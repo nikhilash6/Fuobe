@@ -46,7 +46,7 @@ const ROOT = path.resolve(__dirname, "..");
 const FAKE = path.join(ROOT, "tests/helpers/fake-local-comfy.ts");
 const SITE = "http://127.0.0.1:9";
 const RULES = inputRules(readCatalog(ROOT));
-const ALLOWED = new Set(["LoadImage", "KSampler", "SaveImage", "LoadVideo"]);
+const ALLOWED = new Set(["LoadImage", "KSampler", "SaveImage", "LoadVideo", "VHS_VideoCombine"]);
 const hasFfmpeg = spawnSync("ffmpeg", ["-hide_banner", "-version"]).status === 0;
 const realFetch = globalThis.fetch;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -77,8 +77,8 @@ function addWorker(): W {
 }
 
 let gens = 0;
-/** A job for the workers that loads one input (a picture, or a clip) and saves a picture. */
-function addTask(o: { clip?: Buffer } = {}): { id: string; input: string } {
+/** A job for the workers that loads one input (a picture, or a clip) and saves a picture (or what `save` says). */
+function addTask(o: { clip?: Buffer; save?: { class_type: string; inputs: Record<string, unknown> } } = {}): { id: string; input: string } {
   const gid = `recovery-gen-${++gens}`;
   const now = Date.now();
   db()
@@ -89,7 +89,7 @@ function addTask(o: { clip?: Buffer } = {}): { id: string; input: string } {
   const t = tasks.createTask({
     principal: "owner",
     generationId: gid,
-    graph: { "1": loader, "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } }, "9": { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "fuobe/worker-test" } } },
+    graph: { "1": loader, "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } }, "9": o.save ?? { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "fuobe/worker-test" } } },
     pool: { pools: ["pool"], rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
   });
   return { id: t.id, input };
@@ -136,6 +136,8 @@ interface Pc {
   workDir: string;
   comfyDir: string;
   countFile: string;
+  /** Each prompt its ComfyUI got, as a line of JSON. */
+  graphFile: string;
   logs: string[];
   /** When each log line was written. */
   logAt: number[];
@@ -144,7 +146,7 @@ interface Pc {
 
 function pc(): Pc {
   const base = tempDir("fuobe-worker-pc-");
-  const p = { home: path.join(base, "home"), workDir: path.join(base, "work"), comfyDir: path.join(base, "comfy"), countFile: path.join(base, "prompts.txt"), logs: [], logAt: [], awake: [] };
+  const p = { home: path.join(base, "home"), workDir: path.join(base, "work"), comfyDir: path.join(base, "comfy"), countFile: path.join(base, "prompts.txt"), graphFile: path.join(base, "graphs.jsonl"), logs: [], logAt: [], awake: [] };
   for (const d of [p.home, p.workDir, p.comfyDir]) fs.mkdirSync(d, { recursive: true });
   return p;
 }
@@ -165,7 +167,7 @@ function start(
     modelDirs: o.modelDirs ?? [],
     comfyCommand: o.command ?? [
       process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", FAKE, "--port", "{port}", "--cors", "off",
-      "--steps", String(o.steps ?? 4), "--step-ms", String(o.stepMs ?? 40), "--worker-guard", "1", "--count-file", p.countFile,
+      "--steps", String(o.steps ?? 4), "--step-ms", String(o.stepMs ?? 40), "--worker-guard", "1", "--count-file", p.countFile, "--graph-file", p.graphFile,
       ...(o.failNext ? ["--fail-next", o.failNext] : []),
     ],
     comfyGuard: true,
@@ -535,6 +537,26 @@ http.createServer((q, s) => { s.writeHead(200, { "content-type": "application/js
   it("refuses a studio address that isn't https (this PC itself aside)", async () => {
     const p = pc();
     await expect(runWorker({ site: "http://studio.example", token: "t", workDir: p.workDir, comfyDir: p.comfyDir }, { home: p.home })).rejects.toThrow(/https/);
+  });
+});
+
+describe("results carry no metadata", () => {
+  it("every clip save node goes to its ComfyUI told to write no metadata; the rest of the graph as the studio sent it", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const save = { class_type: "VHS_VideoCombine", inputs: { images: ["1", 0], frame_rate: 8, loop_count: 0, filename_prefix: "fuobe/worker-test", format: "video/h264-mp4", pingpong: false, save_output: true, save_metadata: true } };
+    const { id, input } = addTask({ save });
+    start(w, s, p);
+    const t = await ended(id);
+    expect(t.state).toBe("done");
+    const graphs = fs.readFileSync(p.graphFile, "utf8").trim().split(/\r?\n/).map((l) => JSON.parse(l));
+    expect(graphs).toHaveLength(1);
+    expect(graphs[0]).toEqual({
+      "1": { class_type: "LoadImage", inputs: { image: input } },
+      "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } },
+      "9": { ...save, inputs: { ...save.inputs, save_metadata: false } },
+    });
   });
 });
 

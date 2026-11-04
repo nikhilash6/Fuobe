@@ -26,6 +26,7 @@ import { inventoryHash, modelFiles, packFolders } from "./inventory.mjs";
 import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
 import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
+import { withPlainResults } from "./results.mjs";
 import { retrying } from "./retry.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
 
@@ -175,7 +176,9 @@ async function work(saved, deps, owner) {
   const rules = deps.rules ?? inputRules();
   const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [], log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy });
   // Only its own ComfyUI, and only while the process it started is up and ready: never whatever listens on that port.
-  const own = (url, init) => (comfy.alive() && comfy.ready ? comfy.fetch(url, init) : Promise.reject(new Error("Its own ComfyUI isn't running")));
+  // Its results come without what a save node writes into them unasked (results.mjs).
+  const ownFetch = withPlainResults((url, init) => comfy.fetch(url, init));
+  const own = (url, init) => (comfy.alive() && comfy.ready ? ownFetch(url, init) : Promise.reject(new Error("Its own ComfyUI isn't running")));
   // A ComfyUI that a stopped worker left running is stopped now, before anything else uses the GPU.
   await comfy.stopLeftover();
   // Studio jobs first: only with a turns folder set in worker.json. Without one, every program counts the same, as before.

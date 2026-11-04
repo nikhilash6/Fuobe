@@ -80,6 +80,8 @@ export interface LocalComfyOptions {
   workerGuard?: string;
   /** Each prompt posted adds a line to this file (a count that outlives the process, for a test in another one). */
   countFile?: string;
+  /** Each prompt posted adds its graph to this file, as one line of JSON (what a test in another process sent). */
+  graphFile?: string;
 }
 
 /** One live render the stand-in made (for the bookkeeping checks). */
@@ -530,6 +532,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
         entry.prompt = json;
         posts++;
         if (opts.countFile) appendFileSync(opts.countFile, `prompt ${json.prompt_id ?? "?"}\n`);
+        if (opts.graphFile) appendFileSync(opts.graphFile, `${JSON.stringify(json.prompt ?? null)}\n`);
         const fail = opts.failNext;
         opts.failNext = undefined;
         if (fail === "missing_node") {
@@ -755,7 +758,8 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
 // [--has workflows/comfyui/requirements.json]: everything that index names is installed. [--guard 1]: Fuobe's guard answers.
 // [--connect <origin>]: Fuobe Connect is installed, trusting that origin. [--worker-guard 1]: a worker's guard, with the
 // key in FUOBE_WORKER_GUARD_KEY (as a worker starts its ComfyUI). [--count-file <path>]: a line for each prompt posted.
-// [--fail-next oom|never]: what the first prompt does. [--outputs video,audio]: what a job saves.
+// [--graph-file <path>]: each prompt's graph, a line of JSON each. [--fail-next oom|never]: what the first prompt does.
+// [--outputs video,audio]: what a job saves.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const arg = (name: string) => {
     const i = process.argv.indexOf(`--${name}`);
@@ -775,6 +779,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       ...(arg("connect") && { connect: arg("connect") }),
       ...(workerGuard && { workerGuard }),
       ...(arg("count-file") && { countFile: arg("count-file") }),
+      ...(arg("graph-file") && { graphFile: arg("graph-file") }),
       ...(arg("fail-next") && { failNext: arg("fail-next") as LocalComfyOptions["failNext"] }),
       ...(arg("outputs") && { outputs: arg("outputs")!.split(",") as LocalComfyOptions["outputs"] }),
       has,
