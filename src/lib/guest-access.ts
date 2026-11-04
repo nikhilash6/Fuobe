@@ -274,7 +274,11 @@ export const anyoneMayReport = (method: string, pathname: string): boolean => me
  * itself (src/server/account-tool-run.ts: its own files, its limits, its GPU or key for every step) and refuses a guest
  * with the sign-up card. Genjutsu's "Describe my character" isn't here: it uses the studio's own AI helper.
  */
-export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [/^\/api\/genjutsu(\/(scene|transcribe))?$/];
+export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
+  /^\/api\/genjutsu(\/(scene|transcribe))?$/,
+  // Storyboard: a board, and its film (the route reads the account's own board only).
+  /^\/api\/storyboards(\/[^/]+\/film)?$/,
+];
 
 /**
  * A tool's project routes that keep each account's projects apart (src/server/account-projects.ts): the proxy lets an

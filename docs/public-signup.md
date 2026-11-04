@@ -290,6 +290,14 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   in its own runs, to open and download. "Describe my character" uses the studio's AI helper, so it isn't offered: the
   account describes the character in its own words. A guest gets the sign-up card. The checks are
   `src/server/account-tool-run.ts`.
+- **Storyboard.** An account makes boards the same way (`POST /api/storyboards`), and the film of a board
+  (`POST /api/storyboards/<id>/film`). Every frame, shot and join is a run of its own on the account's ComfyUI, or on
+  its own fal.ai or Replicate key on the cloud engine, with only its own pictures as look references, and a board (or
+  a film) counts once against its limits. Its boards are its own runs: the page lists them, to reopen, open and
+  download, and a film takes only its own board (another account's board, or the owner's, answers 404 "We can't
+  find that storyboard."). "From one idea" splits the story into a shot list without the studio's AI helper. One
+  sheet takes as many panels for an account as its recorded GPU test showed (`ONE_SHEET_GPU_TEST`; with none recorded
+  a one-sheet board answers 422 for an account). A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

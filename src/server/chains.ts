@@ -101,7 +101,8 @@ export interface JoinOptions {
   copy?: boolean;
 }
 
-const joinModelId = (engine: Engine, copy = false) => (engine === "open" ? (copy ? "oss-join-encoded" : "oss-join-clips") : "join-clips");
+/** The join a film of clips ends on: ComfyUI on your GPU (copied as they are when `copy`), fal in the cloud. */
+export const joinModelId = (engine: Engine, copy = false) => (engine === "open" ? (copy ? "oss-join-encoded" : "oss-join-clips") : "join-clips");
 
 /** Join generations' clips, in order. ComfyUI joins 4 at a time, so longer films are joined in steps. */
 export function joinClips(ids: string[], o: JoinOptions): Generation {
