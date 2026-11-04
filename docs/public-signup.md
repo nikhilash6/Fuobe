@@ -451,10 +451,12 @@ With it on:
 - In a run's `params.extra`, a file input is used only when the run sent that file itself. A name of a file in the
   GPUs' folders is dropped. The graph is checked before it is queued or sent: it reads only the files this run sent.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space. The policy's limits
-  for runs on the studio's GPUs (runs at once, runs waiting, runs an hour, runs from one address an hour) count those
-  runs only, never runs on the account's own GPU or key. They are counted in the database as the run is made, so
-  requests sent together never pass them together. A chain counts once, and each of its steps must be one the policy
-  allows.
+  for runs on the studio's GPUs (runs at once, runs waiting, runs made in the last hour, runs made from one address in
+  the last hour) count those runs only, never runs on the account's own GPU or key. A run counts toward the hourly
+  limits once it is made (Run pressed and let in), whether or not it has started. A run made only of CPU work (filters,
+  trims, joins, adding sound, Ken Burns) is free and counts toward none of them. Runs are counted in the database as
+  the run is made, so requests sent together never pass the limits together. A chain counts once, and each of its
+  steps must be one the policy allows.
 
 Two optional services can go with it:
 

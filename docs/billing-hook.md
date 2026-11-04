@@ -81,9 +81,15 @@ input's size, an upscale's times its factor, within the workflow's limits. It is
 `steps` lists every step of the run that uses this install's GPUs, the run's own step first: a chain (a film of
 several shots, a picture and then a step on it, MiniMax H3 at 2K with its finish for each take) is priced once, with one
 quote and one hold, for one press of Run.
-Steps that need no model (joins, trims) are left out: they cost nothing. Every step must be one the policy allows
-(`pool`, `kinds`) and one this install's GPUs can run (a ComfyUI step: not a text step, a step made in the browser or
-a cloud model), or the run isn't offered here. It is refused before Run, never part way through.
+Steps of CPU work are left out: they cost nothing. The requirements index marks these `cpu`: no model file, no
+graphics memory and no card their nodes need, such as filters, trims, joins, adding sound and Ken Burns moves. A step
+whose nodes run on the card (RTX Video) is GPU work. Every step must be one the policy allows (`pool`, `kinds`) and one
+this install's GPUs can run (a ComfyUI step: not a text step, a step made in the browser or a cloud model), or the run
+isn't offered here. It is refused before Run, never part way through.
+
+A run made only of CPU work is free and never counted. Fuobe asks the service for no quote and no hold, and the run
+counts against none of the policy's limits. For now it still waits in the same line on this install's GPUs as GPU work.
+It does not run on the install's own CPU yet.
 
 3D runs (Image to 3D and the other 3D tools) aren't offered on this install's GPUs yet, whatever `kinds.model3d` says.
 They run on the account's own GPU, as before. An account with no GPU of its own is told the tool isn't available here
@@ -91,11 +97,11 @@ They run on the account's own GPU, as before. An account with no GPU of its own 
 
 The policy's limits count runs on this install's GPUs only, never runs on the account's own GPU or key (those keep the
 install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going
-now (waiting or running), `waiting` those not started yet, `runsPerHour` those started in the last hour, and
-`addressRunsPerHour` those started from one client address in the last hour, across accounts (only when the install
+now (waiting or running), and `waiting` those that are going but none of whose rows has started yet. `runsPerHour`
+counts runs made in the last hour: Run was pressed and the run was let in, whether it has started yet or not.
+`addressRunsPerHour` counts runs made from one client address in the last hour, across accounts (only when the install
 trusts its proxy, `FUOBE_TRUST_PROXY=1`; the address is kept as a salted hash, and every run's entry is removed two
-hours on, whether or not more runs come). 0 or absent means no such
-limit. Fuobe counts them in its database together with making the run's rows, so requests that arrive together (or
+hours on, whether or not more runs come). 0 or absent means no such limit. Fuobe counts them in its database together with making the run's rows, so requests that arrive together (or
 reach two servers during a deploy) never pass a limit together. They apply with or without a billing service.
 
 `prefer: "pool"` sends a run to this install's GPUs first even when the account's own GPU is online. A place the
