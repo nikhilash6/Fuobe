@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MODEL3D_MODES, readModel3dLink } from "@/lib/av/model3d";
-import { GENJUTSU_MODES } from "@/lib/catalog/genjutsu";
+import { GENJUTSU_MODES, modeOpen } from "@/lib/catalog/genjutsu";
 import { HUB_MODES, type HubKind } from "@/lib/hubs";
 import { megaSubs, studiosMenu } from "@/lib/mega-menus";
 import { megaCurrent } from "@/components/nav/mega-launcher";
@@ -22,6 +22,7 @@ import {
   type ViewerKind,
 } from "@/lib/nav-model";
 import { navSearchEntries, searchNav } from "@/lib/nav-search";
+import { genjutsuLive } from "@/server/genjutsu-live";
 
 /*
  * What each studio holds inside (its tabs and modes) in the top nav: the catalogue (STUDIO_SUBS) and the links the
@@ -115,7 +116,7 @@ describe("the catalogue of studio features", () => {
 
 describe("who sees a studio's features", () => {
   it("keeps the owner's own modes the owner's, in every place", () => {
-    for (const id of ["genjutsu-picture", "genjutsu-finish", "cinema-blockout", "canvas-skills", "assist-memory", "assist-scheduled", "audio-song", "video-tools-restore"]) {
+    for (const id of ["genjutsu-picture", "cinema-blockout", "canvas-skills", "assist-memory", "assist-scheduled", "audio-song", "video-tools-restore"]) {
       expect(entry(id)!.visibility, id).toEqual(["owner"]);
       for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === id), `${kind}: ${id}`).toBe(false);
     }
@@ -127,6 +128,19 @@ describe("who sees a studio's features", () => {
       for (const s of menu.filter((x) => !x.more)) expect(entry(s.id)!.visibility ?? [], `${kind}: ${s.id}`).not.toEqual(["owner"]);
       const hub = areaSections("studios", kind).flatMap((s) => (s.subs ?? []).flatMap((x) => x.ids));
       for (const id of hub) expect(visibleTo(entry(id)!, kind), `${kind}: ${id}`).toBe(true);
+    }
+  });
+
+  it("links Genjutsu's Finish for everyone exactly when its page shows it to everyone", () => {
+    const live = genjutsuLive();
+    const open = modeOpen("finish", (f) => live[f]);
+    expect(open).toBe(true);
+    const finish = entry("genjutsu-finish")!;
+    for (const kind of VISITORS) {
+      expect(visibleTo(finish, kind), kind).toBe(open);
+      expect(studioSubs("genjutsu", kind, "sheet").some((e) => e.id === finish.id), kind).toBe(open);
+      const menu = studiosMenu(kind).columns.flatMap((c) => [c.lead!, ...c.rows]).flatMap((e) => e.subs ?? []);
+      expect(menu.some((s) => s.id === finish.id), kind).toBe(open);
     }
   });
 
@@ -186,7 +200,7 @@ describe("finding a studio's features", () => {
     const inside = (kind: ViewerKind | undefined, q: string) => find(kind, q).groups[0];
     expect(find("guest", "genjutsu").best[0]).toMatchObject({ id: "genjutsu" });
     expect(inside("guest", "genjutsu")).toMatchObject({ label: "In Genjutsu" });
-    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]);
+    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "Finish"]);
     expect(inside("owner", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
     expect(inside("guest", "character sheet").hits.map((h) => h.label)).toEqual(["From Reference", "Build from scratch", "From a description"]);
     // Not a tab that is the studio's own page (Upscale's Image), nor one already among the best matches.

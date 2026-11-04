@@ -127,7 +127,7 @@ describe("/studios", () => {
     expect(subsOf("film", "video-tools")).not.toContain("video-tools-matte"); // Video tools' first mode is the studio's own page
     // Ads Studio is a studio with a card or pill of its own here: Marketing Studio's row has the other two.
     expect(subsOf("sell", "marketing")).toEqual(["marketing-click-to-ad", "ads-multiplier"]);
-    expect(subsOf("people", "genjutsu")).toEqual(["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert"]);
+    expect(subsOf("people", "genjutsu")).toEqual(["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-finish"]);
     expect(subsOf("people", "character-sheet")).toEqual(["character-sheet-reference", "character-sheet-cast", "character-sheet-describe"]);
     expect(subsOf("sound", "audio")).not.toContain("audio-music"); // a card of its own
     for (const s of sections) {
