@@ -95,7 +95,8 @@ export function findShare(token: string, now = Date.now()): ShareRow | null {
 export const NOT_TRASHED = "NOT EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = g.id)";
 
 const TARGET: Record<ShareKind, string | null> = {
-  result: `SELECT 1 FROM generations g WHERE g.id = ? AND g.status = 'succeeded' AND ${NOT_TRASHED}`,
+  // The owner's own results only: an account's run is never shared, whoever asks.
+  result: `SELECT 1 FROM generations g WHERE g.id = ? AND g.status = 'succeeded' AND ${NOT_TRASHED} AND json_extract(g.request_json, '$.account') IS NULL`,
   folder: "SELECT 1 FROM folders WHERE id = ?",
   cinema: "SELECT 1 FROM cinema_projects WHERE id = ?",
   publish: null,

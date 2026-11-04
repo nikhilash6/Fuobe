@@ -42,12 +42,12 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   "accounts:read": "See accounts",
   "accounts:write": "Switch accounts off and on, sign them out",
   "accounts:delete": "Delete accounts",
-  "runs:read": "See accounts' runs",
+  "runs:read": "See accounts' runs: when, which model and how they ended (their prompts and results need Open accounts' files; emails need See accounts)",
   "runs:delete": "Delete accounts' runs",
-  "outputs:view": "Open accounts' files",
+  "outputs:view": "Open accounts' files, and read their runs' prompts and results",
   "outputs:hide": "Hide results",
   "outputs:moderate": "Hide, show again and remove results",
-  "reports:read": "See reports",
+  "reports:read": "See reports (reporters' emails need See accounts)",
   "workers:read": "See workers",
   "workers:write": "Pause, resume, change and revoke workers",
   "workers:tokens": "Add workers and give them new tokens (a worker runs accounts' queued jobs, with their files)",
@@ -56,8 +56,8 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   "audit:read": "See the admin log",
 };
 
-/** The Settings preset that only reads. */
-export const READ_ONLY_SCOPES: Scope[] = ["accounts:read", "runs:read", "reports:read", "workers:read", "queue:read", "audit:read"];
+/** The Settings preset that only reads: no emails, no prompts and no results (those need their own scopes). */
+export const READ_ONLY_SCOPES: Scope[] = ["runs:read", "reports:read", "workers:read", "queue:read", "audit:read"];
 
 export const ADMIN_TOKEN_PREFIX = "fuobe_adm_";
 const SHAPE = /^fuobe_adm_[A-Za-z0-9_-]{43}$/;
@@ -345,7 +345,7 @@ function auditOnce(key: string, windowMs: number, actor: Actor, action: string, 
 }
 
 /** Actions that change nothing: a token's reads, its file views and refusals (the log's "only changes" leaves them out). */
-export const READ_ACTIONS = ["accounts.list", "accounts.csv", "account.read", "runs.list", "reports.list", "audit.read", "file.view", "scope.denied", "rate.limited"];
+export const READ_ACTIONS = ["accounts.list", "accounts.csv", "account.read", "runs.list", "runs.content", "reports.list", "audit.read", "file.view", "scope.denied", "rate.limited"];
 
 /** A token's read of people's data: one row per token and action every 10 minutes. The owner's own reads aren't logged. */
 export function auditRead(actor: Actor, action: string, detail: Record<string, unknown> | null = null, target: string | null = null): void {
@@ -353,10 +353,22 @@ export function auditRead(actor: Actor, action: string, detail: Record<string, u
   auditOnce(`read:${actor.id}:${action}:${target ?? ""}`, 10 * MINUTE, actor, action, target, detail, 200);
 }
 
-/** A token opened a stored file: one row per token and file every hour. */
+/** May this actor do what `scope` allows (the owner may do everything)? */
+export const actorHas = (actor: Actor, scope: Scope): boolean => actor.kind === "owner" || actor.scopes.includes(scope);
+
+/**
+ * A read of accounts' content (their runs' prompts and results), by the owner or a token: one row per reader, action and
+ * account every 10 minutes, with the account as the row's target, so the log says whose content was read.
+ */
+export function auditContentRead(actor: Actor, action: string, accounts: Iterable<string>, detail: Record<string, unknown> | null = null): void {
+  const who = actor.kind === "token" ? actor.id : "owner";
+  for (const account of new Set(accounts)) auditOnce(`content:${who}:${action}:${account}`, 10 * MINUTE, actor, action, account, detail, 200);
+}
+
+/** A stored file of an account's was opened (by a token or the owner): one row per reader and file every hour. */
 export function auditFileView(actor: Actor, path: string, account: string, held = false): void {
-  if (actor.kind !== "token") return;
-  auditOnce(`file:${actor.id}:${path}`, 60 * MINUTE, actor, "file.view", path, { account, ...(held && { held: true }) }, 200);
+  const who = actor.kind === "token" ? actor.id : "owner";
+  auditOnce(`file:${who}:${path}`, 60 * MINUTE, actor, "file.view", path, { account, ...(held && { held: true }) }, 200);
 }
 
 export interface AuditQuery {

@@ -538,3 +538,79 @@ describe("admin tokens: runs, the log's changes and every admin route", () => {
     }
   });
 });
+
+describe("admin tokens: accounts' content needs its own scopes", () => {
+  /** An account's finished run with a prompt and a stored result, and a report from it. */
+  function accountRun() {
+    const a = auth.createAccount(`content-${++n}@example.com`, "long enough");
+    const file = saveFile({ data: TINY_PNG, contentType: "image/png", source: "generation", accountId: a.id });
+    const id = `content-run-${n}`;
+    const now = Date.now();
+    db()
+      .prepare(
+        "INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, prompt, request_json, outputs_json, created_at, updated_at, completed_at) VALUES (?, 'image', 'oss-z-image-turbo', 'open', 'comfyui', 't2i', 'image', 'succeeded', ?, ?, ?, ?, ?, ?)",
+      )
+      .run(id, "a private prompt", JSON.stringify({ account: a.id, feature: "image", modelId: "oss-z-image-turbo", prompt: "a private prompt" }), JSON.stringify([{ url: file.url, kind: "image", contentType: "image/png" }]), now, now, now);
+    return { account: a, id };
+  }
+  type Page = { items: { id: string; prompt?: string; request?: unknown; outputs: { url?: string; state: string }[]; account: { id: string; email: string | null } }[] };
+  const runsOf = async (token?: string, cookie?: string) => (await (await routes.runs.GET(req("/api/admin/generations?limit=100", { token, cookie }))).json()) as Page;
+
+  it("runs:read alone gets each run's facts: no prompt, no request, no result file, no email", async () => {
+    const r = accountRun();
+    const page = await runsOf(make(["runs:read"]).token);
+    const run = page.items.find((x) => x.id === r.id)!;
+    expect(run).toBeDefined();
+    expect(run.prompt).toBeUndefined();
+    expect(run.request).toBeUndefined();
+    expect(run.outputs).toEqual([{ kind: "image", state: "shown" }]);
+    expect(run.account).toEqual({ id: r.account.id, email: null });
+    expect(JSON.stringify(page)).not.toContain("a private prompt");
+  });
+
+  it("outputs:view adds the content and accounts:read the email; the owner sees both", async () => {
+    const r = accountRun();
+    const withContent = (await runsOf(make(["runs:read", "outputs:view"]).token)).items.find((x) => x.id === r.id)!;
+    expect(withContent.prompt).toBe("a private prompt");
+    expect(withContent.outputs[0].url).toMatch(/^\/api\/files\//);
+    expect(withContent.account.email).toBeNull();
+    const withEmail = (await runsOf(make(["runs:read", "accounts:read"]).token)).items.find((x) => x.id === r.id)!;
+    expect(withEmail.account.email).toBe(r.account.email);
+    expect(withEmail.prompt).toBeUndefined();
+    const owner = (await runsOf(undefined, ownerCookie)).items.find((x) => x.id === r.id)!;
+    expect(owner.prompt).toBe("a private prompt");
+    expect(owner.account.email).toBe(r.account.email);
+  });
+
+  it("every read of an account's content is logged with the account as its target, the owner's reads too", async () => {
+    const r = accountRun();
+    const before = auditRows().length;
+    await runsOf(undefined, ownerCookie);
+    const rows = auditRows().slice(before);
+    expect(rows.some((x) => x.action === "runs.content" && x.actor === "owner" && x.target === r.account.id)).toBe(true);
+    // Facts only: no content read to log.
+    const facts = make(["runs:read"]);
+    const mark = auditRows().length;
+    await runsOf(facts.token);
+    expect(auditRows().slice(mark).some((x) => x.action === "runs.content")).toBe(false);
+    // The owner opening an account's file is logged too.
+    const file = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", accountId: r.account.id });
+    const rel = file.url.replace(/^\/api\/files\//, "");
+    const res = await routes.files.GET(req(`/api/admin/files/${rel}`, { cookie: ownerCookie }), ctx({ path: rel.split("/") }));
+    expect(res.status).toBe(200);
+    await res.arrayBuffer();
+    expect(auditRows().some((x) => x.action === "file.view" && x.actor === "owner" && JSON.parse(x.detail_json!).account === r.account.id)).toBe(true);
+  });
+
+  it("reporters' emails need accounts:read, and the read-only preset holds no email or content scope", async () => {
+    db()
+      .prepare("INSERT INTO reports_inbox (id, target_json, category, text, reporter, created_at) VALUES (?, ?, 'other', 'words', ?, ?)")
+      .run(`rep-${++n}`, JSON.stringify({ kind: "share", id: "x" }), JSON.stringify({ account: "acct-x", email: "reporter@example.com" }), Date.now());
+    const plain = (await (await routes.reports.GET(req("/api/admin/reports", { token: make(["reports:read"]).token }))).json()) as { items: { reporter: { email: string | null } }[] };
+    expect(plain.items[0].reporter.email).toBeNull();
+    const withEmail = (await (await routes.reports.GET(req("/api/admin/reports", { token: make(["reports:read", "accounts:read"]).token }))).json()) as { items: { reporter: { email: string | null } }[] };
+    expect(withEmail.items[0].reporter.email).toBe("reporter@example.com");
+    expect(admin.READ_ONLY_SCOPES).not.toContain("accounts:read");
+    expect(admin.READ_ONLY_SCOPES).not.toContain("outputs:view");
+  });
+});

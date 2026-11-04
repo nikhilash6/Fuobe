@@ -148,8 +148,47 @@ function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState }
   });
 }
 
-/** One page of accounts' runs, newest first, and the cursor of the next (null on the last page). Never the owner's. */
-export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: string | null } {
+/**
+ * A run with its content left out (what a reader without outputs:view gets): when, which model and app, how it ended and
+ * how many results, never its prompt, its inputs, its results' files or words, or its technical reason.
+ */
+export type AccountRunFacts = Pick<
+  AccountRun,
+  "id" | "batchId" | "feature" | "presetId" | "presetName" | "modelId" | "modelName" | "engine" | "provider" | "op" | "kind" | "status" | "progress" | "costUsd" | "createdAt" | "updatedAt" | "completedAt" | "place" | "account"
+> & { outputs: { kind: OutputFile["kind"]; state: OutputState }[] };
+
+function factsOnly(r: AccountRun): AccountRunFacts {
+  return {
+    id: r.id,
+    batchId: r.batchId,
+    feature: r.feature,
+    presetId: r.presetId,
+    presetName: r.presetName,
+    modelId: r.modelId,
+    modelName: r.modelName,
+    engine: r.engine,
+    provider: r.provider,
+    op: r.op,
+    kind: r.kind,
+    status: r.status,
+    progress: r.progress,
+    costUsd: r.costUsd,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    completedAt: r.completedAt,
+    ...(r.place && { place: r.place }),
+    account: r.account,
+    outputs: r.outputs.map((x) => ({ kind: x.kind, state: x.state })),
+  };
+}
+
+/**
+ * One page of accounts' runs, newest first, and the cursor of the next (null on the last page). Never the owner's.
+ * `show.content` false: each run's facts only (factsOnly); `show.emails` false: no account's email.
+ */
+export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: string | null };
+export function listAccountRuns(o: ListOptions, show: { content: boolean; emails: boolean }): { items: (AccountRun | AccountRunFacts)[]; next: string | null };
+export function listAccountRuns(o: ListOptions, show: { content: boolean; emails: boolean } = { content: true, emails: true }): { items: (AccountRun | AccountRunFacts)[]; next: string | null } {
   const limit = o.limit ?? RUNS_PAGE;
   const opts: ListOptions = o.account ? { ...o, accounts: undefined, limit } : { ...o, account: undefined, accounts: true, limit };
   const emails = new Map(listAccounts().map((a) => [a.id, a.email]));
@@ -163,7 +202,10 @@ export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: st
     return e && e !== g.error ? { detail: e } : {};
   };
   return {
-    items: found.map((g) => ({ ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: emails.get(g.request.account!) ?? null }, ...detail(g) })),
+    items: found.map((g) => {
+      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: show.emails ? (emails.get(g.request.account!) ?? null) : null }, ...detail(g) };
+      return show.content ? run : factsOnly(run);
+    }),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,
   };
 }

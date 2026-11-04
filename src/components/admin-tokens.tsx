@@ -74,6 +74,7 @@ const ACTION_WORDS: Record<string, string> = {
   "worker.alert": "A worker's token was used from somewhere new",
   "queue.settings": "Changed the queue's settings",
   "settings.comfy_where": "Changed where ComfyUI runs",
+  "runs.content": "Read an account's prompts and results",
   "token.create": "Made an admin token",
   "token.revoke": "Revoked an admin token",
   "token.revoke_all": "Revoked every admin token",

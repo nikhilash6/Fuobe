@@ -52,7 +52,8 @@ const MAX_TITLE = 120;
 const MAX_DESCRIPTION = 1000;
 
 const HELPER_SQL = `(g.feature LIKE '%${HELPER_SUFFIX}' OR g.feature IN (${HELPER_FEATURES.map((f) => `'${f}'`).join(", ")}))`;
-const SHOWN = `g.status = 'succeeded' AND g.outputs_json != '[]' AND ${NOT_TRASHED}`;
+/** A finished result with outputs, not in the Trash, and the owner's own (an account's run is never on a link). */
+const SHOWN = `g.status = 'succeeded' AND g.outputs_json != '[]' AND ${NOT_TRASHED} AND json_extract(g.request_json, '$.account') IS NULL`;
 const COLUMNS = "g.*, NULL AS deleted_at, NULL AS folder_id";
 
 type GenRow = Parameters<typeof toGeneration>[0];

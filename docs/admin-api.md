@@ -37,18 +37,21 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `accounts:read` | `GET /api/admin/accounts` (JSON or CSV), `GET /api/admin/accounts/{id}` |
 | `accounts:write` | `PATCH /api/admin/accounts/{id}` with `{ "disabled": true \| false }` or `{ "signOut": true }` (its paired ComfyUIs stop too) |
 | `accounts:delete` | `DELETE /api/admin/accounts/{id}`: its runs, files and record go. It can't be undone |
-| `runs:read` | `GET /api/admin/generations`: accounts' runs, prompts included (never the owner's own runs) |
+| `runs:read` | `GET /api/admin/generations`: accounts' runs, each one's facts only (when, which model and app, how it ended, how many results). Never the owner's own runs |
 | `runs:delete` | `DELETE /api/admin/generations/{id}`: a run still going is canceled first |
-| `outputs:view` | `GET /api/admin/files/{path}`: an account's stored file, held ones too (never the owner's own). Each view is logged |
+| `outputs:view` | `GET /api/admin/files/{path}`: an account's stored file, held ones too (never the owner's own). Each view is logged. With `runs:read`, the runs' prompts, inputs and results too |
 | `outputs:hide` | `POST /api/admin/outputs/hide` |
 | `outputs:moderate` | `POST /api/admin/outputs/hide`, `/unhide` and `/remove` |
-| `reports:read` | `GET /api/admin/reports` (reporters' emails included) |
+| `reports:read` | `GET /api/admin/reports` (reporters' emails only with `accounts:read`) |
 | `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/jobs`, `GET /api/admin/workers/download` |
 | `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
 | `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings` |
 | `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share and the pick allowance |
 | `audit:read` | `GET /api/admin/audit` |
+
+The read-only preset in Settings ticks `runs:read`, `reports:read`, `workers:read`, `queue:read` and `audit:read`:
+no emails, no prompts and no results. With `runs:read`, an account's email in a run needs `accounts:read`.
 
 Any valid admin token may call `GET /api/admin/tokens/self`, which says the token's name and scopes, so a tool can
 offer only what it may do. `/api/admin/tokens` itself (make, list, revoke) is the owner's signed-in browser's only.
@@ -123,10 +126,11 @@ A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name }
 `worker.rotate`, `worker.revoke`, `queue.settings` (with the values before and after), `token.create`, `token.revoke`,
 `token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
 `accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
-every 10 minutes) and `file.view` (one row per token and file every hour); refusals `scope.denied` and `rate.limited`;
-and the studio's own alerts `worker.alert` (actor `system`: a worker's token used from a new country, a new network,
-or two networks at once; [gpu-workers.md](gpu-workers.md#the-protocol)). The owner's own reads in the browser aren't
-logged. Rows go after a year. `actor` can be `system`, and the `actor` filter
+every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account
+every 10 minutes, the account as its target) and `file.view` (one row per reader and file every hour); refusals
+`scope.denied` and `rate.limited`; and the studio's own alerts `worker.alert` (actor `system`: a worker's token used
+from a new country, a new network, or two networks at once; [gpu-workers.md](gpu-workers.md#the-protocol)). The
+owner's other reads in the browser aren't logged. Rows go after a year. `actor` can be `system`, and the `actor` filter
 takes it.
 
 A row is written once the change is made. If the server can't write it (a full disk, say), the change still stands and
