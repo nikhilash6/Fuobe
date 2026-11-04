@@ -185,6 +185,9 @@ describe("where Edit speech shows up", () => {
     expect(has(outputActions(g("music", "audio"), 0))).toBeUndefined();
     expect(has(outputActions(g("tts", "audio"), 0, { engineMode: "cloud" }))).toBeUndefined();
     expect(has(outputActions(g("lipsync", "video"), 0))?.href).toMatch(/^\/audio\/edit-speech\?video=/);
+    // A guest or an account (public sign-up) can't run it: the edit runs on a self-hosted Fuobe only.
+    expect(has(outputActions(g("tts", "audio"), 0, { visitor: true }))).toBeUndefined();
+    expect(has(outputActions(g("lipsync", "video"), 0, { visitor: true }))).toBeUndefined();
   });
 
   it("has its model, licence and a row on the GPU pre-flight board", () => {

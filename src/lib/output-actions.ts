@@ -116,7 +116,7 @@ export interface ActionContext {
 export const draftRenderPaid = (placeholders: boolean | undefined): string => (placeholders ? "" : " · paid");
 
 /** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
-const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue", "remove-person", "clean-dialogue"]);
+const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue", "remove-person", "clean-dialogue", "edit-speech"]);
 
 const q = (url: string) => encodeURIComponent(url);
 

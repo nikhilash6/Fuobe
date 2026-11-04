@@ -8,13 +8,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SelfHostNote } from "@/components/self-host-note";
 import { Feed } from "@/components/studio/feed";
 import { ACCEPT, kindOfFile, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
 import { clock } from "@/lib/av/audio-tools";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import type { Cue } from "@/lib/cues";
@@ -51,7 +52,10 @@ import { uploadSource } from "./split-tool";
  * against the original with an A/B switch; a video gets its new sound back with the picture copied as it is.
  */
 
-const SUBTITLE = "Change a word without re-recording it, or how a line sounds: its pitch, pace, mood or noise. The new words come out in the same voice. Free, on your own GPU.";
+const COPY = "Change a word without re-recording it, or how a line sounds: its pitch, pace, mood or noise. The new words come out in the same voice.";
+const SUBTITLE = `${COPY} Free, on your own GPU.`;
+/** A guest or an account (public sign-up): the edit runs on a self-hosted Fuobe only (POST /api/audio-tools answers own-gpu-tool). */
+const SELF_HOSTED = "Edit speech isn't available here";
 
 type Source = SlotValue & { kind: "audio" | "video"; duration?: number };
 type Mode = "words" | "sound";
@@ -97,23 +101,25 @@ function useArrival(take: (s: Source, cues?: Cue[], line?: number) => void) {
   }, []);
 }
 
-function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void }) {
+/** disabled: a visitor (the edit doesn't run here for them), so nothing is uploaded, recorded or picked only to be refused. */
+function AddMedia({ onPick, onUpdate, disabled }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void; disabled?: boolean }) {
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
   const askFirst = useAskBeforeUpload();
   const inputId = useId();
   const take = (f: File | undefined) => {
-    if (!f || askFirst()) return;
+    if (!f || disabled || askFirst()) return;
     const kind = kindOfFile(f);
     if (kind !== "audio" && kind !== "video") return void toast("Audio or video only: drop a recording or a clip here");
     void uploadSource(f, kind, onPick, onUpdate);
   };
   return (
     <div
+      aria-disabled={disabled || undefined}
       className={cn("flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-strong bg-background px-4 py-8 text-center transition-colors sm:py-10", over && "border-primary bg-brand-faint")}
       onDragOver={(e) => {
         e.preventDefault();
-        setOver(true);
+        if (!disabled) setOver(true);
       }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
@@ -128,13 +134,13 @@ function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate:
         <p className="mt-1 text-[13px] text-muted-foreground">English or Chinese speech, up to 20 minutes</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <Button size="sm" className="rounded-full" onClick={() => askFirst() || document.getElementById(inputId)?.click()}>
+        <Button size="sm" className="rounded-full" disabled={disabled} onClick={() => askFirst() || document.getElementById(inputId)?.click()}>
           <Upload className="size-3.5" /> Upload
         </Button>
-        <VoiceRecorder max={300} onRecorded={(v) => onPick({ ...v, id: nanoid(8), kind: "audio", name: "Recording" })} />
-        <Popover open={picking} onOpenChange={setPicking}>
+        {!disabled && <VoiceRecorder max={300} onRecorded={(v) => onPick({ ...v, id: nanoid(8), kind: "audio", name: "Recording" })} />}
+        <Popover open={picking && !disabled} onOpenChange={setPicking}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="rounded-full">
+            <Button variant="ghost" size="sm" className="rounded-full" disabled={disabled}>
               <Library className="size-3.5" /> Pick from Library
             </Button>
           </PopoverTrigger>
@@ -157,6 +163,7 @@ function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate:
         type="file"
         accept={`${ACCEPT.audio},${ACCEPT.video}`}
         hidden
+        disabled={disabled}
         onChange={(e) => {
           take(e.target.files?.[0]);
           e.target.value = "";
@@ -253,6 +260,7 @@ function EffectOptions({ effect, onChange }: { effect: SpeechEffect; onChange: (
 
 export function SpeechEditTool() {
   const [engine, setEngine, mode] = useEngine();
+  const visitor = useLikelyVisitor();
   const create = useCreateGeneration();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
@@ -330,25 +338,27 @@ export function SpeechEditTool() {
   const p = preview.data;
   const error = preview.error ? (preview.error as Error).message : null;
   const cloudProblem = mode === "cloud" ? CLOUD_ONLY_SPEECH_EDIT_PROBLEM : CLOUD_SPEECH_EDIT_PROBLEM;
-  const blocker = !source
-    ? "Add a recording"
-    : source.uploading
-      ? "Uploading…"
-      : engine === "cloud"
-        ? cloudProblem
-        : !cues
-          ? "Transcribe it first"
-          : view === "words" && !changes
-            ? "Change the words of a line"
-            : view === "sound" && !range
-              ? "Tick the lines to change"
-              : null;
+  const blocker = visitor
+    ? SELF_HOSTED
+    : !source
+      ? "Add a recording"
+      : source.uploading
+        ? "Uploading…"
+        : engine === "cloud"
+          ? cloudProblem
+          : !cues
+            ? "Transcribe it first"
+            : view === "words" && !changes
+              ? "Change the words of a line"
+              : view === "sound" && !range
+                ? "Tick the lines to change"
+                : null;
   const g = result.data;
   const busy = run.isPending || g?.status === "queued" || g?.status === "running" || onVideo.data?.status === "queued" || onVideo.data?.status === "running";
   const transcribing = create.isPending || t?.status === "queued" || t?.status === "running";
 
   const transcribe = () => {
-    if (!ready) return;
+    if (!ready || visitor) return;
     create.mutate(
       { feature: SPEECH_EDIT_FEATURE, modelId: "oss-qwen3-asr", engine: "open", op: "transcribe", inputs: ready.kind === "video" ? { video: ready.ref } : { audio: ready.ref }, title: `Transcript · ${baseName(ready)}` },
       { onSuccess: (items) => setTranscriptId(items[0]?.id ?? null), onError: (e) => toastError(e) },
@@ -373,10 +383,14 @@ export function SpeechEditTool() {
 
   return (
     <ToolShell title="Audio" selfHostedOnly>
-      {!source && <ToolHero title="Edit speech" subtitle={SUBTITLE} />}
+      {!source && (
+        <ToolHero title="Edit speech" subtitle={visitor ? COPY : SUBTITLE}>
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>}
+        </ToolHero>
+      )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-6")}>
         {!source ? (
-          <AddMedia onPick={(s) => take(s)} onUpdate={setSource} />
+          <AddMedia onPick={(s) => take(s)} onUpdate={setSource} disabled={visitor} />
         ) : (
           <SourcePanel source={source} onDuration={(duration) => setSource((s) => (s ? { ...s, duration } : s))} onRemove={clear} />
         )}
@@ -399,7 +413,7 @@ export function SpeechEditTool() {
           <Panel title="1 · Transcribe">
             <div className="flex flex-wrap items-center gap-3">
               <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">Fuobe writes down what was said, line by line, so you can change it like text. Free on your GPU.</p>
-              <Button className="rounded-full" onClick={transcribe} disabled={!ready || transcribing}>
+              <Button className="rounded-full" onClick={transcribe} disabled={!ready || transcribing || visitor}>
                 {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Transcribe
               </Button>
             </div>
@@ -487,7 +501,7 @@ export function SpeechEditTool() {
                   "Checking…"
                 )}
               </p>
-              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={busy}>
+              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={busy || visitor}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Edit speech
               </Button>
             </div>
