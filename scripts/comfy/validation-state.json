@@ -1,4 +1,16 @@
 {
+  "any-angle-3d": {
+    "sha256": "ded5abee5cefe7b9ed8924eb72499f25d0940c548ed06faf73da17e446850452",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:22:00.489Z"
+  },
+  "any-angle-shot": {
+    "sha256": "9cb1e588631eca3ec945a8c6da6a97301ea0b21531e5aaab19f5dbce9ecdefc9",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:33:21.938Z"
+  },
   "audio-join-crossfade": {
     "sha256": "f18c08cd22f37ccadb81cf557c4624e894c71dd718685e7b3030c92c9893be6a",
     "validated": true,
@@ -521,6 +533,12 @@
     "error": null,
     "at": "2026-11-03T08:03:14.171Z"
   },
+  "qwen-image-21-relight": {
+    "sha256": "06d2a199f03cd83e50b525d4bb8fc689ee3ab1268e3ef5da76865f614e9cdbe2",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:21:58.891Z"
+  },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
     "validated": true,
@@ -574,6 +592,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T23:33:15.071Z"
+  },
+  "relight-scene-read": {
+    "sha256": "62ca8f04bbb6f9cbbe8a19e44c90da39f92c3485ecb26520dc922cfc0badfe20",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:21:59.684Z"
   },
   "restore-qwen-image-21": {
     "sha256": "70a711896b815722bee4e62dfda71b7eec7cbb7203dd411f4e169ff407a13705",
@@ -984,10 +1008,28 @@
     "at": "2026-10-16T23:33:13.889Z"
   },
   "video-fit-clip": {
-    "sha256": "f00ba60d6f7aac8a250bbf757483869be5bfef80727ce8c08d59b606f9bf5b27",
+    "sha256": "d4bd70d43937888d2061c4cee6efe95c519abdc2458065f0b127f0a9f2603836",
     "validated": true,
     "error": null,
-    "at": "2026-10-26T09:24:35.576Z"
+    "at": "2026-11-03T18:55:07.728Z"
+  },
+  "video-fix-colours": {
+    "sha256": "9769aa084711b03d614b88cc54f1bb8e94631844757e9f7bac3e86a153132dc1",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T18:55:14.135Z"
+  },
+  "video-fix-faces-h3": {
+    "sha256": "ebd29b6754b0b406a73dec05b4cebc22bf0acf5774e732b4c42d6a57a7e0f2a6",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T18:55:13.488Z"
+  },
+  "video-group-swap-h3": {
+    "sha256": "a946ec11f2e0ed403b49e2f43a10801918829e407bd7fe3ab10a6065fc3ec25a",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T19:15:30.473Z"
   },
   "video-h3-t2v-2k": {
     "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
@@ -1090,6 +1132,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-22T23:27:26.214Z"
+  },
+  "video-scene-edit-h3": {
+    "sha256": "8fa9cbb6333cd03f6f06c7dc767857c87c86428d4f6fc1f233374caf828d98eb",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T19:15:31.867Z"
   },
   "video-sdr-to-hdr": {
     "sha256": "f51f27af77dd2f61d51553241b15f6b5af14e6c06ff3342b24e810dff3e87f93",

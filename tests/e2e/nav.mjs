@@ -79,14 +79,14 @@ try {
       order.push(f?.name ?? "");
       if (i > 0 && !f?.ring) rings = false;
     }
-    // Create, Studios, Apps, Motions & effects and Canvas are a link to their page, then their menu's chevron.
-    const want = ["Skip to content", "Fuobe home", "Create", "Create menu", /^Studios, [0-9]+ studios$/, "Studios menu", "Apps", "Apps menu", "Motions & effects", "Motions & effects menu", "Canvas", "Canvas menu", "Assist", "Library", /^Search/, "New creation"];
+    // Create, Studios, Apps, Motions & effects and Canvas are one button each (their page is the menu's See all).
+    const want = ["Skip to content", "Fuobe home", "Create", /^Studios, [0-9]+ studios$/, "Apps", "Motions & effects", "Canvas", "Assist", "Library", /^Search/, "New creation"];
     for (let i = order.length; i < want.length; i++) {
       await p.keyboard.press("Tab");
       order.push((await focused(p))?.name ?? "");
     }
     const ok = want.every((w, i) => (typeof w === "string" ? order[i] === w : w.test(order[i])));
-    check(ok, "Tab order: Skip, wordmark, Create, Studios, Apps, Motions & effects, Canvas (each + menu), Assist, Library, Search, New creation", order.join(" › "));
+    check(ok, "Tab order: Skip, wordmark, Create, Studios, Apps, Motions & effects, Canvas, Assist, Library, Search, New creation", order.join(" › "));
     check(rings, "every bar stop shows a focus ring");
     // The search field is 220 px from 1440 (280 from 1600; an lg rule must not win over it), says "Search Fuobe" on one line
     // until 1600, and its name is the words it shows.
@@ -117,9 +117,9 @@ try {
     const heading = p.locator("main h1").first();
     const before = await heading.boundingBox();
     await trigger.focus();
-    await p.keyboard.press("Enter");
+    await p.keyboard.press("ArrowDown");
     await panel.waitFor({ state: "visible" });
-    check((await trigger.getAttribute("aria-expanded")) === "true", "launcher: Enter opens it (aria-expanded)");
+    check((await trigger.getAttribute("aria-expanded")) === "true", "launcher: ArrowDown opens it (aria-expanded)");
     // The panel's body is a chunk of its own: on a page this fresh it may still be on its way, and focus moves in when
     // its links arrive (within a second; a warmed or idle page has it already).
     const t0 = Date.now();
@@ -189,7 +189,7 @@ try {
     await panel.getByRole("link", { name: /^Marketing Studio/ }).click();
     const landed = await (p.waitForURL((u) => new URL(u).pathname === "/marketing", { timeout: 20_000 }).then(() => panel.waitFor({ state: "hidden" }))).then(() => true, () => false);
     check(landed, "launcher: Marketing Studio lands on /marketing and the launcher closes");
-    check((await trigger.locator("xpath=ancestor::*[@data-bar-split][1]").getAttribute("data-active")) !== null, "on /marketing the Studios item is marked");
+    check((await trigger.getAttribute("data-active")) !== null, "on /marketing the Studios item is marked");
     await trigger.click();
     check((await panel.getByRole("link", { name: /^Marketing Studio/ }).getAttribute("aria-current")) === "page", "…and Marketing Studio has aria-current=page");
     await p.keyboard.press("Escape");
@@ -197,12 +197,26 @@ try {
     await ctx.close();
   }
 
-  // 3. Create and the guest menu are real menus.
+  // 3. Create is a disclosure of links (like every bar menu); the guest menu is a real menu.
   {
     const ctx = await as("guest");
     const p = await page(ctx);
     await openRoute(p, `${app}/`);
-    for (const name of ["Create menu", "Menu"]) {
+    {
+      const button = p.locator('[data-top-bar] [data-bar-menu="create"]');
+      await button.focus();
+      await p.keyboard.press("ArrowDown");
+      const card = p.locator("#create-menu");
+      await card.waitFor();
+      await p.waitForFunction(() => document.activeElement?.closest("#create-menu"), null, { timeout: 3000 }).catch(() => {});
+      const at = await p.evaluate(() => [document.activeElement?.tagName, document.activeElement?.dataset.col, document.activeElement?.dataset.row].join(","));
+      await p.keyboard.press("ArrowDown");
+      const down = await p.evaluate(() => document.activeElement?.dataset.row);
+      await p.keyboard.press("Escape");
+      await card.waitFor({ state: "hidden" });
+      check(at === "A,0,0" && down === "1" && (await button.evaluate((b) => b === document.activeElement)), "Create: ArrowDown opens it on its first link, arrows move, Esc gives focus back", `${at} → ${down}`);
+    }
+    for (const name of ["Menu"]) {
       const button = p.locator("[data-top-bar]").getByRole("button", { name, exact: true });
       await button.focus();
       await p.keyboard.press("Enter");
@@ -626,11 +640,12 @@ try {
     const p = await page(ctx);
     await openRoute(p, `${app}/edit`);
     const bar = p.locator("[data-top-bar]");
-    const menu = p.getByRole("menu");
-    const ITEMS = "[role=menuitem]";
+    const menu = p.locator("#create-menu");
+    const ITEMS = "[data-col]";
+    const MENU = "#create-menu";
 
-    // On /edit the Create pill (a name and a chevron) carries the pip under it, and no fill.
-    const pill = await bar.locator("[data-bar-split]").first().evaluate((e) => ({
+    // On /edit the Create item carries the pip under it, and no fill.
+    const pill = await bar.locator('[data-bar-menu="create"]').evaluate((e) => ({
       pip: getComputedStyle(e, "::before").content !== "none",
       fill: getComputedStyle(e).backgroundColor,
       active: e.hasAttribute("data-active"),
@@ -638,12 +653,12 @@ try {
     check(pill.active && pill.pip && /rgba\(0, 0, 0, 0\)|transparent/.test(pill.fill), "bar: Create (a Create page is open) has the pip under the pill, no fill", JSON.stringify(pill));
 
     // The owner's case: on /edit, Create opened by the mouse, the mouse on Live edit.
-    await bar.getByRole("button", { name: "Create menu", exact: true }).click();
+    await bar.locator('[data-bar-menu="create"]').click();
     await menu.waitFor();
-    const live = menu.getByRole("menuitem", { name: /^Live edit/ });
+    const live = menu.getByRole("link", { name: /^Live edit/ });
     const box = await live.boundingBox();
     await p.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 4 });
-    let rows = await states(p, "[role=menu]", ITEMS);
+    let rows = await states(p, MENU, ITEMS);
     one(rows, "Create on /edit, mouse on Live edit", "Live edit");
     const edit = rows.find((r) => r.name.startsWith("Edit"));
     check(!!edit && edit.current && edit.pip && !edit.lit, "current page: Edit carries the pip, not the highlight fill", JSON.stringify(edit));
@@ -652,54 +667,49 @@ try {
 
     // Keys go on from where the mouse is: Down to Inpaint, Right across to the Make column, each with the ring.
     await p.keyboard.press("ArrowDown");
-    rows = await states(p, "[role=menu]", ITEMS);
+    rows = await states(p, MENU, ITEMS);
     one(rows, "ArrowDown after the mouse", "Inpaint");
     check(rows.find((r) => r.lit)?.ring === true, "keyboard: the highlighted row shows the 2 px ring");
     await p.keyboard.press("ArrowLeft");
-    rows = await states(p, "[role=menu]", ITEMS);
+    rows = await states(p, MENU, ITEMS);
     one(rows, "ArrowLeft moves across the two columns");
     await p.keyboard.press("ArrowRight");
-    rows = await states(p, "[role=menu]", ITEMS);
+    rows = await states(p, MENU, ITEMS);
     one(rows, "ArrowRight comes back", "Inpaint");
 
     // The mouse takes the highlight back, without the ring; then a press shows the pressed fill.
-    const image = menu.getByRole("menuitem", { name: /^Image/ });
+    const image = menu.getByRole("link", { name: /^Image/ });
     const ib = await image.boundingBox();
     await p.mouse.move(ib.x + 40, ib.y + ib.height / 2, { steps: 4 });
-    rows = await states(p, "[role=menu]", ITEMS);
+    rows = await states(p, MENU, ITEMS);
     one(rows, "the mouse back on Image after the keys", "Image");
     check(!rows.some((r) => r.ring), "mouse again: the ring steps aside");
     await p.mouse.down();
-    rows = await states(p, "[role=menu]", ITEMS);
+    rows = await states(p, MENU, ITEMS);
     check(rows.find((r) => r.name.startsWith("Image"))?.pressed === true, "pressed: mouse-down shows the pressed fill", JSON.stringify(rows.find((r) => r.name.startsWith("Image"))));
     await p.mouse.move(ib.x + ib.width + 200, ib.y + 300);
     await p.mouse.up();
 
-    // The open menu's trigger is not a second fill beside the hovered row.
+    // The open item's own fill steps aside for the bar's one open highlight (no second fill beside the hovered row).
     await p.mouse.move(ib.x + 40, ib.y + ib.height / 2, { steps: 4 });
     const trig = await states(p, "[data-top-bar] nav", ":scope > div > a, :scope > div > button");
-    check(!trig.some((r) => r.name.startsWith("Create") && r.lit), "open trigger: Create keeps no fill while its menu is open", JSON.stringify(trig.find((r) => r.name.startsWith("Create"))));
+    check(!trig.some((r) => r.name.startsWith("Create") && r.lit), "open trigger: Create's own fill steps aside while its menu is open", JSON.stringify(trig.find((r) => r.name.startsWith("Create"))));
 
-    // The mouse leaves the menu: the highlight stays on Image, and ArrowDown goes on from there.
-    const before = (await states(p, "[role=menu]", ITEMS)).findIndex((r) => r.name.startsWith("Image"));
+    // The mouse leaves the card: the row it left keeps focus (no fill: the highlight follows the pointer), and ArrowDown
+    // goes on from there.
+    const before = (await states(p, MENU, ITEMS)).findIndex((r) => r.name.startsWith("Image"));
     const mb = await menu.boundingBox();
     const outX = mb.x + mb.width + 40 < p.viewportSize().width ? mb.x + mb.width + 40 : mb.x - 40;
     await p.mouse.move(outX, ib.y + ib.height / 2, { steps: 1 });
-    rows = await states(p, "[role=menu]", ITEMS);
-    one(rows, "the mouse left the menu: the last row keeps the highlight", "Image");
+    rows = await states(p, MENU, ITEMS);
+    check(lit(rows).length <= 1, "the mouse left the menu: at most one row lit", lit(rows).join(" | "));
     await p.keyboard.press("ArrowDown");
-    rows = await states(p, "[role=menu]", ITEMS);
+    rows = await states(p, MENU, ITEMS);
     one(rows, "ArrowDown after the mouse left the menu");
     check(rows.findIndex((r) => r.lit) === before + 1, "ArrowDown goes on from the row the mouse left", lit(rows).join(" | "));
-
-    // Typeahead after the mouse: the letter hands the lead to the keyboard, so the row it picks shows the ring.
-    await p.mouse.move(ib.x + 40, ib.y + ib.height / 2, { steps: 4 });
-    await p.keyboard.press("i");
-    rows = await states(p, "[role=menu]", ITEMS);
-    one(rows, "typeahead after the mouse");
-    check(rows.find((r) => r.lit)?.ring === true, "typeahead: the picked row shows the ring", JSON.stringify(rows.find((r) => r.lit)));
+    check(rows.find((r) => r.lit)?.ring === true, "keyboard after the mouse: the row shows the ring", JSON.stringify(rows.find((r) => r.lit)));
     await p.keyboard.press("Escape");
-    await menu.waitFor({ state: "detached" }).catch(() => {});
+    await menu.waitFor({ state: "hidden" }).catch(() => {});
 
     // A bar control outside the menus (search field) under a resting mouse drops its hover once the keyboard leads.
     {
@@ -720,11 +730,11 @@ try {
 
     // The bar on /library: the hovered item is the one highlight, Library keeps only its pip.
     await openRoute(p, `${app}/library`);
-    const create = bar.getByRole("link", { name: "Create", exact: true });
-    const cb = await create.boundingBox();
+    const assist = bar.getByRole("link", { name: "Assist", exact: true });
+    const cb = await assist.boundingBox();
     await p.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2, { steps: 3 });
     rows = await states(p, "[data-top-bar] nav", ":scope > a, :scope > button, :scope > div > a, :scope > div > button");
-    one(rows, "bar on /library, mouse on Create", "Create");
+    one(rows, "bar on /library, mouse on Assist", "Assist");
     const library = rows.find((r) => r.name === "Library");
     check(!!library && library.current && library.pip && !library.lit, "bar: Library (current) has the pip, no fill", JSON.stringify(library));
 

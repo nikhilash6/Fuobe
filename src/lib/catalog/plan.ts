@@ -287,6 +287,8 @@ const PROMPTLESS = new Set<Operation>([
   "world-turn",
   // Watermark Remover: the marks are found, kept or brushed; no words
   "watermark-scan", "watermark-remove",
+  // Genjutsu's Openjutsu modes: their words (roles, what changes, the scene) travel in their settings, not the prompt
+  "group-swap", "scene-edit", "picture-frame", "picture-video", "face-fix-video", "tone-video", "describe-video",
 ]);
 
 /**

@@ -148,21 +148,143 @@
   }
 }
 
-/* ----- The bar's grouped menus (Studios, Apps, Motions & effects, Canvas): utility menus, so they are quick. The
-   panel drops in from the bar and its columns follow 20 ms apart (3 steps at most: every column reads by 260 ms). It
-   goes at once when it closes, so a menu that replaces it (data-switched, which just appears) never overlaps it. ----- */
-:is(#studios-launcher, [data-mega-panel]) {
-  --tw-duration: var(--motion-base);
-  --tw-ease: var(--ease-enter);
-  --tw-enter-translate-y: calc(var(--motion-d2) * -1);
+/* ----- The top bar's menus (bar-menus.tsx): quick utility motion, transitions only (never keyframes), so a change of
+   mind half-way turns back from where it is and a fast glide never restarts anything.
+   Big panels (Studios, Apps, Motions & effects, Canvas) sit on one shared sheet under the bar ([data-mega-stage]):
+   the sheet comes down from the bar (8 px, base, enter) and goes back up (4 px, fast, exit); between two panels its
+   bottom edge moves to the new height (transform only, base, standard) while the old content leaves sideways (fast,
+   exit) and the new one comes in from the side the pointer went, a stagger later: every switch ends by 240 ms. The
+   columns follow 20 ms apart on a fresh open (3 steps at most: every column reads by 260 ms), never on a switch.
+   Cards (Create, More) grow in from their item (scale 0.97, 4 px) and shrink out (0.98, fast, exit).
+   data-phase: open | exit (inert, still painted) | gone (hidden). Under reduced motion every token is 0. ----- */
+[data-mega-panel] {
   --launcher-step: calc(var(--motion-stagger) * 0.5);
+  --enter-delay: 0ms;
+  --exit-fade: var(--motion-fast);
+  opacity: 0;
+  translate: var(--exit-x, 0px) var(--exit-y, calc(var(--motion-d1) * -1));
+  pointer-events: none;
+  /* Cut at the shared sheet's edge (--panel-h, set on the bar): a taller panel never shows past it mid-switch. */
+  clip-path: inset(0 0 max(0px, calc(100% - var(--panel-h, 100%))) 0);
+  transition:
+    opacity var(--exit-fade) var(--ease-exit),
+    translate var(--motion-fast) var(--ease-exit);
   &[hidden] { display: none; }
-  &:not([hidden]) [data-col] { animation: motion-rise-near var(--motion-base) var(--ease-enter) backwards; }
-  &:not([hidden]) [data-col="1"] { animation-delay: var(--launcher-step); }
-  &:not([hidden]) [data-col="2"] { animation-delay: calc(var(--launcher-step) * 2); }
-  &:not([hidden]) :is([data-col="3"], [data-col="4"], [data-col="5"], [data-col="6"], [data-col="7"], [data-col="8"]) { animation-delay: calc(var(--launcher-step) * 3); }
-  &[data-switched] [data-col] { animation: none; }
+  &[data-phase="open"] {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+    transition:
+      opacity var(--motion-base) var(--ease-enter) var(--enter-delay),
+      translate var(--motion-base) var(--ease-enter) var(--enter-delay);
+  }
+  /* The one in front during a switch is the new one; the old one fades under it. */
+  &[data-phase="exit"] { z-index: 0; }
+  &[data-phase="open"] { z-index: 1; }
+  &[data-phase="open"][data-mega-enter="fresh"] [data-col] { animation: motion-rise-near var(--motion-base) var(--ease-enter) backwards; }
+  &[data-phase="open"][data-mega-enter="fresh"] [data-col="1"] { animation-delay: var(--launcher-step); }
+  &[data-phase="open"][data-mega-enter="fresh"] [data-col="2"] { animation-delay: calc(var(--launcher-step) * 2); }
+  &[data-phase="open"][data-mega-enter="fresh"] :is([data-col="3"], [data-col="4"], [data-col="5"], [data-col="6"], [data-col="7"], [data-col="8"]) { animation-delay: calc(var(--launcher-step) * 3); }
+  /* A menu still loading: its skeleton shows only after a moment (most loads finish first). */
+  & [data-mega-skeleton] { animation: motion-fade var(--motion-fast) var(--ease-enter) 150ms backwards; }
 }
+@starting-style {
+  [data-mega-panel][data-phase="open"] {
+    opacity: 0;
+    translate: var(--enter-x, 0px) var(--enter-y, calc(var(--motion-d2) * -1));
+  }
+}
+/* A switch between two big panels: each one's cut follows the sheet's edge, on the sheet's own timing. */
+[data-top-bar]:has([data-mega-stage][data-morph]) [data-mega-panel] {
+  transition:
+    opacity var(--exit-fade) var(--ease-exit),
+    translate var(--motion-fast) var(--ease-exit),
+    clip-path var(--motion-base) var(--ease-standard);
+  &[data-phase="open"] {
+    transition:
+      opacity var(--motion-base) var(--ease-enter) var(--enter-delay),
+      translate var(--motion-base) var(--ease-enter) var(--enter-delay),
+      clip-path var(--motion-base) var(--ease-standard);
+  }
+}
+[data-mega-stage] {
+  & [data-mega-backdrop] { translate: 0 calc(var(--panel-h, 0px) - 100%); }
+  &[data-morph] [data-mega-backdrop] { transition: translate var(--motion-base) var(--ease-standard); }
+  /* Comes down 8 px with the content (from where it rests while gone), goes back up 4 px. */
+  & [data-mega-sheet] {
+    opacity: 0;
+    translate: 0 calc(var(--motion-d1) * -1);
+    transition:
+      opacity var(--motion-fast) var(--ease-exit),
+      translate var(--motion-fast) var(--ease-exit);
+  }
+  &[data-phase="gone"] [data-mega-sheet] { translate: 0 calc(var(--motion-d2) * -1); transition: none; }
+  &[data-open] [data-mega-sheet] {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+      opacity var(--motion-base) var(--ease-enter),
+      translate var(--motion-base) var(--ease-enter);
+  }
+}
+[data-bar-card] {
+  transform-origin: top left;
+  opacity: 0;
+  scale: var(--motion-scale-out);
+  pointer-events: none;
+  transition:
+    opacity var(--motion-fast) var(--ease-exit),
+    scale var(--motion-fast) var(--ease-exit),
+    translate var(--motion-fast) var(--ease-exit);
+  &[hidden] { display: none; }
+  &[data-phase="open"] {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+    pointer-events: auto;
+    transition:
+      opacity var(--motion-base) var(--ease-enter),
+      scale var(--motion-base) var(--ease-enter),
+      translate var(--motion-base) var(--ease-enter);
+  }
+}
+@starting-style {
+  [data-bar-card][data-phase="open"] {
+    opacity: 0;
+    scale: var(--motion-scale-in);
+    translate: 0 calc(var(--motion-d1) * -1);
+  }
+}
+/* The open item's highlight (BarIndicator): it shows in place, slides from item to item (translate, and scale from the
+   old item's width: transform only), fades out last. */
+[data-bar-indicator] {
+  background-color: var(--nav-hi);
+  transform-origin: left center;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-exit);
+  &[data-on] { opacity: 1; transition: none; }
+  &[data-on][data-slide] {
+    transition:
+      translate var(--motion-base) var(--ease-standard),
+      scale var(--motion-base) var(--ease-standard);
+  }
+}
+/* The dimmed page under any open menu: in with the menu, out only once nothing has been open a moment (a switch never
+   fades it). Half the overlay's strength: the page stays as context for a menu that opens on hover. */
+[data-bar-scrim] {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-exit) 120ms;
+  &[data-open] { opacity: 0.5; transition: opacity var(--motion-base) var(--ease-standard); }
+}
+/* The overlay reads lighter on a dark page: a little more of it there, for the same calm dim. */
+.dark [data-bar-scrim][data-open] { opacity: 0.7; }
+/* The bar and an open big panel read as one surface: the bar's bottom line fades aside with the sheet coming in, and
+   back as it goes. */
+[data-top-bar] { transition: border-color var(--motion-fast) var(--ease-standard); }
+[data-top-bar]:has([data-mega-stage][data-open]) { border-bottom-color: transparent; }
+/* The chevron turns while its menu is open (a transition, so a reversal mid-turn starts from where it is). */
+[data-bar-chevron] { transition: transform var(--motion-base) var(--ease-standard); }
+[data-bar-menu][data-open] [data-bar-chevron] { transform: rotate(180deg); }
 
 /* ----- Toasts (sonner, top centre): in from just above, out quicker; the stack moves on the standard curve. ----- */
 [data-sonner-toaster] [data-sonner-toast] {

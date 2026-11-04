@@ -20,6 +20,7 @@
     "test:e2e:mobile": "node tests/e2e/no-horizontal-scroll.mjs",
     "test:e2e:shell": "node tests/e2e/shell.mjs",
     "test:e2e:mega-menus": "node tests/e2e/mega-menus.mjs",
+    "test:e2e:bar-menus": "node tests/e2e/bar-menus.mjs",
     "test:e2e:tabs": "node tests/e2e/instant-tabs.mjs",
     "test:e2e:motion": "node tests/e2e/motion.mjs",
     "test:e2e:tab-rows": "node tests/e2e/tab-rows.mjs",

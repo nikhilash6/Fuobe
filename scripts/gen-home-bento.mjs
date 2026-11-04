@@ -9,9 +9,9 @@
  * Output (public/previews/home/):
  *   reel-<name>-{640,1024}.mp4                each clip of the video tile's reel (REEL), and at 1536 and 2048 where its
  *                                             2048 px master is in the masters folder
- *   reel-one-take-<width>.avif                the reel's first clip's first frame at each of its widths: the tile's poster
+ *   reel-sand-storm-<width>.avif              the reel's first clip's first frame at each of its widths: the tile's poster
  *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile) at four widths, and each one's first frame
- *   reel-one-take-1024.jpg, rotation-1024.jpg the 1024 px clips' first frames, for a browser without AVIF
+ *   reel-sand-storm-1024.jpg, rotation-1024.jpg the 1024 px clips' first frames, for a browser without AVIF
  *   image-4-{480,768}.avif                the Image studio's example 4
  *   ba-{before,after}-{640,960,1280}.avif       Colorize's before and after (4:3)
  *   ba-{before,after}-tall-{432,691}.avif       the same pair, a 3:5 crop for the tall tile
@@ -83,13 +83,12 @@ const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
  * the tile is wider than the 4:3 clip, so only its top and bottom are cropped), and the CRF each width is encoded at
  * (chosen on close crops of faces and fine detail against the render; a busy picture, such as One Take's leaves, costs
  * more bits). The stretches are the ones that hold up frame by frame at the tile's size: One Take from the arch to its
- * look back (the render's last frame), Sand Storm until the sand fills the frame, Crane Over the Head from the profile
- * to the view. The first clip's first frame is the tile's poster.
+ * look back (the render's last frame) and Sand Storm from the first gust until the sand has wrapped round her (the render's last second relights the shot). The first clip's first frame is the
+ * tile's poster.
  */
 export const REEL = [
+  { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 96, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
   { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
-  { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 84, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
-  { id: "motion-crane-over-the-head", name: "reel-crane-over", from: 36, frames: 88, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
 ];
 /**
  * The 3D tile's clip: its published preset, the name of its copies here, and the CRF each width is encoded at (the

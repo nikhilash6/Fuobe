@@ -334,3 +334,28 @@ export function fadeInOnLoad(img: HTMLImageElement, { offScreenOnly = false }: {
   if (img.complete) return fail();
   img.dataset.fade = "wait";
 }
+
+/**
+ * The top-bar menus' intent timings (ms, px). Not motion: they stay the same under reduced motion, because they guard
+ * against menus opening by accident while the pointer crosses the bar.
+ */
+export const NAV_INTENT = {
+  /** The pointer rests this long on an item before its menu opens. */
+  rest: 120,
+  /** "Rests" = stays within this many px of where it stopped. */
+  restSlop: 8,
+  /** The menu opens anyway after this long on one item. */
+  restCap: 600,
+  /** A menu the pointer opened closes this long after the pointer left it and its item. */
+  grace: 300,
+  /** An item entered this soon after a menu closed opens at once (and at once while one is open). */
+  switchWindow: 300,
+  /** A switch waits at most this long while the pointer heads into the open menu. */
+  aimHold: 100,
+  /** Heading into the open menu holds a close at most this long beyond the grace. */
+  aimMax: 300,
+  /** A pointer that has not moved for this long has stopped (no longer heading anywhere). */
+  aimStop: 60,
+  /** A hover open waits at most this long for its menu's data. */
+  dataWait: 150,
+} as const;

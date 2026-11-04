@@ -453,6 +453,8 @@ export const ASSET_FREE: Record<string, string> = {
   "auth_tokens.extra_json": "an API token's fields this build doesn't know",
   "auth_accounts.extra_json": "an account's fields this build doesn't know",
   "auth_account_gpu.url": "the address of an account's own ComfyUI, never a Fuobe file",
+  "auth_stray_files.counts_json": "how many accounts and tokens a set-aside auth.json lists",
+  "auth_stray_files.account_ids_json": "ids of the accounts a set-aside auth.json lists that the database doesn't have",
   "shorts_sessions.range_json": "start and end times",
   "shorts_sessions.settings_json": "ratio, language, model and resolution",
   "shorts_sessions.segments_json": "generation ids of each take",

@@ -365,6 +365,7 @@ export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () =
           href={area.href}
           aria-current={pathname === area.href ? "page" : undefined}
           aria-label={model?.seeAll.name ?? `See all ${area.label.toLowerCase()}`}
+          data-see-all
           className="nav-row group/all -ml-1 inline-flex h-9 items-center gap-1 rounded-[10px] px-2 text-[13px] font-medium text-brand-text"
         >
           See all

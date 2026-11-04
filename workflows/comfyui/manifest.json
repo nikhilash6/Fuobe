@@ -13464,7 +13464,7 @@
       ],
       "vramGb": 24,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1 and Viggle's turbo LoRA, a derivative): NON-COMMERCIAL, research and evaluation only; the viggle_turbo node file ships in the same model repo under the same terms",
-      "validated": false,
+      "validated": true,
       "notes": "Built from Viggle's ComfyUI edit workflow (Viggle/Qwen-Image-2.1-viggle-turbo, comfyui/) with one reference: the int8 Qwen-Image 2.1 model, the v0.2.1 6-step LoRA (r256) on ViggleTurboLora at 1.0 (applied unmerged; it reads lora_alpha / r from the file's metadata), QwenImage21Cache auto, TextEncodeQwenImage21 at resolution 1024 (about 1 MP, sides on the 32 grid), positive only, BasicGuider (no CFG), euler, ViggleTurboSigmas \"1.0, 0.9375, 0.875, 0.75, 0.5, 0.25\" (the raw nodes, shifted for the latent's size), RandomNoise, SamplerCustomAdvanced, VAEDecode. The words come from the placed lights (\"Relight the photo with a strong sunset orange light coming from the left, at face height, far away. The scene is in darkness, lit only by these lights …\"), so the result is lit only by them and the page blends it with the original (Intensity). Image 2 is an optional light-guide picture (the rig drawn over the darkened photo), dropped when not given. The seed comes from the photo, so moving one light changes only that light. A Pruna 8-step v0.1 LoRA in its place must also load through ViggleTurboLora at 1.0: its x2 strength is only in the metadata, so LoraLoaderModelOnly at 1.0 gives half."
     },
     {
@@ -13522,7 +13522,7 @@
       "customNodes": [],
       "vramGb": 6,
       "license": "Depth Anything 3 mono large: Apache-2.0 (model card) · BiRefNet: MIT",
-      "validated": false,
+      "validated": true,
       "notes": "One photo in, two grey PNGs out, for the Relight page's depth-true preview: DA3Inference (mono, 504, lower-bound resize) and DA3Render depth with v2_style normalisation (near = bright), and the core background-removal nodes (birefnet.safetensors) with the mask saved as a picture (white = subject). Runs once per photo; its runs are helper steps the Library leaves out."
     },
     {
@@ -25396,7 +25396,7 @@
       "customNodes": [],
       "vramGb": 8,
       "license": "MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
-      "validated": false,
+      "validated": true,
       "notes": "Step 1 of Any Angle, run once per photo (the server keeps the result by the photo's sha256; feature any-angle-step, out of Library). image-to-splat-triposplat's chain with the cut-out always on (without it a turned camera shows the photo as a flat card with black wedges), seeds fixed at 46 for the sampler and the decoder (the same photo gives the same 3D view), 20 steps, cfg 3, dpmpp_2m, 262,144 Gaussians. Outputs: the splat as .spz (role splat, about 3 MB: every angle reloads it), a 48-frame turntable from yaw 0 at pitch 10, distance 2, fov 33, 512 px, 12 fps (role turntable, shown while picking), the same frames at 192 px as lossless animated WebP, colour (role sweep) and RenderSplat's coverage mask (role sweep-mask), the BiRefNet cut-out (role matte) and a GLB from core SplatToMesh at 256 (role mesh, the desktop drag view). The server compares the sweep with the cut-out photo (silhouette overlap and colour correlation, the GPU test's measure) to find the photo's front yaw and distance: TripoSplat drops its own camera estimate and puts each subject in a pose of its own (the test found yaw 125, 75 and 90 on three photos). GPU test (RTX 5090): cut-out 0.8-1.3 s, TripoSplat 1.0 + 18-19.4 + 0.4 s, .spz save under 0.05 s, 48 frames at 512 px 20-37 s, mesh 0.4-0.5 s; about 8.7 GiB peak."
     },
     {
@@ -25543,7 +25543,7 @@
       "customNodes": [],
       "vramGb": 32,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1, Qwen3-VL 8B encoder, VAE): NON-COMMERCIAL, research and evaluation only; the AnyAngle LoRA (lilylilith/QI_2.1_AnyAngle) Apache-2.0",
-      "validated": false,
+      "validated": true,
       "notes": "Step 2 of Any Angle, one job per angle. The saved .spz goes in like any input (splatFile) and Load3D reads it without the browser: its image entry points at the photo (the provider fills it), then File3DToSplat. CreateCameraInfo orbit takes the camera Fuobe works out (the photo's measured front view plus the preset's turn, height and distance; a close-up aims at the face's height), RenderSplat renders it at the photo's shape (up to 2048 px, black background). Qwen-Image 2.1 int8 + the AnyAngle LoRA at 1.0, loaded here (one model loader, so no request LoRA lands on another), TextEncodeQwenImage21 with the LoRA's own prompt \"Change the camera angle from <image2> to <image1>.\", image 1 the original photo, image 2 the render, resolution 1024 (about 1 MP out: 1184x896 from a 1536x1152 photo), KSampler 25 steps, cfg 1, euler, simple, seed 46. GPU test (RTX 5090): reload + render 2.3 s (a rebuild would be about 20 s), text encode 5.4 s, sampler 22.6 s, about 30 s an angle, peak 28.4-29.2 GiB (card total, with the desktop): vramGb 32, since a 24 GB card has no room to spare. Tested against the alternatives: the other image order gives back the original angle, cfg 3 is 5x slower and no better, bf16 is 2x slower, the photo behind the render adds a ghost second person, grey is no better than black."
     },
     {
@@ -27866,7 +27866,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT",
-      "validated": false,
+      "validated": true,
       "notes": "video = the part (Genjutsu fits it first), image..image4 = the characters (unused pictures, their shrink and describer are deleted). params.extra.openjutsu: pictures, roles (one line each, ordinal fill), quality 480p | 720p (pack 736p) | 1080p, motion 512 | 768, hats, mouthsFollowSound, edge tight | normal | loose (20 / 40 / 60 px), seed. Every job runs under its own Context Loop run name (fuobe_<generation id>); the provider deletes output/h3_chains/<run> through the pack's run-folder routes once the result is in. Weights touched one stage after another: H3 21 GB, NVFP4 text encoder 15.7 GB, describer 9.4 GB, SAM 3.1 1.7 GB, VAEs 3.8 GB. Upstream timing: 6 s at 480p in 6-13 min on a 16 GB card."
     },
     {
@@ -28074,7 +28074,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT",
-      "validated": false,
+      "validated": true,
       "notes": "params.extra.openjutsu: action change | remove | background, target (SAM words, comma list; background: what stays), becomes, picture (image sent), biggestOnly, keepShape, edge (10 / 20 / 40 px), motion, quality, seed, paint (one run-length keyframe at <= 256 px). Remove drops the picture and the grey shape; background flips the grown mask. Own run name and run-folder clean-up as video-group-swap-h3."
     },
     {
@@ -28631,7 +28631,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT · YOLO face/person weights AGPL-3.0 · SAM ViT-B Apache-2.0 · InsightFace buffalo_l (identity tracking): NON-COMMERCIAL research only",
-      "validated": false,
+      "validated": true,
       "notes": "video = the finished video, image = the character photo. params.extra.openjutsu: faceStyle photo | mouth, chunkSeconds 4 | 6.5 | 10, seed. H3FaceTrackCrop.select is largest_face (H3-FaceRefine 1.1.1). The whole clip is decoded and pasted back at full size (two frame-sized copies of every frame: 1080p 10 s is about 12 GB), so a part is fitted to 1080 px on its short side and kept to 10 s.",
       "autoDownloads": [
         "YOLO face and person detectors (ultralytics/bbox/face_yolov8m.pt, ultralytics/segm/person_yolov8m-seg.pt), SAM ViT-B (sams/sam_vit_b_01ec64.pth) and InsightFace buffalo_l (insightface/models/buffalo_l), as H3-FaceRefine documents"
@@ -28692,7 +28692,7 @@
       ],
       "vramGb": 2,
       "license": "n/a (no model; Image Detail Contrast MIT, Orion4D_FXMax MIT, VideoHelperSuite GPL-3.0 code)",
-      "validated": false,
+      "validated": true,
       "notes": "params.extra.openjutsu: finish soft | filmic | rich | off (the tone mapper's settings travel in raw_settings, no preset files), strength 0-1 (Orion 0-0.5), soften 0-1 (detail contrast 0 to -0.6; 0 drops the step). Both steps work frame by frame, so the clip goes through in passes (VHS_BatchManager re-queues the prompt until the clip is done, as upscale-video-esrgan-chunked does) into one H.264 encode that stays open; the last pass writes the file with the source's sound. framesPerBatch: the provider sizes it from the clip's header so a pass holds about 1.5 GB of frames (three frame-sized copies: decoded, softened, toned), so memory stays flat whatever the length."
     }
   ]

@@ -137,7 +137,11 @@ log-in (the CSV always has them). Running now counts as the run limit does: a ba
 going is one run. A line above the list gives the runs of every account in the last 24 hours and 7
 days, the runs going now, and the space all accounts' files take against their share of the disk.
 The owner can switch an account off (it is signed out at once and can't log in) or delete it, and
-export the list as CSV.
+export the list as CSV. If an `auth.json` turns up in the data folder after the sign-in data moved
+into the database, the section also shows a notice. Visitors never see it. The file is not used: it
+is set aside under a new name, and sign-in goes on from the database. The notice gives the file's
+name and how many accounts and API tokens it lists
+([Sign-in data](SELF-HOSTING.md#sign-in-data)).
 
 **Accounts' runs** (`/settings/runs`, from the list) shows what accounts made, newest first: one
 account's or every account's, each labelled with its email, filtered by account, status (finished,

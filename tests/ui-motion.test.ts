@@ -67,8 +67,9 @@ describe("motion tokens", () => {
     for (const t of css.matchAll(/transition:\s*([^;]+);/g)) {
       for (const part of t[1].split(",")) {
         const prop = part.trim().split(/\s+/)[0];
-        // Sonner's own stack height and its focus shadow are kept from the library; background colour is a colour; none ends one at once.
-        expect(["none", "opacity", "translate", "scale", "transform", "display", "height", "box-shadow", "background-color"]).toContain(prop);
+        // Sonner's own stack height and its focus shadow are kept from the library; background and border colours are
+        // colours; a menu's cut (clip-path) only paints; none ends one at once.
+        expect(["none", "opacity", "translate", "scale", "transform", "display", "height", "box-shadow", "background-color", "border-color", "clip-path"]).toContain(prop);
       }
     }
   });

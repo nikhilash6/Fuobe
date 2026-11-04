@@ -16,6 +16,9 @@ export const DATA_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.FUOBE
  *   was written out again for an older build by scripts/auth-export.mjs ("exported", with the version it wrote).
  * - auth_tokens, auth_accounts (one per email, lower-cased), auth_account_gpu and auth_account_keys (rows of an
  *   account, removed with it), auth_signed_out (signed-out cookies by their SHA-256, until they would have expired).
+ * - auth_stray_files: each auth.json found after the move and set aside unread (auth.json.stray-<UTC time>): when, why,
+ *   its counts (for the owner's notice) and the ids of the accounts it lists that the database doesn't have (the account
+ *   sweep keeps their files while that file is there). Never an email, a hash or a secret.
  * Safe to run on every start.
  */
 export const AUTH_TABLES = `CREATE TABLE IF NOT EXISTS auth_install (
@@ -82,7 +85,14 @@ export const AUTH_TABLES = `CREATE TABLE IF NOT EXISTS auth_install (
     hash TEXT PRIMARY KEY,
     exp INTEGER NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS auth_signed_out_exp ON auth_signed_out(exp);`;
+  CREATE INDEX IF NOT EXISTS auth_signed_out_exp ON auth_signed_out(exp);
+  CREATE TABLE IF NOT EXISTS auth_stray_files (
+    name TEXT PRIMARY KEY,
+    found_at INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    counts_json TEXT,
+    account_ids_json TEXT
+  );`;
 
 /** Run in order, once each: a migration is known by its place in this list (append only, never reorder). */
 export const MIGRATIONS: string[] = [
@@ -909,6 +919,7 @@ const AUTH_COLUMNS: Record<string, string[]> = {
   auth_account_gpu: ["account_id", "mode", "url", "token"],
   auth_account_keys: ["account_id", "provider", "sealed", "last4", "added_at", "rejected_at"],
   auth_signed_out: ["hash", "exp"],
+  auth_stray_files: ["name", "found_at", "reason", "counts_json", "account_ids_json"],
 };
 
 /** Make the sign-in tables and check they are ours. Never throws: a problem is kept for auth-store.ts, which fails closed. */

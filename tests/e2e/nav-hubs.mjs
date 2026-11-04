@@ -1,7 +1,7 @@
-// The area pages (/create, /studios, /apps, /motions-and-effects) and the bar's split items in a real browser: a name goes
-// to its page, a chevron (or ArrowDown, or a mouse resting on Create or Motions & effects) opens the menu, every menu and
-// phone sheet has "See all", section tabs stay under the bar, the bar keeps its width, taps are 44 px, nothing shifts,
-// nothing scrolls sideways, no console errors.
+// The area pages (/create, /studios, /apps, /motions-and-effects, /canvas) and the bar's menu items in a real browser:
+// each item is one button that opens its menu (a click, a tap, ArrowDown, or a mouse resting on it) and never leaves the
+// page, every menu and phone sheet has "See all" to its area's page, section tabs stay under the bar, the bar keeps its
+// width, taps are 44 px, nothing shifts, nothing scrolls sideways, no console errors.
 // Usage: node tests/e2e/nav-hubs.mjs [appUrl] [shotsDir]
 //   E2E_OWNER_PASSWORD: the studio's password, when it has one. With public sign-up on, the account checks sign up a
 //   throwaway qa account (deleted at the end); without it the visitor is the owner and the guest/account checks are skipped.
@@ -54,142 +54,110 @@ async function page(ctx) {
 const bar = (p) => p.locator("[data-top-bar]");
 const pathOf = (p) => new URL(p.url()).pathname;
 const activeName = (p) => p.evaluate(() => (document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent || "").replace(/\s+/g, " ").trim());
-const activeRole = (p) => p.evaluate(() => document.activeElement?.getAttribute("role") ?? document.activeElement?.tagName.toLowerCase());
 const waitPath = (p, want) => p.waitForURL((u) => new URL(u).pathname === want, { timeout: 20_000 }).then(() => true, () => false);
 
 try {
-  // 1. Desktop: names go to their pages, chevrons open menus, keys, hover, See all.
+  // 1. Desktop: each item is one button that opens its menu (never leaves the page), keys, hover, See all.
   {
     const ctx = await as("visitor");
     const p = await page(ctx);
     await openRoute(p, `${app}/image`);
     const items = [
-      { name: "Create", href: "/create", chevron: "Create menu", seeAll: "See all of Create" },
-      { name: /^Studios, \d+ studios$/, href: "/studios", chevron: "Studios menu", seeAll: "See all studios", panel: "#studios-launcher", hover: true },
-      { name: "Apps", href: "/apps", chevron: "Apps menu", seeAll: "See all apps", panel: "#apps-launcher", hover: true },
-      { name: "Motions & effects", href: "/motions-and-effects", chevron: "Motions & effects menu", seeAll: "See all motions and effects", panel: "#motions-launcher", hover: true },
-      { name: "Canvas", href: "/canvas", chevron: "Canvas menu", seeAll: "See all of Canvas", panel: "#canvas-launcher", hover: true },
+      { id: "create", href: "/create", seeAll: "See all of Create" },
+      { id: "studios", href: "/studios", seeAll: "See all studios" },
+      { id: "apps", href: "/apps", seeAll: "See all apps" },
+      { id: "motions", href: "/motions-and-effects", seeAll: "See all motions and effects" },
+      { id: "canvas", href: "/canvas", seeAll: "See all of Canvas" },
     ];
-    // The grouped menus (a panel under the bar) and Create (a menu).
-    const seeAllIn = (it) =>
-      (it.panel ? p.locator(it.panel).getByRole("link", { name: it.seeAll, exact: true }) : p.getByRole("menu").getByRole("menuitem", { name: it.seeAll, exact: true }));
-    const anyPanel = () => p.locator("[data-mega-panel]:visible").count().then((n) => n > 0);
+    const trig = (id) => bar(p).locator(`[data-bar-menu="${id}"]`);
+    const surf = (id) => p.locator(id === "create" ? "#create-menu" : `#${id}-launcher`);
+    const seeAllIn = (it) => surf(it.id).getByRole("link", { name: it.seeAll, exact: true });
+    const anyOpen = () => p.locator('[data-top-bar] [data-phase="open"]').count().then((n) => n > 0);
+    const isOpen = (id) => surf(id).getAttribute("data-phase").then((v) => v === "open");
+
+    // A click opens the menu and stays on the page; Esc closes it and gives focus back to the item.
     for (const it of items) {
       await openRoute(p, `${app}/image`, { settleMs: 300 });
-      await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).click();
-      const went = await waitPath(p, it.href);
-      await p.locator("main h1").first().waitFor();
-      check(went, `${it.href}: clicking the bar's name opens it`, pathOf(p));
-      const current = await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).getAttribute("aria-current");
-      const others = await bar(p).locator('[data-bar-split] a[aria-current="page"]').count();
-      check(current === "page" && others === 1, `${it.href}: its name is aria-current=page, and no other split item's`, `${current}, ${others}`);
-      check((await p.getByRole("menu").count()) === 0 && !(await anyPanel()), `${it.href}: following the name opens no menu`);
+      await trig(it.id).click();
+      await surf(it.id).waitFor({ state: "visible" });
+      check(pathOf(p) === "/image" && (await trig(it.id).getAttribute("aria-expanded")) === "true", `${it.href}: a click on the item opens its menu and stays on the page`);
+      await p.keyboard.press("Escape");
+      await surf(it.id).waitFor({ state: "hidden" });
+      check(await trig(it.id).evaluate((b) => b === document.activeElement), `${it.href}: Esc closes it and focus goes back to the item`);
     }
 
-    // The chevron: click opens, Esc closes and gives focus back to it.
-    await openRoute(p, `${app}/image`, { settleMs: 300 });
-    for (const name of ["Create menu"]) {
-      const chev = bar(p).getByRole("button", { name, exact: true });
-      await chev.click();
-      const menu = p.getByRole("menu");
-      const opened = await menu.waitFor({ timeout: 5_000 }).then(() => true, () => false);
-      check(opened && (await chev.getAttribute("data-state")) === "open", `${name}: the chevron opens it`);
-      check(pathOf(p) === "/image", `${name}: opening it stays on the page`);
-      await p.keyboard.press("Escape");
-      await menu.waitFor({ state: "detached" }).catch(() => {});
-      check(await chev.evaluate((b) => b === document.activeElement), `${name}: Esc closes it and focus goes back to the chevron`);
-    }
-    for (const it of items.filter((x) => x.panel)) {
-      const chev = bar(p).getByRole("button", { name: it.chevron, exact: true });
-      const panel = p.locator(it.panel);
-      await chev.click();
-      await panel.waitFor({ state: "visible" });
-      await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 5_000 }).catch(() => {});
-      const at = await p.evaluate(() => [document.activeElement?.getAttribute("data-col"), document.activeElement?.getAttribute("data-row")].join(","));
-      const first = it.href === "/studios" ? /^Cinema Studio/.test(await activeName(p)) : at === "0,0";
-      check(first && pathOf(p) === "/image", `${it.chevron}: the chevron opens the panel on its first lead card`, `${at} ${await activeName(p)}`);
-      await p.keyboard.press("Escape");
-      await panel.waitFor({ state: "hidden" });
-      check(await chev.evaluate((b) => b === document.activeElement), `${it.chevron}: Esc closes it and focus goes back to the chevron`);
+    // Each area page marks its own item, and no other.
+    for (const it of items) {
+      await openRoute(p, app + it.href, { settleMs: 300 });
+      const marked = await bar(p).locator("[data-bar-menu][data-active]").evaluateAll((els) => els.filter((e) => e.checkVisibility()).map((e) => e.dataset.barMenu));
+      check(marked.join() === it.id, `${it.href}: its item is marked, no other`, marked.join());
+      check(!(await anyOpen()), `${it.href}: arriving opens no menu`);
     }
 
-    // ArrowDown on a name opens its menu on the first row.
+    // ArrowDown on an item opens its menu on the first row; Esc gives focus back to the item.
     for (const it of items) {
       await openRoute(p, `${app}/image`, { settleMs: 300 });
-      await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).focus();
+      await trig(it.id).focus();
       await p.keyboard.press("ArrowDown");
-      await p.waitForTimeout(250);
       // A fetched menu's links may come a moment later: focus moves in once they are there.
-      if (it.panel) await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 5_000 }).catch(() => {});
-      const role = await activeRole(p);
-      const name = await activeName(p);
+      await p.waitForFunction((sel) => document.activeElement?.closest(sel), it.id === "create" ? "#create-menu" : "[data-mega-panel]", { timeout: 5_000 }).catch(() => {});
       const at = await p.evaluate(() => [document.activeElement?.getAttribute("data-col"), document.activeElement?.getAttribute("data-row")].join(","));
-      const ok = it.panel ? at === "0,0" : role === "menuitem";
-      check(ok && pathOf(p) === "/image", `${it.href}: ArrowDown on the name opens the menu on its first row`, `${role} ${name}`);
+      check(at === "0,0" && pathOf(p) === "/image", `${it.href}: ArrowDown on the item opens the menu on its first row`, `${at} ${await activeName(p)}`);
       await p.keyboard.press("Escape");
       await p.waitForTimeout(150);
-      const back = await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).evaluate((a) => a === document.activeElement);
-      check(back, `${it.href}: Esc after ArrowDown on the name gives focus back to the name`);
+      check(await trig(it.id).evaluate((a) => a === document.activeElement), `${it.href}: Esc after ArrowDown gives focus back to the item`);
     }
 
-    // A mouse resting on any item with a menu opens it after a moment, leaves focus in the prompt being typed, and
-    // leaving closes it.
+    // A mouse resting on any item opens its menu after a moment, leaves focus in the prompt being typed, and leaving
+    // closes it.
     await openRoute(p, `${app}/image`, { settleMs: 300 });
     const prompt = p.locator("main textarea").first();
     for (const it of items) {
       await prompt.focus();
-      const label = bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" });
-      const box = await label.boundingBox();
+      const box = await trig(it.id).boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await p.waitForTimeout(120);
-      const early = it.panel ? await anyPanel() : (await p.getByRole("menu").count()) > 0;
+      await p.waitForTimeout(40);
+      const early = await anyOpen();
       await p.waitForTimeout(450);
-      const late = it.panel ? await anyPanel() : (await p.getByRole("menu").count()) > 0;
-      if (it.panel && !it.hover) {
-        check(!early && !late, `${it.href}: resting the mouse on it opens nothing (its panel opens by a click or a key)`, `${early} → ${late}`);
-      } else {
-        check(!early && late, `${it.href}: resting the mouse on it opens its menu after a moment, not at once`, `${early} → ${late}`);
-        check((await seeAllIn(it).count()) === 1, `${it.href}: the menu has its See all`);
-      }
-      const kept = await prompt.evaluate((el) => el === document.activeElement);
-      check(kept, `${it.href}: resting on it leaves focus in the prompt`, await activeName(p));
-      await p.mouse.move(700, 800);
-      await p.waitForTimeout(600);
-      // Away from the item and its panel (a full-width panel reaches down the page): the bar's far left.
-      if (it.hover && it.panel) await p.mouse.move(6, 28);
-      await p.waitForTimeout(it.hover ? 400 : 0);
-      const gone = it.panel ? !(await anyPanel()) : (await p.getByRole("menu").count()) === 0;
-      check(gone, `${it.href}: moving the mouse away closes it`);
+      const late = await isOpen(it.id);
+      check(!early && late, `${it.href}: resting the mouse on it opens its menu after a moment, not at once`, `${early} → ${late}`);
+      check((await seeAllIn(it).count()) === 1, `${it.href}: the menu has its See all`);
+      check(await prompt.evaluate((el) => el === document.activeElement), `${it.href}: resting on it leaves focus in the prompt`, await activeName(p));
+      // Away from the item and its menu (a full-width panel reaches down the page): the bar's far left.
+      await p.mouse.move(6, 28);
+      await p.waitForTimeout(700);
+      check(!(await anyOpen()), `${it.href}: moving the mouse away closes it`);
     }
 
-    // Resting on a pinned launcher's neighbour: one panel at a time.
+    // With Studios pinned open, resting on Create: one menu at a time.
     {
       await openRoute(p, `${app}/image`, { settleMs: 300 });
-      await bar(p).getByRole("button", { name: "Studios menu", exact: true }).click();
-      await p.locator("#studios-launcher").waitFor({ state: "visible" });
-      const box = await bar(p).getByRole("link", { name: "Create", exact: true }).boundingBox();
+      await trig("studios").click();
+      await surf("studios").waitFor({ state: "visible" });
+      const box = await trig("create").boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await p.waitForTimeout(600);
-      const launcher = await p.locator("#studios-launcher").isVisible().catch(() => false);
-      check(!launcher && (await p.getByRole("menu").count()) === 1, "resting on Create while the launcher is open swaps one for the other", `launcher ${launcher}`);
-      await p.mouse.move(700, 800);
+      await p.waitForTimeout(400);
+      check(!(await isOpen("studios")) && (await isOpen("create")), "moving onto Create while Studios is open swaps one for the other");
+      await p.keyboard.press("Escape");
+      await p.mouse.move(6, 28);
       await p.waitForTimeout(600);
     }
 
-    // On an area's own page, resting on its name opens nothing over it.
-    for (const it of items.filter((x) => !x.panel || x.hover)) {
+    // On an area's own page, resting on its item opens its menu too (the same on every page).
+    for (const it of items) {
       await openRoute(p, app + it.href, { settleMs: 300 });
-      const box = await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).boundingBox();
+      const box = await trig(it.id).boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await p.waitForTimeout(700);
-      check((await p.getByRole("menu").count()) === 0 && !(await anyPanel()), `${it.href}: resting on its own name there opens nothing`);
-      await p.mouse.move(700, 800);
+      await p.waitForTimeout(500);
+      check(await isOpen(it.id), `${it.href}: resting on its own item there opens its menu`);
+      await p.mouse.move(6, 28);
+      await p.waitForTimeout(600);
     }
 
     // See all goes to the page.
     for (const it of items) {
       await openRoute(p, `${app}/image`, { settleMs: 300 });
-      await bar(p).getByRole("button", { name: it.chevron, exact: true }).click();
+      await trig(it.id).click();
       await seeAllIn(it).click();
       check(await waitPath(p, it.href), `${it.href}: See all in the menu opens it`, pathOf(p));
     }
@@ -197,21 +165,20 @@ try {
     await ctx.close();
   }
 
-  // 2. A touch screen never opens a menu by hovering: a tap on the name goes to the page.
+  // 2. A touch screen: a tap on an item opens its menu (it stays on the page), a second tap closes it; 44 px to tap.
   {
     const ctx = await as("visitor", { viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true });
     const p = await page(ctx);
     await openRoute(p, `${app}/image`);
-    const fine = await p.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches);
-    const label = bar(p).getByRole("link", { name: "Create", exact: true });
-    const box = await label.boundingBox();
-    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await p.waitForTimeout(500);
-    check(!fine && (await p.getByRole("menu").count()) === 0, "touch: resting on Create opens nothing");
-    const chev = await bar(p).getByRole("button", { name: "Create menu" }).boundingBox();
-    check(chev.width >= 44 && chev.height >= 44, "touch: the chevron is 44x44", `${chev.width}x${chev.height}`);
-    await label.tap();
-    check((await waitPath(p, "/create")) && (await p.getByRole("menu").count()) === 0, "touch: a tap on Create goes to /create");
+    const item = bar(p).locator('[data-bar-menu="create"]');
+    const box = await item.boundingBox();
+    check(box.width >= 44 && box.height >= 44, "touch: the Create item is at least 44x44", `${box.width}x${box.height}`);
+    await item.tap();
+    await p.waitForTimeout(300);
+    check(pathOf(p) === "/image" && (await p.locator("#create-menu").getAttribute("data-phase")) === "open", "touch: a tap on Create opens its menu and stays on the page");
+    await item.tap();
+    await p.waitForTimeout(300);
+    check((await p.locator("#create-menu").getAttribute("data-phase")) !== "open", "touch: a second tap closes it");
     await ctx.close();
   }
 
@@ -236,26 +203,27 @@ try {
             return { spare: Math.round(spacer.getBoundingClientRect().width), clipped: nav.scrollWidth - nav.clientWidth > 1 || h.scrollWidth - h.clientWidth > 1, hidden: nav.scrollWidth - nav.clientWidth };
           });
           rows.push(`${as_}${coarse ? " (touch)" : ""} @${w}: ${m.spare}px spare`);
-          // With a mouse, each split item is exactly as wide as the plain item it replaced: its name, then 40 px (48 from
-          // 1440) for the padding, the gap and the chevron.
+          // With a mouse, each menu item is no wider than the split item it replaced (its words, then 40 px, 48 from
+          // 1440, for the padding, the gap and the chevron), so the bar never grows.
           if (!coarse) {
             const off = await bar(p).evaluate((h, pad) => {
               const bad = [];
-              for (const s of h.querySelectorAll("[data-bar-split]")) {
+              for (const s of h.querySelectorAll("[data-bar-menu]:not([data-bar-menu=more])")) {
                 const r = s.getBoundingClientRect();
                 if (!r.width) continue;
                 const range = document.createRange();
-                range.selectNodeContents(s.querySelector("a"));
+                range.setStartBefore(s.firstChild);
+                range.setEndBefore(s.querySelector("[data-bar-chevron]"));
                 const text = range.getBoundingClientRect().width;
-                if (Math.abs(r.width - (text + pad)) > 1) bad.push(`${s.textContent.trim()} ${Math.round(r.width)} vs ${Math.round(text + pad)}`);
+                if (r.width > text + pad + 1) bad.push(`${s.textContent.trim()} ${Math.round(r.width)} vs ${Math.round(text + pad)}`);
               }
               return bad;
             }, w >= 1440 ? 48 : 40);
-            check(off.length === 0, `bar width: ${as_} at ${w}, each split item is as wide as the item it replaced`, off.join("; "));
+            check(off.length === 0, `bar width: ${as_} at ${w}, each menu item is no wider than the split item it replaced`, off.join("; "));
           }
-          // Nothing cut off. With a mouse, the split items are the old items' width (checked above), so a cut there is the
+          // Nothing cut off. With a mouse, the menu items are no wider than before (checked above), so a cut there is the
           // bar's own (a guest's Log in and Sign up at 1440 cut 15 px before the split items too): reported, not failed.
-          // On a touch screen the chevrons are wider (44 px), so there the bar must still fit.
+          // On a touch screen the items are 44 px tall and at least 44 wide, so there the bar must still fit.
           if (coarse || !m.clipped) check(!m.clipped, `bar width: ${as_}${coarse ? " on touch" : ""} at ${w}, everything fits`, `${m.spare}px spare, ${m.hidden}px cut`);
           else console.log(`note: bar width: ${as_} at ${w}: the bar's items are cut by ${m.hidden}px (as before the split items)`);
         }

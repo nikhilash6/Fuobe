@@ -16,7 +16,7 @@ import {
   fromFuobeAngles,
   fromOrbit,
   orbitOf,
-  PORTRAIT_MAX_PITCH,
+  PORTRAIT_MAX_RISE,
   presetById,
   presetsFor,
   renderSize,
@@ -66,9 +66,12 @@ describe("the cameras", () => {
     expect(wrapYaw(-190)).toBe(170);
   });
 
-  it("keeps the high angle at 35° above level on a portrait, and the low angle at 25° under the front", () => {
+  it("keeps the high angle at 20° over the front on a portrait, and the low angle at 25° under the front", () => {
     expect(cameraFor(FULL, presetById("above")!).pitch).toBe(40);
-    expect(cameraFor(PORTRAIT, presetById("above")!).pitch).toBe(PORTRAIT_MAX_PITCH);
+    expect(cameraFor(PORTRAIT, presetById("above")!).pitch).toBe(PORTRAIT.pitch + PORTRAIT_MAX_RISE);
+    // The cap follows the front view's height, not a fixed angle above level.
+    expect(cameraFor({ ...PORTRAIT, pitch: 20 }, presetById("above")!).pitch).toBe(40);
+    expect(cameraFor({ ...PORTRAIT, pitch: 0 }, presetById("above")!).pitch).toBe(20);
     expect(cameraFor(FULL, presetById("below")!).pitch).toBe(-15);
     expect(cameraFor(FULL, presetById("below")!).distance).toBe(1.74);
   });
@@ -98,7 +101,7 @@ describe("the cameras", () => {
   it("keeps a camera turned by hand inside what the tests covered", () => {
     expect(clampCustom(FULL, { yaw: 170, pitch: 80, distance: 3 })).toEqual({ yaw: CUSTOM_LIMITS.yawPeople, pitch: CUSTOM_LIMITS.pitchMax, distance: CUSTOM_LIMITS.distanceMax });
     expect(clampCustom(BAG, { yaw: -170, pitch: -60, distance: 0.1 })).toEqual({ yaw: -CUSTOM_LIMITS.yawObjects, pitch: CUSTOM_LIMITS.pitchMin, distance: CUSTOM_LIMITS.distanceMin });
-    expect(clampCustom(PORTRAIT, { yaw: 0, pitch: 40, distance: 1 }).pitch).toBe(PORTRAIT_MAX_PITCH - PORTRAIT.pitch);
+    expect(clampCustom(PORTRAIT, { yaw: 0, pitch: 40, distance: 1 }).pitch).toBe(PORTRAIT_MAX_RISE);
     expect(customCamera(FULL, { yaw: -40, pitch: 10, distance: 0.8 })).toMatchObject({ yaw: 85, pitch: 20, distance: 1.46 });
     expect(customLabel({ yaw: 40, pitch: 8, distance: 0.7 })).toBe("Custom · 40° right, slightly above, closer");
     expect(customLabel({ yaw: 0, pitch: 0, distance: 1 })).toBe("Custom · front");

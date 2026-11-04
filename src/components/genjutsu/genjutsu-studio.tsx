@@ -47,8 +47,10 @@ import {
   makersFor,
   qualityFor,
   MODE_TARGETS,
+  modeHint,
   OPEN_TARGET_PROBLEM,
   resolutionWords,
+  SCENE_ACTIONS,
   SOURCE_LABELS,
   TARGET_LABELS,
   type GenjutsuLook,
@@ -225,6 +227,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const options = keepOffered(makersFor(engine, mode, target, open), (m) => makerOffered(m, isOn)).filter((m) => mode !== "finish" || m.tool === finish.tool);
   const group = isCharacter && !!maker?.group;
   const sceneEdit = mode === "swap" && !!maker?.actions;
+  // Scene edit with only some of its actions open to this viewer: start on one that is.
+  const actionOpen = open(SCENE_ACTIONS.find((a) => a.id === action)!.feature);
+  const firstOpenAction = SCENE_ACTIONS.find((a) => open(a.feature))?.id;
+  if (sceneEdit && !actionOpen && firstOpenAction && firstOpenAction !== action) {
+    setAction(firstOpenAction);
+    setObjectEdit((o) => ({ ...o, action: firstOpenAction }));
+  }
   const fresh = !!(maker?.group || maker?.actions || maker?.review || maker?.tool);
   const references = mode === "restyle" || (sceneEdit && action === "remove") || (mode === "picture" && picture.ownPerson) || (mode === "finish" && finish.tool === "colours") ? [] : ready(refs);
   const showRefs = mode !== "restyle" && !(sceneEdit && action === "remove") && !(mode === "picture" && picture.ownPerson) && !(mode === "finish" && finish.tool === "colours");
@@ -632,12 +641,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   };
 
   const modeInfo = getMode(mode);
+  const hint = modeHint(mode, open);
   const tabs = <ModeTabsRow modes={GENJUTSU_MODES.filter((m) => modeOpen(m.id, open))} mode={mode} onMode={setMode} onlyYou={(m) => owner && !modeOpen(m, (f) => !!live?.[f])} />;
 
   return (
     <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
       {!clip && (
-        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
+        <ToolHero title={modeInfo.label} subtitle={`${hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
           {isCharacter && (
             <Link href="/character-swap" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
               Whole clips, shot by shot? Open in Character Swap Studio
@@ -824,7 +834,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
 
             <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               {mode === "picture" && <PictureSteps stage={pictureStage} />}
-              <p className="text-[13px] text-pretty text-muted-foreground">{modeInfo.hint}</p>
+              <p className="text-[13px] text-pretty text-muted-foreground">{hint}</p>
 
               {mode === "finish" && <FinishFields value={finish} onChange={setFinish} open={open} ownerOnly={ownerOnly} seed={seed} onSeed={setSeed} />}
 

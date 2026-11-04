@@ -13,8 +13,9 @@
  *   pressed     --nav-press fill while the mouse button or finger is down (no grey tap flash).
  *   current     the open page: never a fill. A 3 px --nav-mark pip (.nav-mark-start on rows,
  *               .nav-mark-under on bar items and tiles), the icon in --nav-mark, the label semibold.
- *   open        a bar trigger whose menu is open: foreground words and the turned chevron, never a fill (the menu's
- *               highlighted row is the one fill on screen).
+ *   open        a bar item whose menu is open: foreground words, the turned chevron, and the bar's one open highlight
+ *               behind it ([data-bar-indicator], --nav-hi: the same colour as hover, so hover to open shows no step).
+ *               It slides from item to item as the open menu changes; meanwhile the items' own hover fill steps aside.
  *   disabled    aria-disabled=true / data-disabled (Radix "", cmdk "true") / :disabled: 45 % opacity, no
  *               highlight, no press.
  *
@@ -114,19 +115,10 @@ html:not([data-input="pointer"]) .nav-focus-out:focus-visible {
 .nav-mark-start:is(.nav-row[aria-current="page"], .nav-row[data-current]) > svg:first-child {
   color: var(--nav-mark);
 }
-/* A split bar item (a name and a chevron: Create, Studios, Motions & effects): the pip sits under the whole pill, as under
-   a plain item with a chevron, inside the area or on its own page. */
-[data-bar-split].nav-mark-under:is([data-active], :has(> [aria-current="page"]))::before {
-  content: "";
-  position: absolute;
-  bottom: 3px;
-  left: 50%;
-  width: 16px;
-  height: 3px;
-  margin-left: -8px;
-  border-radius: 9999px;
-  background-color: var(--nav-mark);
-  pointer-events: none;
+/* While a bar menu is open its item has the one open highlight (motion.css: [data-bar-indicator]): the items' own hover
+   and focus fill steps aside, so the highlight never doubles up while it slides. */
+html [data-top-bar][data-menu-open] [data-bar-menu].nav-row:is(:hover, :focus-visible) {
+  background-color: transparent;
 }
 /* More, below 1280 px, holds Apps and Motions & effects: their page marks it there. */
 @media (max-width: 1279.98px) {
@@ -144,7 +136,12 @@ html:not([data-input="pointer"]) .nav-focus-out:focus-visible {
   }
 }
 @media (forced-colors: active) {
-  [data-bar-split].nav-mark-under:is([data-active], :has(> [aria-current="page"]))::before,
+  [data-bar-indicator] {
+    background-color: transparent;
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
+  [data-bar-menu][data-open] { text-decoration: underline; text-underline-offset: 6px; }
   :is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active]) :is(.nav-mark-start, .nav-mark-under)::before,
   :is(.nav-mark-start, .nav-mark-under):is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active])::before {
     background-color: Highlight;

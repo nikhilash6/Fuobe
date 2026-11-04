@@ -2,13 +2,15 @@ import { connection } from "next/server";
 import { accountsWithStats } from "@/server/account-admin";
 import { adminAccess, auditRead } from "@/server/admin-tokens";
 import { accountsCsv, listAccounts, normalizeEmail } from "@/server/auth";
+import { signInNotices } from "@/server/auth-store";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * Settings → Accounts (owner only, or an admin token with accounts:read): everyone who signed up, newest first, with
  * their runs and space and the totals. `?q=` keeps the emails that contain it, `?email=` the one with that address;
- * `total` and `totals` still count every account. `?format=csv` downloads the list.
+ * `total` and `totals` still count every account. `?format=csv` downloads the list. `signInNotices`: each auth.json
+ * found in the data folder after sign-in data moved into the database and set aside unread (its name and counts only).
  */
 export async function GET(request: Request) {
   await connection();
@@ -33,8 +35,9 @@ export async function GET(request: Request) {
   }
   auditRead(access.actor, "accounts.list", filters);
   const { items: listed, totals } = accountsWithStats(all);
-  if (!filtered) return Response.json({ total: all.length, items: listed, totals }, { headers: NO_STORE });
+  const notices = signInNotices();
+  if (!filtered) return Response.json({ total: all.length, items: listed, totals, signInNotices: notices }, { headers: NO_STORE });
   const keep = new Set(items.map((a) => a.id));
   const matches = listed.filter((a) => keep.has(a.id));
-  return Response.json({ total: all.length, matched: matches.length, items: matches, totals }, { headers: NO_STORE });
+  return Response.json({ total: all.length, matched: matches.length, items: matches, totals, signInNotices: notices }, { headers: NO_STORE });
 }

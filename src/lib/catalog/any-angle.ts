@@ -90,8 +90,8 @@ export interface AnglePreset {
 /**
  * The presets, as tested on the GPU: turns up to 60° each way, a high and a low angle, a close-up aimed at the face, and a
  * view from behind at three quarters (people only). Over-the-shoulder, wide and straight-behind views weren't tested, so
- * they aren't offered. Heights add to the front view's 10°: from above lands at 40° (35° on a portrait), from below at
- * -15°, as tested.
+ * they aren't offered. Heights add to the front view's height: from above is 30° over it (20° on a portrait), from below
+ * 25° under it, as tested.
  */
 export const ANGLE_PRESETS: readonly AnglePreset[] = [
   { id: "left-30", label: "Left 30°", yaw: -30, pitch: 0, distance: 1, aim: "middle" },
@@ -104,8 +104,11 @@ export const ANGLE_PRESETS: readonly AnglePreset[] = [
   { id: "behind", label: "From behind", yaw: 135, pitch: 5, distance: 1, aim: "middle", people: true },
 ];
 
-/** A portrait's high angle stays at most this far above level: at +40 over the front only the top of the head shows. */
-export const PORTRAIT_MAX_PITCH = 35;
+/**
+ * A portrait's high angle goes at most this far over its front view: at +40 only the top of the head shows, and at +25
+ * a head-and-shoulders photo mostly shows hair; +20 keeps the face in view on the photos tested.
+ */
+export const PORTRAIT_MAX_RISE = 20;
 /** A head taller than this share of the photo makes it a portrait. */
 export const PORTRAIT_HEAD_SHARE = 0.2;
 /** A close-up frames the head at about this share of the picture's height. */
@@ -147,7 +150,7 @@ export function closeUpFactor(front: Pick<FrontView, "person" | "headShare">): n
 
 /** The highest a camera goes on this photo (absolute degrees): lower on a portrait. */
 export const maxPitchFor = (front: Pick<FrontView, "headShare" | "pitch">): number =>
-  front.headShare > PORTRAIT_HEAD_SHARE ? PORTRAIT_MAX_PITCH : front.pitch + CUSTOM_LIMITS.pitchMax;
+  front.pitch + (front.headShare > PORTRAIT_HEAD_SHARE ? PORTRAIT_MAX_RISE : CUSTOM_LIMITS.pitchMax);
 
 /** The camera a preset makes on a photo whose front view was measured. */
 export function cameraFor(front: FrontView, preset: AnglePreset): Camera {

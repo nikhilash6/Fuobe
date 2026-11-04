@@ -2,8 +2,9 @@
 // tabs show and every tab is 44 px tall; Character swap with four characters shows Who becomes who, and a tap on the
 // part's first frame writes where that person stands; From picture's two-step header with step 2 locked until a frame
 // is used; Finish's tool switch; nothing scrolls sideways at 390 px. With --guest (a studio with a password and public
-// sign-up, nothing open yet): only the five existing tabs, ?mode=picture and ?mode=finish land on Motion transfer, and
-// nothing scrolls sideways at 390 or 1440 px.
+// sign-up): the five existing tabs plus the new ones whose features passed their GPU test (workflows/comfyui/gpu-tested.json
+// and the manifest's validated flags), a closed mode's ?mode= lands on Motion transfer, Finish offers only its open tools,
+// and nothing scrolls sideways at 390 or 1440 px.
 // Usage: node tests/e2e/genjutsu-openjutsu.mjs [appUrl] [--guest] [--shots <dir>]   (app running in demo mode). Exits 1 on a failed check.
 import fs from "node:fs";
 import path from "node:path";
@@ -21,6 +22,14 @@ const check = (label, ok, extra = "") => {
   if (!ok) failures.push(label);
 };
 const EXISTING = ["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"];
+// What the committed gate opens (src/server/genjutsu-live.ts): a feature's workflows validated and its render passed.
+const readJson = (p) => JSON.parse(fs.readFileSync(path.join(root, p), "utf8"));
+const validated = new Set(readJson("workflows/comfyui/manifest.json").workflows.filter((w) => w.validated === true).map((w) => w.id));
+const passed = readJson("workflows/comfyui/gpu-tested.json").features ?? {};
+const FEATURE_WORKFLOWS = { picture: ["image-from-picture-prepare", "video-scene-describe", "video-from-picture-solar"], "finish-faces": ["video-fix-faces-h3"], "finish-colours": ["video-fix-colours"] };
+const live = (k) => passed[k]?.passed === true && FEATURE_WORKFLOWS[k].every((id) => validated.has(id));
+const OPEN_MODES = { picture: live("picture"), finish: live("finish-faces") || live("finish-colours") };
+const GUEST_TABS = [...EXISTING, ...(OPEN_MODES.picture ? ["From picture"] : []), ...(OPEN_MODES.finish ? ["Finish"] : [])];
 
 async function upload(file, type, name) {
   const form = new FormData();
@@ -56,13 +65,22 @@ try {
 
     if (guest) {
       await open("/genjutsu");
-      check(`${width}: a guest sees the five existing tabs only`, JSON.stringify(await tabs()) === JSON.stringify(EXISTING), JSON.stringify(await tabs()));
+      check(`${width}: a guest sees the existing tabs and the open ones only`, JSON.stringify(await tabs()) === JSON.stringify(GUEST_TABS), JSON.stringify(await tabs()));
       check(`${width}: no "Only you" for a guest`, !(await page.evaluate(() => document.body.innerText.includes("Only you"))));
       check(`${width}: /genjutsu fits the screen`, (await sideways()) <= 0);
       await shot("guest-genjutsu");
-      for (const m of ["picture", "finish"]) {
+      for (const [m, label] of [["picture", "From picture"], ["finish", "Finish"]]) {
         await open(`/genjutsu?mode=${m}`);
-        check(`${width}: ?mode=${m} lands on Motion transfer for a guest`, (await selected()) === "Motion transfer", String(await selected()));
+        const want = OPEN_MODES[m] ? label : "Motion transfer";
+        check(`${width}: ?mode=${m} lands on ${want} for a guest`, (await selected()) === want, String(await selected()));
+        if (m === "finish" && OPEN_MODES.finish) {
+          const body = await page.evaluate(() => document.body.innerText);
+          // The hint names only the open tools (the tool switch shows once a video is in).
+          check(`${width}: Finish names the film finish once Fix colours is open`, body.includes("soft film finish") === live("finish-colours"));
+          check(`${width}: Finish names sharper faces only once Fix faces is open`, body.includes("sharper faces") === live("finish-faces"));
+          check(`${width}: Finish fits the screen`, (await sideways()) <= 0);
+          await shot("guest-finish");
+        }
       }
       await page.goto(`${app}/character-swap`, { waitUntil: "load", timeout: 120_000 });
       await page.waitForTimeout(1500);
