@@ -4,7 +4,7 @@ import { OrbitPad, orbitOptions } from "@/components/studio/orbit-pad";
 import { ArrowUp, AtSign, Cloud, Cpu, GalleryHorizontalEnd, LayoutDashboard, Loader2, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { openAddKey } from "@/components/keys/your-keys";
@@ -22,10 +22,13 @@ import { formatsOf } from "@/lib/av/formats";
 import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
 import { PoolNote } from "./pool-note";
 import { poolRunsModel } from "@/lib/pool-rules";
+import { HoldFilesCtx } from "@/lib/held-files";
+import { pendingStep } from "@/lib/guest-draft";
+import { useGuestDraft } from "./guest-draft";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
-import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
+import { askToSignUp, CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -270,7 +273,7 @@ export function Composer({ docked }: { docked: boolean }) {
   // Upscale hub: the attached clip's header (length, size, frame rate). Its length prices per-second tools and
   // travels with the request (params.sourceDuration), with its rate for a route billed by frames (params.sourceFps);
   // a clip swapped since a Reuse never keeps the old one's.
-  const facts = useClipFacts(config.clipFacts && !typed.slots.video?.uploading ? typed.slots.video?.ref : undefined).data;
+  const facts = useClipFacts(config.clipFacts && !typed.slots.video?.uploading && !typed.slots.video?.held ? typed.slots.video?.ref : undefined).data;
   // Regenerate · creative needs words: a clip with none (an upload) can have Fuobe's reading model on your GPU describe it,
   // into the prompt box to edit before the run. A second instance, so the composer's own Generate state isn't touched.
   const describeRun = useCreateGeneration();
@@ -279,7 +282,7 @@ export function Composer({ docked }: { docked: boolean }) {
   useEffect(() => () => describeAlive.current?.abort(), []);
   // Lipsync: a talking avatar is as long as its voice (the voice's header prices it and goes with the request); not while a
   // video is attached (lip re-sync keeps the clip's length).
-  const voiceRef = config.voiceFacts && !typed.slots.video?.ref && !typed.slots.audio?.uploading ? typed.slots.audio?.ref : undefined;
+  const voiceRef = config.voiceFacts && !typed.slots.video?.ref && !typed.slots.audio?.uploading && !typed.slots.audio?.held ? typed.slots.audio?.ref : undefined;
   const voice = useClipFacts(voiceRef).data;
   // "Clean the voice first" (Transcribe, Lipsync): the recording or the video's speech apart from its music and effects
   // before the model hears it. On for a video's speech on your GPU, off for a recording (src/lib/av/voice-first.ts).
@@ -551,7 +554,13 @@ export function Composer({ docked }: { docked: boolean }) {
     : config.multiRef.kind === "video"
       ? Math.min(config.multiRef.max, model?.engine === "open" ? 4 : config.multiRef.max)
       : Math.min(config.multiRef.max, Math.max(0, ((model ? imageLimit(model, refOp) : opts.maxImages) ?? 1) - slots.filter((s) => s.accept === "image").length));
-  const attach = useAttach(slots, refMax);
+  // Hosted runs on, a guest's files are kept in this browser until sign-up (HoldFilesForGuests), and its whole draft and
+  // the run it pressed come back after it (useGuestDraft).
+  const guestHold = useContext(HoldFilesCtx);
+  const attach = useAttach(slots, refMax, { hold: guestHold });
+  const guestDraft = useGuestDraft({ hold: guestHold, viewer: status?.viewer?.kind, draft: typed, setDraft });
+  // The price changed since its guest pressed Run: said once, and Run waits for a click.
+  const [priceNote, setPriceNote] = useState<string | null>(null);
 
   // Frames mode (Video studio): up to 10 stills at their times, as the picked model can take them.
   const framesOn = !!config.frames && !!draft.frames;
@@ -614,8 +623,12 @@ export function Composer({ docked }: { docked: boolean }) {
   const runOn: RunOn = runOnPick ?? (ownOnline && viewerInfo?.prefer !== "pool" ? "own" : "pool");
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
   const poolPrice = hostedHere && runOn === "pool";
-  const priceBody = useSettled(poolPrice ? quoteBody(signed.request, runOn) : null);
-  const hostedCheck = useHostedQuote(priceBody).data;
+  const wantPrice = poolPrice ? quoteBody(signed.request, runOn) : null;
+  const priceBody = useSettled(wantPrice);
+  const priceQuery = useHostedQuote(priceBody);
+  const hostedCheck = priceQuery.data;
+  // The price check has answered for the draft as it is now (not one typed a moment ago).
+  const priceSettled = !wantPrice || (priceBody === wantPrice && priceQuery.isFetched && !priceQuery.isFetching);
   const hostedQuote = hostedCheck?.quote;
   // The price check's answer: refused (busy, a limit, not offered here, paused…), Run is off and says why; otherwise
   // the price, and where the run would stand in line with the wait.
@@ -770,6 +783,13 @@ export function Composer({ docked }: { docked: boolean }) {
       return;
     }
     toast.dismiss("composer-blocker");
+    setPriceNote(null);
+    // A guest (hosted runs on): the draft, its kept files and this run wait for the sign-up, with the price shown; back
+    // here as an account, the run starts by itself when the price is unchanged.
+    if (guestHold) {
+      guestDraft.keepRun(poolPrice && hostedQuote?.allowed ? { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion, text: hostedQuote.text } : null);
+      return askToSignUp("run");
+    }
     setRecent((r) => pushRecent(r, draft.modelId));
     // The server resolves @mentions and drawings itself; only pin the operation when there are none.
     // No "Queued" toast: the new card (and the "1 generating ↑" pill when it's off-screen) says it.
@@ -965,6 +985,20 @@ export function Composer({ docked }: { docked: boolean }) {
   });
   const settling = !catalog.ready || presetLoading || uploading || (needsFull && !catalog.complete);
   const step = startRequest ? startStep({ settling, blocker }) : "wait";
+
+  // Back from sign-up with the run its guest pressed: once the draft, its files and the price check have settled, it
+  // starts by itself when the price is the one the guest saw; otherwise the new price shows and Run waits for a click.
+  // Something missing (a file that didn't come back) leaves it to the blocker's line.
+  const pendingRun = guestDraft.pending;
+  const clearPending = guestDraft.clearPending;
+  useEffect(() => {
+    if (!pendingRun) return;
+    const next = pendingStep({ settled: !settling && priceSettled, blocked: !!blocker, pool: poolPrice, shown: pendingRun.shown, quote: hostedQuote });
+    if (next === "wait") return;
+    clearPending();
+    if (next === "start") submitRef.current();
+    else if (next === "note" && hostedQuote) setPriceNote(`The price is now ${hostedQuote.text}. Press Generate to start.`);
+  }, [pendingRun, clearPending, settling, priceSettled, blocker, poolPrice, hostedQuote]);
   const blockedSlot = blocker?.slot;
   useEffect(() => {
     if (step === "wait" || startRequest <= startedFor.current) return;
@@ -1673,6 +1707,11 @@ export function Composer({ docked }: { docked: boolean }) {
         )}
         {/* Folded (docked, not focused), the composer stays one line: the wait shows again once it opens. */}
         {!blocker && !gpuSetup && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} />}
+        {!blocker && priceNote && !poolRefused && (
+          <p data-price-note className="px-2 text-[12px] font-medium text-foreground">
+            {priceNote}
+          </p>
+        )}
         {!blocker && gpuSetup && (
           <p className="px-2 text-[12px] text-muted-foreground">
             <button

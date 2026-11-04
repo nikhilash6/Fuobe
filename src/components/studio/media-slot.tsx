@@ -12,7 +12,8 @@ import { signInHref, useAskBeforeUpload, useAssets, useIsGuest, type Asset } fro
 import { toastError } from "@/lib/refusals";
 import { postFile } from "@/lib/upload";
 import type { MediaKind } from "@/lib/catalog/types";
-import { slotCaption } from "@/lib/composer";
+import { PLACEHOLDER, slotCaption } from "@/lib/composer";
+import { dropHeld, holdFile, readHeld } from "@/lib/held-files";
 import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import type { SketchMode, Stroke } from "./sketch-editor";
@@ -26,6 +27,11 @@ export interface SlotValue {
   kind: MediaKind;
   name?: string;
   uploading?: boolean;
+  /**
+   * A guest's file kept in this browser until sign-up (hosted runs on; src/lib/held-files.ts), by its kept id: `ref` is a
+   * stand-in until it is uploaded as the new account's own.
+   */
+  held?: string;
   /** Picked from the library: whether it was an upload or a result made here. */
   source?: "upload" | "generation";
   /** Drawings and masks: the strokes they were made from, so the editor reopens them (in image pixels). */
@@ -98,6 +104,44 @@ export async function fileToSlot(file: File, onChange: (v: SlotValue | null) => 
     toastError(e, "Upload failed. Please try again.");
   } finally {
     revoke();
+  }
+}
+
+/**
+ * A guest's file kept in this browser until sign-up (hosted runs on): its tile at once, with a stand-in ref for the price
+ * check, and the file kept under `id` (held-files.ts). Null, said in a toast, for a file over the size limit.
+ */
+export function heldSlot(file: File, id: string, kind?: MediaKind): SlotValue | null {
+  if (file.size > MAX_MB * 1024 * 1024) {
+    toast.error(`That file's over ${MAX_MB} MB. Try a smaller one.`);
+    return null;
+  }
+  const k: MediaKind = kind ?? kindOfFile(file);
+  void holdFile(id, file);
+  return { id, ref: PLACEHOLDER[k], preview: URL.createObjectURL(file), kind: k, name: file.name, held: id };
+}
+
+/**
+ * Upload a guest's kept file now that it has an account: the value as the server keeps it, or null when the file is gone
+ * or the upload was refused (said in a toast). The kept copy is dropped once it is uploaded.
+ */
+export async function uploadHeld(v: SlotValue): Promise<SlotValue | null> {
+  const file = v.held ? await readHeld(v.held) : null;
+  if (!file) {
+    toast(`Add ${v.name ? `“${v.name}”` : "your file"} again: it wasn't kept through sign-up.`);
+    return null;
+  }
+  try {
+    const asset = await upload(file);
+    if (asset.kind && asset.kind !== v.kind) {
+      toast.error(wrongKindMessage(v.kind));
+      return null;
+    }
+    void dropHeld(v.held!);
+    return { ...(v.sketch && { sketch: v.sketch }), ...(v.id && { id: v.id }), ref: asset.url, preview: asset.url, kind: asset.kind ?? v.kind, name: v.name };
+  } catch (e) {
+    toastError(e, "Upload failed. Please try again.");
+    return null;
   }
 }
 

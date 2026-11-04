@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
 import type { OwnerGpuView, TestProvider } from "./connections";
@@ -30,6 +30,7 @@ import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folde
 import { markRefusalShown, refusalShown, responseError } from "./refusals";
 import { PLACE_ASK_HEADER, RUNS_CHANGED_EVENT } from "./guest-access";
 import type { PoolRules } from "./pool-rules";
+import { HoldFilesCtx } from "./held-files";
 import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
@@ -1364,19 +1365,23 @@ export function askToSignUp(action: RefusalAction = "upload"): void {
  * GPU or add a key". The function returns true when it asked (the chooser stays shut, the file stays out), and false
  * for anyone the upload takes, and while who is looking isn't known yet (the server's refusal opens the same card).
  * `action` "run" asks the same way before a run of a picture already on the site (a GPU-only tool's hand-off).
+ * In a studio composer that keeps a guest's files in the browser until sign-up (HoldFilesCtx, hosted runs on), a guest's
+ * file is taken (it isn't uploaded); `hold: false` asks anyway (a voice sample, which only an account's upload takes).
  */
-export function useAskBeforeUpload({ gpuOnly = false }: { gpuOnly?: boolean } = {}): (action?: RefusalAction) => boolean {
+export function useAskBeforeUpload({ gpuOnly = false, hold = true }: { gpuOnly?: boolean; hold?: boolean } = {}): (action?: RefusalAction) => boolean {
   const guest = useIsGuest();
+  const holds = useContext(HoldFilesCtx) && hold;
   const seen = useStatus().data?.viewer;
   // With hosted runs on, an account adds pictures for runs on this studio's GPUs: the upload says if a kind isn't taken.
   // A GPU-only tool (gpuOnly) asks for the GPU even when the account has a key: no key runs it.
   const nowhere = seen?.kind === "account" && !seen.gpu.connected && (gpuOnly || !seen.keys?.length) && !seen.hosted;
   return useCallback((action: RefusalAction = "upload") => {
+    if (guest && holds && action === "upload") return false;
     if (guest) askToSignUp(action);
     else if (nowhere) window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { action, ...(gpuOnly && { gpuOnly }) } }));
     else return false;
     return true;
-  }, [guest, nowhere, gpuOnly]);
+  }, [guest, holds, nowhere, gpuOnly]);
 }
 
 /**

@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./attachments";
 import { CatalogProvider, useCatalog } from "./catalog";
 import { Composer } from "./composer";
+import { HoldFilesForGuests } from "./hold-files";
 import { EngineSwitch } from "./engine-switch";
 import { HubHeaderExtras, useInHub } from "./hub-chrome";
 import { Feed } from "./feed";
@@ -642,7 +643,9 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
           </div>
         )}
         <div data-composer className={cn("mx-auto w-full", hasItems ? "max-w-[800px]" : "max-w-[760px]")}>
-          <Composer docked={hasItems} />
+          <HoldFilesForGuests>
+            <Composer docked={hasItems} />
+          </HoldFilesForGuests>
         </div>
       </div>
 
