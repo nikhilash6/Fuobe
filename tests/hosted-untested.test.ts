@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { TINY_MP4 } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
@@ -98,5 +99,65 @@ describe("hosted routes without a live call", () => {
     const status = await visitorStatus(auth.accountById(account)!);
     expect(status.access?.off).toContain("mureka-stems");
     expect(HUB_MODES.audio.find((m) => m.id === "song")?.ownerOnly).toBe(true);
+  });
+});
+
+describe("Kandinsky 6.0, Kandinsky VSR, Bria's green screen and its guided cut-out (no live call yet)", () => {
+  // The asker's own files: an account's run may read only its uploads.
+  const pic = (accountId?: string) => saveFile({ data: Buffer.from("89504e470d0a1a0a", "hex"), contentType: "image/png", source: "upload", ...(accountId && { accountId }) }).url;
+  const clip = (accountId?: string) => saveFile({ data: TINY_MP4, contentType: "video/mp4", source: "upload", ...(accountId && { accountId }) }).url;
+  // One request per endpoint, as its studio sends it (Kandinsky's Quality picks Pro's or Lite's endpoint).
+  const k6 = (op: "t2v" | "i2v", quality: string) => (accountId?: string) => ({
+    feature: "video",
+    modelId: "kandinsky-6",
+    op,
+    prompt: "A fox runs through the snow",
+    ...(op === "i2v" && { inputs: { images: [pic(accountId)] } }),
+    params: { extra: { quality } },
+  });
+  const ROUTES: [string, (accountId?: string) => Record<string, unknown>][] = [
+    ["fal-ai/kandinsky6-pro/text-to-video", k6("t2v", "pro-standard")],
+    ["fal-ai/kandinsky6-lite/text-to-video", k6("t2v", "lite-standard")],
+    ["fal-ai/kandinsky6-pro/image-to-video", k6("i2v", "pro-standard")],
+    ["fal-ai/kandinsky6-lite/image-to-video", k6("i2v", "lite-standard")],
+    ["fal-ai/kandinsky6-vsr", (a) => ({ feature: "upscale", modelId: "kandinsky-vsr", op: "upscale-video", prompt: "", inputs: { video: clip(a) }, params: { resolution: "2.25x" } })],
+    ["bria/video/background-removal/green-screen-despill", (a) => ({ feature: "video-tools", modelId: "bria-green-screen", op: "bg-remove-video", prompt: "", inputs: { video: clip(a) } })],
+    ["bria/guided-remove-background", (a) => ({ feature: "image-tools", modelId: "bria-guided-cutout", op: "bg-remove", prompt: "keep the shadow", inputs: { images: [pic(a)] } })],
+  ];
+
+  it("lists every endpoint this round added to the catalog", () => {
+    for (const [endpoint] of ROUTES) expect(HOSTED_UNTESTED_ENDPOINTS.has(endpoint), endpoint).toBe(true);
+  });
+
+  it.each(ROUTES)("refuses an account's run on %s on its own key, sending nothing", async (_endpoint, ask) => {
+    fetched.length = 0;
+    const r = await post({ ...ask(account), engine: "cloud" });
+    expect(r.status, await r.clone().text()).toBe(403);
+    expect((await r.json()).code).toBe("own-gpu-tool");
+    expect(fetched.filter((u) => /fal\.(run|ai|media)/.test(u))).toHaveLength(0);
+  });
+
+  it.each(ROUTES)("runs %s for the owner", async (endpoint, ask) => {
+    const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+    process.env.FAL_KEY = "owner-fal-key";
+    try {
+      const r = await generationsRoute.POST(
+        new Request("http://localhost:3000/api/generations?preview=1", {
+          method: "POST",
+          headers: { cookie: owner, host: "localhost:3000", "content-type": "application/json" },
+          body: JSON.stringify({ ...ask(), engine: "cloud" }),
+        }) as never,
+      );
+      expect(r.status, await r.clone().text()).toBe(200);
+      expect((await r.json()).route).toEqual({ provider: "fal", endpoint });
+    } finally {
+      delete process.env.FAL_KEY;
+    }
+  });
+
+  it("leaves the cloud models out of an account's pickers and keeps their open halves", () => {
+    const summary = hostedUntestedSummary(MODELS, undefined);
+    for (const id of ["kandinsky-6", "kandinsky-vsr", "bria-green-screen", "bria-guided-cutout"]) expect(summary.off, id).toContain(id);
+    for (const id of ["oss-kandinsky6", "oss-kandinsky6-vsr", "oss-video-key-corridorkey", "oss-matte-feynobg"]) expect(summary.off, id).not.toContain(id);
   });
 });
