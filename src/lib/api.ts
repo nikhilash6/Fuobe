@@ -29,6 +29,7 @@ import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
 import { markRefusalShown, refusalShown, responseError } from "./refusals";
 import { PLACE_ASK_HEADER, RUNS_CHANGED_EVENT } from "./guest-access";
+import type { PoolRules } from "./pool-rules";
 import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
@@ -889,6 +890,8 @@ export interface StatusInfo {
     hosted?: boolean;
     /** "pool": runs go to this studio's GPUs first, even with its own GPU online (either can still be picked). */
     prefer?: "pool";
+    /** What this studio's GPUs keep off, for a viewer with no GPU of its own: its pickers leave it out (src/lib/pool-rules.ts). */
+    pool?: PoolRules;
     /** The billing service's words for the account's balance (src/server/billing.ts). */
     balance?: HostedBalance;
     links?: BillingAction[];

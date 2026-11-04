@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
+import { usePoolRules } from "@/hooks/use-pool-rules";
+import { poolRunsPreset } from "@/lib/pool-rules";
 import { loadFullCatalog, useCatalog } from "./catalog";
 import { Chip, ClearableChip } from "./chip";
 
@@ -120,7 +122,10 @@ export function PresetChip({ type, value, onChange }: { type: "motion" | "effect
   const [open, setOpen] = useState(false);
   const { chip, side, measure } = usePickerSide();
   const catalog = useCatalog();
-  const list = catalog.presets?.[type] ?? null;
+  // For a viewer with no GPU of its own, what this studio's GPUs keep off is left out (src/lib/pool-rules.ts).
+  const rules = usePoolRules();
+  const all = catalog.presets?.[type] ?? null;
+  const list = useMemo(() => (all && rules ? all.filter((p) => poolRunsPreset(rules, p.id)) : all), [all, rules]);
   const selected = value ? catalog.getPreset(value) : undefined;
   // The picked preset's poster in place of its icon, as the Look chip shows its look.
   const cover = selected && presetCover(selected.id);
@@ -187,9 +192,10 @@ export function MixChip({
   const cover = second && presetCover(second.id);
   // Kept while the sliders move, so the picker isn't sorted again on every step.
   const presets = catalog.presets;
+  const rules = usePoolRules();
   const mixable = useMemo(
-    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage")) : null),
-    [presets, primary.id],
+    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage") && poolRunsPreset(rules, p.id)) : null),
+    [presets, primary.id, rules],
   );
   return (
     <ClearableChip active={!!mix} onClear={() => onChange({ mix: undefined })} clearLabel="Remove the mix">

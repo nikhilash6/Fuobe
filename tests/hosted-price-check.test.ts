@@ -7,7 +7,8 @@ import { tempDir } from "./helpers/temp-dir";
 // The price check before Run (`?preview=1`) on hosted runs: where a new run would stand in line and the wait, and a
 // refusal (busy, a limit, a model or files this install's GPUs don't take) said before Run is pressed, in the words the
 // run itself would get. A run's state reads the same from the list and from its own route (a refresh, a second
-// device). With hosted runs off every answer is as before.
+// device), and the status tells a visitor with no GPU of its own what this install's GPUs keep off, for its pickers.
+// With hosted runs off every answer is as before.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 const dir = tempDir("fuobe-hosted-price-check-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -28,6 +29,7 @@ process.env.COMFYUI_URL = comfy.url;
 const auth = await import("@/server/auth");
 const generationsRoute = await import("@/app/api/generations/route");
 const oneRoute = await import("@/app/api/generations/[id]/route");
+const { visitorStatus } = await import("@/server/account-gpu");
 const { POOL_WORDS } = await import("@/lib/relay");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
@@ -216,3 +218,22 @@ describe("a run's state after a refresh or on a second device", () => {
   });
 });
 
+describe("what this install's GPUs keep off, in the status", () => {
+  it("is told to a visitor with no GPU of its own, only when the policy keeps something off, and never with hosted runs off", async () => {
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    fake.policy = { ...FAKE_POLICY, pool: { deny: ["oss-z-image-turbo"], apps: { deny: ["app-x"] } }, kinds: { model3d: false } };
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    const s = await visitorStatus(auth.accountById(a)!);
+    expect(s.viewer.pool).toEqual({ deny: ["oss-z-image-turbo"], apps: { deny: ["app-x"] }, kinds: { model3d: false } });
+    expect((await visitorStatus(null)).viewer.pool).toEqual(s.viewer.pool);
+    // Its own GPU runs what this install's GPUs don't: nothing is left out of its pickers.
+    auth.setAccountGpu(a, { mode: "computer" });
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
+    auth.setAccountGpu(a, null);
+    billing.resetBillingCache();
+    fake.policy = { ...FAKE_POLICY };
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
+  });
+});

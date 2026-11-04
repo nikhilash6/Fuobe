@@ -14,6 +14,7 @@ import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolReady } from "./hosted";
+import { poolRulesOf, type PoolRules } from "@/lib/pool-rules";
 
 /**
  * "Your GPU" (public sign-up): the ComfyUI an account connects, where its runs go. The server calls
@@ -186,6 +187,11 @@ export interface VisitorView {
    * policy says so). Absent: its own GPU first, as before. Either can always be picked.
    */
   prefer?: "pool";
+  /**
+   * What this install's GPUs keep off (the policy's model and app lists, and its kinds), for a visitor with no GPU of its
+   * own: its pickers leave those out instead of failing at Run. Absent: nothing is kept off, or it has a GPU of its own.
+   */
+  pool?: PoolRules;
   /** The billing service's words for the account's balance (billing.ts): the top bar's chip and the account menu. */
   balance?: Balance;
   /** Extra links the billing service sends for the menu. */
@@ -218,6 +224,8 @@ export async function visitorStatus(account: Account | null) {
     const p = await billingPolicy(account?.id ?? null);
     if (p?.hosted) viewer.hosted = true;
     if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
+    const rules = p?.hosted && !gpu ? poolRulesOf(p) : undefined;
+    if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;
     const b = account ? await billingBalance(account.id) : null;

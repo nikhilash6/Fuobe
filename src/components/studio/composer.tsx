@@ -21,6 +21,7 @@ import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
 import { PoolNote } from "./pool-note";
+import { poolRunsModel } from "@/lib/pool-rules";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
@@ -313,7 +314,12 @@ export function Composer({ docked }: { docked: boolean }) {
   }, []);
 
   const pickerOps = config.pickerOps ?? config.ops;
-  const models = useMemo(() => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }), [catalog.models, config.kind, pickerOps]);
+  // For a viewer with no GPU of its own (hosted runs), the open models this studio's GPUs keep off are left out.
+  const poolRules = status?.viewer?.hosted && !status.viewer.gpu.connected ? status.viewer.pool : undefined;
+  const models = useMemo(
+    () => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }).filter((m) => poolRunsModel(poolRules, m)),
+    [catalog.models, config.kind, pickerOps, poolRules],
+  );
   const model: ModelDef | undefined = catalog.getModel(draft.modelId);
   // Fuobe Soul's presetId is a look (its own chip), not an app, motion or effect.
   const takesLook = !!model?.options.looks;
@@ -446,6 +452,16 @@ export function Composer({ docked }: { docked: boolean }) {
     setDraft((d) => (d.modelId !== offModel.id ? {} : { modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(offModel, m) }));
     toast(`${offModel.name} is turned off in Settings → Models & licences, so this uses ${m.name}`, { id: "model-access" });
   }, [offModel, fallback, lockedModel, presetFallback, catalog, setDraft]);
+
+  // A model this studio's GPUs keep off, for a viewer with no GPU of its own (the studio's default, a link, a Reuse): the
+  // composer moves to the studio's default, else the first model of its list they run, before Run could fail on it.
+  const poolOff = model && !lockedModel && !presetFallback && !offModel && !poolRunsModel(poolRules, model) ? model : undefined;
+  const poolTo = poolOff ? [defaults[engine], ...models.filter((m) => m.engine === engine).map((m) => m.id)].find((id) => !!id && id !== poolOff.id && models.some((m) => m.id === id)) : undefined;
+  useEffect(() => {
+    const m = poolOff && poolTo ? catalog.getModel(poolTo) : undefined;
+    if (!m || !poolOff) return;
+    setDraft((d) => (d.modelId !== poolOff.id ? {} : { modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(poolOff, m) }));
+  }, [poolOff, poolTo, catalog, setDraft]);
 
   // An account (Your keys) starts on a paid model it can run: the studio's untouched default when it has that key, else
   // the first of the list it can run. Quietly: nothing it picked changed (a model it picked is never swapped). A preset's
