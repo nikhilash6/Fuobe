@@ -189,22 +189,12 @@ export function missingRules(rules, allowed) {
 
 /**
  * Model files that workflows for workers need and that have no SHA-256 pin yet ("folder/file"). A worker never reports
- * such a file, so no worker runs a workflow that needs one. Their repositories need a signed-in account to read the
- * hashes (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN); the LTX-2.5 entries also need
- * their exact sizes and a pinned revision. The list may only shrink: a test fails when a new file has no pin, and when
- * a file here gets one.
+ * such a file, so no worker runs a workflow that needs one. A file here sits in a repository that asks a signed-in
+ * account to accept its licence before its hash can be read (`node scripts/comfy/build-requirements.mjs --refresh-pins`
+ * with HF_TOKEN). The list may only shrink: a test fails when a new file has no pin, and when a file here gets one.
  */
 export const UNPINNED_FILES = [
-  "diffusion_models/flux3-image-klein-base-int8-convrot.safetensors",
-  "diffusion_models/flux3-image-klein-int8-convrot.safetensors",
-  "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
-  "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
   "loras/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
-  "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors",
-  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
-  "vae/ltx-2.5-audio-vae-bf16.safetensors",
-  "vae/ltx-2.5-video-vae-bf16.safetensors",
 ];
 
 /** The files that workflows for workers (not isolated) need and that have no pin: "folder/file" → the workflows. */
