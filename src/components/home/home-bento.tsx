@@ -22,16 +22,18 @@ const SIZES = {
   live: "(min-width: 1024px) 570px, (min-width: 768px) 630px, calc(100vw - 32px)",
   /** A 4:3 picture in a square tile on a phone (half the row): cropped at its sides, so 4/3 of the tile's width. */
   square: "(min-width: 1024px) 274px, (min-width: 768px) 320px, calc((100vw - 44px) * 0.667)",
-  /** The Genjutsu tile: a third of the grid wide from lg, one column on a tablet (its 4:3 clip under cover: 280 px), the full row on a phone. */
-  genjutsu: "(min-width: 1024px) 376px, (min-width: 768px) 280px, calc(100vw - 32px)",
-  /** The original's window in the Genjutsu tile (home-bento.css: at most 132 px wide). */
-  original: "132px",
+  /**
+   * The Genjutsu tile: from lg as big as the live tile, two rows tall and squarer than its 4:3 clip (so its height
+   * times 4/3: up to 560 px on a 1920 x 1080 screen); two columns on a tablet; the full row on a phone.
+   */
+  genjutsu: "(min-width: 1024px) 560px, (min-width: 768px) 470px, calc(100vw - 32px)",
 };
 
 /**
  * A picture in AVIF where the browser takes it, its published JPEG or WebP where not. `position`: its object-position,
  * where it differs from its tile's. Its tint (a clip's poster) is its box's colour until it is in. `decoding`: "sync"
- * for the picture that must land with the first screen. Decorative: the tile's link names it.
+ * for the picture that must land with the first screen. `reduced`: the picture shown instead under reduced motion (in
+ * AVIF; a browser without it keeps `pic`). Decorative: the tile's link names it.
  */
 function Pic({
   pic,
@@ -41,6 +43,7 @@ function Pic({
   fetchPriority,
   position,
   decoding = "async",
+  reduced,
 }: {
   pic: BentoPicture;
   sizes: string;
@@ -49,9 +52,11 @@ function Pic({
   fetchPriority?: "high" | "low";
   position?: string;
   decoding?: "async" | "sync";
+  reduced?: BentoPicture;
 }) {
   return (
     <picture className={s.pic}>
+      {reduced && <source media="(prefers-reduced-motion: reduce)" type="image/avif" srcSet={reduced.avif.map((a) => `${a.src} ${a.w}w`).join(", ")} sizes={sizes} />}
       <source type="image/avif" srcSet={pic.avif.map((a) => `${a.src} ${a.w}w`).join(", ")} sizes={sizes} />
       <img
         src={pic.fallback}
@@ -207,6 +212,15 @@ export function HomeBento({ bento }: { bento: Bento }) {
           <LiveTyping frames={bento.live.frames} phrases={bento.live.phrases} sizes={SIZES.live} />
         </Tile>
 
+        {/*
+          Swaps shown as they happen: each clip opens on the original, then a divider sweeps the swapped take in across
+          it, "Original" and "Swapped" riding either side of it. Under reduced motion, the first one at rest half way.
+        */}
+        <Tile tile={tiles.genjutsu} area={s.genjutsu}>
+          <Pic pic={bento.genjutsu.poster} reduced={bento.genjutsu.still} sizes={SIZES.genjutsu} fetchPriority="low" />
+          <BentoReel id={bento.genjutsu.id} reel={bento.genjutsu.reel} wipes={bento.genjutsu.wipes} />
+        </Tile>
+
         <Tile tile={tiles.image} area={s.image}>
           <Pic pic={bento.image} sizes={SIZES.square} className={s.kenburns} fetchPriority="low" />
         </Tile>
@@ -214,16 +228,6 @@ export function HomeBento({ bento }: { bento: Bento }) {
         <Tile tile={tiles.threeD} area={s.three}>
           <Pic pic={bento.threeD.poster} sizes={SIZES.square} fetchPriority="low" />
           <BentoClip id={bento.threeD.id} clips={bento.threeD.clips} />
-        </Tile>
-
-        <Tile tile={tiles.genjutsu} area={s.genjutsu}>
-          <Pic pic={bento.genjutsu.poster} sizes={SIZES.genjutsu} fetchPriority="low" />
-          <BentoClip id={bento.genjutsu.id} clips={bento.genjutsu.clips} />
-          {/* The clip as it was: both people in it are swapped in the one take behind it. */}
-          <span aria-hidden className={s.original}>
-            <Pic pic={bento.genjutsu.original} sizes={SIZES.original} fetchPriority="low" />
-            <span className={s.originalLabel}>Original</span>
-          </span>
         </Tile>
 
         <Tile tile={tiles.audio} area={s.audio}>

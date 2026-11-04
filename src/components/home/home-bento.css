@@ -225,9 +225,9 @@
 /* ---------------------------------------------------------------- grid */
 
 /*
- * The reel leads; Live edit, the highlight, is the next biggest and sits right by it (right under it on a phone), and
- * Genjutsu comes next. From lg the grid is twelve narrow columns, so the top two rows (the reel, Live edit, then the
- * image and 3D tiles stacked) and the bottom row (Genjutsu, audio, the numbers, canvas) each split it their own way.
+ * The reel leads; Live edit, the highlight, and Genjutsu, whose swaps need room to be seen, are the next biggest, the
+ * same size, right by it (right under it on a phone). From lg the grid is fourteen narrow columns, so the top two rows
+ * (the reel, Live edit, Genjutsu) and the bottom row (image, 3D, audio, the numbers, canvas) each split it their own way.
  */
 .hb-grid {
   display: grid;
@@ -250,9 +250,9 @@
   .hb-live {
     aspect-ratio: 16 / 10;
   }
-  /* Shorter than the live tile above it, which is the bigger one; the couple's faces still show whole. */
+  /* As big as the live tile above it: the swaps show whole, faces and all. */
   .hb-genjutsu {
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 16 / 10;
   }
   .hb-image,
   .hb-three {
@@ -268,25 +268,25 @@
 @media (min-width: 768px) {
   .hb-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    /* The reel and the live tile a little taller than the rows under them: the live tile is the bigger one. */
-    grid-template-rows: 230px 230px 210px 210px auto;
+    /* Live edit one column two rows tall, Genjutsu two columns one row tall: the same size, each bigger than the rest. */
+    grid-template-rows: 230px 230px 230px 210px auto;
     grid-template-areas:
       "video video live"
       "video video live"
-      "genjutsu image three"
-      "audio canvas canvas"
+      "genjutsu genjutsu image"
+      "three audio canvas"
       "numbers numbers numbers";
   }
 }
 @media (min-width: 1024px) {
   .hb-grid {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-columns: repeat(14, minmax(0, 1fr));
     grid-template-rows: repeat(3, minmax(0, 1fr));
     height: clamp(var(--grid-min), calc(var(--content-h) - var(--bento-head) - var(--head-top) - 3.25rem), 760px);
     grid-template-areas:
-      "video video video video video video live live live live image image"
-      "video video video video video video live live live live three three"
-      "genjutsu genjutsu genjutsu genjutsu audio audio numbers numbers numbers canvas canvas canvas";
+      "video video video video video video live live live live genjutsu genjutsu genjutsu genjutsu"
+      "video video video video video video live live live live genjutsu genjutsu genjutsu genjutsu"
+      "image image three three audio audio audio numbers numbers numbers canvas canvas canvas canvas";
   }
 }
 .hb-video {
@@ -487,18 +487,22 @@
     font-size: 44px;
   }
 }
-/* From a tablet the live tile is the second biggest: its title a size up from the small tiles', and from lg two. */
+/* From a tablet the live and Genjutsu tiles are the second biggest: their titles a size up from the small tiles', and
+   from lg two. */
 @media (min-width: 768px) {
-  .hb-live .hb-title {
+  .hb-live .hb-title,
+  .hb-genjutsu .hb-title {
     font-size: 28px;
   }
 }
 @media (min-width: 1024px) {
-  .hb-live .hb-title {
+  .hb-live .hb-title,
+  .hb-genjutsu .hb-title {
     font-size: 30px;
   }
   @container (min-width: 360px) {
-    .hb-live .hb-title {
+    .hb-live .hb-title,
+    .hb-genjutsu .hb-title {
       font-size: 34px;
     }
   }
@@ -701,16 +705,14 @@
   height: 45%;
 }
 
-/* ---------------------------------------------------------------- genjutsu: the swap, and the clip as it was */
+/* ---------------------------------------------------------------- genjutsu: swaps, as they happen */
 
-/* The couple's faces sit in the top half of the clip (from 16 % to 43 % of its height in every frame): a wide, short
-   tile keeps them in view. */
+/* The faces sit in the top half of each clip (the couple's from 16 % to 43 % of its height in every frame): a tile
+   wider than the clip keeps them in view. From lg the tile is squarer than the clip, so all of its height shows. */
 .hb-genjutsu > .hb-pic .hb-fill,
 .hb-genjutsu .hb-clip video {
   object-position: 50% 22%;
 }
-/* From lg the tile is a short strip with its title over the lower half: the faces sit higher in it, clear of the
-   words, their heads still whole when the camera pushes in. */
 @media (min-width: 1024px) {
   .hb-genjutsu > .hb-pic .hb-fill,
   .hb-genjutsu .hb-clip video {
@@ -718,49 +720,74 @@
   }
 }
 /*
- * The original clip's first frame, in a small window in the tile's top corner: what went in, beside what came out. On
- * a layer over the clip and the shade, its size from the tile's own width (the tile is a container), so it never lays
- * out again.
+ * The words either side of the divider in the picture, riding along with it (BentoReel moves --x, the divider's place
+ * on the frame on screen, a share of the clip's width). The clip fills the tile under object-fit: cover, centred
+ * across, so the divider is at --lx in the tile (--fw: the clip's width on screen). "Original" rides on its right and
+ * keeps to the tile's left edge until the divider comes; "Swapped" rides on its left and stays at the right edge once
+ * it has gone by. Before the tile plays the divider is off the frame to the left, so "Original" names the still; under
+ * reduced motion it is half way across, as in that still. They go with the picture as a clip fades out.
  */
-.hb-original {
+.hb-wipe {
+  --x: -0.03;
+  --fw: 100cqw;
+  --lx: calc(var(--x) * var(--fw) - (var(--fw) - 100cqw) / 2);
   position: absolute;
-  z-index: 1;
-  top: 10px;
-  right: 10px;
-  width: clamp(76px, 27cqw, 132px);
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  border-radius: 8px;
-  border: 1px solid rgb(255 255 255 / 55%);
-  background: #222228;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
+  inset: 0;
   pointer-events: none;
+  transition: opacity 0.3s ease;
 }
-.hb-original-label {
+@media (min-width: 1024px) {
+  .hb-wipe {
+    --fw: max(100cqw, 133.333cqh);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-wipe {
+    --x: 0.5;
+  }
+}
+.hb-wipe[data-out] {
+  opacity: 0;
+}
+.hb-wipe-before,
+.hb-wipe-after {
   position: absolute;
-  left: 5px;
-  bottom: 5px;
-  height: 16px;
+  top: 12px;
   display: inline-flex;
   align-items: center;
-  padding: 0 6px;
+  height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  background: rgb(13 13 15 / 78%);
-  font-size: 9.5px;
+  background: rgb(13 13 15 / 72%);
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
-@container (min-width: 300px) {
-  .hb-original {
-    top: 12px;
-    right: 12px;
+/* Moved, not laid out again: the words ride on a transform, so their trip is never a layout shift. */
+.hb-wipe-before {
+  left: 0;
+  transform: translateX(max(12px, calc(var(--lx) + 8px)));
+}
+.hb-wipe-after {
+  right: 0;
+  transform: translateX(min(-12px, calc(var(--lx) - 100cqw - 8px)));
+  background: color-mix(in oklch, var(--bento-accent) 82%, black);
+}
+@container (min-width: 340px) {
+  .hb-wipe-before,
+  .hb-wipe-after {
+    top: 16px;
+    height: 26px;
+    padding: 0 11px;
+    font-size: 11px;
   }
-}
-/* From lg the strip is short: a smaller window keeps to its corner, clear of the man's face as the camera moves. */
-@media (min-width: 1024px) {
-  .hb-original {
-    width: clamp(64px, 22cqw, 132px);
+  .hb-wipe-before {
+    transform: translateX(max(16px, calc(var(--lx) + 9px)));
+  }
+  .hb-wipe-after {
+    transform: translateX(min(-16px, calc(var(--lx) - 100cqw - 9px)));
   }
 }
 /* The reel's clips and its still: a wide, short tile crops from the bottom, so the head always shows (a clip framed

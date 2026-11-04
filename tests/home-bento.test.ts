@@ -12,6 +12,7 @@ import { HUB_MODES } from "@/lib/hubs";
 import { studioCount } from "@/lib/nav-model";
 import { HOME_BENTO_MEDIA, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
 import { contentVersion } from "../scripts/eval/lib/covers.mjs";
+import { WIPES, lineAt } from "../scripts/gen-home-bento.mjs";
 import sharp from "sharp";
 import type { BentoPicture } from "@/lib/home-bento";
 import { coverWidth, pickWidth } from "@/lib/media-pick";
@@ -30,7 +31,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_GENJUTSU, BENTO_GENJUTSU_WIDTHS, BENTO_HREFS, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, GENJUTSU_ORIGINAL, livePhrases, openModelsOf } =
+const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_GENJUTSU, BENTO_GENJUTSU_WIDTHS, BENTO_HREFS, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, livePhrases, openModelsOf } =
   await import("@/lib/home-bento");
 const { HOME_BEFORE_AFTER, HOME_EFFECTS, HOME_MOTIONS, HOME_REVEALS, HOME_STUDIOS, homeShowcase, navLabel } = await import("@/lib/home-showcase");
 const { HomeBento } = await import("@/components/home/home-bento");
@@ -85,24 +86,56 @@ describe("Home's first screen", () => {
     }
   });
 
-  it("plays Genjutsu's group swap in the widths its render covers, faded out before it loops (no crossfade), beside the original", () => {
+  it("shows Genjutsu's swaps as they happen: a divider sweeps each swapped take in over the original, in step", () => {
     const g = bento.genjutsu;
     expect(g.id).toBe(BENTO_GENJUTSU.id);
     // Its own id in the playback store: the studio's card lower down may play the same cover.
     expect(g.id).not.toBe(BENTO_GENJUTSU.cover);
-    expect(g.clips.map((c) => c.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
-    for (const c of g.clips) {
-      expect(c.src).toMatch(new RegExp(`^/previews/home/genjutsu-${c.w}\\.mp4\\?v=[0-9a-f]{8}$`));
-      expect(mp4Size(file(c.src))).toEqual({ w: c.w, h: (c.w * 3) / 4 });
-      // Five seconds of the take (120 frames at 24 fps), then its last frame held a third of a second as it fades out.
-      expect(mp4Seconds(file(c.src))).toBeCloseTo(128 / 24, 1);
+    // The couple's group swap first (the studio's own example), then the character swap by the lake.
+    expect(g.reel.map((c) => c.id)).toEqual(["genjutsu-couple", "genjutsu-lakeside"]);
+    expect(g.wipes).toHaveLength(g.reel.length);
+    for (const [i, c] of g.reel.entries()) {
+      expect(c.clips.map((x) => x.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
+      for (const x of c.clips) {
+        expect(x.src).toMatch(new RegExp(`^/previews/home/${c.id}-${x.w}\\.mp4\\?v=[0-9a-f]{8}$`));
+        expect(mp4Size(file(x.src))).toEqual({ w: x.w, h: (x.w * 3) / 4 });
+        // The whole take (124 frames at 24 fps), then its last frame held a third of a second as it fades to dark.
+        expect(mp4Seconds(file(x.src))).toBeCloseTo(132 / 24, 1);
+      }
+      // It rests on its dark last frame before the next one fades in: two faces are never laid over each other.
+      expect(c.hold).toBeGreaterThan(0);
+      // The tile's stylesheet frames it (the same framing as its still).
+      expect(c.position).toBeUndefined();
+      const w = g.wipes[i];
+      expect(w.labels).toEqual(["Original", "Swapped"]);
+      expect(w.fps).toBe(24);
+      expect(w.line).toHaveLength(132);
+      expect(w.fadeFrom).toBe(124);
+      // The divider starts off the frame (the original whole, as the poster shows it), sweeps one way only, and ends off
+      // it (the swap whole); on every frame where the script drew it.
+      expect(w.line[0]).toBeLessThan(0);
+      expect(w.line.at(-1)).toBeGreaterThan(1);
+      for (let f = 1; f < w.line.length; f++) expect(w.line[f]).toBeGreaterThanOrEqual(w.line[f - 1]);
+      const made = WIPES.find((m) => m.name === c.id)!;
+      for (let f = 0; f < w.line.length; f++) expect(w.line[f]).toBeCloseTo(lineAt(made.sweep, Math.min(f, made.frames - 1)), 4);
     }
-    expect(g.poster.avif.map((a) => a.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
-    for (const a of g.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/genjutsu-${a.w}\\.avif\\?v=`));
-    expect(g.poster.fallback).toMatch(/^\/previews\/home\/genjutsu-1024\.jpg\?v=/);
-    // The window: the original clip's first frame, the example's own published input.
-    expect(g.original.fallback.split("?")[0]).toBe(GENJUTSU_ORIGINAL);
+    // The couple's divider rests half way, between the two (one swapped, one not): the reduced-motion still is a frame of it.
+    const still = WIPES[0].still!;
+    expect(g.wipes[0].line[still]).toBe(0.5);
+    for (const [pic, name] of [
+      [g.poster, "genjutsu-couple"],
+      [g.still, "genjutsu-couple-split"],
+    ] as const) {
+      expect(pic.avif.map((a) => a.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
+      for (const a of pic.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/${name}-${a.w}\\.avif\\?v=`));
+      expect(pic.fallback).toMatch(/^\/previews\/home\/genjutsu-couple-1024\.jpg\?v=/);
+    }
+    // The words either side of the divider, in the HTML from the first paint; the still under reduced motion.
     expect(html).toContain(">Original<");
+    expect(html).toContain(">Swapped<");
+    expect(html).toContain('<source media="(prefers-reduced-motion: reduce)" type="image/avif" srcSet="/previews/home/genjutsu-couple-split-640.avif?v=');
+    // No small window beside it any more: the swap fills the tile.
+    expect(html).not.toContain("hb-original");
     expect(bento.tiles.genjutsu.href).toBe("/genjutsu");
   });
 
@@ -132,7 +165,7 @@ describe("Home's first screen", () => {
   });
 
   it("lists every picture at its real width", async () => {
-    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.genjutsu.poster, bento.genjutsu.original, ...bento.live.frames];
+    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.genjutsu.poster, bento.genjutsu.still, ...bento.live.frames];
     for (const p of pictures)
       for (const a of p.avif) {
         const m = await sharp(file(a.src)).metadata();
@@ -165,11 +198,14 @@ describe("Home's first screen", () => {
     }
     // The live tile, the next biggest, covers a 3x phone (358 px wide) and its tile on a 2x 1440 screen (405 px under cover).
     for (const f of bento.live.frames) expect(Math.max(...f.avif.map((a) => a.w))).toBeGreaterThanOrEqual(Math.max(358 * 3, 405 * 2));
-    // Genjutsu's clip is never made up past its render's own 1024 px: a 2x laptop's tile (376 px) gets 768, a 3x phone 1024.
-    expect(pickWidth(bento.genjutsu.clips, 376 * 2).w).toBe(768);
-    expect(pickWidth(bento.genjutsu.clips, 358 * 3).w).toBe(1024);
-    // The original's window (at most 132 px) is covered on a 3x screen.
-    expect(Math.max(...bento.genjutsu.original.avif.map((a) => a.w))).toBeGreaterThanOrEqual(132 * 3);
+    // Genjutsu's clips are never made up past their renders' own 1024 px: its tile on a 1x 1440 screen (319 x 308, so
+    // 411 px under cover) gets 640, a box that needs 700 px 768, and a 2x laptop and a 3x phone 1024.
+    for (const c of bento.genjutsu.reel) {
+      expect(pickWidth(c.clips, coverWidth(319, 308, 4 / 3, 1)).w).toBe(640);
+      expect(pickWidth(c.clips, 700).w).toBe(768);
+      expect(pickWidth(c.clips, coverWidth(319, 308, 4 / 3, 2)).w).toBe(1024);
+      expect(pickWidth(c.clips, 358 * 3).w).toBe(1024);
+    }
   });
 
   it("opens a real page from every tile, named by the navigation or the catalog", () => {
@@ -197,7 +233,7 @@ describe("Home's first screen", () => {
   it("makes every tile one link with a name, in the grid's reading order", () => {
     const links = [...html.matchAll(/<a [^>]*>/g)].map((m) => m[0]);
     const tiles = links.filter((a) => a.includes("data-tile="));
-    expect(tiles.map((a) => /data-tile="([^"]+)"/.exec(a)![1])).toEqual(["video", "live", "image", "threeD", "genjutsu", "audio", "numbers", "canvas"]);
+    expect(tiles.map((a) => /data-tile="([^"]+)"/.exec(a)![1])).toEqual(["video", "live", "genjutsu", "image", "threeD", "audio", "numbers", "canvas"]);
     for (const a of tiles) {
       const label = /aria-label="([^"]+)"/.exec(a)?.[1];
       expect(label, a).toBeTruthy();
