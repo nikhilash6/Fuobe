@@ -179,6 +179,16 @@ export const GENJUTSU_FEATURE_KEYS = Object.keys(GENJUTSU_FEATURES) as GenjutsuF
 
 /** Which features are open to this viewer: everything for the owner (and in tests), else what has passed. */
 export type FeatureCheck = (f: GenjutsuFeature) => boolean;
+
+/** A mode's hint for this viewer: Finish names only the tools that are open to them. */
+export function modeHint(mode: GenjutsuMode, open: FeatureCheck): string {
+  if (mode !== "finish") return getMode(mode).hint;
+  const faces = open("finish-faces");
+  const colours = open("finish-colours");
+  if (faces && !colours) return "Give a finished video sharper faces.";
+  if (colours && !faces) return "Give a finished video a soft film finish.";
+  return getMode(mode).hint;
+}
 export const ALL_FEATURES: FeatureCheck = () => true;
 
 /** Whether a mode shows for this viewer (the new modes need one of their features open). */

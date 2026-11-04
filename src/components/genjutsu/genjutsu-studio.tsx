@@ -47,6 +47,7 @@ import {
   makersFor,
   qualityFor,
   MODE_TARGETS,
+  modeHint,
   OPEN_TARGET_PROBLEM,
   resolutionWords,
   SCENE_ACTIONS,
@@ -640,12 +641,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   };
 
   const modeInfo = getMode(mode);
+  const hint = modeHint(mode, open);
   const tabs = <ModeTabsRow modes={GENJUTSU_MODES.filter((m) => modeOpen(m.id, open))} mode={mode} onMode={setMode} onlyYou={(m) => owner && !modeOpen(m, (f) => !!live?.[f])} />;
 
   return (
     <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
       {!clip && (
-        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
+        <ToolHero title={modeInfo.label} subtitle={`${hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
           {isCharacter && (
             <Link href="/character-swap" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
               Whole clips, shot by shot? Open in Character Swap Studio
@@ -832,7 +834,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
 
             <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               {mode === "picture" && <PictureSteps stage={pictureStage} />}
-              <p className="text-[13px] text-pretty text-muted-foreground">{modeInfo.hint}</p>
+              <p className="text-[13px] text-pretty text-muted-foreground">{hint}</p>
 
               {mode === "finish" && <FinishFields value={finish} onChange={setFinish} open={open} ownerOnly={ownerOnly} seed={seed} onSeed={setSeed} />}
 

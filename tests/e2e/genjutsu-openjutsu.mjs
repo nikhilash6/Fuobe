@@ -75,8 +75,9 @@ try {
         check(`${width}: ?mode=${m} lands on ${want} for a guest`, (await selected()) === want, String(await selected()));
         if (m === "finish" && OPEN_MODES.finish) {
           const body = await page.evaluate(() => document.body.innerText);
-          check(`${width}: Finish offers Fix colours to a guest`, body.includes("Fix colours") === live("finish-colours"));
-          check(`${width}: Finish offers Fix faces only once it is open`, body.includes("Fix faces") === live("finish-faces"));
+          // The hint names only the open tools (the tool switch shows once a video is in).
+          check(`${width}: Finish names the film finish once Fix colours is open`, body.includes("soft film finish") === live("finish-colours"));
+          check(`${width}: Finish names sharper faces only once Fix faces is open`, body.includes("sharper faces") === live("finish-faces"));
           check(`${width}: Finish fits the screen`, (await sideways()) <= 0);
           await shot("guest-finish");
         }

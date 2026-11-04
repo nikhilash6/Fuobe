@@ -9,7 +9,9 @@ import {
   GENJUTSU_MODES,
   genjutsuProblem,
   getMaker,
+  getMode,
   makersFor,
+  modeHint,
   modeOpen,
   MOTION_H3,
   ORIGINALS,
@@ -197,6 +199,14 @@ describe("Genjutsu: the Openjutsu modes", () => {
     expect(roleFromPin({ x: 0.1, y: 0.5 })).toBe("the person on the left");
     expect(roleFromPin({ x: 0.5, y: 0.8 })).toBe("the person in the centre in front");
     expect(roleFromPin({ x: 0.9, y: 0.1 })).toBe("the person on the right at the back");
+  });
+
+  it("Finish's hint names only the tools open to the viewer", () => {
+    const only = (k: string) => (f: string) => f === k;
+    expect(modeHint("finish", only("finish-colours") as never)).toBe("Give a finished video a soft film finish.");
+    expect(modeHint("finish", only("finish-faces") as never)).toBe("Give a finished video sharper faces.");
+    expect(modeHint("finish", () => true)).toBe("Give a finished video sharper faces or a soft film finish.");
+    expect(modeHint("motion", () => false)).toBe(getMode("motion").hint);
   });
 
   it("every step of the new modes plans without a prompt: their words travel in the settings", () => {
