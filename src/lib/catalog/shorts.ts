@@ -1009,7 +1009,7 @@ export function stitchSteps(s: Pick<ShortsStitch, "ids" | "final">, gens: Record
   const ids = s.ids.includes(s.final) ? s.ids : [...s.ids, s.final];
   return ids.map((id) => {
     const g = gens[id];
-    const label = !g ? "A step" : g.op === "concat" ? "Stitching the segments" : g.op === "trim" ? "Cutting the original sound" : g.op === "mux" ? "Putting the sound back" : "Restyling";
+    const label = !g ? "A step" : g.op === "concat" ? "Stitching the segments" : g.op === "trim" ? "Cutting the original sound" : g.op === "separate-audio" ? "Splitting the sound" : g.op === "mux" ? "Putting the sound back" : "Restyling";
     return { g, label };
   });
 }
