@@ -92,3 +92,8 @@ export function hostedUntestedSummary(models: ModelDef[], base: AccessSummary | 
   }
   return { off: [...off], ...(Object.keys(engines).length && { engines }) };
 }
+
+/** Whether this route of this model is a hosted call that hasn't been sent with a real key yet (own-setup.ts). */
+export function isHostedUntested(modelId: string, route: Pick<ModelRoute, "provider" | "endpoint">): boolean {
+  return hosted(route) && (HOSTED_UNTESTED_ENDPOINTS.has(route.endpoint) || HOSTED_UNTESTED_MODELS.has(modelId));
+}
