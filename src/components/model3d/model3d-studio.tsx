@@ -51,6 +51,7 @@ import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types"
 import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
+import { OwnSetupChip } from "@/components/own-setup";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
@@ -177,6 +178,8 @@ function IdolSettings({
               <Label htmlFor="m3d-idol-trim" className="text-[13px] font-normal">
                 Trim spikes
               </Label>
+              {/* A visitor's run is on its own GPU: what that needs (the owner reads the line below instead). */}
+              {!owner && <OwnSetupChip setup="image-to-3d:idol-clean" className="ml-1.5 align-[1px]" />}
               <p id="m3d-idol-trim-hint" className="mt-0.5 text-[12px] text-muted-foreground">
                 Drops the thin, needle-like bits around the edges of the 3D file.
               </p>

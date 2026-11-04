@@ -17,7 +17,8 @@ export interface ProjectView {
   project: CinemaProject;
   folders: CinemaFolder[];
   spentUsd: number;
-  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean };
+  /** worldReady: World mode's graph has passed its check on this studio's GPU (its own-setup mark leaves). */
+  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean; worldReady?: boolean };
 }
 
 async function json<T>(res: Response): Promise<T> {
