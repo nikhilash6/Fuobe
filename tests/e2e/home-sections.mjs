@@ -5,6 +5,9 @@
 // Usage: node tests/e2e/home-sections.mjs [appUrl] [--shots <dir>]   (pnpm test:e2e:home-sections)
 //
 // At 390@3x (a phone) and 1440@2x (a laptop), as a guest:
+// 0. Each row shows its cards in full rows: four rows wherever it's a grid (Camera motions and Effects 24 from xl, 16
+//    from lg, 12 from sm; Apps 12, six beside the before/after from xl and six under it; Studios and tools 16 from lg,
+//    8 from sm), and every card on a phone's rail (24, 24, 12 and 16). Counted at 768 and 1024 too.
 // 1. Every card shown at that width has its still, at least as wide as its box shows it (times the pixel ratio, up to
 //    the widest copy, 1024 px). On a phone that's every card of a sideways row too, loaded before it is swiped in
 //    (useRailStills), and a card swiped in shows its still at once. A card hidden at that width loads nothing.
@@ -34,6 +37,18 @@ const cap = (() => {
   if (!m) throw new Error("MAX_PLAYING not found in src/lib/preview-playback.ts");
   return { narrow: Number(m[1]), wide: Number(m[2]) };
 })();
+/**
+ * The cards each row shows, row by row from the top, at a viewport width (a phone's rail is one row). Apps from xl: three
+ * and three beside the before/after, then six under it.
+ */
+const ROWS = (width) =>
+  width < 640
+    ? { "home-motions": [24], "home-effects": [24], "home-apps": [12], "home-studios": [16] }
+    : width < 1024
+      ? { "home-motions": [3, 3, 3, 3], "home-effects": [3, 3, 3, 3], "home-apps": [3, 3, 3, 3], "home-studios": [2, 2, 2, 2] }
+      : width < 1280
+        ? { "home-motions": [4, 4, 4, 4], "home-effects": [4, 4, 4, 4], "home-apps": [4, 4, 4], "home-studios": [4, 4, 4, 4] }
+        : { "home-motions": [6, 6, 6, 6], "home-effects": [6, 6, 6, 6], "home-apps": [3, 3, 6], "home-studios": [4, 4, 4, 4] };
 /** The widest copy of a cover's still (preset-hd.generated.ts). */
 const WIDEST = 1024;
 /** How long a clip may take to load and reach its place in the shared cycle (STAGGER_CYCLE, 2.8 s) before it plays. */
@@ -63,7 +78,8 @@ const readCards = (sections) =>
   sections.flatMap((id) => {
     const section = document.getElementById(id).closest("section");
     const rail = section.querySelector(".snap-x");
-    const clip = rail.getBoundingClientRect();
+    // From xl the Apps cards sit in the section's own grid (their row is display: contents, which has no box).
+    const clip = (getComputedStyle(rail).display === "contents" ? section : rail).getBoundingClientRect();
     return [...rail.children]
       .filter((item) => item.getClientRects().length > 0)
       .map((item) => {
@@ -110,6 +126,37 @@ async function stillWidths(page, srcs) {
 
 /** The device pixels a 4:3 picture covering this box needs (media-pick.ts coverWidth). */
 const need = ([w, h], dpr) => Math.ceil(Math.max(w, h * (4 / 3)) * dpr);
+
+/** How many cards each row shows, row by row (cards whose tops line up are a row), and how many it holds in all. */
+const readRows = (sections) =>
+  Object.fromEntries(
+    sections.map((id) => {
+      const rail = document.getElementById(id).closest("section").querySelector(".snap-x");
+      const shown = [...rail.children].filter((item) => item.getClientRects().length > 0);
+      const tops = new Map();
+      for (const item of shown) {
+        const top = Math.round(item.getBoundingClientRect().top + scrollY);
+        tops.set(top, (tops.get(top) ?? 0) + 1);
+      }
+      return [id, { rows: [...tops.entries()].sort((a, b) => a[0] - b[0]).map(([, n]) => n), all: rail.children.length }];
+    }),
+  );
+
+/** Each row's cards, row by row, at this width: as many as ROWS says, every row full. */
+async function checkRows(page, label, width) {
+  for (const id of SECTIONS) {
+    await scrollToSection(page, id);
+    await page.waitForTimeout(150);
+  }
+  const seen = await page.evaluate(readRows, SECTIONS);
+  const want = ROWS(width);
+  for (const id of SECTIONS)
+    check(
+      `${label} ${id}: ${want[id].reduce((a, b) => a + b, 0)} cards in ${want[id].length} full row${want[id].length > 1 ? "s" : ""}`,
+      JSON.stringify(seen[id].rows) === JSON.stringify(want[id]),
+      `rows ${JSON.stringify(seen[id].rows)} of ${seen[id].all}`,
+    );
+}
 
 async function scrollToSection(page, id) {
   await page.evaluate((i) => {
@@ -174,6 +221,9 @@ async function run(device, label, dpr, max) {
   // The rows sit in that order down the page: Camera motions first, then Effects.
   const tops = await page.evaluate((ids) => ids.map((i) => document.getElementById(i).closest("section").getBoundingClientRect().top), SECTIONS);
   check(`${label}: the rows come in order`, tops.every((t, i) => i === 0 || t > tops[i - 1]), SECTIONS.map((id, i) => `${id} ${Math.round(tops[i])}`).join(" < "));
+  await checkRows(page, label, device.viewport.width);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(600);
 
   // The rows come into view one by one, as a reader scrolls down to them.
   for (const id of SECTIONS) {
@@ -295,6 +345,15 @@ async function stillsOnly(device, label, dpr, opts) {
 }
 
 console.log(`Home's card rows at ${app} (caps: ${cap.narrow} on a phone, ${cap.wide} wider)`);
+// A tablet held up and turned: the counts only.
+for (const width of [768, 1024]) {
+  const ctx = await browser.newContext({ viewport: { width, height: 1000 } });
+  const page = await ctx.newPage();
+  await page.goto(`${app}/?e2e=${Date.now()}`, { waitUntil: "load" });
+  await page.waitForTimeout(800);
+  await checkRows(page, String(width), width);
+  await ctx.close();
+}
 await run(PHONE, "390@3x", 3, cap.narrow);
 await run(DESKTOP, "1440@2x", 2, cap.wide);
 await stillsOnly(PHONE, "390@3x reduced motion", 3, { reducedMotion: true });

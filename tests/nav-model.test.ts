@@ -37,7 +37,7 @@ const pathOf = (href: string) => href.split(/[?#]/)[0];
 const q = (s = "") => new URLSearchParams(s);
 const KINDS: (ViewerKind | undefined)[] = ["guest", "account", "owner", undefined];
 
-/** The sidebar's 44 rows before the navigation model (origin/main), in their groups and order. */
+/** The sidebar's 44 rows before the navigation model (origin/main), in their groups and order, and Kinetic Motion since. */
 const OLD_NAV: [string, [string, string][]][] = [
   [
     "Create",
@@ -73,6 +73,7 @@ const OLD_NAV: [string, [string, string][]][] = [
       ["/mixed-media", "Mixed Media"],
       ["/marketing", "Marketing Studio"],
       ["/ads", "Ads Studio"],
+      ["/kinetic", "Fuobe Kinetic Motion"],
       ["/moodboards", "Moodboards"],
       ["/photodump", "Photodump"],
       ["/fashion-factory", "Fashion Factory"],
@@ -140,9 +141,9 @@ describe("nav model: entries", () => {
     for (const [, rows] of OLD_NAV) for (const [href, label] of rows) expect(NAV_ENTRIES.find((e) => e.href === href)?.label, href).toBe(label);
   });
 
-  it("derives the four groups (Create, Library, Studios, More) exactly as they were: 44 rows", () => {
+  it("derives the four groups (Create, Library, Studios, More) exactly as they were, with Kinetic Motion: 45 rows", () => {
     expect(NAV.map((g) => [g.label, g.items.map((i) => [i.href, i.label])])).toEqual(OLD_NAV);
-    expect(NAV.flatMap((g) => g.items)).toHaveLength(44);
+    expect(NAV.flatMap((g) => g.items)).toHaveLength(45);
     expect(NAV.find((g) => g.label === "Studios")?.collapsible).toBe(true);
     // The same rows prefetch eagerly, with an icon each and search words.
     expect(
