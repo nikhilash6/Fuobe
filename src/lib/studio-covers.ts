@@ -2,8 +2,8 @@
  * Covers that belong to a studio rather than to a preset: one of the studio's own examples, cut into a cover by the
  * same pipeline as a preset's (pnpm eval:covers --from-masters, gen-preset-peaks, gen-preset-hd) and listed with them
  * under its own id (preset-covers.generated.ts, preset-previews.generated.ts). Home's card for the studio, its entry
- * in the menus and its next step under a result show it. Each names its card as a preset's would; no preset has the
- * same id. Pure data, so the server and the browser share it.
+ * in the menus, its next step under a result and the studio's own row of examples (studio-examples.ts) show it. Each
+ * names its card as a preset's would; no preset has the same id. Pure data, so the server and the browser share it.
  */
 export interface StudioCover {
   /** The card's name, as a preset card's (its alt text and tooltip). */
@@ -14,6 +14,8 @@ export interface StudioCover {
   category: string;
   /** A key of PRESET_ICONS (src/components/preset-icons.ts). */
   icon: string;
+  /** Where its card opens in a row of examples: its studio, in the mode that made it, with that example in view. */
+  href: string;
 }
 
 export const STUDIO_COVERS: Record<string, StudioCover> = {
@@ -23,6 +25,7 @@ export const STUDIO_COVERS: Record<string, StudioCover> = {
     description: "Two people swapped in one take: the kiss on the cheek, the laugh and the light stay as filmed.",
     category: "Genjutsu",
     icon: "Users",
+    href: "/genjutsu?mode=character&example=genjutsu-character.1",
   },
 };
 

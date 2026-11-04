@@ -7,7 +7,9 @@ import { thumbOf } from "@/lib/preset-cards";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { STUDIO_COVERS, isStudioCover } from "@/lib/studio-covers";
 import { EXAMPLE_LINES, STUDIO_EXAMPLES, studioExamples, type ExampleStudio } from "@/lib/studio-examples";
+import plan from "@/lib/examples/plan.json";
 
 // home-showcase.ts (which the examples borrow from) imports next/cache for its own showcase.
 vi.mock("next/cache", () => ({ cacheLife: () => {} }));
@@ -61,10 +63,10 @@ describe("the studios' examples", () => {
     }
   });
 
-  it("names real presets, each with its cover, its clip, its peak frame and their small copies", () => {
+  it("names real presets (or a studio's own cover), each with its cover, its clip, its peak frame and their small copies", () => {
     for (const s of studios) {
       for (const { card } of studioExamples(s).tiles) {
-        expect(getPreset(card.id), card.id).toBeDefined();
+        expect(getPreset(card.id) ?? (isStudioCover(card.id) ? STUDIO_COVERS[card.id] : undefined), card.id).toBeDefined();
         const cover = PRESET_PREVIEWS[card.id];
         expect(cover, `${card.id} has a real cover`).toBeDefined();
         expect(card.preview.poster, card.id).toBe(cover.poster);
@@ -89,10 +91,16 @@ describe("the studios' examples", () => {
       for (const e of studioExamples(s).tiles) {
         expect(e.caption.length, e.card.id).toBeGreaterThan(0);
         expect(e.caption.length, e.card.id).toBeLessThanOrEqual(HOME_CAPTION_MAX.card);
-        const type = getPreset(e.card.id)!.type;
-        // An app whose cover wipes from a before to an after (Home's wall says so, or it has Home's HD pair) says so.
-        const kind =
-          type === "motion" ? "Camera motion" : type === "effect" ? "Effect" : (wallKinds.get(e.card.id) ?? (PRESET_BEFORE_AFTER[e.card.id] ? "App · before → after" : "App"));
+        const type = getPreset(e.card.id)?.type;
+        // An app whose cover wipes from a before to an after (Home's wall says so, or it has Home's HD pair) says so; a
+        // studio's own cover names its studio.
+        const kind = !type
+          ? STUDIO_COVERS[e.card.id].category
+          : type === "motion"
+            ? "Camera motion"
+            : type === "effect"
+              ? "Effect"
+              : (wallKinds.get(e.card.id) ?? (PRESET_BEFORE_AFTER[e.card.id] ? "App · before → after" : "App"));
         expect(e.kind, e.card.id).toBe(kind);
       }
     }
@@ -114,15 +122,38 @@ describe("the studios' examples", () => {
     }
   });
 
-  it("opens an app on its own page, and picks a motion or effect in the Video studio", () => {
+  it("opens an app on its own page, picks a motion or effect in the Video studio, and opens a studio's cover in its studio", () => {
     for (const s of studios) {
       for (const e of studioExamples(s).tiles) {
-        expect(e.href, e.card.id).toBe(getPreset(e.card.id)!.type === "app" ? `/apps/${e.card.id}` : `/video?preset=${e.card.id}`);
+        const href = isStudioCover(e.card.id)
+          ? STUDIO_COVERS[e.card.id].href
+          : getPreset(e.card.id)!.type === "app"
+            ? `/apps/${e.card.id}`
+            : `/video?preset=${e.card.id}`;
+        expect(e.href, e.card.id).toBe(href);
       }
     }
     // Edit and Image show apps, Video shows what its studio picks.
     for (const s of ["image", "edit"] as const) for (const e of studioExamples(s).tiles) expect(getPreset(e.card.id)!.type, e.card.id).toBe("app");
     for (const e of studioExamples("video").tiles) expect(["motion", "effect"], e.card.id).toContain(getPreset(e.card.id)!.type);
+  });
+
+  it("shows Genjutsu's own group swap in its row, opening its Character swap mode on that example", () => {
+    const row = studioExamples("genjutsu").tiles;
+    const own = row.find((e) => e.card.id === "genjutsu-group-swap");
+    expect(own, "Genjutsu's row has its group swap").toBeDefined();
+    expect(own!.card.name).toBe("Group swap");
+    expect(own!.caption).toBe("Two people swapped in one take");
+    expect(own!.kind).toBe("Genjutsu");
+    // No effect stands for Genjutsu: its row shows swaps of people.
+    for (const e of row) expect(getPreset(e.card.id)?.type, e.card.id).not.toBe("effect");
+    // Every studio cover's link names its studio's mode and an example of that mode (plan.json).
+    for (const [id, c] of Object.entries(STUDIO_COVERS)) {
+      const url = new URL(c.href, "https://fuobe.com");
+      expect(url.pathname, id).toBe(`/${c.category.toLowerCase()}`);
+      const example = (plan as { id: string; surface: string }[]).find((r) => r.id === url.searchParams.get("example"));
+      expect(example?.surface, id).toBe(`tool:${url.pathname.slice(1)}/${url.searchParams.get("mode")}`);
+    }
   });
 
   it("stays on the server: the pages and the rows take only the examples' types", () => {
