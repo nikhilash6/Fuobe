@@ -14,7 +14,8 @@
  * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
  * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo),
  * `text` (a SaveText output, node 5: the history carries the words and /view serves them as the .txt file), `graph`
- * (outputs under the sent graph's own save nodes: audio as a WAV, SaveText as `text`, so a chain of steps runs through).
+ * (outputs under the sent graph's own save nodes: audio as a WAV, SaveText as `text`, so a chain of steps runs through), `mixed` (every
+ * job answers a clip, a picture, a sound and a text, so each step of a chained tool takes the kind it reads).
  * This file runs under plain Node too: only erasable TypeScript.
  */
 import http from "node:http";
@@ -46,6 +47,8 @@ export interface FakeComfyOptions {
    * a chain of steps (a soundtrack split into stems, its words, a mix) runs through.
    */
   graph?: boolean;
+  /** Every job answers a clip, a picture, a sound (a WAV) and a text (`text`, or "Done."): a chained tool's steps each take their kind. */
+  mixed?: boolean;
 }
 
 /** A tiny but real WAV (mono, 16-bit, 8 kHz, 0.1 s of silence). */
@@ -105,6 +108,27 @@ export const TINY_PNG = Buffer.from(
   "89504e470d0a1a0a0000000d494844520000000200000002080600000072b60d240000001149444154789c63381150f11f8419600c005a940a3db632c1b20000000049454e44ae426082",
   "hex",
 );
+
+/** Half a second of a quiet 220 Hz tone: a real 16 kHz mono WAV (a narrator's sample, a narration, a music bed). */
+export const TONE_WAV: Buffer = (() => {
+  const rate = 16000;
+  const n = rate / 2;
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + n * 2, 4);
+  buf.write("WAVEfmt ", 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 220 * i) / rate) * 3000), 44 + i * 2);
+  return buf;
+})();
 
 /** A one-triangle binary glTF 2 (a GLB the server's 3D finish can read). */
 export const TINY_GLB: Buffer = (() => {
@@ -224,6 +248,15 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         const done = { status: { completed: true, status_str: "success" } };
         const list = (n: number, ext: string) => Array.from({ length: n }, (_, i) => ({ filename: `fake_${String(i + 1).padStart(5, "0")}_.${ext}`, subfolder: "", type: "output" }));
         if (opts.graph) return json(200, { [id]: { ...done, outputs: graphOutputs(graphs.get(id), opts.text ?? "") } });
+        if (opts.mixed) {
+          const text = opts.text ?? "Done.";
+          return json(200, {
+            [id]: {
+              ...done,
+              outputs: { "900": { gifs: list(1, "mp4") }, "901": { images: list(1, "png") }, "902": { audio: list(1, "wav") }, "903": { text: [text], files: [{ filename: "fake_00001_.txt", subfolder: "fuobe", type: "output" }] } },
+            },
+          });
+        }
         if (opts.layers) return json(200, { [id]: { ...done, outputs: { "60": { images: list(opts.layers, "png") } } } });
         if (opts.text !== undefined) return json(200, { [id]: { ...done, outputs: { "5": { text: [opts.text], files: [{ filename: "fake_00001_.txt", subfolder: "fuobe", type: "output" }] } } } });
         if (opts.frames) return json(200, { [id]: { ...done, outputs: { "5": { gifs: list(1, "mp4") }, "3": { images: list(opts.frames, "exr") } } } });
@@ -257,11 +290,11 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         const name = url.searchParams.get("filename") ?? "";
         if (name.endsWith(".txt")) {
           res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
-          return res.end(opts.text ?? "");
+          return res.end(opts.text ?? (opts.mixed ? "Done." : ""));
         }
         if (name.endsWith(".wav")) {
           res.writeHead(200, { "content-type": "audio/wav" });
-          return res.end(TINY_WAV);
+          return res.end(opts.mixed ? TONE_WAV : TINY_WAV);
         }
         if (name.endsWith(".exr")) {
           res.writeHead(200, { "content-type": "image/x-exr" });

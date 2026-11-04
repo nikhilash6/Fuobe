@@ -77,7 +77,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   owner's results, files, uploads, folders, shares, projects (Layers, Cinema, Canvas, storyboards,
   elements…) and Assist threads are hidden: the lists come back empty, and other reads answer 403.
   Every change to them (create, rename, move, share, delete) answers 403 with `code: "library"`.
-  Accounts have their own uploads and runs (below), and their own Cinema Studio projects.
+  Accounts have their own uploads and runs (below), their own Cinema Studio projects, and their own Faceless
+  channels, explainers and Content Factory series.
   A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
   (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
   for a guest), and it takes only the owner's own finished Kinetic Motion results.
@@ -100,7 +101,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
   Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
   (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`, except Cinema Studio's
-  ready films, which an account makes as its own project (a guest gets the sign-up card). A starter without its
+  ready films and Faceless Studio's ready channels, which an account makes as its own project (a guest gets the sign-up
+  card). Content Factory's and the Explainer's ready ones fill the composer for anyone. A starter without its
   cover yet is the owner's only: its card, its words and its page (404 for anyone else). Storyboard's
   ready stories with a cover also fill its composer for anyone (`/storyboard?starter=<id>`), and the
   Library's "Make your first" row links to pages everyone can open.
@@ -395,6 +397,20 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the studio's AI helper, on either engine: a cloud step-by-step dub with a key and no GPU is asked to connect one. Its
   reviewed lines are saved with its dub, and its dubbed videos are its own runs, to open and download. A guest gets the
   sign-up card.
+- **Faceless Studio, the Explainer and Content Factory.** An account's channels (`/api/faceless/channels/**`), their
+  episodes (`/api/faceless/episodes/**`), its explainers (`/api/explainer`) and its series
+  (`/api/content-factory/series/**`) are its own (`src/server/account-projects.ts` kinds `faceless`, `explainer` and
+  `content-factory`; up to 50 of each, deleted with the account). Another account's, or the owner's, read as not found
+  (404), and the owner's lists never show an account's. Its scripts, episode plans, channel names, topic ideas and
+  document summaries are the offline writer's: never the studio's AI helper. A render, a retry, a timeline change, an
+  upscale, a channel avatar, a narrator sample and a reference clip's reading run on its own ComfyUI or its own fal.ai or
+  Replicate key, with only its own files, after the same checks as Genjutsu's (`src/server/account-tool-run.ts`); the
+  whole render is planned and checked before its first step starts, and a series' episodes render as one run. Writing a
+  script for review, a channel and a series made from a preset need no GPU or key. The server never fetches a link for
+  it: a channel's YouTube reference is kept as the link, and an explainer's link source and a series' TikTok or
+  Instagram link are the owner's (it attaches the file or uploads the clip). "Generate in Claude" (the studio's own MCP
+  server) and "Regenerate to 1080p" (held with Open-H3 Regenerate) aren't offered to it (403 `own-gpu-tool`). A guest
+  gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

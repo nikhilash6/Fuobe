@@ -53,8 +53,9 @@ afterAll(() => {
   globalThis.__fuobeTestDiskFree = undefined;
 });
 
+/** The owner's request (a guest is asked to sign up first; an account's own channels: tests/account-content.test.ts). */
 const json = (method: string, body?: unknown) =>
-  new Request("http://x/api", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  new Request("http://x/api", { method, headers: { "Content-Type": "application/json", cookie: owner }, body: body === undefined ? undefined : JSON.stringify(body) });
 const params = <T extends Record<string, string>>(p: T) => ({ params: Promise.resolve(p) }) as never;
 const clip = (accountId?: string) => saveFile({ data: TINY_MP4, contentType: "video/mp4", source: "upload", name: "clip.mp4", ...(accountId && { accountId }) }).url;
 const count = () => (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;

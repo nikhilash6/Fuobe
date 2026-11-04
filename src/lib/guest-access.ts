@@ -339,6 +339,15 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // Translate & dub: one of its own dubs (open it, save its reviewed lines, forget it). Its list is ACCOUNT_LISTS', and
   // starting one is a tool run (ACCOUNT_TOOL_RUNS), so its price check is counted as every other.
   /^\/api\/dub\/[^/]+$/,
+  // Faceless Studio, the Explainer and Content Factory: their own channels, episodes, explainers and series, their topic
+  // ideas, documents and narrator samples, and their runs (renders, retries, changes, upscales, avatars, readings), each
+  // checked by the route on its own GPU or key (src/server/faceless.ts, content-factory.ts). "Generate in Claude" isn't
+  // here (it hands the brief to the studio's own MCP server), nor "Regenerate to 1080p" (held with Open-H3 Regenerate),
+  // nor reading a link (the server never fetches a link for an account: it uploads the file or pastes the words).
+  /^\/api\/faceless\/(channels(\/[^/]+(\/avatar)?)?|episodes(\/[^/]+(\/(render|retry|rewrite|undo|upscale|change))?)?|topics|voices\/preview)$/,
+  /^\/api\/explainer(\/document)?$/,
+  /^\/api\/content-factory\/series(\/[^/]+(\/(episodes|generate|read))?)?$/,
+  /^\/api\/starters\/faceless\.[^/]+$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

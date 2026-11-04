@@ -10,16 +10,17 @@ const Body = z.object({ engine: z.enum(["cloud", "open"]).default("cloud") });
 
 /**
  * The owner's "Use template" on a ready-made starter: makes it (a channel set up for its first episode, a brand kit with
- * its product) and answers `{ href }`, where it opens. A signed-in account makes Cinema Studio's ready films only, each
- * as its own project (src/server/cinema.ts); the rest are saved to the owner's library (403 for an account). A guest
- * signs up first.
+ * its product) and answers `{ href }`, where it opens. A signed-in account makes Cinema Studio's ready films and Faceless
+ * Studio's ready channels, each as its own project (src/server/cinema.ts, faceless.ts); the rest are saved to the
+ * owner's library (403 for an account). A guest signs up first.
  */
 export async function POST(request: Request, { params }: RouteContext<"/api/starters/[id]">) {
   const { id } = await params;
   const viewer = toolViewer(request);
   if (viewer.kind === "guest") return guestRun();
   if (viewer.kind === "account") {
-    if (getStarter(id)?.seed.kind !== "cinema") return Response.json({ error: LIBRARY_MESSAGE, code: "library" }, { status: 403 });
+    const kind = getStarter(id)?.seed.kind;
+    if (kind !== "cinema" && kind !== "faceless") return Response.json({ error: LIBRARY_MESSAGE, code: "library" }, { status: 403 });
     const limited = projectSavesLimited(viewer.account.id);
     if (limited) return limited;
   }

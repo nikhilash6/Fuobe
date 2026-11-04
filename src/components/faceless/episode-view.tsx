@@ -56,7 +56,7 @@ import {
   type StepView,
 } from "@/lib/catalog/faceless";
 import type { Generation } from "@/lib/catalog/types";
-import { useEngineMode, useIsVisitor } from "@/lib/api";
+import { useEngineMode } from "@/lib/api";
 import { FACELESS_REGEN_COPY } from "@/lib/catalog/faceless";
 import { timeAgo } from "@/lib/format";
 import { downloadHref, downloadName } from "@/lib/library";
@@ -223,8 +223,6 @@ const PART_OPTIONS: { value: ChangePart; label: string }[] = [
 /** Change the selected scenes: describe the change, see what re-runs and the price, apply or discard. */
 function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: SceneRow[]; onClose: () => void; onOpen: (g: Generation) => void }) {
   const ep = view.episode;
-  // A guest or an account: the open engine runs on a self-hosted Fuobe only (not on their own GPU yet).
-  const visitor = useIsVisitor();
   const [part, setPart] = useState<ChangePart>("picture");
   const [instruction, setInstruction] = useState("");
   const [lines, setLines] = useState<string[]>(() => scenes.map((s) => s.narration));
@@ -351,7 +349,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
                 : preview.isError
                   ? (preview.error as Error).message
                   : preview.data
-                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Placeholder · free" : ep.settings.engine === "open" ? (visitor ? "Not available here" : "Free · your GPU") : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
+                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Placeholder · free" : ep.settings.engine === "open" ? "Free · your GPU" : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
                     : "Pricing…"}
           </p>
           <Button variant="ghost" onClick={discard} disabled={!draft}>

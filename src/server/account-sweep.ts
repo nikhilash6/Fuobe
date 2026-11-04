@@ -5,6 +5,8 @@ import { RETENTION_MS, runAccountDeletedHooks } from "./account-files";
 import { deleteAccountCanvases } from "./account-canvas";
 import { deleteAccountProjects } from "./account-projects";
 import { deleteAccountCinema } from "./cinema";
+import { deleteAccountSeries } from "./content-factory";
+import { deleteAccountFaceless } from "./faceless";
 import { clearAccountLoras } from "./account-loras";
 import { accountById, deleteAccount, readAccountIds, setAccountDisabled } from "./auth";
 import { strayAccountIds } from "./auth-store";
@@ -49,6 +51,8 @@ export async function purgeAccount(id: string): Promise<{ runs: number; files: n
   deleteAccountCanvases(id);
   // A tool's own rows under its projects go before the projects themselves.
   deleteAccountCinema(id);
+  deleteAccountSeries(id);
+  deleteAccountFaceless(id);
   deleteAccountProjects(id);
   await runAccountDeletedHooks(id);
   return { runs, files: files.length };
