@@ -125,7 +125,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     }
   });
 
-  it("gives an account the price checks, own-gpu-tool for the runs (a GPU wouldn't run them), and library for the Export mix", async () => {
+  it("gives an account the price checks, own-gpu-tool for the runs (a GPU wouldn't run them), and its own Export mix", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const cookie = auth.createSession(newAccount().id).value;
     for (const p of ["/api/turnaround/estimate", "/api/turnaround?preview=1", "/api/audio-tools?preview=1"]) expect(passed(proxy(req(p, { method: "POST", cookie }))), p).toBe(true);
@@ -135,11 +135,8 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
-    // The mix is saved to the owner's Library: a library change, whatever the GPU.
-    const save = proxy(req("/api/audio-tools/export?offset=0", { method: "POST", cookie }));
-    expect(save.status).toBe(403);
-    expect(save.headers.get(access.CONNECT_GPU_HEADER)).toBeNull();
-    expect((await save.json()).code).toBe("library");
+    // The mix is kept as the account's own run (the route checks its room, run rate and the studio's checks), whatever the GPU.
+    expect(passed(proxy(req("/api/audio-tools/export?offset=0", { method: "POST", cookie })))).toBe(true);
   });
 
   it("runs an account's MOSS-Image on its own GPU (the studios' generations); the tools say own-gpu-tool", async () => {
@@ -154,7 +151,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
-    expect((await proxy(req("/api/audio-tools/export?offset=0", { method: "POST", cookie })).json()).code).toBe("library");
+    expect(passed(proxy(req("/api/audio-tools/export?offset=0", { method: "POST", cookie })))).toBe(true);
   });
 
   it("keeps the owner's runs and saves unchanged", () => {

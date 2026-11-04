@@ -2,7 +2,7 @@
 
 import { Cpu, Loader2, Sparkles } from "lucide-react";
 import type { Engine, ModelDef } from "@/lib/catalog/types";
-import { REGEN_COPY, REGEN_MODEL, type FINISH_CHOICES } from "@/lib/catalog/regenerate";
+import { REGEN_COPY, REGEN_MODEL, type FinishChoice } from "@/lib/catalog/regenerate";
 import { RTX_COPY, RTX_UPSCALE_MODEL, rtxStanding } from "@/lib/catalog/rtx-video";
 import { badgeFor, useGpuBadges } from "@/hooks/use-gpu";
 import { useIsOwner } from "@/lib/api";
@@ -10,9 +10,10 @@ import { cn } from "@/lib/utils";
 import { radioKeys, radioTab } from "./radio-keys";
 
 /**
- * Upscale → Video's two open finishing steps side by side (StudioConfig.finishChoices): SeedVR2 "Restore · faithful" and
- * Open-H3 "Regenerate · creative". On the cloud engine (both engines on) Regenerate says it runs on your GPU, with a
- * button that takes the composer there; with Engine mode "Paid APIs only" nothing shows. GPU-only: nobody hosts it.
+ * Upscale → Video's open finishing steps side by side (StudioConfig.finishChoices): SeedVR2 "Restore · faithful", and
+ * Open-H3 "Regenerate · creative" while it is offered. On the cloud engine (both engines on) Regenerate says it runs on
+ * your GPU, with a button that takes the composer there; with Engine mode "Paid APIs only" nothing shows. GPU-only:
+ * nobody hosts it.
  * With Regenerate picked: the GPU line (the install detail for the owner only), the 16:9 / 9:16 shape, and for a clip with
  * no words yet a button that has Fuobe's reading model describe it (`onDescribe`).
  * NVIDIA RTX Video's "Quick · RTX" joins them: first on an NVIDIA RTX card, switched off with the reason on a card that
@@ -28,7 +29,7 @@ export function FinishChoices({
   onDescribe,
   describing,
 }: {
-  choices: typeof FINISH_CHOICES;
+  choices: readonly FinishChoice[];
   model: ModelDef | undefined;
   engine: Engine;
   engineMode: "both" | "open" | "cloud";
@@ -42,7 +43,7 @@ export function FinishChoices({
   const owner = useIsOwner();
   const badges = useGpuBadges().data;
   if (engineMode === "cloud") return null;
-  const regen = offered(REGEN_MODEL);
+  const regen = choices.some((c) => c.modelId === REGEN_MODEL) ? offered(REGEN_MODEL) : undefined;
   if (engine === "cloud") {
     if (!regen) return null;
     return (

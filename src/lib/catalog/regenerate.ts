@@ -419,6 +419,7 @@ export const FINISH_CHOICES = [
   { modelId: RESTORE_MODEL, label: "Restore · faithful", hint: "Keeps every detail and sharpens it." },
   { modelId: REGEN_MODEL, label: "Regenerate · creative", hint: "Redraws your clip at 2K. Details may change; motion and layout stay." },
 ] as const;
+export type FinishChoice = (typeof FINISH_CHOICES)[number];
 
 // ---------------------------------------------------------------------------
 // Files and licences (information for Settings → Models & licences, never a gate)

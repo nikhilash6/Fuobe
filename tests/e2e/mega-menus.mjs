@@ -1,6 +1,7 @@
 // The bar's grouped menus in a real browser: Studios, Apps, Motions & effects and Canvas, for a guest, an account and
 // the owner, at the desktop sizes they must fit without scrolling; their keys, links, loading and budgets; the phone's
-// Studios sheet with its four families; and the Canvas ready boards' covers on /canvas.
+// Studios sheet with its four families; the Canvas menu's pictures sharp on 2x and 3x screens; and the Canvas ready
+// boards' covers on /canvas.
 // Usage: node tests/e2e/mega-menus.mjs [appUrl] [shotsDir]
 //   E2E_BROWSER=webkit (Safari's engine) or firefox runs it there (the loading and budget checks are Chromium's).
 //   E2E_OWNER_PASSWORD: the studio's password, when it has one. Account checks need public sign-up (throwaway qa
@@ -325,6 +326,58 @@ try {
     // Wider windows never get narrower columns (the panel stops at 1680 px with one gutter).
     const w = (x) => Math.min(...(widths[x] ?? [0]));
     check(w(1920) >= w(1440) - 0.5, "Studios: columns at 1920 at least as wide as at 1440", `${w(1440).toFixed(1)} → ${w(1920).toFixed(1)}`);
+  }
+
+  // 1d. Canvas' pictures are sharp: each loads a copy at least as wide as its box times the screen's pixel ratio
+  // (the copies its srcset lists: from 1680 px the lead asks 1068 px at 2x and takes the widest, 1024), in the panel at
+  // 1440 and 1920 px on a 2x screen, and on the phone sheet at 3x.
+  {
+    /** Each picture shown under `sel`: the width of the file it loaded, the width its box asks for and the widest it lists. */
+    const sharpness = (p, sel) =>
+      p.evaluate(async (sel) => {
+        const out = [];
+        for (const img of [...document.querySelectorAll(`${sel} img`)].filter((i) => i.checkVisibility() && !/\bblur/.test(i.className))) {
+          const r = img.getBoundingClientRect();
+          if (r.bottom < 0 || r.top > innerHeight) continue;
+          const probe = new Image();
+          probe.src = img.currentSrc || img.src;
+          await probe.decode().catch(() => {});
+          const listed = [img, ...(img.parentElement?.tagName === "PICTURE" ? img.parentElement.querySelectorAll("source") : [])]
+            .flatMap((x) => (x.getAttribute("srcset") ?? "").split(",").map((c) => Number(/\s(\d+)w$/.exec(c.trim())?.[1] ?? 0)));
+          const need = Math.ceil(Math.max(r.width, probe.naturalHeight ? r.height * (probe.naturalWidth / probe.naturalHeight) : 0) * devicePixelRatio);
+          out.push({ src: new URL(probe.src).pathname, file: probe.naturalWidth, need, widest: Math.max(probe.naturalWidth, ...listed) });
+        }
+        return out;
+      }, sel);
+    const report = (list) => list.map((x) => `${x.src.split("/").slice(-3).join("/")} ${x.file}/${x.need}`).join(", ");
+    for (const width of [1440, 1920]) {
+      const size = SIZES.find((s) => s.width === width);
+      const ctx = await as("guest", { viewport: size, deviceScaleFactor: 2 });
+      const p = await page(ctx);
+      await openRoute(p, `${app}/image`, { settleMs: 300 });
+      await openMenu(p, "canvas");
+      await p.waitForTimeout(500);
+      const list = await sharpness(p, "#canvas-launcher");
+      const soft = list.filter((x) => x.file < Math.min(x.need, x.widest) - 1 || (width === 1440 && x.file < x.need - 1));
+      check(list.length >= 5 && soft.length === 0, `guest ${width}x${size.height} at 2x canvas: every picture at least its box x 2 (${list.length})`, report(soft));
+      if (shots) await shot(p, `canvas-${width}-2x`);
+      await ctx.close();
+    }
+    {
+      const ctx = await as("guest", { ...PHONE, deviceScaleFactor: 3 });
+      const p = await page(ctx);
+      await openRoute(p, `${app}/image`, { settleMs: 300 });
+      await p.locator("[data-phone-tabs]").getByRole("button", { name: "Studios" }).tap();
+      const sheet = p.locator("#phone-sheet");
+      await sheet.waitFor({ state: "visible" });
+      await sheet.getByRole("group", { name: "What to show" }).getByRole("button", { name: "Canvas", exact: true }).tap();
+      await sheet.locator('[data-sheet-family="canvas"] a[href]').first().waitFor({ timeout: 10_000 });
+      await p.waitForFunction(() => [...document.querySelectorAll('[data-sheet-family="canvas"] img')].every((i) => i.complete), null, { timeout: 10_000 }).catch(() => {});
+      const list = await sharpness(p, '[data-sheet-family="canvas"]');
+      const soft = list.filter((x) => x.file < x.need - 1);
+      check(list.length >= 2 && soft.length === 0, `guest phone 390 at 3x canvas: every board's picture at least its box x 3 (${list.length})`, report(soft));
+      await ctx.close();
+    }
   }
 
   // 2. Keys, one panel at a time, links and See all (guest, 1440x900).

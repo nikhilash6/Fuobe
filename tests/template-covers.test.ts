@@ -18,6 +18,8 @@ import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { STARTERS } from "@/lib/starters/catalog";
 import { TEMPLATE_GROUPS, templateCover, type TemplateGroup } from "@/lib/template-covers";
 import { TEMPLATE_COVERS } from "@/lib/template-covers.generated";
+import { templateHdFiles } from "@/lib/template-hd";
+import { TEMPLATE_HD } from "@/lib/template-hd.generated";
 import { tempDir } from "./helpers/temp-dir";
 
 /*
@@ -100,6 +102,8 @@ describe("the template covers manifest", () => {
       for (const f of c.frames) for (const u of [f.src, f.thumb]) named.add(u.split("?")[0]);
       if (c.video) named.add(c.video.split("?")[0]);
     }
+    // The posters' larger copies (scripts/gen-template-hd.mjs, tests/template-hd.test.ts).
+    for (const key of Object.keys(TEMPLATE_HD)) for (const u of templateHdFiles(key)) named.add(u);
     const dir = path.join(root, "public", "previews", "templates");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /.(jpg|mp4)$/.test(f)) : [];
     const orphans = files.map((f) => `/previews/templates/${f.replaceAll("\\", "/")}`).filter((u) => !named.has(u));

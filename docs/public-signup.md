@@ -77,9 +77,7 @@ An account is signed in, but it sees the owner's studio as a guest does:
   owner's results, files, uploads, folders, shares, projects (Layers, Cinema, Canvas, storyboards,
   elements…) and Assist threads are hidden: the lists come back empty, and other reads answer 403.
   Every change to them (create, rename, move, share, delete) answers 403 with `code: "library"`.
-  So does Split soundtrack's **Export mix** (`POST /api/audio-tools/export`), which saves into the
-  owner's Library, with or without a GPU. Accounts have their own uploads and runs (below), but no
-  projects yet.
+  Accounts have their own uploads and runs (below), but no projects yet.
   A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
   (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
   for a guest), and it takes only the owner's own finished Kinetic Motion results.
@@ -121,7 +119,7 @@ An account is signed in, but it sees the owner's studio as a guest does:
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
-- **Results made in the browser (Kinetic Motion) are its own runs too.** A motion clip rendered in
+- **Results made in the browser are its own runs too.** A motion clip rendered in
   the page (an animated end card, a text template, anything made on the Kinetic page) is saved with an upload and
   `POST /api/generations/local` (`op: "motion"`, model `local-motion`). No model makes it, so any
   account may save one, with or without its own GPU or key (the upload is sent with
@@ -137,8 +135,17 @@ An account is signed in, but it sees the owner's studio as a guest does:
   (a refusal answers 422; a result the checks want to see waits for them). It shows in the account's
   own runs, never the owner's Library. Nothing
   is downloaded straight from the page: the clip is downloaded from the saved result. A guest's
-  call answers 401 with the sign-up card. Colour grades and Relight blends stay the owner's
-  (403, `code: "library"`).
+  call answers 401 with the sign-up card.
+  A **colour grade** (`op: "grade"`, model `local-color-grade`) and a **Relight blend** (`op: "relight"`,
+  model `local-relight`) are kept the same way: the same upload, its own stored PNG picture or MP4 or WebM clip
+  (400 otherwise), made from its own files only (a file picked on the page stays in the browser, so the grade names
+  no input), within the same run budget and through the same checks (its description and title). Colour grading's
+  **Save to your runs** shows for an account; a guest's Save opens the sign-up card.
+  Split soundtrack's **Export mix** (`POST /api/audio-tools/export`, the WAV in parts) is kept as one of its runs
+  too (`feature` `audio-split-mix`, model `local-mix`): its WAV goes into its own files, no bigger than the room
+  they have left (413), one export at a time (a new one drops the unfinished one), and a part with another viewer's
+  export id answers 404. The last part answers 201 with the run, within the same run budget (429) and through the
+  same checks (422).
 
 ## Managing accounts
 
@@ -463,9 +470,10 @@ The code is `src/server/hosted.ts` (the switch, the place, the line), `src/serve
 An account with its own ComfyUI connected, or its own key, can upload files (`POST /api/uploads`,
 the file as the request body with its type in `Content-Type` and its name in `X-File-Name`; an
 older page's multipart form works up to 26 MB). With neither it answers 403 with
-`code: "connect-gpu"`, and a guest gets 401 with the sign-up card. The one exception is a Kinetic
-Motion result rendered in the page (sent with `x-fuobe-kinetic: 1`): any account may upload its MP4
-or WebM clip and its PNG poster, within the same space, size and upload limits below. Any other type
+`code: "connect-gpu"`, and a guest gets 401 with the sign-up card. The one exception is a result
+rendered in the page (sent with `x-fuobe-kinetic: 1`: a Kinetic Motion clip and its poster, a colour
+grade, a Relight blend): any account may upload its MP4 or WebM clip or its PNG picture, within the
+same space, size and upload limits below. Any other type
 sent that way answers 403 `connect-gpu`, and a model run still needs the account's own GPU or key.
 
 | What | Types | Largest |

@@ -16,7 +16,7 @@ import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useAskBeforeUpload, useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations, useIsAccount, useLikelyVisitor } from "@/lib/api";
 import {
   backgroundLowered,
   clock,
@@ -35,6 +35,7 @@ import {
   mixName,
   mixPart,
   mixPeak,
+  MIX_FEATURE,
   mixPlan,
   ORIGINAL_MIX,
   partFrames,
@@ -494,8 +495,9 @@ function StemTile({
 
 /**
  * The mix as it plays (gains, solo, mute; mono stems up-mixed as WebAudio does), kept under full scale, written as a
- * 16-bit WAV and sent to the Library in parts (/api/audio-tools/export): only one part is in memory beside the stems,
- * and no upload cap applies to the whole. The peak is found first, a slice at a time, so the page stays responsive.
+ * 16-bit WAV and sent to the Library in parts (/api/audio-tools/export; an account's mix is kept as one of its runs):
+ * only one part is in memory beside the stems, and no upload cap applies to the whole. The peak is found first, a slice
+ * at a time, so the page stays responsive.
  */
 async function exportWav(stems: Stem[], buffers: Partial<Record<StemId, AudioBuffer>>, mix: Mix, name: string): Promise<{ url: string; lowered: boolean }> {
   const g = stemGains(mix);
@@ -520,11 +522,13 @@ async function exportWav(stems: Stem[], buffers: Partial<Record<StemId, AudioBuf
     const last = f + per >= plan.frames;
     const q = new URLSearchParams({ offset: String(offset), ...(id && { id }), ...(last && { last: "1", name }) });
     const res = await fetch(`/api/audio-tools/export?${q}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([mixPart(plan, f, f + per, k) as BlobPart]) });
-    const body = (await res.json().catch(() => ({}))) as { id?: string; received?: number; url?: string; error?: string };
+    const body = (await res.json().catch(() => ({}))) as { id?: string; received?: number; url?: string; outputs?: OutputFile[]; error?: string };
     if (!res.ok) throw responseError(res, body.error ?? "The export didn't finish. Please try again.");
     if (last) {
-      if (!body.url) throw new Error("Export failed");
-      return { url: body.url, lowered: k < 1 };
+      // The owner's mix is a Library file; an account's, the run it was kept as.
+      const url = body.url ?? body.outputs?.[0]?.url;
+      if (!url) throw new Error("Export failed");
+      return { url, lowered: k < 1 };
     }
     id = body.id ?? "";
     offset = body.received ?? 0;
@@ -539,6 +543,7 @@ function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[
   const exported = useRef<{ key: string; url: string } | null>(null);
   const remux = useAudioToolRun();
   const router = useRouter();
+  const account = useIsAccount();
   const { apply } = player;
   useEffect(() => apply(mix), [apply, mix]);
   const preset = presetOf(mix);
@@ -559,7 +564,7 @@ function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[
     setBusy("export");
     try {
       await exportMix();
-      toast.success("Mix saved to your Library", { action: { label: "Open Library", onClick: () => router.push("/library") } });
+      toast.success(account ? "Mix saved to your runs" : "Mix saved to your Library", { action: { label: account ? "Open your runs" : "Open Library", onClick: () => router.push("/library") } });
     } catch (e) {
       toastError(e, "Couldn't export the mix");
     } finally {
@@ -600,7 +605,7 @@ function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[
         </h3>
         <span className="rounded-full bg-success/15 px-2 py-0.5 text-[12px] font-medium text-success">Free · plays in your browser</span>
       </div>
-      <p className="text-[13px] text-muted-foreground">Every stem is already in your Library. Mixing here is free: nothing runs until you export.</p>
+      <p className="text-[13px] text-muted-foreground">Every stem is already in your {account ? "runs" : "Library"}. Mixing here is free: nothing runs until you export.</p>
       {player.failed && (
         <p className="text-[13px] text-destructive" role="alert">
           {player.failed}
@@ -932,8 +937,9 @@ export function SplitSoundtrackTool() {
 /** Earlier splits, and a way back into the mixer for the finished ones (their stems are kept in the Library). */
 function Results({ onOpen, open }: { onOpen: (g: Generation) => void; open: string | null }) {
   const splits = useGenerations({ features: [SPLIT_FEATURE], limit: 12 });
-  const remuxes = useGenerations({ features: [REMUX_FEATURE], limit: 12 });
-  const items = [...(remuxes.data ?? []), ...(splits.data ?? [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  // Mixes put back on a video, and an account's exported mixes (kept as its runs).
+  const made = useGenerations({ features: [REMUX_FEATURE, MIX_FEATURE], limit: 12 });
+  const items = [...(made.data ?? []), ...(splits.data ?? [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   const reopen = (splits.data ?? []).filter((g) => g.status === "succeeded" && g.id !== open && stemsOf(g.outputs).length > 0).slice(0, 4);
   if (!items.length) return null;
   return (

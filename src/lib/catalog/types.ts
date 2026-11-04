@@ -41,6 +41,7 @@ export type Operation =
   | "grade" // colour grade, rendered in the browser
   | "relight" // the Relight tool's blend of a photo and its relit picture, rendered in the browser
   | "motion" // motion graphics, rendered in the browser
+  | "mix" // stems → one track at the levels set in the browser (Split soundtrack's Export mix)
   | "reframe" // video → same video at a new aspect ratio (AI-filled edges)
   | "finalize" // draft video → full-quality render of the same take
   | "dialogue" // several speakers → one audio track
@@ -143,6 +144,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   grade: "Color grade",
   relight: "Relight",
   motion: "Motion graphics",
+  mix: "Mix",
   reframe: "Reframe",
   finalize: "Final render",
   dialogue: "Dialogue",
@@ -235,6 +237,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   grade: "image",
   relight: "image",
   motion: "video",
+  mix: "audio",
   reframe: "video",
   finalize: "video",
   dialogue: "audio",

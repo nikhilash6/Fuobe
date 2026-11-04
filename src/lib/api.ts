@@ -759,8 +759,8 @@ export function useShareActions() {
 // Uploads & assets
 
 /**
- * Upload a file as it is (streamed by the server: src/lib/upload.ts). `kinetic`: a Kinetic Motion clip or poster
- * rendered in the page, which any account may save (KINETIC_UPLOAD_HEADER).
+ * Upload a file as it is (streamed by the server: src/lib/upload.ts). `kinetic`: a result rendered in the page (a
+ * Kinetic Motion clip or poster, a colour grade, a Relight blend), which any account may save (KINETIC_UPLOAD_HEADER).
  */
 export async function uploadFile(file: File, opts: { kinetic?: boolean } = {}): Promise<Asset> {
   return postFile(file, undefined, opts);

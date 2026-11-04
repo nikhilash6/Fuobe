@@ -707,11 +707,15 @@ describe("color grading for everyone", () => {
     expect(fs.statSync(file).size).toBeLessThan(300 * 1024);
   });
 
-  it("downloads the graded result straight from the browser, and only the owner saves it to the library", () => {
-    // Download needs no upload (guests and accounts can't change the owner's library); Save stays the owner's.
+  it("downloads the graded result straight from the browser; the owner saves it to the library, an account to its runs", () => {
+    // Download needs no upload. Save is the owner's library or an account's own runs; a guest's Save asks it to sign up.
     expect(view).toMatch(/onClick=\{\(\) => exportTo\("download"\)\}/);
     expect(view).toMatch(/if \(to === "download"\) downloadBlob\(file, file\.name\);/);
-    expect(view).toMatch(/\{owner && \(\s*<Button[^>]*onClick=\{\(\) => exportTo\("library"\)\}/);
+    expect(view).toMatch(/const canSave = !!owner \|\| account \|\| guest;/);
+    expect(view).toMatch(/\{canSave && \(\s*<Button[^>]*onClick=\{\(\) => exportTo\("library"\)\}/);
+    expect(view).toMatch(/if \(to === "library" && guest\) return askToSignUp\("upload"\);/);
+    // An account's graded file is uploaded as a result made in the browser (no GPU or key needed).
+    expect(view).toMatch(/uploadFile\(file, \{ kinetic: account \}\)/);
   });
 });
 

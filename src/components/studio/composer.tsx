@@ -1510,7 +1510,7 @@ export function Composer({ docked }: { docked: boolean }) {
         </div>
       )}
 
-      {/* Upscale → Video: Restore · faithful and Regenerate · creative side by side (on your GPU). */}
+      {/* Upscale → Video: Restore · faithful, Quick · RTX and (while it is offered) Regenerate · creative side by side (on your GPU). */}
       {config.finishChoices && !preset && (
         <FinishChoices
           choices={config.finishChoices}

@@ -5,6 +5,7 @@
  * covers are preset ids (src/lib/nav-covers.ts resolves them on the server). Every href is a route that exists; none
  * is renamed here.
  */
+import GPU_TESTED from "../../workflows/comfyui/gpu-tested.json";
 import { HUB_MODES, modeHref, type HubKind } from "./hubs";
 import { navActive, NEW_CREATION_HREF } from "./nav";
 
@@ -93,6 +94,15 @@ const OWNER: readonly ViewerKind[] = ["owner"];
 const ACCOUNT: readonly ViewerKind[] = ["account"];
 const GUEST: readonly ViewerKind[] = ["guest"];
 const VISITORS: readonly ViewerKind[] = ["guest", "account"];
+
+/**
+ * Genjutsu's Finish mode is everyone's once one of its tools (Fix faces, Fix colours) has passed its GPU test, as the
+ * studio's page shows it (modeOpen in src/lib/catalog/genjutsu.ts, from src/server/genjutsu-live.ts, which reads the
+ * same record with the workflows' manifest; tests/nav-subfeatures.test.ts holds the two to the same answer). Until
+ * then its link is the owner's.
+ */
+const passedOnGpu = (feature: string) => (GPU_TESTED.features as Record<string, { passed?: boolean } | undefined>)[feature]?.passed === true;
+const FINISH_OPEN = passedOnGpu("finish-faces") || passedOnGpu("finish-colours");
 
 /** Where the source lives (as connections.ts says it; kept here so this module imports nothing heavy). */
 const REPO = "https://github.com/workingprototype/fuobe";
@@ -342,7 +352,7 @@ const STUDIO_FEATURES: NavEntry[] = [
     ] as const
   ).map(([id, label, what, kw]) => feature("genjutsu", "WandSparkles", id, `/genjutsu?mode=${id}`, label, what, kw)),
   feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion", OWNER),
-  feature("genjutsu", "WandSparkles", "finish", "/genjutsu?mode=finish", "Finish", "Fix faces and colours", "finish fix faces colours colors", OWNER),
+  feature("genjutsu", "WandSparkles", "finish", "/genjutsu?mode=finish", "Finish", "Fix faces and colours", "finish fix faces colours colors", FINISH_OPEN ? undefined : OWNER),
   ...(
     [
       ["reference", "From Reference", "A sheet from your photos", "reference photo upload face sheet"],
@@ -695,7 +705,7 @@ export interface StudioSubs {
   tall?: 800 | 880 | 960;
   /** Below `tall`: "line" shows them as one wrapped line of names instead of hiding them (Genjutsu's modes). */
   short?: "line";
-  /** The owner's own features in the list (Genjutsu's From picture and Finish) show from this height. */
+  /** The owner's own features in the list (Genjutsu's modes not open to everyone yet) show from this height. */
   ownerTall?: 880 | 960;
 }
 
