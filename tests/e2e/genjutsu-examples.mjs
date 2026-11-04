@@ -1,12 +1,16 @@
 // Genjutsu's mode examples, browser check at 390 and 1440 px, light and dark. Each mode tab: the selected mode's example
 // card shows when the mode has one for this viewer (one card at most, none for a mode without one); its loop downloads
 // only once the card is half in view and plays muted; nothing moves when it arrives; the pause button, the actions and
-// the settings toggle are 44 px; switching modes drops the loop. Reduced motion: the finished result as a still, no
-// download until Play. Visitors (--viewer guest | account: a studio with a password and public sign-up) see the video,
-// the settings and Copy its setup, and no Use this example, no model names, no "Only you". The owner: Use this example
-// with no clip marks the card "In use" (the form's setup equals the recipe), Undo puts the form back, and with a clip
-// and the example's kind of photos the estimate's request body equals the run that made the example
-// (tests/fixtures/genjutsu-examples/<id>.json; the clip, photos and who-is-who are the test's own).
+// "How it was made" are 44 px; switching modes drops the loop; the card is the page column's width (640 px) and on a
+// phone short enough to leave the upload box close. Reduced motion: the finished result as a still, no download until
+// Play. Visitors (--viewer guest | account: a studio with a password and public sign-up) see the video and how it was
+// made, no action row (nothing there they could run), no model names, no "Only you", and "isn't available" under the
+// card by the upload box. The owner: Use this example with no clip marks the card "In use" (the form's setup equals the
+// recipe), moves the focus to Choose a video, says what is still needed, and Undo puts the form back; a second mode's
+// example after the first asks nothing; a clip added after an example takes the example's length, and a mode change
+// drops it; with a clip and the example's kind of photos the estimate's request body equals the run that made the
+// example (tests/fixtures/genjutsu-examples/<id>.json; the clip, photos and who-is-who are the test's own, and who is who
+// typed before Use this example stays).
 // Usage: node tests/e2e/genjutsu-examples.mjs [appUrl] [--viewer owner|guest|account] [--shots <dir>]   Exits 1 on a failed check.
 import fs from "node:fs";
 import path from "node:path";
@@ -139,27 +143,34 @@ try {
         }
         const loopBox = await c.locator("[data-example-video]").boundingBox();
         check(`${tag} ${label}: the loop is 4:3 and at least 358 px wide`, !!loopBox && loopBox.width >= 340 && Math.abs(loopBox.width / loopBox.height - 4 / 3) < 0.02, loopBox ? `${Math.round(loopBox.width)}×${Math.round(loopBox.height)}` : "none");
+        const cardBox = await c.boundingBox();
+        const dropBox = await page.locator("#gj-clip-drop").boundingBox();
         if (width >= 1440) {
           const side = await c.locator("figcaption").boundingBox();
-          // 960 px with its 1 px border: the loop takes what the 352 px column leaves.
-          check(`${tag} ${label}: 960 px card, a 352 px column beside the loop`, Math.round((await c.boundingBox()).width) === 960 && Math.round(side.width) === 352 && Math.round(loopBox.width) === 606, `${Math.round((await c.boundingBox()).width)} / ${Math.round(side.width)} / ${Math.round(loopBox.width)}`);
+          // 640 px with its 1 px border, lined up with the upload box: the loop takes what the 248 px column leaves.
+          check(`${tag} ${label}: 640 px card in the page's column, a 248 px column beside the loop`, Math.round(cardBox.width) === 640 && Math.round(side.width) === 248 && Math.round(loopBox.width) === 390 && Math.abs(cardBox.x - dropBox.x) < 1, `${Math.round(cardBox.width)} / ${Math.round(side.width)} / ${Math.round(loopBox.width)} / x ${Math.round(cardBox.x)} vs ${Math.round(dropBox.x)}`);
+        } else {
+          check(`${tag} ${label}: the phone card is short (480 px at most)`, cardBox.height <= 480, `${Math.round(cardBox.height)} px`);
         }
         const sizes = await c.evaluate((el) => [...el.querySelectorAll("button, summary")].filter((b) => b.getClientRects().length).map((b) => `${b.getAttribute("aria-label") ?? b.textContent?.trim()}:${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`));
         check(`${tag} ${label}: every target is 44 px or more`, sizes.every((s) => s.split(":").pop().split("x").every((d) => Number(d) >= 44) || /summary/.test(s)), JSON.stringify(sizes));
         const summary = c.locator("summary");
-        if (await summary.isVisible()) check(`${tag} ${label}: "Settings it used" is a 44 px toggle`, ((await summary.boundingBox())?.height ?? 0) >= 44);
+        check(`${tag} ${label}: "How it was made" is a 44 px toggle`, (await summary.innerText()).includes("How it was made") && ((await summary.boundingBox())?.height ?? 0) >= 44);
         // Pause and play.
         await c.getByRole("button", { name: "Pause the example" }).click();
         check(`${tag} ${label}: Pause stops the loop`, !(await playing()));
         await c.getByRole("button", { name: "Play the example" }).click();
         check(`${tag} ${label}: Play starts it again`, await playing());
-        const text = await c.innerText();
+        const text = await c.evaluate((el) => el.textContent ?? "");
         check(`${tag} ${label}: "EXAMPLE", the title and "What went in"`, /example/i.test(text) && text.includes(row.caption) && text.includes("What went in") && row.caption.length <= 40);
+        if (visitor) check(`${tag} ${label}: no seed or "Part" chip for a visitor`, !/Seed \d|Part \d/.test(text), text.replace(/\s+/g, " ").slice(-120));
         check(`${tag} ${label}: no test words or file paths`, !/\b(test|pass(ed)?|owner|validated|oss-|\/api\/)/i.test(text), text.replace(/\s+/g, " ").slice(0, 160));
         if (visitor) {
           check(`${tag} ${label}: a visitor has no Use this example`, (await c.locator("[data-use-example]").count()) === 0);
-          check(`${tag} ${label}: a visitor can copy its setup`, await c.getByRole("button", { name: /Copy its setup/ }).isVisible());
+          check(`${tag} ${label}: a visitor has no action row (only Play/Pause and How it was made)`, (await c.getByRole("button", { name: /Copy its setup/ }).count()) === 0 && (await c.locator("button").count()) === 1);
           check(`${tag} ${label}: no model names and no "Only you" for a visitor`, !/Group swap|Colour finish|Only you|MiniMax|H3/.test(text));
+          const noteBox = await page.getByText("Genjutsu isn't available here.").first().boundingBox();
+          check(`${tag} ${label}: "isn't available" sits under the card, by the upload box`, !!noteBox && noteBox.y > cardBox.y + cardBox.height && noteBox.y < dropBox.y + dropBox.height, noteBox ? `${Math.round(noteBox.y)}` : "none");
         } else {
           check(`${tag} ${label}: the owner has Use this example`, await c.locator("[data-use-example]").isVisible());
         }
@@ -174,9 +185,15 @@ try {
         if (!visitor && scheme === "light") {
           await open(`/genjutsu?mode=${id}`);
           await card().locator("[data-use-example]").click();
-          await page.waitForTimeout(600);
+          await page.waitForTimeout(900);
           const used = card().locator("[data-use-example]");
           check(`${tag} ${label}: Use this example fills the form exactly ("In use")`, (await used.innerText()).includes("In use"), await used.innerText());
+          check(`${tag} ${label}: "In use" says so without turning off (aria-disabled, focusable)`, (await used.getAttribute("aria-disabled")) === "true" && (await used.evaluate((b) => !b.disabled)));
+          const focused = await page.evaluate(() => document.activeElement?.textContent?.trim() || document.activeElement?.tagName);
+          check(`${tag} ${label}: the focus moves to Choose a video`, focused === "Choose a video", String(focused));
+          const photos = Object.keys(row.inputs).filter((k) => k.startsWith("photo")).length;
+          const want = `Add your clip${photos ? ` and ${photos} character photos` : ""}, then Generate.`;
+          check(`${tag} ${label}: the toast says what is still needed`, await page.getByText(want).isVisible().catch(() => false), want);
           check(`${tag} ${label}: it runs nothing (no run request)`, runs.length === 0);
           const undo = page.getByRole("button", { name: "Undo" });
           if (await undo.isVisible().catch(() => false)) {
@@ -185,6 +202,19 @@ try {
             check(`${tag} ${label}: Undo puts the form back`, (await card().locator("[data-use-example]").innerText()).includes("Use this example"));
           } else check(`${tag} ${label}: the toast offers Undo`, false);
         }
+      }
+
+      // The owner: one example, then another mode's: no "Replace your settings?" (the words were the first example's).
+      const ids = Object.keys(expected);
+      if (!visitor && scheme === "light" && ids.length >= 2) {
+        await open(`/genjutsu?mode=${ids[0]}`);
+        await card().locator("[data-use-example]").click();
+        await page.waitForTimeout(600);
+        await page.getByRole("tablist", { name: "Genjutsu modes" }).getByRole("tab", { name: new RegExp(`^${MODES[ids[1]]}`) }).click();
+        await page.waitForTimeout(500);
+        await card().locator("[data-use-example]").click();
+        await page.waitForTimeout(600);
+        check(`${tag}: a second mode's example asks nothing`, (await page.getByRole("alertdialog").count()) === 0 && (await card().locator("[data-use-example]").innerText()).includes("In use"));
       }
       await context.close();
 
@@ -242,17 +272,25 @@ try {
         const rowEl = page.locator("[data-mode-example-row]");
         await rowEl.waitFor({ timeout: 120_000 }).catch(() => {});
         check(`owner ${width} ${row.id}: with a clip, one "Example:" row in the side panel`, (await rowEl.count()) === 1 && (await page.locator("[data-mode-example]").count()) === 0);
+        // Who is who in the example's own clip is the viewer's to give: the test gives the example's, before Use this
+        // example where the form asks for it already (it stays), else after.
+        const people = row.genjutsu.own?.character?.people ?? [];
+        const role = (i) => page.getByRole("textbox", { name: `Character ${i + 1} replaces` });
+        const typed = [];
+        for (let i = 0; i < people.length; i++) {
+          if (await role(i).isVisible().catch(() => false)) {
+            await role(i).fill(people[i].role);
+            typed.push(i);
+          }
+        }
         await rowEl.getByRole("button", { name: "See it" }).click();
         const dialog = page.getByRole("dialog");
         await dialog.waitFor({ timeout: 10_000 });
         await dialog.locator("[data-use-example]").click();
         await page.waitForTimeout(800);
-        // Who is who in the example's own clip is the viewer's to give: the test gives the example's.
-        const people = row.genjutsu.own?.character?.people ?? [];
         for (let i = 0; i < people.length; i++) {
-          const field = page.getByRole("textbox", { name: `Character ${i + 1} replaces` });
-          check(`owner ${width} ${row.id}: who becomes who is asked again (empty)`, (await field.inputValue()) === "");
-          await field.fill(people[i].role);
+          if (typed.includes(i)) check(`owner ${width} ${row.id}: who becomes who typed before stays (${i + 1})`, (await role(i).inputValue()) === people[i].role, await role(i).inputValue());
+          else await role(i).fill(people[i].role);
         }
         await page.waitForTimeout(1500);
         const last = bodies.at(-1);
@@ -261,13 +299,46 @@ try {
           const rest = Object.fromEntries(Object.entries(b ?? {}).filter(([k]) => !["source", "references", "requestId", "frame"].includes(k)));
           // Finish keeps the clip's size: its quality plays no part in the run (tests/genjutsu-examples.test.ts).
           if (rest.mode === "finish") delete rest.quality;
-          return JSON.stringify(Object.keys(rest).sort().reduce((o, k) => ((o[k] = rest[k]), o), {}));
+          // Fix colours' settings a run left out are the plan's defaults (FINISH_COLOURS_DEFAULT): the run used them.
+          if (rest.finish?.tool === "colours") rest.finish = { finish: "soft", strength: 0.4, soften: 0.33, ...rest.finish };
+          const sorted = (v) => (Array.isArray(v) ? v.map(sorted) : v && typeof v === "object" ? Object.keys(v).sort().reduce((o, k) => ((o[k] = sorted(v[k])), o), {}) : v);
+          return JSON.stringify(sorted(rest));
         };
         check(`owner ${width} ${row.id}: the form's request equals the run that made it`, !!last && strip(last) === strip(fixture), `\n   form: ${strip(last)}\n   run:  ${strip(fixture)}`);
         check(`owner ${width} ${row.id}: the photos are the viewer's own`, !!last && JSON.stringify(last.references) === JSON.stringify(refs.r ?? []));
         check(`owner ${width} ${row.id}: Use this example ran nothing`, runs.length === 0);
         await context.close();
       }
+    }
+  }
+
+  // The owner: an example with no clip, then a clip: the part takes the example's length; a mode change in between drops it.
+  if (!visitor && expected.finish && expected.character) {
+    for (const switchMode of [false, true]) {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      await context.addInitScript(() => {
+        try {
+          localStorage.setItem("fuobe.engine", "open");
+        } catch {}
+      });
+      const page = await context.newPage();
+      const bodies = [];
+      page.on("request", (r) => r.method() === "POST" && r.url().endsWith("/api/genjutsu/estimate") && bodies.push(JSON.parse(r.postData() ?? "{}")));
+      await page.goto(`${app}/genjutsu?mode=${switchMode ? "character" : "finish"}`, { waitUntil: "load", timeout: 180_000 });
+      await page.locator("[data-use-example]").first().click();
+      await page.waitForTimeout(600);
+      if (switchMode) {
+        await page.getByRole("tablist", { name: "Genjutsu modes" }).getByRole("tab", { name: /^Finish/ }).click();
+        await page.waitForTimeout(400);
+      }
+      await page.locator("#gj-clip-drop input[type=file]").setInputFiles(path.join(root, "scripts/eval/fixtures/walk-6s.mp4"));
+      await page.waitForFunction(() => !document.querySelector("#gj-clip-drop input[type=file]"), null, { timeout: 120_000 }).catch(() => {});
+      await page.waitForTimeout(6000);
+      const range = bodies.at(-1)?.range;
+      const len = range ? Math.round((range.end - range.start) * 1000) / 1000 : null;
+      const want = switchMode ? 6 : expected.finish.genjutsu.recipe.length;
+      check(`owner: ${switchMode ? "Character swap's example, then Finish, then a clip: the whole clip" : "Finish's example, then a clip: the example's length"}`, len !== null && Math.abs(len - want) < 0.01, `${len} (want ${want})`);
+      await context.close();
     }
   }
 } finally {

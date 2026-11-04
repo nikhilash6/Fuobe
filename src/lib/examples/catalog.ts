@@ -21,7 +21,7 @@ import {
   UPSCALE_STUDIO,
   VIDEO_STUDIO,
 } from "@/lib/studios";
-import { getMaker, GENJUTSU_MODES, requestFeatures, type GenjutsuMode } from "@/lib/catalog/genjutsu";
+import { getMaker, GENJUTSU_MODES, modeOpen, requestFeatures, type FeatureCheck, type GenjutsuMode } from "@/lib/catalog/genjutsu";
 import { exampleSettings, genjutsuSurface, recipeProblem, type GenjutsuExampleCard, type ModeExamples } from "./genjutsu";
 import { EXAMPLE_MEDIA, type ExampleMediaFile } from "./media.generated";
 import plan from "./plan.json";
@@ -361,11 +361,16 @@ export function exampleRow(surface: ExampleSurface): ExampleRowData | null {
   return borrowed.length ? { heading: MORE_HEADING, cards: borrowed, surface } : null;
 }
 
-/** Each Genjutsu mode's examples, best first (the page picks the one a viewer may see: exampleFor in ./genjutsu). */
-export function genjutsuExamples(): ModeExamples {
+/**
+ * Each Genjutsu mode's examples, best first (the page picks the one a viewer may see: exampleFor in ./genjutsu). With
+ * `open`: only the examples whose mode and features it opens (what a page may send to every viewer).
+ */
+export function genjutsuExamples(open?: FeatureCheck): ModeExamples {
   const out: ModeExamples = {};
   for (const m of GENJUTSU_MODES) {
-    const cards = (ALL.bySurface.get(genjutsuSurface(m.id)) ?? []) as GenjutsuExampleCard[];
+    if (open && !modeOpen(m.id, open)) continue;
+    const all = (ALL.bySurface.get(genjutsuSurface(m.id)) ?? []) as GenjutsuExampleCard[];
+    const cards = open ? all.filter((c) => c.load.needs.every(open)) : all;
     if (cards.length) out[m.id] = cards;
   }
   return out;

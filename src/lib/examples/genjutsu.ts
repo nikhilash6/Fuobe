@@ -9,6 +9,7 @@ import {
   ALL_FEATURES,
   decodeSetup,
   encodeSetup,
+  FINISH_COLOURS_DEFAULT,
   GENJUTSU,
   getMaker,
   lookName,
@@ -113,28 +114,29 @@ export function recipeProblem(r: GenjutsuRecipe, mode: GenjutsuMode): string | n
   return null;
 }
 
-const seconds = (n: number) => `${Math.round(n * 10) / 10} s`;
 const FINISH_LABEL: Record<string, string> = { soft: "Soft film", filmic: "Filmic", rich: "Rich", off: "Off" };
 
-/** "Settings it used", as the form labels them (no model names: the owner's card adds the model). */
-export function exampleSettings(r: GenjutsuRecipe): string[] {
+/**
+ * "Settings it used", as the form labels them. Everyone: the size, the length in whole seconds (as "What went in" says
+ * it) and the sound. The owner's card adds the model first (not for Finish, whose finish chip already names it), the
+ * seed and the exact length. The copied setup keeps every one.
+ */
+export function exampleSettings(r: GenjutsuRecipe, opts: { owner?: boolean } = {}): string[] {
   const out: string[] = [];
   const maker = getMaker(r.model, r.engine);
-  // The tool's own name is a model's too: the finish says which one it was.
-  if (r.mode === "finish" && r.finish) {
-    if (r.finish.tool === "colours") {
-      out.push(`Finish: ${FINISH_LABEL[r.finish.finish ?? "soft"]}`);
-      out.push(`Strength ${Math.round((r.finish.strength ?? 0.4) * 100)}%`);
-      out.push(`Soften detail ${Math.round((r.finish.soften ?? 0.33) * 100)}%`);
-    }
+  if (opts.owner && maker && r.mode !== "finish") out.push(maker.label);
+  if (r.mode === "finish" && r.finish?.tool === "colours") {
+    out.push(`Finish: ${FINISH_LABEL[r.finish.finish ?? FINISH_COLOURS_DEFAULT.finish]}`);
+    out.push(`Strength ${Math.round((r.finish.strength ?? FINISH_COLOURS_DEFAULT.strength) * 100)}%`);
+    out.push(`Soften detail ${Math.round((r.finish.soften ?? FINISH_COLOURS_DEFAULT.soften) * 100)}%`);
   }
   if (r.object) out.push(SCENE_ACTIONS.find((a) => a.id === r.object!.action)!.label);
   if (r.look) out.push(`Look: ${lookName(r.look)}`);
   if (r.tier) out.push(r.tier === "high" ? "High" : "Standard");
   if (r.quality && maker && (maker.qualities || maker.h3)) out.push(r.quality);
-  if (r.seed !== undefined) out.push(`Seed ${r.seed}`);
-  out.push(`Part ${seconds(r.length)}`);
-  if (r.originalSound) out.push(`Sound: ${originalSoundLabel(r.originalSound)}`);
+  out.push(opts.owner ? `${Math.round(r.length * 10) / 10} s` : `${Math.max(1, Math.round(r.length))} s`);
+  if (r.originalSound) out.push(r.originalSound === "everything" ? "Original sound" : `Sound: ${originalSoundLabel(r.originalSound)}`);
+  if (opts.owner && r.seed !== undefined) out.push(`Seed ${r.seed}`);
   return out;
 }
 

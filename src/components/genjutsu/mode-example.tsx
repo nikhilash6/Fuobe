@@ -6,15 +6,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
-import { encodeSetup, getMaker } from "@/lib/catalog/genjutsu";
-import type { GenjutsuExampleCard } from "@/lib/examples/genjutsu";
+import { encodeSetup } from "@/lib/catalog/genjutsu";
+import { exampleSettings, type GenjutsuExampleCard } from "@/lib/examples/genjutsu";
 import { cn } from "@/lib/utils";
 import { OnlyYou } from "./openjutsu-panels";
 
 /**
  * A Genjutsu mode's example, under the mode's title: one muted before → after loop (the clip that went in, then what
  * came out), what went in, the settings it used, and "Use this example", which puts those settings into the form and
- * keeps the viewer's own clip and photos. Visitors, who can't run Genjutsu here, copy its setup instead.
+ * keeps the viewer's own clip and photos. Visitors, who can't run Genjutsu here, see the loop and how it was made.
  *
  * Loading: a still in a fixed 4:3 box first (nothing moves when the clip arrives). The clip downloads only once the
  * card is at least half in view, and not at all with Save-Data or reduced motion (then the finished result shows as a
@@ -23,8 +23,6 @@ import { OnlyYou } from "./openjutsu-panels";
 
 /** Where the clip that went in sits in an inset loop (clip-show: 308×230 at 24 px from the corner of 1024×768). */
 const INSET = { left: `${(24 / 1024) * 100}%`, top: `${((768 - 24 - 230) / 768) * 100}%` };
-/** The wipe's line reaches the middle at 1.7 s: before that the frame is mostly the clip that went in. */
-const WIPE_MIDDLE = 1.7;
 
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const saveData = () => typeof navigator !== "undefined" && !!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
@@ -50,39 +48,43 @@ function Loop({ card }: { card: GenjutsuExampleCard }) {
   const box = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [inView, setInView] = useState(false);
-  // null: plays by itself when it can; true / false: the viewer pressed Pause or Play.
+  // null: plays by itself when it can; true / false: the viewer pressed Play or Pause.
   const [chosen, setChosen] = useState<boolean | null>(null);
   // Reduced motion or Save-Data: the finished result as a still, and the clip only on Play (false while the page hydrates).
   const still = useSyncExternalStore(watchStill, () => reducedMotion() || saveData(), () => false);
-  const [late, setLate] = useState(false);
+  // What the video itself reports (a refused play() — Low Power Mode, autoplay off — stays "not playing").
+  const [playing, setPlaying] = useState(false);
+  // The clip didn't load: the still stays, with no button that can't do anything.
+  const [failed, setFailed] = useState(false);
   const out = card.output;
   const rest = out.rest?.src;
 
   useEffect(() => {
     const el = box.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: "200px 0px", threshold: 0.5 });
+    // Half of the card on screen (no margin: the ratio is of the screen itself).
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.5 });
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
-  const wanted = chosen ?? (!still && inView);
+  const wanted = !failed && (chosen ?? (!still && inView));
   // The clip is fetched once it is first wanted, and kept while the mode stays (a scroll back plays at once).
   const [loaded, setLoaded] = useState(false);
   if (wanted && !loaded) setLoaded(true);
 
   useEffect(() => {
     const v = video.current;
-    if (!v || !loaded) return;
+    if (!v || !loaded || failed) return;
     const hidden = () => document.visibilityState === "hidden";
     const sync = () => {
-      if (wanted && inView && !hidden()) void v.play().catch(() => {});
+      if (wanted && (inView || chosen) && !hidden()) void v.play().catch(() => setPlaying(false));
       else v.pause();
     };
     sync();
     document.addEventListener("visibilitychange", sync);
     return () => document.removeEventListener("visibilitychange", sync);
-  }, [loaded, wanted, inView]);
+  }, [loaded, failed, wanted, inView, chosen]);
 
   // The mode changes (this card leaves): its download stops.
   useEffect(() => {
@@ -95,24 +97,13 @@ function Loop({ card }: { card: GenjutsuExampleCard }) {
     };
   }, [loaded]);
 
-  // The wipe's single label follows the line: "Before" until the result has most of the frame.
-  useEffect(() => {
-    const v = video.current;
-    if (!v || !loaded || card.load.layout !== "wipe") return;
-    const tick = () => setLate(v.currentTime >= WIPE_MIDDLE);
-    v.addEventListener("timeupdate", tick);
-    return () => v.removeEventListener("timeupdate", tick);
-  }, [loaded, card.load.layout]);
-
-  const playing = loaded && wanted;
   // Before the clip: the reduced-motion still is the finished result; otherwise the loop's first frame.
   const poster = still && rest ? rest : (out.poster ?? rest);
-  const showsResult = still && !loaded ? true : late;
   return (
     <div ref={box} className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {poster && <img src={poster} alt="" decoding="async" fetchPriority="low" className="absolute inset-0 size-full object-cover" draggable={false} />}
-      {loaded && (
+      {loaded && !failed && (
         <video
           ref={video}
           src={out.src}
@@ -124,42 +115,49 @@ function Loop({ card }: { card: GenjutsuExampleCard }) {
           aria-label={card.caption}
           className="absolute inset-0 size-full object-cover"
           data-example-video=""
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onError={() => {
+            setPlaying(false);
+            setFailed(true);
+          }}
         />
       )}
+      {/* The result is on the left of a wipe and fills an inset loop: "After" sits top left on both. */}
+      <Pill className="top-2 left-2">After</Pill>
       {card.load.layout === "inset" ? (
-        <>
-          <Pill className="top-2 right-2">After</Pill>
-          <Pill style={{ left: `calc(${INSET.left} + 6px)`, top: `calc(${INSET.top} + 6px)` }} className="bg-black/60 text-[11px]">
-            Before
-          </Pill>
-        </>
+        <Pill style={{ left: `calc(${INSET.left} + 6px)`, top: `calc(${INSET.top} + 6px)` }} className="bg-black/60 text-[11px]">
+          Before
+        </Pill>
       ) : (
-        <Pill className="top-2 left-2">{showsResult ? "After" : "Before"}</Pill>
+        <Pill className="top-2 right-2">Before</Pill>
       )}
-      <button
-        type="button"
-        onClick={() => setChosen(!playing)}
-        aria-label={playing ? "Pause the example" : "Play the example"}
-        className="absolute right-2 bottom-2 grid size-11 place-items-center rounded-full bg-black/55 text-white outline-none hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white"
-      >
-        {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
-      </button>
+      {!failed && (
+        <button
+          type="button"
+          onClick={() => setChosen(!playing)}
+          aria-label={playing ? "Pause the example" : "Play the example"}
+          className="absolute right-2 bottom-2 grid size-11 place-items-center rounded-full bg-black/55 text-white outline-none hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white"
+        >
+          {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
+        </button>
+      )}
     </div>
   );
 }
 
-/** Copies the example's setup as a link (a visitor pastes it into Genjutsu on their own Fuobe). */
+/** Copies the example's setup as a link (the owner pastes it into another Fuobe of theirs, or sends it on). */
 async function copySetup(card: GenjutsuExampleCard) {
   const link = `${window.location.origin}/genjutsu?setup=${encodeSetup(card.load.recipe)}`;
-  if (await copyText(link)) toast("Setup copied", { description: "Paste it in Genjutsu on your own Fuobe." });
+  if (await copyText(link)) toast("Setup copied", { description: "Paste it in Genjutsu's Paste setup." });
   else toast.error("Couldn't copy — your browser blocked the clipboard");
 }
 
 export interface ModeExampleProps {
   card: GenjutsuExampleCard;
-  /** The owner (or a studio of one's own): Use this example, the model's name, and Only you where it applies. */
+  /** The owner (or a studio of one's own): Use this example, the model's name, the seed, and Only you where it applies. */
   owner: boolean;
-  /** Genjutsu runs here: Use this example (else Copy its setup only). */
+  /** Genjutsu runs here: Use this example and Copy its setup (a visitor gets the loop and how it was made only). */
   canUse: boolean;
   /** The form still holds this example's settings. */
   inUse: boolean;
@@ -169,24 +167,27 @@ export interface ModeExampleProps {
   className?: string;
 }
 
-/** The example card: the loop on the left (on top on a phone), what it is and what it used beside it. */
+/**
+ * The example card, as wide as the page's column (640 px): the loop beside its title on a wide screen, above it on a
+ * phone. What went in and the settings sit behind "How it was made" (on a phone the words too), so the upload box stays
+ * close.
+ */
 export function ModeExample({ card, owner, canUse, inUse, onlyYou, onUse, className }: ModeExampleProps) {
-  const r = card.load.recipe;
-  const model = owner ? getMaker(r.model, r.engine)?.label : undefined;
-  const settings = [...(model ? [model] : []), ...(card.chips ?? [])];
+  const settings = exampleSettings(card.load.recipe, { owner });
   const titleId = `gj-example-${card.id.replace(/\W/g, "-")}`;
+  const words = card.words && <p className="text-[13px] leading-relaxed text-pretty text-muted-foreground">{card.words}</p>;
   return (
     <figure
       aria-labelledby={titleId}
       data-mode-example={card.id}
       className={cn(
-        "mx-auto grid w-full max-w-[960px] grid-cols-1 overflow-hidden rounded-2xl border bg-background text-left shadow-soft md:grid-cols-[minmax(0,1fr)_352px]",
+        "mx-auto grid w-full max-w-[640px] grid-cols-1 overflow-hidden rounded-2xl border bg-background text-left shadow-soft md:grid-cols-[minmax(0,1fr)_248px]",
         inUse && "ring-2 ring-primary ring-offset-2 ring-offset-background",
         className,
       )}
     >
       <Loop card={card} />
-      <figcaption className="flex min-w-0 flex-col gap-3 p-4 md:p-5">
+      <figcaption className="flex min-w-0 flex-col gap-3 p-4">
         <div>
           <p className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
             <span className="tracking-wider uppercase">Example</span>
@@ -195,57 +196,57 @@ export function ModeExample({ card, owner, canUse, inUse, onlyYou, onUse, classN
           <h3 id={titleId} className="mt-1 text-[16px] leading-snug font-semibold text-balance">
             {card.caption}
           </h3>
-          {card.words && <p className="mt-1.5 text-[13px] leading-relaxed text-pretty text-muted-foreground">{card.words}</p>}
+          {words && <div className="mt-1.5 hidden md:block">{words}</div>}
         </div>
-        <div>
-          <p className="text-[12px] font-medium">What went in</p>
-          <div className="mt-1.5 flex items-center gap-2">
-            {card.inputs.map((i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i.slot}
-                src={i.media.thumb ?? i.media.src}
-                alt={i.label ?? ""}
-                loading="lazy"
-                decoding="async"
-                className={cn("h-12 shrink-0 rounded-md bg-muted object-cover", i.slot === "clip" ? "w-16" : "w-9")}
-              />
-            ))}
-            <span className="min-w-0 text-[13px] text-muted-foreground">{card.load.went}</span>
+        {canUse && (
+          <div className="flex gap-2">
+            <Button
+              variant={inUse ? "outline" : "default"}
+              className={cn("h-11 min-w-0 flex-1 rounded-full", inUse && "cursor-default text-foreground")}
+              onClick={inUse ? undefined : onUse}
+              aria-disabled={inUse || undefined}
+              data-use-example=""
+            >
+              {inUse ? <Check className="size-4" /> : <Sparkles className="size-4" />}
+              {inUse ? "In use" : "Use this example"}
+            </Button>
+            <Button variant="outline" className="size-11 shrink-0 rounded-full p-0" onClick={() => void copySetup(card)} aria-label="Copy its setup" title="Copy its setup">
+              <Copy className="size-4" />
+            </Button>
           </div>
-        </div>
-        {/* The settings: open beside the loop on a wide screen, behind a tap on a phone. */}
-        <div className="hidden md:block">
-          <p className="text-[12px] font-medium">Settings it used</p>
-          <Settings items={settings} />
-        </div>
-        <details className="group md:hidden">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            <span className="inline-block transition-transform group-open:rotate-90" aria-hidden>
+        )}
+        <details className="group -mt-1">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-md text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <span className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden>
               ›
             </span>
-            Settings it used
+            How it was made
           </summary>
-          <Settings items={settings} />
+          <div className="space-y-3 pt-1 pb-1">
+            {words && <div className="md:hidden">{words}</div>}
+            <div>
+              <p className="text-[12px] font-medium">What went in</p>
+              <div className="mt-1.5 flex items-center gap-2">
+                {card.inputs.map((i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i.slot}
+                    src={i.media.thumb ?? i.media.src}
+                    alt={i.label ?? ""}
+                    loading="lazy"
+                    decoding="async"
+                    className={cn("h-12 shrink-0 rounded-md bg-muted object-cover", i.slot === "clip" ? "w-16" : "w-9")}
+                  />
+                ))}
+                <span className="min-w-0 text-[13px] text-muted-foreground">{card.load.went}</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[12px] font-medium">Settings it used</p>
+              <Settings items={settings} />
+            </div>
+          </div>
         </details>
-        {/* One 44 px row for every viewer: the card keeps its height when the owner's page switches at hydration. */}
-        <div className="mt-auto flex gap-2 pt-1">
-          {canUse ? (
-            <>
-              <Button className="h-11 min-w-0 flex-1 rounded-full" onClick={onUse} disabled={inUse} data-use-example="">
-                {inUse ? <Check className="size-4" /> : <Sparkles className="size-4" />}
-                {inUse ? "In use" : "Use this example"}
-              </Button>
-              <Button variant="outline" className="size-11 shrink-0 rounded-full p-0" onClick={() => void copySetup(card)} aria-label="Copy its setup" title="Copy its setup">
-                <Copy className="size-4" />
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" className="h-11 w-full rounded-full" onClick={() => void copySetup(card)}>
-              <Copy className="size-4" /> Copy its setup
-            </Button>
-          )}
-        </div>
       </figcaption>
     </figure>
   );

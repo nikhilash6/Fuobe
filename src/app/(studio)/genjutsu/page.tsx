@@ -7,5 +7,7 @@ export const metadata: Metadata = { title: "Genjutsu" };
 
 export default function Page() {
   // Which Openjutsu modes are open to everyone (two committed files, read as the page is built; the owner sees them all).
-  return <GenjutsuStudio examples={exampleRow("tool:genjutsu")} modeExamples={genjutsuExamples()} live={genjutsuLive()} />;
+  const live = genjutsuLive();
+  // The page carries only the mode examples open to everyone; the owner's Genjutsu fetches the rest (/api/genjutsu/examples).
+  return <GenjutsuStudio examples={exampleRow("tool:genjutsu")} modeExamples={genjutsuExamples((f) => live[f])} live={live} />;
 }

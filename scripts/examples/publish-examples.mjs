@@ -15,8 +15,10 @@
  *   still-out   a picture shown as an output: JPEG q84, 960 px at most, plus its poster (<name>.512.webp)
  *   clip-show   a before → after loop shown as an output (a Genjutsu mode's example): "before" (the clip that went in)
  *               and "after" (the result) baked into one muted H.264 mp4, 1024×768, 24 fps, 1.2 MB at most, as "layout":
- *               "inset" (the result fills the frame, the clip plays in a rounded window bottom-left) or "wipe" (the clip
- *               for 1 s, then a thin line sweeps left to right over 1.4 s and leaves the result). Plus its first frame
+ *               "inset" (the result fills the frame, the clip plays in a rounded window bottom-left) or "wipe" (a thin
+ *               line splits the frame, the result on its left and the clip on its right: it holds in the middle for
+ *               1.5 s, eases to 3/4, back to 1/4 and to the middle again, so both sides always show, a subtle change
+ *               is easy to see at the line, and the loop has no seam). Plus its first frame
  *               (<name>.poster.webp, 1024 px, so the loop starts with no jump) and the result near its end
  *               (<name>.peak.webp, 512 px: where a card rests, and what reduced motion shows)
  * A published file is never replaced or removed (a run may name it): a copy whose file exists with other bytes stops
@@ -149,9 +151,11 @@ async function clipShow(job, dry) {
       `[A1][BM]overlay=${x}:${y}:shortest=1,format=yuv420p[out]`,
     ].join(";");
   } else {
-    // 0–1 s the source; 1–2.4 s a line sweeps (ease in-out) and leaves the result on its left; then the result.
-    const p = "clip((t-1)/1.4\,0\,1)";
-    const X = `(${w}*if(lt(${p}\,0.5)\,2*${p}*${p}\,1-pow(-2*${p}+2\,2)/2))`;
+    // The line (the result on its left): the middle until 1.5 s, then over 1 s each (ease in-out) to 3/4, to 1/4 and
+    // back to the middle, where it holds to the end (the loop's first and last frames match).
+    const ease = (q) => `if(lt(${q},0.5),2*${q}*${q},1-pow(-2*${q}+2,2)/2)`;
+    const step = (from) => ease(`clip(t-${from},0,1)`);
+    const X = `(${w}*(0.5+0.25*${step(1.5)}-0.5*${step(2.5)}+0.25*${step(3.5)}))`;
     const d = (frames / fps).toFixed(4);
     inputs = ["-i", before, "-i", after];
     graph = [
@@ -164,8 +168,8 @@ async function clipShow(job, dry) {
       `[A][BM]overlay=0:0:shortest=1[W]`,
       `color=black@0.25:s=8x${h}:r=${fps}:d=${d}[S]`,
       `color=white:s=2x${h}:r=${fps}:d=${d}[L]`,
-      `[W][S]overlay=x='${X}-4':y=0:eval=frame:enable='between(t\,1\,2.4)'[W1]`,
-      `[W1][L]overlay=x='${X}-1':y=0:eval=frame:enable='between(t\,1\,2.4)',format=yuv420p[out]`,
+      `[W][S]overlay=x='${X}-4':y=0:eval=frame[W1]`,
+      `[W1][L]overlay=x='${X}-1':y=0:eval=frame,format=yuv420p[out]`,
     ].join(";");
   }
   const mp4 = path.join(dir, "show.mp4");

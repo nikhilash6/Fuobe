@@ -283,7 +283,7 @@ describe("the bar's shell", () => {
     expect(html).not.toContain('aria-label="Search Fuobe"');
     expect(html).toContain('aria-keyshortcuts="/ Meta+K Control+K"');
     // The viewer's room is kept: Sign up's by default, the avatar's where an account or the owner was last.
-    expect(html).toMatch(/data-slot="viewer" class="[^"]*w-\[130px\]/);
+    expect(html).toMatch(/data-slot="viewer" class="[^"]*w-\[132px\]/);
     for (const w of OWNER_WORDS) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
     expect(html).not.toContain("Sign up");
   });

@@ -1,5 +1,5 @@
 // Genjutsu's Openjutsu modes, browser check. As the owner (a studio without a password): the From picture and Finish
-// tabs show and every tab is 44 px tall; Character swap with four characters shows Who becomes who, and a tap on the
+// tabs show and every tab is 44 px to tap on a phone (36 px with a mouse); Character swap with four characters shows Who becomes who, and a tap on the
 // part's first frame writes where that person stands; From picture's two-step header with step 2 locked until a frame
 // is used; Finish's tool switch; nothing scrolls sideways at 390 px. With --guest (a studio with a password and public
 // sign-up): the five existing tabs plus the new ones whose features passed their GPU test (workflows/comfyui/gpu-tested.json
@@ -93,8 +93,17 @@ try {
       await open("/genjutsu");
       const t = await tabs();
       check(`${width}: the owner sees From picture and Finish`, t.includes("From picture") && t.includes("Finish"), JSON.stringify(t));
-      const heights = await page.evaluate(() => [...document.querySelectorAll('[role="tablist"][aria-label="Genjutsu modes"] [role="tab"]')].map((b) => Math.round(b.getBoundingClientRect().height)));
-      check(`${width}: every mode tab is 44 px tall`, heights.every((h) => h >= 44), JSON.stringify(heights));
+      // The pill is 36 px; on a touch screen its tap area (::after, 4 px over and under) is 44 px (src/app/tab-row.css).
+      const heights = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="tablist"][aria-label="Genjutsu modes"] [role="tab"]')].map((b) => {
+          const h = b.getBoundingClientRect().height;
+          const a = getComputedStyle(b, "::after");
+          const touch = matchMedia("(pointer: coarse)").matches && a.content !== "none" && a.position === "absolute";
+          return Math.round(touch ? h - (parseFloat(a.top) || 0) - (parseFloat(a.bottom) || 0) : h);
+        }),
+      );
+      const touch = width < 500;
+      check(`${width}: every mode tab is ${touch ? "44 px to tap" : "36 px or more"}`, heights.every((h) => h >= (touch ? 44 : 36)), JSON.stringify(heights));
 
       // Character swap with four characters on your GPU: Who becomes who, and a tap writes the words.
       await open(`/genjutsu?video=${encodeURIComponent(clip)}&setup=${code({ m: "character", e: "open", r: pics })}`);

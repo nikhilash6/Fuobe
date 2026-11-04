@@ -4766,7 +4766,10 @@
     "engine": "open",
     "model": "oss-fix-colours",
     "finish": {
-     "tool": "colours"
+     "tool": "colours",
+     "finish": "soft",
+     "strength": 0.4,
+     "soften": 0.33
     },
     "length": 5.166,
     "originalSound": "everything"

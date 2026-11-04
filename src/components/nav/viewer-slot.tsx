@@ -17,10 +17,10 @@ import { useViewerKind } from "./nav-ui";
 
 /**
  * Fixed widths, so the placeholder and what replaces it take the same room: Log in 68 (from 1440 px), Sign up 84, the menu
- * button 40 like the bar's other items (44 on a touch screen), 6 between.
+ * button 40 like the bar's other items (44 on a touch screen), 8 between (the bar's own gap).
  */
 export const VIEWER_W = {
-  guest: "w-[130px] min-[1440px]:w-[204px] [@media(pointer:coarse)]:w-[134px] [@media(pointer:coarse)]:min-[1440px]:w-[208px]",
+  guest: "w-[132px] min-[1440px]:w-[208px] [@media(pointer:coarse)]:w-[136px] [@media(pointer:coarse)]:min-[1440px]:w-[212px]",
   member: "w-10 [@media(pointer:coarse)]:w-11",
 } as const;
 
@@ -76,7 +76,7 @@ export function ViewerSlot() {
       </span>
     );
   return (
-    <span data-slot="viewer" className={cn("flex shrink-0 items-center justify-end gap-1.5", VIEWER_W.guest)}>
+    <span data-slot="viewer" className={cn("flex shrink-0 items-center justify-end gap-2", VIEWER_W.guest)}>
       <Suspense fallback={<GuestButtons here="/" />}>
         <GuestButtonsHere />
       </Suspense>

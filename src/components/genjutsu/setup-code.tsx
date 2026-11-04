@@ -24,13 +24,19 @@ export function SetupCode({ setup, onPaste }: { setup: GenjutsuSetup; onPaste: (
   };
   const paste = () => {
     const s = decodeSetup(text);
-    if (!s) return void toast.error("That isn't a Genjutsu setup code (they start with gj1. or gj2.)");
+    if (!s) {
+      // A later code version (gj3.…): this install is older than the one that made it.
+      const v = /gj(\d+)\./.exec(text);
+      if (v && Number(v[1]) > 2) return void toast.error("That setup comes from a newer Fuobe. Update this one to paste it.");
+      return void toast.error("That isn't a Genjutsu setup code (they start with gj1. or gj2.)");
+    }
     onPaste(s);
     setOpen(false);
     setText("");
   };
   return (
-    <div className="flex items-center gap-1">
+    // The same space between Copy setup, Paste setup and the engine switch after them (the ghost buttons' own padding counts).
+    <div className="mr-1 flex items-center gap-0.5">
       <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void copy()} aria-label="Copy setup">
         <Copy className="size-3.5" />
         <span className="hidden sm:inline">Copy setup</span>

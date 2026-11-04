@@ -5,6 +5,7 @@ import {
   ALL_FEATURES,
   decodeSetup,
   encodeSetup,
+  FINISH_COLOURS_DEFAULT,
   GENJUTSU_MODES,
   getMaker,
   modeOpen,
@@ -149,19 +150,35 @@ describe("Genjutsu mode examples", () => {
     }
   });
 
-  it("the settings list names no model, no file and no test words", () => {
+  it("the settings list names no model, no seed, no file and no test words for a visitor", () => {
     for (const r of rows) {
       const list = exampleSettings(r.genjutsu!.recipe).join(" | ");
-      expect(list, r.id).not.toMatch(/oss-|fuobe-|H3|Wan|test|pass|owner|\/api\//i);
-      expect(list, r.id).toMatch(/Part \d/);
+      expect(list, r.id).not.toMatch(/oss-|fuobe-|H3|Wan|test|pass|owner|seed|part|\/api\//i);
+      // The length in whole seconds, as "What went in" says it.
+      expect(list, r.id).toContain(`${Math.round(r.genjutsu!.recipe.length)} s`);
+      expect((r as Row & { genjutsu: { went: string } }).genjutsu.went, r.id).toContain(`${Math.round(r.genjutsu!.recipe.length)} s`);
     }
-    expect(exampleSettings({ mode: "finish", engine: "open", model: "oss-fix-colours", finish: { tool: "colours" }, length: 5.166, originalSound: "everything" })).toEqual([
-      "Finish: Soft film",
-      "Strength 40%",
-      "Soften detail 33%",
-      "Part 5.2 s",
-      "Sound: Everything",
-    ]);
+    const finish = { mode: "finish" as const, engine: "open" as const, model: "oss-fix-colours", finish: { tool: "colours" as const }, length: 5.166, originalSound: "everything" as const };
+    // Finish's settings left out read as the plan's own defaults (FINISH_COLOURS_DEFAULT).
+    expect(exampleSettings(finish)).toEqual(["Finish: Soft film", "Strength 40%", "Soften detail 33%", "5 s", "Original sound"]);
+    // The owner: no model chip for Finish (its finish chip names it), the exact length and the seed.
+    expect(exampleSettings({ ...finish, seed: 3 }, { owner: true })).toEqual(["Finish: Soft film", "Strength 40%", "Soften detail 33%", "5.2 s", "Original sound", "Seed 3"]);
+    const character = rows.find((r) => r.id === "genjutsu-character.1")!.genjutsu!.recipe;
+    expect(exampleSettings(character)).toEqual(["720p", "5 s", "Original sound"]);
+    expect(exampleSettings(character, { owner: true })[0]).toBe(getMaker(character.model, character.engine)!.label);
+  });
+
+  it("a page sends only the examples open to everyone; the Finish recipe writes its settings out", () => {
+    expect(Object.keys(genjutsuExamples(() => false))).toEqual([]);
+    const live = genjutsuLive();
+    const open = genjutsuExamples((f) => live[f]);
+    for (const [mode, cards] of Object.entries(genjutsuExamples())) {
+      const shown = open[mode as GenjutsuMode] ?? [];
+      expect(shown.every((c) => c.load.needs.every((f) => live[f])), mode).toBe(true);
+      expect(shown.length).toBeLessThanOrEqual(cards!.length);
+    }
+    const f = rows.find((r) => r.id === "genjutsu-finish.1")!.genjutsu!.recipe.finish!;
+    expect({ finish: f.finish, strength: f.strength, soften: f.soften }).toEqual(FINISH_COLOURS_DEFAULT);
   });
 
   it("a viewer sees an example only where its mode and its model are open to them; the owner sees every one", () => {

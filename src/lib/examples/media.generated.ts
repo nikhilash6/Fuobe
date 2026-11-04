@@ -6246,26 +6246,26 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
  "/examples/genjutsu-finish/1/show.mp4": {
   "role": "show",
   "type": "video/mp4",
-  "bytes": 929162,
-  "sha256": "5fcb43976934bb5380a9f8ce6b1a7a9dbd672ba795e6d0dbcde4c4bc82358543",
-  "v": "5fcb4397",
-  "poster": "/examples/genjutsu-finish/1/show.poster.webp?v=e86785a4"
+  "bytes": 994222,
+  "sha256": "70fbc6365d6cb3be84d63a6621920297fbbad5a3250f86fac5cee6080a7b1f8b",
+  "v": "70fbc636",
+  "poster": "/examples/genjutsu-finish/1/show.poster.webp?v=043b6b4f"
  },
  "/examples/genjutsu-finish/1/show.peak.webp": {
   "role": "show",
   "type": "image/webp",
-  "bytes": 20826,
-  "sha256": "72772e4cacbb0938f7647cb7546375ff3ff18a8e4248b43c6fb9865a126c4202",
-  "v": "72772e4c",
+  "bytes": 24276,
+  "sha256": "6cec7a2fc3a3af20b7209921a11f5003fe5c35ebab3725af349434d499148228",
+  "v": "6cec7a2f",
   "w": 512,
   "h": 384
  },
  "/examples/genjutsu-finish/1/show.poster.webp": {
   "role": "show",
   "type": "image/webp",
-  "bytes": 77530,
-  "sha256": "e86785a43477f83144837904306d04ffcfb0872469ab09109a00eb2e47fce8e9",
-  "v": "e86785a4",
+  "bytes": 68274,
+  "sha256": "043b6b4f591edadea151604aeac0d83095d04962210ac6278cabdbdae7dd68f8",
+  "v": "043b6b4f",
   "w": 1024,
   "h": 768
  },

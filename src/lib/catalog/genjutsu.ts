@@ -251,6 +251,9 @@ export interface FinishOptions {
   soften?: number;
 }
 
+/** Fix colours' settings when a request leaves them out (one source for the plan and an example's card). */
+export const FINISH_COLOURS_DEFAULT: Required<Pick<FinishOptions, "finish" | "strength" | "soften">> = { finish: "soft", strength: 0.4, soften: 0.33 };
+
 /** The part a new maker takes (seconds): Group swap, Scene edit and From picture 2–15 s; Finish the whole clip. */
 export const OPENJUTSU_LIMITS = { minSeconds: 2, maxSeconds: 15, facesMaxSeconds: 10, coloursMaxSeconds: 60, maxCharacters: 4, roleChars: 80, lightChars: 300, sceneChars: 2000 } as const;
 
@@ -1906,7 +1909,7 @@ function planOpenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
   const settings =
     m.tool === "faces"
       ? { faceStyle: f.faceStyle ?? "mouth", chunkSeconds: f.chunkSeconds ?? 6.5 }
-      : { finish: f.finish ?? "soft", strength: f.strength ?? 0.4, soften: f.soften ?? 0.33 };
+      : { finish: f.finish ?? FINISH_COLOURS_DEFAULT.finish, strength: f.strength ?? FINISH_COLOURS_DEFAULT.strength, soften: f.soften ?? FINISH_COLOURS_DEFAULT.soften };
   const step = job("fix", m.tool === "faces" ? "face-fix-video" : "tone-video", m.tool === "faces" ? "Fix the faces" : "Fix the colours", m.tool === "faces" ? input.references.slice(0, 1) : [], settings);
   if (!steps.length) {
     delete step.after;
@@ -2205,7 +2208,9 @@ export function encodeSetup(s: GenjutsuSetup): string {
     pl: lengthOf(s.length),
     os: s.originalSound,
   };
-  return `gj2.${toBase64Url(JSON.stringify(o))}`;
+  // gj1 while none of gj2's own fields is set: an install that reads only gj1 still pastes it.
+  const v = o.sd === undefined && o.pl === undefined && o.os === undefined ? "gj1" : "gj2";
+  return `${v}.${toBase64Url(JSON.stringify(o))}`;
 }
 
 /** A part's length as a code keeps it: 3 decimals, 1 to 60 s. */

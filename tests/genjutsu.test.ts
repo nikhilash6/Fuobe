@@ -534,8 +534,12 @@ describe("Genjutsu: setup codes", () => {
       character: { who: "index" as const, index: 2, subject: "man in red", anchor: false, description: "a ronin", speech: "other" as const, lora: "v1" as const, windowFrames: 158 },
     };
     const code = encodeSetup(setup);
-    expect(code).toMatch(/^gj2\.[A-Za-z0-9_-]+$/);
+    // No seed, length or sound: still a gj1 code, which an install that reads only gj1 pastes too.
+    expect(code).toMatch(/^gj1\.[A-Za-z0-9_-]+$/);
     expect(decodeSetup(code)).toEqual(setup);
+    const full = { ...setup, seed: 7, length: 5.166, originalSound: "dialogue" as const };
+    expect(encodeSetup(full)).toMatch(/^gj2\.[A-Za-z0-9_-]+$/);
+    expect(decodeSetup(encodeSetup(full))).toEqual(full);
     expect(decodeSetup(` http://localhost:3000/genjutsu?setup=${code} `)).toEqual(setup);
     expect(decodeSetup(encodeSetup({ mode: "character", character: { dialogue: "secret words", who: "largest" } as never }))?.character).toEqual({ who: "largest" });
   });
