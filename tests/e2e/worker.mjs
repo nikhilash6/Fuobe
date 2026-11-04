@@ -6,13 +6,15 @@
 //   E2E_DEV=1 node tests/e2e/worker.mjs          (next dev instead of a build)
 //
 // Checks: the owner adds a worker, and it starts paused; resumed in both places with hours and a lane, it runs the
-// owner's run to the end and cleans up its ComfyUI's history; another program on the GPU (per-process memory [N/A])
-// pauses it and its ComfyUI is gone within 10 s; with the automatic resume off it stays paused, a resume by hand
-// brings it back, and with it turned on from the website it comes back by itself after the cool-down;
-// pause --now sends a running job back in line and stops its ComfyUI; a port another program holds is
-// never used or connected to.
+// owner's run to the end and cleans up its ComfyUI's history; its ComfyUI refuses a request without the worker's key
+// or for another name; another program on the GPU (per-process memory [N/A]) pauses it and its ComfyUI is gone within
+// 10 s; with the automatic resume off it stays paused, a resume by hand brings it back, and with it turned on from the
+// website it comes back by itself after the cool-down; pause --now sends a running job back in line and stops its
+// ComfyUI; a worker killed mid-run leaves its ComfyUI running, the next start stops that ComfyUI, and the run
+// finishes; a port another program holds is never used or connected to.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { root } from "./_browser.mjs";
@@ -44,6 +46,25 @@ async function until(fn, ms = 30_000, every = 250) {
 }
 const smi = (s) => fs.writeFileSync(smiState, JSON.stringify(s));
 const comfyUp = () => fetch(`http://127.0.0.1:${COMFY_PORT}/__fake/stats`).then((r) => r.ok, () => false);
+const fakeStats = () => fetch(`http://127.0.0.1:${COMFY_PORT}/__fake/stats`).then((r) => r.json(), () => null);
+/** A request with any Host (fetch can't send another one): its status. */
+const statusFor = (port, p, headers) =>
+  new Promise((resolve) => {
+    const req = http.request({ host: "127.0.0.1", port, path: p, headers }, (res) => {
+      res.resume();
+      res.on("end", () => resolve(res.statusCode));
+    });
+    req.on("error", () => resolve(0));
+    req.end();
+  });
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const password = `e2e-${Math.random().toString(36).slice(2)}`;
 const server = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), process.env.E2E_DEV ? "dev" : "start", "-p", String(APP_PORT), "-H", "127.0.0.1"], {
@@ -60,7 +81,9 @@ let workerLog = "";
 function startWorker(steps = 4) {
   fs.mkdirSync(home, { recursive: true });
   const cfg = JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8"));
-  cfg.comfyCommand = [process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", path.join(root, "tests/helpers/fake-local-comfy.ts"), "--port", "{port}", "--cors", "off", "--steps", String(steps), "--step-ms", "500", "--has", path.join(root, "workflows/comfyui/requirements.json")];
+  // The stand-in plays the worker's guard: it needs the key the worker makes at each start.
+  cfg.comfyCommand = [process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", path.join(root, "tests/helpers/fake-local-comfy.ts"), "--port", "{port}", "--cors", "off", "--steps", String(steps), "--step-ms", "500", "--worker-guard", "1", "--has", path.join(root, "workflows/comfyui/requirements.json")];
+  cfg.comfyGuard = true;
   fs.writeFileSync(path.join(home, "worker.json"), JSON.stringify(cfg));
   workerProc = spawn(process.execPath, [path.join(root, "bin/fuobe.mjs"), "worker", "run"], { env: { ...process.env, FUOBE_WORKER_HOME: home }, stdio: ["ignore", "pipe", "pipe"] });
   workerProc.stdout.on("data", (d) => (workerLog += d));
@@ -78,10 +101,12 @@ const cli = (...args) => new Promise((r) => spawn(process.execPath, [path.join(r
 async function finish() {
   await stopWorker().catch(() => {});
   await stopProcess(server);
+  // Its stand-in ComfyUI's own output (the worker keeps the last three starts' logs).
+  const comfyLogs = ["comfyui.2.log", "comfyui.1.log", "comfyui.log"].map((f) => path.join(workDir, f)).filter((f) => fs.existsSync(f)).map((f) => `${path.basename(f)}:\n${fs.readFileSync(f, "utf8").split("\n").slice(-15).join("\n")}`);
   removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed.`);
-  if (failed.length) console.log(`--- worker\n${workerLog.split("\n").slice(-40).join("\n")}\n--- studio\n${serverLog.split("\n").slice(-30).join("\n")}`);
+  if (failed.length) console.log(`--- worker\n${workerLog.split("\n").slice(-40).join("\n")}\n--- its ComfyUI\n${comfyLogs.join("\n")}\n--- studio\n${serverLog.split("\n").slice(-30).join("\n")}`);
   process.exit(failed.length ? 1 : 0);
 }
 
@@ -139,6 +164,11 @@ try {
   }, 15_000);
   check("after the job, its history entry is gone from the worker's ComfyUI", !!stats, JSON.stringify(stats));
   check("the worker's input and output folders are empty", ["input", "output", "temp"].every((d) => !fs.existsSync(path.join(workDir, d)) || fs.readdirSync(path.join(workDir, d)).length === 0));
+  // Its ComfyUI answers only the worker: a request without the key, or for another name (DNS rebinding), is refused.
+  const noKey = await fetch(`http://127.0.0.1:${COMFY_PORT}/system_stats`).then((r) => r.status, () => 0);
+  check("its ComfyUI refuses a request without the worker's key", noKey === 403, String(noKey));
+  const rebound = await statusFor(COMFY_PORT, "/system_stats", { Host: `rebound.example:${COMFY_PORT}` });
+  check("its ComfyUI refuses a request for another name", rebound === 403, String(rebound));
 
   // Another program takes the GPU ([N/A] per process, as on Windows): it pauses, and its ComfyUI is gone within 10 s.
   smi({ usedMb: 6000, tempC: 60, apps: [{ pid: 999999, name: "blender.exe", usedMb: null }] });
@@ -183,6 +213,35 @@ try {
   }, 20_000);
   check("pause --now: the job is back in line, not failed", !!back, JSON.stringify(back)?.slice(0, 160));
   await owner(`/api/generations/${long}/cancel`, { method: "POST" }).catch(() => {});
+
+  // The worker is killed mid-run, as a crash would: its ComfyUI keeps running. The next start stops that ComfyUI (its
+  // pid file names it), and the run finishes.
+  await stopWorker();
+  await cli("resume");
+  startWorker(12);
+  await until(comfyUp, 30_000);
+  await until(async () => (await view()).words === "Ready", 30_000);
+  const third = await run("worker run three");
+  const mid = await until(async () => {
+    const s = await fakeStats();
+    return s?.running && s.step >= 3 ? s : null;
+  }, 60_000);
+  check("a run is halfway on the worker", !!mid, JSON.stringify(mid));
+  workerProc.kill("SIGKILL");
+  await until(() => workerProc.exitCode !== null || workerProc.signalCode, 10_000);
+  workerProc = null;
+  const orphan = mid?.pid;
+  const leftOver = !!orphan && alive(orphan);
+  // Windows ends a killed program's child processes with it; elsewhere its ComfyUI keeps running until the next start.
+  if (process.platform !== "win32") check("the killed worker's ComfyUI is still running", leftOver);
+  startWorker(12);
+  check("after the next start, no ComfyUI of the killed worker runs", !!orphan && !!(await until(() => !alive(orphan), 30_000)));
+  if (leftOver) check("the next start stopped the ComfyUI it left running", !!(await until(() => /left running/.test(workerLog), 15_000)));
+  const thirdDone = await until(async () => {
+    const g = (await owner(`/api/generations/${third}`)).body;
+    return ["succeeded", "failed", "canceled"].includes(g?.status) ? g : null;
+  }, 120_000, 1000);
+  check("the run the killed worker had finishes", thirdDone?.status === "succeeded", thirdDone ? `${thirdDone.status} ${thirdDone.error ?? ""}` : "timed out");
 
   // Another program holds the worker's port: it never starts ComfyUI there, and never connects to it.
   await stopWorker();
