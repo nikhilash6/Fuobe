@@ -1,7 +1,7 @@
 import http from "node:http";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
+import { listenOnFreePort, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -17,9 +17,9 @@ delete process.env.FUOBE_BILLING_URL;
 delete process.env.FUOBE_MODERATION_URL;
 globalThis.__fuobeTestDiskFree = 1e13;
 
-// This install's ComfyUI: a stand-in on a free port from 3360 to 3369.
+// This install's ComfyUI: a stand-in on a free high port.
 const probe = http.createServer();
-const comfyPort = await listenInRange(probe);
+const comfyPort = await listenOnFreePort(probe);
 await new Promise<void>((r) => probe.close(() => r()));
 const comfy: FakeComfy = await startFakeComfy({ output: "image", delayMs: 0 }, comfyPort);
 process.env.COMFYUI_URL = comfy.url;

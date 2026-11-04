@@ -1,9 +1,10 @@
 /**
  * Stand-ins for an install's optional external services in tests: a billing service (docs/billing-hook.md) and a
  * moderation service (docs/moderation-hook.md). Each records every call and answers with arbitrary numbers ("7 units").
- * They listen on 127.0.0.1, on the first free port from 3360 to 3369.
+ * They listen on 127.0.0.1, on a free high port the system picks, so they never take a port another test needs.
  */
 import http from "node:http";
+import type { AddressInfo } from "node:net";
 
 export interface Recorded {
   method: string;
@@ -13,25 +14,15 @@ export interface Recorded {
   bytes?: Buffer;
 }
 
-/** Listen on the first free port from 3360 to 3369. */
-export async function listenInRange(server: http.Server): Promise<number> {
-  for (let port = 3360; port <= 3369; port++) {
-    const ok = await new Promise<boolean>((resolve) => {
-      const onError = () => {
-        server.off("listening", onListening);
-        resolve(false);
-      };
-      const onListening = () => {
-        server.off("error", onError);
-        resolve(true);
-      };
-      server.once("error", onError);
-      server.once("listening", onListening);
-      server.listen(port, "127.0.0.1");
+/** Listen on 127.0.0.1, on a free high port the system picks; resolves with the port. */
+export function listenOnFreePort(server: http.Server): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve((server.address() as AddressInfo).port);
     });
-    if (ok) return port;
-  }
-  throw new Error("No free port from 3360 to 3369");
+  });
 }
 
 function readBody(req: http.IncomingMessage): Promise<Buffer> {
@@ -142,7 +133,7 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     if (p === "/v1/interest") return json(200, { ok: true, text: "Thanks, noted." });
     json(404, { error: "not found" });
   });
-  const port = await listenInRange(server);
+  const port = await listenOnFreePort(server);
   return Object.assign(f, {
     port,
     url: `http://127.0.0.1:${port}`,
@@ -196,7 +187,7 @@ export async function startFakeModeration(): Promise<FakeModeration> {
     if (p === "/v1/report") return json(200, { ok: true, hidden: false, text: "Report received." });
     json(404, { error: "not found" });
   });
-  const port = await listenInRange(server);
+  const port = await listenOnFreePort(server);
   return Object.assign(f, {
     port,
     url: `http://127.0.0.1:${port}`,

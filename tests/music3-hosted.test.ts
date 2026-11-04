@@ -1,6 +1,6 @@
 import http from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
+import { listenOnFreePort, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -17,7 +17,7 @@ delete process.env.FUOBE_MODERATION_URL;
 globalThis.__fuobeTestDiskFree = 1e13;
 
 const probe = http.createServer();
-const comfyPort = await listenInRange(probe);
+const comfyPort = await listenOnFreePort(probe);
 await new Promise<void>((r) => probe.close(() => r()));
 const comfy: FakeComfy = await startFakeComfy({ output: "image", delayMs: 0 }, comfyPort);
 process.env.COMFYUI_URL = comfy.url;
