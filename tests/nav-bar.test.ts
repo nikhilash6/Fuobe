@@ -174,8 +174,8 @@ describe("the launcher's columns", () => {
     expect(subs("marketing")).toEqual(["Click to Ad", "Ads Studio", "Ad Multiplier"]);
     expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]);
     expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
-    expect(subs("audio")).toEqual(["Dialogue", "Voice change", "Design a voice", "See all 13"]);
-    expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 10"]);
+    expect(subs("audio")).toEqual(["Dialogue", "Voice change", "Design a voice", "See all 14"]);
+    expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 11"]);
     for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
     // Under a hairline, quieter than a row, with no picture and no line of their own (nav-subs.css: 24 px
     // names with a mouse, 44 px pills to tap on a touch screen).
@@ -183,7 +183,7 @@ describe("the launcher's columns", () => {
     expect(sub).toContain("text-muted-foreground");
     expect(html).toMatch(/<ul[^>]*class="nav-subs /);
     // A "See all N" says whose.
-    expect(html).toContain('aria-label="See all 13 in Audio"');
+    expect(html).toContain('aria-label="See all 14 in Audio"');
   });
 
   it("labels the groups, and every link has its studio's real cover in a box of fixed size", () => {
