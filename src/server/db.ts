@@ -1068,6 +1068,10 @@ function open(): Database.Database {
   db.exec(SKILL_TABLES);
   // An account's own canvases (account-canvas.ts): not a numbered migration, so branches never clash over its place.
   db.exec(ACCOUNT_CANVAS_TABLES);
+  // Its list reads this small summary, never every board's pages (a table made before it had the column gets it).
+  if (!(db.prepare("PRAGMA table_info(account_canvases)").all() as { name: string }[]).some((c) => c.name === "summary_json")) {
+    addColumn(db, "ALTER TABLE account_canvases ADD COLUMN summary_json TEXT");
+  }
   // A billing hold's rows are found through this index (only rows that have one are in it).
   try {
     db.exec("CREATE INDEX IF NOT EXISTS generations_hold ON generations(json_extract(request_json, '$.hold')) WHERE json_extract(request_json, '$.hold') IS NOT NULL");
@@ -1093,7 +1097,8 @@ const ACCOUNT_CANVAS_TABLES = `CREATE TABLE IF NOT EXISTS account_canvases (
     pages_json TEXT NOT NULL,
     template_id TEXT,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    summary_json TEXT
   );
   CREATE INDEX IF NOT EXISTS account_canvases_account ON account_canvases(account_id, updated_at DESC);`;
 

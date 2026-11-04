@@ -387,7 +387,11 @@ function Editor({ id, initial, view, host }: { id: string; initial: Canvas; view
     },
     [status],
   );
-  const globals = useMemo<EditorGlobals>(() => ({ canvasId: id, engine, mode, readOnly: isMobile, running: runM.isPending, isDemo }), [id, engine, mode, isMobile, runM.isPending, isDemo]);
+  const isVisitor = !!host.visitor;
+  const globals = useMemo<EditorGlobals>(
+    () => ({ canvasId: id, engine, mode, readOnly: isMobile, running: runM.isPending, isDemo, visitor: isVisitor }),
+    [id, engine, mode, isMobile, runM.isPending, isDemo, isVisitor],
+  );
   const snapshot = useMemo<EditorSnapshot>(() => ({ graph, byId, plan, views, globals }), [graph, byId, plan, views, globals]);
   store.prime(snapshot);
   useLayoutEffect(() => store.set(snapshot), [store, snapshot]);
@@ -1286,11 +1290,14 @@ function Editor({ id, initial, view, host }: { id: string; initial: Canvas; view
   // A Translate (video) on an open-only install dubs in Translate & dub: nothing to fix on the board.
   const attention = new Set(plan.errors.filter((e) => e.message !== OPEN_DUB_HINT).map((e) => e.nodeId)).size;
   const summary = [
-    plan.steps.length
-      ? `${plan.steps.length} to run · ${planDemo ? "Placeholder · free" : plan.costUnknown ? "price unknown" : plan.costUsd === 0 ? "Free" : `≈ ${formatCost(plan.costUsd)}`}`
-      : generators.length && !attention
-        ? "Up to date"
-        : "",
+    // A visitor's board doesn't run here: no count of steps to run and no price, only what needs attention.
+    visitor
+      ? ""
+      : plan.steps.length
+        ? `${plan.steps.length} to run · ${planDemo ? "Placeholder · free" : plan.costUnknown ? "price unknown" : plan.costUsd === 0 ? "Free" : `≈ ${formatCost(plan.costUsd)}`}`
+        : generators.length && !attention
+          ? "Up to date"
+          : "",
     attention ? `${attention} need${attention === 1 ? "s" : ""} attention` : "",
   ]
     .filter(Boolean)

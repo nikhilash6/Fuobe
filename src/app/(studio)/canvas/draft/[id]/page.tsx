@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Canvas", robots: { index: false, fol
 
 async function Board({ params }: { params: PageProps<"/canvas/draft/[id]">["params"] }) {
   const { id } = await params;
-  return <DraftBoard id={id} boards={boardExtras()} />;
+  return <DraftBoard key={id} id={id} boards={boardExtras()} />;
 }
 
 /** A board kept in this browser (a visitor's draft): its pages are read from the browser, never the server. */

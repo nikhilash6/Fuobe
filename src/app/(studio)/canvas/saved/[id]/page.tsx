@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Canvas", robots: { index: false, fol
 
 async function Board({ params }: { params: PageProps<"/canvas/saved/[id]">["params"] }) {
   const { id } = await params;
-  return <SavedBoard id={id} boards={boardExtras()} />;
+  return <SavedBoard key={id} id={id} boards={boardExtras()} />;
 }
 
 /** An account's own canvas: the browser asks /api/account/canvases/<id>, which answers that account only. */

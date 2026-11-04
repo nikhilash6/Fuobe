@@ -144,9 +144,22 @@ describe("an account's own canvases", () => {
     const r1 = await oneRoute.PATCH(req(`/api/account/canvases/${id}`, "PATCH", { name: "Renamed" }), ctx(id));
     expect(r1.status).toBe(200);
     const r2 = await oneRoute.PATCH(req(`/api/account/canvases/${id}`, "PATCH", { pages: page([prompt("a red coat")]) }), ctx(id));
-    const c = (await r2.json()) as { name: string; pages: { graph: { nodes: { data: { text: string } }[] } }[] };
+    // A save answers small: the name and when it changed, not the pages.
+    expect(await r2.json()).toEqual({ id, name: "Renamed", updatedAt: expect.any(Number) });
+    const c = (await (await oneRoute.GET(req(`/api/account/canvases/${id}`, "GET"), ctx(id))).json()) as { name: string; pages: { graph: { nodes: { data: { text: string } }[] } }[] };
     expect(c.name).toBe("Renamed");
     expect(c.pages[0].graph.nodes[0].data.text).toBe("a red coat");
+    // The list reads the summary kept with the save.
+    const list = (await (await listRoute.GET(req("/api/account/canvases", "GET"))).json()) as { items: { id: string; nodeCount: number; outline: { boxes: unknown[] } }[] };
+    expect(list.items[0]).toEqual(expect.objectContaining({ id, nodeCount: 1 }));
+    expect(list.items[0].outline.boxes).toHaveLength(1);
+  });
+
+  it("lists a board saved before summaries were kept, and keeps its summary from then on", async () => {
+    db().prepare("UPDATE account_canvases SET summary_json = NULL WHERE id = ?").run(id);
+    const list = (await (await listRoute.GET(req("/api/account/canvases", "GET"))).json()) as { items: { id: string; nodeCount: number }[] };
+    expect(list.items.find((x) => x.id === id)).toEqual(expect.objectContaining({ nodeCount: 1 }));
+    expect((db().prepare("SELECT summary_json FROM account_canvases WHERE id = ?").get(id) as { summary_json: string | null }).summary_json).toContain('"nodeCount":1');
   });
 
   it("is another account's to neither read, change nor delete (it reads as not found), and a guest's to none", async () => {

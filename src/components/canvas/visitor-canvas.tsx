@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Cloud, Loader2, LogIn, Monitor, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { NotFoundState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,10 @@ import { signInHref, useEngine, useHydrated, useViewer } from "@/lib/api";
 import type { Canvas } from "@/lib/catalog/canvas";
 import type { CanvasPage } from "@/lib/catalog/canvas-board";
 import type { Generation } from "@/lib/catalog/types";
-import { deleteDraft, getDraft, newDraftId, putDraft, type CanvasDraft } from "@/lib/canvas-drafts";
+import { deleteDraft, draftName, getDraft, newDraftId, putDraft, type CanvasDraft } from "@/lib/canvas-drafts";
 import { toastError } from "@/lib/refusals";
 import { BoardEditor, EditorSkeleton, type BoardHost, type BoardNow } from "./canvas-editor";
+import { EXAMPLE_FEATURE } from "./canvas-context";
 import { accountCanvasApi, useAccountCanvas, useCanvasActions, type CanvasView } from "./use-canvas";
 
 /**
@@ -54,7 +55,7 @@ function exampleView(c: Canvas, example: VisitorBoardData["example"]): CanvasVie
   const g = {
     id,
     batchId: null,
-    feature: "canvas-example",
+    feature: EXAMPLE_FEATURE,
     presetId: null,
     modelId: "",
     engine: "open",
@@ -178,8 +179,8 @@ function VisitorEditor({
   savedLabel: string;
   keep: (pages: CanvasPage[], keepalive: boolean) => Promise<void>;
   rename: (name: string) => Promise<void>;
-  /** An account's board not saved to it yet: Save moves it there. */
-  saveToAccount?: (now: BoardNow) => Promise<void>;
+  /** An account's board not saved to it yet: Save moves it there (`saved` runs once the account has it). */
+  saveToAccount?: (now: BoardNow, saved: () => void) => Promise<void>;
   example?: VisitorBoardData["example"];
   oneStep?: VisitorBoardData["oneStep"];
 }) {
@@ -187,6 +188,9 @@ function VisitorEditor({
   const [signUpOpen, setSignUpOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
+  // Saved to the account: this browser stops keeping the board (the editor's last flush as it closes would make it
+  // again, as a second board, and move the address back to it).
+  const moved = useRef(false);
   const keepRef = useRef({ keep, rename, saveToAccount });
   useEffect(() => {
     keepRef.current = { keep, rename, saveToAccount };
@@ -197,7 +201,7 @@ function VisitorEditor({
       if (who === "guest")
         return (
           <Button size="sm" className="h-8 rounded-full px-3" onClick={() => setSignUpOpen(true)} data-visitor-save>
-            <Cloud /> <span className="max-sm:sr-only">Save</span>
+            <Cloud /> Save
           </Button>
         );
       if (!keepRef.current.saveToAccount) return null;
@@ -209,13 +213,14 @@ function VisitorEditor({
           data-visitor-save
           onClick={() => {
             setSaving(true);
-            void keepRef.current.saveToAccount!(now()).catch((e) => {
+            void keepRef.current.saveToAccount!(now(), () => (moved.current = true)).catch((e) => {
               toastError(e);
               setSaving(false);
             });
           }}
         >
-          {saving ? <Loader2 className="animate-spin" /> : <Cloud />} <span className="max-sm:sr-only">Save to account</span>
+          {saving ? <Loader2 className="animate-spin" /> : <Cloud />} <span className="sm:hidden">Save</span>
+          <span className="max-sm:hidden">Save to account</span>
         </Button>
       );
     },
@@ -223,8 +228,8 @@ function VisitorEditor({
   );
   const host = useMemo<BoardHost>(
     () => ({
-      save: (pages, keepalive) => keepRef.current.keep(pages, keepalive),
-      rename: (name) => keepRef.current.rename(name),
+      save: async (pages, keepalive) => void (moved.current || (await keepRef.current.keep(pages, keepalive))),
+      rename: async (name) => void (moved.current || (await keepRef.current.rename(name))),
       visitor: {
         savedLabel,
         run: () => setRunOpen(true),
@@ -248,8 +253,9 @@ function useSaveToAccount(draftId: () => string | null) {
   const router = useRouter();
   const qc = useQueryClient();
   return useCallback(
-    async (now: BoardNow, templateId: string | null) => {
+    async (now: BoardNow, templateId: string | null, saved: () => void) => {
       const c = await accountCanvasApi.create({ name: now.name, templateId, pages: now.pages });
+      saved();
       const d = draftId();
       if (d) deleteDraft(d);
       void qc.invalidateQueries({ queryKey: ["account-canvases"], exact: true });
@@ -268,6 +274,8 @@ function draftKeeper(id: string, base: { name: string; templateId: string | null
   return {
     keep: async (p: CanvasPage[]) => {
       pages = p;
+      // A rename from the Canvas list while this board was open stays.
+      name = draftName(id) ?? name;
       put();
     },
     rename: async (n: string) => {
@@ -328,25 +336,20 @@ export function TryBoard({ board }: { board: VisitorBoardData }) {
         await keepFirst().rename(name);
         afterFirst();
       }}
-      saveToAccount={who === "account" ? (now) => saveToAccount(now, board.templateId) : undefined}
+      saveToAccount={who === "account" ? (now, saved) => saveToAccount(now, board.templateId, saved) : undefined}
       example={board.example}
       oneStep={board.oneStep}
     />
   );
 }
 
-const subscribeNothing = () => () => {};
-
 /** /canvas/draft/<id>: a board kept in this browser. */
 export function DraftBoard({ id, boards }: { id: string; boards: Record<string, Pick<VisitorBoardData, "example" | "oneStep">> }) {
   const who = useWho();
   const hydrated = useHydrated();
-  // Read once, after hydration (the server can't see this browser's storage).
-  const draft = useSyncExternalStore(
-    subscribeNothing,
-    () => draftOnce(id),
-    () => undefined,
-  );
+  // Read as this page opens, so it is the board as last kept (the server can't see this browser's storage, and the
+  // page shows a skeleton until hydrated, so what the server drew and the first render match).
+  const [draft] = useState(() => getDraft(id));
   const saveToAccount = useSaveToAccount(useCallback(() => id, [id]));
   const keeper = useMemo(() => (draft ? draftKeeper(id, draft, draft.createdAt) : null), [id, draft]);
   const canvas = useMemo(() => (draft ? asCanvas(draft) : null), [draft]);
@@ -365,18 +368,11 @@ export function DraftBoard({ id, boards }: { id: string; boards: Record<string, 
       savedLabel="Kept in this browser"
       keep={async (pages) => keeper.keep(pages)}
       rename={async (name) => keeper.rename(name)}
-      saveToAccount={who === "account" ? (now) => saveToAccount(now, draft.templateId) : undefined}
+      saveToAccount={who === "account" ? (now, saved) => saveToAccount(now, draft.templateId, saved) : undefined}
       example={extra?.example}
       oneStep={extra?.oneStep}
     />
   );
-}
-
-/** One read of a draft per id for the page's life (useSyncExternalStore needs the same object each time). */
-const drafts = new Map<string, CanvasDraft | null>();
-function draftOnce(id: string): CanvasDraft | undefined {
-  if (!drafts.has(id)) drafts.set(id, getDraft(id));
-  return drafts.get(id) ?? undefined;
 }
 
 /** /canvas/saved/<id>: an account's own board; every change saves to the account. */

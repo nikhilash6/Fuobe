@@ -166,7 +166,7 @@ export function useAccountCanvas(id: string, { enabled }: { enabled: boolean }) 
 export const accountCanvasApi = {
   create: async (body: { name: string; templateId: string | null; pages: CanvasPage[] }) => json<AccountCanvas>(await send("/api/account/canvases", "POST", body)),
   save: async (id: string, patch: { name?: string; pages?: CanvasPage[] }, keepalive = false) =>
-    json<AccountCanvas>(await send(`/api/account/canvases/${encodeURIComponent(id)}`, "PATCH", patch, { keepalive })),
+    json<{ id: string; name: string; updatedAt: number }>(await send(`/api/account/canvases/${encodeURIComponent(id)}`, "PATCH", patch, { keepalive })),
   remove: async (id: string) => {
     const res = await fetch(`/api/account/canvases/${encodeURIComponent(id)}`, { method: "DELETE" });
     if (!res.ok && res.status !== 404) throw responseError(res, "Couldn't delete it. Please try again.");

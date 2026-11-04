@@ -62,6 +62,11 @@ export function listDrafts(): DraftSummary[] {
   return readIndex().sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/** A draft's name as last kept (the list may rename it while the board is open), or null. */
+export function draftName(id: string): string | null {
+  return readIndex().find((d) => d.id === id)?.name ?? null;
+}
+
 export function getDraft(id: string): CanvasDraft | null {
   if (!isDraftId(id)) return null;
   try {

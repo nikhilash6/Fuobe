@@ -96,7 +96,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   take its own uploads or Fuobe's published example files, nothing else. The owner's canvases
   (`/api/canvases`) stay the owner's (403 `library` for an account). **Run** on a visitor's board
   never runs: a canvas plans with the studio's own AI helpers, so it says what running needs and
-  links the Video effect that makes the same film in one step (or the studios). On a phone the
+  links the Video effect that makes the same film in one step (or the studios); its steps name no
+  price or run state, and a ready board's last step says Example. On a phone the
   board shows read-only with its steps editable in Nodes. Assist, Cinema Studio,
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
   Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one

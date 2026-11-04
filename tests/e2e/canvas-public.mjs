@@ -105,6 +105,10 @@ try {
       else check(`${tag}: the phone shows the board and says where to wire new steps`, nodes >= 4 && (await page.locator("[data-phone-note]").count()) === 1, `${nodes} nodes`);
       const exampleImgs = await page.locator(".react-flow__node img[src*='/examples/'], .react-flow__node img[src*='/previews/'], .react-flow__node video").count();
       check(`${tag}: the board shows its own example photo and film`, exampleImgs >= 2, `${exampleImgs}`);
+      // A visitor's board doesn't run here: its film says Example, and no step names a price, a GPU or a run state.
+      const nodeText = (await page.locator(".react-flow__node").allInnerTexts()).join(" | ");
+      const header = await page.locator("header").filter({ has: page.locator("[data-visitor-run]") }).innerText();
+      check(`${tag}: the film says Example, with no price or run state`, /\bExample\b/.test(nodeText) && !/your GPU|Inputs changed|≈ \$/.test(nodeText) && !/to run/.test(header), header.replace(/\s+/g, " ").slice(0, 120));
       check(`${tag}: no sideways scroll in the editor`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("try-board");
 
@@ -165,6 +169,20 @@ try {
         await page.getByRole("heading", { name: "Your canvases" }).waitFor();
         check(`${tag}: the draft is listed under Your canvases`, (await page.locator("[data-visitor-board='browser']", { hasText: `My pearl ${persona} ${size}` }).count()) === 1);
         await shot("guest-list");
+        // Renamed in the list, the draft opens with its new name.
+        const dcard = page.locator("[data-visitor-board='browser']", { hasText: `My pearl ${persona} ${size}` });
+        await dcard.getByRole("button", { name: /^Actions for/ }).click();
+        await page.getByRole("menuitem", { name: "Rename" }).click();
+        await page.getByRole("dialog").getByRole("textbox").fill(`Draft renamed ${size}`);
+        await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+        const rcard = page.locator("[data-visitor-board='browser']", { hasText: `Draft renamed ${size}` });
+        await rcard.waitFor();
+        await rcard.locator("a").first().click();
+        await page.waitForURL(/\/canvas\/draft\/[^/]+$/);
+        await page.getByText("Set the scene").first().waitFor({ timeout: 60_000 });
+        check(`${tag}: a draft renamed in the list opens with its new name`, (await nameField.inputValue()) === `Draft renamed ${size}`, await nameField.inputValue());
+        await page.goto(`${app}/canvas`, { waitUntil: "load" });
+        await page.getByRole("heading", { name: "Your canvases" }).waitFor();
         // A guest can't read or write anyone's saved canvases.
         // (Asked outside the page: a refused fetch in the page opens the sign-up card.)
         const api = [(await page.request.get(`${app}/api/account/canvases`)).status(), (await page.request.post(`${app}/api/account/canvases`, { data: {} })).status(), (await page.request.get(`${app}/api/canvases`)).status()];
@@ -177,12 +195,16 @@ try {
         await shot("blank");
       } else {
         // ---- An account saves it to its account, reopens it, renames and deletes it
+        // An edit just before Save (still waiting to be kept) goes with it, and leaves no second board in this browser.
+        const field = page.locator(phone ? "[data-testid^='canvas-card-'] textarea" : ".react-flow__node textarea").first();
+        await field.fill("A pearl earring, saved at once");
         await page.locator("[data-visitor-save]").click();
         await page.waitForURL(/\/canvas\/saved\/[^/]+$/, { timeout: 20_000 });
         await page.getByText("Set the scene").first().waitFor({ timeout: 60_000 });
+        await page.waitForTimeout(1500);
         const savedUrl = page.url();
         if (phone) await page.getByRole("tab", { name: "Nodes" }).click();
-        const field = page.locator(phone ? "[data-testid^='canvas-card-'] textarea" : ".react-flow__node textarea").first();
+        check(`${tag}: Save to account takes the last edit and stays on the saved board`, /\/canvas\/saved\//.test(page.url()) && /saved at once/.test(await field.inputValue()), page.url());
         await field.fill("A pearl earring, saved to my account");
         await page.waitForTimeout(2000);
         await page.reload({ waitUntil: "load" });
