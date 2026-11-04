@@ -12,8 +12,9 @@ import { db } from "./db";
  *
  * - Every account run, wherever it goes: the studio's own limit of runs at once (ACCOUNT_LIMITS.activeRuns), as before.
  * - A run on this install's GPUs (hosted runs): also the policy's limits, counted on runs there only, never on runs on
- *   the account's own GPU or its own key: runs at once (`activeRuns`), runs waiting in line (`waiting`), runs started in
- *   the last hour (`runsPerHour`), and runs started from one client address in the last hour (`addressRunsPerHour`).
+ *   the account's own GPU or its own key, nor on runs of light work only (joins, trims: free, never counted): runs at
+ *   once (`activeRuns`), runs waiting in line (`waiting`, no row started yet), runs made (Run pressed and admitted) in
+ *   the last hour (`runsPerHour`), and runs made from one client address in the last hour (`addressRunsPerHour`).
  *   0 or absent: no such limit.
  *
  * A run is one press of Run: its jobs and the steps its chains queue share a batch and count once.
@@ -23,7 +24,7 @@ import { db } from "./db";
  */
 
 const HOUR = 60 * 60_000;
-/** Started runs are kept this long for the hourly counts. */
+/** Runs made (let in) are kept this long for the hourly counts. */
 const KEEP_MS = 2 * HOUR;
 
 /** What a person reads when a limit on runs on this install's GPUs stops a run (plain words, no numbers of the studio's). */
@@ -49,7 +50,10 @@ export function accountActiveRuns(accountId: string): number {
   return r.n;
 }
 
-/** An account's runs going now on this install's GPUs, and how many of them haven't started yet (no row of theirs has). */
+/**
+ * An account's runs going now on this install's GPUs, and how many of them haven't started yet (no row of theirs has).
+ * Runs of light work only (joins, trims) don't count.
+ */
 export function poolRunCounts(accountId: string): { active: number; waiting: number } {
   const r = db()
     .prepare(
@@ -57,6 +61,7 @@ export function poolRunCounts(accountId: string): { active: number; waiting: num
          SELECT COALESCE(g.batch_id, g.id) AS k, MAX(CASE WHEN r.started_at IS NOT NULL THEN 1 ELSE 0 END) AS started
          FROM generations g LEFT JOIN generation_runs r ON r.id = g.id
          WHERE g.status IN ('queued', 'running') AND json_extract(g.request_json, '$.account') = ? AND json_extract(g.request_json, '$.place') = 'pool'
+           AND json_extract(g.request_json, '$.light') IS NOT 1
          GROUP BY k)`,
     )
     .get(accountId) as { active: number; waiting: number };

@@ -1199,6 +1199,8 @@ export interface GenerationRequest {
   class?: "paid" | "free";
   /** Server-only: a head start in line within its class (ms), from the billing service. */
   boostMs?: number;
+  /** Server-only: a run on this install's GPUs made of light work only (joins, trims), free and never counted. */
+  light?: boolean;
   feature: string;
   presetId?: string;
   modelId: string;

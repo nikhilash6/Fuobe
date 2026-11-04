@@ -14,6 +14,7 @@ import {
   billingConfigured,
   cachedPolicy,
   forgetBalance,
+  FREE_QUOTE,
   policy as billingPolicy,
   quote as billingQuote,
   refusalStatus,
@@ -24,7 +25,6 @@ import {
   type RunFacts,
 } from "./billing";
 import { getModel } from "@/lib/catalog";
-import { needsOf } from "@/lib/lanes";
 import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
@@ -77,12 +77,13 @@ type Planned = ReturnType<typeof previewGeneration>;
 
 /**
  * The decision for an account's run: its own GPU or key as today, this install's GPUs, or a refusal. On this install's
- * GPUs: the request as it runs there (`req`, `capped` when the policy cut its outputs), its plan, its policy and the steps
- * it is priced for.
+ * GPUs: the request as it runs there (`req`, `capped` when the policy cut its outputs), its plan, its policy, the steps
+ * it is priced for, and whether it is light work only (`light`: every step a join, a trim or the like, which is free and
+ * never counted against the policy's limits).
  */
 export type PlaceDecision =
   | { kind: "own" }
-  | { kind: "pool"; planned: Planned; policy: Policy; steps: RunFacts["steps"]; req: GenerationRequest; capped: boolean }
+  | { kind: "pool"; planned: Planned; policy: Policy; steps: RunFacts["steps"]; req: GenerationRequest; capped: boolean; light: boolean }
   | { kind: "refuse"; refusal: Refusal };
 
 const OWN: PlaceDecision = { kind: "own" };
@@ -107,8 +108,10 @@ const stepEndpoint = (s: PlannedStep): string | undefined => {
 };
 
 /**
- * A ComfyUI step that needs no model and no graphics memory (a join, a trim, a mux): light work that costs nothing and
- * that every policy allows.
+ * A ComfyUI step of CPU work (the requirements index marks it `cpu`: no model file, no first-run download, no graphics
+ * memory and no card its nodes need, such as a filter, a trim, a join, adding sound or a Ken Burns move): light work that
+ * costs nothing, that every policy allows, and that is never counted. A step whose nodes run on the card (RTX Video) is
+ * GPU work, model file or not.
  */
 function freeStep(s: PlannedStep): boolean {
   if (s.provider !== "comfyui") return false;
@@ -116,8 +119,8 @@ function freeStep(s: PlannedStep): boolean {
   if (!endpoint) return false;
   // A workflow that picks its graph at run time (`video-concat-{n}`): light when every graph it may pick is.
   const index = loadIndex();
-  const needs = (endpoint.includes("{") ? workflowPicks(endpoint) : [endpoint]).map((id) => needsOf(index, id));
-  return needs.length > 0 && needs.every((x) => !!x && x.files.length === 0 && x.minVramBytes === 0);
+  const ids = endpoint.includes("{") ? workflowPicks(endpoint) : [endpoint];
+  return ids.length > 0 && ids.every((id) => index.workflows[id]?.cpu === true);
 }
 
 /**
@@ -153,6 +156,13 @@ export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
   }
   return null;
 }
+
+/**
+ * Is a run light work only: every step it makes a ComfyUI step that needs no model and no graphics memory (a filter, a
+ * trim, a join, adding sound, a Ken Burns move)? Such a run is free and never counts against the policy's limits on runs
+ * at once, in line or an hour. Unknown steps (null: the plan couldn't be made) count as GPU work.
+ */
+export const lightRun = (steps: PlannedStep[] | null | undefined): boolean => !!steps?.length && steps.every(freeStep);
 
 /** The steps of a run that use this install's GPUs, for its one price: each model and operation once, with its rows. */
 export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]> {
@@ -319,7 +329,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   }
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
-  return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped };
+  return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };
 }
 
 /** The input files of a request, for the moderation service: their kind and sha256 (pictures' previews: not sent yet). */
@@ -478,6 +488,11 @@ export async function poolQuote(
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
     return { planned, quote: notOfferedQuote(gateWords(gate.reason, !account)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+  }
+  // Light work only (joins, trims): free, and never counted against the policy's limits, so the service isn't asked.
+  if (lightRun(gate.steps)) {
+    const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
+    return { planned, quote: FREE_QUOTE, line: line(queue) };
   }
   // Priced once for every step of a chain that uses this install's GPUs. Its facts are read as the viewer (an input's
   // size from its own files only: another's file reads as none, and says nothing of whether it exists).

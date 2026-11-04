@@ -258,6 +258,60 @@ describe("runs at once on this install's GPUs", () => {
   });
 });
 
+describe("light work on this install's GPUs (joins, trims, a Ken Burns move)", () => {
+  /** An account's picture, uploaded as its own. */
+  async function picture(cookie: string) {
+    const { TINY_PNG } = await import("./helpers/fake-comfy-runner");
+    const uploadsRoute = await import("@/app/api/uploads/route");
+    const up = await uploadsRoute.POST(
+      new Request(`http://${HOST}/api/uploads`, { method: "POST", headers: { ...SITE_HEADERS, cookie, "content-type": "image/png", "x-file-name": "still.png", "content-length": String(TINY_PNG.length) }, body: new Uint8Array(TINY_PNG) }),
+    );
+    expect(up.status).toBe(201);
+    return ((await up.json()) as { url: string }).url;
+  }
+  const kenBurns = (url: string) => ({ feature: "video", modelId: "oss-ken-burns", op: "still-motion", inputs: { images: [url] }, params: { duration: 4 } });
+
+  it("is free and never counted: no price asked, nothing set aside, and the policy's limits count only GPU runs", async () => {
+    withBilling({ limits: { activeRuns: 1, waiting: 0, runsPerHour: 1 } });
+    const a = account();
+    const url = await picture(a.cookie);
+    expect(hostedRun.lightRun(hostedRun.poolSteps(a.id, kenBurns(url) as never))).toBe(true);
+    expect(hostedRun.lightRun(hostedRun.poolSteps(a.id, IMAGE as never))).toBe(false);
+    // RTX Video's nodes run on the card, model file or not: GPU work, priced and counted.
+    const step = (modelId: string, op: string) => ({ id: "s0", modelId, op, provider: "comfyui", kind: "video", presetId: null, waits: false });
+    const rtx = getModel("oss-rtx-video-upscale")!.routes.find((x) => x.provider === "comfyui")!;
+    expect(hostedRun.lightRun([step("oss-rtx-video-upscale", rtx.op)])).toBe(false);
+    expect(hostedRun.pricedSteps([step("oss-rtx-video-upscale", rtx.op)])).toHaveLength(1);
+    expect(hostedRun.pricedSteps([step("oss-ken-burns", "still-motion")])).toEqual([]);
+    // The price check before Run: free, with its place in line, and the billing service isn't asked.
+    const quotes = fake.calls_of("/v1/quote").length;
+    const check = (await preview(kenBurns(url), a.cookie)).body as { place?: string; quote?: { allowed: boolean; amount: number; text: string } };
+    expect(check.place).toBe("pool");
+    expect(check.quote).toMatchObject({ allowed: true, amount: 0, text: "" });
+    expect(fake.calls_of("/v1/quote").length).toBe(quotes);
+    // Two of them go in line together, with no hold, past a limit of one run at once and one an hour.
+    const holds = fake.holds.size;
+    const reserves = fake.calls_of("/v1/reserve").length;
+    for (let i = 0; i < 2; i++) {
+      const r = await post(kenBurns(url), a.cookie);
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+      expect(r.body.items![0].place).toBe("pool");
+      // What the page gets back never says so.
+      expect((r.body.items![0] as { request?: Record<string, unknown> }).request?.light).toBeUndefined();
+    }
+    expect(fake.calls_of("/v1/reserve").length).toBe(reserves);
+    expect(fake.holds.size).toBe(holds);
+    expect(limits.poolRunCounts(a.id)).toEqual({ active: 0, waiting: 0 });
+    // A GPU run still has its place: they took none of its limits.
+    const gpu = await post({ ...IMAGE, ...SHOWN }, a.cookie);
+    expect(gpu.status, JSON.stringify(gpu.body)).toBe(201);
+    expect(limits.poolRunCounts(a.id)).toEqual({ active: 1, waiting: 1 });
+    // And the next GPU run meets them.
+    const over = await post({ ...IMAGE, ...SHOWN }, a.cookie);
+    expect(over.status).toBe(429);
+  });
+});
+
 describe("runs waiting, runs an hour, runs from one address", () => {
   it("a run that hasn't started counts as waiting", async () => {
     withBilling({ limits: { activeRuns: 5, waiting: 1, runsPerHour: 0 } });

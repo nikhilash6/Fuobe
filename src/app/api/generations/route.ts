@@ -174,8 +174,9 @@ export async function POST(request: Request) {
     const addr = account && onPool ? clientAddress(request) : null;
     if (account && onPool) {
       // The policy's limits for runs on this install's GPUs, counted on runs there only (never on runs on the account's own
-      // GPU or key): said now, before anything is checked or set aside, and counted again as the run is made (admitRun).
-      const over = poolLimitRefusal(account.id, onPool.policy, addr);
+      // GPU or key, nor on a run of light work only, which is free): said now, before anything is checked or set aside, and
+      // counted again as the run is made (admitRun).
+      const over = onPool.light ? null : poolLimitRefusal(account.id, onPool.policy, addr);
       if (over) {
         unhit(`run:${account.id}`);
         return refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) });
@@ -242,7 +243,10 @@ export async function POST(request: Request) {
     if (account) {
       const mod = await moderateRun(account, req, onPool?.planned ?? null, onPool ? "pool" : "own");
       if (!mod.ok) return refusedBy(mod.refusal);
-      if (onPool) {
+      if (onPool?.light) {
+        // Light work only (joins, trims): free, so nothing is set aside, and it counts against none of the policy's limits.
+        stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
+      } else if (onPool) {
         const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps);
         if (!held.ok) return refusedBy(held.refusal);
         stamp = held.stamp;
@@ -259,7 +263,7 @@ export async function POST(request: Request) {
         // sent until they are kept.
         const pool = onPool;
         const admitted = inScope(() => {
-          const r = admitRun({ accountId: account.id, pool: pool ? { policy: pool.policy, addr } : null }, () => {
+          const r = admitRun({ accountId: account.id, pool: pool && !pool.light ? { policy: pool.policy, addr } : null }, () => {
             const run = captureRun(make);
             const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
             if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
