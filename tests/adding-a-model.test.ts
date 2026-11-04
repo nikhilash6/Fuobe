@@ -16,7 +16,7 @@ import { tempDir } from "./helpers/temp-dir";
 
 type Node = { class_type: string; inputs: Record<string, unknown> };
 type Graph = Record<string, Node>;
-type ManifestWorkflow = { id: string; file: string; vramGb?: number; models: { file: string; folder: string }[]; autoDownloads?: string[]; bindings?: Record<string, { node: string; input: string }[]> };
+type ManifestWorkflow = { id: string; file: string; vramGb?: number; gpu?: string; models: { file: string; folder: string }[]; autoDownloads?: string[]; bindings?: Record<string, { node: string; input: string }[]> };
 type Rule = { kind: string; folders?: string[] };
 type Rules = { inputs: Record<string, Record<string, Rule>>; text: Record<string, string[]>; closed: Record<string, string[]> };
 type Catalog = {
@@ -413,7 +413,7 @@ describe("CPU work is marked in the requirement index", () => {
     );
     const mediaType = (v: unknown) => typeof v === "string" && /^(image|video|audio)\/[\w.+-]+$/.test(v);
     const weights = flagged.some((p: { cls: string; input: string }) => nodes.some((n) => n.class_type === p.cls && p.input in (n.inputs ?? {}) && !mediaType(n.inputs[p.input]) && !Array.isArray(n.inputs[p.input])));
-    return gpuNode || weights || w.models.length > 0 || (w.autoDownloads ?? []).length > 0 || typeof w.vramGb !== "number" || w.vramGb > 0;
+    return gpuNode || weights || !!w.gpu || w.models.length > 0 || (w.autoDownloads ?? []).length > 0 || typeof w.vramGb !== "number" || w.vramGb > 0;
   };
 
   it("every catalog workflow that uses no GPU node is marked, and only those", () => {
@@ -421,7 +421,7 @@ describe("CPU work is marked in the requirement index", () => {
     expect(wrong).toEqual([]);
     const cpu = Object.keys(index).filter((id) => index[id].cpu);
     expect(cpu).toEqual(expect.arrayContaining(["video-trim", "video-concat-encoded", "video-concat-2", "video-mux-audio", "audio-join-crossfade", "kenburns-still", "still-to-clip", "captions-burnin", "frame-extract"]));
-    for (const id of ["wan22-t2v-14b", "bg-remove-rmbg", "separate-soundtrack-dbs", "video-fix-colours", "upscale-image-esrgan"]) expect(index[id]?.cpu, id).toBeUndefined();
+    for (const id of ["wan22-t2v-14b", "bg-remove-rmbg", "separate-soundtrack-dbs", "video-fix-colours", "upscale-image-esrgan", "upscale-video-rtx", "fps-rtx-framegen", "sdr-to-hdr-rtx"]) expect(index[id]?.cpu, id).toBeUndefined();
   });
 
   it("the cross-check finds a node that fetches weights by a download id or a file name, with no loader and no model listed", () => {
@@ -434,11 +434,13 @@ describe("CPU work is marked in the requirement index", () => {
     expect(usesGpu(w, one({ mode: "fast", fps: 24 }))).toBe(false);
   });
 
-  it("a model file, a first-run download or any VRAM makes a workflow GPU work", () => {
+  it("a model file, a first-run download, any VRAM or a card its nodes need makes a workflow GPU work", () => {
     expect(cpuWork({ models: [], vramGb: 0 })).toBe(true);
     expect(cpuWork({ models: [{ file: "x.safetensors", folder: "vae" }], vramGb: 0 })).toBe(false);
     expect(cpuWork({ models: [], autoDownloads: ["a node fetches x"], vramGb: 0 })).toBe(false);
     expect(cpuWork({ models: [], vramGb: 2 })).toBe(false);
+    // A card its nodes need (the RTX Video nodes) makes it GPU work too, with no model file and no VRAM written.
+    expect(cpuWork({ models: [], vramGb: 0, gpu: "nvidia-rtx" })).toBe(false);
     // Only an explicit 0: a missing, misspelt or written-as-text vramGb is never CPU work.
     expect(cpuWork({ models: [] })).toBe(false);
     expect(cpuWork({ models: [], vramGB: 0 })).toBe(false);

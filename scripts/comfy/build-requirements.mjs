@@ -90,9 +90,10 @@ export const indexHash = (index) => crypto.createHash('sha256').update(canonical
 /**
  * CPU work: a manifest workflow that loads no model file, fetches none on its first run and says it needs no graphics
  * memory (`vramGb: 0`, written as a number): joins, trims, adding sound, Ken Burns, still to clip. The index marks it
- * `cpu: true`. A missing or misspelt vramGb never makes a workflow CPU work (buildIndex refuses it).
+ * `cpu: true`. A missing or misspelt vramGb never makes a workflow CPU work (buildIndex refuses it), and neither does a
+ * card its nodes need (`gpu`: the NVIDIA RTX Video nodes run on the card, with no model file and no VRAM written).
  */
-export const cpuWork = (wf) => typeof wf.vramGb === 'number' && wf.vramGb === 0 && !(wf.models ?? []).length && !(wf.autoDownloads ?? []).length;
+export const cpuWork = (wf) => typeof wf.vramGb === 'number' && wf.vramGb === 0 && !wf.gpu && !(wf.models ?? []).length && !(wf.autoDownloads ?? []).length;
 
 /**
  * Build the index from the library's inputs. Pure: no file or network access.
