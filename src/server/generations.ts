@@ -98,6 +98,7 @@ import { engineMode, getSetting, withCandidates, withoutCandidates } from "./set
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withRunStamp } from "./run-stamp";
+import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope } from "./demo-scope";
@@ -152,6 +153,9 @@ export function toGeneration(r: Row): Generation {
   const stored = JSON.parse(r.request_json) as GenerationRequest;
   // The billing hold is the server's: never sent to a browser or a script.
   const { hold, ...request } = stored;
+  // A run on this install's GPUs shows the account only where it is (in line, working) and its result, or one plain
+  // sentence when it can't finish: never the technical reason, which the owner reads in the accounts' runs.
+  const pool = stored.place === "pool";
   const checking = r.stage === "checking";
   const model = getModel(r.model_id);
   const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
@@ -176,12 +180,12 @@ export function toGeneration(r: Row): Generation {
     kind: r.kind,
     status: r.status,
     progress: r.progress,
-    message: r.message,
+    message: pool ? poolMessage(r) : r.message,
     prompt: r.prompt,
     request,
     // Held for the moderation service's check: nothing of it is shown until it passes.
     outputs: checking ? [] : (JSON.parse(r.outputs_json) as OutputFile[]),
-    error: r.error,
+    error: pool ? poolError(r.id, r.error) : r.error,
     costUsd: r.cost_usd,
     favorite: !!r.favorite,
     createdAt: r.created_at,
@@ -196,7 +200,7 @@ export function toGeneration(r: Row): Generation {
     folderId: lib.folder_id ?? null,
     pinnedAt: r.pinned_at ?? null,
     review: isReviewStatus(r.review) ? r.review : null,
-    ...(r.status === "failed" && r.fix_json && { fix: parseFix(r.fix_json) }),
+    ...(r.status === "failed" && r.fix_json && !pool && { fix: parseFix(r.fix_json) }),
     // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
     ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
@@ -208,6 +212,39 @@ export function toGeneration(r: Row): Generation {
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
   };
 }
+
+/** A pool row's words while it goes: in line, or working on it. */
+function poolMessage(r: Pick<Row, "status" | "message">): string | null {
+  if (r.status === "queued") return POOL_WORDS.inLine;
+  if (r.status === "running") return POOL_WORDS.working;
+  return null;
+}
+
+/**
+ * A pool row's failure as the account reads it: Fuobe's own plain words about the account's side (its files are full, a
+ * picture it can't use, it stopped the run) and the output check's words (a result it removed) as they are; anything
+ * else (whatever the GPUs, ComfyUI or a worker said) one plain sentence.
+ */
+function poolError(id: string, error: string | null): string | null {
+  if (!error) return error;
+  if (PLAIN_POOL_ERRORS().has(error) || /^Your files have reached \d+ GB\b/.test(error)) return error;
+  const checked = db().prepare("SELECT 1 FROM output_checks WHERE generation_id = ? AND state IN ('hidden', 'unchecked') LIMIT 1").get(id);
+  return checked ? error : POOL_WORDS.failed;
+}
+
+const PLAIN_POOL_ERRORS = (() => {
+  let set: Set<string> | undefined;
+  return () =>
+    (set ??= new Set<string>([
+      ...Object.values(ACCOUNT_MESSAGES),
+      RELAY_WORDS.stopped,
+      POOL_WORDS.failed,
+      BLOCKED_CARD_MESSAGE,
+      NO_SUBJECT_MESSAGE,
+      WATERMARK_COPY.rejected,
+      WATERMARK_COPY.scanFailed,
+    ]));
+})();
 
 /** A pool row's place in line, as the Generation field (none once it has started). */
 function poolQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
@@ -2169,9 +2206,16 @@ async function pollOne(r: Row): Promise<void> {
       recordSubmission(r.id, res.sentAt);
       run = { submitted_at: res.sentAt, started_at: null };
     }
+    // A job for the workers keeps its task's own clocks (its wait limit until a worker first takes it): back in line
+    // after an attempt, its next attempt gets its own running time, and no wait limit of the runner's ends it.
+    const ownClocks = !!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks;
+    if (ownClocks && res?.state === "queued" && run.started_at) {
+      db().prepare("UPDATE generation_runs SET started_at = NULL WHERE id = ?").run(r.id);
+      run = { ...run, started_at: null };
+    }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;
-    const overdue = run.started_at ? now - run.started_at > TIMEOUT_MS : !startsNow && now - run.submitted_at > queueMs;
+    const overdue = run.started_at ? now - run.started_at > TIMEOUT_MS : !ownClocks && !startsNow && now - run.submitted_at > queueMs;
     if (overdue) {
       // Stop the provider's job too, so it doesn't keep rendering (or billing) for nothing.
       await adapterFor(r.provider, account)
@@ -2201,7 +2245,8 @@ async function pollOne(r: Row): Promise<void> {
   if (res.state === "failed") {
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
     update(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
-    if (res.fix) markStale(account ? `acct:${account}` : "install");
+    // (A run on this install's GPUs says nothing about the account's own GPU.)
+    if (res.fix && !onPool) markStale(account ? `acct:${account}` : "install");
     return;
   }
   // The Watermark Remover gave the original back (no clean repair was possible): no new result, the run says what to try.

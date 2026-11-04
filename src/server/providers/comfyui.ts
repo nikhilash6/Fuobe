@@ -81,23 +81,27 @@ import { probeAvi } from "../avi-probe";
 import { probeWebm } from "../webm-probe";
 import { adoptFile, contentTypeFor, readRef, saveFile, scratchDir } from "../storage";
 import { CONNECT_GPU_MESSAGE } from "@/lib/guest-access";
+import { addressKind } from "@/lib/page-place";
+import { graphProblem } from "@/lib/local-comfy";
+import { runStamp } from "../run-stamp";
 import { discardBody, fetchPublic, RemoteFetchError } from "../remote-fetch";
 import { zipToFile } from "../zip";
-import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "../account-files";
+import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskFloorBytes, diskFreeBytes, diskHasRoom, filesFullMessage } from "../account-files";
 import { accountSend } from "../account-send";
 import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
 import { isOutOfMemory } from "@/lib/gpu/fix-codes";
-import { makingWords, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
+import { makingWords, POOL_WORDS, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type ComputerFacts, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
 import type { GenerationFix } from "@/lib/catalog/types";
 import {
   checkClocks,
   createTask,
   extraOf,
-  getTask,
   inputKinds,
+  ownTask,
   receivedFile,
+  freeInputs,
   receivedOf,
   refusalOf,
   requestStop,
@@ -109,7 +113,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { OWNER_BOOST_MS, poolFields, poolWaitMs, poolWaitWords } from "../computer/pool";
+import { OWNER_BOOST_MS, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords } from "../computer/pool";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
 
@@ -177,20 +181,47 @@ export const outsideOwnGpu = <T,>(fn: () => T): T => ownGpuStore.exit(fn);
 export function computerScope(): Principal | undefined {
   const own = ownGpu();
   if (own) return own.kind === "computer" ? own.principal : undefined;
+  // An account's run on this install's workers: its jobs are tasks for the workers, as the account's own.
+  if (poolScope.getStore()) {
+    const account = tenantAccount();
+    return account ? `acct:${account}` : undefined;
+  }
   if (serverScope.getStore()) return undefined;
   const where = getSetting("comfyWhere");
   // Workers (docs/gpu-workers.md) take the owner's jobs the way the owner's own computer would: staged here, run there.
   return where === "computer" || where === "workers" ? "owner" : undefined;
 }
 
-/** The owner's ComfyUI jobs go to the workers (Settings: ComfyUI runs on "workers"), not to one computer. */
-const onWorkers = (computer: Principal | undefined) => computer === "owner" && !ownGpu() && getSetting("comfyWhere") === "workers";
+/**
+ * The jobs of this principal go to the workers: the owner's while Settings says ComfyUI runs on "workers", and an
+ * account's run on this install's GPUs then (never one computer's tab).
+ */
+const onWorkers = (computer: Principal | undefined) => {
+  if (!computer || ownGpu()) return false;
+  if (computer === "owner") return getSetting("comfyWhere") === "workers";
+  return !!poolScope.getStore() && computer.startsWith("acct:");
+};
+
+/**
+ * What a computer's jobs are shaped by (its VRAM, RAM, device, LoRA files): what its tab last said. An account's run on
+ * the workers reads theirs instead (those allowed the workflow's lane), never the account's own computer.
+ */
+function factsOf(computer: Principal, endpoint?: string): ComputerFacts | null {
+  if (computer !== "owner" && onWorkers(computer)) return poolFacts(endpoint && !endpoint.includes("{") ? poolLane(endpoint) : null);
+  return runnerFacts(computer);
+}
+
+/** Inside a run on this install's GPUs (hosted runs): the account's jobs are tasks for the workers. */
+export const onPoolWorkers = (): boolean => !!poolScope.getStore();
 
 /**
  * FUOBE_POOL_MEDIA_INPUTS: what a job for workers may send them ("image" unless set; "image,video,audio" for all).
  * Pictures are always made again from their pixels first (no EXIF, no GPS, nothing a decoder on that PC could trip on).
  */
 const poolMedia = () => new Set((process.env.FUOBE_POOL_MEDIA_INPUTS ?? "image").split(",").map((s) => s.trim()).filter(Boolean));
+
+/** May a job for workers send them files of this kind ("image", "video", "audio")? */
+export const workersTake = (kind: "image" | "video" | "audio"): boolean => poolMedia().has(kind);
 
 export async function forWorkers(data: Buffer, contentType: string, name: string): Promise<{ data: Buffer; contentType: string; name: string }> {
   const kind = contentType.split("/")[0];
@@ -201,14 +232,55 @@ export async function forWorkers(data: Buffer, contentType: string, name: string
   return { data: png, contentType: "image/png", name: name.replace(/\.[^.]*$/, "") + ".png" };
 }
 
-/** A run the owner sent to the studio's own ComfyUI before Settings moved ComfyUI to the owner's computer. */
-const serverScope = new AsyncLocalStorage<true>();
+/**
+ * A run on this install's own ComfyUI server (an account's run on this install's GPUs, or one the owner sent there
+ * before Settings moved ComfyUI): the names of the files this run uploaded there, so its graph is checked to read
+ * only those (never another run's leftovers in the same input folder).
+ */
+const serverScope = new AsyncLocalStorage<{ uploads: Set<string> }>();
+
+/** An account's run on this install's workers (hosted runs while Settings says ComfyUI runs on "workers"). */
+const poolScope = new AsyncLocalStorage<true>();
 
 /**
- * Run `fn` on this install's own ComfyUI server (Settings → ComfyUI address), never an account's own GPU and never a
- * computer's tab: an account's run on this install's GPUs (hosted runs, src/server/hosted.ts).
+ * Run `fn` on this install's own ComfyUI server, whatever Settings says now: a run sent there before ComfyUI moved (to a
+ * computer, or to the workers) is followed and stopped there.
  */
-export const onInstallComfy = <T,>(fn: () => T): T => outsideOwnGpu(() => serverScope.run(true, fn));
+const onInstallServer = <T,>(fn: () => T): T => poolScope.exit(() => serverScope.run({ uploads: new Set() }, fn));
+
+/**
+ * Run `fn` as a run on this install's GPUs (hosted runs, src/server/hosted.ts), never an account's own GPU and never a
+ * computer's tab. While Settings says ComfyUI runs on "workers", each job is a task for the workers that belongs to the
+ * account (staged here, run there, as the owner's jobs are). Otherwise the install's own ComfyUI server, which then must
+ * be on this machine (installComfyLocal).
+ */
+export const onInstallComfy = <T,>(fn: () => T): T => outsideOwnGpu(() => (getSetting("comfyWhere") === "workers" ? serverScope.exit(() => poolScope.run(true, fn)) : onInstallServer(fn)));
+
+/**
+ * The install's own ComfyUI address is on this machine (loopback). Runs of accounts on this install's GPUs go straight
+ * to it only then: an address elsewhere would send accounts' files and prompts over a network to a ComfyUI nothing
+ * cleans, and its errors would name it.
+ */
+export function installComfyLocal(worker: ComfyWorker = "main"): boolean {
+  const url = getSetting(worker === "isolated" ? "comfyIsolatedUrl" : "comfyUrl").trim();
+  return !!url && addressKind(url) === "loopback";
+}
+
+/** Said when a run on this install's GPUs can't go where it was planned (its row's own words then say it plainly). */
+export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this machine, so runs of accounts don't go to it.";
+
+/**
+ * Every VideoHelperSuite save node of a graph for the workers saves no metadata: the prompt and the machine's own clock never
+ * travel inside a result. Returns the graph changed in place.
+ */
+export function withoutSaveMetadata(wf: ComfyWorkflow): ComfyWorkflow {
+  for (const node of Object.values(wf)) {
+    const cls = typeof node?.class_type === "string" ? node.class_type : "";
+    if (!node?.inputs || !cls.startsWith("VHS_")) continue;
+    if (cls === "VHS_VideoCombine" || "save_metadata" in node.inputs) node.inputs.save_metadata = false;
+  }
+  return wf;
+}
 
 /**
  * Whose computer a run sent there belongs to, whatever ComfyUI's place is now: the account's (as its tenant), or the
@@ -280,7 +352,8 @@ export const PROMPT_ID = /^[\w-]{1,64}$/;
 function baseUrl(worker: ComfyWorker = "main"): string {
   const own = ownGpu();
   if (own) return own.kind === "computer" ? "" : own.url;
-  if (computerScope()) return "";
+  // A run on this install's workers never has an address of its own (its jobs are tasks for the workers).
+  if (computerScope() || onPoolWorkers()) return "";
   return getSetting(worker === "isolated" ? "comfyIsolatedUrl" : "comfyUrl").replace(/\/+$/, "");
 }
 
@@ -306,8 +379,8 @@ function authHeaders(worker: ComfyWorker = "main"): Record<string, string> {
 
 async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker = "main"): Promise<Response> {
   // A ComfyUI on someone's own computer is never called from here: not the install's, not a link (every caller in that
-  // scope goes through its task instead; this is the last guard).
-  if (computerScope()) throw new ProviderError(ON_COMPUTER_ONLY);
+  // scope goes through its task instead; this is the last guard). Nor is any from a run on this install's workers.
+  if (computerScope() || onPoolWorkers()) throw new ProviderError(ON_COMPUTER_ONLY);
   const base = baseUrl(worker);
   if (ownGpu()) {
     // A visitor without a GPU of its own (a price check): nothing to reach, and never the install's.
@@ -396,7 +469,8 @@ function setSocket(worker: ComfyWorker, s: ComfySocket | undefined) {
 
 function ensureSocket(worker: ComfyWorker = "main"): { clientId: string; progress: Map<string, Progress> } {
   // An account's own ComfyUI: no socket (the install's stays as it is); its progress comes from polling, or from its tab.
-  if (ownGpu() || computerScope()) return { clientId: "fuobe-account", progress: new Map() };
+  // Nor for a run on this install's workers (its jobs are tasks for them).
+  if (ownGpu() || computerScope() || onPoolWorkers()) return { clientId: "fuobe-account", progress: new Map() };
   const url = baseUrl(worker);
   const cur = socketOf(worker);
   if (cur && cur.url === url && cur.ws.readyState <= 1) return cur;
@@ -709,7 +783,7 @@ async function checkComfy(url: string): Promise<boolean> {
 export async function probeComfy(force = false): Promise<boolean> {
   // An account's own ComfyUI is taken as there: its run says so when it isn't (the install's state stays its own). So is
   // one on a computer: its runs wait for a tab there.
-  if (ownGpu() || computerScope()) return true;
+  if (ownGpu() || computerScope() || onPoolWorkers()) return true;
   const url = baseUrl();
   const cur = globalThis.__fuobeComfyReach;
   if (!force && cur && cur.url === url && Date.now() - cur.at < 10_000) return cur.ok;
@@ -743,7 +817,7 @@ declare global {
 export async function comfyDevice(worker: ComfyWorker = "main"): Promise<string | undefined> {
   // On someone's computer: what its Fuobe tab last said ("cuda:0 NVIDIA …").
   const computer = computerScope();
-  if (computer) return /^[a-z]+/i.exec(runnerFacts(computer)?.device ?? "")?.[0].toLowerCase();
+  if (computer) return /^[a-z]+/i.exec(factsOf(computer)?.device ?? "")?.[0].toLowerCase();
   const url = baseUrl(worker);
   if (!url) return undefined;
   const cache = (globalThis.__fuobeComfyDevice ??= new Map());
@@ -862,7 +936,7 @@ export async function comfyReuseModels(worker: ComfyWorker = "main", maxAgeMs = 
 /** The connected ComfyUI's RAM in bytes, as the last reachability check read it (whole-clip tools' budget). */
 export function comfyRam(): number | undefined {
   const computer = computerScope();
-  if (computer) return runnerFacts(computer)?.ramBytes;
+  if (computer) return factsOf(computer)?.ramBytes;
   if (ownGpu()) return undefined;
   const cur = globalThis.__fuobeComfyReach;
   return cur?.ok && cur.url === baseUrl() ? cur.ram : undefined;
@@ -874,7 +948,7 @@ export function comfyRam(): number | undefined {
  * the background to say for sure.
  */
 export function probeComfySync(timeoutMs = 1500): boolean {
-  if (ownGpu() || computerScope()) return true;
+  if (ownGpu() || computerScope() || onPoolWorkers()) return true;
   const url = baseUrl();
   const { reach, sure } = reachSync(url, `${url}/system_stats`, timeoutMs, authHeaders());
   globalThis.__fuobeComfyReach = reach;
@@ -1223,8 +1297,10 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (audio2) delete extra.audio2;
 
   // Media refs in params.extra (e.g. a background stem for "audio2") are uploaded like regular inputs.
+  const sentHere = new Set<string>();
   for (const [k, v] of Object.entries(extra)) {
     if (!isMediaRef(v)) continue;
+    sentHere.add(k);
     // An account's file is read and sent when it may send (account-send.ts), as the run's other inputs are.
     const send = async () => {
       const f = await readRef(v);
@@ -1801,6 +1877,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       reviewInputs = { video: values.video, image: values.image, prefix: values.filenamePrefix };
     }
   }
+  // An account's run on this install's GPUs never names a file there itself: a file input in params.extra is one this
+  // run sent (a media ref, uploaded above), else it is dropped (it could name another run's file in the same folder).
+  if (tenantAccount() && (poolScope.getStore() || serverScope.getStore())) {
+    for (const k of mediaKeys(manifest, workflow)) if (k in extra && !sentHere.has(k)) delete extra[k];
+  }
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
   // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
   // limits.maxWidth × maxHeight: the multiplier comes down to fit the picture (a 3000 × 2000 photo at the template's 4x
@@ -2156,6 +2237,16 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
     rememberSent(staged, sent.data, sent.contentType, sent.name);
     return staged;
   }
+  // A run on this install's workers with no account behind it (a guest's price check) never sends anything.
+  if (onPoolWorkers()) throw new ProviderError(ON_COMPUTER_ONLY);
+  // An account's run on this install's own ComfyUI server: only one on this machine, and its pictures made again from
+  // their pixels (no EXIF, no GPS), as for the workers.
+  const server = serverScope.getStore();
+  const account = server ? tenantAccount() : undefined;
+  if (account) {
+    if (!installComfyLocal(worker)) throw new ProviderError(POOL_NOT_LOCAL);
+    if (contentType.startsWith("image/")) ({ data, contentType, name } = await forWorkers(data, contentType, name));
+  }
   const form = new FormData();
   const ext = name.includes(".") ? name.split(".").pop() : contentType.split("/")[1];
   form.append("image", new Blob([new Uint8Array(data)], { type: contentType }), `fuobe_${nanoid(8)}.${ext}`);
@@ -2176,6 +2267,7 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   const uploaded = j.subfolder ? `${j.subfolder}/${j.name}` : j.name;
   // Remember a clip's / track's header facts (length, size, fps, audio) for prepareWorkflow.
   rememberSent(uploaded, data, contentType, name);
+  server?.uploads.add(uploaded);
   return uploaded;
 }
 
@@ -2247,6 +2339,8 @@ export function onComputer<T>(principal: Principal, fn: () => T): T {
 
 /** The most one result may weigh when it comes from a computer: an account's 1 GB (less when its files are fuller); the owner's 8 GB. */
 const OWNER_RESULT_BYTES = 8 * 2 ** 30;
+/** The free space the owner's results never use (less than accounts keep free: the owner's own work goes on longer). */
+const OWNER_DISK_FLOOR_BYTES = 2 * 2 ** 30;
 /** A text result (a transcript, captions). */
 const TEXT_RESULT_BYTES = 8 * 2 ** 20;
 
@@ -2255,7 +2349,7 @@ const TEXT_RESULT_BYTES = 8 * 2 ** 20;
  * own run would collect them (collectOutputs), each one a file the tab uploads under its number. An account keeps up to
  * 16 results and 1,800 EXR frames, never more than its files have room for. Call it as the task's principal (onComputer).
  */
-export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_batch" | "prefix">, entries: HistoryEntryLike[], passes: boolean): FinishedPlan {
+export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_batch" | "prefix"> & Partial<Pick<TaskRow, "extra_json" | "pools">>, entries: HistoryEntryLike[], passes: boolean): FinishedPlan {
   let manifest: ManifestWorkflow | undefined;
   try {
     manifest = t.workflow_id ? getWorkflow(t.workflow_id).manifest : undefined;
@@ -2280,8 +2374,20 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
     if (frames.length > ACCOUNT_LIMITS.framesPerJob) return { error: `Your ComfyUI made ${frames.length} EXR frames. A run on your GPU keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.` };
     outputs = [...outputs.filter((o) => o.meta?.role !== "frames").slice(0, ACCOUNT_LIMITS.outputsPerJob), ...frames];
     if (!diskHasRoom()) return { error: ACCOUNT_MESSAGES.diskLow };
-    budget = accountTotalBytes(account) - accountUsage(account).total;
+    budget = Math.min(accountTotalBytes(account) - accountUsage(account).total, diskFreeBytes() - diskFloorBytes());
     if (budget <= 0) return { error: filesFullMessage(account) };
+  } else {
+    // The owner's job: never past the disk's free floor. On the workers also never more results than its workflow says
+    // it makes (at least 16), and EXR frames up to the same number as an account's: a worker token that reports a
+    // made-up history can't fill the server's disk. (The owner's own computer keeps every result, as before.)
+    if (t.pools) {
+      const frames = outputs.filter((o) => o.meta?.role === "frames");
+      if (frames.length > ACCOUNT_LIMITS.framesPerJob) return { error: `ComfyUI made ${frames.length} EXR frames. A run keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.` };
+      const declared = extraOf(t).outputs ?? 0;
+      outputs = [...outputs.filter((o) => o.meta?.role !== "frames").slice(0, Math.max(ACCOUNT_LIMITS.outputsPerJob, declared)), ...frames];
+    }
+    budget = diskFreeBytes() - Math.min(diskFloorBytes(), OWNER_DISK_FLOOR_BYTES);
+    if (budget <= 0) return { error: "There's no room on this server's disk to keep this result. Free some space, then press Retry." };
   }
   const wanted: WantedFile[] = [];
   outputs = outputs.map((o) => {
@@ -2318,12 +2424,23 @@ function relayFailure(t: TaskRow, manifest: ManifestWorkflow | undefined): { err
 
 /** A run on someone's computer: where its task is, in the words its tile shows. */
 async function pollComputer(principal: Principal, meta: Record<string, unknown>, manifest: ManifestWorkflow | undefined, made: string | undefined): Promise<PollResult> {
-  const found = typeof meta.relay === "string" ? getTask(principal, meta.relay) : null;
+  const found = typeof meta.relay === "string" ? ownTask(principal, meta.relay) : null;
   if (!found) return { state: "failed", error: "This run was lost. Press Retry." };
   const t = checkClocks(found);
+  if (!t.pools) return pollTask(principal, t, meta, manifest, made);
   // A run on the workers: while it waits, its place in line; once a worker has it, that worker's reports (a worker that
-  // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer").
-  if (t.pools && t.state === "waiting") return { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) };
+  // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer"). It keeps its task's clocks
+  // (pool.ts): its wait limit until a worker first takes it, then each attempt's own running time; back in line after
+  // an attempt (a worker paused, went quiet, restarted), it keeps its place.
+  const res: PollResult = t.state === "waiting" ? { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) } : await pollTask(principal, t, meta, manifest, made);
+  if (res.state !== "queued" && res.state !== "running") return res;
+  // An account's run says only where it is: in line, or working on it (the owner's own runs keep the workers' words).
+  if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ownClocks: true };
+  return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ownClocks: true } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ownClocks: true };
+}
+
+/** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */
+async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, unknown>, manifest: ManifestWorkflow | undefined, made: string | undefined): Promise<PollResult> {
   const p = taskProgress(t.id);
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
@@ -2380,7 +2497,7 @@ export const comfyProvider: ProviderAdapter = {
   id: "comfyui",
   label: "ComfyUI",
   isConfigured: () => {
-    if (ownGpu() || computerScope()) return true;
+    if (ownGpu() || computerScope() || onPoolWorkers()) return true;
     const cur = globalThis.__fuobeComfyReach;
     // First check for this server: wait for the answer, so a request right after start isn't sent to demo.
     if (!cur || cur.url !== baseUrl()) return probeComfySync();
@@ -2406,14 +2523,14 @@ export const comfyProvider: ProviderAdapter = {
       media: mediaInfoFor,
       serverRam: async () => {
         const computer = computerScope();
-        if (computer) return runnerFacts(computer)?.ramBytes;
+        if (computer) return factsOf(computer, route.endpoint)?.ramBytes;
         return (await comfyJson<{ system?: { ram_total?: number } }>("/system_stats", worker).catch(() => undefined))?.system?.ram_total;
       },
       device: () => comfyDevice(worker),
       modelPath: (folder, name) => comfyModelPath(folder, name, worker),
       vram: async () => {
         const computer = computerScope();
-        if (computer) return runnerFacts(computer)?.vramBytes;
+        if (computer) return factsOf(computer, route.endpoint)?.vramBytes;
         const s = await comfyJson<{ devices?: { vram_total?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
         const v = s?.devices?.[0]?.vram_total;
         return typeof v === "number" && v > 0 ? v : undefined;
@@ -2425,23 +2542,42 @@ export const comfyProvider: ProviderAdapter = {
     // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
     // here. A refusal comes back in its report, and the poll explains it as below.
     const computer = computerScope();
+    // An account's run on this install's GPUs: its graph reads only the files this run sent, checked here before it is
+    // queued or sent (the workers check again; this install's own ComfyUI doesn't).
+    const server = serverScope.getStore();
+    const account = tenantAccount();
+    if (account && (onPoolWorkers() || server)) {
+      if (!computer && !installComfyLocal(worker)) throw new ProviderError(POOL_NOT_LOCAL);
+      const problem = graphProblem(wf, computer ? freeInputs(computer) : [...(server?.uploads ?? [])]);
+      if (problem) throw new ProviderError(problem);
+    }
     if (computer) {
       const metaBatch = !!meta.metaBatch;
+      const forPool = onWorkers(computer);
       const task = createTask({
         principal: computer,
         generationId,
-        graph: wf,
+        graph: forPool ? withoutSaveMetadata(wf) : wf,
         prefix: typeof meta.prefix === "string" ? meta.prefix : undefined,
         metaBatch,
         preview: true,
         workflowId: manifest.id,
         made: model?.kind,
         loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),
-        // The owner's jobs on the workers: the lane and files they need, ahead of everyone else's, with a wait limit.
-        ...(onWorkers(computer) && { pool: poolFields(manifest.id, { boostMs: OWNER_BOOST_MS, waitMs: poolWaitMs() }) }),
+        outputs: Math.max(1, manifest.outputs.length) * Math.max(1, Math.round(Number(input.numOutputs) || 1)),
+        ...(forPool && {
+          pool:
+            computer === "owner"
+              ? // The owner's jobs on the workers: the lane and files they need, ahead of everyone else's, with a wait limit.
+                poolFields(manifest.id, { boostMs: OWNER_BOOST_MS, waitMs: poolWaitMs() })
+              : // An account's: the lane and files they need, in the order they came, with the wait set for the run.
+                poolFields(manifest.id, { account: computer.slice(5), waitMs: runStamp()?.waitMs || poolWaitMs() }),
+        }),
       });
       return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };
     }
+    // A run on this install's workers with no account behind it is never sent anywhere.
+    if (onPoolWorkers()) throw new ProviderError(ON_COMPUTER_ONLY);
     const { clientId } = ensureSocket(worker);
     const res = await comfyFetch(
       "/prompt",
@@ -2477,7 +2613,7 @@ export const comfyProvider: ProviderAdapter = {
     if (computerScope()) {
       // Sent to a link before the account chose this computer: that link is gone.
       if (ownGpu()) return { state: "failed", error: RELAY_WORDS.switched };
-      return serverScope.run(true, () => comfyProvider.poll({ externalId, meta, model, ...rest }));
+      return onInstallServer(() => comfyProvider.poll({ externalId, meta, model, ...rest }));
     }
     const finished = async (entry: HistoryEntry) => {
       // A Context Loop job (Group swap, Scene edit): its clips and checkpoints under output/h3_chains go once it ends (the
@@ -2549,7 +2685,7 @@ export const comfyProvider: ProviderAdapter = {
     if (typeof meta?.relay === "string") return requestStop(relayPrincipal(), meta.relay);
     if (computerScope()) {
       // Sent before ComfyUI moved to a computer: the owner's goes off the studio's own ComfyUI (a link is gone).
-      if (!ownGpu()) await serverScope.run(true, () => comfyProvider.cancel!(ctx));
+      if (!ownGpu()) await onInstallServer(() => comfyProvider.cancel!(ctx));
       return;
     }
     const worker: ComfyWorker = meta?.worker === "isolated" ? "isolated" : "main";
@@ -2609,7 +2745,7 @@ export const comfyProvider: ProviderAdapter = {
 export async function comfyLoraFiles(route?: ModelRoute): Promise<string[] | null> {
   // On someone's computer: the list its tab last sent (null: it can't say, and ComfyUI's own check has the last word).
   const computer = computerScope();
-  if (computer) return runnerFacts(computer)?.loras ?? null;
+  if (computer) return factsOf(computer)?.loras ?? null;
   try {
     const res = await comfyFetch("/models/loras", {}, workerFor(route?.endpoint));
     if (!res.ok) discardBody(res);

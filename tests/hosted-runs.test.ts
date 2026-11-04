@@ -42,7 +42,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   globalThis.__fuobeTestDiskFree = undefined;
-  for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
+  for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_HOSTED_FREE", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
   await fake.close();
   await comfy.close();
 });
@@ -50,6 +50,7 @@ beforeEach(() => {
   resetRates();
   billing.resetBillingCache();
   delete process.env.FUOBE_HOSTED_RUNS;
+  delete process.env.FUOBE_HOSTED_FREE;
   delete process.env.FUOBE_BILLING_URL;
   fake.policy = { hosted: true, pool: {}, uploads: { image: true, video: false, audio: false }, limits: { activeRuns: 7, waiting: 7, runsPerHour: 70, outputsPerRun: 2, maxMegapixels: 7, maxSeconds: 7, keepDays: 7, spaceBytes: 7 }, ttlS: 0 };
 });
@@ -78,6 +79,17 @@ describe("hosted runs off (the default)", () => {
 describe("hosted runs on", () => {
   beforeEach(() => {
     process.env.FUOBE_HOSTED_RUNS = "1";
+    // Free for every account here: no billing service answers for these runs unless a test sets one.
+    process.env.FUOBE_HOSTED_FREE = "1";
+  });
+
+  it("stay closed with nothing to answer for them: no billing service, and not free", async () => {
+    delete process.env.FUOBE_HOSTED_FREE;
+    const r = await post({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" });
+    expect(r.status).toBe(403);
+    expect(((await r.json()) as { code: string }).code).toBe("connect-gpu");
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.hosted).toBeUndefined();
+    expect((await upload(TINY_PNG, "image/png", "me.png")).status).toBe(403);
   });
 
   it("a studio run reaches the route; other tools still need the account's own GPU", async () => {

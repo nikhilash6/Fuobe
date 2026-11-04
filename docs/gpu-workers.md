@@ -104,7 +104,10 @@ The worker obeys any one of these pauses. One pause never ends another pause.
 
 ### The queue
 
-A job for the workers belongs to the owner. It names the pools that may take it (`pool` by default). It also keeps:
+A job for the workers belongs to the owner or, with hosted runs on ([public-signup.md](public-signup.md#hosted-runs)),
+to an account. An account's job is the account's task (`acct:<id>`): only a worker of its pool takes it, and the
+account's own session never reaches it through the computer routes. It names the pools that may take it (`pool` by
+default). It also keeps:
 
 - its lane: the first 12 hex digits of the SHA-256 of the sorted names of the workflow's files over 2 GB. A workflow
   with no big file is in the lane `small`.
@@ -163,8 +166,12 @@ Before its ComfyUI gets a graph, the worker checks all of these. The studio cann
 After each job, the worker deletes the job's inputs and results from its folders and deletes the prompt from its
 ComfyUI's history. At start, it empties its folders.
 
-Pictures for workers are made again from their pixels on the studio (no EXIF, no GPS). Clips and sound go to workers
-only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default; `image,video,audio` for all).
+Pictures for workers are made again from their pixels on the studio (no EXIF, no GPS), the owner's and accounts'
+alike. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
+`image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. Every
+VideoHelperSuite save node of a graph for the workers is sent with `save_metadata` off, so no prompt rides inside a
+result. An account's run is shaped by the workers' own facts (the least VRAM and RAM of the workers allowed its lane),
+never by the account's own computer.
 
 ### The protocol
 
@@ -206,7 +213,8 @@ routes.
 
 ## Tests
 
-- `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`)
+- `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`,
+  `tests/worker-queue.test.ts`, `tests/pool-account-runs.test.ts`)
 - `node tests/e2e/worker.mjs` and `node tests/e2e/fuobe-connect.mjs` (after `pnpm build`, or with `E2E_DEV=1`). These
   use a stand-in ComfyUI and a stand-in `nvidia-smi` on ports 3361 and 3362. They never touch a real GPU or ComfyUI.
 - `python -m unittest discover -s tests` in `integrations/fuobe-connect`

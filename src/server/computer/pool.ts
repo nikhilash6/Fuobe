@@ -403,27 +403,140 @@ setPoolClocks((t, now) => {
 // ---------------------------------------------------------------------------
 // Place in line and the wait (4.4)
 
-/** Where a waiting task is in its lane's line, and about how long until it is done. */
+/** Tasks looked at for a place in line, at most (a longer line counts as this long). */
+const LOOK_AHEAD = 2000;
+
+const poolWorkers = () => db().prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL").all() as WorkerRow[];
+
+/** Do two tasks share a pool (the same workers may serve both)? */
+const sharePool = (a: Pick<TaskRow, "pools">, b: Pick<TaskRow, "pools">) => (a.pools ?? "").split(",").some((p) => !!p && (b.pools ?? "").split(",").includes(p));
+
+/**
+ * A lane's typical run on the workers: the median measured time of its last 20 finished jobs (the worker's own
+ * execution time), else of any lane's, else null before any.
+ */
+export function typicalPoolMs(lane: string | null): number | null {
+  const d = db();
+  const of = (rows: { ms: number }[]) => (rows.length ? rows.map((r) => r.ms).sort((a, b) => a - b)[Math.floor(rows.length / 2)] : null);
+  const q = (where: string, ...args: unknown[]) =>
+    d.prepare(`SELECT exec_ms AS ms FROM worker_jobs WHERE event = 'finished' AND exec_ms > 0 ${where} ORDER BY id DESC LIMIT 20`).all(...args) as { ms: number }[];
+  return (lane ? of(q("AND lane = ?", lane)) : null) ?? of(q(""));
+}
+
+/** How long a task should take: its lane's bench on the quickest of these workers, its own estimate, or the lane's typical run. */
+function estFor(t: Pick<TaskRow, "lane" | "est_ms">, workers: WorkerRow[], typical: (lane: string | null) => number | null): number {
+  const bench = workers.map((w) => (t.lane && benchOf(w)[t.lane]?.medianMs) || 0).filter((ms) => ms > 0);
+  return (bench.length ? Math.min(...bench) : 0) || t.est_ms || typical(t.lane) || 60_000;
+}
+
+/**
+ * Where a waiting task is in line, and about how long until it is done. Every task ahead of it counts, whatever its lane,
+ * in the order the workers serve them (LINE_ORDER), when a worker that may run this one may run that one too: one GPU
+ * serves every lane it has in that order. The wait adds what is left of the jobs those workers are running now, the
+ * load of its lane when none has it warm, and its own run. No worker able to run it right now (paused, outside its
+ * hours): its place, with no estimate.
+ */
 export function placeInLine(t: TaskRow, now = Date.now()): { place: number; etaSeconds: number | null } {
   const d = db();
-  const ahead = d.prepare("SELECT est_ms FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND lane IS ? AND rank_at < ?").all(t.lane, t.rank_at ?? now) as { est_ms: number | null }[];
-  const workers = (d.prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL").all() as WorkerRow[]).filter((w) => eligible(w, now) && fits({ ...t, created_at: 0 }, w, now));
+  const all = poolWorkers().filter((w) => sharePool({ pools: w.pool }, t));
+  const workers = all.filter((w) => eligible(w, now) && fits({ ...t, created_at: 0 }, w, now));
+  const rank = t.rank_at ?? t.created_at;
+  const before = d
+    .prepare(
+      `SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND id != ?
+         AND (rank_at < ? OR (rank_at = ? AND (created_at < ? OR (created_at = ? AND id < ?))))
+       ORDER BY ${LINE_ORDER} LIMIT ?`,
+    )
+    .all(t.id, rank, rank, t.created_at, t.created_at, t.id, LOOK_AHEAD) as TaskRow[];
+  // Ahead of it: a task the same workers would serve first (with none able to run it now, any that could run it at all).
+  const able = workers.length ? workers : all.filter((w) => fits({ ...t, created_at: 0 }, w, now));
+  const ahead = before.filter((x) => sharePool(x, t) && (!able.length || able.some((w) => fits({ ...x, created_at: 0 }, w, now))));
   if (!workers.length) return { place: ahead.length + 1, etaSeconds: null };
-  const own = t.est_ms ?? 60_000;
+  const typical = memo(typicalPoolMs);
+  const own = estFor(t, workers, typical);
   const warm = workers.some((w) => w.warm_lane === t.lane);
   const load = warm ? 0 : Math.max(0, ...workers.map((w) => (t.lane && benchOf(w)[t.lane]?.loadMs) || 0));
-  const sum = ahead.reduce((s, r) => s + (r.est_ms ?? own), 0);
-  return { place: ahead.length + 1, etaSeconds: Math.round((sum / workers.length + load + own) / 1000) };
+  const sum = ahead.reduce((s, x) => s + estFor(x, workers, typical), 0);
+  // The jobs these workers hold now: what is left of each.
+  const ids = new Set(workers.map((w) => w.id));
+  const running = (d.prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state IN ('sending','queued','running','collecting') AND worker_id IS NOT NULL`).all() as TaskRow[]).filter((x) => ids.has(x.worker_id!));
+  const left = running.reduce((s, x) => s + Math.max(0, estFor(x, workers, typical) - (now - (x.claimed_at ?? now))), 0);
+  return { place: ahead.length + 1, etaSeconds: Math.round(((sum + left) / workers.length + load + own) / 1000) };
+}
+
+/** A one-argument function whose answers are kept for this call's life. */
+function memo<A, R>(fn: (a: A) => R): (a: A) => R {
+  const seen = new Map<A, R>();
+  return (a) => {
+    if (!seen.has(a)) seen.set(a, fn(a));
+    return seen.get(a)!;
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Making tasks for workers
 
+/** The lane a workflow's tasks go in (a workflow the catalog doesn't know: the small lane). */
+export function poolLane(workflowId: string): string {
+  return allLanes(loadIndex(), sha).find((l) => l.workflows.includes(workflowId))?.lane ?? "small";
+}
+
+/**
+ * Is there a worker for this lane: one the owner added and didn't revoke, allowed the lane (any lane: `lane` null),
+ * whether it is paused, outside its hours or offline right now (a run then waits in line for it).
+ */
+export function workersAllowed(lane: string | null): boolean {
+  return poolWorkers().some((w) => {
+    const allow = allowOf(w);
+    return lane === null ? Object.keys(allow).length > 0 : lane in allow;
+  });
+}
+
+/**
+ * What the workers allowed a lane have (any lane: `lane` null), for shaping a graph that each of them can run: the least
+ * VRAM and RAM among those that said, and their device when they all name the same kind. Nothing known: empty.
+ */
+export function poolFacts(lane: string | null): ComputerFacts {
+  const facts = poolWorkers()
+    .filter((w) => lane === null || lane in allowOf(w))
+    .map((w) => json<ComputerFacts>(w.facts_json, {}));
+  const least = (k: "vramBytes" | "ramBytes") => {
+    const v = facts.map((f) => f[k]).filter((n): n is number => typeof n === "number" && n > 0);
+    return v.length ? Math.min(...v) : undefined;
+  };
+  const kinds = new Set(facts.map((f) => /^[a-z]+/i.exec(f.device ?? "")?.[0].toLowerCase()).filter(Boolean));
+  const vramBytes = least("vramBytes");
+  const ramBytes = least("ramBytes");
+  const device = kinds.size === 1 ? facts.find((f) => f.device)?.device : undefined;
+  return { ...(vramBytes && { vramBytes }), ...(ramBytes && { ramBytes }), ...(device && { device }) };
+}
+
+/**
+ * The line for a new run of this workflow, for a quote or a reserve (the billing service's QueueFacts): how many tasks the
+ * workers that may run it would serve before it, about how long until it would be done, how many such workers can take
+ * work now, and the account's own tasks waiting and running.
+ */
+export function lineFacts(accountId: string | null, asked: string | null, now = Date.now()) {
+  // A workflow that picks its graph at run time (`…-{n}`) has no lane yet: the whole line counts.
+  const workflowId = asked && !asked.includes("{") ? asked : null;
+  const lane = workflowId ? poolLane(workflowId) : null;
+  const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
+  const probe = { id: "", pools: "pool", lane, needs_json: needs ? JSON.stringify(needs) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null } as unknown as TaskRow;
+  const p = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
+  const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fits({ ...probe, created_at: 0 }, w, now))).length;
+  const mine = accountId
+    ? (db()
+        .prepare("SELECT SUM(CASE WHEN state = 'waiting' THEN 1 ELSE 0 END) AS waiting, SUM(CASE WHEN state = 'waiting' THEN 0 ELSE 1 END) AS running FROM relay_tasks WHERE pools IS NOT NULL AND account = ? AND state IN ('waiting','sending','queued','running','collecting')")
+        .get(accountId) as { waiting: number | null; running: number | null })
+    : { waiting: 0, running: 0 };
+  return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: null, mine: { waiting: mine.waiting ?? 0, running: mine.running ?? 0 } };
+}
+
 /** What a task for workers stores: its lane, its needs, and its place in line. */
 export function poolFields(workflowId: string, o: { account?: string; boostMs?: number; waitMs?: number; onlyWorker?: string } = {}, now = Date.now()) {
   const index = loadIndex();
   const needs = needsOf(index, workflowId);
-  const lane = allLanes(index, sha).find((l) => l.workflows.includes(workflowId))?.lane ?? "small";
+  const lane = poolLane(workflowId);
   return {
     pools: ["pool"],
     account: o.account,

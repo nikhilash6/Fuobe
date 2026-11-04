@@ -129,8 +129,12 @@ export function accountRunOptions(sp: URLSearchParams): ListOptions | { error: s
  */
 export type OutputState = "shown" | "held" | "removed";
 
-/** An account's run as the owner sees it: whose it is (null email: the account was deleted), and each result's state. */
-export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: { id: string; email: string | null } };
+/**
+ * An account's run as the owner sees it: whose it is (null email: the account was deleted), and each result's state. A
+ * run on this install's GPUs also carries `detail`: the technical reason it failed, which the account never sees (its
+ * own page shows one plain sentence).
+ */
+export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: { id: string; email: string | null }; detail?: string };
 
 /** Each result's state, read from its stored file (its asset row; none: removed). An output that isn't a stored file is shown. */
 function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState })[] {
@@ -152,8 +156,14 @@ export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: st
   // The WHERE already leaves the owner's runs out; this keeps them out whatever a caller passes.
   const found = listGenerations(opts).filter((g) => g.request.account);
   const last = found.at(-1);
+  const raw = db().prepare("SELECT error FROM generations WHERE id = ?");
+  const detail = (g: Generation) => {
+    if (g.place !== "pool" || !g.error) return {};
+    const e = (raw.get(g.id) as { error: string | null } | undefined)?.error;
+    return e && e !== g.error ? { detail: e } : {};
+  };
   return {
-    items: found.map((g) => ({ ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: emails.get(g.request.account!) ?? null } })),
+    items: found.map((g) => ({ ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: emails.get(g.request.account!) ?? null }, ...detail(g) })),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,
   };
 }

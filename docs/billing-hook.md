@@ -2,8 +2,8 @@
 
 An install can connect an external billing service at `FUOBE_BILLING_URL`. Fuobe sends facts about each run that goes
 to this install's GPUs (hosted runs, see [public-signup.md](public-signup.md#hosted-runs)); the service answers with what
-the person sees and whether the run may start. With no service set, every run is free and allowed, and Fuobe makes no
-call at all.
+the person sees and whether the run may start. With no service set, Fuobe makes no call at all, and runs on this
+install's GPUs stay closed unless `FUOBE_HOSTED_FREE=1` makes them free for every account.
 
 Fuobe has no words of its own for prices or balances. Every word on screen about them (the price on Run, the balance in
 the top bar and the account menu, a refusal's text, a link, an offer) comes from the service's answers at runtime.
@@ -15,6 +15,7 @@ the top bar and the account menu, a refusal's text, a link, an offer) comes from
 | `FUOBE_BILLING_URL` | The service: `https://billing.example.com/base`, `http://…`, or a Unix socket on this machine, `unix:/path/to/billing.sock` | none: no billing |
 | `FUOBE_BILLING_TOKEN` | Sent as `Authorization: Bearer <token>` with every call | none |
 | `FUOBE_HOSTED_RUNS` | `1` lets accounts run on this install's GPUs (the only runs the service prices) | off |
+| `FUOBE_HOSTED_FREE` | `1` opens those runs with no service set: free for every account, within the install's own limits | off |
 | `FUOBE_POOL_WAIT_MIN` | How long a run may wait in line on this install's GPUs when the service doesn't say | 30 |
 
 ## When Fuobe calls the service
@@ -129,7 +130,7 @@ report from what is stored. A run whose rows couldn't be made after its reserve 
 
 | Situation | What happens |
 |---|---|
-| No `FUOBE_BILLING_URL` | No call. Every run is free and allowed. |
+| No `FUOBE_BILLING_URL` | No call. Runs on this install's GPUs are closed, or free and allowed with `FUOBE_HOSTED_FREE=1`. |
 | Set, and it answers | As above. |
 | Set, and no answer in time | Runs on this install's GPUs are refused (503, "Runs are paused for a moment. Try again soon."). Run shows "Price unavailable". Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
 

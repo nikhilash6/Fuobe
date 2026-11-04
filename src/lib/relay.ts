@@ -338,6 +338,18 @@ export const RELAY_WORDS = {
   computerAway: "Waiting for your computer. Open Fuobe there to finish this run.",
 } as const;
 
+/**
+ * What a run on this install's GPUs (hosted runs) shows an account: in line (with its place and wait, the row's queue
+ * block), working on it, then its result. Every recovery (a worker that paused, went quiet or restarted, a retry) is
+ * "in line" again in the same place. A run that can't finish says one plain sentence; the technical reason is kept for
+ * the owner only.
+ */
+export const POOL_WORDS = {
+  inLine: "In line",
+  working: "Working",
+  failed: "This one couldn't be made. Press Retry to try again.",
+} as const;
+
 /** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */
 export const RUNS_ON_COMPUTER_NOTE = "Runs when Fuobe is open on your computer.";
 

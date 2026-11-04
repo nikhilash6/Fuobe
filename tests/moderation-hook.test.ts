@@ -13,6 +13,8 @@ delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_BILLING_URL;
 delete process.env.FUOBE_MODERATION_URL;
 process.env.FUOBE_HOSTED_RUNS = "1";
+// Free for every account unless a test sets a billing service: something answers for runs on this install's GPUs.
+process.env.FUOBE_HOSTED_FREE = "1";
 globalThis.__fuobeTestDiskFree = 1e13;
 
 const probe = http.createServer();
@@ -48,7 +50,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   globalThis.__fuobeTestDiskFree = undefined;
-  for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_MODERATION_URL", "FUOBE_MODERATION_TOKEN", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
+  for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_HOSTED_FREE", "FUOBE_MODERATION_URL", "FUOBE_MODERATION_TOKEN", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
   await mod.close();
   await bill.close();
   await comfy.close();
@@ -169,6 +171,8 @@ describe("the output check", () => {
     const id = await started({ ...run, shown: { amount: 7, priceVersion: "v7" } });
     await until(() => row(id).status === "failed");
     expect(row(id).error).toBe("Removed by the checks. Not charged.");
+    // The account reads the check's own words (a run on this install's GPUs hides only technical reasons).
+    expect(getGeneration(id)!.error).toBe("Removed by the checks. Not charged.");
     expect(getGeneration(id)!.notCharged).toBe(true);
     await outbox.sweepBilling();
     const hold = [...bill.holds.entries()].find(([, h]) => h.reports.has(id));
@@ -184,6 +188,7 @@ describe("the output check", () => {
     await checks.sweepOutputChecks(Date.now() + 25 * 3_600_000);
     expect(row(id).status).toBe("failed");
     expect(row(id).error).toBe(checks.UNCHECKED_WORDS);
+    expect(getGeneration(id)!.error).toBe(checks.UNCHECKED_WORDS);
     expect(db().prepare("SELECT 1 FROM assets WHERE id = ?").get(file)).toBeUndefined();
   });
 });

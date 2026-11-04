@@ -98,7 +98,7 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/accounts/{id}` | | one account with its numbers; 404 `No such account` |
 | `PATCH /api/admin/accounts/{id}` | exactly one of `{ disabled: boolean }` or `{ signOut: true }` | the account (no numbers) |
 | `DELETE /api/admin/accounts/{id}` | | 204 |
-| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone) |
+| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone). A failed run on this install's GPUs also has `detail`: the technical reason, which the account never sees |
 | `DELETE /api/admin/generations/{id}` | | 204; 404 for an unknown run or the owner's own |
 | `POST /api/admin/outputs/hide` | `{ assetIds?, generationIds? }` (up to 500 each) | `{ hidden }` |
 | `POST /api/admin/outputs/unhide` | the same | `{ shown }` |

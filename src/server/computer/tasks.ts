@@ -154,8 +154,9 @@ export function setTask(id: string, fields: Partial<TaskRow>): void {
 }
 
 /**
- * A principal's task, or null (another principal's task is no task at all). A pool's: a task for workers that this pool
- * may take.
+ * A task as a caller of the computer routes reaches it, or null (another principal's task is no task at all). A pool's:
+ * a task for workers that this pool may take. The owner's or an account's: a task for its own computer only, never a
+ * task for workers, even one of its own runs (only a worker of its pool takes that, and only the server reads it).
  */
 export function getTask(principal: Principal, id: string): TaskRow | null {
   if (typeof id !== "string" || !/^[A-Za-z0-9_-]{16}$/.test(id)) return null;
@@ -163,6 +164,15 @@ export function getTask(principal: Principal, id: string): TaskRow | null {
     const t = rdb().prepare("SELECT * FROM relay_tasks WHERE id = ? AND pools IS NOT NULL").get(id) as TaskRow | undefined;
     return t && poolsOf(t).includes(principal.slice(5)) ? t : null;
   }
+  return (rdb().prepare("SELECT * FROM relay_tasks WHERE id = ? AND principal = ? AND pools IS NULL").get(id, principal) as TaskRow | undefined) ?? null;
+}
+
+/**
+ * A task of one of this principal's runs, wherever it runs (its own computer, or the workers): the server's own reads as
+ * the run's principal (a poll, a cancel, a result). Never what a route's caller reaches (that is getTask).
+ */
+export function ownTask(principal: Principal, id: string): TaskRow | null {
+  if (isPool(principal) || typeof id !== "string" || !/^[A-Za-z0-9_-]{16}$/.test(id)) return null;
   return (rdb().prepare("SELECT * FROM relay_tasks WHERE id = ? AND principal = ?").get(id, principal) as TaskRow | undefined) ?? null;
 }
 
@@ -293,6 +303,8 @@ export interface NewTask {
   made?: string;
   /** The run's LoRAs (for the words of a refusal). */
   loras?: { file: string; url?: string }[];
+  /** How many results its workflow says one job makes (an owner's job keeps no more than that, and at least 16). */
+  outputs?: number;
   /** For workers (pool.ts): the pools that may take it, and what they need to. */
   pool?: { pools: string[]; account?: string; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string };
 }
@@ -320,7 +332,7 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
       t.metaBatch ? 1 : 0,
       t.preview ? 1 : 0,
       t.workflowId ?? null,
-      JSON.stringify({ made: t.made, loras: t.loras ?? [] }),
+      JSON.stringify({ made: t.made, loras: t.loras ?? [], ...(t.outputs && { outputs: t.outputs }) }),
       now,
       now,
       pool?.account ?? null,
@@ -338,6 +350,10 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   })();
   return { id, promptId };
 }
+
+/** The names of the inputs a principal staged that no task has taken yet (its next task's files). */
+export const freeInputs = (principal: Principal): string[] =>
+  (rdb().prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL").all(principal) as { name: string }[]).map((r) => r.name);
 
 export const inputsOf = (taskId: string) => rdb().prepare("SELECT * FROM relay_inputs WHERE task_id = ? ORDER BY n").all(taskId) as InputRow[];
 
@@ -456,7 +472,7 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
     if (t?.device === b.device) setTask(t.id, { stop: 0 });
   }
   const stops = (
-    d.prepare("SELECT id, prompt_id, prefix FROM relay_tasks WHERE principal = ? AND device = ? AND stop = 1").all(principal, b.device) as { id: string; prompt_id: string; prefix: string | null }[]
+    d.prepare("SELECT id, prompt_id, prefix FROM relay_tasks WHERE principal = ? AND pools IS NULL AND device = ? AND stop = 1").all(principal, b.device) as { id: string; prompt_id: string; prefix: string | null }[]
   ).map((s) => ({ task: s.id, promptId: s.prompt_id, ...(s.prefix && { prefix: s.prefix }) }));
   const waiting = (d.prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE principal = ? AND pools IS NULL AND state = 'waiting'").get(principal) as { n: number }).n;
   return { runner: free, heldElsewhere: !free && elsewhere, waiting, stops };
@@ -789,7 +805,7 @@ export function release(t: TaskRow): void {
  * ComfyUI at the computer's next beat.
  */
 export function requestStop(principal: Principal, id: string): void {
-  const t = getTask(principal, id);
+  const t = ownTask(principal, id);
   if (!t || !(ACTIVE_STATES as readonly string[]).includes(t.state)) return;
   endTask(t.id, "canceled", { error: "Stopped" });
 }
@@ -888,7 +904,7 @@ export const setPoolClocks = (fn: (t: TaskRow, now: number) => TaskRow) => (pool
 
 /** The file of a received output, for the principal whose task it is (anyone else: null). */
 export function receivedFile(principal: Principal, taskId: string, n: number): { path: string; contentType?: string } | null {
-  const t = getTask(principal, taskId);
+  const t = ownTask(principal, taskId);
   if (!t) return null;
   const r = json<Received[]>(t.received_json, []).find((x) => x.n === n);
   if (!r?.done) return null;
@@ -899,6 +915,6 @@ export function receivedFile(principal: Principal, taskId: string, n: number): {
 export const wantedOf = (t: TaskRow) => json<WantedFile[]>(t.wanted_json, []);
 export const receivedOf = (t: TaskRow) => json<Received[]>(t.received_json, []);
 export const resultOf = <T,>(t: TaskRow) => json<T[]>(t.result_json, []);
-export const extraOf = (t: TaskRow) => json<{ made?: string; loras?: { file: string; url?: string }[]; budget?: number }>(t.extra_json, {});
+export const extraOf = (t: { extra_json?: string | null }) => json<{ made?: string; loras?: { file: string; url?: string }[]; budget?: number; outputs?: number }>(t.extra_json ?? null, {});
 export const refusalOf = (t: TaskRow) => json<{ status: number; body: unknown } | null>(t.refusal_json, null);
 export const inputKinds = (t: TaskRow) => (rdb().prepare("SELECT content_type FROM relay_inputs WHERE task_id = ?").all(t.id) as { content_type: string }[]).map((r) => r.content_type);

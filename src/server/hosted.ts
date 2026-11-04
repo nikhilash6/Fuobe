@@ -1,12 +1,13 @@
 import "server-only";
 import { getModel } from "@/lib/catalog";
 import type { GenerationRequest } from "@/lib/catalog/types";
+import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
+import { lineFacts, poolLane, queueOfGeneration, workersAllowed } from "./computer/pool";
 import { db } from "./db";
 import { hostedRunsOn } from "./hosted-switch";
-import { onInstallComfy } from "./providers/comfyui";
+import { installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
 import { runAsTenant } from "./tenant";
-import type { Policy, QueueFacts, RunFacts } from "./billing";
 
 /**
  * Hosted runs (FUOBE_HOSTED_RUNS=1; docs/public-signup.md "Hosted runs"): an account with no GPU of its own may run on
@@ -20,18 +21,52 @@ import type { Policy, QueueFacts, RunFacts } from "./billing";
  *    when a billing service is set (billing.ts), free otherwise;
  * 4. otherwise today's answer ("Connect your GPU", "Add your key").
  *
- * This install's GPUs are its own ComfyUI server (Settings → ComfyUI address). An install whose ComfyUI is on the
+ * This install's GPUs are its workers (Settings: ComfyUI runs on "workers", docs/gpu-workers.md): each job of the run is
+ * a task for them, in one line with every other, and nothing reaches a ComfyUI address from here. Otherwise its own
+ * ComfyUI server (Settings → ComfyUI address), only when that is on this machine. An install whose ComfyUI is on the
  * owner's computer (a browser tab) doesn't offer hosted runs: that computer is the owner's alone.
+ *
+ * Runs here need someone to answer for them: a billing service (billing.ts), whose policy then says who may run what;
+ * or FUOBE_HOSTED_FREE=1, which says this install's runs are free for every account (within its own limits). With
+ * neither, hosted runs stay closed even when switched on.
  */
 
 export const hostedRuns = hostedRunsOn;
 
-/** Hosted runs are on and this install has a ComfyUI server they can use. */
+/** FUOBE_HOSTED_FREE=1: with no billing service, runs on this install's GPUs are free for accounts (within its limits). */
+export const hostedFree = (): boolean => process.env.FUOBE_HOSTED_FREE === "1";
+
+/** This install's GPUs are its workers (Settings: ComfyUI runs on "workers"). */
+export const poolOnWorkers = (): boolean => getSetting("comfyWhere") === "workers";
+
+/**
+ * Hosted runs are on, something answers for them (a billing service, or FUOBE_HOSTED_FREE=1), and this install has GPUs
+ * for them: a worker the owner added and allowed a lane (paused or not: a paused worker means the run waits in line),
+ * or its own ComfyUI server on this machine.
+ */
 export function poolReady(): boolean {
   if (!hostedRunsOn()) return false;
-  if (getSetting("comfyWhere") === "computer") return false;
-  return !!getSetting("comfyUrl").trim();
+  if (!billingConfigured() && !hostedFree()) return false;
+  const where = getSetting("comfyWhere");
+  if (where === "computer") return false;
+  return where === "workers" ? workersAllowed(null) : installComfyLocal();
 }
+
+/**
+ * May this install's GPUs run this workflow (planned.route.endpoint)? On the workers: one is allowed its lane (a
+ * workflow that picks its graph at run time, `…-{n}`, goes to any). On its own server: the isolated ComfyUI's
+ * workflows too only when that one is on this machine.
+ */
+export function poolTakes(endpoint: string | undefined): boolean {
+  if (!endpoint) return false;
+  const isolated = workerFor(endpoint) === "isolated";
+  if (!poolOnWorkers()) return installComfyLocal(isolated ? "isolated" : "main");
+  if (isolated) return false;
+  return workersAllowed(endpoint.includes("{") ? null : poolLane(endpoint));
+}
+
+/** May a run on this install's GPUs send them this kind of file (the workers take only the kinds the install allows)? */
+export const poolTakesFiles = (kind: "image" | "video" | "audio"): boolean => !poolOnWorkers() || workersTake(kind);
 
 /**
  * Run `fn` as an account's run on this install's GPUs: as the account (its own files and runs only), on this install's
@@ -102,8 +137,12 @@ function typicalRunMs(): number | null {
 /** Rows not started yet (no provider start): they wait in line. */
 const WAITING = "NOT EXISTS (SELECT 1 FROM generation_runs r WHERE r.id = g.id AND r.started_at IS NOT NULL)";
 
-/** The line on this install's GPUs right now, for a quote or a reserve (QueueFacts). */
-export function queueFacts(accountId: string | null): QueueFacts {
+/**
+ * The line on this install's GPUs right now, for a quote or a reserve (QueueFacts). On the workers: their own line, as a
+ * new run of this workflow would stand in it (every task ahead of it, whatever its lane). On its own server: its rows.
+ */
+export function queueFacts(accountId: string | null, workflowId?: string | null): QueueFacts {
+  if (poolOnWorkers()) return lineFacts(accountId, workflowId ?? null);
   const d = db();
   const ahead = (d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING}`).get() as { n: number }).n;
   const typical = typicalRunMs();
@@ -127,6 +166,9 @@ export function queueFacts(accountId: string | null): QueueFacts {
 
 /** A waiting row's place in line on this install's GPUs (1: next), and the wait, about. Null when it isn't waiting there. */
 export function placeInLine(generationId: string): { place: number; etaSeconds: number | null } | null {
+  // On the workers: its task's place in their line (back in line after an attempt, the same place).
+  const task = queueOfGeneration(generationId);
+  if (task || poolOnWorkers()) return task;
   const d = db();
   const row = d.prepare(`SELECT g.created_at FROM generations g WHERE g.id = ? AND ${POOL_ROWS} AND ${WAITING}`).get(generationId) as { created_at: number } | undefined;
   if (!row) return null;
@@ -138,10 +180,11 @@ export function placeInLine(generationId: string): { place: number; etaSeconds: 
 /** The facts the billing service prices a run by (from a planned request: previewGeneration's answer). */
 export function runFacts(
   req: GenerationRequest,
-  p: { model: { id: string; kind: string; engine: "open" | "cloud" }; op: string; jobs: number; outputs: number; providerId: string; costUsd: number | null; loras: { applied: unknown[] } },
+  p: { model: { id: string; kind: string; engine: "open" | "cloud" }; op: string; jobs: number; outputs: number; providerId: string; costUsd: number | null; loras: { applied: unknown[] }; route?: { endpoint?: string } },
   kind: RunFacts["kind"],
 ): RunFacts {
   const model = getModel(p.model.id);
+  const endpoint = p.route?.endpoint;
   return {
     place: "pool",
     model: p.model.id,
@@ -159,7 +202,7 @@ export function runFacts(
     fps: req.params?.fps ?? null,
     loras: p.loras.applied.length,
     inputs: inputCounts(req),
-    lane: POOL_LANE,
+    lane: poolOnWorkers() && endpoint && !endpoint.includes("{") ? poolLane(endpoint) : POOL_LANE,
     providerUsd: p.costUsd,
   };
 }

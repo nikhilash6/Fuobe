@@ -339,35 +339,59 @@ account with that provider. The studio's own keys are never used for an account'
 ## Hosted runs
 
 By default an account runs only on its own GPU or its own key. An owner who wants accounts to run on the studio's own
-ComfyUI instead sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
+GPUs instead sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
+
+Something must answer for these runs. Either a billing service is set (`FUOBE_BILLING_URL`, below), or
+`FUOBE_HOSTED_FREE=1` says that they are free for every account. With neither, hosted runs stay closed even when the
+switch is on.
+
+Where the runs go:
+
+- **The workers** ([gpu-workers.md](gpu-workers.md)), when Settings sends this studio's ComfyUI jobs to them
+  (`comfyWhere=workers`). Each job of an account's run becomes a task for the workers that belongs to that account.
+  It waits in one line with every other task, and the server never sends it to a ComfyUI address. Hosted runs are open
+  while at least one worker is added and allowed a lane, even when it is paused: a run then waits in line for it. A run
+  that no worker is allowed to run is refused before it is queued.
+- **This install's own ComfyUI server** (the address in Settings), only when that address is on the same machine
+  (`127.0.0.1` or `localhost`). An address on another machine is never used for accounts' runs. Pictures are made
+  again from their pixels first (no EXIF, no GPS).
+- An install whose ComfyUI runs on the owner's computer doesn't offer hosted runs.
 
 With it on:
 
-- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps). The run goes
-  to this install's ComfyUI server (the address in Settings). An install whose ComfyUI runs on the owner's computer
-  doesn't offer hosted runs.
+- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps).
 - An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU" or "This
   studio's GPUs"), and the person can pick either.
 - Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
-  Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
-- An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
+  Image to 3D and extra LoRAs added to a request stay on the account's own GPU. So do clips and sound as inputs,
+  unless the policy and the studio's GPUs both take them.
+- An account can upload the kinds of file its policy allows for these runs (pictures without a billing service), and
+  only those the studio's GPUs take (`FUOBE_POOL_MEDIA_INPUTS` on the workers). Others still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
   Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
-- A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
-  `FUOBE_POOL_WAIT_MIN` minutes (30 by default); past that it fails.
+- A run on the studio's GPUs shows only where it is: "In line" with its place ("In line · 3rd · about 40 s"),
+  "Working" with its progress, then its result. The place counts every run ahead of it that the same GPUs serve
+  first, whatever its model. When a worker pauses, goes quiet or restarts, the run is "In line" again in the same
+  place. A run that can't finish shows one plain sentence; the owner reads the technical reason in the accounts' runs
+  (`detail` in `GET /api/admin/generations`). A failed run on the studio's GPUs never offers "Fix it".
+- A run may wait `FUOBE_POOL_WAIT_MIN` minutes (30 by default, or what the billing service says) before a worker
+  first takes it; past that it fails, not charged. Once a worker took it, that limit is over.
+- In a run's `params.extra`, a file input is used only when the run sent that file itself. A name of a file in the
+  GPUs' folders is dropped. The graph is checked before it is queued or sent: it reads only the files this run sent.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
 
 Two optional services can go with it:
 
 - a **billing service** ([billing-hook.md](billing-hook.md)): prices runs on this install's GPUs, sets the price aside
-  before a run starts, and shows the person a balance. Without one, these runs are free.
+  before a run starts, and shows the person a balance. Without one, these runs are closed unless `FUOBE_HOSTED_FREE=1`
+  makes them free.
 - a **moderation service** ([moderation-hook.md](moderation-hook.md)): checks a run before it starts and, when it asks
   to, its outputs before they show. Without one, nothing is checked.
 
 The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side),
 `src/server/run-stamp.ts` (what every row of a run carries) and `src/lib/hosted.ts` (the browser's side). The tests are
-`tests/hosted-runs.test.ts`, `tests/billing-hook.test.ts`, `tests/billing-release.test.ts` and
-`tests/moderation-hook.test.ts`.
+`tests/hosted-runs.test.ts`, `tests/pool-account-runs.test.ts` (runs on the workers), `tests/billing-hook.test.ts`,
+`tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`.
 
 ## Uploads
 

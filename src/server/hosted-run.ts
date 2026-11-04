@@ -21,7 +21,7 @@ import {
   type RunFacts,
 } from "./billing";
 import { outputKind, previewGeneration } from "./generations";
-import { HOSTED_WORDS, inputCounts, poolAllows, poolReady, queueFacts, runFacts, runOnPool } from "./hosted";
+import { HOSTED_WORDS, inputCounts, poolAllows, poolReady, poolTakes, poolTakesFiles, queueFacts, runFacts, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
@@ -100,9 +100,12 @@ export async function decidePlace(account: Account, req: GenerationRequest, wish
   const notHere = (error: string): PlaceDecision => (hasGpu && wish !== "pool" ? { kind: "own" } : { kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
   if (outputKind(planned.op, planned.model) === "model3d") return hasGpu && wish !== "pool" ? { kind: "own" } : { kind: "refuse", refusal: { status: 403, body: { error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, headers: {} } };
   if (!poolAllows(p, planned.model.id, req.presetId)) return notHere(HOSTED_WORDS.notOffered);
+  // Nothing of this install's would ever run it (no worker is allowed its lane): never a run that waits for nothing.
+  if (!poolTakes(planned.route.endpoint)) return notHere(HOSTED_WORDS.notOffered);
   if (req.loras?.length) return notHere(HOSTED_WORDS.loras);
   const inputs = inputCounts(req);
-  if ((inputs.image && !p.uploads.image) || (inputs.video && !p.uploads.video) || (inputs.audio && !p.uploads.audio)) return notHere(HOSTED_WORDS.inputs);
+  const takes = (kind: "image" | "video" | "audio") => p.uploads[kind] && poolTakesFiles(kind);
+  if ((inputs.image && !takes("image")) || (inputs.video && !takes("video")) || (inputs.audio && !takes("audio"))) return notHere(HOSTED_WORDS.inputs);
   return { kind: "pool", planned, policy: p };
 }
 
@@ -178,7 +181,7 @@ export async function reservePool(account: Account, req: GenerationRequest, plan
     requestId: nanoid(16),
     account: accountFacts(account),
     run: runFacts(req, planned, kind),
-    queue: queueFacts(account.id),
+    queue: queueFacts(account.id, planned.route.endpoint),
     shown: shown ?? { amount: 0, priceVersion: "" },
   });
   if (!a) return { ok: true, stamp: base };
@@ -208,7 +211,8 @@ export async function poolQuote(account: Account | null, asked: GenerationReques
   if (planned.route.provider !== "comfyui") return null;
   if (account && wish !== "pool" && accountGpu(account.id) && (await ownGpuOnline(account.id))) return null;
   if (p && (!p.hosted || !poolAllows(p, planned.model.id, req.presetId))) return null;
+  if (!poolTakes(planned.route.endpoint)) return null;
   const kind = outputKind(planned.op, planned.model);
-  const q = await billingQuote(account ? accountFacts(account) : null, runFacts(req, planned, kind), queueFacts(account?.id ?? null));
+  const q = await billingQuote(account ? accountFacts(account) : null, runFacts(req, planned, kind), queueFacts(account?.id ?? null, planned.route.endpoint));
   return { planned, quote: q };
 }
