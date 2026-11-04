@@ -111,14 +111,26 @@ describe("pairing a ComfyUI", () => {
     expect(workers.pollPairing(s.id, s.secret).state).toBe("gone");
   });
 
-  it("the owner can pair too: ComfyUI then runs on the owner's computer", async () => {
-    setSetting("comfyWhere", "server");
+  it("the owner can pair too; where the studio's ComfyUI jobs run stays the owner's choice in Settings", async () => {
+    setSetting("comfyWhere", "workers");
+    const logged = () => db().prepare("SELECT detail_json FROM admin_audit WHERE action = 'settings.comfy_where' ORDER BY id").all() as { detail_json: string }[];
+    const before = logged().length;
     const p = await pair("owner");
-    expect(getSetting("comfyWhere")).toBe("computer");
+    expect(getSetting("comfyWhere")).toBe("workers");
+    expect(logged().length).toBe(before);
+    // It takes the owner's jobs once the owner moves them to the owner's computer in Settings.
+    expect((principalOf(program("/api/gpu/computer/beat", p.token)) as Response).status).toBe(409);
+    // Every change of it is in the admin log, with the values before and after; setting the same value again is not.
+    setSetting("comfyWhere", "computer");
     const req = program("/api/gpu/computer/beat", p.token);
     expect(principalOf(req)).toBe("owner");
     expect(requestWorker(req)?.id).toBe(p.id);
+    setSetting("comfyWhere", "computer");
     setSetting("comfyWhere", "server");
+    expect(logged().slice(before).map((r) => JSON.parse(r.detail_json))).toEqual([
+      { before: "workers", after: "computer" },
+      { before: "computer", after: "server" },
+    ]);
   });
 
   it("codes are case- and dash-blind", () => {

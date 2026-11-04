@@ -299,7 +299,8 @@ export function ownerBrowser(request: Request): boolean {
 export interface AuditRow {
   id: number;
   at: number;
-  actor: "owner" | "token";
+  /** "system": the studio itself (an alert about a worker's token). */
+  actor: "owner" | "token" | "system";
   token: { id: string; name: string } | null;
   action: string;
   target: string | null;
@@ -361,7 +362,7 @@ export function auditFileView(actor: Actor, path: string, account: string, held 
 export interface AuditQuery {
   before?: number;
   limit: number;
-  actor?: "owner" | "token";
+  actor?: "owner" | "token" | "system";
   token?: string;
   action?: string;
   /** Changes only: no reads, file views or refusals. */
@@ -376,7 +377,7 @@ export function auditQueryFrom(sp: URLSearchParams): AuditQuery | { error: strin
   const limit = limitRaw === null ? 50 : Math.trunc(Number(limitRaw));
   if (!Number.isFinite(limit) || limit < 1 || limit > 200) return { error: "limit is 1 to 200" };
   const actor = sp.get("actor");
-  if (actor !== null && actor !== "owner" && actor !== "token") return { error: "actor is owner or token" };
+  if (actor !== null && actor !== "owner" && actor !== "token" && actor !== "system") return { error: "actor is owner, token or system" };
   const token = sp.get("token");
   if (token !== null && !/^[0-9a-f]{12}$/.test(token)) return { error: "token is a token id" };
   const action = sp.get("action");
@@ -407,7 +408,7 @@ export function listAudit(q: AuditQuery): { items: AuditRow[]; next: string | nu
   const items = rows.map((r) => ({
     id: r.id,
     at: r.at,
-    actor: r.actor === "token" ? ("token" as const) : ("owner" as const),
+    actor: r.actor === "token" ? ("token" as const) : r.actor === "system" ? ("system" as const) : ("owner" as const),
     token: r.token_id ? { id: r.token_id, name: r.token_name ?? "" } : null,
     action: r.action,
     target: r.target,

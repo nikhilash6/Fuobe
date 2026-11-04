@@ -2,7 +2,6 @@ import "server-only";
 import { clearAccountLoras } from "../account-loras";
 import { accountGpu, requestViewer, setAccountGpu } from "../auth";
 import { dropSnapshots } from "../gpu/snapshots";
-import { getSetting, setSetting } from "../settings";
 import type { Principal } from "./tasks";
 
 const no = (status: number, error: string) => Response.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
@@ -21,13 +20,11 @@ export function pairingPrincipal(request: Request): Principal | Response {
 
 /**
  * A paired ComfyUI runs the person's jobs as their own computer does: an account's GPU becomes "this computer" (as when
- * its browser connects), and the owner's ComfyUI runs on the owner's computer.
+ * its browser connects). The owner's pairing changes nothing of where the studio's ComfyUI jobs run: that stays the
+ * owner's choice in Settings (a pairing link anyone can start must never move the studio's jobs).
  */
 export function runOnComputer(principal: Principal): void {
-  if (principal === "owner") {
-    if (getSetting("comfyWhere") !== "computer") setSetting("comfyWhere", "computer");
-    return;
-  }
+  if (principal === "owner") return;
   const id = principal.slice(5);
   if (accountGpu(id)?.mode !== "computer") {
     setAccountGpu(id, { mode: "computer" });

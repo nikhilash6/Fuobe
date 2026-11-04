@@ -7,7 +7,7 @@ import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
 import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setTask, takeTask, taskById, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
-import { createWorker, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
+import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
 /**
  * Workers (docs/gpu-workers.md): the owner's GPUs on other machines, each running `fuobe worker`, which pulls jobs from
@@ -179,6 +179,8 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     }
     const state = workerState(fresh, now);
     d.prepare("UPDATE relay_workers SET state = ? WHERE id = ?").run(state.state, w.id);
+    // A worker that can save a new token (protocol 2) gets its next one when half its token's life is gone.
+    const nextToken = b.protocol >= 2 ? offerNextToken(fresh, now) : null;
     const h = hoursAt(hoursOf(fresh), now);
     // Pool names are validated at creation (/^[a-z0-9-]{1,32}$/), so they never contain commas. INSTR on the
     // CSV avoids the LIKE-wildcard class of risk (%, _) entirely.
@@ -199,6 +201,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         lanes: Object.keys(allowOf(fresh)),
         minProtocol: MIN_PROTOCOL,
         sendInventory: !fresh.inventory_hash || fresh.inventory_hash !== b.inventoryHash,
+        ...(nextToken && { token: nextToken }),
       },
     };
   })();

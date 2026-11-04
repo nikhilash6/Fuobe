@@ -174,6 +174,11 @@ export interface WorkerAnswer {
   minProtocol: number;
   /** Its inventory is unknown or changed: send it (PUT /api/gpu/computer/inventory). */
   sendInventory: boolean;
+  /**
+   * Its next token (protocol 2), when its token has a lifetime and half of it is gone: save it and use it from the next
+   * call on. The old token stops at the new one's first use. Given again after 10 minutes if it was never used.
+   */
+  token?: { value: string; expiresAt: number };
 }
 
 /** What a worker says in its beat, on top of a browser's. */

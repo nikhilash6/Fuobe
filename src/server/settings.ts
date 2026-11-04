@@ -225,13 +225,25 @@ export function validateSetting(name: SettingName, value: string, from: "api" | 
 export function setSetting(name: SettingName, value: string): void {
   validateSetting(name, value);
   const def = SETTINGS[name];
-  if (value === "") {
-    db().prepare("DELETE FROM settings WHERE key = ?").run(def.key);
-    return;
+  // Where ComfyUI runs decides whose GPUs run every job: each change is in the admin log, with the value before and after.
+  const before = name === "comfyWhere" ? getSetting("comfyWhere") : null;
+  if (value === "") db().prepare("DELETE FROM settings WHERE key = ?").run(def.key);
+  else db().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(def.key, value);
+  if (name === "comfyWhere") {
+    const after = getSetting("comfyWhere");
+    if (after !== before) auditSettingChange("settings.comfy_where", { before, after });
   }
-  db()
-    .prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-    .run(def.key, value);
+}
+
+/** A row in the admin log (admin_audit) for a setting the owner changed. Never fails the change. */
+function auditSettingChange(action: string, detail: Record<string, unknown>): void {
+  try {
+    db()
+      .prepare("INSERT INTO admin_audit (at, actor, token_id, token_name, action, target, detail_json, status) VALUES (?, 'owner', NULL, NULL, ?, NULL, ?, 200)")
+      .run(Date.now(), action, JSON.stringify(detail));
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't write the admin log: ${(e as Error).message}`);
+  }
 }
 
 export function mask(value: string): string {

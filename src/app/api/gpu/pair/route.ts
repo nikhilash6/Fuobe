@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { pairingPrincipal, runOnComputer } from "@/server/computer/pairing-http";
 import { approvePairing, denyPairing, normaliseCode, pairingByCode } from "@/server/computer/workers";
 import { hit } from "@/server/rate";
+import { getSetting } from "@/server/settings";
 
 /** Codes a person may look up or answer in 10 minutes (a code is 8 characters from 31: guessing one is hopeless). */
 const LOOKUPS = 30;
@@ -43,5 +44,7 @@ export async function POST(request: Request) {
   const a = approvePairing(String(body?.code ?? ""), principal);
   if (!a) return Response.json({ error: GONE }, { status: 404, headers: { "Cache-Control": "no-store" } });
   runOnComputer(principal);
-  return Response.json({ ok: true, worker: { id: a.workerId, name: a.name } }, { headers: { "Cache-Control": "no-store" } });
+  // The owner's pairing never moves the studio's jobs: the owner chooses the computer in Settings.
+  const settingsNeeded = principal === "owner" && getSetting("comfyWhere") !== "computer";
+  return Response.json({ ok: true, worker: { id: a.workerId, name: a.name }, ...(settingsNeeded && { settingsNeeded: true }) }, { headers: { "Cache-Control": "no-store" } });
 }

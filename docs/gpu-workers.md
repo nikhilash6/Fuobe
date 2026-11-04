@@ -35,7 +35,9 @@ You do not need a start flag or a guard file. In the studio, **Connect your GPU*
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 
 The token acts only as that person's own computer. The ComfyUI gets that person's jobs, and nobody else's. The jobs
-run with no Fuobe tab open. The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
+run with no Fuobe tab open. The owner's pairing never changes where the studio's ComfyUI jobs run: the paired
+ComfyUI takes the owner's jobs once the owner chooses the computer in Settings → ComfyUI. Every change of that setting
+is in the admin log (`settings.comfy_where`, with the value before and after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
 or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected token gets 401 at its next call.
 
 ## Workers (the owner's shared GPUs)
@@ -201,9 +203,23 @@ Every worker call carries `Authorization: Bearer fuobe_wkr_…`. A worker token 
 gets 403 everywhere else. It is never the owner, and an owner API token can never act as a worker. The studio reads the
 token on every call, so a revoked token stops at once.
 
+**A token's lifetime.** With `FUOBE_WORKER_TOKEN_DAYS` set (unset or 0: a token never expires, as before), a pool
+worker's token lasts that many days. Once half of it is gone, the beat answer of a worker that speaks protocol 2 gives
+it the next token (`worker.token: { value, expiresAt }`). The worker saves it and uses it from its next call on. The old
+token stops at the new one's first use. A next token that is never used is given again, as a new one, after 10
+minutes. A paired ComfyUI's token keeps no lifetime. Set the lifetime only once every worker speaks protocol 2: an
+older worker's token would simply expire.
+
+**Where a token is used from.** For a pool worker, the studio remembers the countries (Cloudflare's `cf-ipcountry`)
+and the networks (an IPv4 address's /24 or an IPv6 address's /64, read only with `FUOBE_TRUST_PROXY=1`) its token was
+used from, as short hashes, never as addresses. A call from a new country or a new network, and calls from two networks
+within 10 minutes of each other, each write an alert to the admin log (`worker.alert`, actor `system`, the worker as
+its target), at most once an hour each.
+
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, local: { paused, why, until }, gpu: {
   otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
-  insideHours, nextChangeAt, lanes, minProtocol, sendInventory }` and `claimableNow`: how many people's jobs (an
+  insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token, above) and
+  `claimableNow`: how many people's jobs (an
   account's, never the owner's) this worker may claim right now by its lanes, files, VRAM and hours, its own pause aside.
 - `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }] }` →
   `{ lanes, workflows, missing }`.

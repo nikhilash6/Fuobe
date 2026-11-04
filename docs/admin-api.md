@@ -117,14 +117,17 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner` or `token`), `token` (a token id), `action`, `changes=1` (changes only: no reads, file views or refusals) | `{ items, next }` |
 | `GET /api/admin/tokens/self` | | `{ id, name, prefix, scopes, expiresAt, createdAt }` |
 
-A log row is `{ id, at, actor: "owner" | "token", token: { id, name } | null, action, target, detail, status }`.
+A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name } | null, action, target, detail, status }`.
 `token.name` is the name the token had at the time. Actions: `account.disable`, `account.enable`, `account.signout`,
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
 `worker.rotate`, `worker.revoke`, `queue.settings` (with the values before and after), `token.create`, `token.revoke`,
-`token.revoke_all`; a token's reads `accounts.list`, `accounts.csv`,
-`account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action every 10 minutes) and
-`file.view` (one row per token and file every hour); and refusals `scope.denied` and `rate.limited`. The owner's own
-reads in the browser aren't logged. Rows go after a year.
+`token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
+`accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
+every 10 minutes) and `file.view` (one row per token and file every hour); refusals `scope.denied` and `rate.limited`;
+and the studio's own alerts `worker.alert` (actor `system`: a worker's token used from a new country, a new network,
+or two networks at once; [gpu-workers.md](gpu-workers.md#the-protocol)). The owner's own reads in the browser aren't
+logged. Rows go after a year. `actor` can be `system`, and the `actor` filter
+takes it.
 
 A row is written once the change is made. If the server can't write it (a full disk, say), the change still stands and
 the server's own log notes the missing row.

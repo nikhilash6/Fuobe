@@ -996,6 +996,13 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "worker_id", "TEXT"],
   // The class a task waits in: "paid", "free" or "owner" (pool.ts LINE_ORDER).
   ["relay_tasks", "class", "TEXT"],
+  // A pool worker's next token (workers.ts offerNextToken) and where its token was used from (hashed networks).
+  ["relay_workers", "next_token_hash", "TEXT"],
+  ["relay_workers", "next_expires_at", "INTEGER"],
+  ["relay_workers", "next_token_at", "INTEGER"],
+  ["relay_workers", "seen_json", "TEXT"],
+  ["relay_workers", "last_network", "TEXT"],
+  ["relay_workers", "last_net_at", "INTEGER"],
 ];
 
 declare global {
