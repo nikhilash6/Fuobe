@@ -127,7 +127,7 @@ describe("/studios", () => {
     expect(subsOf("film", "video-tools")).not.toContain("video-tools-matte"); // Video tools' first mode is the studio's own page
     // Ads Studio is a studio with a card or pill of its own here: Marketing Studio's row has the other two.
     expect(subsOf("sell", "marketing")).toEqual(["marketing-click-to-ad", "ads-multiplier"]);
-    expect(subsOf("people", "genjutsu")).toEqual(["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-finish"]);
+    expect(subsOf("people", "genjutsu")).toEqual(["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-picture", "genjutsu-finish"]);
     expect(subsOf("people", "character-sheet")).toEqual(["character-sheet-reference", "character-sheet-cast", "character-sheet-describe"]);
     expect(subsOf("sound", "audio")).not.toContain("audio-music"); // a card of its own
     for (const s of sections) {
@@ -137,7 +137,7 @@ describe("/studios", () => {
       for (const c of s.chips) expect(s.cards.map((x) => entry(x)!.href), `${s.id}: ${c}`).not.toContain(entry(c)!.href);
       for (const x of s.subs ?? []) for (const c of x.ids) expect(hrefs.has(entry(c)!.href), `${s.id}: ${c}`).toBe(false);
     }
-    // The owner's own (Genjutsu's From picture) are theirs alone; Cinema Studio's Blockout is everyone's.
+    // Genjutsu's From picture (it runs on a visitor's own GPU) and Cinema Studio's Blockout are linked for everyone.
     const owner = areaSections("studios", "owner");
     expect(owner.find((s) => s.id === "people")!.subs!.find((x) => x.parent === "genjutsu")!.ids).toContain("genjutsu-picture");
     expect(owner.find((s) => s.id === "film")!.subs!.find((x) => x.parent === "cinema")!.ids).toEqual(["cinema-blockout"]);

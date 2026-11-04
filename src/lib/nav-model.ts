@@ -351,7 +351,7 @@ const STUDIO_FEATURES: NavEntry[] = [
       ["insert", "Insert", "Add something to the shot", "insert add object put into clip place"],
     ] as const
   ).map(([id, label, what, kw]) => feature("genjutsu", "WandSparkles", id, `/genjutsu?mode=${id}`, label, what, kw)),
-  feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion", OWNER),
+  feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion"),
   feature("genjutsu", "WandSparkles", "finish", "/genjutsu?mode=finish", "Finish", "Fix faces and colours", "finish fix faces colours colors", FINISH_OPEN ? undefined : OWNER),
   ...(
     [

@@ -172,7 +172,7 @@ describe("the launcher's columns", () => {
         .find((e) => e.id === id)
         ?.subs?.map((s) => s.label);
     expect(subs("marketing")).toEqual(["Click to Ad", "Ads Studio", "Ad Multiplier"]);
-    expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "Finish"]);
+    expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
     expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
     expect(subs("audio")).toEqual(["Speech", "Dialogue", "Voice change", "See all 15"]);
     expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 11"]);

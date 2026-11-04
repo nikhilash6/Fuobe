@@ -116,7 +116,7 @@ describe("the catalogue of studio features", () => {
 
 describe("who sees a studio's features", () => {
   it("keeps the owner's own modes the owner's, in every place", () => {
-    for (const id of ["genjutsu-picture", "canvas-skills", "assist-memory", "assist-scheduled", "video-tools-restore"]) {
+    for (const id of ["canvas-skills", "assist-memory", "assist-scheduled", "video-tools-restore"]) {
       expect(entry(id)!.visibility, id).toEqual(["owner"]);
       for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === id), `${kind}: ${id}`).toBe(false);
     }
@@ -157,6 +157,15 @@ describe("who sees a studio's features", () => {
       expect(studioSubs("genjutsu", kind, "sheet").some((e) => e.id === finish.id), kind).toBe(open);
       const menu = studiosMenu(kind).columns.flatMap((c) => [c.lead!, ...c.rows]).flatMap((e) => e.subs ?? []);
       expect(menu.some((s) => s.id === finish.id), kind).toBe(open);
+    }
+  });
+
+  it("links Genjutsu's From picture for everyone: it runs on a visitor's own GPU until it opens here", () => {
+    const picture = entry("genjutsu-picture")!;
+    expect(picture.visibility).toBeUndefined();
+    for (const kind of VISITORS) {
+      expect(visibleTo(picture, kind), kind).toBe(true);
+      expect(studioSubs("genjutsu", kind, "sheet").some((e) => e.id === picture.id), kind).toBe(true);
     }
   });
 
@@ -218,7 +227,7 @@ describe("finding a studio's features", () => {
     const inside = (kind: ViewerKind | undefined, q: string) => find(kind, q).groups[0];
     expect(find("guest", "genjutsu").best[0]).toMatchObject({ id: "genjutsu" });
     expect(inside("guest", "genjutsu")).toMatchObject({ label: "In Genjutsu" });
-    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "Finish"]);
+    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
     expect(inside("owner", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
     expect(inside("guest", "character sheet").hits.map((h) => h.label)).toEqual(["From Reference", "Build from scratch", "From a description"]);
     // Not a tab that is the studio's own page (Upscale's Image), nor one already among the best matches.

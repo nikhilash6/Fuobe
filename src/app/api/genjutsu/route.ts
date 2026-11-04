@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       runAccountTool(request, viewer.account, {
         tool: "genjutsu",
         files: [input.source.url, input.mask, input.picture?.frame, ...(input.references ?? []), ...look],
-        plan: async () => genjutsuSteps((run = await planGenjutsuRun(input, { owner: false }))),
+        plan: async () => genjutsuSteps((run = await planGenjutsuRun(input, { owner: false, ownSetup: true }))),
         start: () => startGenjutsu(run!),
       }),
       ({ value, gpuWarning }) => Response.json({ final: value.final, items: value.items, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),

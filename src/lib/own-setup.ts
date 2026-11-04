@@ -126,6 +126,15 @@ export function ownSetupOnly(modelOrAppId: string, engine?: Engine): OwnSetup | 
   return m ? ownSetupFor(m, engine) : null;
 }
 
+/**
+ * An item's setup whatever its test says: for a surface that already knows, from the same flags, whether the item has
+ * opened on this studio's GPU (Genjutsu's live features, genjutsu-live.ts) and shows the label only until then. Null for
+ * an id this table doesn't hold.
+ */
+export function ownSetupItem(id: string): OwnSetup | null {
+  return ITEMS[id]?.setup ?? null;
+}
+
 /** Every id this table holds (tests, and the hosted runs' checks). */
 export const OWN_SETUP_IDS: readonly string[] = Object.keys(ITEMS);
 
