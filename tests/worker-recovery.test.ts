@@ -12,6 +12,8 @@
  * - A request to its ComfyUI with another Host or without the key is refused.
  * - A clip is made again by ffmpeg before its ComfyUI sees it; without ffmpeg, the job goes back to the line.
  * - A model file that turns up later is reported within one look at its folders.
+ * - A token with a lifetime: the worker saves the next token from a beat answer in worker.json and uses it, and the old
+ *   token stops.
  * - Its PC sleeps mid-run and the studio takes the job back: the next beat says how long it slept, the attempt is taken
  *   back, and the output arrives once.
  * - A model folder that isn't there yet (a drive still locked after a restart): the worker waits for it, says so, and
@@ -104,6 +106,8 @@ interface Studio {
   reports: { at: number; body: Record<string, unknown> }[];
   inventories: Record<string, unknown>[];
   intercept: ((p: string, init: RequestInit) => Promise<Response | undefined> | Response | undefined) | null;
+  /** Next tokens the studio gave the worker in its beat answers (the worker may use them from then on). */
+  tokens: string[];
 }
 
 /** fetch for the worker: the studio's routes for SITE, its own ComfyUI for the rest. */
@@ -122,8 +126,13 @@ function router(w: W, s: Studio) {
       s.inventories.push(JSON.parse(String(init.body)));
       return Response.json({ ok: true, lanes: ["small"], workflows: ["wf-test"], missing: [] });
     }
-    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${w.token}`);
-    return api(p, init);
+    expect([w.token, ...s.tokens].map((t) => `Bearer ${t}`)).toContain(new Headers(init.headers).get("authorization"));
+    const res = await api(p, init);
+    if (p === "/api/gpu/computer/beat" && res.ok) {
+      const next = ((await res.clone().json()) as { worker?: { token?: { value: string } } }).worker?.token?.value;
+      if (next) s.tokens.push(next);
+    }
+    return res;
   };
 }
 
@@ -205,7 +214,7 @@ function start(
   return r;
 }
 
-const studio = (): Studio => ({ calls: [], reports: [], inventories: [], intercept: null });
+const studio = (): Studio => ({ calls: [], reports: [], inventories: [], intercept: null, tokens: [] });
 
 async function until<T>(fn: () => T | Promise<T>, ms = 60_000, every = 100): Promise<Exclude<T, false | null | undefined | 0 | "">> {
   const end = Date.now() + ms;
@@ -678,5 +687,38 @@ describe("its model folders", () => {
     // Once heard, the sleep isn't said again.
     const last = beats.at(-1)!;
     expect(last.slept).toBeUndefined();
+  });
+
+  it("a token with a lifetime: it saves the next one in worker.json, uses it, and the old one stops", async () => {
+    process.env.FUOBE_WORKER_TOKEN_DAYS = "2";
+    try {
+      const w = addWorker();
+      const s = studio();
+      const p = pc();
+      // Half its life is gone: its next beat answer gives it the next token.
+      db().prepare("UPDATE relay_workers SET expires_at = ? WHERE id = ?").run(Date.now() + 60 * 60_000, w.id);
+      start(w, s, p);
+      const saved = await until(() => {
+        try {
+          const t = (JSON.parse(fs.readFileSync(path.join(p.home, "worker.json"), "utf8")) as { token?: string }).token;
+          return t && t !== w.token ? t : null;
+        } catch {
+          return null;
+        }
+      });
+      expect(s.tokens).toContain(saved);
+      // It uses the new one: the studio switches to it, and the old one no longer works.
+      const hash = crypto.createHash("sha256").update(saved).digest("hex");
+      await until(() => (db().prepare("SELECT token_hash FROM relay_workers WHERE id = ?").get(w.id) as { token_hash: string }).token_hash === hash);
+      const workersModule = await import("@/server/computer/workers");
+      expect(workersModule.workerFromAuth("Bearer " + w.token)).toBeNull();
+      expect(workersModule.workerFromAuth("Bearer " + saved)?.id).toBe(w.id);
+      // And it goes on working with it.
+      const { id } = addTask();
+      expect((await ended(id)).state).toBe("done");
+      expect(p.logs.some((l) => /Saved its next token/.test(l))).toBe(true);
+    } finally {
+      delete process.env.FUOBE_WORKER_TOKEN_DAYS;
+    }
   });
 });

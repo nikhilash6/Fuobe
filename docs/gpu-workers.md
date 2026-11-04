@@ -490,9 +490,10 @@ worker's token lasts that many days. A worker added before the lifetime was set 
 half of it is gone, the beat answer of a worker that says it saves tokens (`canRotateToken: true` in its beat) gives it
 the next token (`worker.token: { value, expiresAt }`). The worker saves it and uses it from its next call on. The old
 token stops at the new one's first use. A next token that is never used is given again, as a new one, after 10
-minutes. A paired ComfyUI's token keeps no lifetime. Set the lifetime only once every pool worker sends
-`canRotateToken: true`: the token of a worker that doesn't expires at the end of its lifetime, and the worker stops
-until you rotate its token in Settings → Workers.
+minutes. A paired ComfyUI's token keeps no lifetime. The worker program sends `canRotateToken: true`: it saves the
+next token in `worker.json` first, then uses it. If it can't save it, it keeps the token it has and gets the next one
+again later. An older worker program doesn't rotate its token: update every worker before you set the lifetime, or
+its token expires at the end of its lifetime and the worker stops until you rotate its token in Settings → Workers.
 
 **Where a token is used from.** For a pool worker, the studio remembers the countries (Cloudflare's `cf-ipcountry`)
 and the networks (an IPv4 address's /24 or an IPv6 address's /64, read only with `FUOBE_TRUST_PROXY=1`) its token was

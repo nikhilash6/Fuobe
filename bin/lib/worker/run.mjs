@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
-import { ffmpegOf, PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
+import { ffmpegOf, PROTOCOL, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
@@ -61,6 +61,9 @@ export const MODELS_CHECK_MS = 60_000;
  * next beat says how long (`slept`), so a job the studio took back meanwhile counts against no one.
  */
 export const SLEPT_MS = 60_000;
+
+/** A worker token as the studio makes them. */
+const NEXT_TOKEN = /^fuobe_wkr_[A-Za-z0-9_-]{43}$/;
 
 /** Kept results that the studio hasn't taken for this long are deleted (the studio drops its jobs after a day). */
 export const HOLD_MAX_AGE_MS = 24 * HOUR;
@@ -284,7 +287,22 @@ async function work(saved, deps, owner) {
   };
 
   const api = retrying(fetchFn, { now, sleep, signal: deps.signal, log });
-  const call = (p, init = {}) => api(`${site}${p}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${cfg.token}`, "User-Agent": `FuobeWorker/${VERSION}` } });
+  // Its token: worker.json's, until the studio gives it the next one (a token with a lifetime, docs/gpu-workers.md).
+  let token = cfg.token;
+  const call = (p, init = {}) => api(`${site}${p}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${token}`, "User-Agent": `FuobeWorker/${VERSION}` } });
+  /** The studio's next token: saved in worker.json first, then used from the next call on (the old one stops then). */
+  const takeToken = (next) => {
+    if (!next || typeof next.value !== "string" || !NEXT_TOKEN.test(next.value) || next.value === token) return;
+    if (!deps.home) return;
+    try {
+      saveConfig(deps.home, { ...savedConfig(deps.home), token: next.value });
+    } catch (e) {
+      log(`Couldn't save its next token in worker.json (${e.message}): it keeps the one it has, and asks again later.`);
+      return;
+    }
+    token = next.value;
+    log(`Saved its next token in worker.json${Number.isFinite(next.expiresAt) ? ` (it lasts until ${new Date(next.expiresAt).toISOString().slice(0, 10)})` : ""}.`);
+  };
 
   async function scan() {
     packs = packFolders(cfg.comfyDir, index);
@@ -387,6 +405,8 @@ async function work(saved, deps, owner) {
         return {
           protocol: PROTOCOL,
           version: VERSION,
+          // It saves the next token a beat answer gives it.
+          canRotateToken: !!deps.home,
           local: pause,
           gpu: gpuInfo,
           inventoryHash: invHash,
@@ -405,6 +425,7 @@ async function work(saved, deps, owner) {
         const min = Number(a?.worker?.minProtocol);
         if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
         answer = a;
+        takeToken(a?.worker?.token);
         // The owner's switch on the Workers page wins over worker.json; null leaves worker.json's.
         const s = a?.worker?.autoResume;
         gpu.o.autoResume = typeof s === "boolean" ? s : !!cfg.autoResume;
