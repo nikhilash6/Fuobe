@@ -86,6 +86,13 @@ export function canonical(v) {
 export const indexHash = (index) => crypto.createHash('sha256').update(canonical({ ...index, hash: undefined })).digest('hex');
 
 /**
+ * CPU work: a manifest workflow that loads no model file, fetches none on its first run and needs no graphics memory
+ * (joins, trims, adding sound, Ken Burns, still to clip). The index marks it `cpu: true`, so it is never counted as GPU
+ * work.
+ */
+export const cpuWork = (wf) => !(wf.models ?? []).length && !(wf.autoDownloads ?? []).length && !(Number(wf.vramGb) > 0);
+
+/**
  * Build the index from the library's inputs. Pure: no file or network access.
  * @param {{ manifest: object, graphs: Record<string, object>, subset: Record<string, object | null>, packs: Record<string, object>, pins: Record<string, { revision: string, sizeBytes: number, sha256?: string }>, packClasses?: Record<string, RegExp> }} inputs
  * @returns {import('../../src/lib/gpu/types').RequirementIndex}
@@ -191,6 +198,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       isolated: wf.worker === 'isolated',
       firstRun: wf.autoDownloads ?? [],
       ...(wf.validated && { validated: true }),
+      ...(cpuWork(wf) && { cpu: true }),
     };
   }
 
