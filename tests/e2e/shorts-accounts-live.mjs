@@ -92,7 +92,8 @@ try {
     check(`${who}: the clip drop is on`, (await choose.count()) > 0 && (await choose.first().isEnabled()));
     check(`${who}: Create a preset is offered`, (await page.getByText("Create a preset").count()) > 0);
     const generate = page.getByRole("button", { name: /Generate short/ });
-    check(`${who}: Generate is on`, (await generate.count()) > 0 && (await generate.first().isEnabled()));
+    // Not turned off (`disabled`); like everyone's, it waits for a preset and a clip (aria-disabled, with the reason).
+    check(`${who}: Generate is on`, (await generate.count()) > 0 && (await generate.first().evaluate((e) => !e.disabled)));
     if (shots) await page.screenshot({ path: path.join(shots, `shorts-${who}.png`), fullPage: false });
     // Choosing a video asks first: the sign-up card for a guest, the connect card for an account with no GPU or key.
     await choose.first().click();
