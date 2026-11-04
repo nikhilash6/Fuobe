@@ -23,7 +23,8 @@ import { MediaThumb } from "@/components/studio/result-media";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Viewer } from "@/components/studio/viewer";
 import { chainState, ENHANCE_COPY, formatSeconds, segmentSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
-import { finishLengthProblem, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { finishLengthProblem } from "@/lib/catalog/regenerate";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import { originalSoundLabel, originalSoundOn } from "@/lib/av/original-sound";
 import { useEngineMode, useIsOwner } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
@@ -131,6 +132,8 @@ function Session({ s }: { s: View }) {
       .catch((e: Error) => toastError(e));
   };
   const enhanceGuard = useSubmitGuard();
+  // Enhance needs a 48 GB card: a visitor runs it on its own GPU (own-setup.ts), else gets the step that sets it up.
+  const press = useOwnSetupPress();
   const enhance = (i: number) => {
     if (actions.enhance.isPending) return;
     void enhanceGuard(`enhance:${i}:${s.segments[i].primary}`, (requestId) => actions.enhance.mutateAsync({ index: i, requestId }))
@@ -271,15 +274,15 @@ function Session({ s }: { s: View }) {
                 onRegenerate={() => regenerate(i)}
                 regenerating={actions.regenerate.isPending && actions.regenerate.variables?.index === i}
                 busy={actions.regenerate.isPending}
-                enhanceable={REGEN_OFFERED && s.engine === "open" && engineMode !== "cloud"}
-                onEnhance={() => enhance(i)}
+                enhanceable={s.engine === "open" && engineMode !== "cloud"}
+                onEnhance={() => press("regenerate:enhance", () => enhance(i))}
                 enhancing={actions.enhance.isPending && actions.enhance.variables?.index === i}
                 onPrimary={(gid) => actions.primary.mutate({ index: i, generationId: gid }, { onError: (e) => toastError(e) })}
               />
             ))}
           </div>
           {/* A cloud short: Enhance (H3 regenerate) needs your GPU, said once rather than on every segment. */}
-          {REGEN_OFFERED && s.engine === "cloud" && engineMode !== "cloud" && <p className="text-[12px] text-muted-foreground">{ENHANCE_COPY.cloudSession}.</p>}
+          {s.engine === "cloud" && engineMode !== "cloud" && <p className="text-[12px] text-muted-foreground">{ENHANCE_COPY.cloudSession}.</p>}
         </section>
       </div>
       {open && <Viewer generation={open} index={0} onClose={() => setOpen(null)} />}
@@ -449,6 +452,7 @@ function SegmentCard({
               >
                 {enhancing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                 {ENHANCE_COPY.label}
+                <OwnSetupChip setup="regenerate:enhance" />
                 <span className="font-mono text-[11px] font-normal text-muted-foreground">1080p · Free</span>
               </button>
             )}

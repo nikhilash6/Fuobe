@@ -86,6 +86,7 @@ import {
 import { routesFor } from "@/lib/catalog/plan";
 import { pricingAt } from "@/lib/catalog/promo";
 import { REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { ownSetupGate } from "./own-setup-run";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { AccountProjectError, accountProjectIds, accountProjectOwner, createAccountProject, deleteAccountProject } from "./account-projects";
 import { DocxError, docxText } from "./assist/docx";
@@ -1375,8 +1376,10 @@ export function upscaleToolSteps(id: string): { request: GenerationRequest; deps
 /** "Regenerate to 1080p" on this episode: offered on the open engine once the film is done (null otherwise). */
 function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["regenerate"] {
   const modelId = ENGINE_MODELS[ep.settings.engine].regenerate;
-  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED).
-  if (!REGEN_OFFERED || !modelId || !getModel(modelId)) return null;
+  // Open-H3 Regenerate needs a 48 GB card: offered with its label (own-setup.ts "regenerate:faceless"); a run goes to
+  // the owner's GPU only once it is offered (regenerateEpisode). An account's episodes don't have it yet: its route
+  // isn't one of an account's tool runs (src/lib/guest-access.ts).
+  if (!modelId || !getModel(modelId) || tenantAccount()) return null;
   let demo = false;
   try {
     demo = runsAsDemo(modelId, "upscale-video");
@@ -1393,8 +1396,10 @@ function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["rege
  */
 export function regenerateEpisode(id: string): FacelessEpisode {
   const ep = mustEpisode(id);
-  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
-  if (!REGEN_OFFERED) throw new FacelessError(REGEN_COPY.heldEpisode, 422);
+  // Open-H3 Regenerate needs a 48 GB card: an account runs it on its own GPU when that GPU fits it (own-setup-run.ts),
+  // never on this studio's. The owner's waits until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
+  if (tenant()) ownSetupGate("regenerate:faceless");
+  else if (!REGEN_OFFERED) throw new FacelessError(REGEN_COPY.heldEpisode, 422);
   if (!ENGINE_MODELS[ep.settings.engine].regenerate) throw new FacelessError("Regenerate runs on your GPU (open source): switch the episode to open source to use it", 422);
   const final = finalOf(ep);
   if (!ep.plan || !final) throw new FacelessError("Wait for the episode to finish first", 409);

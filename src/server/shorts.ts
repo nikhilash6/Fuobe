@@ -58,6 +58,7 @@ import { firstOn } from "./model-access";
 import { engineMode } from "./settings";
 import { readRef, RefError } from "./storage";
 import { mediaFacts, type SourceInfo } from "./media-facts";
+import { ownSetupGate } from "./own-setup-run";
 import { tenant } from "./tenant";
 
 /**
@@ -773,8 +774,10 @@ export function regenerateSegment(id: string, index: number): ShortsSessionView 
 export function enhanceSegment(id: string, index: number): ShortsSessionView {
   const s = readSession(id);
   const seg = segmentAt(s, index);
-  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
-  if (!REGEN_OFFERED) throw new ShortsError(REGEN_COPY.heldEnhance, 422);
+  // Open-H3 Regenerate needs a 48 GB card: an account runs it on its own GPU when that GPU fits it (own-setup-run.ts),
+  // never on this studio's. The owner's waits until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
+  if (tenant()) ownSetupGate("regenerate:enhance");
+  else if (!REGEN_OFFERED) throw new ShortsError(REGEN_COPY.heldEnhance, 422);
   if (s.engine !== "open") throw new ShortsError(ENHANCE_COPY.cloudSession, 422);
   checkEngine("open");
   const take = seg.takes.find((t) => t.look === seg.primary);

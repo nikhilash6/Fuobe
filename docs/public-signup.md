@@ -287,7 +287,12 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   key is asked for it (`add-key`), and a guest gets the sign-up card. Audio → Extend & remix shows to everyone, its tab
   marked "Use your own fal.ai key". `src/lib/own-setup.ts` labels these and every other item that runs only on a
   visitor's own GPU or key (`ownSetupOnly`, `ownSetupLabel`, `ownSetupStep`), and the hosted runs never place one on
-  this studio's GPUs or keys.
+  this studio's GPUs or keys. The items that need a bigger card than this studio's (Open-H3 Regenerate: Upscale →
+  Video's "Regenerate · creative" and its first step, "Regenerate in 2K" and "Enhance" in result menus, the Canvas
+  node, Shorts' Enhance, Faceless's "Regenerate to 1080p", Cinema's "Finish in 2K" on a GPU take, MiniMax H3 at 2K on
+  your GPU, Character Swap's Sharpen and its 1080p / 2K / 4K on your GPU; and Kandinsky 6.0 Pro) show to everyone,
+  marked "Runs on your own GPU · 48 GB" (Kandinsky Pro's choice says about 80 GB). An account runs them on its own GPU
+  only, when that GPU has the memory (`src/server/own-setup-run.ts`); otherwise it gets "Connect your GPU" (`connect-gpu`).
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.

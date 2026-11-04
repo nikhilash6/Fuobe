@@ -58,7 +58,8 @@ import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
 import { useEngineMode, useIsOwner } from "@/lib/api";
-import { finishedTakes, finishIn2k, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { finishedTakes, finishIn2k } from "@/lib/catalog/regenerate";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
@@ -211,9 +212,11 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
   const elsewhere = foreign(u.g, projectId);
   // Finish in 2K: a MiniMax H3 take below 2K (fal renders it again at 2K; your GPU redraws it with Open-H3 Regenerate),
   // once: not on a take whose 2K finish is under way or made (a 2K run's own 768p draft included).
-  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): offered only while Regenerate is.
-  const offered = o?.kind === "video" && !u.tile && !finished.has(u.g.id) ? finishIn2k(u.g, engineMode) : null;
-  const finish = offered && (offered.perSecond !== null || REGEN_OFFERED) ? offered : null;
+  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): a 48 GB card, so it says so (own-setup.ts)
+  // and a visitor runs it on its own GPU only.
+  const finish = o?.kind === "video" && !u.tile && !finished.has(u.g.id) ? finishIn2k(u.g, engineMode) : null;
+  const ownSetup = finish?.perSecond === null ? "regenerate:cinema-finish" : undefined;
+  const press = useOwnSetupPress();
   const seconds = Number(u.g.request.params?.duration ?? 0);
   const finishPrice = !finish ? "" : finish.perSecond === null ? "Free" : seconds > 0 ? `≈ ${formatCost(finish.perSecond * seconds)}` : `$${finish.perSecond.toFixed(2)}/s`;
   return (
@@ -280,12 +283,16 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
             {finish && (
               <DropdownMenuItem
                 onClick={() =>
+                  press(ownSetup, () =>
                   void guard(`finish-2k:${u.g.id}`, (requestId) => actions.finish2k(u.g, requestId))
                     .then((done) => done !== undefined && toast(finish.perSecond === null ? "Finishing in 2K on your GPU" : "Rendering it again at 2K"))
-                    .catch((e) => toastError(e))
+                    .catch((e) => toastError(e)),
+                  )
                 }
               >
-                <Sparkles /> {finish.label} <span className="ml-auto text-[11.5px] text-muted-foreground">{finishPrice}</span>
+                <Sparkles /> {finish.label}
+                <OwnSetupChip setup={ownSetup} />
+                <span className="ml-auto text-[11.5px] text-muted-foreground">{finishPrice}</span>
               </DropdownMenuItem>
             )}
           </>

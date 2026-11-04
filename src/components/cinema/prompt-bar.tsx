@@ -453,6 +453,8 @@ export function PromptBar(props: PromptBarProps) {
 
   // MiniMax H3 adds a 2K tier (fal's 2K, or a 768p draft finished by Open-H3 Regenerate on your GPU).
   const videoTiers = videoResolutionsFor(model);
+  // 2K on your GPU finishes with Open-H3 Regenerate: a 48 GB card, said with the tier (own-setup.ts).
+  const twoKSetup = ownSetupOnly("regenerate:h3-2k");
   // Secondary settings: inline on wide bars, in one Settings popover on narrow ones.
   const settingsItems: { label: string; node: React.ReactNode }[] = [
     {
@@ -469,7 +471,7 @@ export function PromptBar(props: PromptBarProps) {
           label="Resolution"
           value={video && !videoTiers.includes(draft.resolution.video) ? "1080p" : draft.resolution[draft.mode]}
           options={video ? videoTiers : IMAGE_RESOLUTIONS}
-          describe={video && videoTiers.includes("2K") ? (v) => (v !== "2K" ? "" : model.engine === "open" ? "768p draft, then redrawn at 2K on your GPU" : "Rendered from a 768P base") : undefined}
+          describe={video && videoTiers.includes("2K") ? (v) => (v !== "2K" ? "" : model.engine === "open" ? `768p draft, then redrawn at 2K${twoKSetup ? ` · ${ownSetupLabel(twoKSetup)}` : " on your GPU"}` : "Rendered from a 768P base") : undefined}
           onChange={(v) => setDraft((d) => ({ resolution: { ...d.resolution, [d.mode]: v } }))}
         />
       ),

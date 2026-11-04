@@ -397,8 +397,8 @@ export const REGEN_COPY = {
   /** The same refusal on an account's own ComfyUI. */
   missingVisitor: "Your ComfyUI doesn't have Open-H3 Regenerate yet. Add it with Fuobe's ComfyUI setup, then run this again.",
   /** The refusal when Settings → Models & licences has the refiner switched off. */
-  off: "Regenerate isn't available right now. Pick Restore · faithful to sharpen the clip instead.",
-  /** The refusals while Regenerate is held (REGEN_OFFERED off), for the owner and visitors alike: a run of it asked for directly. */
+  off: "Pick Restore · faithful to sharpen this clip.",
+  /** The owner's refusals while Regenerate is held on this studio's GPUs (REGEN_OFFERED off); a visitor runs it on its own GPU (server/own-setup-run.ts). */
   held: "Regenerate isn't available yet. Pick Restore · faithful to sharpen the clip instead.",
   /** MiniMax H3 at 2K on your GPU, whose takes it finishes. */
   heldTwoK: "MiniMax H3 in 2K isn't available on your GPU yet. Pick 768p, or make it in the cloud.",

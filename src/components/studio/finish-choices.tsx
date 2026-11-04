@@ -5,13 +5,14 @@ import type { Engine, ModelDef } from "@/lib/catalog/types";
 import { REGEN_COPY, REGEN_MODEL, type FinishChoice } from "@/lib/catalog/regenerate";
 import { RTX_COPY, RTX_UPSCALE_MODEL, rtxStanding } from "@/lib/catalog/rtx-video";
 import { badgeFor, useGpuBadges } from "@/hooks/use-gpu";
+import { OwnSetupChip } from "@/components/own-setup";
 import { useIsOwner } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { radioKeys, radioTab } from "./radio-keys";
 
 /**
  * Upscale → Video's open finishing steps side by side (StudioConfig.finishChoices): SeedVR2 "Restore · faithful", and
- * Open-H3 "Regenerate · creative" while it is offered. On the cloud engine (both engines on) Regenerate says it runs on
+ * Open-H3 "Regenerate · creative" with what it needs (a 48 GB card: OwnSetupChip). On the cloud engine (both engines on) Regenerate says it runs on
  * your GPU, with a button that takes the composer there; with Engine mode "Paid APIs only" nothing shows. GPU-only:
  * nobody hosts it.
  * With Regenerate picked: the GPU line (the install detail for the owner only), the 16:9 / 9:16 shape, and for a clip with
@@ -52,6 +53,7 @@ export function FinishChoices({
         <span className="min-w-0">
           <span className="font-medium text-foreground">Regenerate · creative</span> · {REGEN_COPY.gpuOnly}
         </span>
+        <OwnSetupChip setup="regenerate:upscale" />
         <button
           type="button"
           onClick={() => onPick(regen)}
@@ -99,6 +101,8 @@ export function FinishChoices({
               )}
             >
               <span className={cn("block text-[12px] font-medium", sel ? "text-brand-text" : "text-foreground")}>{c.label}</span>
+              {/* Regenerate · creative needs a 48 GB card: the choice says so (own-setup.ts). Picking it stays free for all. */}
+              {c.modelId === REGEN_MODEL && <OwnSetupChip setup="regenerate:upscale" className="my-0.5" />}
               <span className="block text-[11px] leading-snug text-pretty text-muted-foreground">{c.hint}</span>
             </button>
           );

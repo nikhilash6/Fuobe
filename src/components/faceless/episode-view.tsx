@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import { NotFoundState } from "@/components/empty-state";
 import { MediaThumb } from "@/components/studio/feed";
 import { Viewer } from "@/components/studio/viewer";
@@ -475,6 +476,8 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
   const [title, setTitle] = useState("");
   const [open, setOpen] = useState<Generation | null>(null);
   const [confirm, setConfirm] = useState(false);
+  // Regenerate to 1080p needs a 48 GB card (own-setup.ts): a visitor runs it on its own GPU, else gets the step that sets it up.
+  const press = useOwnSetupPress();
 
   if (error && /not found/i.test((error as Error).message)) return <NotFoundState title="This episode doesn't exist">It may have been deleted. Its videos are still in your library.</NotFoundState>;
   const ep = view?.episode;
@@ -550,7 +553,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                 {regenOffer && !regenerated && (
                   <DropdownMenuItem
                     disabled={!!regenerating || action.isPending}
-                    onClick={() => run("regenerate", "Regenerating each scene at 1080p — the download switches to it when it's done")}
+                    onClick={() => press("regenerate:faceless", () => run("regenerate", "Regenerating each scene at 1080p — the download switches to it when it's done"))}
                     className="items-start"
                   >
                     <Sparkles className="mt-0.5" />
@@ -560,6 +563,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                         <span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">Free</span>
                       </span>
                       <span className="text-[11.5px] leading-snug text-muted-foreground">Sharper, may redraw · {FACELESS_REGEN_COPY.time(regenOffer.scenes)}</span>
+                      <OwnSetupChip setup="regenerate:faceless" className="mt-0.5" />
                     </span>
                   </DropdownMenuItem>
                 )}
