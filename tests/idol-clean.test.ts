@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import type { Manifest } from "@/lib/comfy";
 
 /**
@@ -13,7 +13,7 @@ import type { Manifest } from "@/lib/comfy";
  * The pack is never installed here: the graph is checked against the inputs the pack's nodes declare (§5.1).
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-idol-clean-"));
+const dir = tempDir("fuobe-idol-clean-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -68,7 +68,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const prepare = (extra: Record<string, unknown>, idolPack?: () => Promise<boolean | undefined>) =>

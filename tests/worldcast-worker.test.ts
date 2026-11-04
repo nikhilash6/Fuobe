@@ -1,11 +1,9 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // The WorldCast worker's client (docs/workers/worldcast.md) against a stand-in worker: submit, poll, download, errors.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-worldcast-"));
+const dir = tempDir("fuobe-worldcast-");
 process.env.FUOBE_DATA_DIR = dir;
 
 type Job = { status: string; progress?: number; error?: string };
@@ -79,7 +77,6 @@ const { framePoses, presetKeys } = await import("@/lib/camera-path");
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   delete process.env.WORLDCAST_URL;
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => {

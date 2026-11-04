@@ -2,8 +2,8 @@
   "asOf": "2026-11-02",
   "scope": "Hi3D v1.0 (Sparc3D's refinement stage, released open): what it is, its weights, licence, hardware, ComfyUI support and hosting, read for package hi3d-refine.",
   "sources": {
-    "readme": "https://github.com/hi3d-official/Hi3Dv1.0 README.md (copy read as data: /home/user/ext/hi3d/README.md)",
-    "licence": "https://github.com/hi3d-official/Hi3Dv1.0 LICENSE (copy read as data: /home/user/ext/hi3d/LICENSE)",
+    "readme": "https://github.com/hi3d-official/Hi3Dv1.0 README.md (read from a local copy)",
+    "licence": "https://github.com/hi3d-official/Hi3Dv1.0 LICENSE (read from a local copy)",
     "weights": "https://huggingface.co/hi3d-official/Hi3Dv1.0 (API read 2026-11-02)",
     "site": "https://www.hi3d.ai/hi3d-1-0-open-source"
   },

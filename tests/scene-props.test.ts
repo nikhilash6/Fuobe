@@ -183,7 +183,7 @@ describe("the scene draws props in its own render", () => {
 
   it("reads frames with no pixel-pack buffer bound (Spark's async sort readback leaves one: frame 0 came out black)", () => {
     const engine = read("src/components/cinema/scene-engine.ts");
-    expect(engine).toMatch(/gl\.bindBuffer\(gl\.PIXEL_PACK_BUFFER, null\);\n\s+this\.renderer\.readRenderTargetPixels/);
+    expect(engine).toMatch(/gl\.bindBuffer\(gl\.PIXEL_PACK_BUFFER, null\);\r?\n\s+this\.renderer\.readRenderTargetPixels/);
     expect(engine.match(/this\.renderer\.readRenderTargetPixels\(/g)).toHaveLength(1);
   });
 

@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import { applyMeasured, imagesToMeasure } from "@/components/layers/apply";
 import { getModel, getPreset } from "@/lib/catalog";
 import { planGeneration } from "@/lib/catalog/plan";
@@ -13,7 +11,7 @@ import { readLayout } from "@/lib/layout-prompt";
 // N7-11: MOSS-Image's layouts in two studios people already use. Storyboard's "One sheet" draws every panel on one page
 // (a multi-panel layout, cropped into frames in the browser); Layers' "Re-render from layers" paints the arrangement again
 // from each visible layer's box and the text read off the picture. Demo mode: no keys, no GPU.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-moss-sheets-"));
+const dir = tempDir("fuobe-moss-sheets-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -23,7 +21,6 @@ const { jobSteps, nearestAspect, rerenderCaption } = await import("@/server/laye
 const { getGeneration } = await import("@/server/generations");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const plan = (r: GenerationRequest) => planGeneration(r, getModel, getPreset);
 const ratio = (a: string) => {

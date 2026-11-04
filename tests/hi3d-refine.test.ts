@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Hi3D 1.0 refine (hi3d-refine, docs/research/hi3d-refine.json): the request and its parameters, the chain Image to 3D
@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * scaling, watertight check and files. Nothing here runs Hi3D (it needs an Ampere-or-newer NVIDIA GPU).
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-hi3d-"));
+const dir = tempDir("fuobe-hi3d-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -29,7 +29,6 @@ const m3d = await import("@/lib/av/model3d");
 const print = await import("@/lib/print3d");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 const manifest = JSON.parse(read("workflows/comfyui/manifest.json")) as { workflows: { id: string; license: string; bindings: Record<string, unknown>; customNodes: { name: string }[]; models: { file: string; folder: string; url: string }[] }[] };

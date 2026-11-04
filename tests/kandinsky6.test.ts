@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import { getModel, getPreset } from "@/lib/catalog";
 import { buildPayload } from "@/lib/catalog/payload";
 import { estimateCost, planGeneration, routesFor, sourceLengthProblem } from "@/lib/catalog/plan";
@@ -16,12 +16,11 @@ import { LIPSYNC_STUDIO } from "@/lib/studios";
 
 // Package nm10-kandinsky6 (docs/research/new-models-10.md §2.1, §2.6): Kandinsky 6.0 on both engines. Kandinsky Lab's packs
 // (kandinsky6, kandinsky6-sr) on your GPU, fal's Pro / Lite / VSR in the cloud, priced by steps and per output frame.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-k6-"));
+const tmp = tempDir("fuobe-k6-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
 const { STUDIO_ROWS } = await import("@/server/gpu/tools");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const dir = path.join(process.cwd(), "workflows/comfyui");
 const read = <T>(f: string) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as T;

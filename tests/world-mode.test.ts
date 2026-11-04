@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import type { CinemaGenerateInput } from "@/lib/catalog/cinema";
 import type { ComfyWorkflow, Manifest } from "@/lib/comfy";
 import type { WorldScript } from "@/lib/world";
@@ -12,7 +12,7 @@ import type { WorldScript } from "@/lib/world";
  * bindings, Cinema's World take (open engine only) and the GPU pre-flight row.
  */
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-world-"));
+const tmp = tempDir("fuobe-world-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -34,7 +34,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const dir = path.join(process.cwd(), "workflows/comfyui");
 const read = <T>(f: string) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as T;

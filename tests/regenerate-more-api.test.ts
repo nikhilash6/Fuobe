@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import type { Generation, GenerationRequest, GenInput } from "@/lib/catalog/types";
 
 // Regenerate in Faceless, video segments and Cinema H3 shots (package n7-10-regenerate-more): MiniMax H3's 2K tier on your
@@ -12,7 +12,7 @@ vi.setConfig({ testTimeout: 120_000 });
 // tests/regenerate-offered.test.ts checks that nothing offers it while it is off.
 vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-more-"));
+const dir = tempDir("fuobe-regen-more-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 delete process.env.FUOBE_PASSWORD;
@@ -47,7 +47,6 @@ const params = <T extends Record<string, string>>(p: T) => ({ params: Promise.re
 const sixteen = (accountId?: string) => saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "edit.mp4", ...(accountId && { accountId }) }).url;
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 60_000): Promise<Generation> {
   const end = Date.now() + ms;

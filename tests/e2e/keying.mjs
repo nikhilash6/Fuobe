@@ -68,7 +68,7 @@ try {
         await noSideScroll(page, `${label} green screen`);
         if (size === "1440" && engine === "open") {
           // The settings: the three outputs and the three formats.
-          const settings = page.getByRole("button", { name: /settings|options/i }).first();
+          const settings = page.getByRole("button", { name: /^Settings:/ }).first();
           if (await settings.isVisible().catch(() => false)) {
             await settings.click();
             await page.waitForTimeout(400);

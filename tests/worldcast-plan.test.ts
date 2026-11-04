@@ -1,17 +1,16 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * WorldCast behind the camera-path buttons (build plan N7-9): the steps of a run, the buttons preferring it when the
  * worker answers and saying what they film on when it doesn't, the ModelDef's visibility, and the server's case.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-worldcast-plan-"));
+const dir = tempDir("fuobe-worldcast-plan-");
 process.env.FUOBE_DATA_DIR = dir;
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const { getModel, MODELS } = await import("@/lib/catalog");
 const { providerEngine } = await import("@/lib/catalog/engines");

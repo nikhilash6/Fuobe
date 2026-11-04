@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import type { Generation } from "@/lib/catalog/types";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 
@@ -13,7 +11,7 @@ vi.setConfig({ testTimeout: 120_000 });
 // tests/regenerate-held.test.ts checks that every way in refuses it while it is off.
 vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-latent-"));
+const dir = tempDir("fuobe-regen-latent-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.COMFYUI_WHERE;
@@ -32,7 +30,6 @@ const { readAccess, saveAccess } = await import("@/server/model-access");
 beforeAll(() => setSetting("demoMode", "off"));
 afterAll(async () => {
   await fake.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown> }>;

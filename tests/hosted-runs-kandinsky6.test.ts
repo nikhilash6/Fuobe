@@ -1,15 +1,13 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import { FAKE_POLICY, listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 
 // Kandinsky 6.0 on hosted runs (FUOBE_HOSTED_RUNS=1; nm10-kandinsky6): an account with no GPU of its own may make a clip with
 // dialogue on this install's ComfyUI like any open model, priced by the billing service as a video run; image to video and
 // Kandinsky VSR read a file, so they follow the policy's uploads, and fal's Kandinsky never runs there.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-hosted-k6-"));
+const dir = tempDir("fuobe-hosted-k6-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -39,7 +37,6 @@ afterAll(async () => {
   for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
   await fake.close();
   await comfy.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(() => {
   billing.resetBillingCache();

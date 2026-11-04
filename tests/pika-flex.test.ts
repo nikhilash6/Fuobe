@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import { getModel, getPreset } from "@/lib/catalog";
 import { planCinema, takesClips, type CinemaGenerateInput } from "@/lib/catalog/cinema";
 import { PIKA_FLEX_FL2VA, PIKA_FLEX_LORAS, PIKA_FLEX_NOTICE, PIKA_FLEX_REF2VA, pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
@@ -15,7 +15,7 @@ import type { MediaInfo } from "@/lib/media-probe";
 
 // Pika H3 Flex on your GPU (nm10-pika-flex; docs/research/new-models-10.md): 6-step FL2VA graphs, the Ref2VA references
 // graph, the References mode's limits and order, Cinema and Lipsync on it, the adapters' licence rows and pre-flight row.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-pika-flex-"));
+const tmp = tempDir("fuobe-pika-flex-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -23,7 +23,6 @@ const { accessList, knownSwitch, readAccess, saveAccess } = await import("@/serv
 const { previewGeneration } = await import("@/server/generations");
 const { runAsTenant } = await import("@/server/tenant");
 const { STUDIO_ROWS, studioTool, modelTool } = await import("@/server/gpu/tools");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const DIR = path.join(__dirname, "../workflows/comfyui");
 const manifest = JSON.parse(fs.readFileSync(path.join(DIR, "manifest.json"), "utf8")) as { workflows: ManifestWorkflow[] };

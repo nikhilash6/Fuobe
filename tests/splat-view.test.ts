@@ -117,7 +117,7 @@ describe("Spark loads only with the splat viewer", () => {
 
   it("only splat-engine.ts imports it, and only through a dynamic import", () => {
     const importers = src.filter((f) => fs.readFileSync(f, "utf8").includes("@sparkjsdev/spark"));
-    expect(importers.map((f) => path.relative(process.cwd(), f))).toEqual(["src/components/model3d/splat-engine.ts"]);
+    expect(importers.map((f) => path.relative(process.cwd(), f).split(path.sep).join("/"))).toEqual(["src/components/model3d/splat-engine.ts"]);
     const engineUsers = src.filter((f) => /["']\.\/splat-engine["']|model3d\/splat-engine["']/.test(fs.readFileSync(f, "utf8")));
     for (const f of engineUsers) {
       const text = fs.readFileSync(f, "utf8");
@@ -125,7 +125,7 @@ describe("Spark loads only with the splat viewer", () => {
       expect(text.replace(/import type [^;]+;/g, "").replace(/import\("(\.\/|\.\.\/model3d\/)splat-engine"\)/g, ""), path.relative(process.cwd(), f)).not.toMatch(/splat-engine/);
     }
     // The splat viewer, and Cinema's 3D scene for its props (idol-9; itself loaded only when a scene opens).
-    expect(engineUsers.map((f) => path.relative(process.cwd(), f)).sort()).toEqual(["src/components/cinema/scene-engine.ts", "src/components/model3d/splat-viewer.tsx"]);
+    expect(engineUsers.map((f) => path.relative(process.cwd(), f).split(path.sep).join("/")).sort()).toEqual(["src/components/cinema/scene-engine.ts", "src/components/model3d/splat-viewer.tsx"]);
   });
 });
 
