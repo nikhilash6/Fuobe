@@ -1,4 +1,4 @@
-// Home's card rows under the first screen in a real browser: Effects, Camera motions, Apps, and Studios and tools
+// Home's card rows under the first screen in a real browser: Camera motions, Effects, Apps, and Studios and tools
 // (src/components/home/home-sections.tsx). Run it on a production server (`next build`, then `next start -p <port>`), or
 // against the live site.
 //
@@ -26,7 +26,8 @@ const app = (args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--shots
 const shotsDir = args.includes("--shots") ? args[args.indexOf("--shots") + 1] : undefined;
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 
-const SECTIONS = ["home-effects", "home-motions", "home-apps", "home-studios"];
+/** The rows in the order a reader meets them, top to bottom (src/app/(studio)/page.tsx). */
+const SECTIONS = ["home-motions", "home-effects", "home-apps", "home-studios"];
 const cap = (() => {
   const src = fs.readFileSync(path.join(root, "src/lib/preview-playback.ts"), "utf8");
   const m = /MAX_PLAYING = \{ narrow: (\d+), wide: (\d+) \}/.exec(src);
@@ -169,6 +170,10 @@ async function run(device, label, dpr, max) {
   page.on("pageerror", (e) => errors.push(e.message.slice(0, 160)));
   await page.goto(`${app}/?e2e=${Date.now()}`, { waitUntil: "load" });
   await page.waitForTimeout(800);
+
+  // The rows sit in that order down the page: Camera motions first, then Effects.
+  const tops = await page.evaluate((ids) => ids.map((i) => document.getElementById(i).closest("section").getBoundingClientRect().top), SECTIONS);
+  check(`${label}: the rows come in order`, tops.every((t, i) => i === 0 || t > tops[i - 1]), SECTIONS.map((id, i) => `${id} ${Math.round(tops[i])}`).join(" < "));
 
   // The rows come into view one by one, as a reader scrolls down to them.
   for (const id of SECTIONS) {

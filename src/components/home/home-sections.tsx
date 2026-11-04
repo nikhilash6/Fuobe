@@ -146,7 +146,7 @@ function Cards({
   );
 }
 
-/** Home's preset rows (Effects, Camera motions), for an area page that shows them the same way. */
+/** Home's preset rows (Camera motions, Effects), for an area page that shows them the same way. */
 export const PresetRail = Cards;
 
 /**
