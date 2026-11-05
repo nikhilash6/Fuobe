@@ -57,7 +57,9 @@ const fake = spawn(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE
 const clients = [];
 /** Fuobe Connect's runner as its own process: its JSON lines, one by one. */
 function connect(name, token) {
-  const p = spawn(python, [path.join(root, "integrations/fuobe-connect/tests/pair_and_run.py"), "--site", SITE, "--comfy", FAKE, "--name", name, ...(token ? ["--token", token] : [])], { stdio: ["ignore", "pipe", "pipe"] });
+  // The helper prints the worker token only when asked (this studio is a throwaway one), and takes one from the environment.
+  const env = { ...process.env, FUOBE_CONNECT_TEST_PRINT_TOKEN: "1", ...(token ? { FUOBE_CONNECT_TOKEN: token } : {}) };
+  const p = spawn(python, [path.join(root, "integrations/fuobe-connect/tests/pair_and_run.py"), "--site", SITE, "--comfy", FAKE, "--name", name], { stdio: ["ignore", "pipe", "pipe"], env });
   clients.push(p);
   const lines = [];
   let err = "";

@@ -1,15 +1,17 @@
 """Fuobe Connect's middleware in front of ComfyUI's own (tests/comfy_stack.py), over real HTTP on this computer.
 
-Run: python -m unittest discover -s tests (from integrations/fuobe-connect). FUOBE_CONNECT_TEST_PORT picks the port
-(3360 by default); COMFYUI_DIR=<a ComfyUI folder> reads ComfyUI's own middleware from it.
+Run: python -m unittest discover -s tests (from the pack's folder). FUOBE_CONNECT_TEST_PORT picks the port (3360 by
+default); COMFYUI_DIR=<a ComfyUI folder> reads ComfyUI's own middleware from it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import unittest
+import uuid
 
 import aiohttp
 from aiohttp import web
@@ -17,19 +19,34 @@ from aiohttp import web
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from comfy_stack import build_app  # noqa: E402
+from comfy_stack import COMFY, Comfy, build_app  # noqa: E402
 from fuobe_connect import plugin  # noqa: E402
-from fuobe_connect.middleware import MARKER, make_middleware  # noqa: E402
-from fuobe_connect.origins import allowed, normalise, parse_list, trusted_origins  # noqa: E402
+from fuobe_connect.middleware import MARKER, Studios, make_middleware  # noqa: E402
+from fuobe_connect.origins import allowed, normalise, parse_list, same_host, studio, trusted_origins  # noqa: E402
 
 PORT = int(os.environ.get("FUOBE_CONNECT_TEST_PORT", "3360"))
 BASE = f"http://127.0.0.1:{PORT}"
 FUOBE = "https://fuobe.com"
 EVIL = "https://evil.example"
+NODES = frozenset({"CheckpointLoaderSimple", "CLIPTextEncode", "KSampler", "VAEDecode", "SaveImage", "LoadImage", "EmptyLatentImage", "PreviewImage"})
 
 
 def browser(origin: str, site: str = "cross-site", **extra) -> dict:
     return {"Origin": origin, "Sec-Fetch-Site": site, "Sec-Fetch-Mode": "cors", **extra}
+
+
+def graph(**extra) -> dict:
+    g = {
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "model.safetensors"}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a red door", "clip": ["4", 1]}},
+        "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "fuobe/gen123abc", "images": ["8", 0]}},
+    }
+    g.update(extra)
+    return g
+
+
+def prompt_body(g=None, **extra) -> bytes:
+    return json.dumps({"prompt": g or graph(), "prompt_id": str(uuid.uuid4()), "client_id": "fuobe-abcdefgh", **extra}).encode()
 
 
 class Server:
@@ -51,6 +68,14 @@ class Server:
         async with self.session.request(method, BASE + path, headers=headers or {}, **kw) as res:
             return res.status, dict(res.headers), await res.read()
 
+    async def json(self, method: str, path: str, origin: str = FUOBE, body=None):
+        status, h, raw = await self.req(method, path, browser(origin, **({"Content-Type": "application/json"} if body is not None else {})), data=json.dumps(body).encode() if body is not None else None)
+        try:
+            data = json.loads(raw) if raw else None
+        except ValueError:
+            data = None
+        return status, h, data
+
 
 class FakeStore:
     def __init__(self, data=None):
@@ -60,15 +85,20 @@ class FakeStore:
         return dict(self.data)
 
     def update(self, **c):
-        self.data.update({k: v for k, v in c.items() if v is not None})
+        for k, v in c.items():
+            if v is None:
+                self.data.pop(k, None)
+            else:
+                self.data[k] = v
         return self.data
 
 
-def with_connect(trusted=trusted_origins(None, None), cors_flag=None):
+def with_connect(trusted=trusted_origins(None, None), cors_flag=None, comfy=None, lan=False):
     plugin._state.clear()
     plugin._state["store"] = FakeStore()
     routes = [("GET", "/fuobe/connect", plugin.status), ("POST", "/fuobe/connect/studios", plugin.set_studios)]
-    app, source = build_app(cors_flag, make_middleware(lambda: trusted, cors_flag), routes)
+    studios = Studios(lambda: NODES)
+    app, source = build_app(cors_flag, make_middleware(lambda: trusted, cors_flag, studios, lan), routes, comfy)
     return app, source
 
 
@@ -84,19 +114,70 @@ class OriginsTest(unittest.TestCase):
         for bad in ["fuobe.com", "https://fuobe.com/path", "javascript:alert(1)", "null", "", "https://user@fuobe.com", "ftp://fuobe.com"]:
             self.assertIsNone(normalise(bad), bad)
 
+    def test_studios_are_https(self):
+        self.assertEqual(studio("https://studio.example.com"), "https://studio.example.com")
+        self.assertEqual(studio("http://localhost:3001"), "http://localhost:3001")
+        self.assertEqual(studio("http://127.0.0.1:3001"), "http://127.0.0.1:3001")
+        self.assertIsNone(studio("http://studio.example.com"))
+        self.assertIsNone(studio("http://192.168.1.5:3000"))
+        self.assertEqual(parse_list("http://studio.example.com, https://fuobe.com"), ["https://fuobe.com"])
+
     def test_trusted(self):
         self.assertEqual(trusted_origins(None, None), ("https://fuobe.com", "https://www.fuobe.com"))
         self.assertEqual(trusted_origins("https://studio.example.com", ["https://fuobe.com"]), ("https://studio.example.com",))
         self.assertEqual(trusted_origins(None, "https://a.example, https://b.example:8443"), ("https://a.example", "https://b.example:8443"))
         self.assertEqual(parse_list("nonsense"), [])
+        # "none", or a saved empty list: no website at all.
+        self.assertEqual(trusted_origins("none", None), ())
+        self.assertEqual(trusted_origins(None, []), ())
+        self.assertEqual(trusted_origins(None, "none"), ())
+        self.assertEqual(trusted_origins("", None), ("https://fuobe.com", "https://www.fuobe.com"))
 
     def test_allowed_paths(self):
-        for m, p in [("GET", "/system_stats"), ("GET", "/api/system_stats"), ("POST", "/prompt"), ("POST", "/upload/image"), ("GET", "/ws"), ("GET", "/history/0f0e0d0c-0000-4000-8000-000000000000"), ("POST", "/api/jobs/0f0e0d0c-0000-4000-8000-000000000000/cancel"), ("GET", "/v2/customnode/installed")]:
-            self.assertTrue(allowed(m, p), p)
-        for m, p in [("GET", "/userdata/comfy.settings.json"), ("POST", "/v2/manager/queue/install"), ("POST", "/history"), ("POST", "/fuobe/connect/studios"), ("POST", "/fuobe/connect/pair"), ("DELETE", "/prompt"), ("GET", "/internal/logs")]:
-            self.assertFalse(allowed(m, p), p)
-        self.assertFalse(allowed("GET", "/view", "filename=a.png&type=input&subfolder="))
+        uid = "0f0e0d0c-0000-4000-8000-000000000000"
+        for m, p, q in [("GET", "/system_stats", ""), ("GET", "/api/system_stats", ""), ("POST", "/prompt", ""), ("POST", "/upload/image", ""), ("GET", "/ws", "clientId=fuobe-abcdefgh"), ("GET", f"/history/{uid}", ""), ("GET", "/history", "max_items=64"), ("POST", f"/api/jobs/{uid}/cancel", ""), ("GET", "/v2/customnode/installed", ""), ("POST", "/history", "")]:
+            self.assertTrue(allowed(m, p, q), p)
+        for m, p, q in [("GET", "/userdata/comfy.settings.json", ""), ("POST", "/v2/manager/queue/install", ""), ("POST", "/fuobe/connect/studios", ""), ("POST", "/fuobe/connect/pair", ""), ("DELETE", "/prompt", ""), ("GET", "/internal/logs", ""), ("GET", "/history", ""), ("GET", "/history", "max_items=64&offset=0"), ("GET", "/history/not-a-uuid", "")]:
+            self.assertFalse(allowed(m, p, q), p)
+
+    def test_paths_match_whole(self):
+        # Python's "$" also matches before a final newline: the lists match the whole path.
+        self.assertFalse(allowed("GET", "/system_stats\n"))
+        self.assertFalse(allowed("GET", "/history/0f0e0d0c-0000-4000-8000-000000000000\n"))
+        self.assertFalse(allowed("POST", "/prompt\n"))
+
+    def test_view_only_results(self):
         self.assertTrue(allowed("GET", "/view", "filename=a.png&type=output&subfolder="))
+        self.assertTrue(allowed("GET", "/view", "filename=a.png&type=temp&subfolder=fuobe"))
+        for q in [
+            "filename=a.png&type=input&subfolder=",
+            # ComfyUI reads a " [input]" tag on the name before the type.
+            "filename=photo.png%20%5Binput%5D&type=output&subfolder=",
+            "filename=photo.png%20[input]&type=output",
+            "filename=photo.png%20[output]&type=temp",
+            "filename=blake3:0123abcd&type=output",
+            "filename=a.png&type=output&subfolder=..",
+            "filename=a.png&type=output&subfolder=fuobe/../..",
+            "filename=a.png&type=output&subfolder=/etc",
+            "filename=a.png&type=output&subfolder=C:/Users",
+            "filename=../a.png&type=output",
+            "filename=a.png&type=output&channel=a",
+        ]:
+            self.assertFalse(allowed("GET", "/view", q), q)
+
+    def test_ws_only_fuobe_ids(self):
+        self.assertTrue(allowed("GET", "/ws", "clientId=fuobe-abcdefgh"))
+        self.assertTrue(allowed("GET", "/ws", "clientId=fuobe-live-0123456789abcdef"))
+        for q in ["", "clientId=0123456789abcdef0123456789abcdef", "clientId=fuobe-abc", "clientId=fuobe-abcdefgh&x=1"]:
+            self.assertFalse(allowed("GET", "/ws", q), q)
+
+    def test_same_host_ports(self):
+        self.assertTrue(same_host("http://127.0.0.1:8188", "127.0.0.1:8188"))
+        # A page on port 80 isn't ComfyUI's own page on 8188.
+        self.assertFalse(same_host("http://localhost", "localhost:8188"))
+        self.assertFalse(same_host("http://127.0.0.1", "127.0.0.1:8188"))
+        self.assertTrue(same_host("http://localhost", "localhost"))
+        self.assertTrue(same_host("https://comfy.example", "comfy.example:443"))
 
 
 class WithoutConnectTest(unittest.TestCase):
@@ -125,11 +206,176 @@ class DirectModeTest(unittest.TestCase):
                 self.assertIn(b"comfyui_version", body)
                 status, h, _ = await s.req("GET", "/api/system_stats", browser("https://www.fuobe.com"))
                 self.assertEqual((status, h.get("Access-Control-Allow-Origin")), (200, "https://www.fuobe.com"))
-                status, h, body = await s.req("POST", "/prompt", browser(FUOBE, **{"Content-Type": "application/json"}), data=b'{"prompt_id":"p1"}')
-                self.assertEqual((status, h.get("Access-Control-Allow-Origin")), (200, FUOBE))
-                self.assertIn(b"p1", body)
-                status, h, _ = await s.req("GET", "/view?filename=a.png&subfolder=&type=output", browser(FUOBE))
+                pid = str(uuid.uuid4())
+                status, h, data = await s.json("POST", "/prompt", body={"prompt": graph(), "prompt_id": pid, "client_id": "fuobe-abcdefgh", "extra_data": {"preview_method": "auto"}})
+                self.assertEqual((status, h.get("Access-Control-Allow-Origin")), (200, FUOBE), data)
+                self.assertEqual(data["prompt_id"], pid)
+                # Its own prompt's history, then its result.
+                status, _, data = await s.json("GET", f"/history/{pid}")
+                self.assertEqual(list(data), [pid])
+                f = data[pid]["outputs"]["9"]["images"][0]
+                status, _, _ = await s.req("GET", f"/view?filename={f['filename']}&subfolder={f['subfolder']}&type=output", browser(FUOBE))
                 self.assertEqual(status, 200)
+
+        run(go())
+
+    def test_prompt_is_checked_here(self):
+        """Whatever the studio's own page checked: the pack checks every prompt in Python."""
+
+        async def go():
+            app, _ = with_connect()
+            async with Server(app) as s:
+                refused = {
+                    "a node this pack doesn't ship": graph(**{"10": {"class_type": "Image Load", "inputs": {"image_path": "C:/Users/me/secret.png"}}}),
+                    "an absolute path": graph(**{"10": {"class_type": "SaveImage", "inputs": {"filename_prefix": "/etc/cron.d/x", "images": ["8", 0]}}}),
+                    "a Windows path": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "C:\\Users\\me\\x.png", "clip": ["4", 1]}}}),
+                    "a URL": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "http://192.168.1.1/admin", "clip": ["4", 1]}}}),
+                    "a .. step": graph(**{"10": {"class_type": "SaveImage", "inputs": {"filename_prefix": "../../startup", "images": ["8", 0]}}}),
+                    "a file of yours": graph(**{"10": {"class_type": "LoadImage", "inputs": {"image": "holiday.png"}}}),
+                    "your output": graph(**{"10": {"class_type": "LoadImage", "inputs": {"image": "ComfyUI_00001_.png [output]"}}}),
+                    "a name from another node": graph(**{"10": {"class_type": "LoadImage", "inputs": {"image": ["6", 0]}}}),
+                }
+                for why, g in refused.items():
+                    status, h, data = await s.json("POST", "/prompt", body={"prompt": g, "prompt_id": str(uuid.uuid4())})
+                    self.assertEqual(status, 400, why)
+                    self.assertEqual(h.get("Access-Control-Allow-Origin"), FUOBE)
+                    self.assertEqual(data["error"]["type"], "fuobe_connect_refused", why)
+                for why, body in {
+                    "no prompt id": {"prompt": graph()},
+                    "a prompt id that isn't a UUID": {"prompt": graph(), "prompt_id": "../manager/reboot"},
+                    "another client's socket": {"prompt": graph(), "prompt_id": str(uuid.uuid4()), "client_id": "0123456789abcdef"},
+                    "an unknown field": {"prompt": graph(), "prompt_id": str(uuid.uuid4()), "number": -1},
+                    "extra data a run never sends": {"prompt": graph(), "prompt_id": str(uuid.uuid4()), "extra_data": {"extra_pnginfo": {}}},
+                }.items():
+                    status, _, _ = await s.json("POST", "/prompt", body=body)
+                    self.assertEqual(status, 400, why)
+                self.assertEqual(app[COMFY].posts, [])
+                # Its own staged input is fine.
+                status, _, _ = await s.json("POST", "/prompt", body={"prompt": graph(**{"10": {"class_type": "LoadImage", "inputs": {"image": "fuobe_abcdefgh12.png"}}}), "prompt_id": str(uuid.uuid4())})
+                self.assertEqual(status, 200)
+
+        run(go())
+
+    def test_upload_only_run_inputs(self):
+        async def go():
+            app, _ = with_connect()
+            async with Server(app) as s:
+
+                async def up(name, **fields):
+                    form = aiohttp.FormData()
+                    form.add_field("image", b"data", filename=name, content_type="image/png")
+                    for k, v in fields.items():
+                        form.add_field(k, v)
+                    async with s.session.post(BASE + "/upload/image", data=form, headers=browser(FUOBE)) as res:
+                        return res.status
+
+                self.assertEqual(await up("fuobe_abcdefgh12.png", type="input", overwrite="true"), 200)
+                self.assertEqual(app[COMFY].uploads[-1], {"name": "fuobe_abcdefgh12.png", "type": "input", "subfolder": None, "bytes": 4})
+                for name, fields in [
+                    ("my_photo.png", {"type": "input", "overwrite": "true"}),
+                    ("fuobe_abcdefgh12.html", {"type": "input"}),
+                    ("fuobe_abcdefgh12.svg", {"type": "input"}),
+                    ("fuobe_abcdefgh12.png", {"type": "output"}),
+                    ("fuobe_abcdefgh12.png", {"type": "temp"}),
+                    ("fuobe_abcdefgh12.png", {"type": "input", "subfolder": "../../custom_nodes"}),
+                    ("fuobe_abcdefgh12.png", {"type": "input", "original_ref": "{}"}),
+                ]:
+                    self.assertEqual(await up(name, **fields), 403, (name, fields))
+                self.assertEqual(len(app[COMFY].uploads), 1)
+
+        run(go())
+
+    def test_studio_sees_only_its_own_prompts(self):
+        async def go():
+            comfy = Comfy()
+            yours = str(uuid.uuid4())
+            comfy.entry(yours, {"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI"}}}, [{"filename": "ComfyUI_00001_.png", "subfolder": "", "type": "output"}])
+            batch = str(uuid.uuid4())
+            comfy.entry(batch, {"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "fuobe/gen123abc"}}}, [{"filename": "gen123abc_00002_.png", "subfolder": "fuobe", "type": "output"}])
+            running = str(uuid.uuid4())
+            comfy.queue_running = [[1, running, {"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI"}}}, {"client_id": "my-own-tab"}, ["1"]]]
+            app, _ = with_connect(comfy=comfy)
+            async with Server(app) as s:
+                # Your prompt's history and its file: not the studio's.
+                status, _, data = await s.json("GET", f"/history/{yours}")
+                self.assertEqual((status, data), (200, {}))
+                status, _, _ = await s.req("GET", "/view?filename=ComfyUI_00001_.png&subfolder=&type=output", browser(FUOBE))
+                self.assertEqual(status, 403)
+                status, _, data = await s.json("GET", f"/api/jobs/{yours}")
+                self.assertEqual(status, 404)
+                # The last prompts: only Fuobe's (a batch's passes under fuobe/<id>).
+                status, _, data = await s.json("GET", "/history?max_items=64")
+                self.assertEqual(list(data), [batch])
+                status, _, _ = await s.req("GET", "/view?filename=gen123abc_00002_.png&subfolder=fuobe&type=output", browser(FUOBE))
+                self.assertEqual(status, 200)
+                status, _, data = await s.json("GET", "/api/jobs")
+                self.assertEqual([j["id"] for j in data["jobs"]], [batch])
+                # The queue: your prompt keeps its place, with nothing else about it.
+                status, _, data = await s.json("GET", "/queue")
+                self.assertEqual(data["queue_running"], [[1, None, None, {}, []]])
+                # The bare history list is not for studios.
+                status, _, _ = await s.req("GET", "/history", browser(FUOBE))
+                self.assertEqual(status, 403)
+                # ComfyUI's own page still sees everything.
+                status, _, raw = await s.req("GET", "/history", {"Origin": BASE, "Sec-Fetch-Site": "same-origin"})
+                self.assertEqual(set(json.loads(raw)), {yours, batch})
+
+        run(go())
+
+    def test_studio_controls_only_its_own_prompts(self):
+        async def go():
+            comfy = Comfy()
+            yours = str(uuid.uuid4())
+            app, _ = with_connect(comfy=comfy)
+            async with Server(app) as s:
+                mine = str(uuid.uuid4())
+                status, _, _ = await s.json("POST", "/prompt", body={"prompt": graph(), "prompt_id": mine})
+                self.assertEqual(status, 200)
+                for body in [{"clear": True}, {"delete": [yours]}, {"delete": [mine], "clear": True}, {"delete": []}]:
+                    status, _, _ = await s.json("POST", "/queue", body=body)
+                    self.assertEqual(status, 403, body)
+                status, _, _ = await s.json("POST", "/queue", body={"delete": [mine]})
+                self.assertEqual(status, 200)
+                status, _, _ = await s.json("POST", "/history", body={"delete": [mine]})
+                self.assertEqual(status, 200)
+                status, _, _ = await s.json("POST", "/history", body={"clear": True})
+                self.assertEqual(status, 403)
+                status, _, _ = await s.json("POST", "/interrupt", body={})
+                self.assertEqual(status, 403)
+                status, _, _ = await s.json("POST", "/interrupt", body={"prompt_id": yours})
+                self.assertEqual(status, 403)
+                status, _, _ = await s.json("POST", "/interrupt", body={"prompt_id": mine})
+                self.assertEqual(status, 200)
+                status, _, _ = await s.json("POST", f"/api/jobs/{yours}/cancel", body={})
+                self.assertEqual(status, 403)
+                status, _, _ = await s.json("POST", f"/api/jobs/{mine}/cancel", body={})
+                self.assertEqual(status, 200)
+                self.assertEqual([p for p in comfy.posts if isinstance(p, tuple) and p[0] == "cancel"], [("cancel", mine)])
+
+        run(go())
+
+    def test_older_comfyui_names_the_prompt(self):
+        async def go():
+            comfy = Comfy(mint_ids=True)
+            app, _ = with_connect(comfy=comfy)
+            async with Server(app) as s:
+                status, _, data = await s.json("POST", "/prompt", body={"prompt": graph(), "prompt_id": str(uuid.uuid4())})
+                self.assertEqual(status, 200)
+                status, _, data = await s.json("GET", f"/history/{data['prompt_id']}")
+                self.assertEqual(len(data), 1)
+
+        run(go())
+
+    def test_input_names_stay_hidden(self):
+        async def go():
+            app, _ = with_connect()
+            async with Server(app) as s:
+                status, _, data = await s.json("GET", "/object_info")
+                self.assertEqual(data["LoadImage"]["input"]["required"]["image"][0], ["fuobe_abcdefgh12.png"])
+                self.assertEqual(data["LoadAudio"]["input"]["required"]["audio"][1]["options"], ["fuobe_abcdefgh12.wav"])
+                self.assertEqual(data["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0], ["model.safetensors"])
+                status, _, raw = await s.req("GET", "/object_info")
+                self.assertIn(b"holiday.png", raw)
 
         run(go())
 
@@ -177,11 +423,40 @@ class DirectModeTest(unittest.TestCase):
 
         run(go())
 
+    def test_only_this_computer(self):
+        """A trusted studio reaches the ComfyUI on this computer, not one at a network address (unless LAN is on)."""
+
+        async def go():
+            app, _ = with_connect()
+            async with Server(app) as s:
+                for host in [f"192.168.1.5:{PORT}", f"comfy.local:{PORT}"]:
+                    status, h, _ = await s.req("GET", "/system_stats", browser(FUOBE, Host=host))
+                    self.assertEqual(status, 403, host)
+                    self.assertNotIn("Access-Control-Allow-Origin", h)
+                for host in [f"localhost:{PORT}", f"127.0.0.1:{PORT}"]:
+                    status, _, _ = await s.req("GET", "/system_stats", browser(FUOBE, Host=host))
+                    self.assertEqual(status, 200, host)
+            app, _ = with_connect(lan=True)
+            async with Server(app) as s:
+                status, _, _ = await s.req("GET", "/system_stats", browser(FUOBE, Host=f"192.168.1.5:{PORT}"))
+                self.assertEqual(status, 200)
+
+        run(go())
+
+    def test_no_studio_when_none(self):
+        async def go():
+            app, _ = with_connect(trusted=trusted_origins(None, "none"))
+            async with Server(app) as s:
+                status, _, _ = await s.req("GET", "/system_stats", browser(FUOBE))
+                self.assertEqual(status, 403)
+
+        run(go())
+
     def test_studio_reaches_only_what_a_run_needs(self):
         async def go():
             app, _ = with_connect()
             async with Server(app) as s:
-                for method, path in [("GET", "/userdata/comfy.settings.json"), ("POST", "/v2/manager/queue/install"), ("POST", "/fuobe/connect/studios"), ("GET", "/view?filename=a.png&subfolder=&type=input")]:
+                for method, path in [("GET", "/userdata/comfy.settings.json"), ("POST", "/v2/manager/queue/install"), ("POST", "/fuobe/connect/studios"), ("GET", "/view?filename=a.png&subfolder=&type=input"), ("GET", "/view?filename=a.png%20[input]&subfolder=&type=output")]:
                     status, h, _ = await s.req(method, path, browser(FUOBE, **{"Content-Type": "application/json"}), data=b'{"studios":"https://evil.example"}' if method == "POST" else None)
                     self.assertEqual(status, 403, path)
                     self.assertNotIn("Access-Control-Allow-Origin", h)
@@ -195,7 +470,7 @@ class DirectModeTest(unittest.TestCase):
         async def go():
             app, _ = with_connect()
             async with Server(app) as s:
-                status, h, _ = await s.req("POST", "/prompt", {"Origin": BASE, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json"}, data=b"{}")
+                status, h, _ = await s.req("POST", "/prompt", {"Origin": BASE, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json"}, data=b'{"prompt": {"1": {"class_type": "Anything", "inputs": {"path": "C:/x"}}}}')
                 self.assertEqual(status, 200)
                 self.assertNotIn("Access-Control-Allow-Origin", h)
                 status, _, _ = await s.req("GET", "/userdata/x")
@@ -207,13 +482,15 @@ class DirectModeTest(unittest.TestCase):
         async def go():
             app, _ = with_connect()
             async with Server(app) as s:
-                async with s.session.ws_connect(f"ws://127.0.0.1:{PORT}/ws?clientId=abc12345", headers=browser(FUOBE, **{"Sec-Fetch-Mode": "websocket"})) as ws:
+                async with s.session.ws_connect(f"ws://127.0.0.1:{PORT}/ws?clientId=fuobe-abc12345", headers=browser(FUOBE, **{"Sec-Fetch-Mode": "websocket"})) as ws:
                     msg = await ws.receive(timeout=5)
                     self.assertIn("status", msg.data)
-                with self.assertRaises(aiohttp.WSServerHandshakeError) as e:
-                    async with s.session.ws_connect(f"ws://127.0.0.1:{PORT}/ws?clientId=abc12345", headers=browser(EVIL, **{"Sec-Fetch-Mode": "websocket"})):
-                        pass
-                self.assertEqual(e.exception.status, 403)
+                # Your own ComfyUI tab's socket can't be taken over.
+                for origin, cid in [(FUOBE, "abc12345"), (EVIL, "fuobe-abc12345")]:
+                    with self.assertRaises(aiohttp.WSServerHandshakeError) as e:
+                        async with s.session.ws_connect(f"ws://127.0.0.1:{PORT}/ws?clientId={cid}", headers=browser(origin, **{"Sec-Fetch-Mode": "websocket"})):
+                            pass
+                    self.assertEqual(e.exception.status, 403)
 
         run(go())
 
@@ -266,6 +543,23 @@ class WithCorsFlagTest(unittest.TestCase):
                 self.assertEqual(status, 403)
                 status, _, _ = await s.req("POST", "/prompt", {"Sec-Fetch-Site": "cross-site"}, data=b"{}")
                 self.assertEqual(status, 403)
+                # A page on another port of this computer isn't ComfyUI's own page.
+                status, _, _ = await s.req("POST", "/prompt", {"Origin": "http://127.0.0.1"}, data=b"{}")
+                self.assertEqual(status, 403)
+
+        run(go())
+
+    def test_flag_that_isnt_an_origin(self):
+        """--enable-cors-header with a value that isn't a full origin: a sandboxed page ("null") stays out."""
+
+        async def go():
+            app, _ = with_connect(cors_flag="localhost:8080")
+            async with Server(app) as s:
+                for origin in ["null", EVIL]:
+                    status, _, _ = await s.req("POST", "/prompt", {"Origin": origin, "Content-Type": "text/plain"}, data=b"{}")
+                    self.assertEqual(status, 403, origin)
+                status, _, _ = await s.req("POST", "/prompt", {"Origin": BASE}, data=b"{}")
+                self.assertEqual(status, 200)
 
         run(go())
 
