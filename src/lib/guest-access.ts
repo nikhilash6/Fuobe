@@ -139,7 +139,7 @@ const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
   ["PATCH DELETE", /^\/api\/folders\/[^/]+$/],
   ["PATCH DELETE", /^\/api\/generations\/[^/]+$/],
   // (POST /api/generations/bulk goes to the route, which takes an account's likes, pins and reviews of its own runs only.)
-  ["POST", /^\/api\/generations\/[^/]+\/(cancel|finish)$/],
+  ["POST", /^\/api\/generations\/[^/]+\/(cancel|finish|smaller)$/],
   ["DELETE", /^\/api\/generations\/trash$/],
   ["DELETE", /^\/api\/assets\/[^/]+$/],
   ["POST", /^\/api\/shares$/],

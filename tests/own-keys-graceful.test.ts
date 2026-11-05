@@ -181,7 +181,7 @@ describe("an account's run on its own key waits out a busy or down provider", ()
   it("a voice it cloned for the run (a billed step) is used again when the run tries again, never cloned twice", async () => {
     const wav = tinyWav();
     const up = await uploadsRoute.POST(
-      new Request("http://localhost:3000/api/uploads", { method: "POST", headers: { cookie: cookies.A, host: "localhost:3000", "content-type": "audio/wav", "x-file-name": "sample.wav", "content-length": String(wav.length) }, body: wav }),
+      new Request("http://localhost:3000/api/uploads", { method: "POST", headers: { cookie: cookies.A, host: "localhost:3000", "content-type": "audio/wav", "x-file-name": "sample.wav", "content-length": String(wav.length) }, body: new Uint8Array(wav) }),
     );
     expect(up.status, await up.clone().text()).toBe(201);
     const voice = ((await up.json()) as { url: string }).url;

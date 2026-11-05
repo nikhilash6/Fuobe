@@ -3153,10 +3153,11 @@ async function pollOne(r: Row): Promise<void> {
     let movedAt = typeof ctx.meta.queueMovedAt === "number" ? ctx.meta.queueMovedAt : run.submitted_at;
     const pos = res?.state === "queued" && typeof res.position === "number" ? res.position : undefined;
     if (ownQueue && pos !== undefined && (typeof ctx.meta.queuePos !== "number" || pos < ctx.meta.queuePos)) {
-      movedAt = now;
+      // Its place first seen is where it starts; only a place nearer the front is a queue that moves.
+      if (typeof ctx.meta.queuePos === "number") movedAt = now;
       db()
-        .prepare("UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.queuePos', @pos, '$.queueMovedAt', @now) WHERE id = @id AND external_id IS NOT NULL")
-        .run({ id: r.id, pos, now });
+        .prepare("UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.queuePos', @pos, '$.queueMovedAt', @movedAt) WHERE id = @id AND external_id IS NOT NULL")
+        .run({ id: r.id, pos, movedAt });
     }
     const queueOver = ownQueue
       ? now - Math.max(run.submitted_at, movedAt) > queueMs * OWN_QUEUE.scale || now - run.submitted_at > OWN_QUEUE_CAP_MS * OWN_QUEUE.scale
