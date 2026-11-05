@@ -5,6 +5,7 @@ import { modelOwnSetup, poolOwnSetup, poolRulesOf, poolRunsModel, presetOwnSetup
 import { poolRunState, type HostedCheck } from "@/lib/hosted";
 import { needsGpu, poolOwnSetups, requestOwnSetup, requestSetupIds } from "@/server/pool-own-setup";
 import { loadIndex } from "@/server/gpu/index-file";
+import { planRestore, RESTORE } from "@/lib/catalog/restore";
 
 /**
  * What runs on a visitor's own setup only, as the hosted runs see it: the static items a request asks for (a model, or a
@@ -26,6 +27,15 @@ describe("a request's own setup", () => {
     expect(requestOwnSetup({ feature: "image", modelId: "oss-z-image-turbo", op: "t2i", params: {}, engine: "open" })).toBeNull();
     expect(requestOwnSetup({ feature: "video", modelId: H3, op: "t2v", params: { resolution: "2K" }, engine: "open" })).toEqual(ownSetupOnly("regenerate:h3-2k"));
     expect(requestOwnSetup({ feature: "video", modelId: "oss-h3-regenerate", op: "upscale-video", params: {}, engine: "open" })).toEqual(ownSetupOnly("oss-h3-regenerate"));
+  });
+
+  it("asks Restore & colourise's windows by the tool's own id, and none of its joins", () => {
+    const plan = planRestore({ engine: "open", title: "R", prompt: "p", negative: "n", source: { url: "/api/files/a.mp4", duration: 12, frames: 192, fps: 16, width: 640, height: 480, hasAudio: true } });
+    const windows = plan.steps.filter((s) => s.request.modelId === RESTORE.model);
+    expect(windows.length).toBeGreaterThan(0);
+    for (const s of windows) expect(requestOwnSetup({ ...s.request, engine: "open" })).toEqual(ownSetupOnly("video-tools:restore"));
+    for (const s of plan.steps.filter((x) => x.request.modelId !== RESTORE.model)) expect(requestSetupIds(s.request)).not.toContain("video-tools:restore");
+    expect(ownSetupOnly("video-tools:restore")).toMatchObject({ need: "gpu" });
   });
 });
 

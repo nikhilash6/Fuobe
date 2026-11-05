@@ -314,6 +314,9 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   // Translate & dub: a dub, and voicing one language of the account's own dub (src/server/dub.ts).
   /^\/api\/audio-tools$/,
   /^\/api\/dub(\/[^/]+\/voice)?$/,
+  // Restore & colourise: its windows, joins and sound on the account's own GPU, with its own words or Fuobe's offline
+  // template for the prompt. The prompt writer (/api/restore/prompt) stays the owner's: it uses the studio's AI helper.
+  /^\/api\/restore$/,
 ];
 
 /**

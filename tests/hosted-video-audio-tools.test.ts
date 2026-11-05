@@ -45,7 +45,10 @@ const routes = {
   turnaroundEstimate: await import("@/app/api/turnaround/estimate/route"),
   audio: await import("@/app/api/audio-tools/route"),
   dub: await import("@/app/api/dub/route"),
+  restoreEstimate: await import("@/app/api/restore/estimate/route"),
+  restore: await import("@/app/api/restore/route"),
 };
+const { ownSetupLabel, ownSetupOnly } = await import("@/lib/own-setup");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
@@ -203,6 +206,43 @@ describe("hosted runs on: an account with no GPU of its own runs them on this in
       const r = await send(() => call("gpu", t.run!(f)));
       expect(r.status, `${t.name}: ${await r.clone().text()}`).toBe(201);
     }
+    expect(reserves()).toBe(before);
+    const made = places("gpu", since);
+    expect(made.length).toBeGreaterThan(0);
+    expect(made.every((p) => p === "own")).toBe(true);
+  });
+});
+
+describe("hosted runs on: a tool that runs on a visitor's own setup only", () => {
+  beforeEach(hostedOn);
+  const restore = (f: Files) => ({ engine: "open", source: { url: f.clip, name: "old.mp4", ...src } });
+
+  it("Restore & colourise: its price check says its setup's label, and Run opens that setup with nothing held or made", async () => {
+    const setup = ownSetupOnly("video-tools:restore")!;
+    const f = await filesOf("none");
+    const check = await routes.restoreEstimate.POST(json("/api/restore/estimate", "POST", restore(f), "none"));
+    expect(check.status, await check.clone().text()).toBe(200);
+    const priced = (await check.json()) as { place?: string; quote?: Record<string, unknown> };
+    expect(priced.place).toBe("pool");
+    expect(priced.quote).toMatchObject({ allowed: false, text: ownSetupLabel(setup), ownSetup: setup });
+    const before = reserves();
+    const since = Date.now();
+    const r = await routes.restore.POST(json("/api/restore", "POST", restore(f), "none"));
+    expect(r.status, await r.clone().text()).toBe(403);
+    expect(await r.json()).toMatchObject({ code: "connect-gpu", error: ownSetupLabel(setup), ownSetup: setup });
+    expect(reserves()).toBe(before);
+    expect(places("none", since)).toEqual([]);
+  });
+
+  it("Restore & colourise: an account whose own GPU answers runs it there, with no place in its price check", async () => {
+    const f = await filesOf("gpu");
+    const check = await routes.restoreEstimate.POST(json("/api/restore/estimate", "POST", restore(f), "gpu"));
+    expect(((await check.json()) as { place?: string }).place).toBeUndefined();
+    db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+    const before = reserves();
+    const since = Date.now();
+    const r = await send(() => routes.restore.POST(json("/api/restore", "POST", restore(f), "gpu")));
+    expect(r.status, await r.clone().text()).toBe(201);
     expect(reserves()).toBe(before);
     const made = places("gpu", since);
     expect(made.length).toBeGreaterThan(0);

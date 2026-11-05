@@ -3,6 +3,7 @@ import type { GenerationRequest, ModelDef } from "@/lib/catalog/types";
 import { MODELS } from "@/lib/catalog/models";
 import { directRunFeatures } from "@/lib/catalog/genjutsu";
 import { ENHANCE_FEATURES, REGEN_MODEL, wantsH3TwoK } from "@/lib/catalog/regenerate";
+import { RESTORE } from "@/lib/catalog/restore";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
 import { controlSetup } from "@/lib/own-setup-controls";
@@ -16,7 +17,7 @@ import { poolOnWorkers, poolTakes } from "./hosted";
  * What a run on this install's GPUs needs instead, in the "own setup" shape (src/lib/own-setup.ts): the visitor's own GPU
  * or key. Two sources, one shape:
  * - the static items (ownSetupOnly): a model, or a mode or option of it with an id of its own (MiniMax H3 at 2K,
- *   Kandinsky 6.0 Pro, Regenerate, Genjutsu's makers, "Clean the voice first");
+ *   Kandinsky 6.0 Pro, Regenerate, Genjutsu's makers, "Clean the voice first", Restore & colourise);
  * - what this install's GPUs can't run right now (a model none of them holds, a lane none serves, a card too small or
  *   of the wrong kind): `needsGpu`, with the memory its workflow needs when the index says.
  * The pool gate (hosted-run.ts poolGate) refuses with it, the price check says its label, and GET /api/status sends the
@@ -29,6 +30,8 @@ export function requestSetupIds(req: Pick<GenerationRequest, "modelId" | "op" | 
   const extra = req.params?.extra ?? {};
   if (wantsH3TwoK(req.modelId, req.params?.resolution)) ids.push("regenerate:h3-2k");
   if (req.modelId === REGEN_MODEL && req.feature && ENHANCE_FEATURES.has(req.feature)) ids.push("regenerate:enhance");
+  // Restore & colourise's windows: the tool's own setup (its gated IC-LoRA, on the visitor's own GPU).
+  if (req.modelId === RESTORE.model) ids.push("video-tools:restore");
   // A model setting whose value has an id of its own (Kandinsky 6.0 at Pro): the one table the pickers read too.
   for (const [param, v] of Object.entries(extra)) {
     const id = typeof v === "string" || typeof v === "number" ? controlSetup(req.modelId, param, v) : undefined;
