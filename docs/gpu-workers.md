@@ -465,8 +465,9 @@ still runs, and clears the whole history (a meta-batch's passes too). It also de
 its folders, and its copies of the inputs. At start, and whenever it stops, it empties these folders too. Before it
 starts a job that its ComfyUI did not have last, it clears its ComfyUI the same way.
 
-Pictures for workers are made again from their pixels on the studio (no EXIF, no GPS), the owner's and accounts'
-alike. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
+The owner's pictures for workers are made again from their pixels on the studio (no EXIF, no GPS). An account's
+pictures go to the worker as they came, and the worker makes each one again from its pixels before its ComfyUI or a
+finishing job reads it (see "Pictures of an account's run"). The studio never decodes them. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
 `image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. The worker
 then makes each one again before its ComfyUI reads it (see "Clips and sound"). Every VideoHelperSuite save node of a
 graph for the workers is sent with `save_metadata` off, so no prompt rides inside a result. An account's run is shaped
@@ -495,6 +496,61 @@ the job fails with plain words ("A clip or sound in this run couldn't be read.")
 
 Without `ffmpeg`, the worker takes pictures only. Its inventory says so (`media: ["image"]`), and the studio sends it no
 workflow that reads a clip or a sound. If such a job comes anyway, the worker gives it back to the line.
+
+### Pictures of an account's run
+
+A worker (protocol 3) makes every picture of an account's job ticket, and of a finishing job, again from its pixels
+before anything on the PC reads it. A short-lived process at low priority reads the picture as it came (with sharp, at
+most 64 megapixels, for at most 2 minutes), turns it upright by its EXIF orientation and writes a fresh PNG. Nothing
+else of the file stays: no EXIF, no GPS, no XMP, no comment. If the picture can't be read, the job fails with plain
+words. The studio sizes the picture as it shows (turned by its orientation), so a clip in the picture's own shape keeps
+that shape.
+
+The worker needs sharp for this, which `pnpm install` puts in its checkout. Without it, the worker logs so, and an
+account's job with a picture goes back to the line for another worker. Only a worker of protocol 3 or newer takes an
+account's job ticket. While accounts' runs may come to the install's GPUs, an older one reads **Update the worker**.
+
+### The CPU slot
+
+Set `"cpuSlot": true` in `worker.json` (setup asks) and the worker runs one CPU task at a time beside its GPU's job:
+
+- **Light CPU work.** Catalog workflows that the requirements index marks `cpu` (no model file, no graphics memory, no
+  particular card): joins, trims, adding sound, loops, Ken Burns moves and filters. They run on a second ComfyUI of the
+  worker's own, started with `--cpu` and with no GPU visible to it. It has its own folders, port and key, behind the
+  same guard and the same checks as the GPU's ComfyUI. `cpuComfyCommand` in `worker.json` starts it another way, as
+  `comfyCommand` does for the GPU's.
+- **Finishing jobs.** The CPU work that follows an account's run on the install's GPUs runs here, never on the studio's
+  server. The worker runs them with its own code, in a process of its own at low priority, in an emptied folder that it
+  deletes after the job, with a short environment (never its token):
+  - `model3d`, the finish of an image-to-3D model. The worker first checks that the GLB is self-contained: every buffer
+    and picture is inside the file. A GLB that names any other file is refused and never read further, and the run
+    keeps its model as it is. Then it writes the web GLB and renders the turntable and its poster on the CPU. With no
+    browser or ffmpeg for the turntable, the model comes back without one. This needs `pnpm install` in its checkout.
+  - `path`, a camera path drawn through a still and its depth picture (the guide of a camera move), encoded by ffmpeg.
+    This needs ffmpeg.
+
+  A finishing job comes as a finish ticket (`src/lib/finish-ticket.ts`): its kind, typed settings, and its input
+  files by slot, name and SHA-256. The worker checks it the same way the studio does, and sends back only the files its
+  kind makes (`web`, `turntable` and `poster`; or `path`). The studio stores them, and checks the web GLB is
+  self-contained again before it keeps it. The owner's own runs, and runs on an account's own GPU or keys, keep the
+  studio's own finish, as before.
+
+On the studio, a worker holds at most one GPU job and one CPU task. Each slot claims for itself (`slot: "cpu"` in the
+claim), so a CPU task never waits for the GPU's job, nor holds it up. The line counts each slot apart: a CPU task never
+stands ahead of a GPU job on a worker with a CPU slot, and the place and the wait say so. A worker with no CPU slot takes
+light CPU work in its GPU's slot, as before, and no finishing job. A finishing job goes only to a CPU slot that runs its
+kind, in the run's class and at the run's place in line. A CPU task's run limit is its lane's run ceiling, at most 20
+minutes. Another program on the GPU stops only the GPU's job; a pause now by hand stops both. A 3D run of an account on
+the install's GPUs is taken only while a worker's CPU slot runs the 3D finish.
+
+### Live previews
+
+When a job's run shows live previews (never one whose results are checked before anyone sees them), the claim says
+`reportPreview: true`. The worker then sends its ComfyUI's latest preview with its progress: a JPEG of at most 64 KB,
+at most one every 2 seconds. ComfyUI makes PNG previews, so the worker makes each one again with ffmpeg: at most 512
+pixels on its long side, from a local PNG or JPEG file only, with no metadata. Without ffmpeg, or when the picture
+doesn't fit in 64 KB, it sends none. The studio keeps a preview only from the attempt that holds the job, and drops a
+larger one (the progress stays).
 
 ### When something goes wrong
 
@@ -596,7 +652,10 @@ its target), at most once an hour each.
     (see "Job tickets and the PC's ceiling"). The facts it sends with its ComfyUI's add `gpuGen`, its GPU's
     generation (compute capability), when nvidia-smi can say.
   - `protocol` is 2 for a worker that says which inputs it takes, makes clips and sound again, and keeps its ComfyUI
-    behind the guard.
+    behind the guard. It is 3 for a worker that also makes an account's pictures again (see "Pictures of an account's
+    run") and may have a CPU slot.
+  - `cpuSlot` (optional) says its CPU slot and the finishing jobs it runs (`{ finishes: ["model3d", "path"] }`), and
+    `cpuRunning` the task that slot works on, as `running` does for its GPU's. With no `cpuSlot`, it has none.
   - `held` (optional) names the jobs whose finished results the worker keeps on its disk. A pause now sends those
     jobs back in line only when the worker doesn't name them.
   - While the worker waits for its turn (see "Studio jobs first"), `local` is `{ paused: false, why:
@@ -620,6 +679,9 @@ its target), at most once an hour each.
   the only kind that comes with a graph. See "The run limit" above for `runLimitMs`.
   `stallMs` is how long the job may go with no progress before the worker gives it back (see "The stall limit"). A
   worker ignores a `stallMs` under one minute, and uses its own 10 minutes then.
+  A worker's CPU slot sends `slot: "cpu"` and gets only work for that slot, with `slot: "cpu"` on the task. A
+  finishing job carries `finish` (a finish ticket) in place of `graph` or `ticket`. `reportPreview: true` asks for live
+  previews (see "Live previews").
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
   job also count: the last 20 jobs in each lane give the median and the 90th percentile.
 - Reports, inputs and results work as they do for the browser, with these additions:
@@ -634,9 +696,13 @@ its target), at most once an hour each.
     or `outside-ceiling` (more than its PC allows), the job never ran there: it costs no attempt, it waits as a job no
     worker took (its wait limit holds, unless a worker ran it before), and that worker is not offered it again until
     its build or its ceiling changes.
+  - `running` may carry `preview`: a JPEG as base64, at most 64 KB, at most one every 2 seconds (see "Live
+    previews"). A progress report with a preview may weigh up to 256 KB; any other stays under the small limit.
   - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,
     `input-crashed` (its ComfyUI stopped twice on the job), `input-unreadable` (ffmpeg could not read a clip or a
-    sound) or `bad-ticket` (a ticket it can't use, or a graph where a ticket belongs) as the reason. The worker's own log names the node and the input, never the value. For
+    sound), `bad-ticket` (a ticket it can't use, or a graph where a ticket belongs), `unsafe-model` (a 3D model that
+    isn't self-contained) or `finish-failed` (a finishing job that couldn't be made) as the reason. The worker's own log
+    names the node and the input, never the value. For
     `input-crashed` and `input-unreadable`, and for a job that a worker gave back for the last time, the person who
     started the run sees one plain sentence with no technical detail.
 
@@ -668,7 +734,10 @@ routes.
   `tests/pool-line-order.test.ts`, `tests/pool-limits.test.ts`,
   `tests/worker-input-rules.test.ts`, `tests/worker-environment.test.ts`, `tests/worker-guard.test.ts`,
   `tests/worker-runner.test.ts`, `tests/worker-recovery.test.ts`, `tests/worker-parts.test.ts`,
-  `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`). The turn tests use a fake port table, fake GPU
+  `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`, `tests/cpu-slot.test.ts`,
+  `tests/worker-cpu-slot.test.ts`). The CPU slot tests run a CPU task while a GPU job runs, refuse a GLB that names
+  an outside file on the worker, bring a turntable back with its GLB, check that an account's picture reaches its
+  ComfyUI with no EXIF, and drop a preview over 64 KB. The turn tests use a fake port table, fake GPU
   counters and a fake lock file. With only local ComfyUI work on the GPU, the worker writes `siteWaiting` and claims
   within 5 seconds of the answer; with a game, it pauses and asks for no turn. The input-rule tests
   send graphs that try to write or read files outside the worker's folders, and check that the worker refuses them.
