@@ -330,6 +330,17 @@ describe("an account dubs a video on its own ComfyUI, and its dubs are its own",
     expect(p.costUsd).toBe(0);
   });
 
+  it("never prices another account's video: it reads as a missing file", async () => {
+    const price = (video: string) => dubsRoute.POST(json("/api/dub?preview=1", "POST", { engine: "open", mode: "steps", video, targets: ["es"] }, "b"));
+    const missing = await price("/api/files/uploads/nothing-here.mp4");
+    const theirs = await price(clip);
+    expect(theirs.status).toBe(missing.status);
+    expect(theirs.status).toBe(422);
+    const said = (await theirs.json()) as { error: string; costUsd?: number };
+    expect(said).toEqual(await missing.json());
+    expect(said.error).toBe("That video is gone — add it again");
+  });
+
   it("transcribes and translates on its own ComfyUI (never the AI helper), then voices a language end to end", async () => {
     fake.log.length = 0;
     fetched.length = 0;
