@@ -2,7 +2,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { MEGA_AREAS, megaMove, megaPanelId, TILE_COLS, type MegaId } from "@/lib/mega-menus";
-import { launcherActive, studioCount, subActive } from "@/lib/nav-model";
+import { launcherActive, subActive } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { useBarMenu } from "./bar-menus";
 import { BarTrigger } from "./bar-split";
@@ -132,26 +132,13 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
     if (open) warmNav(WARM[id]);
   }, [open, id]);
 
-  const n = id === "studios" ? studioCount() : undefined;
   return (
     <>
       <BarTrigger
         id={id}
         panelId={megaPanelId(id)}
         href={area.href}
-        label={
-          n !== undefined ? (
-            /* Spoken "Studios, 29 studios": the visible words start the name (no separate label to drift from them). */
-            <span className="inline-flex items-center gap-1.5">
-              {area.label}
-              <span className="sr-only">, </span>
-              <span className="rounded-full bg-brand-faint px-1.5 py-px text-[11px] leading-4 font-semibold text-brand-text tabular-nums">{n}</span>
-              <span className="sr-only"> studios</span>
-            </span>
-          ) : (
-            area.label
-          )
-        }
+        label={area.label}
         active={active}
         open={open}
         handlers={trigger}
