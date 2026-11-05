@@ -604,6 +604,20 @@ account with that provider. The studio's own keys are never used for an account'
   attached files to that provider. civitai LoRAs are left out of runs on an account's key (copying
   them would use the studio's civitai key). Image to 3D runs on its key too; Assist, text steps and the other tools stay closed.
 - An account on a studio set to **Open source only** keeps its keys, but they aren't used.
+- **Balance and account.** Each saved key's card shows what the provider tells about the account
+  behind it, and the account menu (the You sheet on a phone) has **Connected accounts**: one row per
+  key with its balance, or **Add a key** when the account has none. `GET /api/key-info`
+  (`src/server/provider-account-info.ts`) asks fal.ai's account billing call (the balance and the
+  account's name, for a key with the `billing:usage:read` permission; fal.ai's default API keys
+  get a link to the billing page instead) and Replicate's `GET /v1/account` (the account; Replicate
+  has no balance call, so its row links to its billing page). Both are reads that run nothing. The
+  route reads the key through `cloudKey` inside the account's own work, so an account only ever
+  gets its own keys' answers. The owner gets the studio's keys, and a guest gets 401 before any key
+  is read. Nothing is asked on page load: the menu asks when it opens, and Settings when the card
+  scrolls into view. An answer is kept 60 seconds (15 when the provider is busy or out of reach),
+  and **Refresh** asks again at most once every 10 seconds per key. The answer holds only the
+  balance, the account's name and the state, never a key, its last characters or the provider's
+  own words. A check here never marks a key refused or its balance empty.
 
 ## When your GPU or key has a problem
 
@@ -832,7 +846,9 @@ work may read is `src/server/tenant.ts`. Your keys are `src/server/account-keys.
 `src/server/secret-box.ts` (encryption), `src/server/provider-keys.ts` (`cloudKey`, the one place a
 fal.ai or Replicate key is read) and `src/app/api/account/keys`; their tests are the
 `tests/account-keys*.test.ts` files, `tests/secret-box.test.ts`, `tests/byo-keys-static.test.ts` and
-`tests/e2e/byo-keys.mjs` (against stand-in providers). Uploads are `src/app/api/uploads/route.ts` (which makes the
+`tests/e2e/byo-keys.mjs` (against stand-in providers). Connected accounts (a key's balance and account) are
+`src/server/provider-account-info.ts` and `src/app/api/key-info`, tested in `tests/key-info.test.ts` and
+`tests/key-info-ui.test.ts`. Uploads are `src/app/api/uploads/route.ts` (which makes the
 proxy's checks itself, `src/server/direct-gate.ts`), the limits are in `src/server/account-files.ts`
 and the clean-up in `src/server/account-sweep.ts`. The owner's view of what accounts make is
 `src/server/account-admin.ts`. The tests are in `tests/public-signup.test.ts`,

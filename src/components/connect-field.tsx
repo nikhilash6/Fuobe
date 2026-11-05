@@ -78,6 +78,7 @@ export function ConnectField({
   place,
   trustSaved = false,
   refusal,
+  children,
 }: {
   name: string;
   setting?: PublicSetting;
@@ -106,6 +107,8 @@ export function ConnectField({
   trustSaved?: boolean;
   /** How a refused address is shown: its one line, and what to do instead. */
   refusal?: (line: string) => React.ReactNode;
+  /** Shown under the field (a saved key's provider account: src/components/keys/key-account-details.tsx). */
+  children?: React.ReactNode;
 }) {
   const qc = useQueryClient();
   const inputId = useId();
@@ -134,6 +137,8 @@ export function ConnectField({
     void qc.invalidateQueries({ queryKey: ["status"] });
     // Settings → AI helper lists what each local LLM server answers with its saved URL, model and key.
     void qc.invalidateQueries({ queryKey: ["llm"] });
+    // Connected accounts: a new fal.ai key's or Replicate token's account, or none.
+    if (provider === "fal" || provider === "replicate") void qc.invalidateQueries({ queryKey: ["key-info"] });
   };
 
   const run = async () => {
@@ -273,6 +278,7 @@ export function ConnectField({
           {hint}
         </p>
       )}
+      {children}
     </div>
   );
 }
