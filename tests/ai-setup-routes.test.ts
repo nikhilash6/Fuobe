@@ -178,7 +178,7 @@ describe("the tab's reports and waits", () => {
     await report(body.code, a, facts({ comfy: "unreadable", port: 8188 }));
     const status = await (await reading).json();
     expect(Date.now() - t0).toBeLessThan(4000);
-    expect(status.steps[0]).toMatchObject({ id: "comfyui", state: "done", detail: "Port 8188" });
+    expect(status.steps[0]).toMatchObject({ id: "comfyui", state: "done", detail: "On port 8188" });
     // The tab's next report says the AI checked in.
     expect((await (await report(body.code, a)).json()).aiReadAt).toBeGreaterThan(0);
   });
@@ -208,7 +208,7 @@ describe("the public status", () => {
     expect(text.headers.get("access-control-allow-origin")).toBeNull();
     const words = await text.text();
     expect(words).toMatch(/^[\x0a\x20-\x7e]*$/);
-    expect(words).toContain("[done] ComfyUI is running: Port 8000, ComfyUI Desktop");
+    expect(words).toContain("[done] ComfyUI is running: ComfyUI Desktop, on port 8000");
     expect(words).not.toContain("setup-a@example.com");
     const json = await (await read(body.code, "?format=json&n=2")).json();
     expect(json).toMatchObject({ fuobe_setup: 1, code: body.code, way: "direct", port: 8000, install: "desktop" });
@@ -288,6 +288,22 @@ describe("the guide and Fuobe's files", () => {
     expect(bat.headers.get("content-disposition")).toContain("Fuobe ComfyUI setup.bat");
     expect(await bat.text()).toContain("--enable-cors-header https://fuobe.com");
     expect((await startRoute.GET(req("/api/setup/files/start/99999"), ctx({ port: "99999" }))).status).toBe(404);
+  });
+
+  it("limit each visitor on its own: many visitors together never keep another one from the steps", async () => {
+    process.env.FUOBE_TRUST_PROXY = "1";
+    try {
+      const guide = (ip: string) => guideRoute.GET(req("/api/setup/guide/address/mac", { headers: { "x-forwarded-for": ip } }), ctx({ way: "address", os: "mac" }));
+      const guard = (ip: string) => guardRoute.GET(req("/api/setup/files/fuobe_guard.py", { headers: { "x-forwarded-for": ip } }));
+      // Eleven visitors use up their own minute (more than the 600 a minute a shared budget would allow).
+      for (let v = 1; v <= 11; v++) for (let i = 0; i < 60; i++) expect((await guide(`2001:db8:${v}::1`)).status).toBe(200);
+      expect((await guide("2001:db8:1::1")).status).toBe(429);
+      expect((await guide("198.51.100.20")).status).toBe(200);
+      for (let v = 1; v <= 11; v++) for (let i = 0; i < 60; i++) await guard(`2001:db8:${v}::1`);
+      expect((await guard("198.51.100.20")).status).toBe(200);
+    } finally {
+      delete process.env.FUOBE_TRUST_PROXY;
+    }
   });
 
   it("knows the studio's address from a fixed list", () => {

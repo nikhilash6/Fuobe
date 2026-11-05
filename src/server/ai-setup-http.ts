@@ -32,6 +32,16 @@ export const tooMany = (error: string, retryAfterS: number) =>
   Response.json({ error, retryAfterS }, { status: 429, headers: { ...SETUP_HEADERS, "Retry-After": String(retryAfterS) } });
 
 /**
+ * A visitor's budget for Fuobe's own fixed files (the steps, the guard, the start file): its own only, when the studio
+ * can tell visitors apart. No budget shared by everyone: these are the same few lines for every visitor, and a shared
+ * one would let a few visitors use it up and keep every other person's AI from its steps.
+ */
+export function ownBudget(name: string, headers: Headers, perVisitor: number, windowMs: number): { ok: boolean; retryAfterS: number } {
+  const key = visitorKey(headers);
+  return key ? hit(`${name}:${key}`, perVisitor, windowMs) : { ok: true, retryAfterS: 0 };
+}
+
+/**
  * A visitor's budget for a public read: its own when the studio can tell visitors apart (FUOBE_TRUST_PROXY), and
  * always one shared by everyone, much larger (so one busy visitor can't use it up for the rest, and a studio that can't
  * tell visitors apart never gives everyone one visitor's budget).

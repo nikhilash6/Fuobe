@@ -80,7 +80,8 @@ export function useSetupSession(o: { way: Way; os: Os; phone: boolean; facts: Om
   const facts = useRef(o.facts);
   const onPoke = useRef(o.onPoke);
   const failures = useRef(0);
-  const claim = useRef(false);
+  // The tab the person opened last leads (its first report takes the setup over), unless it opened out of view.
+  const claim = useRef(typeof document === "undefined" || document.visibilityState === "visible");
   useEffect(() => {
     facts.current = o.facts;
     onPoke.current = o.onPoke;
@@ -203,6 +204,25 @@ export function useSetupSession(o: { way: Way; os: Os; phone: boolean; facts: Om
     document.addEventListener("visibilitychange", on);
     return () => document.removeEventListener("visibilitychange", on);
   }, [report]);
+
+  // Closed or left: one last report says this tab is out of view, so a tab still open (or the next one) leads at once.
+  useEffect(() => {
+    const bye = () => {
+      const c = code.current;
+      const f = facts.current;
+      if (!c || !f) return;
+      void fetch(`/api/setup/session/${c}/report`, {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...f, visible: false, tabId: tabId.current }),
+      }).catch(() => null);
+    };
+    window.addEventListener("pagehide", bye);
+    return () => {
+      window.removeEventListener("pagehide", bye);
+    };
+  }, []);
 
   /** End this code: the AI can't read it any more. */
   const end = useCallback(async () => {

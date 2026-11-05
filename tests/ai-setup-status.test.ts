@@ -3,6 +3,7 @@ import { newSetupCode, setupCode, showCode, spokenCode, SETUP_ALPHABET } from "@
 import { addressCauseOf, listensWide, TabFactsSchema, type SetupView, type TabFacts } from "@/lib/ai-setup/facts";
 import { FIRST_PICTURE_MODELS, firstModelOf, firstPictureRequest, modelOrder } from "@/lib/ai-setup/first-picture";
 import { nextOf } from "@/lib/ai-setup/next-step";
+import { personWords } from "@/lib/ai-setup/person-words";
 import { PUBLIC_KEYS, toPublic, toText } from "@/lib/ai-setup/status";
 import { stepsOf } from "@/lib/ai-setup/steps";
 import { browserOf, pickWay, waysFor } from "@/lib/ai-setup/ways";
@@ -107,6 +108,14 @@ describe("the steps and the next step", () => {
     ["address: local", { way: "address", address: "failed", addressCause: "local" }, {}, "address-local", "trycloudflare.com"],
     ["address: saved, offline", { way: "address", address: "ok" }, { server: { gpu: "link", online: false } }, "link-offline"],
     ["address: connected", { way: "address", address: "ok", model: "ready" }, { server: { gpu: "link", online: true } }, "make-picture"],
+    ["address: a password keeps its protection", { way: "address", address: "failed", addressCause: "password" }, {}, "address-password", "Keep that protection"],
+    ["address: from a phone, pasted on the computer", { way: "address" }, { phone: true }, "start-tunnel", "/connect?setup=ai on that computer"],
+    ["not looked yet: install first if needed", { browser: "ask" }, {}, "allow-browser", "guide Step 0"],
+    ["ComfyUI went quiet a moment ago", { comfy: "waiting", port: 8288 }, {}, "restarting", "port 8288"],
+    ["on the processor, started with --cpu", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", cpu: true, cpuFlag: true }, {}, "cpu-only", "without --cpu"],
+    ["on the processor, a PyTorch without CUDA", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", cpu: true }, {}, "cpu-only", "run_nvidia_gpu.bat"],
+    ["a GPU too small", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", modelWhy: "small" }, {}, "no-model-fits", "Your keys"],
+    ["a model needs more than a download", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", modelWhy: "setup" }, {}, "model-setup", "Update ComfyUI"],
   ];
   it.each(cases)("%s", (_name, facts, o, id, words) => {
     const v = view(facts, o);
@@ -115,6 +124,16 @@ describe("the steps and the next step", () => {
     if (words) expect([next.say, ...next.how].join(" ")).toContain(words);
     expect(next.guide.startsWith(`${SITE}/api/setup/guide/`)).toBe(true);
     for (const s of [next.say, ...next.how, ...stepsOf(v).flatMap((s) => [s.label, s.detail ?? ""])]) expect(s).toMatch(/^[\x20-\x7e]*$/);
+    // The person's own words: no guide steps, flags or commands.
+    const mine = personWords(next);
+    expect(mine).not.toMatch(/guide|Step \d|--|\(|curl|cloudflared tunnel/);
+    expect(mine.length).toBeGreaterThan(10);
+  });
+
+  it("never tells the AI to take a password or token off a web address", () => {
+    const next = nextOf(view({ way: "address", address: "failed", addressCause: "password" }), NOW);
+    expect(next.say).toContain("Access token");
+    expect(next.say).not.toMatch(/needs none|straight to ComfyUI/);
   });
 
   it("ticks the rows off in order", () => {
@@ -155,8 +174,8 @@ describe("the public status", () => {
     const text = toText(toPublic(input({ comfy: "unreadable", port: 8000, install: "desktop" }), NOW));
     expect(text).toMatch(/^[\x0a\x20-\x7e]*$/);
     expect(text).toContain("Fuobe setup status for code ABCD-EFGH-JKMN.");
-    expect(text).toContain("[done] ComfyUI is running: Port 8000, ComfyUI Desktop");
-    expect(text).toContain("[todo] Fuobe is allowed in");
+    expect(text).toContain("[done] ComfyUI is running: ComfyUI Desktop, on port 8000");
+    expect(text).toContain("[todo] ComfyUI lets Fuobe in");
     expect(text).toContain("Next step: ComfyUI is running on port 8000");
     expect(text).toContain("Documents -> ComfyUI");
     expect(text).toContain("?r=k7q2abcd");
@@ -179,7 +198,8 @@ describe("the first picture", () => {
     expect(firstModelOf({ connected: true, models: { "oss-sdxl#t2i": ["r", 0, 0, 0], "oss-z-image-turbo#t2i": ["a", 1, 207, 0] } })).toEqual({ state: "ready", model: "oss-sdxl" });
     expect(firstModelOf({ connected: true, vramGb: 32, models: { "oss-sdxl#t2i": ["a", 1, 69, 0], "oss-z-image-turbo#t2i": ["a", 1, 207, 0] } })).toEqual({ state: "download", model: "oss-z-image-turbo", gbTenths: 207 });
     expect(firstModelOf({ connected: true, vramGb: 8, models: { "oss-sdxl#t2i": ["a", 1, 69, 0], "oss-z-image-turbo#t2i": ["a", 1, 207, 0] } })).toEqual({ state: "download", model: "oss-sdxl", gbTenths: 69 });
-    expect(firstModelOf({ connected: true, models: { "oss-sdxl#t2i": ["g", 0, 0, 0] } })).toEqual({ state: "none" });
+    expect(firstModelOf({ connected: true, models: { "oss-sdxl#t2i": ["g", 0, 0, 0] } })).toEqual({ state: "none", why: "small" });
+    expect(firstModelOf({ connected: true, models: { "oss-sdxl#t2i": ["g", 0, 0, 0], "oss-z-image-turbo#t2i": ["s", 2, 120, 0] } })).toEqual({ state: "none", why: "setup" });
     expect(modelOrder(8)[0]).toBe("oss-sdxl");
   });
 });

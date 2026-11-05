@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { GUARD_FILE_NAME, GUARD_SOURCE } from "@/lib/comfy-guard";
 import { inMinutes } from "@/server/ai-setup-http";
-import { visitorBudget } from "@/server/ai-setup-http";
+import { ownBudget } from "@/server/ai-setup-http";
 
 /**
  * Fuobe's guard for ComfyUI (src/lib/comfy-guard.ts), as a download for the person's AI: the guide checks it against
@@ -9,7 +9,7 @@ import { visitorBudget } from "@/server/ai-setup-http";
  */
 export async function GET(request: Request) {
   await connection();
-  const r = visitorBudget("setup:file", request.headers, 60, 600, 60_000);
+  const r = ownBudget("setup:file", request.headers, 60, 60_000);
   if (!r.ok) return new Response(`Too many downloads. Try again in ${inMinutes(r.retryAfterS)}.\n`, { status: 429, headers: { "Retry-After": String(r.retryAfterS), "Cache-Control": "no-store" } });
   return new Response(GUARD_SOURCE, {
     headers: {

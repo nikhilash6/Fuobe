@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { listensWide } from "@/lib/ai-setup/facts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { listensWide, startedOnCpu } from "@/lib/ai-setup/facts";
 import { installFromStats, guessInstall, platformOf, type ComfyInstall } from "@/lib/comfy-install";
 import { isGuard } from "@/lib/comfy-guard";
 import { isConnectAnswer } from "@/lib/fuobe-connect";
@@ -42,33 +42,44 @@ export function useSetupProbe(active: boolean, watch: boolean) {
   const key = found ? `${found.host}:${found.port}` : null;
   const mine = read && read.key === key ? read : null;
   const stats = mine?.stats ?? found?.stats;
-
-  // Found: its guard, and while the panel watches, ComfyUI again every few seconds (a restart goes back to the finder).
+  const place = useRef<{ key: string; port: number; host: string } | null>(null);
   useEffect(() => {
-    if (!found || !key) return;
-    let alive = true;
-    const once = async () => {
-      const [l, guard] = await Promise.all([lookOn(found.port, found.host), guardOn(found.port, found.host)]);
-      if (!alive) return;
-      if (l.state === "found") setRead({ key, stats: l.stats, guard });
-      else void look({ quiet: true });
-    };
-    void once();
-    if (!watch) return () => void (alive = false);
-    const id = setInterval(() => visible() && void once(), WATCH_MS);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-    // The found state's own object changes on every look; its place is what counts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, watch, look]);
+    place.current = found && key ? { key, port: found.port, host: found.host } : null;
+  });
+
+  /** ComfyUI read again now, with its guard (a restart goes back to the finder). */
+  const readNow = useCallback(async (): Promise<boolean> => {
+    const at = place.current;
+    if (!at) return false;
+    const [l, guard] = await Promise.all([lookOn(at.port, at.host), guardOn(at.port, at.host)]);
+    if (place.current?.key !== at.key) return false;
+    if (l.state === "found") setRead({ key: at.key, stats: l.stats, guard });
+    else void look({ quiet: true });
+    return true;
+  }, [look]);
+
+  // Found: its guard, and while the panel watches, ComfyUI again every few seconds.
+  useEffect(() => {
+    if (!key) return;
+    void readNow();
+    if (!watch) return;
+    const id = setInterval(() => visible() && void readNow(), WATCH_MS);
+    return () => clearInterval(id);
+  }, [key, watch, readNow]);
 
   const port = found?.port ?? (state.s === "needs-setting" || state.s === "waiting" ? state.port : undefined);
   const facts = stats ? statsFacts(stats, typeof window === "undefined" ? "" : window.location.origin) : null;
   const install: ComfyInstall | undefined = port ? (stats ? installFromStats(stats, port, platformOf(nav())) : ((stored("install") as ComfyInstall | null) ?? guessInstall(port, platformOf(nav())))) : undefined;
-  /** A quiet look now (the AI asked for a fresh one). */
-  const poke = useCallback(() => void look({ quiet: true }), [look]);
+  /**
+   * A quiet look now (the AI asked for a fresh one): at every port while nothing answers. Never before the person's
+   * own first look (the browser may still ask), nor while the browser blocks it.
+   */
+  const s = state.s;
+  const poke = useCallback(() => {
+    if (s === "start" || s === "looking" || s === "blocked" || s === "unsupported") return;
+    if (s === "found") void readNow();
+    else void look({ quiet: true, wide: true });
+  }, [look, readNow, s]);
   return {
     ...finder,
     port,
@@ -79,9 +90,12 @@ export function useSetupProbe(active: boolean, watch: boolean) {
     guard: mine?.guard,
     install,
     cpu: !!stats?.devices?.length && stats.devices.every((d) => d.type === "cpu"),
+    cpuFlag: startedOnCpu(stats?.system?.argv),
     vramGb: stats?.devices?.[0]?.vram_total ? Math.round(stats.devices[0].vram_total / 2 ** 30) : undefined,
     restarted: state.s === "needs-setting" && state.back,
     poke,
+    /** ComfyUI read again now (after its AI changed it): false when none is found here. */
+    refresh: readNow,
   };
 }
 

@@ -41,10 +41,14 @@ export interface TabFacts {
   connected?: boolean;
   /** The GPU is the computer's processor (no graphics card ComfyUI uses). */
   cpu?: boolean;
+  /** ComfyUI was started with --cpu (read from its command line, which the tab never sends). */
+  cpuFlag?: boolean;
   address?: "none" | "testing" | "ok" | "failed";
   addressCause?: AddressCause;
   /** A picture model for the first picture. */
   model?: "checking" | "ready" | "download" | "none";
+  /** No model fits: the GPU is too small for each, or one needs more than a download here. */
+  modelWhy?: "small" | "setup";
   modelId?: FirstModel;
   /** The download it needs, in tenths of a GB. */
   modelGbTenths?: number;
@@ -72,9 +76,11 @@ export const TabFactsSchema = z.strictObject({
   guardSkipped: z.boolean().optional(),
   connected: z.boolean().optional(),
   cpu: z.boolean().optional(),
+  cpuFlag: z.boolean().optional(),
   address: z.enum(["none", "testing", "ok", "failed"]).optional(),
   addressCause: z.enum(ADDRESS_CAUSES).optional(),
   model: z.enum(["checking", "ready", "download", "none"]).optional(),
+  modelWhy: z.enum(["small", "setup"]).optional(),
   modelId: z.enum(FIRST_PICTURE_MODELS).optional(),
   modelGbTenths: z.number().int().min(0).max(10_000).optional(),
   picture: z.enum(["none", "running", "ok", "failed", "no-model"]).optional(),
@@ -140,3 +146,6 @@ export function listensWide(argv: readonly string[] | undefined): boolean {
   if (!value || value.startsWith("--")) return true;
   return value.split(",").some((a) => !["127.0.0.1", "localhost", "::1"].includes(a.trim()));
 }
+
+/** ComfyUI was started with --cpu: it never uses the graphics card, whatever the computer has. */
+export const startedOnCpu = (argv: readonly string[] | undefined): boolean => !!argv?.includes("--cpu");

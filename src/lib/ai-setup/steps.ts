@@ -25,9 +25,9 @@ export const INSTALL_LABEL: Record<InstallKind, string> = {
 
 export const STEP_LABEL: Record<StepId, string> = {
   comfyui: "ComfyUI is running",
-  allowed: "Fuobe is allowed in",
-  guard: "The guard is in place",
-  connect: "Fuobe Connect is in place",
+  allowed: "ComfyUI lets Fuobe in",
+  guard: "Other websites are kept out",
+  connect: "Fuobe Connect is installed",
   address: "Web address works",
   connected: "Fuobe is connected",
   model: "A picture model is ready",
@@ -68,7 +68,7 @@ function modelStep(v: SetupView, connected: boolean): Step {
     case "download":
       return step("model", "todo", t.modelId && `${FIRST_MODEL_NAME[t.modelId]}: one download, ${gb(t.modelGbTenths ?? 0)}`);
     case "none":
-      return step("model", "warn", "No small picture model fits this GPU");
+      return step("model", "warn", t.cpu ? "ComfyUI runs on the processor" : t.modelWhy === "setup" ? "ComfyUI needs an update first" : "No small picture model fits this GPU");
     default:
       return step("model", "working", "Checking what ComfyUI has");
   }
@@ -118,9 +118,9 @@ export function stepsOf(v: SetupView): Step[] {
     t?.browser === "blocked"
       ? step("comfyui", "warn", "The browser blocks Fuobe")
       : t?.comfy === "found" || t?.comfy === "unreadable"
-        ? step("comfyui", "done", t.port ? `Port ${t.port}${t.install ? `, ${INSTALL_LABEL[t.install]}` : ""}` : undefined)
+        ? step("comfyui", "done", t.port ? `${t.install ? `${INSTALL_LABEL[t.install]}, on` : "On"} port ${t.port}` : undefined)
         : t?.comfy === "waiting"
-          ? step("comfyui", "working", "Restarting")
+          ? step("comfyui", "working", "Restarting, or closed")
           : t?.comfy === "other"
             ? step("comfyui", "warn", t.port ? `Another app answers on port ${t.port}` : "Another app answers")
             : step("comfyui", "todo");
@@ -145,7 +145,7 @@ export function stepsOf(v: SetupView): Step[] {
               : step("allowed", "todo");
   const guard =
     t?.guard === "guard" || t?.guard === "connect"
-      ? step("guard", "done", "Other websites stay out")
+      ? step("guard", "done", "Fuobe's guard is on")
       : allowed.state === "done" && t?.guardSkipped
         ? step("guard", "warn", "Connected without the guard")
         : step("guard", "todo");
