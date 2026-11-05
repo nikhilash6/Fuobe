@@ -181,8 +181,10 @@ const LIBRARY_JOIN = `generations g ${LIBRARY_JOINS}`;
 
 export function toGeneration(r: Row): Generation {
   const stored = JSON.parse(r.request_json) as GenerationRequest;
-  // The billing hold is the server's: never sent to a browser or a script.
-  const { hold, ...request } = stored;
+  // The billing hold is the server's: never sent to a browser or a script. (So is `standalone`: what Run with your key
+  // may move is said by the run's buttons.)
+  const { hold, standalone: _standalone, ...request } = stored;
+  void _standalone;
   const checking = r.stage === "checking";
   const model = getModel(r.model_id);
   const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
@@ -271,13 +273,14 @@ function parseTrouble(json: string): { trouble: RunTrouble } | Record<string, ne
 }
 
 /**
- * A waiting run's diagnosis (external_meta_json `heal`), as the Generation field. A step of a longer run never offers
- * Run with your key (moving it alone would leave the rest of the run without it), also when its wait was kept before.
+ * A waiting run's diagnosis (external_meta_json `heal`), as the Generation field. A run Run with your key can't move on
+ * its own (keyMoveBlock: a step of a longer run, or a tool's run for one of the account's projects) never offers it,
+ * also when its wait was kept before.
  */
-function waitingOf(r: Pick<Row, "id" | "depends_on" | "external_meta_json">): { waiting: RunTrouble & { until?: number } } | Record<string, never> {
+function waitingOf(r: Pick<Row, "id" | "depends_on" | "batch_id" | "request_json" | "external_meta_json">): { waiting: RunTrouble & { until?: number } } | Record<string, never> {
   const h = readMeta(r.external_meta_json).heal;
   if (!h?.trouble || typeof h.trouble.cause !== "string" || !Array.isArray(h.trouble.actions)) return {};
-  const t = h.trouble.actions.some((a) => a.kind === "run-with-key") && inChain(r) ? withoutKeyOffer(h.trouble) : h.trouble;
+  const t = h.trouble.actions.some((a) => a.kind === "run-with-key") && keyMoveBlock(r) ? withoutKeyOffer(h.trouble) : h.trouble;
   return { waiting: { ...t, ...(h.deadline && { until: h.deadline }) } };
 }
 
@@ -288,17 +291,54 @@ const maybeSent = (r: Pick<Row, "error" | "external_meta_json">): boolean => r.e
  * A run that is one step of a longer one: it waits for an earlier step, or a later step (queued or running) waits for it.
  * Run with your key can't move such a step alone (the route answers 409 CHAINED_RUN, and its tile doesn't offer it).
  */
-export function inChain(r: string | Pick<Row, "id" | "depends_on">): boolean {
+function inChain(r: string | Pick<Row, "id" | "depends_on">): boolean {
   const id = typeof r === "string" ? r : r.id;
   const dependsOn = typeof r === "string" ? (db().prepare("SELECT depends_on FROM generations WHERE id = ?").pluck().get(id) as string | null | undefined) : r.depends_on;
   if (dependsOn) return true;
   return !!db().prepare(`SELECT 1 FROM generations WHERE status IN ('queued', 'running') AND ${DEPENDENTS_OF} LIMIT 1`).get({ id, quoted: JSON.stringify(id) });
 }
 
+/** Why Run with your key can't take a waiting run's place on its own: a step of a longer run, or a run of a project. */
+export type KeyMoveBlock = "chained" | "project";
+
+/**
+ * Whether Run with your key can take this waiting run's place on its own (null), and why not. One check for its tile,
+ * its next try's words and the route (POST /api/generations with `replaces`), so a button that shows can always act.
+ *
+ * - "chained": a step of a longer run (it waits for an earlier step, or a later step waits for it), or a job of a batch
+ *   whose other waiting job a later step waits for (the press moves the whole batch). Moved alone, the rest of the run
+ *   would go without it.
+ * - "project": a run a tool made for one of the account's projects (a Cinema take, a storyboard, a short), even a take of
+ *   one step. The project keeps the run it made: a run made in its place would be outside it, and the take would show
+ *   Canceled. Only a run made on its own in a studio (stamped `standalone`, run-stamp.ts) moves.
+ */
+export function keyMoveBlock(r: string | Pick<Row, "id" | "depends_on" | "batch_id" | "request_json">): KeyMoveBlock | null {
+  const row =
+    typeof r === "string" ? (db().prepare("SELECT id, depends_on, batch_id, request_json FROM generations WHERE id = ?").get(r) as Pick<Row, "id" | "depends_on" | "batch_id" | "request_json"> | undefined) : r;
+  if (!row) return null;
+  if (inChain(row)) return "chained";
+  if (row.batch_id) {
+    // The batch's other jobs the press would stop with it (the same request, not handed over yet).
+    const jobs = db()
+      .prepare("SELECT id FROM generations WHERE batch_id = ? AND request_json = ? AND depends_on IS NULL AND status = 'queued' AND external_id IS NULL AND id != ?")
+      .pluck()
+      .all(row.batch_id, row.request_json, row.id) as string[];
+    if (jobs.some((j) => inChain(j))) return "chained";
+  }
+  let standalone = false;
+  try {
+    standalone = (JSON.parse(row.request_json) as GenerationRequest).standalone === true;
+  } catch {}
+  return standalone ? null : "project";
+}
+
 /** What a step of a longer run that can't move to a key alone says (POST /api/generations with `replaces` on it). */
 export const CHAINED_RUN = "This step is part of a longer run, so it can't move to your key on its own. It goes on by itself, or cancel it and run the tool again with your key.";
 
-/** A trouble's buttons without Run with your key (a step of a longer run). */
+/** What a run of one of the account's projects says the same way (a Cinema take, a storyboard, a short). */
+export const PROJECT_RUN = "This run is part of one of your projects, so it can't move to your key on its own. It goes on by itself, or cancel it and run it again in its project with your key.";
+
+/** A trouble's buttons without Run with your key (a run that can't move to a key on its own). */
 const withoutKeyOffer = <T extends { actions: TroubleAction[] }>(t: T): T => ({ ...t, actions: t.actions.filter((a) => a.kind !== "run-with-key") });
 
 /**
@@ -314,6 +354,11 @@ interface PendingMeta {
   resent?: boolean;
   /** Which of its batch's jobs it is (its seed is the batch's + this). */
   jobIndex?: number;
+  /**
+   * A step of an account's longer run on its first try (nothing waited, so no `heal`): when its job began to be sent.
+   * Cleared when the try fails and the step waits; gone once it is handed over (markSending).
+   */
+  sending?: number;
 }
 
 /** A run's wait for its own GPU or key, kept with it (survives a restart). */
@@ -1551,6 +1596,8 @@ const READY_DEPENDENTS = `SELECT g.* FROM generations g
 
 /** The error a waiting step gets when an input failed (framesProgress tells these from a step's own failure). */
 export const waitedOnFailure = (frame?: boolean) => `${frame ? "The previous frame" : "An earlier step"} didn't finish`;
+/** Both of waitedOnFailure's sentences: a step that stopped only because an earlier one did. */
+const WAITED_ON_FAILURE = new Set([waitedOnFailure(false), waitedOnFailure(true)]);
 /** What a step dropped by dropUnused says (canceled, not by anyone: the steps it was for failed). */
 export const DROPPED_UNUSED = "Stopped before it ran: the steps it was for failed";
 
@@ -1625,21 +1672,26 @@ async function advanceDependents(): Promise<void> {
     const allIds = depIds(r.depends_on);
     const allSlots = slotsFor(stored, allIds.length);
     const allDeps = allIds.map(
-      (id) => db().prepare("SELECT status, provider, outputs_json, request_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "provider" | "outputs_json" | "request_json"> | undefined,
+      (id) =>
+        db().prepare("SELECT status, provider, outputs_json, request_json, error FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "provider" | "outputs_json" | "request_json" | "error"> | undefined,
     );
     const earlier = stored.frame ? "The previous frame" : "An earlier step";
-    const fail = (error: string, cause = "earlier-step") => {
+    const fail = (error: string, cause = "earlier-step", logged = true) => {
       update(r.id, { status: "failed", error, message: null, completed_at: Date.now() });
       // An account's own step: the owner's log line and note, as for any of its runs.
-      ownFailed(r.id, ownAccountOf(stored), factsOf(r, { stage: "chain" }), cause);
+      if (logged) ownFailed(r.id, ownAccountOf(stored), factsOf(r, { stage: "chain" }), cause);
       // Steps waiting only to feed this one (the other lanes of a per-frame render) are dropped before they are paid for.
       dropUnused(allIds);
     };
     const broken = (d: (typeof allDeps)[number]) => !d || d.status === "failed" || d.status === "canceled";
     // An optional input whose step failed is left out (Genjutsu's anchor frame): the step runs without it.
     const skipped = allSlots.flatMap((s, i) => (s.optional && broken(allDeps[i]) ? [i] : []));
-    if (allDeps.some((d, i) => broken(d) && !skipped.includes(i))) {
-      fail(waitedOnFailure(!!stored.frame));
+    const failedDeps = allDeps.filter((d, i) => broken(d) && !skipped.includes(i));
+    if (failedDeps.length) {
+      // The owner's line goes with the first step after the failure: a step whose earlier steps all stopped only because
+      // theirs did (a frame-by-frame chain broken at frame 3) writes none of its own.
+      const knockOn = failedDeps.every((d) => d?.status === "failed" && WAITED_ON_FAILURE.has(d.error ?? ""));
+      fail(waitedOnFailure(!!stored.frame), "earlier-step", !knockOn);
       continue;
     }
     const keep = (_: unknown, i: number) => !skipped.includes(i);
@@ -1659,9 +1711,11 @@ async function advanceDependents(): Promise<void> {
     // Another instance (a deploy's other one) launching this step already: left to it.
     if (!claim(r.id)) continue;
     // A step that waited for its own GPU or key, taken over after a restart or a deploy (its wait is kept with it, as a
-    // run's is: takeOver). One cut off in the middle of its send may have reached its GPU or provider: never sent twice.
-    const heal = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null).heal;
-    if (heal && typeof heal.sending === "number") {
+    // run's is: takeOver). One cut off in the middle of its send, on a later try or its first (markSending), may have
+    // reached its GPU or provider: never sent twice.
+    const pending = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null);
+    const heal = pending.heal;
+    if ((heal && typeof heal.sending === "number") || typeof pending.sending === "number") {
       fail(CUT_OFF_SENDING, "interrupted-sending");
       continue;
     }
@@ -2094,9 +2148,9 @@ async function submitNow(
         if (now + wait <= heal.deadline) {
           if (link) noteGpuState(account!, link.url, false, { trouble: asStatus(error, trouble, link) });
           // Kept with the run (another instance goes on with it after a restart or a deploy), the tile saying what it
-          // waits for and showing what helps. A step of a longer run doesn't offer Run with your key: moving it alone
-          // would leave the rest of the run without it.
-          const shown = trouble.actions.some((a) => a.kind === "run-with-key") && inChain(id) ? withoutKeyOffer(trouble) : trouble;
+          // waits for and showing what helps. A step of a longer run, or a run of one of the account's projects, doesn't
+          // offer Run with your key: moved alone, it would leave its run or its project (keyMoveBlock).
+          const shown = trouble.actions.some((a) => a.kind === "run-with-key") && keyMoveBlock(id) ? withoutKeyOffer(trouble) : trouble;
           if (!markWaiting(id, heal, shown, now + wait, waitingWords(shown, isCloudProvider(providerId) ? providerId : undefined, pod))) return;
           if (heal.tries === 1 || heal.firstSeen[trouble.cause] === now) ownEvent(id, account!, error, trouble, facts({ attempt: heal.tries, waitedMs: now - heal.since }), "waiting");
           if (!(await pause(id, wait))) return;
@@ -2124,6 +2178,9 @@ async function submitNow(
           trouble = { ...again, actions: withKeyOffer(again.actions, account!, req) };
         }
       }
+      // The provider turned the job down as it was sent (a refused key, an empty balance, a model gone): it never had it,
+      // so its card says Not billed again, as on a first try (not after a voice the provider cloned for it: that was billed).
+      if (refusedAtSend(error) && !sent.has("voiceEmbedding")) notSending(id);
       failRun(id, error, trouble, req.account, account ? facts({ attempt: heal.tries, waitedMs: Date.now() - heal.since }) : undefined, !!account);
       return;
     }
@@ -2151,19 +2208,41 @@ function letGo(id: string): void {
 /**
  * Just before a run's job is sent. A run that waited (its `heal` kept with it) is marked as being sent: an instance that
  * takes the wait over later (this one cut off in the middle of the send, by a restart or a deploy) then doesn't send it
- * a second time. Throws LetGo when another instance holds the run, or when this server is stopping and the run waited
- * (the next instance goes on with its wait, and sends it).
+ * a second time. So is a step of an account's own longer run on its first try (`own`): the instance that launches it
+ * after this one was cut off fails it instead of sending it again (advanceDependents). Throws LetGo when another
+ * instance holds the run, or when this server is stopping and the run waited (the next instance goes on with its wait,
+ * and sends it).
  */
-function markSending(id: string): void {
-  const r = db().prepare(`SELECT external_meta_json FROM generations WHERE id = ? AND ${PENDING}`).get(id) as Pick<Row, "external_meta_json"> | undefined;
+function markSending(id: string, own: boolean): void {
+  const r = db().prepare(`SELECT external_meta_json, depends_on FROM generations WHERE id = ? AND ${PENDING}`).get(id) as Pick<Row, "external_meta_json" | "depends_on"> | undefined;
   if (!r) throw new Error("Stopped");
   if (heldElsewhere(r.external_meta_json)) throw new LetGo("Held by another instance");
-  // A first try (nothing waited): a send cut off here fails at the next instance's look (sweepInterrupted).
-  if (!readMeta(r.external_meta_json).heal) return;
+  if (!readMeta(r.external_meta_json).heal) {
+    // A first try (nothing waited): a run's send cut off here fails at the next instance's look (sweepInterrupted).
+    if (own && r.depends_on) {
+      db()
+        .prepare(`UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending', @now) WHERE id = @id AND ${PENDING}`)
+        .run({ id, now: Date.now() });
+    }
+    return;
+  }
   if (draining()) throw new LetGo("Stopping");
   db()
     .prepare(`UPDATE generations SET external_meta_json = json_set(external_meta_json, '$.heal.sending', @now) WHERE id = @id AND ${PENDING} AND json_type(external_meta_json, '$.heal') = 'object'`)
     .run({ id, now: Date.now() });
+}
+
+/** A send its provider answered with a refusal (a 4xx): the job was never taken. */
+function refusedAtSend(e: unknown): boolean {
+  const status = (e as { status?: unknown } | null)?.status;
+  return typeof status === "number" && status >= 400 && status < 500;
+}
+
+/** A send that is over without a job: the run's mark of being sent goes (it was never handed over). */
+function notSending(id: string): void {
+  db()
+    .prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.heal.sending', '$.sending') WHERE id = ? AND ${PENDING} AND json_valid(external_meta_json)`)
+    .run(id);
 }
 
 /** Self-healing's clock: tests make it faster (0.001: a 30-minute wait takes 1.8 s). */
@@ -2185,7 +2264,7 @@ function markWaiting(id: string, heal: HealState, trouble: Diagnosis, next: numb
     db()
       .prepare(
         `UPDATE generations SET status = 'queued', message = @message, updated_at = @now,
-           external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.heal', json(@heal))
+           external_meta_json = json_set(json_remove(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending'), '$.heal', json(@heal))
          WHERE id = @id AND ${PENDING}`,
       )
       .run({ id, message, now: Date.now(), heal: JSON.stringify(heal) }).changes > 0
@@ -2903,7 +2982,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     if (cloned && route.map?.cloneFirst && !input.voiceEmbedding) input.voiceEmbedding = cloned;
     // Nothing is sent once the run stopped being this one's to send (cancelled, failed, or taken by another instance).
     if (!going()) throw new Error("Stopped");
-    markSending(id);
+    markSending(id, !!req.account && req.place !== "pool");
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });
     // A saved voice the cloud just cloned keeps the embedding (the owner's runs only), so its next line skips the clone.
     if (typeof res.meta?.voiceEmbedding === "string" && !req.account) void keepVoiceEmbedding(req.inputs?.voiceAudio, res.meta.voiceEmbedding).catch(() => {});

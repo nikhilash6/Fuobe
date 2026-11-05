@@ -51,7 +51,10 @@ const gpuRoute = await import("@/app/api/account/gpu/route");
 const { proxy } = await import("@/proxy");
 const access = await import("@/lib/guest-access");
 const cinema = await import("@/server/cinema");
-const { cancelGeneration, getGeneration } = await import("@/server/generations");
+const { cancelGeneration, cloudTwin, getGeneration, PROJECT_RUN, SELF_HEAL } = await import("@/server/generations");
+const generationsRoute = await import("@/app/api/generations/route");
+const { removeAccountKey, saveAccountKey } = await import("@/server/account-keys");
+const { onCloudKey } = await import("@/lib/before-run");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { clearAccountLoras } = await import("@/server/account-loras");
@@ -493,6 +496,57 @@ describe("an account's takes run on its own ComfyUI", () => {
     expect(del.status).toBe(200);
     expect(await del.json()).toEqual({ removed: 1 });
     expect(getGeneration(id, { includeDeleted: true })).toBeNull();
+  });
+});
+
+describe("a take that waits for the account's GPU stays in its project", () => {
+  it("a take of one step doesn't offer Run with your key, and a press on it anyway is refused in plain words", { timeout: 30_000 }, async () => {
+    const project = await makeProject("a", "Waiting takes");
+    // Its fal.ai key runs the take's cloud version; its GPU is starting up (its last check said so).
+    saveAccountKey(a, "fal", "acct-fal-cinema");
+    SELF_HEAL.scale = 0.01;
+    fake.opts.answer = (_m, p) => (p === "/system_stats" ? { status: 502, body: "<html><title>Bad gateway</title></html>", contentType: "text/html" } : undefined);
+    expect((await gpuRoute.PUT(json("/api/account/gpu?test=1", "PUT", { saved: true }, "a"))).status).toBe(422);
+    const made: string[] = [];
+    try {
+      const r = await take(project, STILL, "a");
+      expect(r.status, await r.clone().text()).toBe(201);
+      const items = ((await r.json()) as { items: { id: string }[] }).items;
+      // One step: nothing waits for it, and it waits for nothing.
+      expect(items).toHaveLength(1);
+      const id = items[0].id;
+      made.push(id);
+      for (let i = 0; i < 500 && !getGeneration(id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+      const g = getGeneration(id)!;
+      expect(g.waiting, g.error ?? g.message ?? "").toBeTruthy();
+      const twin = cloudTwin(g.request, a);
+      expect(twin).toBeTruthy();
+      expect(g.waiting!.actions.map((x) => x.kind)).not.toContain("run-with-key");
+      // The same run made on its own in the studio offers it.
+      const own = await generationsRoute.POST(json("/api/generations", "POST", g.request, "a"));
+      expect(own.status, await own.clone().text()).toBe(201);
+      const alone = ((await own.json()) as { items: { id: string }[] }).items[0].id;
+      made.push(alone);
+      for (let i = 0; i < 500 && !getGeneration(alone)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+      expect(getGeneration(alone)!.waiting!.actions.map((x) => x.kind)).toContain("run-with-key");
+      // Pressed on the take anyway (a tile drawn before): refused in plain words, and nothing is made or stopped.
+      const runs = db().prepare("SELECT COUNT(*) FROM generations").pluck().get();
+      const press = await generationsRoute.POST(json("/api/generations", "POST", { ...onCloudKey(g.request, twin!), replaces: id }, "a"));
+      expect(press.status).toBe(409);
+      expect(await press.json()).toEqual({ error: PROJECT_RUN, code: "project-run" });
+      expect(PROJECT_RUN).not.toMatch(/\b[1-5]\d\d\b|HTTP|127\.0\.0\.1/);
+      expect(db().prepare("SELECT COUNT(*) FROM generations").pluck().get()).toBe(runs);
+      expect(getGeneration(id)?.status).toBe("queued");
+      // The take is still the project's.
+      expect(runAsTenant({ kind: "account", id: a }, () => cinema.listItems(project)).map((x) => x.id)).toContain(id);
+    } finally {
+      fake.opts.answer = undefined;
+      SELF_HEAL.scale = 1;
+      removeAccountKey(a, "fal");
+      for (const id of made) await cancelGeneration(id);
+      // Its GPU is back, as its next check says.
+      expect((await gpuRoute.PUT(json("/api/account/gpu?test=1", "PUT", { saved: true }, "a"))).status).toBe(200);
+    }
   });
 });
 

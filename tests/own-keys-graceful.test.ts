@@ -235,6 +235,35 @@ describe("an account's run on its own key waits out a busy or down provider", ()
     for (const id of [g.id, later.id]) await gens.cancelGeneration(id);
   });
 
+  it("a job of a batch whose other job a later step waits for doesn't offer it either, and a press on it is refused", async () => {
+    gens.SELF_HEAL.scale = 0.1;
+    // On Replicate, Nano Banana Pro makes one picture a job: two outputs, two jobs of one batch.
+    rep.script = (r) => (isSubmit(r) ? { status: 429, body: { detail: "Too many requests" }, headers: { "Retry-After": "1" } } : null);
+    const post = async (body: Record<string, unknown>) => {
+      const text = JSON.stringify({ feature: "image", modelId: "nano-banana-pro", engine: "cloud", prompt: "a quiet harbour at dawn", ...body });
+      return generationsRoute.POST(new Request("http://localhost:3000/api/generations", { method: "POST", headers: { cookie: cookies.A, host: "localhost:3000", "content-type": "application/json", "content-length": String(text.length) }, body: text }));
+    };
+    const made = await post({ prefer: "replicate", params: { numOutputs: 2 } });
+    expect(made.status, await made.clone().text()).toBe(201);
+    const jobs = ((await made.json()) as { items: { id: string; provider: string }[] }).items;
+    expect(jobs.map((j) => j.provider)).toEqual(["replicate", "replicate"]);
+    const [one, two] = jobs.map((j) => j.id);
+    for (let i = 0; i < 500 && !(gens.getGeneration(one)?.waiting && gens.getGeneration(two)?.waiting); i++) await new Promise((r) => setTimeout(r, 10));
+    const offered = (id: string) => (gens.getGeneration(id)?.waiting?.actions ?? []).map((a) => a.kind);
+    // On their own, both jobs offer the other key.
+    expect(offered(two)).toContain("run-with-key");
+    // A later step waits for the batch's first job only (as a pipeline's next step waits for its step's first job).
+    const [later] = gens.asAccount(A, () => gens.createGenerations({ feature: "image", modelId: "nano-banana-pro", engine: "cloud", prompt: "the same harbour at night" }, { dependsOn: one }));
+    // The press would stop the whole batch, the job the later step waits for with it: neither tile offers it.
+    expect(offered(one)).not.toContain("run-with-key");
+    expect(offered(two)).not.toContain("run-with-key");
+    const r = await post({ replaces: two });
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: gens.CHAINED_RUN, code: "chained-run" });
+    for (const id of [one, two, later.id]) expect(gens.getGeneration(id)?.status).toBe("queued");
+    for (const id of [one, two, later.id]) await gens.cancelGeneration(id);
+  });
+
   it("a 502 at submit may have started a job already: never sent twice", async () => {
     fal.script = (r) => (isSubmit(r) ? { status: 502, body: "<!DOCTYPE html><html><head><title>502 Bad gateway</title></head></html>" } : null);
     const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
@@ -260,6 +289,35 @@ describe("Not billed", () => {
     expect(gens.getGeneration(g.id)!.notBilled).toBeUndefined();
     stopped("fal.ai is having trouble right now. Press Retry in a few minutes.", { heal: { since: 1, deadline: 2, firstSeen: {}, tries: 1, next: 0, index: 0, sending: Date.now() } });
     expect(gens.getGeneration(g.id)!.notBilled).toBeUndefined();
+  });
+
+  it("is said of a run fal.ai turned down at its next try after a wait (a refused key): it never had the job", async () => {
+    let tries = 0;
+    fal.script = (r) =>
+      isSubmit(r) ? (tries++ === 0 ? { status: 429, body: { detail: "Too many requests" }, headers: { "Retry-After": "1" } } : { status: 401, body: { detail: "Invalid credentials" } }) : null;
+    const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
+    const done = await settle(g.id);
+    expect(done.status).toBe("failed");
+    expect(done.error).toBe("fal.ai didn't accept your key. Check it in Settings → Your keys.");
+    expect(tries).toBe(2);
+    expect(done.notBilled).toBe(true);
+    const meta = JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(g.id))) as { heal?: { sending?: number } };
+    expect(meta.heal?.sending).toBeUndefined();
+  });
+
+  it("isn't said when the next try after a wait may have reached fal.ai (a 502)", async () => {
+    let tries = 0;
+    fal.script = (r) =>
+      isSubmit(r)
+        ? tries++ === 0
+          ? { status: 429, body: { detail: "Too many requests" }, headers: { "Retry-After": "1" } }
+          : { status: 502, body: "<!DOCTYPE html><html><head><title>502 Bad gateway</title></head></html>" }
+        : null;
+    const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
+    const done = await settle(g.id);
+    expect(done.status).toBe("failed");
+    expect(tries).toBe(2);
+    expect(done.notBilled).toBeUndefined();
   });
 });
 

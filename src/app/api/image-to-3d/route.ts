@@ -7,6 +7,7 @@ import { accountEngineMode } from "@/server/account-keys";
 import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { createGenerations } from "@/server/generations";
 import { GenerationRequestSchema } from "@/server/request-schema";
+import { runStamp, withRunStamp } from "@/server/run-stamp";
 
 /**
  * Image to 3D's runs: a model from a photo, several photos, words or an object in a photo, a splat, and a finished
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
         tool: "image-to-3d",
         files,
         plan: () => [{ request: run }],
-        start: () => createGenerations(run),
+        // A model made on its own, as in a studio (no project keeps it): Run with your key may take its place while it waits.
+        start: () => withRunStamp({ ...runStamp(), standalone: true }, () => createGenerations(run)),
         skipGpuCheck: extra.gpuCheck === "skip",
       }),
     ({ value, gpuWarning }) => {

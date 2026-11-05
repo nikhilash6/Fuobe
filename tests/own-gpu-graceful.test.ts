@@ -547,6 +547,26 @@ describe("what the owner learns of an account's failed run on its own GPU", () =
     }
   });
 
+  it("a longer run broken at its first step: the next step writes the owner's line, the steps after it none", async () => {
+    const warn = vi.spyOn(console, "warn");
+    try {
+      fake.opts.answer = (_m, p) => (p === "/upload/image" ? { status: 401, body: "" } : undefined);
+      const pic = await uploadPng();
+      const first = await startRun();
+      const second = laterStep(first, pic);
+      const third = laterStep(second, pic);
+      expect((await settle(first))?.status).toBe("failed");
+      for (const id of [second, third]) expect((await settle(id))?.error).toBe("An earlier step didn't finish");
+      const lines = (id: string) => warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"evt":"own-run"') && l.includes(`"run":"${id}"`));
+      expect(lines(first)).toHaveLength(1);
+      expect(lines(second)).toHaveLength(1);
+      expect(JSON.parse(lines(second)[0])).toMatchObject({ run: second, stage: "chain", cause: "earlier-step", outcome: "failed" });
+      expect(lines(third)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("keeps at most 2 KB of what the GPU said, counted in bytes, never cutting a character in two", async () => {
     const { keptText } = await import("@/server/run-events");
     const wide = "é".repeat(3000);
@@ -859,6 +879,39 @@ describe("a step of a longer run that waited, taken over after a restart", () =>
       expect(JSON.parse(line!)).toMatchObject({ run: second, account: a, place: "own-gpu", cause: "interrupted-sending", outcome: "failed" });
     } finally {
       warn.mockRestore();
+      fake.opts.output = undefined;
+    }
+  });
+
+  it("one cut off in the middle of its first send (it never waited) is never sent again either", async () => {
+    try {
+      const { first, pic } = await firstStepDone();
+      // Its first try: marked as being sent just before its job goes, with no wait of its own.
+      fake.log.length = 0;
+      fake.opts.hold = (m, p) => m === "POST" && p === "/prompt";
+      const sending = laterStep(first, pic);
+      for (let i = 0; i < 1000 && !fake.log.some((e) => e.path === "/prompt"); i++) {
+        await globalThis.__fuobeRunner?.tick();
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      const meta = JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(sending))) as { sending?: unknown; heal?: unknown };
+      expect(typeof meta.sending).toBe("number");
+      expect(meta.heal).toBeUndefined();
+      await cancelGeneration(sending);
+      fake.opts.hold = undefined;
+      fake.dropHeld();
+      // The next instance finds such a step once the cut-off one's hold has run out: it fails, and nothing is sent.
+      fake.log.length = 0;
+      const second = laterStep(first, pic);
+      setPending(second, { sending: Date.now() - 1000, lease: { by: "gone", until: Date.now() - 1 } });
+      const g = await settle(second);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toBe("This run was interrupted while it was being sent. Press Retry.");
+      expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
+      expect(ownRunNote(second)).toMatchObject({ cause: "interrupted-sending", stage: "chain" });
+    } finally {
+      fake.opts.hold = undefined;
+      fake.dropHeld();
       fake.opts.output = undefined;
     }
   });

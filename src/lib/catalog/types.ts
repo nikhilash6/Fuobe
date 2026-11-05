@@ -1185,6 +1185,11 @@ export interface GenerationRequest {
   checkOutputs?: boolean;
   /** How long a run on this install's GPUs may wait in line (ms), when the billing service set it. */
   waitMs?: number;
+  /**
+   * Server-only too: an account's run made on its own in a studio, not by a tool for one of its projects (a Cinema take,
+   * a storyboard). Only such a run can move to the account's key while it waits (Run with your key).
+   */
+  standalone?: boolean;
   feature: string;
   presetId?: string;
   modelId: string;
