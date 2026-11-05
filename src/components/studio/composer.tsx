@@ -23,7 +23,8 @@ import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from 
 import { composerOnPool, composerPlace } from "@/lib/run-place";
 import { PoolNote } from "./pool-note";
 import { modelOwnSetup, poolRunsModel } from "@/lib/pool-rules";
-import { controlSetup } from "@/lib/own-setup-controls";
+import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
+import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
 import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { HoldFilesCtx } from "@/lib/held-files";
 import { pendingStep } from "@/lib/guest-draft";
@@ -992,7 +993,11 @@ export function Composer({ docked }: { docked: boolean }) {
   // On the open engine every run is free on the GPU: said even before the run can be planned (no voice sample, no clip yet).
   // Said with "your GPU" only off a hosted studio: there the run may use the studio's GPUs, and the chip or hint says where.
   const gpuRun = saysYourGpu(engine, hostedHere);
-  const ownCostText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown, gpu: gpuRun }, formatCost);
+  // A cloud model that runs on a visitor's own key only (Mureka Extend on Audio → Extend & remix): never "Free · your GPU",
+  // its key in the label's words.
+  const keyOnly = setupViewer && !demo ? keyOnlySetup(model, engine) : null;
+  const freeHere = engine === "open" && model && !keyOnly ? 0 : null;
+  const ownCostText = keyOnly && cost == null ? ownSetupLabel(keyOnly) : costLabel({ demo, cost: cost ?? freeHere, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost);
   // An account's paid run is billed to its own provider account (Your keys), or still needs that key.
   const payer = paidThrough(model, status);
   const missingKey = needsKey(model, status)?.[0];
@@ -1737,7 +1742,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className={cn("shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums", poolRefused && "min-w-0 shrink truncate max-sm:hidden")} data-pool-refused={poolRefused || undefined}>
-                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : keyOnly && cost == null ? ownSetupShort(keyOnly) : costLabel({ demo, cost: cost ?? freeHere, compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}
@@ -1751,6 +1756,8 @@ export function Composer({ docked }: { docked: boolean }) {
                   : [hostedQuote?.sub ?? "Runs on this studio's GPUs", poolState?.wait].filter(Boolean).join(" · ")
                 : demo
                 ? "Placeholder results are on (Settings), so outputs are free stand-ins"
+                : keyOnly && cost == null
+                  ? ownSetupDetail(keyOnly)
                 : cost === 0
                   ? "Runs on your own GPU"
                   : missingKey

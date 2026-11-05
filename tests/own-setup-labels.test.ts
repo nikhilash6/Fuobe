@@ -199,3 +199,22 @@ describe("beside a setting's value", () => {
     expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "lite" } } })).not.toContain("oss-kandinsky6:pro");
   });
 });
+
+describe("a cloud model a visitor runs on its own key only", () => {
+  it("is priced with its key's label, never as free on a GPU", async () => {
+    const { keyOnlySetup } = await import("@/lib/own-setup-controls");
+    const { costLabel } = await import("@/lib/composer");
+    const song = getModel("mureka-extend");
+    expect(song).toBeDefined();
+    const setup = keyOnlySetup(song, "open");
+    expect(setup).toEqual(ownSetupOnly("mureka-extend", "cloud"));
+    expect(setup).not.toBeNull();
+    if (setup) {
+      expect(ownSetupLabel(setup)).toBe(`Use your own ${setup.provider === "fal" ? "fal.ai" : "Replicate"} key`);
+      expect(ownSetupLabel(setup)).not.toBe(costLabel({ demo: false, cost: 0, gpu: true }, String));
+    }
+    // An open model, or a cloud model any key runs: no key label.
+    expect(keyOnlySetup(H3, "open")).toBeNull();
+    expect(keyOnlySetup(undefined, "open")).toBeNull();
+  });
+});
