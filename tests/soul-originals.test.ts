@@ -43,6 +43,16 @@ describe("Soul looks (soul-originals.generated.ts)", () => {
     }
   });
 
+  it("leaves the research's notes in the research: the looks are bundled into the site's browser code", () => {
+    // The research does have notes on its looks, so this checks something.
+    expect(research.presets.some((p: { notes?: string }) => p.notes)).toBe(true);
+    for (const l of SOUL_ORIGINALS) {
+      expect(Object.keys(l), l.id).not.toContain("note");
+      expect(Object.keys(l), l.id).not.toContain("notes");
+    }
+    expect(fs.readFileSync(path.join(ROOT, "src/lib/catalog/soul-originals.generated.ts"), "utf8")).not.toMatch(/"notes?":/);
+  });
+
   it("gives every look at most 3 LoRAs, each in the library with its licence recorded (information, not a rule)", () => {
     for (const l of SOUL_ORIGINALS) {
       expect(l.loras.length, l.id).toBeLessThanOrEqual(3);

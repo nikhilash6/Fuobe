@@ -57,7 +57,6 @@ export interface SoulLook {
   post?: SoulPost;
   /** A Fuobe-trained LoRA should replace the public one or the words (research §6). */
   train?: true;
-  note?: string;
   /** Legacy style id: only to read old saved settings, never sent. */
   legacyStyleId: string;
 }

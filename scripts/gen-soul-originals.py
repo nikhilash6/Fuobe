@@ -20,6 +20,9 @@ Licences are information (the owner's decision of 2026-10-27; Settings → Model
 look whose LoRA is non-commercial or licensed for the user's GPU only, or that the research marks not
 commercial-safe, is printed as a licence note, never a failure.
 
+The research's free-text `notes` on each look stay in the research file: the generated looks are bundled into the
+site's browser code, and no page shows them.
+
 Fails (exit 1) when the research breaks the Soul recipe:
 - a look's LoRA isn't in the LoRA library;
 - a look lists more than 3 LoRAs (fal's Z-Image endpoint takes 3), or a LoRA for another base;
@@ -225,8 +228,6 @@ for p in RECIPES["presets"]:
         entry["post"] = post
     if p.get("trainOwn"):
         entry["train"] = True
-    if clean(p.get("notes")):
-        entry["note"] = clean(p["notes"])
     entry["legacyStyleId"] = p["id"]
     looks.append(entry)
 
