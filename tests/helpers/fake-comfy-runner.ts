@@ -51,9 +51,9 @@ export interface FakeComfyOptions {
   mixed?: boolean;
   /**
    * Answers a request before anything else when it returns one (a GPU that is off, starting up, behind a password or a
-   * web page): its status, body and content type. Undefined: the request goes on as usual.
+   * web page): its status, body, content type and any headers (a redirect's location). Undefined: the request goes on as usual.
    */
-  answer?: (method: string, path: string) => { status: number; body?: string; contentType?: string } | undefined;
+  answer?: (method: string, path: string) => { status: number; body?: string; contentType?: string; headers?: Record<string, string> } | undefined;
 }
 
 /** A tiny but real WAV (mono, 16-bit, 8 kHz, 0.1 s of silence). */
@@ -206,7 +206,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
       const p = url.pathname;
       const said = opts.answer?.(entry.method, p);
       if (said) {
-        res.writeHead(said.status, { "content-type": said.contentType ?? "text/html" });
+        res.writeHead(said.status, { "content-type": said.contentType ?? "text/html", ...said.headers });
         return res.end(said.body ?? "");
       }
       if (p === "/system_stats") return json(200, { system: { comfyui_version: "0.3.fake", ram_total: 64 * 2 ** 30 }, devices: [{ name: "Fake GPU", vram_total: 24 * 2 ** 30 }] });

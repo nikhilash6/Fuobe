@@ -19,7 +19,7 @@ import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, disk
 import { accountInputProblem } from "@/server/account-inputs";
 import { db } from "@/server/db";
 import { findView, requestViewKey } from "@/server/any-angle";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, cancelGeneration, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
@@ -47,14 +47,39 @@ export async function GET(request: Request) {
   return Response.json({ items: listGenerations({ ...listOptionsFrom(new URL(request.url).searchParams), account: viewer.kind === "account" ? viewer.account.id : undefined }) });
 }
 
-/** An account's runs going now (queued or running), counted as runs: a run's jobs and chain steps share a batch. */
-function activeRuns(accountId: string): number {
+/** A run waiting for the account's own GPU or key to come back: no job yet, its wait kept with it (generations.ts `heal`). */
+const WAITING = "(external_id IS NULL AND json_valid(external_meta_json) AND json_extract(external_meta_json, '$.heal') IS NOT NULL)";
+
+/**
+ * An account's runs going now (queued or running), counted as runs: a run's jobs and chain steps share a batch. Runs
+ * waiting for its own GPU or key are counted apart (`waiting`): they use neither while they wait. `except`: a run the new
+ * one takes the place of ("Run with your key" on a waiting run).
+ */
+function activeRuns(accountId: string, except?: string): number {
   const r = db()
     .prepare(
-      "SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?",
+      `SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ? AND NOT ${WAITING} AND id IS NOT ?`,
     )
-    .get(accountId) as { n: number };
+    .get(accountId, except ?? null) as { n: number };
   return r.n;
+}
+
+function waitingRuns(accountId: string, except?: string): number {
+  const r = db()
+    .prepare(`SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status = 'queued' AND json_extract(request_json, '$.account') = ? AND ${WAITING} AND id IS NOT ?`)
+    .get(accountId, except ?? null) as { n: number };
+  return r.n;
+}
+
+/**
+ * Beside the request: the account's own run (waiting for its GPU or key, or failed) this one takes the place of ("Run
+ * with your fal.ai key" on it): it stops once this one is made.
+ */
+function replacedRun(body: unknown, accountId: string): string | undefined {
+  const id = (body as { replaces?: unknown } | null)?.replaces;
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(id)) return undefined;
+  const row = db().prepare("SELECT status, external_id FROM generations WHERE id = ? AND json_extract(request_json, '$.account') = ?").get(id, accountId) as { status: string; external_id: string | null } | undefined;
+  return row && (row.status === "failed" || (row.status === "queued" && !row.external_id)) ? id : undefined;
 }
 
 /** What the sign-in proxy passes on of a request body (next.config.ts proxyClientMaxBodySize). */
@@ -127,11 +152,12 @@ export async function POST(request: Request) {
     return refuse(r.status, r.body.error, r.body, r.headers);
   };
   const notes: string[] = [];
+  const replaces = account && !preview ? replacedRun(body, account.id) : undefined;
   if (account && !preview) {
     // Room on the server, room in the account's files, and a fair share of runs.
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total >= accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
-    if (activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+    if (activeRuns(account.id, replaces) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${account.id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
     if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
     if ((req.params?.numOutputs ?? 1) > ACCOUNT_LIMITS.outputsPerRun) {
@@ -183,7 +209,7 @@ export async function POST(request: Request) {
     if (account && onPool && billingConfigured()) {
       // The billing service's limits for runs on this install's GPUs (never above the studio's own).
       const lim = onPool.policy.limits;
-      if (lim.activeRuns > 0 && activeRuns(account.id) >= lim.activeRuns) {
+      if (lim.activeRuns > 0 && activeRuns(account.id, replaces) >= lim.activeRuns) {
         unhit(`run:${account.id}`);
         return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
       }
@@ -198,6 +224,8 @@ export async function POST(request: Request) {
     // GPU pre-flight: a ComfyUI run that is sure to fail for something missing stops here with the plan that fixes it
     // (src/server/gpu/gate.ts; never when the check is unknown, for graphics memory, or with gpuCheck "skip").
     let gpuWarning: string | undefined;
+    // Where the run goes (its GPU, or a key): runs waiting for the GPU are counted apart, and only a run for the GPU waits too.
+    let goesTo: string | undefined;
     // (A run on this install's GPUs: its plan was checked by decidePlace; the pre-flight is about the account's own GPU.)
     if (viewer.kind !== "guest" && !onPool) {
       let planned: ReturnType<typeof previewGeneration> | null = null;
@@ -208,6 +236,7 @@ export async function POST(request: Request) {
         if (e instanceof AccountRunError) return refused(e.refusal);
         // Otherwise createGenerations says what's wrong with the request.
       }
+      goesTo = planned?.route.provider;
       if (account && planned) {
         // Where the run goes decides what the account needs: its GPU for ComfyUI, its own key for fal.ai or Replicate.
         const own = accountRun(account.id, planned.route.provider, "submit");
@@ -260,10 +289,11 @@ export async function POST(request: Request) {
     }
     // Counted again just before the run is stored, with nothing awaited in between: requests that arrived together all
     // passed the first count while the checks above waited.
-    if (account && activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) {
+    const waitingFull = !onPool && goesTo === "comfyui" && waitingRuns(account?.id ?? "", replaces) >= ACCOUNT_LIMITS.waitingRuns;
+    if (account && (activeRuns(account.id, replaces) >= ACCOUNT_LIMITS.activeRuns || waitingFull)) {
       unhit(`run:${account.id}`);
       if (stamp?.hold) queueRelease(stamp.hold);
-      return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+      return refuse(429, waitingFull ? ACCOUNT_MESSAGES.waitingRuns : ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     }
     const make = () => createGenerations(req);
     let items: ReturnType<typeof createGenerations>;
@@ -274,6 +304,8 @@ export async function POST(request: Request) {
       if (stamp?.hold) queueRelease(stamp.hold);
       throw e;
     }
+    // The run this one takes the place of stops now (it was waiting, or it failed): never two of the same.
+    if (replaces) await cancelGeneration(replaces);
     // A script's open-source run while ComfyUI is on the owner's computer: it waits for the owner's Fuobe tab there.
     if (viewer.kind === "owner" && token && getSetting("comfyWhere") === "computer" && items.some((g) => g.provider === "comfyui")) notes.push(RUNS_ON_COMPUTER_NOTE);
     // What the run leaves out or changes (a model that replaced a retired one, a LoRA that runs only on a GPU, a length the API rounds).

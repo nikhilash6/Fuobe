@@ -31,8 +31,11 @@ async function rFetch(url: string, init: RequestInit = {}): Promise<unknown> {
   if (!t && tenant()) throw missingKeyError("replicate");
   const origin = originOf(url);
   if (origin !== HOST && origin !== standIn("replicate")) throw new ProviderError("That address is outside Replicate, so Fuobe didn't send the token there");
+  // A hung call fails in time (a submit or a file 60 s; a status or a cancel 20 s), never holding a run for minutes.
+  const short = !init.method || init.method === "GET" || /\/cancel$/.test(url);
   const res = await fetch(url, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(short ? 20_000 : 60_000),
     headers: { Authorization: `Bearer ${t}`, ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(init.headers ?? {}) },
   });
   const text = await res.text();

@@ -108,6 +108,7 @@ import { discardBody, fetchPublic, peekText, RemoteFetchError } from "../remote-
 import { zipToFile } from "../zip";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "../account-files";
 import { accountSend } from "../account-send";
+import { redactKey } from "../provider-keys";
 import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
@@ -303,15 +304,21 @@ export const OWN_FRAME_MAX_BYTES = 100 * 2 ** 20;
 
 /**
  * What an account's ComfyUI may answer, by path: a file (/view) up to 1 GB in 15 minutes; an upload's answer 1 MB, in
- * 5 minutes (the time covers sending the file); the node list (/object_info) 64 MB in 2 minutes; anything else 8 MB in
- * 60 seconds. A slow or endless answer can't hold the server.
+ * the time sending its file takes at a slow 128 KB/s plus a minute (5 to 30 minutes: the time covers sending the file);
+ * the node list (/object_info) 64 MB in 2 minutes; anything else 8 MB in 60 seconds. A slow or endless answer can't
+ * hold the server.
  */
-export function ownGpuLimits(p: string): { maxBytes: number; deadlineMs: number } {
+export function ownGpuLimits(p: string, bytes = 0): { maxBytes: number; deadlineMs: number } {
   const at = p.split("?")[0];
   if (at.startsWith("/view")) return OWN_OUTPUT_LIMITS;
-  if (at.startsWith("/upload/")) return { maxBytes: 2 ** 20, deadlineMs: 5 * 60_000 };
+  if (at.startsWith("/upload/")) return { maxBytes: 2 ** 20, deadlineMs: uploadDeadlineMs(bytes) };
   if (at.startsWith("/object_info")) return { maxBytes: 64 * 2 ** 20, deadlineMs: 2 * 60_000 };
   return { maxBytes: 8 * 2 ** 20, deadlineMs: 60_000 };
+}
+
+/** How long sending a file of `bytes` to an account's ComfyUI may take: 128 KB/s plus a minute, between 5 and 30 minutes. */
+export function uploadDeadlineMs(bytes: number): number {
+  return Math.min(30 * 60_000, Math.max(5 * 60_000, Math.ceil((Math.max(0, bytes) / (128 * 1024)) * 1000) + 60_000));
 }
 
 /** A job id as ComfyUI gives it (a UUID): anything else from an account's ComfyUI is refused, never put in a path. */
@@ -365,8 +372,19 @@ export function troubleError(d: Diagnosis, status?: number, failure?: GpuFailure
   return Object.assign(new ProviderError(d.words, status), { trouble: d, ...(failure && { failure }) });
 }
 
-/** What came back from an account's link, read for the person (diagnose.ts), as the run's error. */
-const gpuTrouble = (f: GpuFailure, place: Parameters<typeof diagnoseGpu>[1]) => troubleError(diagnoseGpu(f, place), f.status, f);
+/** What came back from an account's link, read for the person (diagnose.ts), as the run's error. Its token never in it. */
+const gpuTrouble = (f: GpuFailure, place: Parameters<typeof diagnoseGpu>[1]) => {
+  const own = ownGpu();
+  const token = own && own.kind !== "computer" ? own.token : undefined;
+  const clean = token ? withoutToken(f, token) : f;
+  return troubleError(diagnoseGpu(clean, place), clean.status, clean);
+};
+
+/** What came back, with a token it echoed taken out (a page that repeats the request's headers). */
+export function withoutToken(f: GpuFailure, token: string): GpuFailure {
+  const out = (t: string | undefined) => (t === undefined ? t : redactKey(t, token));
+  return { ...f, body: out(f.body), error: out(f.error), location: out(f.location) };
+}
 
 /** An answer from an account's link that isn't what was asked: read for the person (its body's first KB, for details). */
 async function linkAnswer(res: Response, f: Omit<GpuFailure, "status" | "body" | "contentType" | "location" | "retryAfterS">, link: NonNullable<ReturnType<typeof ownLink>>): Promise<ProviderError> {
@@ -395,7 +413,8 @@ async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker
     // A visitor without a GPU of its own (a price check): nothing to reach, and never the install's.
     if (!base) throw new ProviderError(CONNECT_GPU_MESSAGE);
     try {
-      return await fetchPublic(`${base}${p}`, { ...init, headers: { "ngrok-skip-browser-warning": "1", ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, ...ownGpuLimits(p) });
+      // A connection that doesn't open in 15 s is a GPU that doesn't answer (the idle time, 2 minutes, is for a slow one).
+      return await fetchPublic(`${base}${p}`, { ...init, headers: { "ngrok-skip-browser-warning": "1", ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, connectTimeoutMs: 15_000, ...ownGpuLimits(p, o.bytes) });
     } catch (e) {
       // The account's words (a stopped pod, a GPU that doesn't answer…); the reason itself goes in the details line.
       throw gpuTrouble({ stage: stageOf(p), error: (e as Error).message, bytes: o.bytes }, ownLink() ?? { kind: "link", url: base });
@@ -2664,17 +2683,20 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
   return { wanted, outputs, budget: Number.isFinite(budget) ? budget : Number.MAX_SAFE_INTEGER };
 }
 
+/** An account's ComfyUI that refused a job without saying why: plain words (the owner's keep the status). */
+const REFUSED_PLAIN = "Your ComfyUI couldn't start this run. Update your add-ons, then press Retry.";
+
 /** A task's error as the run's words (and what was missing, for "Fix it"). */
 function relayFailure(t: TaskRow, manifest: ManifestWorkflow | undefined): { error: string; fix?: GenerationFix } {
   const refusal = refusalOf(t);
   if (refusal && manifest) {
     const r = promptRefusal((refusal.body ?? {}) as PromptRefusalBody, refusal.status, manifest, extraOf(t).loras ?? []);
-    return { error: r.message ?? `Your ComfyUI refused the job (HTTP ${refusal.status})`, ...(r.fix && { fix: r.fix }) };
+    return { error: r.message ?? (tenantAccount() ? REFUSED_PLAIN : `Your ComfyUI refused the job (HTTP ${refusal.status})`), ...(r.fix && { fix: r.fix }) };
   }
-  if (refusal) return { error: `Your ComfyUI refused the job (HTTP ${refusal.status})` };
+  if (refusal) return { error: tenantAccount() ? REFUSED_PLAIN : `Your ComfyUI refused the job (HTTP ${refusal.status})` };
   const e = t.error ?? "";
   const tab = /^tab:([a-z-]+)(?::(\d+))?$/.exec(e);
-  if (tab) return { error: tabFailureWords(tab[1] as TabFailure, tab[2] ? Number(tab[2]) : undefined) };
+  if (tab) return { error: tabFailureWords(tab[1] as TabFailure, tab[2] ? Number(tab[2]) : undefined, !!tenantAccount()) };
   const words: Record<string, string> = { lost: RELAY_WORDS.lost, silent: RELAY_WORDS.computerSilent, down: RELAY_WORDS.comfyDownTooLong, tooBig: RELAY_WORDS.tooBig };
   if (e === "full") {
     const account = tenantAccount();
@@ -2958,7 +2980,7 @@ export const comfyProvider: ProviderAdapter = {
       return { state: "failed", error: "ComfyUI restarted and lost this run. Press Retry." };
     }
     globalThis.__fuobeComfyMisses?.delete(externalId);
-    if (pendingIdx >= 0) return { state: "queued", message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
+    if (pendingIdx >= 0) return { state: "queued", position: pendingIdx, message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
     const total = Number(meta.nodeCount ?? 0);
     const stepFrac = p && p.max ? p.value / p.max : 0;
     const progressValue = total ? Math.min(0.99, ((p?.nodesDone ?? 0) - 1 + stepFrac) / total) : stepFrac || undefined;

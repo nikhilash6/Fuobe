@@ -2,7 +2,7 @@ import "server-only";
 import dns from "node:dns/promises";
 import net from "node:net";
 import { isCloudProvider, type CloudProvider } from "@/lib/your-keys";
-import { accountEngineMode, accountProviders, paidAllowed } from "./account-keys";
+import { accountEngineMode, accountKeyInfo, accountProviders, paidAllowed, usableProviders } from "./account-keys";
 import { accountGpu, type Account, type AccountGpu } from "./auth";
 import type { OwnerGpuView } from "@/lib/connections";
 import { runnerFacts, type Principal } from "./computer/tasks";
@@ -11,6 +11,8 @@ import { MODELS } from "@/lib/catalog";
 import { hostedUntestedSummary } from "@/lib/catalog/hosted-untested";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu, peekText } from "./remote-fetch";
+import { redactKey } from "./provider-keys";
+import { networkCode, recordRunEvent } from "./run-events";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, OPEN_POLICY, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolReady } from "./hosted";
@@ -39,8 +41,12 @@ export class GpuError extends Error {
   }
 }
 
-/** A check's failure, read for the person. */
-const failed = (f: GpuFailure, place: GpuPlace) => new GpuError(diagnoseGpu(f, place), f);
+/** A check's failure, read for the person. A token the answer echoed (a page that repeats the request's headers) never in it. */
+const failed = (f: GpuFailure, place: GpuPlace, token?: string) => {
+  const out = (t: string | undefined) => (t === undefined || !token ? t : redactKey(t, token));
+  const clean = { ...f, body: out(f.body), error: out(f.error), location: out(f.location) };
+  return new GpuError(diagnoseGpu(clean, place), clean);
+};
 
 const allowPrivate = () => process.env.FUOBE_ALLOW_PRIVATE_URLS === "1";
 
@@ -97,9 +103,9 @@ export async function checkGpuAddress(raw: string, o: { resolve?: (host: string)
     try {
       addrs = net.isIP(host) ? [host] : await resolve(host);
     } catch {
-      throw new GpuError(diagnoseAddress("not-found", host));
+      throw new GpuError(diagnoseAddress("not-found", u.href));
     }
-    if (!addrs.length) throw new GpuError(diagnoseAddress("not-found", host));
+    if (!addrs.length) throw new GpuError(diagnoseAddress("not-found", u.href));
     // Private networks, this machine's own addresses (loopback too, even with FUOBE_ALLOW_PRIVATE_URLS), wrapped IPv4.
     if (addrs.some(blockedForAccounts)) throw new GpuError(diagnoseAddress("local"));
   }
@@ -162,12 +168,15 @@ export async function testGpu(
     const from = safeUrl(url);
     if (next && from && from.protocol === "http:" && next.protocol === "https:" && next.hostname === from.hostname) {
       res.body?.cancel().catch(() => {});
-      url = normal(new URL(`https://${from.hostname}${from.pathname}`));
+      // To the port the redirect named (none: 443), never one it didn't.
+      url = normal(new URL(`https://${next.host}${from.pathname}`));
       res = await ask(url);
     }
   } catch (e) {
-    console.warn(`[your-gpu] ${gpu.url}: ${(e as Error).message}`);
-    throw failed({ stage, error: (e as Error).message }, place);
+    // The kind of address and what went wrong, never the address (nor the IP and port a socket error names).
+    // (Not for the status strip's check, every 30 s while a page is open: a run that can't reach it logs its own line.)
+    if (stage !== "status") recordRunEvent("your-gpu-check", { stage, hostKind: gpuHostOf(gpu.url).kind, code: networkCode((e as Error).message) }, "warn");
+    throw failed({ stage, error: (e as Error).message }, place, gpu.token);
   }
   const contentType = res.headers.get("content-type") ?? undefined;
   if (!res.ok) {
@@ -176,14 +185,14 @@ export async function testGpu(
     const body = redirect ? "" : await peekText(res);
     res.body?.cancel().catch(() => {});
     const retryAfterS = Number(res.headers.get("retry-after")) || undefined;
-    throw failed({ stage, status: res.status, body, contentType, location: res.headers.get("location") ?? undefined, retryAfterS }, place);
+    throw failed({ stage, status: res.status, body, contentType, location: res.headers.get("location") ?? undefined, retryAfterS }, place, gpu.token);
   }
   const text = await headText(res, o.maxBytes ?? 1 * 2 ** 20);
   let s: { system?: { comfyui_version?: string }; devices?: { name?: string; vram_total?: number }[] } | null = null;
   try {
     s = JSON.parse(text);
   } catch {}
-  if (!s?.system) throw failed({ stage, status: res.status, body: text.slice(0, 4096), contentType }, place);
+  if (!s?.system) throw failed({ stage, status: res.status, body: text.slice(0, 4096), contentType }, place, gpu.token);
   const dev = s.devices?.[0];
   return { device: dev?.name, vramBytes: typeof dev?.vram_total === "number" ? dev.vram_total : undefined, version: s.system.comfyui_version, ...(url !== gpu.url && { url }) };
 }
@@ -313,6 +322,10 @@ export interface VisitorView {
   };
   /** The providers it has its own key for that this server can open ("Your keys"): never a key. */
   keys: CloudProvider[];
+  /** Of those, the ones a run would be taken on now (not refused by the provider, balance not known to be empty). */
+  usableKeys?: CloudProvider[];
+  /** Keys whose provider account's balance ran out on a run (Add credit before the next one). */
+  emptyKeys?: CloudProvider[];
   /** The studio lets accounts run paid models on their own keys (it isn't open-source only). */
   paidAllowed: boolean;
   /**
@@ -326,6 +339,13 @@ export interface VisitorView {
   links?: Action[];
   /** A notice to show once per id (the billing service's policy). */
   notice?: { id: string; text: string; url?: string };
+}
+
+/** Keys whose balance ran out on a run, as the status says them. */
+function emptyKeysOf(id: string): { emptyKeys: CloudProvider[] } | Record<string, never> {
+  const info = accountKeyInfo(id);
+  const empty = (Object.keys(info) as CloudProvider[]).filter((p) => info[p]?.balanceEmptyAt);
+  return empty.length ? { emptyKeys: empty } : {};
 }
 
 /** What the status strip and the composer show of a GPU that didn't answer: never more than the person's own GPU said. */
@@ -356,6 +376,8 @@ export async function visitorStatus(account: Account | null) {
         }
       : { connected: false },
     keys,
+    ...(account && keys.length && { usableKeys: usableProviders(account.id) }),
+    ...(account && keys.length && emptyKeysOf(account.id)),
     paidAllowed: paidAllowed(),
   };
   // Hosted runs and the billing hook: nothing of either with them off.

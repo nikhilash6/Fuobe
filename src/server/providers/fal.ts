@@ -47,7 +47,7 @@ const falRun = () => standIn("fal") ?? RUN;
  */
 async function uploadSong(upload: { endpoint: string; purpose: string }, fileUrl: string): Promise<string> {
   const res = (await falFetch(`${falRun()}/${upload.endpoint}`, { method: "POST", body: JSON.stringify({ file_url: fileUrl, purpose: upload.purpose }) })) as { id?: unknown };
-  if (typeof res?.id !== "string" || !res.id) throw new ProviderError("The song couldn't be sent to Mureka: try again");
+  if (typeof res?.id !== "string" || !res.id) throw Object.assign(new ProviderError("We couldn't send the song. Press Retry."), { said: "Mureka gave no file id" });
   return res.id;
 }
 
@@ -158,13 +158,21 @@ function key(): string {
   return cloudKey("fal");
 }
 
+/**
+ * How long a call to fal.ai may take: a submit or a result 60 s, a status or a cancel 20 s. A hung call fails (a status is
+ * asked again later; a submit isn't sent twice by itself, as its job may exist) instead of holding the run for minutes.
+ */
+export const FAL_CALL_MS = { long: 60_000, short: 20_000 };
+
 export async function falFetch(url: string, init: RequestInit = {}): Promise<unknown> {
   const k = key();
   if (!k && tenant()) throw missingKeyError("fal");
   // A status, result or cancel address is the one fal.ai gave at submit: the key goes to fal.ai's own hosts only.
   if (!keyOrigin(url)) throw new ProviderError("fal.ai gave an address outside fal.ai, so Fuobe didn't send the key there");
+  const short = /\/(status|cancel)(\?|$)/.test(url) || init.method === "PUT";
   const res = await fetch(url, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(short ? FAL_CALL_MS.short : FAL_CALL_MS.long),
     headers: { Authorization: `Key ${k}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
   });
   const text = await res.text();
@@ -225,7 +233,8 @@ export async function cloneVoice(cf: NonNullable<FieldMap["cloneFirst"]>, audio:
   for (let wait = 500; ; wait = Math.min(wait * 1.5, 3000)) {
     const st = (await falFetch(job.status_url)) as { status?: string; error?: string };
     if (st.status === "COMPLETED") {
-      if (st.error) throw new ProviderError(`Couldn't clone the voice: ${st.error}`);
+      // fal.ai's own words go to the run's details line; the sentence is plain.
+      if (st.error) throw Object.assign(new ProviderError("We couldn't copy this voice. Try a longer, clearer sample, or press Retry."), { said: st.error });
       break;
     }
     if (Date.now() + wait > until) throw new ProviderError("Cloning the voice took too long. Try again.");
@@ -278,7 +287,11 @@ export const falProvider: ProviderAdapter = {
     const song = map.songSource;
     if (song && payload[song.songId] === undefined) {
       if (!input.audio) throw new ProviderError("Add the song");
-      payload[song.uploadId] = await uploadSong(song.upload, input.audio);
+      try {
+        payload[song.uploadId] = await uploadSong(song.upload, input.audio);
+      } catch (e) {
+        throw embedding && e && typeof e === "object" ? Object.assign(e, { voiceEmbedding: embedding }) : e;
+      }
     }
     let endpoint: string;
     try {
@@ -286,10 +299,13 @@ export const falProvider: ProviderAdapter = {
     } catch (e) {
       throw new ProviderError((e as Error).message);
     }
-    const res = (await falFetch(`${falQueue()}/${endpoint}`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })) as { request_id: string; status_url: string; response_url: string; cancel_url: string };
+    let res: { request_id: string; status_url: string; response_url: string; cancel_url: string };
+    try {
+      res = (await falFetch(`${falQueue()}/${endpoint}`, { method: "POST", body: JSON.stringify(payload) })) as typeof res;
+    } catch (e) {
+      // The voice it cloned (a billed step) goes with the error: a try again of this run uses it, never clones twice.
+      throw embedding && e && typeof e === "object" ? Object.assign(e, { voiceEmbedding: embedding }) : e;
+    }
     return {
       externalId: res.request_id,
       meta: { statusUrl: res.status_url, responseUrl: res.response_url, cancelUrl: res.cancel_url, ...(embedding && { voiceEmbedding: embedding }) },
@@ -305,7 +321,7 @@ export const falProvider: ProviderAdapter = {
       error?: string;
     };
     if (status.status === "IN_QUEUE") {
-      return { state: "queued", message: status.queue_position != null ? `In queue · position ${status.queue_position + 1}` : "In queue" };
+      return { state: "queued", ...(status.queue_position != null && { position: status.queue_position }), message: status.queue_position != null ? `In queue · position ${status.queue_position + 1}` : "In queue" };
     }
     if (status.status === "IN_PROGRESS") {
       const last = status.logs?.at(-1)?.message;
@@ -331,6 +347,8 @@ export const falProvider: ProviderAdapter = {
         const s = (e as { status?: number }).status;
         if (tenantAccount() && e instanceof ProviderError && (s === 429 || (s !== undefined && s >= 500) || (s === undefined && /fetch failed|ECONN|ETIMEDOUT|ENOTFOUND/i.test(e.message)))) throw e;
         if (tenantAccount() && e instanceof TypeError && /fetch failed/i.test(e.message)) throw e;
+        // A result call that hung past its time: asked again too.
+        if (tenantAccount() && (e as Error | null)?.name === "TimeoutError") throw e;
         return { state: "failed", error: (e as Error).message };
       }
     }

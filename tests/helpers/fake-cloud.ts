@@ -36,6 +36,8 @@ export interface FakeCloud {
    * refuses): its status, body and headers. Null or undefined: the request goes on as usual.
    */
   script: ((r: CloudRequest) => { status: number; body?: unknown; headers?: Record<string, string> } | null | undefined) | null;
+  /** A request it never answers while this says so (a provider that hangs). */
+  hang: ((r: CloudRequest) => boolean) | null;
   close(): Promise<void>;
 }
 
@@ -49,13 +51,14 @@ const json = (res: http.ServerResponse, status: number, body: unknown) => {
 };
 
 async function start(handle: (fake: FakeCloud, req: CloudRequest, res: http.ServerResponse, key: string | null) => Promise<void> | void, scheme: "Key" | "Bearer", port = 0): Promise<FakeCloud> {
-  const fake = { log: [], keys: {}, pollsToFinish: 2, holdSubmits: null, canceled: [], script: null } as unknown as FakeCloud;
+  const fake = { log: [], keys: {}, pollsToFinish: 2, holdSubmits: null, canceled: [], script: null, hang: null } as unknown as FakeCloud;
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", () => {
       const r: CloudRequest = { method: req.method ?? "GET", path: req.url ?? "/", authorization: req.headers.authorization, body: Buffer.concat(chunks).toString("latin1") };
       fake.log.push(r);
+      if (fake.hang?.(r)) return;
       const said = fake.script?.(r);
       if (said) {
         res.writeHead(said.status, { "Content-Type": "application/json", ...said.headers });
@@ -94,6 +97,8 @@ const ZERO = "00000000-0000-0000-0000-000000000000";
 export function startFakeFal(port = 0): Promise<FakeCloud> {
   let n = 0;
   const polls = new Map<string, number>();
+  /** Jobs of a voice clone endpoint (Qwen3-TTS clone-voice): their result is a speaker embedding file. */
+  const clones = new Set<string>();
   return start(
     async (fake, r, res, key) => {
       const path = r.path.split("?")[0];
@@ -122,11 +127,13 @@ export function startFakeFal(port = 0): Promise<FakeCloud> {
           if (seen > fake.pollsToFinish) return json(res, 200, { status: "COMPLETED", logs: [] });
           return json(res, 200, seen === 1 ? { status: "IN_QUEUE", queue_position: 0 } : { status: "IN_PROGRESS", logs: [{ message: "50%" }] });
         }
+        if (clones.has(id)) return json(res, 200, { speaker_embedding: { url: `${fake.url}/files/voice-${id}.safetensors` } });
         return json(res, 200, { images: [{ url: PNG_DATA_URI, content_type: "image/png" }] });
       }
       if (r.method === "POST") {
         if (fake.holdSubmits) await fake.holdSubmits;
         const id = `fal-${++n}`;
+        if (/\/clone-voice\//.test(path)) clones.add(id);
         // fal's status paths drop an endpoint's sub-path: the app's first two parts.
         const app = path.split("/").slice(1, 3).join("/");
         const base = `${fake.url}/${app}/requests/${id}`;

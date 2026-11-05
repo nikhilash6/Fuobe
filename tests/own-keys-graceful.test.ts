@@ -29,6 +29,14 @@ const { getModel, getPreset } = await import("@/lib/catalog");
 const { cloudVersionKey } = await import("@/lib/your-keys");
 const { BILLING_URL } = await import("@/lib/diagnose");
 const { onCloudKey } = await import("@/lib/before-run");
+const keysRoute = await import("@/app/api/account/keys/[provider]/route");
+const { KEY_CHECK } = await import("@/server/your-keys");
+const { visitorStatus } = await import("@/server/account-gpu");
+
+const keyRequest = (cookie: string, provider: string, body: unknown) => {
+  const text = JSON.stringify(body);
+  return new Request(`http://localhost:3000/api/account/keys/${provider}`, { method: "PUT", headers: { cookie, host: "localhost:3000", "content-type": "application/json", "content-length": String(text.length) }, body: text });
+};
 
 let fal: FakeCloud;
 let rep: FakeCloud;
@@ -74,6 +82,7 @@ beforeEach(async () => {
     f.log.length = 0;
     f.pollsToFinish = 2;
     f.script = null;
+    f.hang = null;
     f.canceled.length = 0;
   }
   keys.saveAccountKey(A, "fal", "acct-fal-A");
@@ -100,6 +109,24 @@ async function settle(id: string, ms = 15_000, seen: string[] = []) {
 const isSubmit = (r: CloudRequest) => r.method === "POST" && !r.path.startsWith("/storage/") && !r.path.startsWith("/upload/");
 const isStatus = (r: CloudRequest) => r.method === "GET" && /\/requests\/[^/]+\/status/.test(r.path);
 const kinds = (g: { trouble?: { actions: { kind: string }[] } }) => (g.trouble?.actions ?? []).map((a) => a.kind);
+/** A tenth of a second of silence as a WAV (a voice sample). */
+function tinyWav(): Buffer {
+  const data = Buffer.alloc(1600 * 2);
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(36 + data.length, 4);
+  h.write("WAVEfmt ", 8);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(1, 22);
+  h.writeUInt32LE(16_000, 24);
+  h.writeUInt32LE(32_000, 28);
+  h.writeUInt16LE(2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write("data", 36);
+  h.writeUInt32LE(data.length, 40);
+  return Buffer.concat([h, data]);
+}
 
 describe("an account's run on its own key waits out a busy or down provider", () => {
   it("fal.ai busy at submit (429): the tile says so, it tries again by itself, and runs", async () => {
@@ -113,6 +140,17 @@ describe("an account's run on its own key waits out a busy or down provider", ()
     expect(fal.log.filter(isSubmit)).toHaveLength(3);
   });
 
+  it("an outage while polling that lasts past the old 10-minute end is still waited out (the job is paid), and collected", async () => {
+    gens.SELF_HEAL.scale = 0.001; // the old end, 10 minutes: 0.6 s
+    let until = Infinity;
+    fal.script = (r) => (isStatus(r) && Date.now() < until ? { status: 503, body: { detail: "Service unavailable" } } : null);
+    const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
+    until = Date.now() + 1500;
+    const done = await settle(g.id, 15_000);
+    expect(done.status, done.error ?? "").toBe("succeeded");
+    expect(fal.canceled).toEqual([]);
+  });
+
   it("fal.ai down while polling: the tile says it waits, and the run is collected once it answers", async () => {
     let down = 0;
     fal.script = (r) => (isStatus(r) && down++ < 4 ? { status: 503, body: { detail: "Service unavailable" } } : null);
@@ -121,6 +159,41 @@ describe("an account's run on its own key waits out a busy or down provider", ()
     const done = await settle(g.id, 15_000, seen);
     expect(done.status, done.error ?? "").toBe("succeeded");
     expect(seen).toContain("Waiting for fal.ai to answer");
+  });
+
+  it("a status call that hangs is given up in time and asked again, and the run is collected", async () => {
+    const { FAL_CALL_MS } = await import("@/server/providers/fal");
+    FAL_CALL_MS.short = 200;
+    try {
+      let hung = 0;
+      fal.hang = (r) => isStatus(r) && hung++ < 2;
+      const started = Date.now();
+      const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
+      const done = await settle(g.id);
+      expect(done.status, done.error ?? "").toBe("succeeded");
+      expect(hung).toBeGreaterThan(2);
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      FAL_CALL_MS.short = 20_000;
+    }
+  });
+
+  it("a voice it cloned for the run (a billed step) is used again when the run tries again, never cloned twice", async () => {
+    const wav = tinyWav();
+    const up = await uploadsRoute.POST(
+      new Request("http://localhost:3000/api/uploads", { method: "POST", headers: { cookie: cookies.A, host: "localhost:3000", "content-type": "audio/wav", "x-file-name": "sample.wav", "content-length": String(wav.length) }, body: wav }),
+    );
+    expect(up.status, await up.clone().text()).toBe(201);
+    const voice = ((await up.json()) as { url: string }).url;
+    const isTts = (r: CloudRequest) => isSubmit(r) && /\/text-to-speech\//.test(r.path);
+    let busy = 0;
+    fal.script = (r) => (isTts(r) && busy++ < 1 ? { status: 429, body: { detail: "Too many requests" } } : null);
+    const g = await run(cookies.A, { feature: "audio", modelId: "qwen-3-tts", engine: "cloud", op: "tts", prompt: "Welcome aboard.", inputs: { voiceAudio: voice } });
+    await settle(g.id);
+    expect(fal.log.filter((r) => isSubmit(r) && /\/clone-voice\//.test(r.path))).toHaveLength(1);
+    const tts = fal.log.filter(isTts);
+    expect(tts).toHaveLength(2);
+    expect(JSON.parse(tts[1].body)).toMatchObject({ speaker_voice_embedding_file_url: expect.stringMatching(/voice-fal-\d+\.safetensors$/) });
   });
 
   it("a 502 at submit may have started a job already: never sent twice", async () => {
@@ -162,6 +235,17 @@ describe("what waiting can't fix fails at once, in plain words, with what helps"
     expect(done.error).toBe("Your fal.ai balance has run out. Top it up on fal.ai, then run again.");
     expect(done.trouble?.actions[0]).toEqual({ kind: "add-credit", label: "Add credit on fal.ai", target: BILLING_URL.fal });
     expect(fal.log.filter(isSubmit)).toHaveLength(1);
+    // Settings → Your keys says Add credit (not Ready), and the status tells the composer before the next run.
+    expect(keys.accountKeyInfo(A).fal?.balanceEmptyAt).toBeGreaterThan(0);
+    expect((await visitorStatus(auth.accountById(A)!)).viewer).toMatchObject({ emptyKeys: ["fal"] });
+    // Topped up: a run the provider takes clears it.
+    fal.keys["acct-fal-broke"] = "good";
+    try {
+      expect((await settle((await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" })).id)).status).toBe("succeeded");
+      expect(keys.accountKeyInfo(A).fal?.balanceEmptyAt).toBeUndefined();
+    } finally {
+      fal.keys["acct-fal-broke"] = "broke";
+    }
   });
 
   it("a key refused while polling fails the run at once (not after half an hour), and stops the job", async () => {
@@ -232,6 +316,44 @@ describe("Run with your key: the cloud version of a tool on the account's GPU", 
     // A Fuobe Original on both engines: the same model on the cloud.
     expect(gens.cloudTwin({ modelId: "fuobe-soul" }, D)).toEqual({ modelId: "fuobe-soul", provider: "replicate" });
     expect(cloudVersionKey(undefined, getModel("fuobe-soul"), ["replicate"], has, getModel)).toBe("replicate");
+  });
+
+  it("Run with your Replicate key runs on Replicate, never back on fal.ai; without that key it asks for one", async () => {
+    const asked = { feature: "image" as const, prompt: "a quiet harbour at dawn", modelId: "nano-banana-pro", engine: "cloud" as const };
+    const before = fal.log.filter(isSubmit).length;
+    const g = await run(cookies.A, onCloudKey(asked, { target: "replicate" }) as unknown as Record<string, unknown>);
+    expect(g.provider).toBe("replicate");
+    expect((await settle(g.id)).status).toBe("succeeded");
+    expect(fal.log.filter(isSubmit)).toHaveLength(before);
+    // An account with only a Replicate token asked to run on fal.ai: Add your key, never a silent other route.
+    await expect(run(cookies.D, onCloudKey(asked, { target: "fal" }) as unknown as Record<string, unknown>)).rejects.toThrow(/^403: .*add-key/);
+  });
+
+  it("a key the provider refused isn't offered for Run with your key; Check again clears it once the provider takes it", async () => {
+    const fpv = { presetId: "motion-fpv-drone", modelId: "oss-minimax-h3" };
+    keys.markKeyRejected(A, "fal", "acct-fal-A");
+    expect(gens.cloudTwin(fpv, A)).toBeNull();
+    const again = await keysRoute.PUT(keyRequest(cookies.A, "fal", { recheck: true }), { params: Promise.resolve({ provider: "fal" }) });
+    expect(again.status).toBe(200);
+    expect(keys.accountKeyInfo(A).fal?.rejectedAt).toBeUndefined();
+    expect(gens.cloudTwin(fpv, A)).toEqual({ modelId: "minimax-h3", provider: "fal", op: "i2v" });
+  });
+
+  it("the key check asks again by itself while the provider is busy, and says so plainly when it stays busy", async () => {
+    KEY_CHECK.waitsMs = [10, 10];
+    try {
+      let busy = 0;
+      fal.script = (r) => (/requests\/0{8}-/.test(r.path) && busy++ < 2 ? { status: 503, body: { detail: "Service unavailable" } } : null);
+      const ok = await keysRoute.PUT(keyRequest(cookies.A, "fal", { key: "acct-fal-A" }), { params: Promise.resolve({ provider: "fal" }) });
+      expect(ok.status).toBe(200);
+      expect(busy).toBe(3);
+      fal.script = (r) => (/requests\/0{8}-/.test(r.path) ? { status: 503, body: { detail: "Service unavailable" } } : null);
+      const down = await keysRoute.PUT(keyRequest(cookies.A, "fal", { key: "acct-fal-A" }), { params: Promise.resolve({ provider: "fal" }) });
+      expect(down.status).toBe(503);
+      expect(await down.json()).toEqual({ error: "fal.ai is busy right now, so we couldn't check your key. Try again in a minute.", details: "fal.ai answered 503" });
+    } finally {
+      KEY_CHECK.waitsMs = [1_000, 3_000];
+    }
   });
 
   it("the failed tile's Run with your fal.ai key asks for a run the studio takes, on that key", async () => {

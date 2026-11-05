@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import crypto from "node:crypto";
 import http from "node:http";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
@@ -10,6 +11,8 @@ import { tempDir } from "./helpers/temp-dir";
  * says so; the status strip (the composer's check before Run) knows why the GPU is offline. All against a stand-in
  * ComfyUI on this machine: no real ComfyUI, RunPod or fuobe.com is called.
  */
+vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
+
 const dir = tempDir("fuobe-own-gpu-graceful-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
@@ -30,7 +33,10 @@ const auth = await import("@/server/auth");
 const generationsRoute = await import("@/app/api/generations/route");
 const uploadsRoute = await import("@/app/api/uploads/route");
 const gpuRoute = await import("@/app/api/account/gpu/route");
-const { getGeneration, SELF_HEAL } = await import("@/server/generations");
+const generationRoute = await import("@/app/api/generations/[id]/route");
+const smallerRoute = await import("@/app/api/generations/[id]/smaller/route");
+const { cancelGeneration, getGeneration, LEASE, OWN_QUEUE, SELF_HEAL, STALE_SUBMIT } = await import("@/server/generations");
+const { ownRunNote } = await import("@/server/run-events");
 const { cleanGpuAddress, checkGpuAddress, visitorStatus } = await import("@/server/account-gpu");
 const { comfyProvider, onOwnGpu } = await import("@/server/providers/comfyui");
 const { db } = await import("@/server/db");
@@ -61,6 +67,7 @@ beforeEach(() => {
   Object.assign(fake.opts, { loras: [], delayMs: 0, answer: undefined });
   fake.log.length = 0;
   auth.setAccountGpu(a, { url: fake.url });
+  globalThis.__fuobeTestGpuHosts = undefined;
   globalThis.__fuobeAccountGpus?.clear();
   globalThis.__fuobePollHeals?.clear();
   db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
@@ -114,7 +121,8 @@ describe("Settings → Your GPU: Test says what is wrong, in plain words, with w
     expect(starting.body.trouble).toMatchObject({ cause: "gpu-starting", retryable: true });
     expect(starting.body.error).toBe(starting.body.trouble!.words);
     expect(starting.body.error).toMatch(/starting up/);
-    expect(starting.body.trouble!.details).toBe(`127.0.0.1:${fake.port} · HTTP 502 · Bad gateway`);
+    // The kind of address, never the address itself.
+    expect(starting.body.trouble!.details).toBe("your web address · HTTP 502 · Bad gateway");
     plainWords(starting.body.error);
     // Today's wrong advice is gone.
     expect(starting.body.error).not.toMatch(/isn't a ComfyUI/);
@@ -162,6 +170,30 @@ describe("Settings → Your GPU: Test says what is wrong, in plain words, with w
     const pw = await put({ url: "https://me:secret@gpu.example.com" });
     expect(pw.status).toBe(422);
     expect(pw.body.trouble).toMatchObject({ cause: "address-credentials", words: "A password goes in the Access token box, not in the address." });
+  });
+
+  it("an http address that sends to https is followed to the port it named (none: 443), never another", async () => {
+    globalThis.__fuobeTestGpuHosts = { "gpu-redirect.example.com": fake.port };
+    for (const [to, kept] of [
+      ["https://gpu-redirect.example.com:8443/system_stats", "https://gpu-redirect.example.com:8443"],
+      ["https://gpu-redirect.example.com/system_stats", "https://gpu-redirect.example.com"],
+    ]) {
+      let asked = 0;
+      fake.opts.answer = (_m, p) => (p === "/system_stats" && asked++ === 0 ? { status: 301, body: "", contentType: "text/plain", headers: { location: to } } : undefined);
+      const r = await put({ url: "http://gpu-redirect.example.com:8188" });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      expect(r.body.url).toBe(kept);
+    }
+  });
+
+  it("a token the address echoes back is never in what the person reads", async () => {
+    const token = "sekret-token-4815162342";
+    fake.opts.answer = (_m, p) => (p === "/system_stats" ? { status: 200, body: `{"headers": {"Authorization": "Bearer ${token}"}}`, contentType: "application/json" } : undefined);
+    const r = await put({ url: fake.url, token });
+    expect(r.status).toBe(422);
+    expect(r.body.trouble?.cause).toBe("gpu-not-comfy");
+    expect(JSON.stringify(r.body)).not.toContain(token);
+    expect(JSON.stringify(r.body)).not.toContain("4815162342");
   });
 
   it("too many checks: says when it checks again, by itself", async () => {
@@ -225,29 +257,64 @@ describe("a run on an account's own GPU heals itself, or fails in plain words wi
     expect(g?.status).toBe("failed");
     expect(g?.error).toBe("Your GPU is starting up, so ComfyUI wasn't ready for this run. Press Retry in a minute.");
     plainWords(g?.error);
-    expect(g?.trouble).toMatchObject({ cause: "gpu-starting", details: `127.0.0.1:${fake.port} · HTTP 502 · Bad gateway` });
+    expect(g?.trouble).toMatchObject({ cause: "gpu-starting", details: "your web address · HTTP 502 · Bad gateway" });
     expect(kinds(g?.trouble)).toEqual(expect.arrayContaining(["retry", "check-gpu", "gpu-settings"]));
-    // Tried several times, then asked once more (/system_stats) before failing.
+    // The file went once: each try after it only looked at the GPU (/system_stats), and it was asked once more at the end.
     const paths = fake.log.map((e) => e.path);
-    expect(paths.filter((p) => p === "/upload/image").length).toBeGreaterThan(1);
+    expect(paths.filter((p) => p === "/upload/image")).toHaveLength(1);
+    expect(paths.filter((p) => p === "/system_stats").length).toBeGreaterThan(2);
     expect(paths.lastIndexOf("/system_stats")).toBeGreaterThan(paths.indexOf("/upload/image"));
     // What it learnt shows in the status strip too.
     expect((await visitorStatus(auth.accountById(a)!)).viewer.gpu).toMatchObject({ online: false, trouble: { cause: "gpu-starting" } });
   });
 
-  it("while a run waits, the status strip says so in a check's words; a GPU moved meanwhile stops the run in plain words", async () => {
+  it("while a run waits, the status strip says so in a check's words; a new address saved meanwhile is where the run goes", async () => {
     SELF_HEAL.scale = 0.01;
-    fake.opts.answer = (_m, p) => (p === "/upload/image" ? html(502) : undefined);
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
     const id = await startRun();
     for (let i = 0; i < 500 && getGeneration(id)?.message !== "Waiting for your GPU to start up"; i++) await new Promise((r) => setTimeout(r, 10));
     expect(getGeneration(id)?.message).toBe("Waiting for your GPU to start up");
+    // The tile shows what helps while it waits, and until when.
+    expect(getGeneration(id)?.waiting).toMatchObject({ cause: "gpu-starting", until: expect.any(Number) });
+    expect(kinds(getGeneration(id)?.waiting)).toContain("check-gpu");
     // The composer's check before Run reads this (Settings' words, not a run's "press Retry").
     const s = await visitorStatus(auth.accountById(a)!);
     expect(s.viewer.gpu).toMatchObject({ online: false, trouble: { cause: "gpu-starting", words: expect.stringMatching(/we connect as soon as ComfyUI is ready/) } });
-    auth.setAccountGpu(a, { url: `${fake.url}/elsewhere` });
+    // The person pastes a new address (a tunnel that restarted): the run goes there, and runs.
+    globalThis.__fuobeTestGpuHosts = { "new-river.trycloudflare.com": fake.port };
+    fake.opts.answer = undefined;
+    auth.setAccountGpu(a, { url: "https://new-river.trycloudflare.com" });
+    const g = await settle(id, 20_000);
+    expect(g?.status, g?.error ?? "").toBe("succeeded");
+    // Sent to the new address (the run keeps which, by a name made from it, never the address).
+    const sentTo = (JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id))) as { sentTo?: string }).sentTo;
+    expect(sentTo).toBe(crypto.createHash("sha256").update("https://new-river.trycloudflare.com").digest("hex").slice(0, 16));
+  });
+
+  it("a GPU disconnected while a run waits stops the run, saying so, with Connect your GPU", async () => {
+    SELF_HEAL.scale = 0.01;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const id = await startRun();
+    for (let i = 0; i < 500 && getGeneration(id)?.message !== "Waiting for your GPU to start up"; i++) await new Promise((r) => setTimeout(r, 10));
+    auth.setAccountGpu(a, null);
     const g = await settle(id);
     expect(g?.status).toBe("failed");
-    expect(g?.error).toBe("This run stopped because your GPU moved to a new address. Press Retry.");
+    expect(g?.error).toBe("You disconnected your GPU, so this run stopped. Connect it again, then press Retry.");
+    expect(g?.trouble?.actions[0]).toMatchObject({ kind: "gpu-settings", label: "Connect your GPU" });
+  });
+
+  it("Cancel while a run waits stays a cancel, and nothing more is sent", async () => {
+    SELF_HEAL.scale = 0.01;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const id = await startRun();
+    for (let i = 0; i < 500 && getGeneration(id)?.message !== "Waiting for your GPU to start up"; i++) await new Promise((r) => setTimeout(r, 10));
+    await cancelGeneration(id);
+    const at = Date.now();
+    fake.opts.answer = undefined;
+    await new Promise((r) => setTimeout(r, 1500));
+    await settle(id, 500);
+    expect(getGeneration(id, { includeDeleted: true })?.status).toBe("canceled");
+    expect(fake.log.filter((e) => e.at > at && (e.path === "/upload/image" || e.path === "/prompt"))).toEqual([]);
   });
 
   it("never waits out what waiting can't fix: a password, a web page instead of ComfyUI", async () => {
@@ -291,6 +358,56 @@ describe("a run on an account's own GPU heals itself, or fails in plain words wi
     expect(g?.status).toBe("failed");
     expect(g?.error).toBe("Your GPU stopped answering for 1 minute, so this run stopped. Start it again, then press Retry.");
     expect(kinds(g?.trouble)).toEqual(expect.arrayContaining(["retry", "check-gpu"]));
+  });
+
+  it("a made result whose copy breaks off is copied again at a later look, the tile saying so, and never made twice", async () => {
+    let refused = 0;
+    fake.opts.answer = (_m, p) => (p === "/view" && refused++ < 4 ? html(502) : undefined);
+    const seen: string[] = [];
+    const g = await settle(await startRun(), 20_000, seen);
+    expect(g?.status, g?.error ?? "").toBe("succeeded");
+    expect(seen).toContain("Your result is made. Copying it from your GPU");
+    expect(refused).toBeGreaterThan(4);
+    expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+  });
+
+  it("the time a file may take to reach the GPU grows with its size", async () => {
+    const { ownGpuLimits, uploadDeadlineMs } = await import("@/server/providers/comfyui");
+    // Sending a file may take as long as it needs at a slow 128 KB/s, plus a minute: 5 to 30 minutes.
+    expect(uploadDeadlineMs(1024)).toBe(5 * 60_000);
+    expect(uploadDeadlineMs(80 * 2 ** 20)).toBe(Math.ceil(((80 * 2 ** 20) / (128 * 1024)) * 1000) + 60_000);
+    expect(uploadDeadlineMs(10 * 2 ** 30)).toBe(30 * 60_000);
+    expect(ownGpuLimits("/upload/image", 80 * 2 ** 20).deadlineMs).toBeGreaterThan(10 * 60_000);
+    expect(ownGpuLimits("/system_stats", 80 * 2 ** 20).deadlineMs).toBe(60_000);
+  });
+
+  it("a run its GPU lost twice is sent again only once, then says so with Retry", async () => {
+    let prompts = 0;
+    fake.opts.answer = (m, p) => {
+      if (p === "/prompt" && m === "POST") {
+        prompts++;
+        return undefined;
+      }
+      // A ComfyUI that forgets every run.
+      if (p === "/queue" && m === "GET") return { status: 200, body: JSON.stringify({ queue_running: [], queue_pending: [] }), contentType: "application/json" };
+      if (p.startsWith("/history/")) return { status: 200, body: "{}", contentType: "application/json" };
+      return undefined;
+    };
+    const g = await settle(await startRun(), 20_000);
+    expect(g?.status).toBe("failed");
+    expect(prompts).toBe(2);
+    expect(g?.trouble?.cause).toBe("gpu-restarted");
+    expect(kinds(g?.trouble)).toContain("retry");
+  });
+
+  it("each job of a batch keeps its place (its seed) when it is handed over", async () => {
+    const pic = await uploadPng();
+    const r = await generationsRoute.POST(json("/api/generations", "POST", { feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic] }, params: { numOutputs: 2, seed: 1234 } }));
+    expect(r.status).toBe(201);
+    const ids = ((await r.json()) as { items: { id: string }[] }).items.map((x) => x.id);
+    for (const id of ids) await settle(id);
+    const index = (id: string) => (JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id) ?? "{}")) as { jobIndex?: number }).jobIndex;
+    expect(ids.map(index)).toEqual(ids.length === 2 ? [0, 1] : [0]);
   });
 
   it("a run its GPU lost (ComfyUI restarted) is sent again once, and finishes", async () => {
@@ -345,7 +462,239 @@ describe("a run on an account's own GPU heals itself, or fails in plain words wi
     fake.opts.answer = (_m, p) => (p === "/upload/image" ? { status: 404, body: "404 page not found", contentType: "text/plain" } : undefined);
     const e = (await onOwnGpu({ url: fake.url }, () => comfyProvider.prepareFile(Buffer.from("png"), "image/png", "a.png")).catch((x: unknown) => x)) as Error & { trouble?: { cause: string; details?: string } };
     expect(e.message).not.toMatch(/upload failed|404/);
-    expect(e.trouble).toMatchObject({ cause: "gpu-not-comfy", details: `127.0.0.1:${fake.port} · HTTP 404 · 404 page not found` });
+    expect(e.trouble).toMatchObject({ cause: "gpu-not-comfy", details: "your web address · HTTP 404 · 404 page not found" });
     expect(fetched.filter((u) => u.includes("owner-comfy.test") && !u.endsWith("/system_stats"))).toEqual([]);
+  });
+});
+
+describe("the reported case, end to end: a RunPod pod that is stopped (its address stands for the stand-in)", () => {
+  const POD = "https://abc123xyz-8188.proxy.runpod.net";
+  /** A stopped pod: RunPod's proxy answers 404 to everything. */
+  const stopped = () => ({ status: 404, body: "404 page not found", contentType: "text/plain" });
+
+  it("Save anyway, Generate: the run waits for the pod, says so with Start your pod, and runs once it is started", async () => {
+    globalThis.__fuobeTestGpuHosts = { "abc123xyz-8188.proxy.runpod.net": fake.port };
+    SELF_HEAL.scale = 0.01;
+    auth.setAccountGpu(a, null);
+    fake.opts.answer = stopped;
+    const kept = await put({ url: "abc123xyz-8188.proxy.runpod.net", anyway: true }, false);
+    expect(kept.status).toBe(200);
+    expect(kept.body).toMatchObject({ offline: true, gpu: { url: POD }, trouble: { cause: "gpu-stopped", details: "RunPod pod, port 8188 · HTTP 404 · 404 page not found" } });
+    const id = await startRun();
+    for (let i = 0; i < 500 && !getGeneration(id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(getGeneration(id)?.message).toBe("Your RunPod pod is off. Start it, and this run goes on by itself");
+    expect(getGeneration(id)?.waiting?.actions[0]).toMatchObject({ kind: "start-gpu" });
+    // The pod is started.
+    fake.opts.answer = undefined;
+    const g = await settle(id, 20_000);
+    expect(g?.status, g?.error ?? "").toBe("succeeded");
+  });
+
+  it("a pod that stays off: the run stops in plain words with Start your pod first, never the raw 404 or the address", async () => {
+    globalThis.__fuobeTestGpuHosts = { "abc123xyz-8188.proxy.runpod.net": fake.port };
+    auth.setAccountGpu(a, { url: POD });
+    fake.opts.answer = stopped;
+    const g = await settle(await startRun());
+    expect(g?.status).toBe("failed");
+    expect(g?.error).toBe("Your RunPod pod isn't running, or ComfyUI isn't on port 8188. Start your pod, then press Retry.");
+    plainWords(g?.error);
+    expect(g?.trouble?.details).toBe("RunPod pod, port 8188 · HTTP 404 · 404 page not found");
+    expect(kinds(g?.trouble)[0]).toBe("start-gpu");
+    expect(JSON.stringify(g)).not.toMatch(/abc123xyz|proxy\.runpod|ComfyUI upload failed/);
+  });
+});
+
+describe("what the owner learns of an account's failed run on its own GPU", () => {
+  it("one log line and a note kept with the run (no address, no token), never in the account's own answers", async () => {
+    const warn = vi.spyOn(console, "warn");
+    try {
+      fake.opts.answer = (_m, p) => (p === "/upload/image" ? { status: 401, body: "Unauthorized: token abc123secret from 127.0.0.1", contentType: "text/plain" } : undefined);
+      const id = await startRun();
+      const g = await settle(id);
+      expect(g?.status).toBe("failed");
+      const note = ownRunNote(id)!;
+      expect(note).toMatchObject({ cause: "gpu-password", stage: "upload", code: "401", hostKind: "web" });
+      expect(note.said).toMatch(/^Unauthorized/);
+      expect(note.said).not.toMatch(/127\.0\.0\.1|abc123secret/);
+      const line = warn.mock.calls.map((c) => String(c[0])).find((l) => l.includes('"evt":"own-run"') && l.includes(id));
+      expect(JSON.parse(line!)).toMatchObject({ evt: "own-run", run: id, account: a, place: "own-gpu", provider: "comfyui", stage: "upload", code: "401", hostKind: "web", cause: "gpu-password", outcome: "failed" });
+      expect(line).not.toMatch(/127\.0\.0\.1|localhost|abc123secret|me\.png|Unauthorized/);
+      // The account's own answers never carry it.
+      const list = await generationsRoute.GET(new Request("http://localhost:3000/api/generations", { headers: headers() }));
+      const one = await generationRoute.GET(new Request(`http://localhost:3000/api/generations/${id}`, { headers: headers() }), { params: Promise.resolve({ id }) });
+      for (const r of [list, one]) {
+        const text = await r.text();
+        expect(text).toContain(id);
+        expect(text).not.toMatch(/ownRun|Unauthorized|abc123secret|"lease"|"heal"/);
+      }
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("a busy GPU: a queue that keeps moving is waited out", () => {
+  const queue = (pos: number) => ({ status: 200, body: JSON.stringify({ queue_running: [[0, "someone-else"]], queue_pending: [...Array.from({ length: pos }, (_, i) => [i + 1, `other-${i}`]), [pos + 1, "job-moving"]] }), contentType: "application/json" });
+  const empty = { status: 200, body: "{}", contentType: "application/json" };
+
+  it("waits on while its place moves up, past the queue limit, and finishes", async () => {
+    OWN_QUEUE.scale = 0.0003; // 30 minutes: about half a second
+    fake.opts.promptId = "job-moving";
+    const started = Date.now();
+    // Five ahead, one fewer every 200 ms: about a second in the queue, twice the limit, while it moves.
+    fake.opts.answer = (m, p) => {
+      const ahead = 5 - Math.floor((Date.now() - started) / 200);
+      if (ahead < 0) return undefined;
+      if (p === "/queue" && m === "GET") return queue(ahead);
+      if (p.startsWith("/history/")) return empty;
+      return undefined;
+    };
+    try {
+      const g = await settle(await startRun(), 20_000);
+      expect(g?.status, g?.error ?? "").toBe("succeeded");
+    } finally {
+      OWN_QUEUE.scale = 1;
+      fake.opts.promptId = undefined;
+    }
+  });
+
+  it("stops when its place hasn't moved for the limit, saying the GPU was busy", async () => {
+    OWN_QUEUE.scale = 0.0003;
+    fake.opts.promptId = "job-moving";
+    fake.opts.answer = (m, p) => (p === "/queue" && m === "GET" ? queue(3) : p.startsWith("/history/") ? empty : undefined);
+    try {
+      const g = await settle(await startRun(), 20_000);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toMatch(/^Your GPU was busy for 1 minute, so this run stopped\./);
+      expect(kinds(g?.trouble)).toEqual(expect.arrayContaining(["retry", "check-gpu"]));
+    } finally {
+      OWN_QUEUE.scale = 1;
+      fake.opts.promptId = undefined;
+    }
+  });
+});
+
+describe("runs that wait, and a file too big for the address", () => {
+  it("runs waiting for the GPU don't fill the account's runs at once; a run that takes a waiting one's place stops it", async () => {
+    SELF_HEAL.scale = 0.01;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) ids.push(await startRun());
+    for (let i = 0; i < 500 && ids.some((id) => !getGeneration(id)?.waiting); i++) await new Promise((r) => setTimeout(r, 10));
+    const pic = await uploadPng();
+    const body = { feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic] } };
+    // A fifth for the GPU: four already wait for it.
+    const fifth = await generationsRoute.POST(json("/api/generations", "POST", body));
+    expect(fifth.status).toBe(429);
+    expect(((await fifth.json()) as { error: string }).error).toBe("You have 4 runs waiting for your GPU. Cancel one, or run one with your key, to start another.");
+    // One that takes a waiting run's place (Run with your key on its tile): accepted, and that run stops.
+    const instead = await generationsRoute.POST(json("/api/generations", "POST", { ...body, replaces: ids[0] }));
+    expect(instead.status, await instead.clone().text()).toBe(201);
+    expect(getGeneration(ids[0])?.status).toBe("canceled");
+    for (const id of ids) await cancelGeneration(id);
+    for (const g of ((await instead.json()) as { items: { id: string }[] }).items) await cancelGeneration(g.id);
+  });
+
+  it("a file the address refuses as too big: Send a smaller copy makes one, and the run made again with it runs", async () => {
+    // A big picture (noise: it doesn't shrink as a PNG).
+    const sharp = (await import("sharp")).default;
+    const noise = (await import("node:crypto")).randomBytes(2400 * 2400 * 3);
+    const big = await sharp(noise, { raw: { width: 2400, height: 2400, channels: 3 } }).png({ compressionLevel: 1 }).toBuffer();
+    const up = await uploadsRoute.POST(new Request("http://localhost:3000/api/uploads", { method: "POST", headers: headers({ "content-type": "image/png", "x-file-name": "big.png", "content-length": String(big.length) }), body: big }));
+    expect(up.status, await up.clone().text()).toBe(201);
+    const pic = ((await up.json()) as { url: string }).url;
+    // The tunnel's own size limit: its web page, 413.
+    fake.opts.answer = (_m, p) => (p === "/upload/image" ? { status: 413, body: "<html><title>413 Request Entity Too Large</title></html>", contentType: "text/html" } : undefined);
+    const r = await generationsRoute.POST(json("/api/generations", "POST", { feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic] } }));
+    const id = ((await r.json()) as { items: { id: string }[] }).items[0].id;
+    const g = await settle(id);
+    expect(g?.trouble?.cause).toBe("gpu-too-big");
+    expect(g?.trouble?.actions[0]).toMatchObject({ kind: "send-smaller", label: "Send a smaller copy" });
+    // The proxy lets the account ask for its own run's copy, and nobody else's.
+    const { proxy } = await import("@/proxy");
+    const { NextRequest } = await import("next/server");
+    const via = (who: string) => proxy(new NextRequest(`http://localhost:3000/api/generations/${id}/smaller`, { method: "POST", headers: { cookie: who, host: "localhost:3000" } }));
+    expect(via(cookie).headers.get("x-middleware-next")).toBe("1");
+    const other = auth.createAccount("graceful-other@example.com", "long enough").id;
+    expect(via(`${auth.SESSION_COOKIE}=${auth.createSession(other).value}`).status).toBe(403);
+    const smaller = await smallerRoute.POST(new Request(`http://localhost:3000/api/generations/${id}/smaller`, { method: "POST", headers: headers() }), { params: Promise.resolve({ id }) });
+    expect(smaller.status, await smaller.clone().text()).toBe(200);
+    const made = (await smaller.json()) as { request: { inputs: { images: string[] } }; note: string };
+    expect(made.note).toMatch(/^Sent a smaller copy \(\d+ MB\)\.$/);
+    expect(made.request.inputs.images[0]).not.toBe(pic);
+    fake.opts.answer = undefined;
+    const again = await generationsRoute.POST(json("/api/generations", "POST", made.request));
+    expect(again.status, await again.clone().text()).toBe(201);
+    expect((await settle(((await again.json()) as { items: { id: string }[] }).items[0].id))?.status).toBe("succeeded");
+    const sentBytes = fake.log.filter((e) => e.path === "/upload/image").at(-1)?.upload?.length ?? 0;
+    expect(sentBytes).toBeGreaterThan(0);
+    expect(sentBytes).toBeLessThan(big.length * 0.8);
+  });
+});
+
+// Last: the server's own state is replaced here (a new instance of the runner's module on the same database).
+describe("a wait survives a restart or a deploy", () => {
+  it("another instance's look while this one holds a waiting run leaves it alone", async () => {
+    SELF_HEAL.scale = 0.01;
+    STALE_SUBMIT.ms = 0;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    try {
+      const id = await startRun();
+      for (let i = 0; i < 500 && !getGeneration(id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+      // Another instance's sweep: its own (empty) list of runs in hand, the same database.
+      const mine = globalThis.__fuobeSubmitting;
+      globalThis.__fuobeSubmitting = new Set();
+      await globalThis.__fuobeRunner?.tick();
+      globalThis.__fuobeSubmitting = mine;
+      expect(getGeneration(id)?.status).toBe("queued");
+      fake.opts.answer = undefined;
+      const g = await settle(id, 20_000);
+      expect(g?.status, g?.error ?? "").toBe("succeeded");
+    } finally {
+      STALE_SUBMIT.ms = 2 * 60_000;
+    }
+  });
+
+  it("a deploy's old instance hands its waiting run to the new one, which goes on with it and runs it once", async () => {
+    SELF_HEAL.scale = 0.01;
+    LEASE.ms = 400;
+    LEASE.renewMs = 100;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const id = await startRun();
+    for (let i = 0; i < 500 && !getGeneration(id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(getGeneration(id)?.message).toBe("Waiting for your GPU to start up");
+    // The old instance starts stopping: its wait lets go of the run, without failing it.
+    const shut = (globalThis.__fuobeShutdown ??= { stops: new Set(), draining: false, hooked: false });
+    shut.draining = true;
+    for (let i = 0; i < 500 && globalThis.__fuobeSubmitting?.has(id); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(globalThis.__fuobeSubmitting?.has(id)).toBe(false);
+    expect(getGeneration(id)?.status).toBe("queued");
+    // It is gone: its timers, its runs in hand, its name. A new instance starts on the same database.
+    const old = globalThis.__fuobeRunner;
+    if (old) {
+      clearInterval(old.timer);
+      if (old.fastTimer) clearInterval(old.fastTimer);
+    }
+    globalThis.__fuobeRunner = undefined;
+    if (globalThis.__fuobeLeaseTimer) clearTimeout(globalThis.__fuobeLeaseTimer);
+    globalThis.__fuobeLeaseTimer = undefined;
+    globalThis.__fuobeSubmitting = new Set();
+    globalThis.__fuobeInstance = undefined;
+    globalThis.__fuobeResent = undefined;
+    shut.draining = false;
+    vi.resetModules();
+    const fresh = await import("@/server/generations");
+    fresh.SELF_HEAL.scale = 0.01;
+    fresh.STALE_SUBMIT.ms = 0;
+    fresh.LEASE.ms = 400;
+    // The old hold runs out; the GPU is back.
+    await new Promise((r) => setTimeout(r, 500));
+    fake.opts.answer = undefined;
+    fake.log.length = 0;
+    fresh.ensureRunner();
+    const g = await settle(id, 20_000);
+    expect(g?.status, g?.error ?? "").toBe("succeeded");
+    expect(g?.error ?? "").not.toMatch(/stopped before it started/);
+    expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
   });
 });

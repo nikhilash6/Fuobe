@@ -127,6 +127,8 @@ export const GenerationRequestSchema = z.object({
   // A Fuobe Original runs on both engines: the one to run on (the composer's switch). Unset: the engine mode, else
   // the first connected.
   engine: z.enum(["open", "cloud"]).optional(),
+  // The provider whose key a cloud run goes on when the model is on several ("Run with your Replicate key").
+  prefer: z.enum(["fal", "replicate"]).optional(),
   // A recipe's LoRAs (the evaluation harness, scripts/eval): added after the preset's own. On ComfyUI `file` must
   // already be in models/loras (ComfyUI checks the name against its list); a cloud LoRA endpoint takes `url`.
   loras: z

@@ -170,8 +170,8 @@ const GENERATION = /^\/api\/generations\/(?!(?:facets|trash|stream|zip|bulk|loca
 
 /** The generation an account's request is about (its own runs: the proxy checks it made it), or undefined. */
 export function accountGeneration(method: string, pathname: string): string | undefined {
-  // Cancel, and Fuobe Soul's finished picture for its own result.
-  const step = /^\/api\/generations\/([^/]+)\/(cancel|finish)$/.exec(pathname);
+  // Cancel, Fuobe Soul's finished picture for its own result, and a smaller copy of its failed run's file.
+  const step = /^\/api\/generations\/([^/]+)\/(cancel|finish|smaller)$/.exec(pathname);
   if (method === "POST" && step) return step[1];
   const one = GENERATION.exec(pathname);
   // PATCH: a like, a pin or a review status (all the route changes).
