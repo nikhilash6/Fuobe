@@ -20,7 +20,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/faceless/ep
       return Response.json(episodeView(id), { status: 201 });
     }
     const graph = asViewer(viewer, () => changeGraph(id, c));
-    // A resend of the same press (the page's id in its header) gets the change the first one started.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the change the first one started.
     return onceForAccount(
       viewer.account,
       `faceless-change:${id}`,

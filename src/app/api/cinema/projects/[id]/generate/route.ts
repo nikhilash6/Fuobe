@@ -1,4 +1,4 @@
-import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolPriceCheck, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, poolPress, runAccountTool, toolPriceCheck, toolViewer } from "@/server/account-tool-run";
 import { cinemaSteps, generateInProject, prepareCinemaRun, startCinemaRun, type CinemaRun } from "@/server/cinema-generate";
 import { GenerateBody, body, fileRefs, handle, withStatus } from "@/server/cinema-schemas";
 
@@ -31,7 +31,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cinema/proj
     return onceForAccount(
       viewer.account,
       `cinema:${id}`,
-      b.requestId,
+      poolPress(b.requestId),
       () =>
         runAccountTool(request, viewer.account, {
           tool: "cinema",

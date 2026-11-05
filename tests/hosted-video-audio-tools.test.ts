@@ -250,6 +250,25 @@ describe("hosted runs on: one press of Run is one run and one hold, however ofte
       expect(reserves() - before).toBe(1);
       expect(places("none", since)).toHaveLength(rows);
     });
+
+    it(`${name}: on an account's own GPU every send of a press makes its run, as before, and nothing of it is kept`, async () => {
+      const f = await filesOf("gpu");
+      const before = reserves();
+      const since = Date.now();
+      const counts: number[] = [];
+      for (let i = 0; i < 2; i++) {
+        // One at a time, as the account's limit on runs going at once asks.
+        db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+        const r = await send(() => call("gpu", run(f)));
+        expect(r.status, await r.clone().text()).toBe(201);
+        counts.push(places("gpu", since).length);
+      }
+      expect(counts[0]).toBeGreaterThan(0);
+      expect(counts[1]).toBe(counts[0] * 2);
+      expect(places("gpu", since).every((p) => p === "own")).toBe(true);
+      expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(ids.gpu)).toEqual({ n: 0 });
+      expect(reserves()).toBe(before);
+    });
   }
 });
 

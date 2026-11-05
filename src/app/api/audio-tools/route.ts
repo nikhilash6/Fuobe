@@ -1,4 +1,4 @@
-import { bodyTooBig, guestRun, onceForAccount, requestIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, poolPress, requestIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { AudioToolBody, AudioToolError, audioToolFiles, audioToolSteps, planAudioTool, previewAudioTool, runAudioTool, startAudioTool, type AudioToolPlan } from "@/server/audio-tools";
 import { connectRefusal } from "@/server/connect-refusal";
 import { ConnectComfyError } from "@/server/generations";
@@ -47,11 +47,11 @@ async function post(request: Request, preview: boolean) {
     // An account's run: on its own GPU or key, with its own files, after the checks a studio run gets.
     const body = parsed.data;
     let planned: AudioToolPlan | null = null;
-    // A repeated requestId (a resend of the same press) gets the run the first one started.
+    // A repeated requestId (a resend of the same press) gets the run the first one started on this install's GPUs.
     return onceForAccount(
       viewer.account,
       "audio-tools",
-      requestIdOf(raw),
+      poolPress(requestIdOf(raw)),
       () =>
         runAccountTool(request, viewer.account, {
           tool: `audio-${body.tool}`,

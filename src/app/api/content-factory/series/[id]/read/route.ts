@@ -18,7 +18,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/content-fac
     const { engine } = await body(request, Read, "Pick an engine");
     if (viewer.kind === "owner") return Response.json(await rereadSeries(id, engine));
     const clip = asViewer(viewer, () => seriesClip(id));
-    // A resend of the same press (the page's id in its header) gets the reading the first one started.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the reading the first one started.
     return onceForAccount(
       viewer.account,
       `content-factory-read:${id}`,

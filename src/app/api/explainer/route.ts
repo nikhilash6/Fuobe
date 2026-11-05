@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const composed = await asViewer(viewer, () => composeScript({ kind: "explainer", channelId: null, topic: input.prompt.trim(), settings: input.settings, sources }, ""));
     const ask = { kind: "explainer" as const, topic: input.prompt, sources, settings: input.settings, composed };
     if (input.review) return Response.json(asViewer(viewer, () => createEpisode(ask)), { status: 201 });
-    // A resend of the same press (the page's id in its header) gets the episode the first one started.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the episode the first one started.
     return onceForAccount(
       viewer.account,
       "explainer",

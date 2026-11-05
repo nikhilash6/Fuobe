@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, TranscribeSchema, "Add a clip first");
     if (viewer.kind === "owner") return Response.json(transcribeClip(input), { status: 201 });
-    // A resend of the same press (the page's id in its header) gets the transcription the first one started.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the first one's transcription.
     return onceForAccount(
       viewer.account,
       "genjutsu-transcribe",

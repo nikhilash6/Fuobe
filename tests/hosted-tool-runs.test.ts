@@ -127,6 +127,22 @@ describe("hosted runs off (the default): tool runs are as before", () => {
     expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(account.id)).toEqual({ n: 0 });
   });
 
+  it("a press id kept for this install's GPUs only makes a run for every send, as before the page sent one", async () => {
+    const account = auth.accountById(ids.none)!;
+    let called = 0;
+    const press = () =>
+      toolRun.onceForAccount(
+        account,
+        "test-off-pool-only",
+        toolRun.poolPress("press-off-pool-01"),
+        async () => ({ ok: true as const, value: ++called }),
+        ({ value }) => Response.json({ value }, { status: 201 }),
+      );
+    expect(await (await press()).json()).toEqual({ value: 1 });
+    expect(await (await press()).json()).toEqual({ value: 2 });
+    expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(account.id)).toEqual({ n: 0 });
+  });
+
   it("the seam answers its own GPU or key, whatever the steps", async () => {
     const place = await toolRun.placeOf(auth.accountById(ids.none)!, [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }]);
     expect(place).toEqual({ kind: "own" });
@@ -338,6 +354,43 @@ describe("hosted runs on", () => {
     expect(await (await press()).json()).toEqual({ value: 1 });
     expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(account.id)).toEqual({ n: 0 });
     expect(reserves()).toBe(before);
+  });
+
+  it("a press id kept for this install's GPUs only: one run and one hold there; on the account's own GPU a run per send", async () => {
+    useBilling();
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const shown = { amount: fake.price.amount, priceVersion: fake.price.version };
+    const pressAs = (who: string, id: string) => {
+      const account = auth.accountById(ids[who])!;
+      return toolRun.onceForAccount(
+        account,
+        "test-pool-only",
+        toolRun.poolPress(id),
+        () => toolRun.runAccountTool(json("/api/x", "POST", {}, who), account, { tool: "test", files: [], shown, plan: () => plan, start: () => createGenerations(plan[0].request) }),
+        ({ value }) => Response.json({ ids: (value as { id: string }[]).map((g) => g.id) }, { status: 201 }),
+      );
+    };
+    const before = reserves();
+    // On this install's GPUs: sent twice in this server process, one run and one hold.
+    const first = await pressAs("none", "press-pool-only-1");
+    expect(first.status, await first.clone().text()).toBe(201);
+    const again = await pressAs("none", "press-pool-only-1");
+    expect(await again.json()).toEqual(await first.json());
+    expect(reserves() - before).toBe(1);
+    expect(fake.calls_of("/v1/reserve").at(-1)!.body).toMatchObject({ requestId: pressRequestId(ids.none, "test-pool-only\npress-pool-only-1") });
+    // On the account's own GPU: each send makes its run, nothing kept, nothing held.
+    const own = auth.accountById(ids.gpu)!;
+    expect(await toolRun.placeOf(own, plan)).toEqual({ kind: "own" });
+    const made: string[][] = [];
+    for (let i = 0; i < 2; i++) {
+      db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+      const r = await pressAs("gpu", "press-pool-only-2");
+      expect(r.status, await r.clone().text()).toBe(201);
+      made.push(((await r.json()) as { ids: string[] }).ids);
+    }
+    expect(made[1]).not.toEqual(made[0]);
+    expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(own.id)).toEqual({ n: 0 });
+    expect(reserves() - before).toBe(1);
   });
 
   it("a resend while another server process starts the press waits for that answer and makes nothing", async () => {

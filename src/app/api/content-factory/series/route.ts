@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     if (viewer.kind === "account" && input.reference?.kind === "link") return ownGpuTool();
     if (viewer.kind === "owner" || !seriesReads(input)) return Response.json(await asViewer(viewer, () => createSeries(input)), { status: 201 });
     let prepared: PreparedSeries | null = null;
-    // A resend of the same press (the page's id in its header) gets the series the first one made.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the series the first one made.
     return onceForAccount(
       viewer.account,
       "content-factory",

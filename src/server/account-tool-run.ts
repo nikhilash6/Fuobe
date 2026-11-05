@@ -143,16 +143,20 @@ async function awaitPress(look: () => PressClaim | null): Promise<Extract<PressC
  * gets it as well, and the run asks the billing service for one hold however often it is sent. A refusal isn't kept:
  * sent again (after the account connects its GPU, say), the run is checked again; one refused after its hold was made
  * (and given back) is a new try then, with a new hold. A run on the account's own GPU or key keeps nothing, as before.
- * `ok` turns the started run into the route's answer.
+ * An id given as a PoolPress (poolPress, pressIdOf) is kept for a run on this install's GPUs only: on the account's own
+ * GPU or key each send of it makes its run, as it did before the page sent one. `ok` turns the started run into the
+ * route's answer.
  */
 export async function onceForAccount<T>(
   account: Account,
   scope: string,
-  id: string | undefined,
+  id: string | PoolPress | undefined,
   fn: () => Promise<AccountToolResult<T>>,
   ok: (r: { value: T; gpuWarning?: string }) => Response,
 ): Promise<Response> {
-  const key = id && hostedRunsOn() ? toolPressKey(scope, id) : null;
+  const poolOnly = typeof id === "object";
+  const sent = poolOnly ? id.poolOnly : id;
+  const key = sent && hostedRunsOn() ? toolPressKey(scope, sent) : null;
   const attempt = async (): Promise<PressAnswer> => {
     // A press another server process answered (or is starting) is that answer.
     const before = key ? await awaitPress(() => toolPressSeen(account.id, key)) : null;
@@ -175,7 +179,9 @@ export async function onceForAccount<T>(
     }
   };
   try {
-    return fromAnswer(await once(`${scope}:acct:${account.id}`, id, attempt));
+    // (Once per server process for every run: a plain id only. A PoolPress is kept by the database alone, for a run on
+    // this install's GPUs.)
+    return fromAnswer(await once(`${scope}:acct:${account.id}`, poolOnly ? undefined : sent, attempt));
   } catch (e) {
     if (e instanceof Refused) return fromAnswer(e.answer);
     throw e;
@@ -206,8 +212,17 @@ export function requestIdOf(body: unknown): string | undefined {
 /** The header a page sends its id for a press of Run in, for a tool whose body has no field for it. */
 export const PRESS_HEADER = "x-request-id";
 
-/** A page's id for a press of Run, from the request's PRESS_HEADER, or none. */
-export const pressIdOf = (request: Request): string | undefined => requestIdOf({ requestId: request.headers.get(PRESS_HEADER) });
+/**
+ * A page's id for a press of Run that keeps the run once on this install's GPUs only (onceForAccount): for a tool whose
+ * route made a run for every send before its page sent an id. A run on the account's own GPU or key is made as before.
+ */
+export type PoolPress = { readonly poolOnly: string | undefined };
+
+/** A press id kept for a run on this install's GPUs only (PoolPress). */
+export const poolPress = (id: string | undefined): PoolPress => ({ poolOnly: id });
+
+/** A page's id for a press of Run, from the request's PRESS_HEADER (kept for a run on this install's GPUs only), or none. */
+export const pressIdOf = (request: Request): PoolPress => poolPress(requestIdOf({ requestId: request.headers.get(PRESS_HEADER) }));
 
 /**
  * An account's runs going now (queued or running), counted as runs: a run's jobs and steps share a batch, and a run let

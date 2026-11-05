@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const input = await body(request, Create, "Describe the channel and pick a genre");
     if (viewer.kind === "owner") return Response.json(await createChannel(input), { status: 201 });
     const account = viewer.account;
-    // A resend of the same press (the page's id in its header) gets the channel, and its avatar, the first one made.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the first one's channel and avatar.
     return onceForAccount(
       account,
       "faceless-channel",

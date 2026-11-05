@@ -12,7 +12,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/faceless/ch
   return handle(async () => {
     const { id } = await ctx.params;
     if (viewer.kind === "owner") return Response.json(makeAvatar(id), { status: 201 });
-    // A resend of the same press (the page's id in its header) gets the avatar the first one started.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the avatar the first one started.
     return onceForAccount(
       viewer.account,
       `faceless-avatar:${id}`,

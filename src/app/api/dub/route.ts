@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { ONE_SHOT_MODELS, VOICE_SPLIT_IDS, type VoiceSplit } from "@/lib/av/dub";
-import { asViewer, bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, bodyTooBig, guestRun, onceForAccount, poolPress, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { createDubSession, dubPlanSteps, dubRoomProblem, listDubSessions, planDub, previewDub, startDub, type DubPlan } from "@/server/dub";
 import { connectRefusal } from "@/server/connect-refusal";
 import { ShortsError } from "@/server/shorts";
@@ -50,7 +50,7 @@ async function post(request: Request, preview: boolean) {
     return onceForAccount(
       viewer.account,
       "dub",
-      input.requestId,
+      poolPress(input.requestId),
       () =>
         runAccountTool(request, viewer.account, {
           tool: "dub",

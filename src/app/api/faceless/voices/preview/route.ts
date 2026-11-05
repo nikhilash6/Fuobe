@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     if (viewer.kind === "owner") return Response.json(voicePreview(voice));
     const p = asViewer(viewer, () => voicePreviewPlan(voice));
     if ("made" in p) return Response.json(p.made);
-    // A resend of the same press (the page's id in its header) gets the sample the first one started.
+    // On this install's GPUs, a resend of this press (its id in the header) gets the sample the first one started.
     return onceForAccount(
       viewer.account,
       `faceless-voice:${voice.id}`,

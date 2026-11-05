@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { asViewer, bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, bodyTooBig, guestRun, onceForAccount, poolPress, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { CueSchema, getDubSession, planVoiceDub, previewVoiceDub, startVoiceDub, voiceDub, voicePlanSteps, type VoicePlan } from "@/server/dub";
 import { poolPricedCheck } from "@/server/tool-runs";
 
@@ -28,7 +28,7 @@ async function post(request: Request, ctx: RouteContext<"/api/dub/[id]/voice">, 
     return onceForAccount(
       viewer.account,
       `dub-voice:${id}`,
-      parsed.data.requestId,
+      poolPress(parsed.data.requestId),
       () =>
         runAccountTool(request, viewer.account, {
           tool: "dub",
