@@ -63,6 +63,7 @@ const pool = await import("@/server/computer/pool");
 const tasks = await import("@/server/computer/tasks");
 const billing = await import("@/server/billing");
 const outbox = await import("@/server/billing-outbox");
+const outputChecks = await import("@/server/output-checks");
 const qs = await import("@/server/queue-settings");
 const { comfyProvider, loadManifest } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
@@ -1630,6 +1631,44 @@ describe("two app processes on one database (a deploy's overlap)", () => {
       expect((db().prepare("SELECT COUNT(*) AS n FROM output_checks WHERE generation_id = ?").get(id) as { n: number }).n).toBe(0);
       expect(assetsOf(id)).toBe(0);
       expect(mod.calls_of("/v1/check-output")).toEqual([]);
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
+  });
+
+  it("with the moderation service checking outputs, a process whose turn runs out while it saves a result leaves it to the process that took over: nothing of its own save is held or checked", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    mod.run = { allowed: true, checkOutputs: true };
+    try {
+      const w = standInWorker();
+      const { id } = await pressRun();
+      const d = driver(w);
+      // As its file is kept, the save here has taken past its turn, and another process took the turn over.
+      db().exec(`CREATE TEMP TRIGGER turn_taken AFTER INSERT ON assets WHEN NEW.generation_id = '${id}' BEGIN UPDATE generation_runs SET finish_by = 'another-process', finish_until = ${Date.now() + 10 * MIN} WHERE id = '${id}'; END`);
+      try {
+        await workAll(d);
+        await until(() => taskOf(id)?.state === "done" && assetsOf(id) === 0);
+        for (let i = 0; i < 5; i++) await tick();
+      } finally {
+        db().exec("DROP TRIGGER IF EXISTS turn_taken");
+      }
+      // Nothing of this process's save is held or checked: its file went.
+      expect(getGeneration(id)?.status).toBe("running");
+      expect((db().prepare("SELECT stage FROM generations WHERE id = ?").get(id) as { stage: string | null }).stage).toBeNull();
+      expect((db().prepare("SELECT COUNT(*) AS n FROM output_checks WHERE generation_id = ?").get(id) as { n: number }).n).toBe(0);
+      expect(assetsOf(id)).toBe(0);
+      // A slow look here changes nothing while the other process saves it.
+      expect(updateLive(id, { status: "failed", error: "Timed out after 45 minutes", completed_at: Date.now() })).toBe(false);
+      // The process holding the turn holds its own save for the check (here a result with no file, which succeeds as it is),
+      // once: a run already held for its check is never held again.
+      db().prepare("UPDATE generations SET stage = 'checking' WHERE id = ?").run(id);
+      expect(outputChecks.holdForCheck(id, [], { live: true, turn: "another-process" })).toBe(false);
+      db().prepare("UPDATE generations SET stage = NULL WHERE id = ?").run(id);
+      expect(outputChecks.holdForCheck(id, [], { live: true, turn: "a-third-process" })).toBe(false);
+      expect(outputChecks.holdForCheck(id, [], { live: true, turn: "another-process" })).toBe(true);
+      expect(getGeneration(id)?.status).toBe("succeeded");
     } finally {
       delete process.env.FUOBE_MODERATION_URL;
       await mod.close();

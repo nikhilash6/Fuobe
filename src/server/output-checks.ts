@@ -23,16 +23,22 @@ export const CHECKING_WORDS = "Checking";
 
 /**
  * Hold a finished run's files for their check (the runner calls it instead of marking the row succeeded). `live`: only
- * while the run still goes (queued or running), as the runner saves it: a run stopped meanwhile stays stopped, nothing of
- * it is held, and the caller removes its files. Returns whether the files were held.
+ * while the run still goes (queued or running, not already held for its check), as the runner saves it: a run stopped
+ * meanwhile stays stopped, nothing of it is held, and the caller removes its files. `turn`: the app process saving it
+ * (generations.ts claimFinish); while another process holds the turn, that process saves the run, and nothing is held
+ * here either. Returns whether the files were held.
  */
-export function holdForCheck(generationId: string, outputs: OutputFile[], o: { live?: boolean; now?: number } = {}): boolean {
+export function holdForCheck(generationId: string, outputs: OutputFile[], o: { live?: boolean; turn?: string; now?: number } = {}): boolean {
   const now = o.now ?? Date.now();
   const d = db();
   const ids = outputs.map((o) => o.assetId).filter((x): x is string => !!x);
-  const live = o.live ? " AND status IN ('queued', 'running')" : "";
+  const live = o.live ? " AND status IN ('queued', 'running') AND stage IS NULL" : "";
+  const turn = o.turn ? " AND NOT EXISTS (SELECT 1 FROM generation_runs WHERE id = @id AND finish_by IS NOT NULL AND finish_by != @turn AND finish_until >= @now)" : "";
   return d.transaction((): boolean => {
-    const held = d.prepare(`UPDATE generations SET status = 'running', stage = 'checking', progress = 0.99, message = ?, outputs_json = ?, updated_at = ? WHERE id = ?${live}`).run(CHECKING_WORDS, JSON.stringify(outputs), now, generationId).changes > 0;
+    const held =
+      d
+        .prepare(`UPDATE generations SET status = 'running', stage = 'checking', progress = 0.99, message = @message, outputs_json = @outputs, updated_at = @now WHERE id = @id${live}${turn}`)
+        .run({ message: CHECKING_WORDS, outputs: JSON.stringify(outputs), now, id: generationId, ...(o.turn && { turn: o.turn }) }).changes > 0;
     if (!held) return false;
     for (const id of ids) {
       d.prepare("UPDATE assets SET held = 1 WHERE id = ?").run(id);

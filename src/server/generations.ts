@@ -2685,7 +2685,7 @@ async function pollOne(r: Row): Promise<void> {
   }
   // The moderation service asked to see this run's outputs first: they are held, and the row waits ("Checking").
   if (stored.checkOutputs && moderationConfigured()) {
-    if (!holdForCheck(r.id, outputs, { live: true })) dropSaved();
+    if (!holdForCheck(r.id, outputs, { live: true, turn: runnerToken() })) dropSaved();
     return;
   }
   const saved = updateLive(r.id, {
@@ -2699,8 +2699,8 @@ async function pollOne(r: Row): Promise<void> {
 }
 
 /**
- * Change a run the runner looked at, only while it still goes (queued or running) and no other app process holds its
- * turn to save its results. A look that took a while (a slow poll, a deploy's overlap) never takes a run another
+ * Change a run the runner looked at, only while it still goes (queued or running, and not held for its output check) and
+ * no other app process holds its turn to save its results. A look that took a while (a slow poll, a deploy's overlap) never takes a run another
  * process saved, failed or canceled meanwhile back to an earlier state, and never fails a run another process is
  * saving. Returns whether the change was made.
  */
@@ -2710,7 +2710,7 @@ export function updateLive(id: string, fields: Partial<Row>, now = Date.now()): 
   return (
     db()
       .prepare(
-        `UPDATE generations SET ${keys.map((k) => `${k} = @${k}`).join(", ")}, updated_at = @__now WHERE id = @__id AND status IN ('queued', 'running')
+        `UPDATE generations SET ${keys.map((k) => `${k} = @${k}`).join(", ")}, updated_at = @__now WHERE id = @__id AND status IN ('queued', 'running') AND stage IS NULL
            AND NOT EXISTS (SELECT 1 FROM generation_runs WHERE id = @__id AND finish_by IS NOT NULL AND finish_by != @__me AND finish_until >= @__now)`,
       )
       .run({ ...fields, __now: now, __id: id, __me: runnerToken() }).changes > 0
@@ -2736,8 +2736,9 @@ export function claimFinish(id: string, now = Date.now()): boolean {
   const d = db();
   return d
     .transaction((): boolean => {
-      const g = d.prepare("SELECT status FROM generations WHERE id = ?").get(id) as Pick<Row, "status"> | undefined;
-      if (!g || (g.status !== "queued" && g.status !== "running")) return false;
+      const g = d.prepare("SELECT status, stage FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "stage"> | undefined;
+      // A run held for its output check was saved already.
+      if (!g || (g.status !== "queued" && g.status !== "running") || g.stage) return false;
       const me = runnerToken();
       d.prepare("INSERT OR IGNORE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, NULL)").run(id, now);
       return (
