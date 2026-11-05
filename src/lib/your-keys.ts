@@ -33,6 +33,8 @@ export interface KeyInfo {
   readable: boolean;
   /** When the provider refused it in a run. */
   rejectedAt?: number;
+  /** When a run (or the check) found its provider account's balance empty: "Add credit" until it takes a run again. */
+  balanceEmptyAt?: number;
 }
 
 /** GET /api/account/keys. */
@@ -99,12 +101,26 @@ export function cloudVersionKey(
   has: (id: string) => boolean,
   getModel: (id: string) => Routed | undefined,
 ): CloudProvider | null {
+  return cloudVersion(preset, model, keys, has, getModel)?.provider ?? null;
+}
+
+/**
+ * The tool's cloud version that one of the account's keys runs: the key, the model, and (another model) its operation
+ * there. What "Run with your fal.ai key" runs, once, before Run or on a run that couldn't reach the GPU.
+ */
+export function cloudVersion(
+  preset: Parameters<typeof presetRoutes>[0] | undefined,
+  model: (Routed & { id: string }) | undefined,
+  keys: readonly CloudProvider[],
+  has: (id: string) => boolean,
+  getModel: (id: string) => Routed | undefined,
+): { provider: CloudProvider; modelId: string; op?: string } | null {
   if (!keys.length) return null;
-  const ids = preset ? presetRoutes(preset, "cloud", has).map((r) => r.modelId) : model && dualEngine(model as Parameters<typeof dualEngine>[0]) ? [model.id] : [];
-  for (const id of ids) {
+  const routes: { modelId: string; op?: string }[] = preset ? presetRoutes(preset, "cloud", has) : model && dualEngine(model as Parameters<typeof dualEngine>[0]) ? [{ modelId: model.id }] : [];
+  for (const { modelId: id, op } of routes) {
     const m = getModel(id);
     const p = m && CLOUD_PROVIDERS.find((k) => keys.includes(k) && m.routes.some((r) => r.provider === k));
-    if (p) return p;
+    if (p) return { provider: p, modelId: id, ...(op && id !== model?.id && { op }) };
   }
   return null;
 }
