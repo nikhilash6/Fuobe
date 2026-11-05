@@ -296,8 +296,6 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/genjutsu\/describe$/,
   // Character Swap Studio's jobs on an account's own project (src/server/swap-studio-account.ts).
   /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
-  // Apps made in one go from the account's own pictures (src/server/tool-runs.ts): Turnaround and Fly around.
-  /^\/api\/(turnaround|fly-around)$/,
   // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
   /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
   // The Image studio's palette lock: its images, then each recoloured to the palette (src/server/palettes.ts).
