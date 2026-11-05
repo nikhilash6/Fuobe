@@ -18,6 +18,8 @@ import { onSignals, STOP_SIGNALS } from "../bin/lib/signals.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 const hasFfmpeg = spawnSync("ffmpeg", ["-hide_banner", "-version"]).status === 0;
+/** A check that starts the real ffmpeg (several times, for a preview): time for a busy machine running other tests too. */
+const FFMPEG_MS = 60_000;
 
 /** A clock that moves only when the policy sleeps. */
 function clock() {
@@ -264,7 +266,7 @@ describe("clips and sound, made again", () => {
     expect(out).not.toBeNull();
     expect([...out!.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
     expect(out!.length).toBeLessThanOrEqual(64 * 1024);
-  });
+  }, FFMPEG_MS);
 
   it.runIf(hasFfmpeg)("ffmpeg refuses a playlist that names another file on this PC, and makes a plain clip again", async () => {
     const dir = tempDir("fuobe-worker-playlist-");
@@ -278,7 +280,7 @@ describe("clips and sound, made again", () => {
     expect(await reencode({ ffmpeg: "ffmpeg", kind: "video", name: "fuobe_aaaaaaaaaaaa.mp4", src: playlist, dst: path.join(dir, "out1.part") })).toBe(false);
     expect(await reencode({ ffmpeg: "ffmpeg", kind: "video", name: "fuobe_aaaaaaaaaaaa.mp4", src: clip, dst: path.join(dir, "out2.part") })).toBe(true);
     expect(fs.readFileSync(path.join(dir, "out2.part")).subarray(4, 8).toString("latin1")).toBe("ftyp");
-  });
+  }, FFMPEG_MS);
 
   it.runIf(hasFfmpeg)("ffmpeg refuses a DASH, HLS or ffconcat list that names another file, even under a clip's name", async () => {
     const dir = tempDir("fuobe-worker-lists-");
@@ -298,7 +300,7 @@ describe("clips and sound, made again", () => {
       const dst = path.join(dir, `${kind}-out.part`);
       expect(await reencode({ ffmpeg: "ffmpeg", kind: "video", name: "fuobe_aaaaaaaaaaaa.mp4", src, dst }), kind).toBe(false);
     }
-  });
+  }, FFMPEG_MS);
 
   it("keeps one picture and one sound stream and nothing else of the file, in the format its name says", () => {
     const mp4 = encodeArgs("video", "fuobe_a.mp4", "in", "out");
