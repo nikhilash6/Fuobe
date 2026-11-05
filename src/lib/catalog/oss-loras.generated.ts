@@ -21,7 +21,6 @@ export interface DopRecipe {
   cameraMotion?: string;
   /** The round-1 key whose LoRAs it reuses. */
   aliasOf?: string;
-  notes?: string;
 }
 
 /** Preset id ("motion-overhead") for the map v2, else the bare slug of a round-1 match ("crash-zoom-in"). */
@@ -3448,8 +3447,7 @@ export const OSS_LORAS: Record<string, OssLora[]> = {
 export const DOP_RECIPES: Record<string, DopRecipe> = {
   "motion-overhead": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "High/low pair. Older than mid-2026 but not yet in the map."
+    "status": "add-lora"
   },
   "motion-incline": {
     "kind": "motion",
@@ -3457,18 +3455,15 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "motion-handheld": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "High-noise file only; a MiniMax H3 version followed on 2026-09-20."
+    "status": "add-lora"
   },
   "motion-documentary-snap": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "High-noise file only; a MiniMax H3 version followed on 2026-09-20."
+    "status": "add-lora"
   },
   "motion-intimate-observer": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "High-noise file only; a MiniMax H3 version followed on 2026-09-20."
+    "status": "add-lora"
   },
   "motion-raw-chaos": {
     "kind": "motion",
@@ -3476,13 +3471,11 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "motion-snorricam": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "No trigger listed; describe a head-mounted camera."
+    "status": "add-lora"
   },
   "motion-head-tracking": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "No trigger listed; describe a head-mounted camera."
+    "status": "add-lora"
   },
   "motion-pov": {
     "kind": "motion",
@@ -3498,13 +3491,11 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "motion-road-rush": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "Remade POV-Driving (Wan 2.1 T2V) from round 1 is the Apache alternative."
+    "status": "add-lora"
   },
   "motion-car-grip": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "Remade POV-Driving (Wan 2.1 T2V) from round 1 is the Apache alternative."
+    "status": "add-lora"
   },
   "motion-tracking": {
     "kind": "motion",
@@ -3528,347 +3519,285 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "motion-glam": {
     "kind": "motion",
-    "status": "alias",
-    "notes": "Reuse the orbit pair at 0.6-0.8 and write 'slow' into the prompt."
+    "status": "alias"
   },
   "motion-lazy-orbit": {
     "kind": "motion",
-    "status": "alias",
-    "notes": "Reuse the orbit pair at 0.6-0.8 and write 'slow' into the prompt."
+    "status": "alias"
   },
   "motion-jib-up": {
     "kind": "motion",
     "status": "alias",
     "cameraLora": "jib_up",
-    "aliasOf": "crane-up",
-    "notes": "Open: reuse Remade crane_up / crane_down (already mapped for Crane Up/Down). Cloud: LTX-2.3's built-in camera_lora."
+    "aliasOf": "crane-up"
   },
   "motion-jib-down": {
     "kind": "motion",
     "status": "alias",
     "cameraLora": "jib_down",
-    "aliasOf": "crane-down",
-    "notes": "Open: reuse Remade crane_up / crane_down (already mapped for Crane Up/Down). Cloud: LTX-2.3's built-in camera_lora."
+    "aliasOf": "crane-down"
   },
   "motion-epic-scale": {
     "kind": "motion",
     "status": "alias",
     "cameraLora": "jib_up",
-    "aliasOf": "crane-up",
-    "notes": "Open: reuse Remade crane_up / crane_down (already mapped for Crane Up/Down). Cloud: LTX-2.3's built-in camera_lora."
+    "aliasOf": "crane-up"
   },
   "motion-dolly-left": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Pan Left",
-    "cameraLora": "dolly_left",
-    "notes": "Open: Wan 2.2 Fun Camera 'Pan Left/Right' (a translation). Cloud: LTX-2.3 camera_lora (or the Lightricks LTX-2 Dolly Left/Right LoRAs on an LTX-2 host)."
+    "cameraLora": "dolly_left"
   },
   "motion-dolly-right": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Pan Right",
-    "cameraLora": "dolly_right",
-    "notes": "Open: Wan 2.2 Fun Camera 'Pan Left/Right' (a translation). Cloud: LTX-2.3 camera_lora (or the Lightricks LTX-2 Dolly Left/Right LoRAs on an LTX-2 host)."
+    "cameraLora": "dolly_right"
   },
   "motion-truck-left": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Pan Left",
-    "cameraLora": "dolly_left",
-    "notes": "Open: Wan 2.2 Fun Camera 'Pan Left/Right' (a translation). Cloud: LTX-2.3 camera_lora (or the Lightricks LTX-2 Dolly Left/Right LoRAs on an LTX-2 host)."
+    "cameraLora": "dolly_left"
   },
   "motion-truck-right": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Pan Right",
-    "cameraLora": "dolly_right",
-    "notes": "Open: Wan 2.2 Fun Camera 'Pan Left/Right' (a translation). Cloud: LTX-2.3 camera_lora (or the Lightricks LTX-2 Dolly Left/Right LoRAs on an LTX-2 host)."
+    "cameraLora": "dolly_right"
   },
   "motion-super-dolly-out": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Zoom Out",
-    "cameraLora": "dolly_out",
-    "notes": "Open: Fun Camera 'Zoom Out'."
+    "cameraLora": "dolly_out"
   },
   "motion-zoom": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Zoom In",
-    "cameraLora": "dolly_in",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "cameraLora": "dolly_in"
   },
   "motion-pan": {
     "kind": "motion",
     "status": "fun-camera",
-    "funCamera": "Pan Right",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "funCamera": "Pan Right"
   },
   "motion-pedestal-down": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Pan Down",
-    "cameraLora": "jib_down",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "cameraLora": "jib_down"
   },
   "motion-classic-static": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Static",
-    "cameraLora": "static",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "cameraLora": "static"
   },
   "motion-roll-transition": {
     "kind": "motion",
     "status": "fun-camera",
-    "funCamera": "ClockWise (CW)",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "funCamera": "ClockWise (CW)"
   },
   "motion-aerial-pullback": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Zoom Out",
-    "cameraLora": "dolly_out",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "cameraLora": "dolly_out"
   },
   "motion-dolly-out": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Zoom Out",
-    "cameraLora": "dolly_out",
-    "notes": "Added 2026-10-26 (o/dop): already on Wan 2.2 Fun Camera on the open engine (Zoom Out, Static); LTX-2.3's built-in camera_lora (dolly_out, static) in the cloud, as for the moves above."
+    "cameraLora": "dolly_out"
   },
   "motion-static": {
     "kind": "motion",
     "status": "fun-camera",
     "funCamera": "Static",
-    "cameraLora": "static",
-    "notes": "Added 2026-10-26 (o/dop): already on Wan 2.2 Fun Camera on the open engine (Zoom Out, Static); LTX-2.3's built-in camera_lora (dolly_out, static) in the cloud, as for the moves above."
+    "cameraLora": "static"
   },
   "motion-fpv-drone": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "Wan options (DroneShot, FPV Drone Dive) do not allow selling outputs or third-party hosting."
+    "status": "add-lora"
   },
   "motion-earth-zoom-out": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "Wan 'Earth Zoom Out' (civitai 1871537) forbids selling outputs."
+    "status": "add-lora"
   },
   "motion-focus-change": {
     "kind": "motion",
     "status": "hosted-native",
-    "cameraMotion": "focus_shift",
-    "notes": "Open on GPU: prompt-only on Wan; RackFocus (civitai 1783051) forbids selling outputs."
+    "cameraMotion": "focus_shift"
   },
   "motion-slow-motion": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "Gated repo: accept the licence on HF and pass a token. Card not readable without login, so usage settings are unverified."
+    "status": "add-lora"
   },
   "motion-flying-cam-transition": {
     "kind": "motion",
-    "status": "add-lora",
-    "notes": "Same file is re-uploaded as wolf1280/LTX-2.3-Transition-LORA (2026-08-31). Best with a start and an end frame."
+    "status": "add-lora"
   },
   "motion-bts": {
     "kind": "motion",
-    "status": "licence-hold",
-    "notes": "Licence conflict between the HF and civitai pages: do not ship until the author clarifies. Status corrected 2026-10-24 (o/lora-plumbing): add-lora → licence-hold, so no default uses this non-commercial LoRA; BTS stays prompt-only until the licence is clear."
+    "status": "licence-hold"
   },
   "motion-eyes-in": {
     "kind": "motion",
     "status": "train-own",
-    "cameraLora": "dolly_in",
-    "notes": "Wan 'eyes in' (civitai 1877142) forbids selling outputs; Remade Eye-Close-Up is a Wan 2.1 T2V LoRA. Train a Wan 2.2 I2V LoRA on 20-40 own push-in clips (fal-ai/wan-22-trainer/i2v-a14b)."
+    "cameraLora": "dolly_in"
   },
   "motion-mouth-in": {
     "kind": "motion",
     "status": "train-own",
-    "cameraLora": "dolly_in",
-    "notes": "Wan 'eyes in' (civitai 1877142) forbids selling outputs; Remade Eye-Close-Up is a Wan 2.1 T2V LoRA. Train a Wan 2.2 I2V LoRA on 20-40 own push-in clips (fal-ai/wan-22-trainer/i2v-a14b)."
+    "cameraLora": "dolly_in"
   },
   "motion-eating-zoom": {
     "kind": "motion",
     "status": "train-own",
-    "cameraLora": "dolly_in",
-    "notes": "Wan 'eyes in' (civitai 1877142) forbids selling outputs; Remade Eye-Close-Up is a Wan 2.1 T2V LoRA. Train a Wan 2.2 I2V LoRA on 20-40 own push-in clips (fal-ai/wan-22-trainer/i2v-a14b)."
+    "cameraLora": "dolly_in"
   },
   "motion-timelapse": {
     "kind": "motion",
-    "status": "train-own",
-    "notes": "The Wan 2.2 Time-lapse LoRA (civitai 1877924) forbids selling outputs. Train from own time-lapse footage."
+    "status": "train-own"
   },
   "motion-timelapse-human": {
     "kind": "motion",
-    "status": "train-own",
-    "notes": "The Wan 2.2 Time-lapse LoRA (civitai 1877924) forbids selling outputs. Train from own time-lapse footage."
+    "status": "train-own"
   },
   "motion-timelapse-landscape": {
     "kind": "motion",
-    "status": "train-own",
-    "notes": "The Wan 2.2 Time-lapse LoRA (civitai 1877924) forbids selling outputs. Train from own time-lapse footage."
+    "status": "train-own"
   },
   "motion-timelapse-glam": {
     "kind": "motion",
-    "status": "train-own",
-    "notes": "The Wan 2.2 Time-lapse LoRA (civitai 1877924) forbids selling outputs. Train from own time-lapse footage."
+    "status": "train-own"
   },
   "motion-hyperlapse": {
     "kind": "motion",
-    "status": "train-own",
-    "notes": "The Wan 2.2 Time-lapse LoRA (civitai 1877924) forbids selling outputs. Train from own time-lapse footage."
+    "status": "train-own"
   },
   "motion-wiggle": {
     "kind": "motion",
-    "status": "local-only",
-    "notes": "Usable on the user's own GPU (outputs may be sold), not on fal or Replicate."
+    "status": "local-only"
   },
   "motion-fisheye": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "Remade Tiny-Planet-Fisheye is Wan 2.1 T2V only; on Originals, make the still with the Fish Eye Redmond image LoRA and animate it."
+    "status": "prompt-only"
   },
   "motion-drone-reveal": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "DroneShot and Set Reveal forbid selling outputs; keep prompt-only or train own drone clips."
+    "status": "prompt-only"
   },
   "motion-helicopter-shot": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "DroneShot and Set Reveal forbid selling outputs; keep prompt-only or train own drone clips."
+    "status": "prompt-only"
   },
   "motion-flying": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "DroneShot and Set Reveal forbid selling outputs; keep prompt-only or train own drone clips."
+    "status": "prompt-only"
   },
   "motion-yoyo-zoom": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-through-object-in": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-through-object-out": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-buckle-up": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-double-dolly": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-whip-pan": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-hero-cam": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-rap-flex": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-low-shutter": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-general": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-impossible-camera": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-one-take": {
     "kind": "motion",
-    "status": "prompt-only",
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "status": "prompt-only"
   },
   "motion-baseball-kick": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-basketball-dunks": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-boxing": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-face-punch": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-moonwalk-left": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-moonwalk-right": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-skate-cruise": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-skateboard-glide": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-skateboard-ollie": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-ski-carving": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-ski-powder": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-snowboard-carving": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "motion-snowboard-powder": {
     "kind": "motion",
-    "status": "motion-library",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "status": "motion-library"
   },
   "effect-building-explosion": {
     "kind": "effect",
@@ -3884,18 +3813,15 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "effect-powder-explosion": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Closest match; describe the powder or plasma colour."
+    "status": "add-lora"
   },
   "effect-plasma-explosion": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Closest match; describe the powder or plasma colour."
+    "status": "add-lora"
   },
   "effect-freezing": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Low-noise file only."
+    "status": "add-lora"
   },
   "effect-turning-metal": {
     "kind": "effect",
@@ -3923,13 +3849,11 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "effect-exploded-view": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "XPLDV card: strength 0.5 (0.7 with first + last frame), distilled LTX-2.5."
+    "status": "add-lora"
   },
   "effect-money-rain": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Closest match (coins burst upward)."
+    "status": "add-lora"
   },
   "effect-wind-to-face": {
     "kind": "effect",
@@ -3945,68 +3869,55 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   },
   "effect-seamless-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-melt-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-smoke-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-splash-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-flame-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-hand-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-hole-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-jump-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-column-wipe": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-display-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-trucksition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-raven-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-lidar-transition": {
     "kind": "effect",
-    "status": "add-lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "status": "add-lora"
   },
   "effect-flashback": {
     "kind": "effect",
@@ -4015,948 +3926,759 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   "effect-muscle-up": {
     "kind": "effect",
     "status": "alias",
-    "aliasOf": "muscle",
-    "notes": "Alias to the existing 'muscle' key (Remade Muscle)."
+    "aliasOf": "muscle"
   },
   "effect-vanish": {
     "kind": "effect",
     "status": "alias",
-    "aliasOf": "disintegration",
-    "notes": "Alias to the existing 'disintegration' key."
+    "aliasOf": "disintegration"
   },
   "effect-thunder-god": {
     "kind": "effect",
-    "status": "replace",
-    "notes": "Native Wan 2.2 pair; would replace the Wan 2.1 'electrify' LoRA now mapped."
+    "status": "replace"
   },
   "effect-set-on-fire": {
     "kind": "effect",
-    "status": "weak-candidate",
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "status": "weak-candidate"
   },
   "effect-fire-breath": {
     "kind": "effect",
-    "status": "weak-candidate",
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "status": "weak-candidate"
   },
   "effect-fire-element": {
     "kind": "effect",
-    "status": "weak-candidate",
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "status": "weak-candidate"
   },
   "effect-flame-on": {
     "kind": "effect",
-    "status": "weak-candidate",
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "status": "weak-candidate"
   },
   "effect-burning-man": {
     "kind": "effect",
-    "status": "weak-candidate",
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "status": "weak-candidate"
   },
   "effect-firelava": {
     "kind": "effect",
-    "status": "weak-candidate",
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "status": "weak-candidate"
   },
   "effect-superstar": {
     "kind": "effect",
-    "status": "local-only",
-    "notes": "Wan LoRAs exist (Superstar Moment 1888178, Titanscape 1941755, Cinematic Flare 1902817) but forbid selling outputs; keep prompt-only for Originals."
+    "status": "local-only"
   },
   "effect-giant": {
     "kind": "effect",
-    "status": "local-only",
-    "notes": "Wan LoRAs exist (Superstar Moment 1888178, Titanscape 1941755, Cinematic Flare 1902817) but forbid selling outputs; keep prompt-only for Originals."
+    "status": "local-only"
   },
   "effect-giant-people": {
     "kind": "effect",
-    "status": "local-only",
-    "notes": "Wan LoRAs exist (Superstar Moment 1888178, Titanscape 1941755, Cinematic Flare 1902817) but forbid selling outputs; keep prompt-only for Originals."
+    "status": "local-only"
   },
   "effect-street-colossus": {
     "kind": "effect",
-    "status": "local-only",
-    "notes": "Wan LoRAs exist (Superstar Moment 1888178, Titanscape 1941755, Cinematic Flare 1902817) but forbid selling outputs; keep prompt-only for Originals."
+    "status": "local-only"
   },
   "effect-lens-flare": {
     "kind": "effect",
-    "status": "local-only",
-    "notes": "Wan LoRAs exist (Superstar Moment 1888178, Titanscape 1941755, Cinematic Flare 1902817) but forbid selling outputs; keep prompt-only for Originals."
+    "status": "local-only"
   },
   "effect-silhouette": {
     "kind": "effect",
-    "status": "relight-route",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "status": "relight-route"
   },
   "effect-practicals": {
     "kind": "effect",
-    "status": "relight-route",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "status": "relight-route"
   },
   "effect-window": {
     "kind": "effect",
-    "status": "relight-route",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "status": "relight-route"
   },
   "effect-overhead-fall": {
     "kind": "effect",
-    "status": "relight-route",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "status": "relight-route"
   },
   "effect-contre-jour": {
     "kind": "effect",
-    "status": "relight-route",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "status": "relight-route"
   },
   "effect-soft-cross": {
     "kind": "effect",
-    "status": "relight-route",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "status": "relight-route"
   },
   "effect-film-colors": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-black-gloss": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-candy-pink": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-lime-jam": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-nostalgic-blue": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-soft-palette": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-overtime": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-crimson-vigil": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-bleach-bypass": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-bleached-warm": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-classic-bw": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-cold-steel": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-hyper-neon": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-naturalistic-clean": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-sodium-decay": {
     "kind": "effect",
-    "status": "post-grade",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "status": "post-grade"
   },
   "effect-acid": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-akrill": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-broken-mirror": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-bubbles": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-cannabis": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-cold-vision": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-comic": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-flash-comic": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-fragments": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-hand-paint": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-lsd": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-lava": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-layer-mixed-media": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-magazine": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-marble": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-modern": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-multiverse": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-noir": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-ocean": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-origami": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-overexposed": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-palette": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-paper": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-particles": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-random-glow": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-sketch": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-toxic": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-tracking": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-two-color": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-ultraviolet": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-vintage": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-windows": {
     "kind": "effect",
-    "status": "mixed-media-route",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "status": "mixed-media-route"
   },
   "effect-lens-crack": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-head-off": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-water-splash": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-flood": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-sand-storm": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-earth-element": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-earth-wave": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-water-element": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-water-bending": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-ice-rose": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-clone-explosion": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-duplicate": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-portal": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-angel-wings": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-glowshift": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-invisible": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-soul-jump": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-luminous-gaze": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-objects-around": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-shadow-smoke": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-turn-into-statue": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-melting": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-medusa-gorgona": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-diamond": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-werewolf": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-gorilla-transfer": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-polygon": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-wireframe": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-point-cloud": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-gas-transformation": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-bloom-mouth": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-floral-eyes": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-garden-bloom": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-sakura-petals": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-floating-fish": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-glowing-fish": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-jelly-drift": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-black-tears": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-tentacles": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-spiders-from-mouth": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-paint-splash": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-dirty-lens": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-paparazzi": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-x-ray": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-pixelated-face": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-censorship": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-glow-trace": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-visor-x": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-push-to-glass": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-super-fast-run": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-starship-troopers": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-wonderland": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-earth-zoom-out": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-tiny-planet": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "status": "prompt-only"
   },
   "effect-aquarium": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-attack-of-clones": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-beach-ride": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-boiling-point": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-clothes-rain": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-color-rain": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-cotton-cloud": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-dream-date": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-drunk-master": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-fairies-around": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-firework": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-giant-grab": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-group-photo": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-helicopter-escape": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-live-concert": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-look-boom": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-mystification": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-northern-lights": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-oni-mask": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-pizza-fall": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-pool-jump": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-spirit-animal": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-tattoo-animation": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-train-rush": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-turning-monkey": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "status": "prompt-only"
   },
   "effect-ballet": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-eating": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-fix-and-pose": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-hair-style": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-handheld-run": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-happy": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-morning-routine": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-motor-ride": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-outfit-check": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-peak-moment": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-plate-check": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-sand-cut": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-selfie": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-selfie-outfit": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-selfie-posing": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-static-posing": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-sunglasses": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-yacht": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "status": "prompt-only"
   },
   "effect-studio-slide": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-smash-and-grab": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-high-flip": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-cutout": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-act-natural": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-world-morphing": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-lacewalker": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-boarding-pass": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-monster-dab": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-floating-fall": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-architecture-wave": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-clones": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-infinite-clones": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-scrapbook-collage": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-stop-world": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-agamemnon": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-fallen-angel": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-cyclope": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-frozen-in-motion": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-pigeons": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-fairytale-castle": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-skatedog": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-blue-depth": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-moonwalk": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   },
   "effect-dolphin-ride": {
     "kind": "effect",
-    "status": "prompt-only",
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "status": "prompt-only"
   }
 };

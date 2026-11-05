@@ -23,6 +23,9 @@ licence (e.g. "unspecified (check card)") is kept with commercial: false and its
 makes a non-commercial LoRA a default, sends a hostedOk: false LoRA to the cloud, or is on licence hold is listed
 as a note, never a failure.
 
+The rows' free-text `notes` stay in the research file: the generated map is bundled into the site's browser code,
+and no page shows them.
+
 Run:  python3 scripts/gen-oss-loras.py
 """
 import json
@@ -162,8 +165,6 @@ for m in RECIPES["motionsEffects"]:
                     mine = [dict(l) for l in round1[src]]
         if mine:
             v2[pid] = mine
-        if m.get("notes"):
-            recipe["notes"] = m["notes"]
         recipes[pid] = recipe
 
 overlap = sorted(k for k in v2 if k in round1)
@@ -197,7 +198,6 @@ ts = (
     "  cameraMotion?: string;\n"
     "  /** The round-1 key whose LoRAs it reuses. */\n"
     "  aliasOf?: string;\n"
-    "  notes?: string;\n"
     "}\n\n"
     "/** Preset id (\"motion-overhead\") for the map v2, else the bare slug of a round-1 match (\"crash-zoom-in\"). */\n"
     f"export const OSS_LORAS: Record<string, OssLora[]> = {json.dumps(out, indent=2, ensure_ascii=False)};\n\n"

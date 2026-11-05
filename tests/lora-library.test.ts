@@ -20,6 +20,16 @@ describe("LoRA library (lora-library.generated.ts)", () => {
     expect(LORA_LIBRARY_AS_OF).toBe(research.asOf);
   });
 
+  it("leaves the research's notes in the research: the library is bundled into the site's browser code", () => {
+    const research = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/research/fuobe-originals-recipes-5.json"), "utf8"));
+    // The research does have notes on both, so this checks something.
+    expect(research.loraLibrary.some((l: { notes?: string }) => l.notes)).toBe(true);
+    expect(research.motionsEffects.some((m: { notes?: string }) => m.notes)).toBe(true);
+    for (const e of LORA_LIBRARY) expect(Object.keys(e), e.key).not.toContain("notes");
+    for (const m of MOTION_EFFECT_LORAS) expect(Object.keys(m), m.presets.join(", ")).not.toContain("notes");
+    expect(fs.readFileSync(path.join(ROOT, "src/lib/catalog/lora-library.generated.ts"), "utf8")).not.toMatch(/"notes":/);
+  });
+
   it("gives every entry licence fields and a snapshot date", () => {
     for (const e of LORA_LIBRARY) {
       expect(typeof e.licence.commercial, e.key).toBe("boolean");

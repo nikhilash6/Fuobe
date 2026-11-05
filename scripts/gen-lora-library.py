@@ -17,6 +17,9 @@ Licences are information (the owner's decision of 2026-10-27; Settings → Model
 a default that uses a non-commercial LoRA, or sends one licensed for the user's GPU only to the cloud, is
 printed as a licence note, never a failure.
 
+The research's free-text `notes` (on library entries and motion / effect rows) stay in the research file: the
+generated library is bundled into the site's browser code, and no page shows them.
+
 Fuobe's own LoRAs (research fuobeTrainedLoras, §6; the training kit in scripts/train/): until a trained file exists
 each one is a "planned" entry (PLANNED_LORAS) that no preset may use. Once `scripts/train/kit.mjs publish` has published the
 file and its data-licence log, the entry's `trained` block (pinned URL, SHA256, size, licence) moves it into the library.
@@ -122,7 +125,7 @@ def entry(raw, key, group, checked=None, spare=False):
     if perms is not None:
         licence["permissions"] = perms
     out["licence"] = licence
-    for k in ("released", "hostedEndpoint", "notes"):
+    for k in ("released", "hostedEndpoint"):
         if raw.get(k):
             out[k] = raw[k]
     if spare:
@@ -197,8 +200,6 @@ for m in DATA["motionsEffects"]:
     hosted = (m.get("hosted") or {}).get("endpoint")
     if hosted:
         row["hostedEndpoint"] = hosted
-    if m.get("notes"):
-        row["notes"] = m["notes"]
     motions.append(row)
 
 # Adapters: a LoRA an Original's recipe always loads (Fuobe Try-On's try-on LoRA, build plan O10). Its licence is said
