@@ -607,7 +607,9 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   for it). Too many checks (429) count down and check again by themselves. The saved address's card
   says **Offline** with the reason, and **Check now** (`{ "saved": true }`) asks it again. A local
   address (`localhost`, a home network) offers **Use this computer** where this browser can reach
-  its ComfyUI, and **Pair with a code**.
+  its ComfyUI, and **Pair with a code**. Where it can't, a line says why instead ("Use this computer
+  works in Chrome, Edge or Firefox. Safari doesn't let a website reach programs on your Mac.", or on
+  a phone or tablet, or a page the browser marks as not secure).
 - **Settings → Your keys.** A key whose provider account has no balance left shows **Add credit**
   (a link to the provider's billing page) instead of **Ready**, with the day it ran out. A saved key
   has **Check again** (`PUT /api/account/keys/<provider>` with `{ "recheck": true }`): the provider's
@@ -624,8 +626,9 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   route, or a Fuobe Original on the cloud engine), **Run with your fal.ai key** sits right after the
   first fix. It runs this one run there, billed to that key, and leaves the engine switch where it
   was: the next run goes to the GPU again. A key the provider refused, or whose balance ran out, is
-  not offered. A paid model on a key whose balance ran out says so above Generate, with **Add
-  credit**. A graph that needs a second ComfyUI (ThinkSound, LatentSync 1.6) says so before Run, with
+  not offered. A paid model on a key whose balance is empty (found on a run, or by a check of the
+  key) says so above Generate ("Your fal.ai balance is empty. Add credit there, then run."), with
+  **Add credit**. A graph that needs a second ComfyUI (ThinkSound, LatentSync 1.6) says so before Run, with
   **Run with your key** when one runs its cloud version, and **Pick another model**. The account
   menu says why the GPU is offline: "pod stopped", "starting up", "needs a password".
 - **A run that waits.** A run whose GPU is off, starting up or out of reach waits and tries again by
@@ -639,7 +642,11 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   and the cloud run makes their outputs, never the whole batch again; while it is on its way the
   batch's other tiles don't offer the button, and a later press on one of them answers 409 "This run
   has already started or stopped, so nothing new was run." (`replaces` beside the request names the
-  run). The Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
+  run). A step of a longer run (a relight and then its clip, a film's shot, a Cinema, Storyboard or
+  Mixed Media step) doesn't offer it: moved alone, the step would stop and the rest of the run would
+  go without it. Its wait goes on, and `replaces` on it answers 409 "This step is part of a longer
+  run, so it can't move to your key on its own. It goes on by itself, or cancel it and run the tool
+  again with your key." The Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
   GPU that is off 30 minutes, one starting up 10 minutes, and 40 minutes in all. Before the run
   fails, the GPU is asked once more. When the account saves a new address (or password) while a
   run waits, the run goes there; when it disconnects its GPU, the run stops and says so, with
@@ -651,11 +658,13 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   model refuses. A 403 that isn't about the key (a model the key may not run) says to pick another
   model; the key stays as it is. A wait is kept with the run (`external_meta_json`), and the server
   that waits renews its hold on it: after a restart, or when a deploy's new instance takes over,
-  the run goes on with what is left of its wait, on one instance only. A server that is stopping
+  the run goes on with what is left of its wait (its tries and its time), on one instance only; so
+  does a step of a longer run. A server that is stopping
   sends no more tries and lets go of its waiting runs at once, for the next instance. A try marks
   the run just before it sends the job itself: a server cut off in the middle of that send leaves a
   job the GPU or provider may already have, so the next instance doesn't send it again, and the run
-  fails with "This run was interrupted while it was being sent. Press Retry." A run planned for
+  fails with "This run was interrupted while it was being sent. Press Retry." (a step of a longer
+  run too). Its tile doesn't say **Not billed**, because the provider may have the job. A run planned for
   another provider by then stops in plain words. Runs that wait for the GPU count apart from the 4
   runs at once (up to 4 more wait); a fifth waiting run answers 429 "You have 4 runs waiting for
   your GPU. Cancel one, or run one with your key, to start another." Runs that wait on a key (its
@@ -673,8 +682,10 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   balance gone while a run is polled fails it at once, and the job is stopped there. A ComfyUI that
   restarted and lost a run gets it sent once more, as the same job of its batch (its own seed). A
   run whose account moved to another address says so. A job in the GPU's queue waits as long as
-  its place keeps moving (2 hours at most); it stops when its place hasn't moved for 30 minutes,
-  saying the GPU was busy. A made result whose copy breaks off (a connection dropped, a 5xx) is
+  the queue keeps moving (2 hours at most): its place gets nearer the front (the jobs before it are
+  the ones with a lower number in ComfyUI's queue), or the GPU starts another job ahead of it. It
+  stops when nothing has moved for 30 minutes (45 while a job runs ahead of it, the time one job
+  may take), saying the GPU was busy. A made result whose copy breaks off (a connection dropped, a 5xx) is
   copied again at later looks for up to 15 minutes ("Your result is made. Copying it from your
   GPU"), never made again. Sending a file to the GPU may take as long as its size needs at 128 KB/s
   plus a minute (5 to 30 minutes).
@@ -699,7 +710,11 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
 - **For the owner.** Each wait, heal and failure of an account's run on its own GPU or key writes
   one JSON line to the server's log (`"evt":"own-run"`: the run, the account, the place, provider,
   model, stage, status or network code, the kind of address, the cause, the try and the time
-  waited). It never holds a prompt, a key, a token, an address or a file's name. A failed run also
+  waited). A run that stops in this server's own words writes one too, with its cause: cut off by a
+  restart (`interrupted`, or `interrupted-sending` in the middle of its send), refused as its
+  account runs now (`connect-gpu`, `add-key`, `switched-off`…), its keys changed while it waited
+  (`keys-changed`), or a step whose earlier step didn't finish (`earlier-step`). It never holds
+  a prompt, a key, a token, an address or a file's name. A failed run also
   keeps, for the owner only, the cause, stage, code, kind of address and the provider's own words
   (cleaned, 2 KB at most): `ownRunNote(id)` in `src/server/run-events.ts` reads it, and no account
   or visitor answer carries it.
