@@ -4,10 +4,17 @@ A graph from a studio (a trusted page in direct mode, or the paired studio in pa
 
 - every node type is on the list that ships inside this pack (allowed_nodes.json: the nodes Fuobe's own workflows use),
   plus the types you list yourself in fuobe-connect-nodes.json in ComfyUI's user folder. A studio can never add to it;
-- no text input names a path or an address: an absolute path, a drive letter, a network share, a ".." step, a home
-  folder, a URL, or one of ComfyUI's folder tags ("name [output]", "name [temp]");
+- no text names a place: an absolute path in any form ("/x", "\\x", "//host/share", "\\\\?\\C:\\x", "C:\\x", "C:x"), a
+  ".." step, a home folder ("~", "~user"), an environment variable at the start ("$HOME/", "%USERPROFILE%\\"), a URL,
+  one of ComfyUI's folder tags ("name [output]", "name [temp]"), or a JSON key that names a file, folder or address
+  ("video_path": ...). The check looks at the text after its leading spaces and quotes, as a node that trims it sees it;
+- every input that a listed node reads as a file or a folder (PATH_INPUTS) holds a value the graph writes itself, in the
+  one form Fuobe's own graphs use. It never takes a link: another node could work out any text;
 - every file loader reads one of the files Fuobe sent for the run (named fuobe_<id>.<ext>), never a file of yours and
-  never a value that another node works out.
+  never a value that another node works out;
+- a value the graph writes is never a JSON object, except a 3D view's entries: ComfyUI hands an object to a node
+  unchecked, and some nodes read a file's path from one;
+- a few inputs take only a link from one node type, or text of one shape (LINK_INPUTS, TEXT_INPUTS).
 
 A result is downloaded only when this run's own history lists it. A model name is not checked here: ComfyUI itself
 refuses a model name that isn't in your model folders.
@@ -54,22 +61,32 @@ FILE_LOADERS = {
     "AUSBOSS_NODES_ImageCropRotatePad": ["image"],
     # Any Angle's saved 3D view: the scene file, and the picture entries (checked one by one below).
     "Load3D": ["model_file"],
+    # Hi3D's coarse mesh: any file in the input folder by name.
+    "Hi3DLoadMesh": ["mesh_file"],
+}
+# Loaders whose file is optional: "" (no file) or one of the run's own inputs.
+OPTIONAL_FILES = {
+    # A continuation history (.npz) read from the input folder.
+    "H3CharacterSwapShot": ["history_file"],
 }
 _FILEISH = re.compile(r"image|video|audio|file|path|directory", re.I)
 
 _PATHLIKE = [
-    re.compile(r"^[A-Za-z]:[\\/]"),  # C:\ or C:/
-    re.compile(r"^\\\\"),  # \\server\share, \\?\C:\
-    re.compile(r"^/(?!/)[^\s]*/"),  # /etc/passwd
-    re.compile(r"^/(?!/)\S+\Z"),  # /secret.png
+    re.compile(r"^[\\/]"),  # /etc/passwd, \Users\x, //host/share, //?/C:/x, \\host\share, \\?\C:\x, \/host/share
+    re.compile(r"^[A-Za-z]:(?![ \t])"),  # C:\x, C:/x, and C:x or D:Users\x (a drive with no slash)
+    re.compile(r"^~(?!\s)"),  # ~, ~/x, ~user/x
+    re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[A-Za-z_][A-Za-z0-9_]*%)(?:[\\/]|\Z)"),  # $HOME/x, %USERPROFILE%\x
     re.compile(r"(^|[\\/])\.\.([\\/]|\Z)"),  # a ".." step
-    re.compile(r"^~[\\/]"),  # ~/
     re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://"),  # a URL
     re.compile(r"^file:", re.I),
     re.compile(r"^blake3:", re.I),  # ComfyUI's asset names reach any registered file
     re.compile(r"\x00"),
 ]
+# A key in JSON (or a Python dict) inside a text: "video_path": ..., 'output_folder': ...
+_KEY = re.compile(r"""["']([A-Za-z0-9_.-]{1,64})["']\s*:""")
+_PLACE_KEY = re.compile(r"(?:^|[_.-])(?:paths?|files?|file_?names?|file_?paths?|dirs?|directory|folders?|urls?|uris?|roots?|assets?|href|src)\Z", re.I)
 _TAG = re.compile(r" \[(input|output|temp)\]\Z")
+_QUOTES = "\"'`"
 
 
 def staged_name_ok(name) -> bool:
@@ -77,9 +94,106 @@ def staged_name_ok(name) -> bool:
     return isinstance(name, str) and bool(INPUT_NAME.match(name)) and name.rsplit(".", 1)[1] in INPUT_EXTS
 
 
+def _trimmed(v: str) -> str:
+    """The text as a node that trims spaces and quotes from its start sees it."""
+    while True:
+        t = v.lstrip().lstrip(_QUOTES)
+        if t == v:
+            return t
+        v = t
+
+
 def unsafe_text(v: str) -> bool:
-    """A text input that names a path, an address or a folder tag."""
-    return any(p.search(v) for p in _PATHLIKE)
+    """A text that names a path, an address, a folder tag, or a file inside JSON."""
+    t = _trimmed(v)
+    return any(p.search(t) for p in _PATHLIKE) or any(_PLACE_KEY.search(k) for k in _KEY.findall(v))
+
+
+# ---------------------------------------------------------------------------
+# Inputs with rules of their own
+
+
+_NAME = r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,95}"  # one file or folder name: it never starts with a dot, so it is never ".."
+_NONE = re.compile(r"")  # only "": the node's own default, no file
+
+# Inputs that a listed node reads as a file or a folder. Each one takes only a value the graph writes itself, in the one
+# form Fuobe's own graphs use; never a link. Every text input of every node on the shipped list was read in that node's
+# source (at the commits Fuobe's workflows/comfyui/requirements.json pins); the others are words, numbers or data that
+# no node opens as a file, or names that the node itself keeps inside ComfyUI's own folders.
+PATH_INPUTS: dict[str, dict[str, re.Pattern]] = {
+    # Writes a subtitle file at this path (an absolute one as given, else under the output folder).
+    "AILab_Qwen3ASRSubtitle": {"output_path": re.compile(r"(?:fuobe(?:/[A-Za-z0-9_-]{1,64}){1,4})?")},
+    # Model files, with $VARS and ~ expanded; a relative path is under the pack's own folder.
+    "AuKModelLoader": {
+        "checkpoint_path": re.compile(rf"ckpts/{_NAME}/{_NAME}\.safetensors"),
+        "config_path": _NONE,
+        "qwen_path": re.compile(rf"(?:ckpts/{_NAME})?"),
+    },
+    # A model folder ("" is ComfyUI's models/Hi3D).
+    "Hi3DModelLoader": {"model_root": _NONE},
+    # Opens any video or sound file at these paths.
+    "MiniMaxH3SourceTimeline": {"video_path": _NONE, "audio_path": _NONE},
+    # The run's own folder under output/h3_chains: Fuobe's jobs are named fuobe_<id> (or come from the swap plan nodes).
+    "MiniMaxH3ChainPlanModern": {"run_name": re.compile(r"fuobe_[A-Za-z0-9_-]{0,60}[A-Za-z0-9]")},
+    # A latent saved in output/open_h3_latents: only one a Fuobe draft saved (fuobe_h3_<id>_00001), never "(newest)",
+    # which would be whatever was saved last, yours too.
+    "OpenH3LoadRefinedLatent": {"latent_file": re.compile(r"fuobe_[A-Za-z0-9_-]{1,96}_\d{5}\.safetensors")},
+    # A SAM model in models/sams, else a path from ComfyUI's working folder (loaded with torch).
+    "QWMRefineMask": {"sam_model": re.compile(r"sam_vit_[bhl][A-Za-z0-9_.-]{0,64}\.pth")},
+    # Writes every window's frames into this folder.
+    "WanVideoImageToVideoMultiTalk": {"output_path": _NONE},
+    # A model folder, the adapter file and the text encoder (a folder, or a Hugging Face id it downloads).
+    "ZenImage21AdapterLoader": {
+        "model_folder": _NONE,
+        "adapter_file": re.compile(rf"models/text_encoders/{_NAME}\.safetensors"),
+        "text_encoder": re.compile(rf"Qwen/Qwen3\.5-0\.8B|models/text_encoders/{_NAME}"),
+    },
+}
+
+# Inputs that may also (or only) take a link, but only from these node types.
+_SWAP_PLANS = frozenset({"H3AdvancedSwapPlan", "H3ObjectSwapPlan", "H3OneClickSwapPlan", "H3PictureSwapPlan", "H3SceneSwapPlan", "H3MontagePlan"})
+LINK_INPUTS: dict[str, dict[str, frozenset]] = {
+    # The swap plan nodes name their runs from a hash of their inputs.
+    "MiniMaxH3ChainPlanModern": {"run_name": _SWAP_PLANS},
+    # An SVG that ComfyUI saves into the output folder: only the vectorizer's own.
+    "TS_SVGStringToSVGBytesIO": {"SVG_String": frozenset({"TS_ImageToSVGStringColor_Vtracer"})},
+}
+
+# A replacement field that reads an attribute or an item ("{a.__class__}", "{a[0]}"): Python's format can reach a
+# module's globals (os.environ) through a node's object.
+_FIELD_ACCESS = re.compile(r"(?<!\{)(?:\{\{)*\{[^{}!:]*[.\[]")
+
+# Text inputs that must have one shape (a value the graph writes; never a link).
+TEXT_INPUTS: dict[str, dict] = {
+    "StringFormat": {"f_string": lambda s: not _FIELD_ACCESS.search(s)},
+}
+
+# The only inputs that take a JSON object the graph writes: a 3D view's entries (Load3D's are checked below).
+OBJECT_INPUTS = frozenset({("Load3D", "image"), ("Save3DAdvanced", "viewport_state")})
+
+
+def is_link(v) -> bool:
+    """[node id, output slot]: a value another node works out."""
+    return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and isinstance(v[1], int) and not isinstance(v[1], bool)
+
+
+def input_problem(graph: dict, cls: str, key: str, v) -> str | None:
+    """What is wrong with one input under its node's own rule: 'unsafe-path', 'unsafe-graph', or None."""
+    if isinstance(v, dict) and (cls, key) not in OBJECT_INPUTS:
+        return "unsafe-graph"
+    links = LINK_INPUTS.get(cls, {}).get(key)
+    if is_link(v) and links is not None:
+        src = graph.get(v[0])
+        return None if isinstance(src, dict) and src.get("class_type") in links else "unsafe-graph"
+    form = PATH_INPUTS.get(cls, {}).get(key)
+    if form is not None:
+        return None if isinstance(v, str) and form.fullmatch(v) else "unsafe-path"
+    shape = TEXT_INPUTS.get(cls, {}).get(key)
+    if shape is not None:
+        return None if isinstance(v, str) and shape(v) else "unsafe-path"
+    if links is not None:
+        return "unsafe-graph"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +281,12 @@ def graph_problem(graph, staged: list[str] | None) -> str | None:
                 continue
             if not _staged(v, staged):
                 return f"Node {node_id} ({cls}) reads a file this run didn't send"
+        for k in OPTIONAL_FILES.get(cls, []):
+            v = inputs.get(k)
+            if v is None or v == "":
+                continue
+            if not _staged(v, staged):
+                return f"Node {node_id} ({cls}) reads a file this run didn't send"
         if cls == "Load3D" and "image" in inputs:
             pics = inputs["image"]
             if isinstance(pics, dict):
@@ -182,7 +302,8 @@ def graph_problem(graph, staged: list[str] | None) -> str | None:
 
 def vet_graph(graph, allowed: frozenset | set, staged: list[str] | None) -> str | None:
     """The first reason this graph may not run here, or None. The reasons are the worker program's
-    ('unknown-node', 'unsafe-path') and 'unsafe-graph' for a loader that reads a file this run didn't send."""
+    ('unknown-node', 'unsafe-path') and 'unsafe-graph': a loader that reads a file this run didn't send, a JSON object
+    the graph writes, or a link from a node that may not feed that input."""
     if not isinstance(graph, dict) or not graph or len(graph) > 5000:
         return "unsafe-graph"
     for node in graph.values():
@@ -194,10 +315,13 @@ def vet_graph(graph, allowed: frozenset | set, staged: list[str] | None) -> str 
             continue
         if not isinstance(inputs, dict):
             return "unsafe-graph"
-        for v in inputs.values():
+        for k, v in inputs.items():
             for s in _strings(v):
                 if unsafe_text(s) or (_TAG.search(s) and not _staged(s, staged)):
                     return "unsafe-path"
+            why = input_problem(graph, node["class_type"], k, v)
+            if why:
+                return why
     if graph_problem(graph, staged):
         return "unsafe-graph"
     return None

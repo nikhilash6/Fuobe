@@ -6,8 +6,9 @@ upload the results the studio asks for. It decides nothing about a result. Only 
 picks them by the token, which belongs to one person.
 
 Before a job runs, Fuobe Connect checks it here, whatever the studio says (graph.py): every node type is on the list
-this pack ships (plus your own fuobe-connect-nodes.json), no text input names a path or an address, the inputs have the
-names Fuobe gives its files, and every loader reads one of them. Every id the studio sends is checked before it goes
+this pack ships (plus your own fuobe-connect-nodes.json), no text names a path or an address, a node's file or folder
+setting holds only Fuobe's own form, the inputs have the names Fuobe gives its files, and every loader reads one of
+them. Every id the studio sends is checked before it goes
 into an address. Only the prompts this runner queued are followed, taken off or read back, and a result is uploaded only
 when this job's own prompt (or its batch's passes, under the job's own fuobe/<id> prefix) saved it. One job at a time.
 Pausing (ComfyUI's Connect to Fuobe window) stops it taking new jobs.

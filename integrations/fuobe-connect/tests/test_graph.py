@@ -17,7 +17,12 @@ sys.path.insert(0, PACK)
 
 from fuobe_connect import __version__  # noqa: E402
 from fuobe_connect.graph import (  # noqa: E402
+    FILE_LOADERS,
+    LINK_INPUTS,
+    OPTIONAL_FILES,
     OWN_NODES_FILE,
+    PATH_INPUTS,
+    TEXT_INPUTS,
     NodeList,
     graph_problem,
     may_download,
@@ -65,6 +70,7 @@ class VetTest(unittest.TestCase):
             B + B + "server" + B + "share",
             "/etc/passwd",
             "/secret.png",
+            "/",
             "../../secret.png",
             "fuobe/" + ".." + "/x",
             "~/.ssh/id_rsa",
@@ -79,6 +85,62 @@ class VetTest(unittest.TestCase):
             self.assertEqual(vet_graph(g(node("CLIPTextEncode", text=v)), NODES, STAGED), "unsafe-path", v)
         # Ordinary words, a staged input with its folder tag, a Fuobe prefix, a model in a subfolder: fine.
         for v in ["a red door", "wait.. what?", "...", "fuobe/gen123abc", "flux/model.safetensors", "1/2 cup", "fuobe_abcdefgh12.png [input]"]:
+            self.assertIsNone(vet_graph(g(node("CLIPTextEncode", text=v)), NODES, STAGED), v)
+
+    def test_every_absolute_form(self):
+        """Every way Windows, Linux and macOS read a text as a place outside a node's own folder."""
+        for v in [
+            "//?/C:/Users/Public/x.srt",  # a Win32 device path with forward slashes
+            "//attacker.example/share/x.srt",  # a network share with forward slashes
+            B + B + "?" + B + "C:" + B + "x",  # \\?\C:\x
+            B + B + "." + B + "PhysicalDrive0",  # \\.\PhysicalDrive0
+            B + "Users" + B + "Public" + B + "x.srt",  # \Users\...: the root of ComfyUI's drive
+            B + "/attacker.example/share/x.srt",  # \/host/share: a share too
+            "D:Users" + B + "x.srt",  # a drive with no slash: that drive's own working folder
+            "C:x.srt",
+            "C:",
+            "~",
+            "~admin/Videos/x.mp4",  # another account's home
+            "~admin",
+            "$HOME/x",
+            "${HOME}/x",
+            "$HOME",
+            "%USERPROFILE%" + B + "x",
+            "%APPDATA%",
+            # What a node that trims its text sees.
+            " C:/Users/me",
+            "\t/etc/passwd",
+            "\u3000" + B + "Users",
+            '"C:/Users/me"',
+            "'//host/share'",
+            ' " ~/x',
+        ]:
+            self.assertEqual(vet_graph(g(node("CLIPTextEncode", text=v)), NODES, STAGED), "unsafe-path", repr(v))
+        # Words that start like one but aren't: a dialogue line, a mood, a price, a share of something.
+        for v in ["A: hello there", "B:\tok", "~ dreamy ~", "$5 bill", "$HOME is where the heart is", "50% off", "%d frames", "SPEAKER A: Test"]:
+            self.assertIsNone(vet_graph(g(node("CLIPTextEncode", text=v)), NODES, STAGED), repr(v))
+
+    def test_a_place_inside_json(self):
+        """A plan or a settings text that a node parses: no key that names a file, a folder or an address."""
+        for v in [
+            '{"shots": [{"id": "a", "lip_sync_source_asset": {"path": "x.wav"}}]}',
+            '{"video_path": "clip.mp4"}',
+            "{'output_folder': 'x'}",
+            '{"model_root": "models"}',
+            '{"config_file": "a.yaml"}',
+            '{"url": "x"}',
+            '{"src": "x"}',
+            '{"FileName": "x"}',
+        ]:
+            self.assertEqual(vet_graph(g(node("CLIPTextEncode", text=v)), NODES, STAGED), "unsafe-path", v)
+        # The JSON Fuobe's own graphs send: a lean picture prompt, boxes, a plan, touches.
+        for v in [
+            '{"high_level_description": "a red door", "elements": [{"type": "photo", "desc": "x", "bbox": [0, 0, 1, 1]}], "color_palette": ["#fff"]}',
+            '{"coordinate_space": "pixels", "boxes": []}',
+            '{"shots": [{"id": "intro", "prompt": "Describe the opening"}]}',
+            '{"items": [{"op": "add", "x": 1, "y": 2, "t": 0}]}',
+            "Profile: a file of notes, a folder of pictures",
+        ]:
             self.assertIsNone(vet_graph(g(node("CLIPTextEncode", text=v)), NODES, STAGED), v)
 
     def test_nodes_that_read_or_fetch(self):
@@ -112,7 +174,8 @@ class VetTest(unittest.TestCase):
         self.assertIsNotNone(graph_problem(g(node("LoadImage", image="my_photo.png")), None))
 
     def test_studio_workflows_pass(self):
-        """Every workflow Fuobe ships uses only listed nodes and no path-like text (when the pack is inside Fuobe)."""
+        """Every workflow Fuobe ships passes every check once its loaders name the files the studio sends (when the
+        pack is inside Fuobe): only listed nodes, no path-like text, every rule above."""
         folder = os.path.join(PACK, "..", "..", "workflows", "comfyui")
         files = [f for f in glob.glob(os.path.join(folder, "*.json")) if os.path.basename(f) not in ("requirements.json", "manifest.json", "object_info.subset.json")]
         if not files:
@@ -125,9 +188,166 @@ class VetTest(unittest.TestCase):
             if not isinstance(wf, dict) or not all(isinstance(n, dict) and "class_type" in n for n in wf.values()):
                 continue
             checked += 1
-            # Their loaders still name placeholder files (the studio stages the real ones), so only these two reasons.
-            self.assertNotIn(vet_graph(wf, nodes, None), ("unknown-node", "unsafe-path"), os.path.basename(f))
+            self.assertIsNone(vet_graph(staged_like_the_studio(wf), nodes, None), os.path.basename(f))
         self.assertGreater(checked, 50)
+
+
+def staged_like_the_studio(wf: dict) -> dict:
+    """The workflow as the studio sends it: each loader's placeholder file becomes a Fuobe input name, and a 2K finish
+    loads its own draft's latent (src/lib/catalog/regenerate.ts latentFileFor)."""
+    wf = json.loads(json.dumps(wf))
+    count = [0]
+
+    def staged(v):
+        if not isinstance(v, str) or not v or staged_name_ok(v):
+            return v
+        count[0] += 1
+        ext = v.rsplit(".", 1)[1].lower() if "." in v else "png"
+        return f"fuobe_placeholder{count[0]:04d}.{ext}"
+
+    for n in wf.values():
+        inputs = n.get("inputs") or {}
+        for k in FILE_LOADERS.get(n["class_type"], []) + OPTIONAL_FILES.get(n["class_type"], []):
+            inputs[k] = staged(inputs.get(k))
+        if n["class_type"] == "OpenH3LoadRefinedLatent":
+            inputs["latent_file"] = "fuobe_h3_gen123abc_00001.safetensors"
+        if n["class_type"] == "Load3D" and isinstance(inputs.get("image"), dict):
+            for k, v in inputs["image"].items():
+                if k != "camera_info":
+                    inputs["image"][k] = staged(v)
+    return wf
+
+
+SHIPPED = shipped_nodes()
+
+
+def vet1(cls, staged=STAGED, **inputs):
+    """One node of the shipped list, with these inputs."""
+    return vet_graph(g(node(cls, **inputs)), SHIPPED, staged)
+
+
+class NodeRulesTest(unittest.TestCase):
+    """Inputs that a listed node reads as a file or a folder take only Fuobe's own form, and never a link."""
+
+    def test_rules_name_shipped_nodes(self):
+        for table in (PATH_INPUTS, LINK_INPUTS, TEXT_INPUTS, OPTIONAL_FILES):
+            for cls in table:
+                self.assertIn(cls, SHIPPED, cls)
+        self.assertIn("Hi3DLoadMesh", FILE_LOADERS)
+
+    def test_subtitle_file(self):
+        """AILab_Qwen3ASRSubtitle writes its file at output_path (an absolute path as given)."""
+        for ok in ["", "fuobe/captions", "fuobe/gen123/captions"]:
+            self.assertIsNone(vet1("AILab_Qwen3ASRSubtitle", output_path=ok, audio=["9", 0]), ok)
+        for bad in [
+            "//?/C:/Users/Public/x.srt",
+            "//attacker.example/share/x.srt",
+            B + "Users" + B + "Public" + B + "x.srt",
+            B + "/attacker.example/share/x.srt",
+            "D:Users" + B + "x.srt",
+            "C:/Users/Public/x.srt",
+            "captions",  # anywhere in your output folder
+            "fuobe/x.bat",
+            "fuobe/../x",
+            "fuobe",
+        ]:
+            self.assertEqual(vet1("AILab_Qwen3ASRSubtitle", output_path=bad, audio=["9", 0]), "unsafe-path", repr(bad))
+        # A path another node works out: never.
+        self.assertEqual(vet_graph(g(node("PrimitiveStringMultiline", value="fuobe/captions"), node("AILab_Qwen3ASRSubtitle", output_path=["1", 0])), SHIPPED, STAGED), "unsafe-path")
+
+    def test_source_timeline_reads_no_file(self):
+        """MiniMaxH3SourceTimeline opens any file at video_path / audio_path: Fuobe's graphs leave them empty."""
+        self.assertIsNone(vet1("MiniMaxH3SourceTimeline", video_path="", audio_path="", source_audio=["2", 0]))
+        for bad in [
+            B + "Users" + B + "me" + B + "Videos" + B + "private.mp4",
+            "//?/D:/private/voice.wav",
+            "ComfyUI/input/my_private.mp4",  # relative to ComfyUI's working folder: your own files
+            "ComfyUI/output/ComfyUI_00001_.mp4",
+            "~admin/Videos/x.mp4",
+            "fuobe_abcdefgh12.png",
+        ]:
+            self.assertEqual(vet1("MiniMaxH3SourceTimeline", video_path=bad, audio_path=""), "unsafe-path", bad)
+            self.assertEqual(vet1("MiniMaxH3SourceTimeline", video_path="", audio_path=bad), "unsafe-path", bad)
+        self.assertEqual(vet_graph(g(node("StringConcatenate", string_a="C", string_b="x", delimiter=":"), node("MiniMaxH3SourceTimeline", video_path=["1", 0], audio_path="")), SHIPPED, STAGED), "unsafe-path")
+
+    def test_model_paths(self):
+        self.assertIsNone(vet1("AuKModelLoader", checkpoint_path="ckpts/AuK-Flash/auk_flash.safetensors", config_path="", qwen_path="ckpts/Qwen2.5-Omni-3B", device="cuda:0", dtype="bf16"))
+        self.assertIsNone(vet1("AuKModelLoader", checkpoint_path="ckpts/AuK/auk_base.safetensors", config_path="", qwen_path=""))
+        for bad in [
+            {"checkpoint_path": "ckpts/../x.safetensors"},
+            {"checkpoint_path": "ckpts/AuK/x.ckpt"},
+            {"checkpoint_path": "input/fuobe_abcdefgh12.safetensors"},
+            {"config_path": "ckpts/AuK/config.yaml"},
+            {"qwen_path": "models"},
+            {"qwen_path": "ckpts/.hidden"},
+        ]:
+            inputs = {"checkpoint_path": "ckpts/AuK/auk_base.safetensors", "config_path": "", "qwen_path": "", **bad}
+            self.assertEqual(vet1("AuKModelLoader", **inputs), "unsafe-path", bad)
+        self.assertIsNone(vet1("Hi3DModelLoader", model_root="", attention="sdpa"))
+        self.assertEqual(vet1("Hi3DModelLoader", model_root="models"), "unsafe-path")
+        self.assertIsNone(vet1("QWMRefineMask", sam_model="sam_vit_b_01ec64.pth", boxes_json=["2", 0]))
+        for bad in ["input/fuobe_vit_b_12345678.bin", "fuobe_vit_b_12345678.bin", "sam_vit_b.bin", "x/sam_vit_b_01ec64.pth"]:
+            self.assertEqual(vet1("QWMRefineMask", sam_model=bad), "unsafe-path", bad)
+        self.assertIsNone(vet1("ZenImage21AdapterLoader", model_folder="", adapter_file="models/text_encoders/adapter_v12.safetensors", text_encoder="Qwen/Qwen3.5-0.8B"))
+        self.assertIsNone(vet1("ZenImage21AdapterLoader", model_folder="", adapter_file="models/text_encoders/adapter_v12.safetensors", text_encoder="models/text_encoders/qwen3.5_0.8b"))
+        for bad in [{"model_folder": "models"}, {"adapter_file": "input/fuobe_abcdefgh12.bin"}, {"text_encoder": "someone/other-model"}, {"text_encoder": "models/text_encoders/../x"}]:
+            inputs = {"model_folder": "", "adapter_file": "models/text_encoders/adapter_v12.safetensors", "text_encoder": "Qwen/Qwen3.5-0.8B", **bad}
+            self.assertEqual(vet1("ZenImage21AdapterLoader", **inputs), "unsafe-path", bad)
+
+    def test_folders_a_node_writes(self):
+        self.assertIsNone(vet1("WanVideoImageToVideoMultiTalk", output_path="", mode="infinitetalk"))
+        self.assertEqual(vet1("WanVideoImageToVideoMultiTalk", output_path="frames"), "unsafe-path")
+        self.assertIsNone(vet1("OpenH3LoadRefinedLatent", latent_file="fuobe_h3_gen123abc_00001.safetensors"))
+        for bad in ["(newest)", "my_latent_00001.safetensors", "open_h3_regen_00001.safetensors"]:
+            self.assertEqual(vet1("OpenH3LoadRefinedLatent", latent_file=bad), "unsafe-path", bad)
+
+    def test_run_folder(self):
+        """A Context Loop run's folder under output/h3_chains: a Fuobe job's own, or a swap plan's."""
+        self.assertIsNone(vet1("MiniMaxH3ChainPlanModern", run_name="fuobe_abc123XYZ"))
+        self.assertIsNone(vet1("MiniMaxH3ChainPlanModern", run_name="fuobe_job-x"))
+        for bad in ["my_film", "fuobe_", "fuobe_a/b", "h3_chain"]:
+            self.assertEqual(vet1("MiniMaxH3ChainPlanModern", run_name=bad), "unsafe-path", bad)
+        plan = node("H3AdvancedSwapPlan", roles="")
+        self.assertIsNone(vet_graph(g(plan, node("MiniMaxH3ChainPlanModern", run_name=["1", 3])), SHIPPED, STAGED))
+        self.assertEqual(vet_graph(g(node("PrimitiveStringMultiline", value="my_film"), node("MiniMaxH3ChainPlanModern", run_name=["1", 0])), SHIPPED, STAGED), "unsafe-graph")
+
+    def test_optional_history_file(self):
+        self.assertIsNone(vet1("H3CharacterSwapShot", shot_id="character-swap"))
+        self.assertIsNone(vet1("H3CharacterSwapShot", history_file=""))
+        self.assertIsNone(vet1("H3CharacterSwapShot", history_file="fuobe_abcdefgh56.npz", staged=["fuobe_abcdefgh56.npz"]))
+        for bad in ["history.npz", "fuobe_zzzzzzzz99.npz", ["2", 0]]:
+            self.assertEqual(vet1("H3CharacterSwapShot", history_file=bad), "unsafe-graph", bad)
+
+    def test_mesh_loader(self):
+        self.assertIsNone(vet1("Hi3DLoadMesh", mesh_file="fuobe_abcdefgh34.glb", staged=["fuobe_abcdefgh34.glb"]))
+        for bad in ["coarse.glb", "hi3d/mine.glb", ["2", 0]]:
+            self.assertEqual(vet1("Hi3DLoadMesh", mesh_file=bad), "unsafe-graph", bad)
+
+    def test_json_objects(self):
+        """ComfyUI passes an object the graph writes to a node unchecked (a LoRA list, a model path, a {"__value__"})."""
+        for bad in [
+            node("WanVideoModelLoader", extra_model={"path": "models/x.safetensors"}),
+            node("WanVideoModelLoader", lora={"__value__": [{"path": "loras/x.safetensors", "strength": 1}]}),
+            node("WanVideoModelLoader", compile_args={"backend": "inductor"}),
+            node("SaveGLB", mesh={"path": "x.glb"}),
+        ]:
+            self.assertEqual(vet_graph(g(bad), SHIPPED, STAGED), "unsafe-graph", bad)
+        # A 3D view's entries are the one object a graph writes.
+        self.assertIsNone(vet1("Save3DAdvanced", viewport_state={"image": "", "mask": "", "normal": "", "camera_info": {"position": {"x": 1, "y": 2, "z": 3}, "zoom": 1}}))
+        self.assertEqual(vet1("Save3DAdvanced", viewport_state={"image": "C:/x.png"}), "unsafe-path")
+
+    def test_svg_comes_from_the_vectorizer(self):
+        vector = node("TS_ImageToSVGStringColor_Vtracer", image=["9", 0])
+        self.assertIsNone(vet_graph(g(vector, node("TS_SVGStringToSVGBytesIO", SVG_String=["1", 0])), SHIPPED, STAGED))
+        self.assertEqual(vet1("TS_SVGStringToSVGBytesIO", SVG_String="<svg onload='x()'/>"), "unsafe-graph")
+        self.assertEqual(vet_graph(g(node("StringConcatenate", string_a="<svg", string_b="></svg>", delimiter=""), node("TS_SVGStringToSVGBytesIO", SVG_String=["1", 0])), SHIPPED, STAGED), "unsafe-graph")
+
+    def test_format_reads_no_attribute(self):
+        """Python's format reaches a module's globals through an object: "{a.__init__.__globals__[os].environ}"."""
+        for ok in ["Dress {a} in image 1 in {b}. Keep the rest.", '{{"width": {a}, "height": {b}, "coords": "relative-1000"}}', "{a:.2f} and {b!r}", "{{a.b}}"]:
+            self.assertIsNone(vet1("StringFormat", f_string=ok), ok)
+        for bad in ["{a.__init__.__globals__[os].environ}", "{a[0]}", "x {b.real}", "{{{a.x}}}", "{a:{b.__class__}}", ["2", 0]]:
+            self.assertEqual(vet1("StringFormat", f_string=bad), "unsafe-path", bad)
 
 
 class NodeListTest(unittest.TestCase):

@@ -99,8 +99,8 @@ def _refuse(message: str, status: int = 403) -> web.Response:
 # What a refused graph means, in words the studio shows the person.
 REASONS = {
     "unknown-node": "Fuobe Connect on this computer doesn't run one of this workflow's node types. Update Fuobe Connect in ComfyUI-Manager, then retry.",
-    "unsafe-path": "Fuobe Connect refused this workflow: it names a folder, a file path or a web address on this computer.",
-    "unsafe-graph": "Fuobe Connect refused this workflow: it reads a file Fuobe didn't send.",
+    "unsafe-path": "Fuobe Connect refused this workflow: it names a folder, a file path or a web address, or a node's file setting isn't one Fuobe uses.",
+    "unsafe-graph": "Fuobe Connect refused this workflow: it reads a file Fuobe didn't send, or gives a node a value Fuobe Connect can't check.",
 }
 
 _PROMPT_KEYS = {"prompt", "prompt_id", "client_id", "extra_data", "front"}

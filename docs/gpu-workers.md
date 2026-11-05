@@ -23,13 +23,24 @@ only at `127.0.0.1`, `::1` or `localhost`. Fuobe Connect checks each of its requ
 page checked:
 
 - a workflow runs only when every node type is on the list the pack ships (`fuobe_connect/allowed_nodes.json`, written
-  by `node scripts/connect-nodes.mjs` from the same sources as the worker's list) or on the person's own list, no text
-  input names a path or an address, and every loader reads a Fuobe input (`fuobe_<id>.<ext>`);
+  by `node scripts/connect-nodes.mjs` from the same sources as the worker's list) or on the person's own list, and:
+  - no text names a place: an absolute path in any form (`/x`, `\x`, `//host/share`, `\\?\C:\x`, `C:\x`, `D:x`), a
+    `..` step, a home folder (`~`, `~user`), an environment variable at the start, a URL, a folder tag, or a JSON key
+    that names a file, a folder or an address. Spaces and quotes in front don't hide one;
+  - an input that a listed node reads as a file or a folder holds the one value or form the studio's own graphs use,
+    written in the graph, never a link (`PATH_INPUTS` in `fuobe_connect/graph.py`);
+  - every loader reads a Fuobe input (`fuobe_<id>.<ext>`), and no node gets a JSON object except a 3D view's entries;
 - an upload goes only into the input folder, under a Fuobe input name;
 - the studio sees, cancels, stops and downloads only its own prompts and their results; the queue shows other prompts
-  only as places in the line, and the node list hides the names of the person's input files.
+  only as places in the line, the node list hides the names of the person's input files, and the model lists leave
+  out `custom_nodes` and `configs`.
 
-It cannot reach the Manager's install calls, the person's user files, settings, input files or own results. Fuobe
+When a graph builder starts giving one of those inputs a new value, add its form to `PATH_INPUTS` and ship it with the
+next Fuobe Connect release (the pack's `tests/test_graph.py` runs every workflow in `workflows/comfyui` through the
+checks).
+
+It cannot reach the Manager's install calls, the person's user files or settings, a file of the person's in the input
+folder, or the person's own results, and its workflows cannot open a file of the person's by its path. Fuobe
 Connect answers the CORS and Private Network Access preflights for the trusted origins only. Every other website still
 meets ComfyUI's own check.
 
