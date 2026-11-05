@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { settingProblem } from "@/lib/connections";
 import { CLOUD_KEY, CLOUD_PROVIDERS, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
+import { KeyAccountDetails, NoKeyYet } from "./key-account-details";
 import { cn } from "@/lib/utils";
 
 /**
@@ -58,6 +59,8 @@ function useKeysChanged() {
     void qc.invalidateQueries({ queryKey: ["account-keys"] });
     void qc.invalidateQueries({ queryKey: ["status"] });
     void qc.invalidateQueries({ queryKey: ["models"] });
+    // Connected accounts: a new key's account, or none.
+    void qc.invalidateQueries({ queryKey: ["key-info"] });
   };
 }
 
@@ -270,6 +273,7 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
               Your {p.label} balance ran out on {day(info.balanceEmptyAt!)}. Add credit on {p.label}, then press Check again.
             </p>
           )}
+          {info.readable && <KeyAccountDetails provider={provider} scope="account" refused={!!info.rejectedAt} emptyNoted={empty} />}
           {checkNote && (
             <div aria-live="polite" className="space-y-0.5">
               <p className="text-[13px]">{checkNote.words}</p>
@@ -312,7 +316,10 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
           )}
         </>
       ) : (
-        <KeyForm provider={provider} replacing={!!info} onSaved={() => setReplacing(false)} onCancel={info ? () => setReplacing(false) : undefined} />
+        <>
+          <KeyForm provider={provider} replacing={!!info} onSaved={() => setReplacing(false)} onCancel={info ? () => setReplacing(false) : undefined} />
+          {!info && <NoKeyYet provider={provider} />}
+        </>
       )}
     </div>
   );

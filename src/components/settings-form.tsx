@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { PLACEHOLDER_SETTING, placeholdersOn } from "@/lib/demo-mode";
 import { AccountsChip } from "@/components/accounts-admin";
 import { ConnectField, useSettings, type PublicSetting } from "@/components/connect-field";
+import { KeyAccountDetails } from "@/components/keys/key-account-details";
 import { GetStarted } from "@/components/get-started";
 import { AboutLinks } from "@/components/owner-settings";
 import { LlmProviderSettings } from "@/components/llm-provider-settings";
@@ -585,7 +586,9 @@ export function SettingsForm({ prices }: { prices?: string }) {
               Get a key <ExternalLink className="size-3" />
             </a>
           }
-        />
+        >
+          {get("falKey")?.isSet && <KeyAccountDetails provider="fal" scope="owner" className="mt-2" />}
+        </ConnectField>
         <ConnectField
           id="replicate"
           name="replicateToken"
@@ -598,7 +601,9 @@ export function SettingsForm({ prices }: { prices?: string }) {
               Get a token <ExternalLink className="size-3" />
             </a>
           }
-        />
+        >
+          {get("replicateToken")?.isSet && <KeyAccountDetails provider="replicate" scope="owner" className="mt-2" />}
+        </ConnectField>
         <ChoiceField
           id="setting-cloud-provider"
           label="Preferred provider"

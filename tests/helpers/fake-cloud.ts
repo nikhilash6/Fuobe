@@ -7,11 +7,21 @@ import http from "node:http";
  * it with `node --experimental-strip-types`.
  *
  * What a key gets is scripted per key: "good" (works), "broke" (its balance has run out), "echo" (refused, and the
- * error repeats the request's Authorization header, like a proxy that echoes it), "outage" (503: says nothing about the key).
- * Any other key is refused (401).
+ * error repeats the request's Authorization header, like a proxy that echoes it), "outage" (503: says nothing about the key),
+ * "billing" (fal.ai: works, and may also read its account's billing, as a key with billing:usage:read does; a "good" key
+ * gets fal.ai's 403 there, as fal.ai's default API keys do). Any other key is refused (401).
  */
 
-export type KeyMode = "good" | "broke" | "echo" | "outage";
+export type KeyMode = "good" | "billing" | "broke" | "echo" | "outage";
+
+/** fal.ai's account billing for a "billing" key (its documented sample: tests/fixtures/key-info/fal-billing-200-credits.json). */
+export const FAL_BILLING = { username: "my-team", credits: { current_balance: 24.5, currency: "USD" } };
+/** fal.ai's usage summary for a "billing" key (its documented sample: tests/fixtures/key-info/fal-usage-200-summary.json). */
+export const FAL_USAGE = {
+  summary: [{ endpoint_id: "fal-ai/flux/dev", unit: "image", quantity: 4, unit_price: 0.1, percent_discount: 20, cost_subtotal: 0.4, cost_discount: 0.08, cost_total: 0.32, cost: 0.32, currency: "USD" }],
+  next_cursor: null,
+  has_more: false,
+};
 
 export interface CloudRequest {
   method: string;
@@ -83,7 +93,7 @@ async function start(handle: (fake: FakeCloud, req: CloudRequest, res: http.Serv
 /** Refuse a request whose key isn't "good": 401, or 403 for an empty balance, or a 401 that echoes the header. */
 function refused(fake: FakeCloud, r: CloudRequest, res: http.ServerResponse, key: string | null, broke: { status: number; detail: string }): boolean {
   const mode = key ? fake.keys[key] : undefined;
-  if (mode === "good") return false;
+  if (mode === "good" || mode === "billing") return false;
   if (mode === "broke") json(res, broke.status, { detail: broke.detail });
   else if (mode === "outage") json(res, 503, { detail: "Service unavailable" });
   else if (mode === "echo") json(res, 401, { detail: `Invalid credentials: ${r.authorization}` });
@@ -110,6 +120,11 @@ export function startFakeFal(port = 0): Promise<FakeCloud> {
       if (refused(fake, r, res, key, { status: 403, detail: "User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing." })) return;
       // The key check: the status of a request that doesn't exist.
       if (path === `/fal-ai/flux/requests/${ZERO}/status`) return json(res, 404, { status: "NOT_FOUND" });
+      // The Platform API's account billing and usage (api.fal.ai): only a key that may read billing gets them.
+      if (r.method === "GET" && (path === "/v1/account/billing" || path === "/v1/models/usage")) {
+        if (fake.keys[key ?? ""] !== "billing") return json(res, 403, { error: { type: "authorization_error", message: "Access denied", request_id: "req_0000" } });
+        return json(res, 200, path === "/v1/models/usage" ? FAL_USAGE : FAL_BILLING);
+      }
       if (r.method === "POST" && path === "/storage/upload/initiate") {
         const id = ++n;
         return json(res, 200, { upload_url: `${fake.url}/upload/${id}`, file_url: `${fake.url}/files/${id}` });

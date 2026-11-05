@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { signInHref, signOut, useEngineMode, useViewer } from "@/lib/api";
 import type { ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
+import { ConnectedAccounts } from "./connected-accounts";
 import { ExploreProgress } from "./explore-progress";
 import { useViewerKind } from "./nav-ui";
 import { keepHighlight, MENU_HEADING, MENU_ROW_1, NavMenuItem, SHEET_HEADING, SHEET_ROW as SHEET_ROW_BASE } from "./nav-row";
@@ -21,8 +22,10 @@ import { avatarDot, OwnerStatus, usePlaceholdersOn, useShownStatus, VisitorGpu }
  * Thanks & licences, the owner's Models & licences and the source on GitHub are in Settings → About. What each viewer
  * sees:
  *   guest   Sign up free, Log in · Your GPU (sign up first) · explore · Settings, theme
- *   account Signed in as <email> · balance or their own GPU · explore · Settings, Your GPU, theme · Sign out
- *   owner   Your setup · cloud models, ComfyUI, mode, the owner's GPU, Placeholders on · explore · Settings, theme
+ *   account Signed in as <email> · balance or their own GPU · its connected accounts (its own keys' balances, or Add a
+ *           key) · explore · Settings, Your GPU, theme · Sign out
+ *   owner   Your setup · cloud models, ComfyUI, mode, the owner's GPU · connected accounts (the studio's keys'
+ *           balances) · Placeholders on · explore · Settings, theme
  * The owner's status words exist only in the owner's branch: a guest's or an account's menu never says them.
  */
 
@@ -115,6 +118,7 @@ function GpuSection({ kind, variant }: { kind: ViewerKind | undefined; variant: 
     return (
       <div className={cn("flex flex-col", item ? "gap-0.5" : "gap-1")}>
         <OwnerStatus item={item} />
+        <ConnectedAccounts kind={kind} item={item} />
         {placeholders &&
           (item ? (
             // From xl the bar shows this pill itself, so the menu leaves it out.
@@ -128,7 +132,14 @@ function GpuSection({ kind, variant }: { kind: ViewerKind | undefined; variant: 
           ))}
       </div>
     );
-  if (kind === "guest" || kind === "account") return <VisitorGpu item={item} />;
+  if (kind === "account")
+    return (
+      <>
+        <VisitorGpu item={item} />
+        <ConnectedAccounts kind={kind} item={item} />
+      </>
+    );
+  if (kind === "guest") return <VisitorGpu item={item} />;
   return null;
 }
 

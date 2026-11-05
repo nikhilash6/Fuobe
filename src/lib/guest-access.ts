@@ -194,7 +194,8 @@ export function accountGeneration(method: string, pathname: string): string | un
 
 /**
  * A read of an account's own things, which the route (or the proxy, by accountGeneration) scopes to it:
- * the list of its runs, a stored file (the proxy checks whose it is), its GPU, its keys (never a key: their last 4).
+ * the list of its runs, a stored file (the proxy checks whose it is), its GPU, its keys (never a key: their last 4),
+ * and what its own keys tell about its provider accounts (/api/key-info: the balance, never a key).
  */
 export function accountOwnRead(pathname: string): boolean {
   if (ACCOUNT_LISTS.has(pathname)) return true;
@@ -202,6 +203,7 @@ export function accountOwnRead(pathname: string): boolean {
     pathname === "/api/generations" ||
     pathname === "/api/account/gpu" ||
     pathname === "/api/account/keys" ||
+    pathname === "/api/key-info" ||
     ACCOUNT_CANVASES.test(pathname) ||
     GPU_READS.has(pathname) ||
     COMPUTER_READ.test(pathname) ||
