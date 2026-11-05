@@ -25,7 +25,7 @@ import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
 import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
-import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
+import { ffmpegVersion, fileSize, mediaKind, outputCap, previewJpeg, reencode } from "./media.mjs";
 import { withPlainResults } from "./results.mjs";
 import { retrying } from "./retry.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
@@ -150,8 +150,8 @@ export function siteOf(answer) {
 /**
  * Run until `signal` aborts or the studio stops it. Returns why it ended: "aborted" (Ctrl+C, the scheduled task's end),
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
- * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
- * options), readCounters, readListeners, gpuEveryMs }.
+ * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, previewJpeg, awake, rescanMs,
+ * comfy (OwnComfy's own options), readCounters, readListeners, gpuEveryMs }.
  */
 export async function runWorker(saved, deps) {
   // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
@@ -382,6 +382,8 @@ async function work(saved, deps, owner) {
       local: own,
       sha256: async (data) => sha256(Buffer.from(data)),
       origin: site,
+      // A run's preview picture for the studio's tile: ComfyUI's PNG (or a big JPEG) made a small JPEG, with ffmpeg.
+      ...(ffmpeg && { jpeg: (data, type) => (deps.previewJpeg ?? previewJpeg)({ ffmpeg: ffmpegBin, data, type }) }),
       socket: typeof WebSocket === "function" ? (url) => (comfy.ready ? new WebSocket(comfy.rebase(url), { headers: comfy.headers() }) : null) : undefined,
       now,
       sleep,

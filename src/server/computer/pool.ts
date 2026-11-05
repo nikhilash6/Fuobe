@@ -204,7 +204,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       const t = typeof r?.task === "string" ? (d.prepare("SELECT * FROM relay_tasks WHERE id = ? AND worker_id = ?").get(r.task, w.id) as TaskRow | undefined) : undefined;
       if (!t || !(SENT_STATES as readonly string[]).includes(t.state)) continue;
       setTask(t.id, { device_seen_at: now });
-      noteProgress(t.id, r as unknown as Record<string, unknown>, now);
+      noteProgress(t.id, r as unknown as Record<string, unknown>, now, t.lease_hash);
     }
     for (const id of b.stopped) d.prepare("UPDATE relay_tasks SET stop = 0 WHERE id = ? AND device = ?").run(id, device);
     const stops = (d.prepare("SELECT id, prompt_id, prefix FROM relay_tasks WHERE device = ? AND stop = 1").all(device) as { id: string; prompt_id: string; prefix: string | null }[]).map((s) => ({

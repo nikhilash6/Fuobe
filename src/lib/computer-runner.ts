@@ -14,6 +14,7 @@ import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, w
 import {
   DONE_SHOWN_MS,
   META_BATCH_HISTORY,
+  PREVIEW_REPORT,
   RELAY_LIMITS,
   RELAY_TIMES,
   type BeatAnswer,
@@ -69,6 +70,11 @@ export interface RunnerDeps {
   onBeat?: (a: BeatAnswer) => void;
   /** What only a worker program does (docs/gpu-workers.md). A browser tab has none of it. */
   worker?: WorkerHooks;
+  /**
+   * A preview picture as a JPEG of at most PREVIEW_REPORT.bytes, or null (a worker program with ffmpeg makes one from
+   * ComfyUI's PNG or a bigger JPEG). Without it, only ComfyUI's own JPEG previews that small are sent.
+   */
+  jpeg?: (data: Uint8Array, type: string) => Promise<Uint8Array | null>;
 }
 
 /** A finished job's results as a worker keeps them on its own disk: its entries (one, or a meta-batch's passes). */
@@ -227,6 +233,16 @@ const BEAT_MS = 20_000;
 /** How long a result may wait for a busy studio before the run gives up. */
 const SAVE_WAIT_MS = 60 * 60_000;
 
+/** Is this a JPEG picture (its first bytes)? */
+const isJpeg = (b: Uint8Array) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+
+/** Bytes as base64, in a browser and in Node alike. */
+function base64(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
 /** Retry-After in ms (1 to 30 s; 2 s when it doesn't say). */
 const retryAfter = (res: Response) => Math.min(30, Math.max(1, Number(res.headers.get("retry-after")) || 2)) * 1000;
 
@@ -245,6 +261,11 @@ export class ComputerRunner {
   private ws: SocketLike | null = null;
   private wsOpen = false;
   private events = new Map<string, { value?: number; max?: number; node?: string; nodesDone: number; done?: boolean }>();
+  /**
+   * The jobs whose run shows a preview picture (the claim's `reportPreview`): ComfyUI's latest preview of each, and when
+   * the last one was made ready for the studio (and which frame it was).
+   */
+  private previewed = new Map<string, { frame?: { data: Uint8Array; type: string; at: number }; triedAt?: number; frameAt?: number }>();
   private factsSentAt = 0;
   private factsWithLoras = 0;
   private foundAt = 0;
@@ -400,7 +421,11 @@ export class ComputerRunner {
       if (!p) return;
       // A preview goes only to the prompt's own client: this tab's job (a newer ComfyUI also names the prompt).
       const job = this.view.jobs.find((j) => j.phase === "running" && (!p.promptId || this.events.has(p.promptId)));
-      if (job) this.job({ id: job.taskId, generationId: job.generationId }, { preview: new Blob([p.data as BlobPart], { type: p.type }) });
+      if (!job) return;
+      this.job({ id: job.taskId, generationId: job.generationId }, { preview: new Blob([p.data as BlobPart], { type: p.type }) });
+      // Kept for the studio too, when the run shows one (a copy: the socket's buffer is reused).
+      const kept = this.previewed.get(job.taskId);
+      if (kept && (!p.promptId || p.promptId === this.promptOf.get(job.taskId))) kept.frame = { data: new Uint8Array(p.data), type: p.type, at: this.now() };
     };
   }
 
@@ -606,6 +631,7 @@ export class ComputerRunner {
     try {
       await this.runJob(t);
     } finally {
+      this.previewed.delete(t.id);
       const phase = this.view.jobs.find((j) => j.taskId === t.id)?.phase;
       if (this.deps.ended && (phase === "done" || phase === "failed")) await Promise.resolve(this.deps.ended(t, phase)).catch(() => {});
     }
@@ -613,6 +639,7 @@ export class ComputerRunner {
 
   private async runJob(t: ClaimedTask): Promise<void> {
     this.promptOf.set(t.id, t.promptId);
+    if (t.reportPreview) this.previewed.set(t.id, {});
     this.job(t, { phase: t.resume === "collecting" ? "saving" : t.resume === "running" ? "running" : t.resume === "queued" ? "queued" : "sending" });
     try {
       const worker = this.deps.worker;
@@ -949,8 +976,11 @@ export class ComputerRunner {
       moved(JSON.stringify([w.s, w.s === "pending" ? w.ahead : null, ev?.value, ev?.max, ev?.node, ev?.nodesDone]));
       const report: ReportEvent = w.s === "pending" ? { event: "queued", position: w.ahead } : { event: "running", value: ev?.value, max: ev?.max, node: ev?.node, nodesDone: ev?.nodesDone };
       const key = JSON.stringify(report);
-      if (key !== lastKey && this.now() - lastSent >= PROGRESS_EVERY_MS) {
-        const a = await this.report(t, report);
+      const due = this.now() - lastSent >= PROGRESS_EVERY_MS;
+      // The run's latest preview picture goes with a "running" report, at most one every 2 s, even when the step is the same.
+      const preview = due && w.s === "running" ? await this.previewFor(t) : undefined;
+      if (due && (key !== lastKey || preview)) {
+        const a = await this.report(t, preview ? ({ ...report, preview } as ReportEvent) : report);
         if (a.stop) throw new Stopped();
         lastKey = key;
         lastSent = this.now();
@@ -959,6 +989,22 @@ export class ComputerRunner {
       // The socket says when steps move; without it, a read a second.
       await this.sleep(this.wsOpen ? PROGRESS_EVERY_MS : POLL_MS);
     }
+  }
+
+  /**
+   * The job's latest preview picture for the studio, as base64: a JPEG of at most PREVIEW_REPORT.bytes, newer than the
+   * last one, at most one every PREVIEW_REPORT.everyMs (a picture that can't be made that small is skipped, and the next
+   * try waits as long). Undefined when there is none to send.
+   */
+  private async previewFor(t: ClaimedTask): Promise<string | undefined> {
+    const p = this.previewed.get(t.id);
+    const f = p?.frame;
+    if (!p || !f || (p.frameAt !== undefined && f.at <= p.frameAt) || (p.triedAt !== undefined && this.now() - p.triedAt < PREVIEW_REPORT.everyMs)) return undefined;
+    p.frameAt = f.at;
+    p.triedAt = this.now();
+    const small = (b: Uint8Array | null | undefined) => (b && isJpeg(b) && b.length <= PREVIEW_REPORT.bytes ? b : null);
+    const jpeg = (f.type === "image/jpeg" && small(f.data)) || (this.deps.jpeg ? small(await this.deps.jpeg(f.data, f.type).catch(() => null)) : null);
+    return jpeg ? base64(jpeg) : undefined;
   }
 
   /** Upload the results the server asked for, each in parts, from where each got to. */

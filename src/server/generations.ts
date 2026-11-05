@@ -228,8 +228,9 @@ export function toGeneration(r: Row): Generation {
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
     // The owner's own job on the workers, waiting: its place in their line (in the list as after a refresh).
     ...(stored.place !== "pool" && r.status === "queued" && r.provider === "comfyui" && workerQueue(r.id)),
-    // Working on this install's GPUs: the address of its latest preview picture, while there is one.
-    ...(r.status === "running" && r.provider === "comfyui" && !checking && livePreview(r.id)),
+    // Working on this install's GPUs: the address of its latest preview picture, while there is one. None for a run
+    // whose outputs the moderation service sees first (a preview would show what its check holds back).
+    ...(r.status === "running" && r.provider === "comfyui" && !checking && !stored.checkOutputs && livePreview(r.id)),
   };
 }
 

@@ -2865,7 +2865,9 @@ export const comfyProvider: ProviderAdapter = {
         graph: forPool ? withoutSaveMetadata(wf) : wf,
         prefix: typeof meta.prefix === "string" ? meta.prefix : undefined,
         metaBatch,
-        preview: true,
+        // On the workers, a run whose outputs the moderation service sees first shows no preview while it works (its
+        // ComfyUI makes none). A person's own computer shows its own previews in its tab, as before.
+        preview: !(forPool && runStamp()?.checkOutputs),
         workflowId: manifest.id,
         made: model?.kind,
         loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),

@@ -147,7 +147,15 @@ export interface ClaimedTask {
   notAfter?: number | null;
   attempt?: number;
   models?: { folder: string; name: string; size: number; sha256: string | null }[];
+  /**
+   * The run shows its latest preview picture while it works: the worker sends it with its "running" reports (a JPEG of
+   * at most PREVIEW_REPORT.bytes, as base64, at most one every PREVIEW_REPORT.everyMs). Absent: it sends none.
+   */
+  reportPreview?: boolean;
 }
+
+/** A worker's preview picture of its job, as a "running" report carries it: its size at most, and how often at most. */
+export const PREVIEW_REPORT = { bytes: 64 * 1024, everyMs: 2000 } as const;
 
 /** The tab's facts about its ComfyUI (never its command line: that holds paths and user names). */
 export interface ComputerFacts {

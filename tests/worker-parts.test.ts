@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { helperCommand, StayAwake } from "../bin/lib/worker/awake.mjs";
-import { encodeArgs, FIT, INPUT_FORMATS, MEDIA_LIMITS, mediaKind, outputCap, reencode } from "../bin/lib/worker/media.mjs";
+import { encodeArgs, FIT, INPUT_FORMATS, MEDIA_LIMITS, mediaKind, outputCap, PREVIEW_QUALITIES, previewArgs, previewJpeg, reencode } from "../bin/lib/worker/media.mjs";
 import { RETRY, retrying } from "../bin/lib/worker/retry.mjs";
 import { ffmpegOf } from "../bin/lib/worker/config.mjs";
 import { takeLock, workerLives, WorkerRunning } from "../bin/lib/worker/lock.mjs";
@@ -214,6 +214,56 @@ describe("clips and sound, made again", () => {
     fs.writeFileSync(src, Buffer.alloc(100));
     expect(await reencode({ ffmpeg: "ffmpeg", kind: "video", name: "a.mp4", src, dst: path.join(dir, "ok.part"), capBytes: 1000, spawnFn: spawnFn as never })).toBe(true);
     expect(await reencode({ ffmpeg: "ffmpeg", kind: "video", name: "a.mp4", src, dst: path.join(dir, "big.part"), capBytes: 1000, spawnFn: spawnFn as never })).toBe(false);
+  });
+
+  it("a preview picture is made a JPEG from ffmpeg's standard input only, at the best quality that fits", async () => {
+    const args = previewArgs("image/png", 4)!;
+    expect(args).toEqual(expect.arrayContaining(["-protocol_whitelist", "pipe", "-f", "png_pipe", "-i", "pipe:0", "-c:v", "mjpeg", "pipe:1"]));
+    expect(args).not.toContain("file");
+    expect(previewArgs("image/jpeg", 4)).toContain("jpeg_pipe");
+    expect(previewArgs("text/html", 4)).toBeNull();
+    // Each try writes a JPEG of the size its quality gives; the first that fits is kept.
+    const sizes: Record<string, number> = { "4": 90_000, "8": 70_000, "14": 40_000, "24": 20_000 };
+    const tried: string[] = [];
+    const spawnFn = (_bin: string, a: string[]) => {
+      const q = a[a.indexOf("-q:v") + 1];
+      tried.push(q);
+      const child = new EventEmitter() as EventEmitter & { pid: number; kill: () => void; stdout: EventEmitter; stdin: EventEmitter & { end: () => void } };
+      child.pid = 0;
+      child.kill = () => {};
+      child.stdout = new EventEmitter();
+      child.stdin = Object.assign(new EventEmitter(), { end: () => {} });
+      setTimeout(() => {
+        child.stdout.emit("data", Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(sizes[q] - 4, 1)]));
+        child.emit("close", 0);
+      }, 2);
+      return child;
+    };
+    const out = await previewJpeg({ ffmpeg: "ffmpeg", data: new Uint8Array(8), type: "image/png", spawnFn: spawnFn as never });
+    expect(tried).toEqual(["4", "8", "14"]);
+    expect(out?.length).toBe(40_000);
+    // Nothing fits, or ffmpeg can't read it: none.
+    tried.length = 0;
+    expect(await previewJpeg({ ffmpeg: "ffmpeg", data: new Uint8Array(8), type: "image/png", maxBytes: 1000, spawnFn: spawnFn as never })).toBeNull();
+    expect(tried).toEqual(PREVIEW_QUALITIES.map(String));
+    const failing = () => Object.assign(new EventEmitter(), { pid: 0, kill: () => {}, stdout: new EventEmitter(), stdin: Object.assign(new EventEmitter(), { end() {} }) });
+    const broken = () => {
+      const c = failing();
+      setTimeout(() => c.emit("close", 1), 2);
+      return c;
+    };
+    expect(await previewJpeg({ ffmpeg: "ffmpeg", data: new Uint8Array(8), type: "image/png", spawnFn: broken as never })).toBeNull();
+  });
+
+  it.runIf(hasFfmpeg)("ffmpeg makes ComfyUI's PNG preview a JPEG of at most 64 KB", async () => {
+    const dir = tempDir("fuobe-worker-preview-");
+    const png = path.join(dir, "preview.png");
+    const made = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=768x512", "-frames:v", "1", png]);
+    expect(made.status).toBe(0);
+    const out = await previewJpeg({ ffmpeg: "ffmpeg", data: new Uint8Array(fs.readFileSync(png)), type: "image/png" });
+    expect(out).not.toBeNull();
+    expect([...out!.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+    expect(out!.length).toBeLessThanOrEqual(64 * 1024);
   });
 
   it.runIf(hasFfmpeg)("ffmpeg refuses a playlist that names another file on this PC, and makes a plain clip again", async () => {

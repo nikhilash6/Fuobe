@@ -15,8 +15,12 @@ const AT_ONCE = { person: 2, all: 16 };
  * under this size.
  */
 const PREVIEW_REPORT_BYTES = Math.ceil(PREVIEW_LIMITS.bytes / 3) * 4 + 4 * 1024;
-/** A report over this size counts against a lower limit a minute (a "running" report with its preview stays under it). */
-const LARGE_BYTES = PREVIEW_REPORT_BYTES;
+/**
+ * A report over this size counts against a lower limit a minute. A worker's "running" report with its preview stays
+ * under its own, larger bound; a person's own computer keeps 64 KB.
+ */
+const LARGE_BYTES = 64 * 1024;
+const largeFor = (t: Pick<TaskRow, "pools">) => (t.pools ? PREVIEW_REPORT_BYTES : LARGE_BYTES);
 
 /** The event as the tab sent it, with only the fields each one has, or null. */
 function eventOf(b: Record<string, unknown>): ReportEvent | null {
@@ -99,7 +103,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
   }
   const declared = Number(request.headers.get("content-length") ?? NaN);
   if (Number.isFinite(declared) && declared > cap) return no(413, "That report is too large");
-  if (cap > LARGE_BYTES && !(declared <= LARGE_BYTES)) {
+  const large = largeFor(t0);
+  if (cap > large && !(declared <= large)) {
     const big = rateOf(callerKey(request, principal), "report-large", 30);
     if (big) return big;
   }

@@ -145,3 +145,92 @@ export function reencode({ ffmpeg, kind, name, src, dst, capBytes = outputCap(fi
     });
   });
 }
+
+/** The picture formats a preview may come in from its ComfyUI, by the name of ffmpeg's reader for each. */
+const PREVIEW_READERS = { "image/png": "png_pipe", "image/jpeg": "jpeg_pipe", "image/webp": "webp_pipe" };
+
+/** The qualities a preview is made at (ffmpeg's -q:v: lower is better), best first, until it is small enough. */
+export const PREVIEW_QUALITIES = [4, 8, 14, 24];
+
+/** At most this many pixels on a preview's long side, keeping its shape. */
+const PREVIEW_SIDE = 512;
+const previewSide = (dim) => `min(${dim}\\,${PREVIEW_SIDE})`;
+const PREVIEW_FIT = `scale=w=if(gte(iw\\,ih)\\,${previewSide("iw")}\\,-2):h=if(gte(iw\\,ih)\\,-2\\,${previewSide("ih")})`;
+
+/**
+ * ffmpeg's arguments to make one preview picture (`type`, read from its standard input) a JPEG at quality `q`, at most
+ * PREVIEW_SIDE pixels on its long side, with no metadata, written to its standard output. Null for a type it doesn't take.
+ */
+export function previewArgs(type, q) {
+  const reader = PREVIEW_READERS[type];
+  if (!reader) return null;
+  return [
+    "-hide_banner", "-nostats", "-loglevel", "error",
+    "-protocol_whitelist", "pipe", "-f", reader, "-i", "pipe:0",
+    "-map_metadata", "-1", "-frames:v", "1", "-vf", PREVIEW_FIT,
+    "-c:v", "mjpeg", "-pix_fmt", "yuvj420p", "-q:v", String(q), "-f", "image2pipe", "pipe:1",
+  ];
+}
+
+/** Is this a JPEG picture (its first bytes)? */
+const isJpeg = (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+
+/**
+ * Make a preview picture of a job (its ComfyUI's PNG, or a JPEG too big to send) a JPEG of at most `maxBytes`, for the
+ * studio's tile: at the best quality of PREVIEW_QUALITIES that fits. Each try is ffmpeg in its own short-lived process at
+ * low priority, stopped after `timeoutMs`. Null when none fits, or ffmpeg can't read it.
+ */
+export async function previewJpeg({ ffmpeg, data, type, maxBytes = 64 * 1024, timeoutMs = 10_000, spawnFn = spawn }) {
+  for (const q of PREVIEW_QUALITIES) {
+    const args = previewArgs(type, q);
+    if (!args) return null;
+    const out = await pipeThrough({ ffmpeg, args, data, limit: maxBytes * 8, timeoutMs, spawnFn });
+    if (out === "too-big") continue;
+    if (!out) return null;
+    if (isJpeg(out) && out.length <= maxBytes) return new Uint8Array(out);
+  }
+  return null;
+}
+
+/**
+ * Run ffmpeg with `data` on its standard input: what it wrote, "too-big" when that passed `limit` bytes (it is stopped
+ * there), or null when it failed.
+ */
+function pipeThrough({ ffmpeg, args, data, limit, timeoutMs, spawnFn }) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawnFn(ffmpeg, args, { stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
+    } catch {
+      return resolve(null);
+    }
+    try {
+      if (child.pid) os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
+    } catch {}
+    const chunks = [];
+    let size = 0;
+    let done = false;
+    const end = (v) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      end(null);
+    }, timeoutMs);
+    child.stdout?.on("data", (d) => {
+      size += d.length;
+      if (size > limit) {
+        child.kill("SIGKILL");
+        return end("too-big");
+      }
+      chunks.push(d);
+    });
+    child.stdin?.on("error", () => {});
+    child.once("error", () => end(null));
+    child.once("close", (code) => end(code === 0 ? Buffer.concat(chunks) : null));
+    child.stdin?.end(Buffer.from(data));
+  });
+}

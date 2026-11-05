@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { connection } from "next/server";
-import { runPreview } from "@/server/computer/tasks";
+import { previewShown, runPreview } from "@/server/computer/tasks";
 import { getGeneration } from "@/server/generations";
 
 /** Never kept by a browser or a cache in between: the picture changes while the run works, and it is the account's own. */
@@ -9,13 +9,14 @@ const HEADERS = { "Cache-Control": "private, no-store", "X-Content-Type-Options"
 /**
  * A run's latest preview picture while it works on this install's GPUs (a JPEG its worker sent with its progress).
  * Only the run's own account (or the owner) reaches it: the sign-in proxy checks whose run it is, as for the run
- * itself (guest-access.ts accountGeneration). Nothing once the run has ended or gone back in line: 404.
+ * itself (guest-access.ts accountGeneration). Nothing once the run has ended or gone back in line, and nothing ever for
+ * a run whose outputs the moderation service sees first: 404.
  */
 export async function GET(_req: Request, ctx: RouteContext<"/api/generations/[id]/preview">) {
   await connection();
   const { id } = await ctx.params;
   const g = getGeneration(id);
-  const p = g && g.status === "running" ? runPreview(id) : null;
+  const p = g && g.status === "running" && g.preview && previewShown(id) ? runPreview(id) : null;
   let data: Buffer | null = null;
   try {
     data = p ? fs.readFileSync(p.path) : null;

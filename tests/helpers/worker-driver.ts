@@ -94,6 +94,8 @@ export function workerDriver(o: {
   clientId?: string;
   /** How long its waits are, at most (the runner's own waits are seconds; tests keep them short). */
   sleepCapMs?: number;
+  /** How it makes a preview picture a small JPEG, as the worker program does with ffmpeg (none: it can't). */
+  jpeg?: (data: Uint8Array, type: string) => Promise<Uint8Array | null>;
 }): WorkerDriver {
   const local = apiAs(o.routes, null, { authorization: `Bearer ${o.token}` });
   let target: StudioApi | null = null;
@@ -159,6 +161,7 @@ export function workerDriver(o: {
       socket: (url) => (dead ? null : (new WebSocket(url) as never)),
       sha256,
       origin: "http://localhost:3000",
+      ...(o.jpeg && { jpeg: o.jpeg }),
       sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, o.sleepCapMs ?? 50))),
       beatExtra: () => ({ protocol: DRIVER_PROTOCOL, version: "test", local: { paused: !!paused, why: paused, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
       // As the worker program does when a job ends here: its prompt leaves its ComfyUI's history (once its ComfyUI has
