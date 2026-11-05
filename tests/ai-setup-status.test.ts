@@ -138,6 +138,18 @@ describe("the steps and the next step", () => {
     ["on the processor, a PyTorch without CUDA", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", cpu: true }, {}, "cpu-only", "run_nvidia_gpu.bat"],
     ["a GPU too small", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", modelWhy: "small" }, {}, "no-model-fits", "Your keys"],
     ["a model needs more than a download", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", modelWhy: "setup" }, {}, "model-setup", "Update ComfyUI"],
+    ["connect: not installed yet", { way: "connect", comfy: "unreadable", port: 8188 }, {}, "install-connect", "ComfyUI-Manager's search may not list Fuobe Connect yet. Clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect into custom_nodes"],
+    ["connect: ComfyUI didn't load it", { way: "connect", comfy: "unreadable", port: 8000, restarted: true }, {}, "connect-not-loaded", "curl.exe -s http://127.0.0.1:8000/fuobe/connect"],
+    ["connect: installed, connecting", { way: "connect", comfy: "found", port: 8188, guard: "connect" }, {}, "connecting"],
+    ["connect: --listen", { way: "connect", comfy: "found", port: 8188, guard: "connect", listen: true }, {}, "remove-listen"],
+    ["connect: done in this tab", { way: "connect", comfy: "found", guard: "connect", connected: true, model: "ready", picture: "ok" }, {}, "done", "pair this ComfyUI with a code"],
+    ["connect: no tab yet", null, { way: "connect" }, "open-fuobe", `${SITE}/connect?setup=ai&way=connect in a browser`],
+    ["connect: from a phone, pair it", { way: "connect", browser: "unsupported" }, { phone: true }, "pair", "Extensions (in ComfyUI's top menu), then Connect to Fuobe"],
+    ["connect: a phone's tab asleep: still pairing", { way: "connect", browser: "unsupported", visible: false }, { phone: true, tabAt: NOW - 120_000 }, "pair", "on the phone"],
+    ["connect: Safari pairs", { way: "connect", browser: "unsupported", browserName: "safari" }, {}, "pair", `${SITE}/connect?pair=1`],
+    ["connect: a blocked browser pairs, or unblocks", { way: "connect", browser: "blocked", browserName: "chrome" }, {}, "pair", "Or, to connect from this browser instead"],
+    ["connect: paired and answering", { way: "connect", browser: "unsupported" }, { phone: true, server: { gpu: "computer", online: true, paired: true } }, "done", "with no Fuobe tab open"],
+    ["connect: paired elsewhere, nothing here", { way: "connect", comfy: "none" }, { server: { gpu: "computer", online: true, paired: true } }, "done"],
   ];
   it.each(cases)("%s", (_name, facts, o, id, words) => {
     const v = view(facts, o);
@@ -171,6 +183,22 @@ describe("the steps and the next step", () => {
     expect(stepsOf(view({ comfy: "found", port: 8188, cors: "exact" }))[1].detail).toBe("fuobe.com only");
     expect(stepsOf(view({ comfy: "found", port: 8188, cors: "any" }))[1]).toMatchObject({ state: "warn", detail: "Every website is let in" });
     expect(stepsOf(view({ way: "address" }, { server: { gpu: "link", online: true } })).map((s) => s.id)).toEqual(["address", "connected", "model", "picture"]);
+  });
+
+  it("ticks Fuobe Connect off in this tab, or by pairing", () => {
+    const states = (f: Partial<TabFacts> | null, o: Partial<SetupView> = {}) => stepsOf(view(f && { way: "connect", ...f }, { way: "connect", ...o })).map((s) => `${s.id}:${s.state}`);
+    expect(states({ comfy: "unreadable", port: 8188 })).toEqual(["comfyui:done", "connect:todo", "model:todo", "picture:todo"]);
+    expect(states({ comfy: "unreadable", port: 8188, restarted: true })).toEqual(["comfyui:done", "connect:warn", "model:todo", "picture:todo"]);
+    expect(states({ comfy: "found", port: 8188, guard: "connect", connected: true, model: "ready", modelId: "oss-sdxl" })).toEqual(["comfyui:done", "connect:done", "model:done", "picture:todo"]);
+    expect(states({ browser: "unsupported" }, { phone: true })).toEqual(["connect:todo", "paired:todo"]);
+    // Pairing ends once the paired ComfyUI answers, whether or not this tab's own check sees it.
+    expect(states({ browser: "unsupported" }, { phone: true, server: { gpu: "computer", online: false, paired: true } })).toEqual(["connect:done", "paired:done"]);
+    expect(states({ browser: "unsupported" }, { phone: true, server: { gpu: "link", online: true, paired: true } })).toEqual(["connect:todo", "paired:todo"]);
+    // The status points into Fuobe Connect's own steps.
+    const at = (f: Partial<TabFacts>, o: Partial<SetupView> = {}) => nextOf(view({ way: "connect", ...f }, { way: "connect", ...o }), NOW).guide;
+    expect(at({ browser: "ask" })).toBe(`${SITE}/api/setup/guide/connect/windows#step-3`);
+    expect(at({ comfy: "unreadable", port: 8188 })).toBe(`${SITE}/api/setup/guide/connect/windows#step-2`);
+    expect(at({ browser: "unsupported" }, { phone: true })).toBe(`${SITE}/api/setup/guide/connect/windows#step-2`);
   });
 
   it("says how long ComfyUI has been starting again, and when it didn't come back", () => {

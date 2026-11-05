@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, Cpu, Loader2, Sparkles } from "lucide-react";
+import { BotMessageSquare, CircleAlert, Cpu, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
@@ -160,6 +160,32 @@ export function ConnectGpu() {
       </div>
     );
 
+  // A guest at "Set it up with my AI" (a phone's Send to my computer, or the page the AI names) most often started it
+  // signed in somewhere else: Log in comes first, with the same account, and comes back to this same link.
+  if (guest && ai)
+    return (
+      <div className="space-y-6">
+        {header(1)}
+        <Card>
+          <div className="flex items-start gap-3">
+            <BotMessageSquare aria-hidden className="mt-0.5 size-5 shrink-0 text-brand-text" />
+            <div className="min-w-0 space-y-3">
+              <p className="text-[14px] font-medium">Set it up with your AI</p>
+              <p className="text-[13px] text-muted-foreground">Started on your phone? Log in with the same account, and the setup goes on here.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild className="h-11 sm:h-9">
+                  <Link href={signInHref("login", aiHref)}>Log in</Link>
+                </Button>
+                <Button asChild variant="secondary" className="h-11 sm:h-9">
+                  <Link href={signInHref("signup", aiHref)}>Sign up free</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+
   if (guest)
     return (
       <div className="space-y-6">
@@ -175,13 +201,13 @@ export function ConnectGpu() {
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button asChild className="h-11 sm:h-9">
-                  <Link href={signInHref("signup", ai ? aiHref : "/connect")}>Sign up free</Link>
+                  <Link href={signInHref("signup", "/connect")}>Sign up free</Link>
                 </Button>
                 <Button asChild variant="secondary" className="h-11 sm:h-9">
-                  <Link href={signInHref("login", ai ? aiHref : "/connect")}>Log in</Link>
+                  <Link href={signInHref("login", "/connect")}>Log in</Link>
                 </Button>
                 <Button asChild variant="secondary" className="h-11 sm:h-9">
-                  <Link href={signInHref("signup", ai ? aiHref : AI_SETUP_HREF)}>Set it up with my AI</Link>
+                  <Link href={signInHref("signup", AI_SETUP_HREF)}>Set it up with my AI</Link>
                 </Button>
               </div>
             </div>

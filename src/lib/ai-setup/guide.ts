@@ -6,6 +6,7 @@
  */
 import { GUARD_SHA256 } from "@/lib/comfy-guard";
 import { LIVE_NODES_SHA256 } from "@/lib/comfy-live-nodes";
+import { FUOBE_CONNECT, trustedByDefault } from "@/lib/fuobe-connect";
 import { showCode } from "./code";
 import { MODEL_STEP, STOP_STEP } from "./next-step";
 import { aiSetupHref, OS_NAME, type BrowserName, type Os, type Way } from "./ways";
@@ -45,7 +46,7 @@ function header(i: GuideInput): string {
     return lines(
       `# Connect ComfyUI to Fuobe with Fuobe Connect: ${os}`,
       "",
-      `This page shows how to connect the ComfyUI on ${on} to Fuobe (${i.site}) with Fuobe Connect, a ComfyUI add-on. Fuobe is a website that makes pictures, video and sound on the person's own GPU.`,
+      `This page shows how to connect the ComfyUI on ${on} to Fuobe (${i.site}) with Fuobe Connect, a ComfyUI add-on (${FUOBE_CONNECT.gitUrl}). Fuobe is a website that makes pictures, video and sound on the person's own GPU. With Fuobe Connect, the Fuobe page in Chrome, Edge or Firefox on this computer uses ComfyUI with no new setting. In Safari, on a phone, or on a computer with no screen, the person pairs ComfyUI with their Fuobe account by a code instead, and runs go to it with no Fuobe tab open.`,
     );
   return lines(
     `# Connect ComfyUI to Fuobe: this browser, ${os}`,
@@ -96,6 +97,19 @@ function rules(i: GuideInput): string {
       "7. Use the setup code only with the status address.",
       ...(shell ? ["", shell] : []),
     );
+  if (i.way === "connect")
+    return lines(
+      "## Rules",
+      "",
+      "1. Before each command, show it and say in one line what it does. Wait for the person to say yes.",
+      "2. This way needs no new ComfyUI setting. Do not add --enable-cors-header. Never use --listen.",
+      "3. Do not open ports in a firewall or a router. Do not turn off antivirus, the firewall, SmartScreen or Gatekeeper.",
+      "4. Do not change or delete the person's own start files.",
+      "5. Restarting ComfyUI stops what it is making now. Ask before it restarts. Do not stop ComfyUI's python yourself: ask the person to close ComfyUI's window.",
+      `6. Install only Fuobe Connect, from ${FUOBE_CONNECT.gitUrl} . Do not install other custom nodes. Do not change models or other settings, except the picture model the status asks for${trustedByDefault(i.site) ? "" : " and Fuobe Connect's own list of studios (Step 2)"}.`,
+      "7. Use the setup code only with the status address.",
+      ...(shell ? ["", shell] : []),
+    );
   return lines(
     "## Rules",
     "",
@@ -105,9 +119,7 @@ function rules(i: GuideInput): string {
     "4. Do not open ports in a firewall or a router. Do not turn off antivirus, the firewall, SmartScreen or Gatekeeper.",
     "5. Do not change or delete the person's own start files. If a start file is needed, make a new one.",
     "6. Restarting ComfyUI stops what it is making now. Ask before it restarts. Do not stop ComfyUI's python yourself: ask the person to close ComfyUI's window.",
-    i.way === "connect"
-      ? "7. Install only Fuobe Connect. Do not change models or other settings, except the picture model the status asks for."
-      : "7. Install only Fuobe's two files (fuobe_guard.py and fuobe_live.py). Do not install other custom nodes. Do not change models or other settings, except the picture model the status asks for.",
+    "7. Install only Fuobe's two files (fuobe_guard.py and fuobe_live.py). Do not install other custom nodes. Do not change models or other settings, except the picture model the status asks for.",
     "8. Use the setup code only with the status address.",
     ...(shell ? ["", shell] : []),
   );
@@ -196,8 +208,10 @@ function findComfy(i: GuideInput): string {
             "   tr '\\0' ' ' < /proc/PID/cmdline; echo",
             "   readlink /proc/PID/cwd",
             "   If the command has --base-directory <folder>, that folder holds custom_nodes and models. If not, custom_nodes and models are next to main.py.",
-            i.way !== "address" &&
+            i.way === "direct" &&
               "4. If ComfyUI runs as a service or in Docker, the setting goes into the start command of that service or container. Ask the person before you change a service or a container.",
+            i.way === "connect" &&
+              "4. If ComfyUI runs in Docker, custom_nodes is the folder that the container maps to its custom_nodes. Ask the person which folder that is.",
             "",
             "Common places for custom_nodes:",
             "- A git install: ~/ComfyUI/custom_nodes",
@@ -439,23 +453,67 @@ function addressSteps(i: GuideInput): string {
 }
 
 function connectSteps(i: GuideInput): string {
-  return lines(
-    stepZero(i),
-    "",
-    findComfy(i),
-    "",
+  const c = curl(i.os);
+  const s = sep(i.os);
+  const { gitUrl, folder, archive } = FUOBE_CONNECT;
+  const dir = `<custom_nodes>${s}${folder}`;
+  const own = !trustedByDefault(i.site);
+  const download =
+    i.os === "windows"
+      ? [
+          `   curl.exe -fsSL -o "${dir}.zip" ${archive}.zip`,
+          `   Expand-Archive "${dir}.zip" "<custom_nodes>"`,
+          `   Rename-Item "${dir}-main" ${folder}`,
+          `   Remove-Item "${dir}.zip"`,
+        ]
+      : [`   mkdir -p "${dir}"`, `   curl -fsSL ${archive}.tar.gz | tar -xz --strip-components=1 -C "${dir}"`];
+  const install = lines(
     "## Step 2: Install Fuobe Connect",
     "",
-    "In ComfyUI, the person opens Manager, then Custom Nodes Manager, searches Fuobe Connect, presses Install, then Restart. If there is no Manager, run this in custom_nodes, then restart ComfyUI:",
-    "   git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect",
-    "",
+    `Fuobe Connect is a ComfyUI add-on (a custom node pack) from ${gitUrl} . It installs no Python packages.`,
+    "ComfyUI-Manager's search may not list Fuobe Connect yet. Install it with git or with the download below. The person can also use Install via Git URL in ComfyUI-Manager with the same address, if their Manager allows it.",
+    `1. Look in custom_nodes (Step 1) for a folder named ${folder}. If it is there, Fuobe Connect is installed: go to item 5.`,
+    "2. Look for git:",
+    "   git --version",
+    "   If it answers, clone Fuobe Connect into custom_nodes. Put the real folder in place of <custom_nodes>:",
+    `   git clone ${gitUrl} "${dir}"`,
+    "3. If git is missing, download Fuobe Connect and unpack it into custom_nodes instead. Put the real folder in place of <custom_nodes>:",
+    ...download,
+    "4. Restart ComfyUI, so that it loads Fuobe Connect. Ask the person first. Do the part for their install:",
+    i.os !== "linux" && "   - ComfyUI Desktop: in ComfyUI, Manager, then Restart. Or quit ComfyUI Desktop and open it again.",
+    i.os === "windows" && "   - Portable or Easy-Install: close ComfyUI's window, then start ComfyUI again the usual way (for example run_nvidia_gpu.bat).",
+    "   - Stability Matrix: stop ComfyUI and launch it again.",
+    `   - Started from ${i.os === "mac" ? "Terminal" : "a terminal"}: stop ComfyUI with Ctrl+C in its window, then start it again with the same command.`,
+    i.os === "linux" && "   - A service or Docker: restart that service or container.",
+    `5. Make sure that ComfyUI loaded it. Put ComfyUI's port in place of 8188. The answer has "connect": 1:`,
+    `   ${c} -s http://127.0.0.1:8188/fuobe/connect`,
+    `   If nothing answers, ComfyUI is still starting: wait 30 seconds, then try again. If the answer is 404, ComfyUI didn't load Fuobe Connect: make sure that __init__.py is right inside ${dir} (not in a second folder inside it), and read the last lines of ComfyUI's window with the person.`,
+    own &&
+      `6. Fuobe Connect trusts https://fuobe.com by itself, not this studio. Ask the person to open ComfyUI's Settings, then Fuobe Connect, and to enter ${i.site} in Fuobe studios that may use this ComfyUI. Or start ComfyUI with the environment variable FUOBE_CONNECT_ORIGINS=${i.site}.`,
+  );
+  const host = new URL(i.site).host;
+  const headless =
+    i.os === "windows"
+      ? `3. On a computer with no screen, start ComfyUI with the environment variable FUOBE_CONNECT_PAIR=1${own ? ` and FUOBE_CONNECT_SITE=${i.site}` : ""}: in Command Prompt, run set FUOBE_CONNECT_PAIR=1${own ? ` and set FUOBE_CONNECT_SITE=${i.site}` : ""}, then start ComfyUI in the same window. The code and the link to approve it are then in ComfyUI's window.`
+      : `3. On a computer with no screen, start ComfyUI with the environment variable FUOBE_CONNECT_PAIR=1${own ? ` and FUOBE_CONNECT_SITE=${i.site}` : ""}, for example in ComfyUI's folder:`;
+  const connect = lines(
     "## Step 3: Connect",
     "",
-    "- In Chrome, Edge or Firefox: Fuobe connects by itself.",
-    `- In Safari or on a phone: in ComfyUI open Extensions, then Connect to Fuobe. The person approves the code it shows at ${i.site}/connect.`,
+    "In Chrome, Edge or Firefox on the computer that runs ComfyUI:",
+    `1. The browser can ask the person to let ${host} access other apps and services on this device. The person presses Allow.`,
+    "2. If the browser blocked it before:",
+    ...BROWSER_LINES.map((b) => b.line),
+    "3. Read the status. Fuobe connects by itself when it sees Fuobe Connect.",
     "",
-    modelStep(i),
+    "In Safari, on a phone, or for a computer with no screen, pair ComfyUI with the person's Fuobe account. The commands still run on the computer that runs ComfyUI:",
+    "1. In ComfyUI, the person opens Extensions (in ComfyUI's top menu), then Connect to Fuobe, and presses the Connect button. ComfyUI shows a code like ABCD-EFGH.",
+    `2. The person types that code into Fuobe, in the box The code ComfyUI shows, and presses Approve. The box is on Fuobe's setup page, and at ${i.site}/connect?pair=1, signed in to the same account.`,
+    headless,
+    i.os !== "windows" && `   ${own ? `FUOBE_CONNECT_SITE=${i.site} ` : ""}FUOBE_CONNECT_PAIR=1 python3 main.py`,
+    i.os !== "windows" && "   The code and the link to approve it are then in ComfyUI's window or its log.",
+    "4. Read the status. Once the person approves the code, runs go to this ComfyUI with no Fuobe tab open, while ComfyUI runs.",
   );
+  return lines(stepZero(i), "", findComfy(i), "", install, "", connect, "", modelStep(i));
 }
 
 /** The guide for a computer whose system isn't known: which one, then that guide. */

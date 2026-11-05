@@ -6,7 +6,9 @@
  *   runs the jobs. Chrome, Edge, Firefox, Brave or Opera on a computer.
  * - address ("A web address"): a cloudflared quick tunnel, whose address the person pastes into Fuobe. Safari, phones,
  *   and runs that go on with the tab closed.
- * - connect ("Fuobe Connect"): offered first once FUOBE_CONNECT_PUBLISHED is true.
+ * - connect ("Fuobe Connect"): the ComfyUI add-on, offered first while FUOBE_CONNECT_PUBLISHED is true. Chrome, Edge
+ *   or Firefox on the computer use ComfyUI from the tab, with no setting; Safari, phones, a blocked browser and a
+ *   computer with no screen pair ComfyUI with the account by a code, and runs go on with the tab closed.
  */
 import type { Platform } from "@/lib/comfy-install";
 

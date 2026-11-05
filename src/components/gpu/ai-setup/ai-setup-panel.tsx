@@ -21,14 +21,15 @@ import { agentLine, AGENTS, AI_TARGETS, chatLink, fullInstructions, isAgent, pre
 import { nextOf } from "@/lib/ai-setup/next-step";
 import { personWords } from "@/lib/ai-setup/person-words";
 import { quietFacts, quietWords, RESTART_SLOW_MS, RESTART_WAIT_MIN } from "@/lib/ai-setup/restart";
-import { isConnected, isDone, stepsOf } from "@/lib/ai-setup/steps";
+import { isConnected, isDone, isPairing, stepsOf } from "@/lib/ai-setup/steps";
 import { aiSetupHref, BROWSER_LABEL, browserOf, OS_NAME, pickWay, WAY_LABEL, waysFor, type Os, type Way } from "@/lib/ai-setup/ways";
 import { useStatus } from "@/lib/api";
 import { copyText, copyWithToast } from "@/lib/clipboard";
 import { platformOf } from "@/lib/comfy-install";
-import { FUOBE_CONNECT_PUBLISHED } from "@/lib/fuobe-connect";
+import { FUOBE_CONNECT, FUOBE_CONNECT_PUBLISHED, pairedOnline } from "@/lib/fuobe-connect";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { cn } from "@/lib/utils";
+import { PairWithCode, usePaired } from "../fuobe-connect";
 import { useComputerSupport } from "../open-connect";
 import { AllowNote, blockedSteps, GuardFix, OtherPort } from "../this-computer";
 import { FinishCard, useFirstPicture } from "./first-picture";
@@ -135,14 +136,17 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
 
   // This browser's way: the ComfyUI on this computer, watched while the AI works.
   const [connectedHere, setConnectedHere] = useState(false);
-  const probe = useSetupProbe(way === "direct" && support === "ok", !connectedHere);
+  // Fuobe Connect reads ComfyUI from this tab too (in a browser that can reach this computer); a phone, Safari and a page
+  // on plain http pair it with a code instead.
+  const tabWay = way !== "address";
+  const probe = useSetupProbe(tabWay && support === "ok", !connectedHere);
   const [skipGuard, setSkipGuard] = useState(false);
   const [switchOk, setSwitchOk] = useState(false);
   const found = probe.state.s === "found";
   const allowed = found && (probe.cors === "exact" || probe.guard === "connect") && !probe.listen;
   const guarded = probe.guard === "guard" || probe.guard === "connect";
   const auto = useAutoConnect({
-    ready: way === "direct" && allowed && (guarded || skipGuard) && (saved !== "link" || switchOk),
+    ready: tabWay && allowed && (guarded || skipGuard) && (saved !== "link" || switchOk),
     port: probe.port,
     host: probe.host,
     stats: probe.stats,
@@ -162,7 +166,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
 
   const now = useNow(5000);
   const browserState: TabFacts["browser"] =
-    way !== "direct" ? "unknown" : support !== "ok" ? "unsupported" : probe.state.s === "blocked" ? "blocked" : probe.perm === "granted" ? "granted" : probe.state.s === "start" ? "ask" : "unknown";
+    way === "address" ? "unknown" : support !== "ok" ? "unsupported" : probe.state.s === "blocked" ? "blocked" : probe.perm === "granted" ? "granted" : probe.state.s === "start" ? "ask" : "unknown";
   // Where ComfyUI last answered, and when it stopped: a ComfyUI that went quiet up to 5 minutes ago is starting again
   // (Fuobe's start file, the AI; a portable one loads every add-on first), so the setup says so, with the time so far,
   // and doesn't ask to install it. Past that, it says that ComfyUI didn't come back.
@@ -214,11 +218,15 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
     ...(picture.cause && { pictureCause: picture.cause }),
     ...(fromRun && { fromRun: true }),
   };
-  const server = { gpu: saved, online: saved === "none" ? false : status.data ? online : null } as const;
+  // Fuobe Connect: a ComfyUI paired with this account that was heard from in the last minute.
+  const pairedQ = usePaired(way === "connect");
+  const pairedNow = (pairedQ.data?.paired ?? []).some((p) => pairedOnline(p, now));
+  const server = { gpu: saved, online: saved === "none" ? false : status.data ? online || pairedNow : null, paired: pairedNow } as const;
   const viewNow = { site: typeof window === "undefined" ? "" : window.location.origin, way, os: os ?? "other", phone, tab: { ...facts, tabId: "this-tab-0" }, tabAt: now, server };
   const steps = stepsOf(viewNow);
   const connected = isConnected(viewNow);
   const done = isDone(viewNow);
+  const pairing = isPairing(viewNow);
 
   // The AI read the status: a fresh look, and while a model is missing, a fresh check of what ComfyUI has.
   const afterPoke = useRef<() => void>(() => {});
@@ -303,7 +311,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
 
   // ---- The rows' own controls.
   const extras: Partial<Record<(typeof steps)[number]["id"], React.ReactNode>> = {};
-  if (way === "direct") {
+  if (tabWay && !pairing) {
     const s = probe.state.s;
     if (s === "start")
       extras.comfyui = (
@@ -340,15 +348,17 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
         </>
       );
     else if (s === "none") extras.comfyui = <NoComfy onLook={(port, host) => void probe.look({ ports: [{ port, host }] })} missed={probe.state.missed} notComfy={probe.state.notComfy} />;
-    if (found && saved === "link" && !switchOk && allowed)
-      extras.allowed = (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
-          <span>Use this computer instead of your web address?</span>
-          <Button size="sm" variant="secondary" className="h-8" onClick={() => setSwitchOk(true)}>
-            Switch
-          </Button>
-        </div>
-      );
+    const switchRow = found && saved === "link" && !switchOk && allowed && (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
+        <span>Use this computer instead of your web address?</span>
+        <Button size="sm" variant="secondary" className="h-8" onClick={() => setSwitchOk(true)}>
+          Switch
+        </Button>
+      </div>
+    );
+    if (way === "connect")
+      extras.connect = auto.error ? <p className="text-[12px] text-destructive">{auto.error}</p> : switchRow || (probe.guard !== "connect" && <ConnectNote />);
+    else if (switchRow) extras.allowed = switchRow;
     else if (probe.state.s === "needs-setting" && probe.install === "portable" && probe.port)
       extras.allowed = (
         <div className="space-y-1.5">
@@ -356,14 +366,26 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
           <GuardFix port={probe.port} install="portable" />
         </div>
       );
-    if (allowed && !guarded && !skipGuard)
+    if (way === "direct" && allowed && !guarded && !skipGuard)
       extras.guard = (
         <p className="text-[12px] text-muted-foreground">
           Your AI adds it next. It keeps other websites out of your ComfyUI.{" "}
           {allowedAt && now - allowedAt > GUARD_WAIT_MS && <Quiet onClick={() => setSkipGuard(true)}>Connect anyway</Quiet>}
         </p>
       );
-    if (auto.error) extras.guard = <p className="text-[12px] text-destructive">{auto.error}</p>;
+    if (way === "direct" && auto.error) extras.guard = <p className="text-[12px] text-destructive">{auto.error}</p>;
+  }
+  // Pairing (a phone, Safari, a page on plain http, a browser that blocks this computer): the code ComfyUI shows.
+  if (pairing && !connected) {
+    extras.connect = <ConnectNote pairing />;
+    extras.paired = (
+      <div className="space-y-2">
+        <p className="text-[12px] text-muted-foreground">
+          In ComfyUI on your computer, open <span className="text-foreground">Extensions → Connect to Fuobe</span> and press Connect. Type the code it shows here.
+        </p>
+        <PairWithCode />
+      </div>
+    );
   }
   if (way === "address" && !(saved === "link" && online && address.state !== "failed"))
     extras.address = (
@@ -439,13 +461,13 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
       </div>
 
       {/* What Fuobe picked for this browser, and the way to change it. */}
-      {!phone && (
+      {(!phone || ways.length > 1) && (
         <div className="space-y-2">
           <p className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
             <span>
               {way === "direct"
                 ? `For ${OS_NAME[os ?? "other"] || "your computer"} and ${BROWSER_LABEL[browser]}, with ComfyUI on this computer.`
-                : `For ComfyUI on your ${OS_NAME[os ?? "other"] ? `${OS_NAME[os ?? "other"]} ` : ""}computer, through a web address.`}
+                : `For ComfyUI on your ${OS_NAME[os ?? "other"] ? `${OS_NAME[os ?? "other"]} ` : ""}computer, ${way === "connect" ? "with Fuobe Connect" : "through a web address"}.`}
             </span>
             <Quiet onClick={() => setChanging((v) => !v)}>{changing ? "Done" : "Change"}</Quiet>
           </p>
@@ -467,23 +489,25 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
                   </button>
                 ))}
               </TabRow>
-              <Select value={os ?? undefined} onValueChange={(v) => setOsPicked(v as Os)}>
-                <SelectTrigger className="h-9 w-36" aria-label="Computer">
-                  <SelectValue placeholder="Computer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="windows">Windows</SelectItem>
-                  <SelectItem value="mac">Mac</SelectItem>
-                  <SelectItem value="linux">Linux</SelectItem>
-                </SelectContent>
-              </Select>
+              {!phone && (
+                <Select value={os ?? undefined} onValueChange={(v) => setOsPicked(v as Os)}>
+                  <SelectTrigger className="h-9 w-36" aria-label="Computer">
+                    <SelectValue placeholder="Computer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="windows">Windows</SelectItem>
+                    <SelectItem value="mac">Mac</SelectItem>
+                    <SelectItem value="linux">Linux</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
           {(changing || off.length > 0) && <p className="text-[12px] text-muted-foreground">{wayLine(way, support)}</p>}
         </div>
       )}
 
-      {phone && <PhoneSend site={site} os={os} onOs={setOsPicked} />}
+      {phone && <PhoneSend site={site} os={os} way={way} onOs={setOsPicked} />}
 
       {!session.mine && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2.5 text-[13px]">
@@ -529,7 +553,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
                   stuck={stuck}
                   next={nextOf(viewNow, now)}
                   onSelf={onBack}
-                  onAddress={way === "direct" ? () => setWay("address") : undefined}
+                  onAddress={way !== "address" ? () => setWay("address") : undefined}
                   code={session.code}
                 />
               }
@@ -550,11 +574,38 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: A
 
 /** One line about the way picked. */
 function wayLine(way: Way, support: string): string {
+  if (way === "connect")
+    return support === "safari"
+      ? "Safari can't reach ComfyUI from a website. With Fuobe Connect, you pair ComfyUI with your account by a code instead, and runs go on with this tab closed."
+      : support === "http"
+        ? "Your browser marks this page as not secure, so it can't reach ComfyUI from here. With Fuobe Connect, you pair ComfyUI with your account by a code instead."
+        : support === "phone"
+          ? "Install Fuobe Connect in ComfyUI on your computer, then approve the code it shows on this phone. Runs go on with no Fuobe tab open."
+          : "Install Fuobe Connect in ComfyUI once. Fuobe then uses ComfyUI from this tab, or from any browser and phone with a code.";
   if (support === "safari") return "Safari can't reach ComfyUI from a website. In Chrome, Edge or Firefox, Fuobe uses ComfyUI right from the tab, with nothing public.";
   if (support === "http") return "Your browser marks this page as not secure, so it can't reach ComfyUI from here. A web address works.";
   if (way === "address") return "ComfyUI gets a web address. It works from Safari and phones, and runs go on with this tab closed.";
-  if (way === "connect") return "Install Fuobe Connect once. It works in every browser and with this tab closed.";
   return "Fuobe uses ComfyUI right from this tab. Runs go while Fuobe is open here.";
+}
+
+/**
+ * Fuobe Connect isn't in ComfyUI yet: the AI installs it, with a link to its page. On this computer's tab, a ComfyUI on
+ * another computer can pair with a code instead (`pairing`: the setup pairs already).
+ */
+function ConnectNote({ pairing }: { pairing?: boolean }) {
+  const [code, setCode] = useState(false);
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] text-muted-foreground">
+        {pairing ? "Your AI installs it in ComfyUI on your computer, then restarts ComfyUI." : "Your AI installs it next, then restarts ComfyUI. Fuobe connects by itself once it's there."}{" "}
+        <a href={FUOBE_CONNECT.gitUrl} target="_blank" rel="noopener noreferrer" className="text-brand-text underline-offset-4 hover:underline">
+          Fuobe Connect on GitHub
+          <span className="sr-only"> (opens a new tab)</span>
+        </a>
+      </p>
+      {!pairing && (code ? <PairWithCode /> : <Quiet onClick={() => setCode(true)}>ComfyUI on another computer? Pair it with a code</Quiet>)}
+    </div>
+  );
 }
 
 /** Nothing answers: install it with the AI, or a port of its own (`installed`: ComfyUI ran here a while ago, so no install). */
@@ -995,42 +1046,24 @@ function AddressForm({
         Keep the address to yourself. Paste it here, not in your AI&apos;s chat.{" "}
         {!showToken && <Quiet onClick={() => setWithToken(true)}>Has a password or token?</Quiet>}
       </p>
-      {phone && <OnComputer site={site} host={host} />}
+      {phone && <OnComputer host={host} />}
     </div>
   );
 }
 
 /**
- * On a phone: the address is on the computer's clipboard, so it goes into Fuobe there. The link opens this box on the
- * computer, under the same code once the person signs in with the same account.
+ * On a phone: the address is on the computer's clipboard, so it goes into Fuobe there: the page that opens this box on
+ * the computer, under the same code once the person logs in with the same account. The button that sends that page is
+ * the one at the top of the panel (PhoneSend), never a second one here.
  */
-function OnComputer({ site, host }: { site: string; host: string }) {
+function OnComputer({ host }: { host: string }) {
   const path = aiSetupHref("address");
-  const link = `${site}${path}`;
-  const share = typeof navigator !== "undefined" && typeof navigator.share === "function";
   return (
-    <div className="space-y-1.5 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
-      <p>
-        The address goes on your computer&apos;s clipboard, not your phone&apos;s. On that computer, open <span className="break-all font-medium">{host}{path}</span> and sign in with this
-        account. This box is there, with the same setup code. Paste the address in it. If your phone shares the computer&apos;s clipboard, you can paste it here instead.
-      </p>
-      <Button
-        size="sm"
-        variant="secondary"
-        className="h-9"
-        onClick={async () => {
-          if (share) {
-            try {
-              await navigator.share({ title: "Paste my ComfyUI's web address in Fuobe", url: link });
-              return;
-            } catch {}
-          }
-          await copyWithToast(link, "Link copied");
-        }}
-      >
-        <Send /> {share ? "Send this link to my computer" : "Copy this link for my computer"}
-      </Button>
-    </div>
+    <p className="rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
+      The address goes on your computer&apos;s clipboard, not your phone&apos;s. On that computer, open <span className="break-all font-medium">{host}{path}</span> and log in with
+      this account, or press {sendLabel(canShare())} at the top. This box is there, with the same setup code. Paste the address in it. If your phone shares the
+      computer&apos;s clipboard, you can paste it here instead.
+    </p>
   );
 }
 
@@ -1057,29 +1090,45 @@ function ModelDownload({ model, gbTenths, os, onCheck, checking }: { model: Firs
   );
 }
 
-/** On a phone: the steps run on the computer. Send this page there, or use an AI app here with the computer's system picked. */
-function PhoneSend({ site, os, onOs }: { site: string; os: Os | null; onOs: (os: Os) => void }) {
-  const link = `${site}/connect?setup=ai`;
-  const share = typeof navigator !== "undefined" && typeof navigator.share === "function";
+/** Can this browser hand a link to another app (the share sheet)? Else the link is copied. */
+const canShare = () => typeof navigator !== "undefined" && typeof navigator.share === "function";
+/** The name of the phone's one button that sends the setup to the computer. */
+const sendLabel = (share: boolean) => (share ? "Send to my computer" : "Copy link for my computer");
+
+/**
+ * On a phone: the steps run on the computer. One button sends this setup there on the way picked here (a web address
+ * opens at the box for it, Fuobe Connect at its checks), under the same code once the person logs in with this account.
+ * Or an AI app here, with the computer's system picked.
+ */
+function PhoneSend({ site, os, way, onOs }: { site: string; os: Os | null; way: Way; onOs: (os: Os) => void }) {
+  const link = `${site}${aiSetupHref(way)}`;
+  const share = canShare();
   return (
     <div className="space-y-3">
-      <Button
-        className="h-11 w-full"
-        onClick={async () => {
-          if (share) {
-            try {
-              await navigator.share({ title: "Set up Fuobe on my computer", url: link });
-              return;
-            } catch {}
-          }
-          await copyWithToast(link, "Link copied");
-        }}
-      >
-        <Send /> {share ? "Send to my computer" : "Copy link for my computer"}
-      </Button>
+      <div className="space-y-1.5">
+        <Button
+          className="h-11 w-full"
+          onClick={async () => {
+            if (share) {
+              try {
+                await navigator.share({ title: "Set up Fuobe on my computer", url: link });
+                return;
+              } catch {}
+            }
+            await copyWithToast(link, "Link copied");
+          }}
+        >
+          <Send /> {sendLabel(share)}
+        </Button>
+        <p className="text-[12px] text-muted-foreground">It opens this setup on your computer. Log in there with this account.</p>
+      </div>
       <div className="space-y-1.5">
         <p className="text-[12px] text-muted-foreground">
-          Or start with an AI app on this phone. The commands run on your computer, and at the end you paste an address into Fuobe on that computer, signed in to this account. Which computer runs ComfyUI?
+          Or start with an AI app on this phone. The commands run on your computer.{" "}
+          {way === "connect"
+            ? "At the end, ComfyUI shows a code, and you type it here."
+            : "At the end, you paste an address into Fuobe on that computer, signed in to this account."}{" "}
+          Which computer runs ComfyUI?
         </p>
         <TabRow role="tablist" aria-label="Computer" fade={false} className="w-fit">
           {(["windows", "mac", "linux"] as Os[]).map((o) => (

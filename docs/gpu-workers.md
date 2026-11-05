@@ -2,8 +2,9 @@
 
 A Fuobe studio can run its ComfyUI jobs on GPUs in other places:
 
-- **Fuobe Connect** connects a person's own ComfyUI to their account. Each person installs it once in ComfyUI. Their
-  runs then go to their own GPU.
+- **Fuobe Connect** ([ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect)) connects a
+  person's own ComfyUI to their account. It is optional. Each person installs it once in ComfyUI. Their runs then go to
+  their own GPU.
 - **Workers** are the owner's GPUs on other PCs, for example a team's machines or a spare PC. Each PC runs
   `fuobe worker`. The worker takes the studio's ComfyUI jobs and runs them on its own ComfyUI.
 
@@ -12,9 +13,29 @@ the studio over HTTPS, and neither opens a port. With no worker added and nothin
 
 ## Fuobe Connect (a person's own ComfyUI)
 
-Fuobe Connect is a ComfyUI custom node pack. Its source is in `integrations/fuobe-connect`, and people install it
-from `https://github.com/workingprototype/ComfyUI-Fuobe-Connect` or from ComfyUI-Manager (`Fuobe Connect`). Its own
-README says how to install it and exactly what a trusted studio can do. It adds no nodes.
+Fuobe Connect is an optional ComfyUI custom node pack. Its source is in `integrations/fuobe-connect`, and the
+[ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect) repository is published from that
+folder. People install it from that repository: with `git clone` in ComfyUI's `custom_nodes` folder, or with
+ComfyUI-Manager's **Install via Git URL**. ComfyUI-Manager's search (`Fuobe Connect`) finds the versions that the
+[Comfy Registry](https://registry.comfy.org) lists. Its own README says how to install it and exactly what a trusted
+studio can do. It adds no nodes.
+
+Fuobe Connect is one of three ways to connect a person's own ComfyUI. None of them is required: a fal.ai or Replicate
+key also works, and so do the studio's own GPUs where it offers them.
+
+1. Fuobe's setting with Fuobe's guard, with no install. ComfyUI starts with
+   `--enable-cors-header <the studio's address>`, and `fuobe_guard.py` in `custom_nodes` keeps every other website
+   out. It works in Chrome, Edge and Firefox on the computer that runs ComfyUI.
+2. Fuobe Connect. The person installs it once. It works from any browser, Safari and phones included, and it pairs
+   with the person's account for a computer with no screen.
+3. A web address. A cloudflared quick tunnel gives ComfyUI an address, with no Cloudflare account. The address changes
+   each time the tunnel starts.
+
+While `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, **Connect your GPU** and Settings → Your GPU
+offer Fuobe Connect as the one step, with the setting under Advanced. **Set it up with my AI** offers it first, and
+its steps (`/api/setup/guide/connect/<windows|mac|linux>`) install it for ComfyUI Desktop, the portable build and a
+git install. Fuobe Connect trusts `https://fuobe.com` by default. A self-hosted studio is added in ComfyUI under
+**Settings → Fuobe Connect**, or with `FUOBE_CONNECT_ORIGINS`.
 
 **Direct mode.** ComfyUI turns away every other website. Fuobe Connect lets in only the studios that you trust. Each
 studio is an exact https origin, and the default is `https://fuobe.com` with `https://www.fuobe.com`. You can name your

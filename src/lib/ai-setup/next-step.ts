@@ -3,11 +3,12 @@
  * shows it. The status (GET /api/setup/<code>) and the panel's "Stuck?" say the same. Every word comes from the tables
  * here; only fixed words, whole numbers and the studio's own address go into them. ASCII only. Pure.
  */
+import { FUOBE_CONNECT, trustedByDefault } from "@/lib/fuobe-connect";
 import { COMFY_PORTS } from "@/lib/local-comfy";
 import { FIRST_MODEL_NAME } from "./first-picture";
 import type { AddressCause, InstallKind, SetupView } from "./facts";
 import { RESTART_WAIT_MIN } from "./restart";
-import { isConnected, isDone } from "./steps";
+import { isConnected, isDone, isPairing } from "./steps";
 import { aiSetupHref, type BrowserName, type Os, type Way } from "./ways";
 
 export interface NextStep {
@@ -90,6 +91,28 @@ const ON_COMPUTER_HOW = [
   "The person pastes the address there (it is on that computer's clipboard) and presses Connect.",
 ];
 
+const curlOf = (os: Os) => (os === "windows" ? "curl.exe" : "curl");
+
+/** A studio Fuobe Connect doesn't trust by itself (a self-hosted one): the person adds its address in ComfyUI. */
+const ADD_STUDIO = "Fuobe Connect trusts https://fuobe.com by itself, not this studio. In ComfyUI, the person opens Settings, then Fuobe Connect, and enters {site} (guide Step 2).";
+
+/** Fuobe Connect isn't in ComfyUI yet: where it comes from. */
+const installHow = (site: string): string[] => [
+  `ComfyUI-Manager's search may not list Fuobe Connect yet. Clone ${FUOBE_CONNECT.gitUrl} into custom_nodes, or use the download in guide Step 2.`,
+  ...(trustedByDefault(site) ? [] : [ADD_STUDIO]),
+];
+
+/** Pairing: the code that ComfyUI shows, approved in Fuobe by the person. */
+function pairHow(v: SetupView): string[] {
+  const own = !trustedByDefault(v.site);
+  return [
+    "In ComfyUI on the computer, the person opens Extensions (in ComfyUI's top menu), then Connect to Fuobe, and presses the Connect button. ComfyUI shows a code like ABCD-EFGH.",
+    `The person types that code into Fuobe${v.phone ? " on the phone" : ""}, in the box The code ComfyUI shows, and presses Approve. Or at {site}/connect?pair=1, signed in to the same account.`,
+    `On a computer with no screen, start ComfyUI with the environment variable FUOBE_CONNECT_PAIR=1${own ? " (and FUOBE_CONNECT_SITE={site})" : ""}. The code is then in ComfyUI's window or its log.`,
+    ...(own ? [ADD_STUDIO] : []),
+  ];
+}
+
 const gb = (tenths: number) => `${(tenths / 10).toFixed(tenths >= 100 ? 0 : 1)} GB`;
 
 /** The status words' site: the studio's own address (never a visitor's word). */
@@ -125,16 +148,32 @@ export function nextOf(v: SetupView, now: number): NextStep {
 
   // The Fuobe tab: its checks need it open. A web address that Fuobe doesn't have yet needs no tab until it is pasted
   // (a phone's tab sleeps while the person reads their AI): the next step is the tunnel, and the page to paste it in.
+  // Pairing needs no tab either until the code is approved: the server sees the paired ComfyUI itself.
   const quiet = !t || now - v.tabAt > TAB_QUIET_MS;
-  if (quiet && !(way === "address" && v.server.gpu !== "link")) {
+  const pairs = isPairing(v);
+  if (quiet && !(way === "address" && v.server.gpu !== "link") && !pairs) {
     if (t && !t.visible)
       return say("wake-fuobe", "The Fuobe tab is asleep in the background, so Fuobe can't check. Ask the person to click on the Fuobe tab once, then come back to you.");
     return way === "address"
       ? say("open-fuobe", `The Fuobe page isn't open. Ask the person to open ${ADDRESS_PAGE} in a browser on the computer that runs ComfyUI, signed in to the same account. The setup code stays the same.`)
       : say(
           "open-fuobe",
-          `The Fuobe page isn't open. Ask the person to open {site}${aiSetupHref()} in Chrome, Edge or Firefox on the computer that runs ComfyUI, signed in to the same account. The setup code stays the same.`,
+          `The Fuobe page isn't open. Ask the person to open {site}${aiSetupHref(way)} in ${way === "connect" ? "a browser" : "Chrome, Edge or Firefox"} on the computer that runs ComfyUI, signed in to the same account. The setup code stays the same.`,
         );
+  }
+  if (pairs) {
+    if (isDone(v))
+      return say("done", "Done. Fuobe uses this GPU now. Nothing else to do.", [
+        "Runs go to the paired ComfyUI while it runs, with no Fuobe tab open.",
+        `If ComfyUI has no picture model yet, guide Step ${MODEL_STEP.connect} lists one for each size of GPU. Ask the person first: the files are big.`,
+      ]);
+    const blocked = t?.browser === "blocked" ? [`Or, to connect from this browser instead: ${BLOCKED_HOW[t.browserName ?? "other"]}`] : [];
+    return say(
+      "pair",
+      "Fuobe Connect pairs ComfyUI with the person's Fuobe account. If it isn't in ComfyUI yet, install it (guide Step 2) and restart ComfyUI. Then pair it (guide Step 3).",
+      [...pairHow(v), ...blocked],
+      2,
+    );
   }
   if (!t || quiet) return startTunnel(v, say, false);
 
@@ -145,7 +184,9 @@ export function nextOf(v: SetupView, now: number): NextStep {
             "Keep cloudflared running while runs go. Each time cloudflared starts again, it makes a new address: paste the new one in Fuobe.",
             `Tell the person that closing the cloudflared window stops the address, and that anyone with the address can use ComfyUI while it runs. When they are done for the day, stop cloudflared (guide Step ${STOP_STEP}).`,
           ]
-        : ["Keep a Fuobe tab open on this computer while runs go."];
+        : way === "connect"
+          ? ["Keep a Fuobe tab open on this computer while runs go.", "For runs with no Fuobe tab open, the person can also pair this ComfyUI with a code (guide Step 3)."]
+          : ["Keep a Fuobe tab open on this computer while runs go."];
     return say("done", "Done. Fuobe uses this GPU now. Nothing else to do.", keep);
   }
 
@@ -167,7 +208,7 @@ export function nextOf(v: SetupView, now: number): NextStep {
         "allow-browser",
         "Fuobe hasn't looked for ComfyUI on this computer yet. If ComfyUI runs now, ask the person to press Let Fuobe look in Fuobe, and Allow if the browser asks. If ComfyUI isn't installed yet, start with guide Step 0, and ask for the press once it runs.",
         [],
-        5,
+        way === "connect" ? 3 : 5,
       );
     if (t.browser === "blocked")
       return say("unblock-browser", "The browser blocks Fuobe from reaching apps on this computer.", [BLOCKED_HOW[t.browserName ?? "other"], "Or the person switches to A web address in Fuobe."], 5);
@@ -197,7 +238,19 @@ export function nextOf(v: SetupView, now: number): NextStep {
         ["If the person closed ComfyUI, ask them to start it again.", `Fuobe says so if ComfyUI isn't back after ${RESTART_WAIT_MIN} minutes.`],
       );
     if (way === "connect") {
-      if (t.guard !== "connect") return say("install-connect", "Fuobe Connect isn't in ComfyUI yet. Install it (guide Step 2), then restart ComfyUI.", [], 2);
+      if (t.guard !== "connect" && t.comfy === "unreadable" && t.restarted)
+        return say(
+          "connect-not-loaded",
+          "ComfyUI restarted, but Fuobe still can't use it. ComfyUI didn't load Fuobe Connect.",
+          [
+            `The folder ${FUOBE_CONNECT.folder} in custom_nodes must hold __init__.py itself, not in a second folder inside it.`,
+            `${curlOf(v.os)} -s http://127.0.0.1:${t.port ?? 8188}/fuobe/connect answers {"connect": 1, ...} once ComfyUI loaded it. If it answers 404, read the last lines in ComfyUI's window with the person: they name each add-on that didn't load, and why.`,
+            ...(trustedByDefault(site) ? [] : [ADD_STUDIO]),
+          ],
+          2,
+        );
+      if (t.guard !== "connect") return say("install-connect", "Fuobe Connect isn't in ComfyUI yet. Install it (guide Step 2), then restart ComfyUI.", installHow(site), 2);
+      if (t.listen) return say("remove-listen", "ComfyUI listens on the network (--listen). Fuobe doesn't need that, and it lets other computers use ComfyUI. Restart ComfyUI without --listen.");
       return say("connecting", "Fuobe sees ComfyUI and is connecting. Wait a few seconds, then check again.");
     }
     if (t.comfy === "unreadable") {

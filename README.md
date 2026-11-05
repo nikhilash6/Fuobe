@@ -172,6 +172,24 @@ Choose **Open source only** and Fuobe runs every generation on open weights thro
 
 [Set up the open-source engine →](docs/SELF-HOSTING.md#the-open-source-engine-comfyui) · [ComfyUI scripts](scripts/comfy/README.md)
 
+### Your own ComfyUI with fuobe.com
+
+An account on [fuobe.com](https://fuobe.com) can run its jobs on the ComfyUI on its own computer. Open **Connect your GPU**, or **Settings → Your GPU**. You can connect ComfyUI in one of three ways:
+
+1. No install. Start ComfyUI with `--enable-cors-header https://fuobe.com` and add Fuobe's guard, a small file in ComfyUI's `custom_nodes` folder. The guard keeps every other website out. Fuobe gives you both. This works in Chrome, Edge and Firefox on the computer that runs ComfyUI.
+2. [Fuobe Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect), an optional ComfyUI add-on. Install it once and restart ComfyUI. It needs no start setting and no other file. It works from any browser, Safari and phones included. A computer with no screen can pair with your account by a code, and your runs then go to it with no Fuobe tab open.
+3. A web address. A cloudflared quick tunnel gives ComfyUI a web address, with no Cloudflare account. The address changes each time the tunnel starts.
+
+You do not need any of them. Your own fal.ai or Replicate key also works, and so do the studio's own GPUs where it offers them. **Set it up with my AI**, on the same screen, gives your own AI the steps for each way.
+
+To install Fuobe Connect, run this in ComfyUI's `custom_nodes` folder, then restart ComfyUI:
+
+```bash
+git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect
+```
+
+You can also enter the same address in ComfyUI-Manager's **Install via Git URL**, or search for `Fuobe Connect` in ComfyUI-Manager once it lists the pack. Fuobe Connect trusts `https://fuobe.com` by default. If you run your own Fuobe studio, add its address in ComfyUI under **Settings → Fuobe Connect**. The source of Fuobe Connect is [`integrations/fuobe-connect`](integrations/fuobe-connect) in this repository, and the [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect) repository is published from it. [How it works →](docs/gpu-workers.md#fuobe-connect-a-persons-own-comfyui)
+
 ## Local models and cloud keys
 
 | For | Works with | Set it in |

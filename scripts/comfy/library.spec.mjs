@@ -5663,8 +5663,9 @@ export const SPEC = [
       sampler: [b('88:6', 'sampler_name')], cropMode: [b('88:110', 'mode')], minOpacity: [b('88:111', 'min_opacity')], maxScale: [b('88:111', 'max_scale')],
       seed: [b('88:6', 'seed'), b('88:55', 'seed')], splatFormat: [b('92', 'format')], orbitFrames: [b('75', 'frames')],
     },
-    // The input-view still is the card's poster ("preview": the picture shown for the result); the count of Gaussians the
-    // prune kept is the pack's own report of the run (meta.kept on the splat).
+    // The input-view still ("preview": what the model saw) stays one of the results, but the card's still is the orbit's
+    // (the predicted camera can miss a product seen side on); the count of Gaussians the prune kept is the pack's own
+    // report of the run (meta.kept on the splat).
     outputs: [
       { node: '51', kind: 'model3d', role: 'splat' },
       { node: '42', kind: 'video', role: 'turntable' },
@@ -5685,7 +5686,7 @@ export const SPEC = [
       'IdolPruneSplat 88:111 after the decoder drops the near-transparent Gaussians (minOpacity 0.05; maxScale 0 = off, 0.05 = "Trim spikes", the needle-shaped ones at the silhouette): ' +
       'the saved file and the orbit video both get the pruned splat. Its count of the Gaussians kept goes to a PreviewAny (94, role report; the first item of a batch), which the result card shows. ' +
       'IdolCamera 88:112 reads the camera Idol predicted from the KSampler\'s latent; RenderSplat 88:113 renders the pruned splat from it (1 frame, 1024 px, black) and SaveImage 93 keeps it ' +
-      '(role preview: the card\'s poster, what the model saw). The pack has no Python dependencies; ComfyUI v0.23.0 or later (Fuobe runs 0.41.0). ' +
+      '(role preview: what the model saw; that camera can miss a product seen side on, so the result card shows the orbit video\'s first frame instead). The pack has no Python dependencies; ComfyUI v0.23.0 or later (Fuobe runs 0.41.0). ' +
       'Same weights, sampler presets and VRAM listing as image-to-splat-idol.',
   },
   {

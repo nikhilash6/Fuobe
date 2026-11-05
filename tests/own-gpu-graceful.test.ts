@@ -37,6 +37,7 @@ const generationRoute = await import("@/app/api/generations/[id]/route");
 const smallerRoute = await import("@/app/api/generations/[id]/smaller/route");
 const { asAccount, CHAINED_RUN, cancelGeneration, createGenerations, getGeneration, OWN_QUEUE, QUIET_MS, SELF_HEAL, STALE_SUBMIT } = await import("@/server/generations");
 const { ownRunNote } = await import("@/server/run-events");
+const { removeAccountKey, saveAccountKey } = await import("@/server/account-keys");
 const { cleanGpuAddress, checkGpuAddress, visitorStatus } = await import("@/server/account-gpu");
 const { comfyProvider, onOwnGpu, queuePlace } = await import("@/server/providers/comfyui");
 const { db } = await import("@/server/db");
@@ -998,6 +999,54 @@ describe("a wait survives a restart or a deploy", () => {
     } finally {
       shut.draining = false;
       STALE_SUBMIT.ms = 2 * 60_000;
+    }
+  });
+
+  it("so is a step of a longer run that waited: planned for another provider after a restart, it stops, and nothing is sent", async () => {
+    fake.opts.output = "both";
+    const gone = () => ({ by: "gone", until: Date.now() - 1 });
+    const waited = (words: string) => ({ since: Date.now() - 60_000, deadline: Date.now() + 60_000, firstSeen: {}, tries: 3, next: 0, index: 0, words });
+    /** A later step of the run `first` on the account's keys: a still from its frame. */
+    const onKeys = (first: string) => asAccount(a, () => createGenerations({ feature: "image", modelId: "nano-banana-pro", engine: "cloud", prompt: "the same look at night" }, { dependsOn: first }))[0].id;
+    try {
+      const first = await startRun();
+      expect((await settle(first))?.status).toBe("succeeded");
+      // Made for its fal.ai key (it has a Replicate key too), which it waited for on an instance that is gone. Meanwhile
+      // the account removed that key: the next instance would plan it on Replicate, which nobody pressed Run for.
+      saveAccountKey(a, "fal", "acct-fal-graceful");
+      saveAccountKey(a, "replicate", "acct-rep-graceful");
+      const second = onKeys(first);
+      expect(getGeneration(second)?.provider).toBe("fal");
+      setPending(second, { heal: waited("Waiting for fal.ai"), lease: gone() });
+      removeAccountKey(a, "fal");
+      fake.log.length = 0;
+      fetched.length = 0;
+      const g = await settle(second);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toBe("This run stopped because your keys changed while it waited. Press Retry.");
+      expect(fetched.filter((u) => /fal\.(ai|run|media)|replicate\.com/.test(u))).toEqual([]);
+      expect(getGeneration(second)?.provider).toBe("fal");
+      expect(ownRunNote(second)).toMatchObject({ cause: "keys-changed", stage: "chain" });
+      // One made for its GPU (the row says so), planned on its key now that the account disconnected that GPU: it stops,
+      // saying so, and its key is never used.
+      saveAccountKey(a, "fal", "acct-fal-graceful");
+      const third = onKeys(first);
+      db().prepare("UPDATE generations SET provider = 'comfyui' WHERE id = ?").run(third);
+      setPending(third, { heal: { ...waited("Waiting for your GPU"), firstSeen: { "gpu-off": Date.now() - 60_000 } }, lease: gone() });
+      auth.setAccountGpu(a, null);
+      fake.log.length = 0;
+      fetched.length = 0;
+      const h = await settle(third);
+      expect(h?.status).toBe("failed");
+      expect(h?.error).toBe("You disconnected your GPU, so this run stopped. Connect it again, then press Retry.");
+      expect(h?.trouble?.actions[0]).toMatchObject({ kind: "gpu-settings", label: "Connect your GPU" });
+      expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
+      expect(fetched.filter((u) => /fal\.(ai|run|media)|replicate\.com/.test(u))).toEqual([]);
+      expect(ownRunNote(third)).toMatchObject({ cause: "gpu-moved", stage: "chain" });
+    } finally {
+      removeAccountKey(a, "fal");
+      removeAccountKey(a, "replicate");
+      fake.opts.output = undefined;
     }
   });
 

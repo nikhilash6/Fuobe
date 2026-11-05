@@ -1927,6 +1927,14 @@ async function advanceDependents(): Promise<void> {
       const mode = chainMode(prepared, deps as Pick<Row, "provider">[], original);
       if (mode.error) throw new Error(mode.error);
       const p = mode.forceDemo ? { ...prepared, demo: true, providerId: "mock" as const, cost: 0 } : prepared;
+      // A step that waited, planned for another provider now (its GPU disconnected or moved, its keys changed): its wait
+      // was for the one it was made for, and nobody asked for the other, so it stops as a waiting run taken over does.
+      const own = ownAccountOf(stored);
+      if (heal && own && p.providerId !== r.provider) {
+        stopReplanned(r.id, r.provider, own, p, "chain");
+        dropUnused(allIds);
+        continue;
+      }
       // Its wait goes on with what is left of it (its tries and its time), where it still goes; its tile keeps its words.
       const resume = heal && !mode.forceDemo && p.providerId === r.provider ? heal : undefined;
       update(r.id, {
@@ -3325,19 +3333,29 @@ function takeOver(r: Pick<Row, "id" | "provider" | "model_id" | "op" | "request_
   // Planned for another provider now (its GPU disconnected, another key): its polls would ask the provider it was made
   // for, so it stops, as a run whose GPU changed while it waited does.
   if (p.providerId !== r.provider) {
-    if (r.provider === "comfyui") {
-      const gpu = accountGpu(account);
-      const end = diagnoseGpuJob({ kind: gpu ? "moved" : "disconnected" }, { kind: "link", url: gpuLink(gpu)?.url ?? "" });
-      failRun(r.id, new Error("moved"), end, account, { provider: r.provider, model: p.plan.model.id, op: p.plan.op, stage: "submit" });
-    } else if (updateLive(r.id, { status: "failed", error: "This run stopped because your keys changed while it waited. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
-      ownFailed(r.id, account, { provider: r.provider, model: p.plan.model.id, op: p.plan.op, stage: "submit" }, "keys-changed");
-    }
+    stopReplanned(r.id, r.provider, account, p, "submit");
     handOverEnds(r.id);
     return true;
   }
   submitting().add(r.id);
   void submit(r.id, p.route, p.providerId, p.plan, p.req, typeof h.index === "number" ? h.index : 0, h);
   return true;
+}
+
+/**
+ * A run that waited for its own GPU or key, planned again after a restart or a deploy (takeOver, or advanceDependents for
+ * a step of a longer run), that would now go to another provider than the one it waited for: it stops in plain words and
+ * is never sent there, since nobody pressed Run there. `was`: the provider it was made for.
+ */
+function stopReplanned(id: string, was: string, account: string, p: { plan: { model: { id: string }; op: string } }, stage: "submit" | "chain"): void {
+  const facts: RunFacts = { provider: was, model: p.plan.model.id, op: p.plan.op, stage };
+  if (was === "comfyui") {
+    const gpu = accountGpu(account);
+    const end = diagnoseGpuJob({ kind: gpu ? "moved" : "disconnected" }, { kind: "link", url: gpuLink(gpu)?.url ?? "" });
+    failRun(id, new Error("moved"), end, account, facts);
+  } else if (updateLive(id, { status: "failed", error: "This run stopped because your keys changed while it waited. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
+    ownFailed(id, account, facts, "keys-changed");
+  }
 }
 
 async function pollGuarded(r: Row): Promise<void> {

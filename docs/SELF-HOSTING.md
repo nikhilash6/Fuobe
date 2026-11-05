@@ -176,9 +176,11 @@ On Windows or ComfyUI Desktop, where the script doesn't run, clone each new pack
 
 To share your GPUs with your team or your other machines, add **workers** in **Settings → Workers**. Each GPU's PC runs
 `fuobe worker`, which takes the studio's ComfyUI jobs over HTTPS and runs them on its own ComfyUI. The PC opens no
-port. A person who connects their own ComfyUI from the browser needs only **Fuobe Connect**, a ComfyUI custom node
-pack in `integrations/fuobe-connect`. They do not need a start flag. See [gpu-workers.md](gpu-workers.md). With no
-worker added, nothing changes.
+port. A person can connect their own ComfyUI from the browser with **Fuobe Connect**, an optional ComfyUI custom node
+pack ([ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect), published from
+`integrations/fuobe-connect`). They do not need a start flag. Fuobe Connect trusts `https://fuobe.com` by default, so
+on your own studio each person adds the studio's address in ComfyUI under **Settings → Fuobe Connect**. See
+[gpu-workers.md](gpu-workers.md). With no worker added, nothing changes.
 
 To check a ComfyUI connection end to end without downloading any models:
 
