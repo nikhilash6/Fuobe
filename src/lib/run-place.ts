@@ -82,6 +82,13 @@ const list = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") 
 /** Unique names, in order. */
 const uniq = (names: readonly string[] | undefined) => [...new Set((names ?? []).filter(Boolean))];
 
+/**
+ * A tool that runs for the studio's owner only, as anyone else reads it while hosted runs are on: what is coming, and the
+ * studios to use now (never "Not available here").
+ */
+const OWNER_ONLY_HOSTED: Omit<RunPlace, "tip"> = { where: "unavailable", label: "Coming soon", price: "", title: "Coming soon", send: "" };
+export const ownerOnlyTip = (tool: string): string => `${tool} isn't open to accounts yet. Try the Image, Video or Audio studio.`;
+
 /** The price's words (the studio composer's costLabel, without the place: the chip says that). */
 export function placePrice(s: { demo?: boolean; costUsd?: number | null; open: boolean }, format: (usd: number) => string): string {
   if (s.demo) return "Placeholder · free";
@@ -105,6 +112,8 @@ export function runPlace(input: RunPlaceInput): RunPlace {
     };
   }
   if (input.ownerOnly && audience !== "owner") {
+    // Hosted runs on: said as what is coming, with the way on now (no visitor's own GPU or key runs it yet, so no setup).
+    if (input.hosted) return { ...OWNER_ONLY_HOSTED, tip: ownerOnlyTip(input.ownerOnly) };
     return {
       where: "unavailable",
       label: "Not available here",

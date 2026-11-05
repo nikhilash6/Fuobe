@@ -51,7 +51,7 @@ const { loadManifest } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
-const { CONNECT_GPU_HEADER, OWN_GPU_TOOL_MESSAGE, PLACE_ASK_HEADER } = await import("@/lib/guest-access");
+const { CONNECT_GPU_HEADER, PLACE_ASK_HEADER } = await import("@/lib/guest-access");
 const hosted = await import("@/server/hosted");
 const { getGeneration } = await import("@/server/generations");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
@@ -482,10 +482,10 @@ describe("where a run goes", () => {
     const r = await post(IMAGE, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.items![0].place).toBeUndefined();
-    // Named, it is a refusal (the person asked for that place).
+    // Named, it is its label, which opens the setup that runs it (the person asked for that place).
     const named = await post({ ...IMAGE, place: "pool", ...SHOWN }, a.cookie);
     expect(named.status).toBe(403);
-    expect(named.body.code).toBe("not-offered");
+    expect(named.body.code).toBe("connect-gpu");
   });
 
   it("with this install's GPUs first, the price check of a run that names no place answers for where it really goes", async () => {
@@ -661,12 +661,12 @@ describe("where a run goes", () => {
     const a = account();
     const r = await post({ ...IMAGE, ...SHOWN }, a.cookie);
     expect(r.status).toBe(403);
-    expect(r.body.code).toBe("not-offered");
+    expect(r.body.code).toBe("connect-gpu");
     expect(hostedRun.kindAllowed({ kinds: { image: false } }, "video")).toBe(true);
     expect(hostedRun.kindAllowed({}, "model3d")).toBe(true);
   });
 
-  it("3D isn't offered on this install's GPUs yet, even with kinds.model3d on: an account with no GPU of its own is told the tool isn't available here", async () => {
+  it("3D no worker finishes, even with kinds.model3d on: an account with no GPU of its own reads its label, and the answer opens Connect your GPU", async () => {
     withBilling({ kinds: { model3d: true }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
     const a = account();
     const uploadsRoute = await import("@/app/api/uploads/route");
@@ -679,9 +679,9 @@ describe("where a run goes", () => {
     const holds = fake.holds.size;
     const r = await post({ feature: "image-to-3d", modelId: "oss-pixal3d", op: "image-to-3d", inputs: { images: [url] }, ...SHOWN }, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(403);
-    expect(r.body.code).toBe("own-gpu-tool");
-    expect(r.body.error).toBe(OWN_GPU_TOOL_MESSAGE);
-    expect(r.headers.get(CONNECT_GPU_HEADER)).toBeNull();
+    expect(r.body.code).toBe("connect-gpu");
+    expect(r.body.error).toMatch(/^Runs on your own GPU · \d+ GB$/);
+    expect(r.headers.get(CONNECT_GPU_HEADER)).toBe("1");
     expect(poolRuns(a.id)).toBe(0);
     expect(fake.holds.size).toBe(holds);
   });
@@ -852,7 +852,7 @@ describe("a run's price facts", () => {
     const holds = fake.holds.size;
     const r = await post(film, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(403);
-    expect(r.body.code).toBe("not-offered");
+    expect(r.body.code).toBe("connect-gpu");
     expect(poolRuns(a.id)).toBe(0);
     expect(fake.holds.size).toBe(holds);
     // Its price check says the same before Run: not offered here, so Run stays off.
@@ -880,7 +880,6 @@ describe("the price check before Run and the run itself", async () => {
   const { hostedGuestWords, hostedWords } = await import("@/server/hosted");
   const HOSTED_GUEST_WORDS = hostedGuestWords();
   const HOSTED_WORDS = hostedWords(placeOf(null));
-  const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
   /** A Fuobe DoP effect: its start frame is made first on another model, then animated. */
   const EFFECT = { feature: "video", presetId: "effect-acid", modelId: "fuobe-dop", op: "i2v", prompt: "a dancer", inputs: { images: [PLACEHOLDER.image] } };
   const LORAS = { ...IMAGE, loras: [{ file: "x.safetensors", url: "https://huggingface.co/x/x.safetensors" }] };
@@ -896,7 +895,7 @@ describe("the price check before Run and the run itself", async () => {
       { name: "extra LoRAs", req: LORAS, refused: HOSTED_WORDS.loras },
       { name: "a kind of file the policy keeps off", req: EFFECT, policy: { uploads: { image: false, video: false, audio: false } }, refused: HOSTED_WORDS.inputs },
       { name: "a chain whose later step the policy denies", req: EFFECT, policy: { pool: { deny: ["fuobe-mixed-media"] } }, refused: HOSTED_WORDS.notOffered },
-      { name: "a 3D model", req: THREE_D, refused: OWN_GPU_TOOL_MESSAGE },
+      { name: "a 3D model", req: THREE_D, refused: "3d" },
     ];
     const a = account();
     const acct = auth.accountById(a.id)!;
@@ -911,8 +910,45 @@ describe("the price check before Run and the run itself", async () => {
         continue;
       }
       expect(run.kind, c.name).toBe("refuse");
-      expect(run.kind === "refuse" && run.refusal.body.error, c.name).toBe(c.refused);
-      expect(check?.quote, c.name).toMatchObject({ allowed: false, text: c.refused });
+      const words = c.refused === "3d" ? expect.stringMatching(/^Runs on your own GPU · \d+ GB$/) : c.refused;
+      expect(run.kind === "refuse" && run.refusal.body.error, c.name).toEqual(words);
+      expect(check?.quote, c.name).toMatchObject({ allowed: false, text: words, ownSetup: { need: "gpu" } });
+    }
+  });
+
+  it("a size bigger than every GPU here makes is its label before Run, the press opens Connect your GPU, and an own GPU runs it at once", async () => {
+    withBilling({ limits: NO_LIMITS });
+    const a = account();
+    const acct = auth.accountById(a.id)!;
+    const req = { ...IMAGE, account: a.id } as never;
+    expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
+    // The only GPU here makes pictures up to a tenth of a megapixel (its PC's ceiling).
+    db().prepare("UPDATE relay_workers SET ceiling_json = ? WHERE id = ?").run(JSON.stringify({ maxMegapixels: 0.1 }), worker.id);
+    try {
+      const check = await hostedRun.poolQuote(acct, req, undefined);
+      expect(check?.quote).toMatchObject({ allowed: false, code: "not-offered", text: HOSTED_WORDS.size, ownSetup: { need: "gpu" } });
+      expect((check?.quote as { sub?: string }).sub).toBe("Up to 0.1 megapixels on our GPUs. Pick a smaller size, or run it on your own GPU.");
+      const run = await hostedRun.decidePlace(acct, req, undefined);
+      expect(run.kind).toBe("refuse");
+      if (run.kind === "refuse") {
+        expect(run.refusal.body).toMatchObject({ code: "connect-gpu", error: "This size runs on your own GPU", ownSetup: { need: "gpu" } });
+        expect(run.refusal.headers[CONNECT_GPU_HEADER]).toBe("1");
+      }
+      // Pressed anyway: nothing is held or made.
+      const holds = fake.holds.size;
+      const r = await post({ ...IMAGE, place: "pool", ...SHOWN }, a.cookie);
+      expect(r.status, JSON.stringify(r.body)).toBe(403);
+      expect(r.body.code).toBe("connect-gpu");
+      expect(poolRuns(a.id)).toBe(0);
+      expect(fake.holds.size).toBe(holds);
+      // An account whose own GPU answers: the run goes there on the first press, no question.
+      const g = account({ gpu: "online" });
+      expect((await hostedRun.decidePlace(auth.accountById(g.id)!, { ...IMAGE, account: g.id } as never, undefined)).kind).toBe("own");
+      // A size within the ceiling runs here again.
+      db().prepare("UPDATE relay_workers SET ceiling_json = ? WHERE id = ?").run(JSON.stringify({ maxMegapixels: 64 }), worker.id);
+      expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
+    } finally {
+      db().prepare("UPDATE relay_workers SET ceiling_json = NULL WHERE id = ?").run(worker.id);
     }
   });
 
@@ -925,7 +961,7 @@ describe("the price check before Run and the run itself", async () => {
       const run = await hostedRun.decidePlace(acct, { ...r, account: a.id } as never, undefined);
       return run.kind === "refuse" ? run.refusal.body.error : run.kind;
     };
-    expect(await refused(THREE_D)).toBe(OWN_GPU_TOOL_MESSAGE);
+    expect(await refused(THREE_D)).toMatch(/^Runs on your own GPU · \d+ GB$/);
     // A worker whose CPU slot runs the 3D finish: the model's GLB is checked, made for the web and given its turntable there.
     db().prepare("UPDATE relay_workers SET cpu_slot_json = ? WHERE id = ?").run(JSON.stringify({ finishes: ["model3d"] }), worker.id);
     try {
@@ -936,14 +972,14 @@ describe("the price check before Run and the run itself", async () => {
       expect(await refused(THREE_D)).toBe(HOSTED_WORDS.notOffered);
       withBilling({ limits: NO_LIMITS });
       // A splat or a scene gets no finish there: it stays on a visitor's own setup.
-      expect(await refused({ ...THREE_D, modelId: "oss-triposplat", op: "splat" })).toBe(OWN_GPU_TOOL_MESSAGE);
-      expect(await refused({ ...THREE_D, modelId: "oss-scene-moge", op: "scene-3d" })).toBe(OWN_GPU_TOOL_MESSAGE);
+      expect(await refused({ ...THREE_D, modelId: "oss-triposplat", op: "splat" })).toMatch(/^Runs on your own GPU · \d+ GB$/);
+      expect(await refused({ ...THREE_D, modelId: "oss-scene-moge", op: "scene-3d" })).toMatch(/^Runs on your own GPU · \d+ GB$/);
     } finally {
       db().prepare("UPDATE relay_workers SET cpu_slot_json = NULL WHERE id = ?").run(worker.id);
     }
     // No CPU slot that finishes it any more: refused again, before Run and at the run alike.
-    expect(await refused(THREE_D)).toBe(OWN_GPU_TOOL_MESSAGE);
-    expect((await hostedRun.poolQuote(acct, req, undefined))?.quote).toMatchObject({ allowed: false, text: OWN_GPU_TOOL_MESSAGE });
+    expect(await refused(THREE_D)).toMatch(/^Runs on your own GPU · \d+ GB$/);
+    expect((await hostedRun.poolQuote(acct, req, undefined))?.quote).toMatchObject({ allowed: false, text: expect.stringMatching(/^Runs on your own GPU · \d+ GB$/), ownSetup: { need: "gpu" } });
   });
 
   it("while every worker that could run it is built from the catalog before the studio's update, the run is taken and waits in line until one is updated; Run stays on", async () => {
@@ -1000,7 +1036,7 @@ describe("the price check before Run and the run itself", async () => {
     expect(hostedRun.runAway(planned as never, chain)).toBe(false);
   });
 
-  it("a guest's price check plans every step of a chain too, and words its refusals for someone with no Settings yet", async () => {
+  it("a guest's price check plans every step of a chain too, and says the same labels as an account's", async () => {
     withBilling({ limits: NO_LIMITS });
     expect((await hostedRun.poolQuote(null, EFFECT as never, undefined))?.quote.allowed).toBe(true);
     // A later step this install's GPUs don't take: refused before Run, never only once the run starts after sign-up.
@@ -1008,8 +1044,8 @@ describe("the price check before Run and the run itself", async () => {
     expect((await hostedRun.poolQuote(null, EFFECT as never, undefined))?.quote).toMatchObject({ allowed: false, code: "not-offered", text: HOSTED_GUEST_WORDS.notOffered });
     withBilling({ limits: NO_LIMITS, pool: { deny: ["oss-z-image-turbo"] } });
     const denied = await hostedRun.poolQuote(null, IMAGE as never, undefined);
-    expect(denied?.quote).toMatchObject({ allowed: false, text: HOSTED_GUEST_WORDS.notOffered });
-    expect(denied?.quote.text).not.toMatch(/Settings|your own GPU/);
+    expect(denied?.quote).toMatchObject({ allowed: false, text: HOSTED_GUEST_WORDS.notOffered, ownSetup: { need: "gpu" } });
+    expect(denied?.quote.text).toBe(HOSTED_WORDS.notOffered);
     withBilling({ limits: NO_LIMITS });
     expect((await hostedRun.poolQuote(null, LORAS as never, undefined))?.quote.text).toBe(HOSTED_GUEST_WORDS.loras);
     // Planned as nobody's: nothing of the plan is kept.
@@ -1037,9 +1073,10 @@ describe("the price check before Run and the run itself", async () => {
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, chain)).toBe(HOSTED_WORDS.rtxCard);
     setSetting("comfyWhere", "workers");
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, chain)).not.toBe(HOSTED_WORDS.rtxCard);
-    // A guest is told it isn't offered, with nowhere to connect a GPU named.
+    // A guest reads the same label as an account (Run opens the sign-up for it), with no Settings named.
     expect(hostedRun.gateWords("rtxCard", true, placeOf(null))).toBe(HOSTED_GUEST_WORDS.rtxCard);
-    expect(hostedRun.gateWords("rtxCard", true, placeOf(null))).not.toMatch(/Settings|your own GPU|NVIDIA/);
+    expect(hostedRun.gateWords("rtxCard", true, placeOf(null))).toBe("Runs on your own RTX GPU");
+    expect(hostedRun.gateWords("rtxCard", true, placeOf(null))).not.toMatch(/Settings/);
     expect(hostedRun.gateWords("rtxCard", false, placeOf(null))).toBe(HOSTED_WORDS.rtxCard);
   });
 

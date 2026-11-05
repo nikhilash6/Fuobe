@@ -69,7 +69,7 @@ describe("Design a voice on this install's GPUs", () => {
   it("a clone reads a voice sample: offered only when the policy takes audio uploads", async () => {
     const refused = await decidePlace(account, clone, undefined);
     expect(refused.kind).toBe("refuse");
-    if (refused.kind === "refuse") expect(refused.refusal.body.code).toBe("not-offered");
+    if (refused.kind === "refuse") expect(refused.refusal.body).toMatchObject({ code: "connect-gpu", error: "This file runs on your own GPU" });
     fake.policy = { ...FAKE_POLICY, uploads: { ...FAKE_POLICY.uploads, audio: true } };
     billing.resetBillingCache();
     expect((await decidePlace(account, clone, undefined)).kind).toBe("pool");

@@ -6,7 +6,7 @@ import { lineWords } from "@/lib/pool-line";
 import { refreshPriceChecks } from "@/lib/hosted";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
-import { jobFraction, jobWords, POOL_WORDS } from "@/lib/relay";
+import { FILE_TROUBLE_WORDS, jobFraction, jobWords, POOL_WORDS } from "@/lib/relay";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -169,7 +169,14 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   );
 }
 
-export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
+/** The sentences about the person's own files: the same run would only fail again, so changing the draft comes first. */
+const FILE_TROUBLE: readonly string[] = Object.values(FILE_TROUBLE_WORDS);
+
+/**
+ * A run that didn't make anything. `onReuse` (the feed's Reuse: the draft comes back to change): for a run on this
+ * studio's GPUs that failed on the person's own files, Reuse is the main button and Retry the quiet second.
+ */
+export function FailedTile({ g, ratio, onRetry, onReuse }: { g: Generation; ratio: number; onRetry: () => void; onReuse?: () => void }) {
   const create = useCreateGeneration();
   const trouble = g.status === "failed" ? g.trouble : undefined;
   // Hosted runs: a run that failed on the person's own GPU can run once on this studio's GPUs instead.
@@ -177,6 +184,7 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
   const onSite = !!trouble && offersRunOnSite(g, !!site);
   // A run on this studio's GPUs that couldn't finish: one plain sentence (the server's), nothing technical.
   const poolFailed = g.place === "pool" && g.status === "failed";
+  const reuseFirst = poolFailed && !!onReuse && FILE_TROUBLE.includes(g.error ?? "");
   return (
     <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: Math.max(ratio, 0.8) }}>
       <div className="min-h-0 space-y-1 overflow-hidden">
@@ -204,6 +212,18 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
         />
       )}
       <div className="mt-2 flex flex-wrap gap-1.5">
+        {reuseFirst && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onReuse?.();
+            }}
+            title="Load prompt, model and settings into the composer"
+            className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-highlight px-2.5 text-[12px] font-medium text-highlight-foreground hover:opacity-90"
+          >
+            <RotateCcw className="size-3" /> Reuse
+          </button>
+        )}
         {g.status === "failed" && g.fix && (
           // Something was missing on the GPU: the guided fix shows what, and how to add it.
           <button
@@ -221,7 +241,12 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
             e.stopPropagation();
             onRetry();
           }}
-          className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
+          className={
+            reuseFirst
+              ? // After Reuse, the quiet second: the same files would only fail again.
+                "inline-flex h-7 w-fit items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              : "inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
+          }
         >
           <RotateCcw className="size-3" /> Retry
         </button>
@@ -470,7 +495,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest, first 
           ))}
         {(g.status === "failed" || g.status === "canceled") && (
           <div className="h-56 max-w-full sm:h-64">
-            <FailedTile g={g} ratio={ratio} onRetry={() => feed.retry(g)} />
+            <FailedTile g={g} ratio={ratio} onRetry={() => feed.retry(g)} onReuse={feed.reuse ? () => feed.reuse?.(g) : undefined} />
           </div>
         )}
         {g.status === "succeeded" &&

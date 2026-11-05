@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clearDraft, readDraft, restoredDraft, restoredPrompt, sameDraft, saveDraft, savePendingRun, takePendingRun, type PendingRun, type ShownPrice } from "@/lib/guest-draft";
+import type { OwnSetup } from "@/lib/own-setup";
 import { replaceAttachment } from "@/lib/composer";
 import { readHeld } from "@/lib/held-files";
 import { uploadHeld, type SlotValue } from "./media-slot";
@@ -73,13 +74,16 @@ export function useGuestDraft({ hold, viewer, draft, setDraft }: { hold: boolean
     if (hold && restored.current && path.current) saveDraft(path.current, draft as unknown as Parameters<typeof saveDraft>[1]);
   }, [hold, draft]);
 
-  /** A guest pressed Run: the draft and the run (with the price it showed, and the draft it was pressed on) wait for the sign-up. */
+  /**
+   * A guest pressed Run: the draft and the run (with the price it showed, and the draft it was pressed on) wait for the
+   * sign-up. `setup`: pressed on an item that runs on one's own GPU or key, whose setup opens then instead.
+   */
   const keepRun = useCallback(
-    (shown: ShownPrice) => {
+    (shown: ShownPrice, setup?: OwnSetup) => {
       if (!path.current) return;
       const kept = draft as unknown as Parameters<typeof saveDraft>[1];
       saveDraft(path.current, kept);
-      savePendingRun(path.current, shown, kept);
+      savePendingRun(path.current, shown, kept, setup);
     },
     [draft],
   );

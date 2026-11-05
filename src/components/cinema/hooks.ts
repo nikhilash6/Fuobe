@@ -265,6 +265,27 @@ export function useItemActions(projectId: string) {
 export type GenerateBody = { input: Omit<CinemaGenerateInput, "brief">; folderId: string | null; requestId?: string };
 export type GenerateResult = { items: Generation[]; folderId: string | null; plan: { notes: string[]; costUsd: number | null; outputs: number; modelId: string } };
 
+/**
+ * A take's price check (hosted runs on, an account: `body` set): `{ place: "pool", quote, line }` when it goes to this
+ * studio's GPUs (their price and wait, or the label of what runs on the account's own GPU), `{ place: "own" }` otherwise.
+ * Asked once the draft stops changing; nothing is made. Read with usePoolRun.
+ */
+export function useCinemaPriceCheck(projectId: string, body: GenerateBody | null) {
+  const key = body ? JSON.stringify(body) : null;
+  const [settled, setSettled] = useState(key);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(key), 400);
+    return () => clearTimeout(t);
+  }, [key]);
+  return useQuery({
+    queryKey: ["cinema", projectId, "price-check", settled],
+    enabled: !!settled,
+    retry: false,
+    staleTime: 30_000,
+    queryFn: () => send<unknown>(`/api/cinema/projects/${projectId}/generate?preview=1`, "POST", JSON.parse(settled!)),
+  });
+}
+
 export function useCinemaGenerate(projectId: string) {
   const qc = useQueryClient();
   return useMutation({

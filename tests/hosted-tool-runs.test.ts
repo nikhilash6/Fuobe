@@ -191,12 +191,16 @@ describe("hosted runs on", () => {
     const steps = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
     const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);
     expect(place.kind).toBe("refuse");
-    if (place.kind === "refuse") expect(place.refusal.body.code).toBe("not-offered");
+    if (place.kind === "refuse") expect(place.refusal.body).toMatchObject({ code: "connect-gpu", error: "Runs on your own GPU", ownSetup: { need: "gpu" } });
     const before = reserves();
     const rows = stored("none").length;
     const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, { tool: "test", files: [], plan: () => steps, start: () => createGenerations(steps[0].request) });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(((await r.response.json()) as { code: string }).code).toBe("not-offered");
+    // Its label, and the answer opens Connect your GPU.
+    if (!r.ok) {
+      expect(r.response.headers.get("x-fuobe-connect-gpu")).toBe("1");
+      expect((await r.response.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "Runs on your own GPU" });
+    }
     expect(reserves()).toBe(before);
     expect(stored("none").length).toBe(rows);
   });
@@ -238,7 +242,9 @@ describe("hosted runs on", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.response.status).toBe(403);
-      expect(((await r.response.json()) as { code: string }).code).toBe("not-offered");
+      // Said as its label, which opens Connect your GPU (lateRefusal), as the gate says it before Run.
+      expect(((await r.response.json()) as { code: string }).code).toBe("connect-gpu");
+      expect(r.response.headers.get("x-fuobe-connect-gpu")).toBe("1");
     }
     expect(reserves() - before).toBe(1);
     expect((fake.calls_of("/v1/reserve").at(-1)!.body as { run: { steps: { jobs: number }[] } }).run.steps).toEqual([expect.objectContaining({ jobs: 1 })]);
@@ -500,13 +506,15 @@ describe("hosted runs on", () => {
     expect(fake.calls_of("/v1/refund").filter((c) => (c.body as { holdId: string }).holdId === hold[0])).toHaveLength(1);
   });
 
-  it("a 3D model stays on an account's own GPU: refused here in the tools' words", async () => {
+  it("a 3D model stays on an account's own GPU: its label, and the answer opens Connect your GPU", async () => {
     const steps = [{ request: { feature: "3d", modelId: "oss-pixal3d", op: "image-to-3d" as const, prompt: "", inputs: { images: ["/api/files/x.png"] } } }];
     const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);
     expect(place.kind).toBe("refuse");
     if (place.kind === "refuse") {
-      expect(place.refusal.body.code).toBe("own-gpu-tool");
-      expect(place.refusal.body.error).toBe(OWN_GPU_TOOL_MESSAGE);
+      expect(place.refusal.body.code).toBe("connect-gpu");
+      expect(place.refusal.body.error).toMatch(/^Runs on your own GPU · \d+ GB$/);
+      expect(place.refusal.body.ownSetup).toMatchObject({ need: "gpu" });
+      expect(place.refusal.body.error).not.toBe(OWN_GPU_TOOL_MESSAGE);
     }
   });
 

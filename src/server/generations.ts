@@ -96,6 +96,7 @@ import {
   type TroubleAction,
 } from "@/lib/diagnose";
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { MODEL3D_SETUP, ownSetupLabel } from "@/lib/own-setup";
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
 import { generationAccount } from "./account-library";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "./account-files";
@@ -1209,7 +1210,8 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   // worker runs it (poolFinishes3d). Any Angle's 3D view is the exception: a splat and its turntable, nothing to finish.
   if (original.account && original.place === "pool" && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) {
     const ops = original.op ? [original.op] : shotModel.routes.filter((r) => r.provider === "comfyui").map((r) => r.op);
-    if (!ops.length || !ops.every((op) => poolFinishes3d({ provider: "comfyui", op }))) throw new Error(OWN_GPU_TOOL_MESSAGE);
+    // (The gate says this before Run as a label: hosted-run.ts poolGate. This is its last guard, in the same words.)
+    if (!ops.length || !ops.every((op) => poolFinishes3d({ provider: "comfyui", op }))) throw new Error(ownSetupLabel(MODEL3D_SETUP));
   }
   if (!opts.dependsOn && shotModel?.options.multiShot?.mode === "concat" && (original.params?.shots?.filter((x) => x.prompt.trim()).length ?? 0) > 1) {
     return createShotFilm(original, shotModel);

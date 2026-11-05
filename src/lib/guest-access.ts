@@ -427,10 +427,25 @@ export const ACTIVE_RUNS_CODE = "active-runs";
 export const OWN_GPU_TOOL_MESSAGE = "This tool isn't available here. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
 
 /**
+ * The same answer while hosted runs are on (a tool that runs for the studio's owner only: no GPU or key of a visitor's
+ * own runs it yet, so no setup is offered), with the way on: the studios.
+ */
+export const OWN_GPU_TOOL_HOSTED = "This one isn't open to accounts yet. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
+
+/** A tool no visitor's own GPU or key runs yet, in the words for this install (hosted runs on or off). */
+export const ownGpuToolMessage = (hosted: boolean): string => (hosted ? OWN_GPU_TOOL_HOSTED : OWN_GPU_TOOL_MESSAGE);
+
+/**
  * The header of an account's run the server asks about instead of moving (409): its own GPU didn't answer, and the run
  * named no place. The page offers to run it on this studio's GPUs (watchGuestRefusals).
  */
 export const PLACE_ASK_HEADER = "x-fuobe-place-ask";
+
+/**
+ * The own GPU a refused run's label names (hosted runs on: an item this install's GPUs don't run), as URI-encoded JSON
+ * (an OwnSetup), beside x-fuobe-connect-gpu: the card that opens says what it needs.
+ */
+export const OWN_SETUP_HEADER = "x-fuobe-own-setup";
 
 /** Fired when a run started from a toast or a card (not from a page's own button), so the lists show it. */
 export const RUNS_CHANGED_EVENT = "fuobe:runs-changed";

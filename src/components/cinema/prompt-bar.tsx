@@ -47,7 +47,9 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { exactDefaults, takesExact } from "@/lib/exact-orbit";
 import { CameraChip, EmotionChip, FilmSetupChip, LightingChip, PaletteChip } from "./director-panel";
 import { directorPicks, draftToInput, withMoves, type BarAction, type CinemaDraft, type RefItem } from "./draft";
-import { useCinemaGenerate } from "./hooks";
+import { useCinemaGenerate, useCinemaPriceCheck } from "./hooks";
+import { usePoolRun } from "@/components/studio/pool-price";
+import { useRunViewer } from "@/components/studio/run-place-chip";
 import { firstFrame, mediaDuration } from "./media";
 import { formatUsd } from "./money";
 import { placeholdersOn } from "@/lib/demo-mode";
@@ -352,9 +354,19 @@ export function PromptBar(props: PromptBarProps) {
   const cost = demo ? 0 : plan.costUsd;
   const overCap = costCapUsd != null && cost != null && cost > 0 && spentUsd + cost > costCapUsd + 1e-9;
   const uploading = draft.refs.some((r) => r.uploading);
+  // Hosted runs on (an account, open models): where the take goes and its price, from its own price check. This studio's
+  // GPUs say their price and wait; what runs on the account's own GPU says its label, and Generate opens that setup.
+  const runViewer = useRunViewer();
+  const checksPlace = !!runViewer?.hosted && runViewer.audience === "account" && engine === "open" && !demo;
+  const priceCheck = useCinemaPriceCheck(projectId, checksPlace && !plan.blocker ? { input, folderId } : null);
+  const poolRun = usePoolRun(checksPlace ? priceCheck.data : null);
+  const pool = poolRun.pool;
   const blocker = uploading
     ? "Uploading…"
-    : refCheck ?? plan.blocker ?? (overCap ? `Over the project's ${formatUsd(costCapUsd)} limit (≈ ${formatUsd(spentUsd)} spent) — raise it in project settings` : undefined);
+    : (refCheck ??
+      plan.blocker ??
+      (overCap ? `Over the project's ${formatUsd(costCapUsd)} limit (≈ ${formatUsd(spentUsd)} spent) — raise it in project settings` : undefined) ??
+      (poolRun.off ? pool?.text : undefined));
   // An empty bar needs no warning line (the placeholder says it); everything else is spelled out under the bar.
   const quietBlocker = !draft.prompt.trim() && !draft.refs.length && blocker === plan.blocker && /^Describe/.test(blocker ?? "");
   const blockerId = useId();
@@ -375,6 +387,12 @@ export function PromptBar(props: PromptBarProps) {
     if (blocker) {
       toast.error(blocker);
       return;
+    }
+    // A take that runs on the account's own GPU (its label): Generate opens that setup, or goes on where it already is.
+    if (pool?.setup) {
+      let goOn = false;
+      poolRun.go(() => (goOn = true));
+      if (!goOn) return;
     }
     let frame: string | undefined;
     const src = draft.source;
@@ -529,9 +547,20 @@ export function PromptBar(props: PromptBarProps) {
   ]
     .filter(Boolean)
     .join(" · ");
-  // The live cost sits next to Generate at every width (short on narrow bars).
-  const costShort = demo ? "Placeholder" : cost === 0 ? (engine === "open" ? "Free · GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
-  const costLong = demo ? "Placeholder · free" : cost === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  // The live cost sits next to Generate at every width (short on narrow bars). On this studio's GPUs: the price check's
+  // words ("Free · ready in about 2 min"), or the label of what runs on the account's own GPU.
+  const onSite = !!pool && !pool.refused;
+  const costShort = pool ? (onSite ? (pool.text.split(" · ")[0] ?? pool.text) : "Your GPU") : demo ? "Placeholder" : cost === 0 ? (engine === "open" ? "Free · GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
+  const costLong = pool ? pool.text : demo ? "Placeholder · free" : cost === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  const costTip = pool
+    ? onSite
+      ? `Runs on ${runViewer!.place.text}`
+      : pool.text
+    : demo
+      ? "Placeholder results are on (Settings), so takes are free stand-ins"
+      : cost === 0
+        ? "Runs on your own GPU"
+        : "Estimated cost of this run, billed by the provider to your key";
 
   // The Director's Panel chips: their own row from sm up; on phones one "Director" chip opens them in a sheet.
   const directorChips = (
@@ -879,7 +908,7 @@ export function PromptBar(props: PromptBarProps) {
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            {demo ? "Placeholder results are on (Settings), so takes are free stand-ins" : cost === 0 ? "Runs on your own GPU" : "Estimated cost of this run, billed by the provider to your key"}
+            {costTip}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -918,7 +947,7 @@ export function PromptBar(props: PromptBarProps) {
         </p>
       )}
       <span className="sr-only" aria-live="polite">
-        {cost != null ? `Estimated cost ${demo ? "free: placeholder results" : cost === 0 && engine === "open" ? "free, on your GPU" : formatCost(cost)}` : ""}
+        {pool ? costLong : cost != null ? `Estimated cost ${demo ? "free: placeholder results" : cost === 0 && engine === "open" ? "free, on your GPU" : formatCost(cost)}` : ""}
       </span>
     </div>
   );

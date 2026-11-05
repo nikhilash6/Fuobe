@@ -936,6 +936,8 @@ export function Composer({ docked }: { docked: boolean }) {
         if (runOnPicked === "key") return submitRef.current(skip, withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice));
         return void setKeyChoice(true);
       }
+      // A guest (hosted runs on): the draft waits for the sign-up, and this setup opens once signed up (never a run).
+      if (guestHold) guestDraft.keepRun(null, poolSetup);
       if (pressSetup(poolSetup)) return submitRef.current(skip, undefined, "own");
       return;
     }
@@ -958,8 +960,10 @@ export function Composer({ docked }: { docked: boolean }) {
     // A guest (hosted runs on): the draft, its kept files and this run wait for the sign-up, with the price shown; back
     // here as an account, the run starts by itself when the price is unchanged.
     if (guestHold) {
-      guestDraft.keepRun(poolPrice && hostedQuote?.allowed ? { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion, text: hostedQuote.text } : null);
-      return askToSignUp("run");
+      const keptRun = poolPrice && hostedQuote?.allowed ? { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion, text: hostedQuote.text } : null;
+      guestDraft.keepRun(keptRun);
+      // A run on this studio's GPUs starts by itself once the guest is in: the card says so.
+      return askToSignUp("run", keptRun ? { kept: true } : {});
     }
     setRecent((r) => pushRecent(r, draft.modelId));
     // The server resolves @mentions and drawings itself; only pin the operation when there are none.
@@ -1220,14 +1224,29 @@ export function Composer({ docked }: { docked: boolean }) {
   const keptLost = guestDraft.lost;
   useEffect(() => {
     if (!pendingRun) return;
-    const next = pendingStep({ settled: !settling && priceSettled, blocked: !!blocker, pool: poolPrice, shown: pendingRun.shown, quote: hostedQuote, lost: keptLost, same: pendingRun.same });
+    const next = pendingStep({
+      settled: !settling && priceSettled,
+      blocked: !!blocker,
+      pool: poolPrice,
+      shown: pendingRun.shown,
+      quote: hostedQuote,
+      lost: keptLost,
+      same: pendingRun.same,
+      setup: !!poolSetup,
+      labelled: !!pendingRun.setup,
+    });
     if (next === "wait") return;
     clearPending();
     if (next === "start") submitRef.current(undefined, undefined, undefined, true);
+    // Pressed on an item that runs on one's own GPU or key: its setup opens on this page (Connect your GPU, Add your key),
+    // with the draft back; nothing runs. One the account has already: Run waits for a click.
+    else if (next === "setup" && poolSetup) {
+      if (pressSetup(poolSetup)) setPriceNote(PENDING_WORDS.ask);
+    }
     else if (next === "lost") setPriceNote(PENDING_WORDS.lost);
     else if (next === "ask") setPriceNote(PENDING_WORDS.ask);
     else if (next === "note" && hostedQuote) setPriceNote(PENDING_WORDS.note(hostedQuote.text));
-  }, [pendingRun, clearPending, settling, priceSettled, blocker, poolPrice, hostedQuote, keptLost]);
+  }, [pendingRun, clearPending, settling, priceSettled, blocker, poolPrice, hostedQuote, keptLost, poolSetup, pressSetup]);
   const blockedSlot = blocker?.slot;
   useEffect(() => {
     if (step === "wait" || startRequest <= startedFor.current) return;
@@ -1801,6 +1820,7 @@ export function Composer({ docked }: { docked: boolean }) {
                   madeWith={madeWith}
                   boxes={layoutOn}
                   ownSetup={modelSetup}
+                  answersPick
                 />
               ) : (
                 <Chip icon={Loader2} disabled className="[&>svg]:animate-spin">

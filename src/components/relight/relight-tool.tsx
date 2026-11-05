@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { PLACEHOLDER } from "@/lib/composer";
 import { askToSignUp, uploadFile, useCreateGeneration, useGenerations, useHydrated, useIsAccount, useIsGuest, useIsOwner, useStatus } from "@/lib/api";
 import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
 import { getModel, getPreset } from "@/lib/catalog";
@@ -144,7 +145,9 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const account = useIsAccount();
   const status = useStatus().data;
   const gpu = !!status?.viewer?.gpu?.connected;
-  const canRun = owner || (account && gpu);
+  // Hosted runs on: an account with no GPU of its own lights its photo on this studio's GPUs (the server says where).
+  const hosted = !!status?.viewer?.hosted;
+  const canRun = owner || (account && (gpu || hosted));
   const fine = useFinePointer();
   const create = useCreateGeneration();
   // The scene read goes through its own mutation, so a Generate sent at the same moment keeps its callbacks.
@@ -485,7 +488,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
       setHint(GUEST_LINE);
       return void askToSignUp("run");
     }
-    if (account && !gpu) {
+    if (account && !gpu && !hosted) {
       setHint(NO_GPU_LINE);
       return void openConnect();
     }
@@ -507,7 +510,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     }
     // The values it reads are listed; the helpers read the same state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lights, guest, account, gpu, current, look, override, seed, photo, img, scene]);
+  }, [lights, guest, account, gpu, hosted, current, look, override, seed, photo, img, scene]);
 
   /**
    * The blend at the photo's size, as a PNG: as large as this browser can draw and read back (phones cap a canvas at
@@ -615,9 +618,14 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const busy = !!runId || create.isPending;
   const sceneBusy = !!sceneId && sceneRun.data?.status !== "succeeded" && sceneRun.data?.status !== "failed";
   const line = busy ? "Lighting your photo…" : aligning ? "Lining it up…" : sceneBusy ? "Reading the scene…" : photo.uploading ? "Uploading…" : null;
-  const keeper = owner || (account && gpu);
-  // Where the lighting is made and its price, as the studios say it: on your GPU, free (an account connects its own).
-  const place = useOpenRunPlace([getModel(RELIGHT_MODEL)?.name ?? "Qwen Image 2.1"], null, { ownGpuOnly: true });
+  const keeper = owner || (account && (gpu || hosted));
+  // Where the lighting is made and its price, as the studios say it: on your GPU, free (an account connects its own);
+  // with hosted runs on, where the server's price check says (this studio's GPUs, or the label of what runs elsewhere).
+  const quoteReq = useMemo(
+    () => (hosted && !owner ? relightRequest({ photo: photo.serverUrl ?? PLACEHOLDER.image, lights, seed }) : null),
+    [hosted, owner, photo.serverUrl, lights, seed],
+  );
+  const place = useOpenRunPlace([getModel(RELIGHT_MODEL)?.name ?? "Qwen Image 2.1"], quoteReq, { ownGpuOnly: !hosted });
   const changed = anyResult && !current;
   // "Again" only once this viewer has generated on this photo.
   const again = made ? "Generate again" : "Generate";

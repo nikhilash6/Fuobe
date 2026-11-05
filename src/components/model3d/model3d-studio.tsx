@@ -53,6 +53,7 @@ import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
+import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
 import { Model3dSetupsProvider, useModel3dSetup, type Model3dSetups } from "./own-setups";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useCreate3d, useRunPreview } from "./hooks";
@@ -370,6 +371,10 @@ function Model3dStudioBody({ info, examples }: { info: Record<string, Model3dInf
     : null;
   const preview = useRunPreview(engineKnown ? priced : null);
   const price = priceLine(preview.data);
+  // Hosted runs on: where an open run goes and its price, from the price check every studio reads (this studio's GPUs and
+  // the wait, or the label of what runs on the visitor's own GPU, which the button opens). Otherwise the line above.
+  const openPlace = useOpenRunPlace(preview.data?.modelName ? [preview.data.modelName] : [], engine === "open" && engineKnown ? priced : null);
+  const site = openPlace && (openPlace.where === "pool" || openPlace.setup) ? openPlace : null;
   const cloudAllowed = engineMode !== "open";
   // A guest, or an account without a key, on open models only: the cloud models run with its own fal.ai key, labelled,
   // and a press opens the step that sets it up (own-setup.ts).
@@ -384,7 +389,7 @@ function Model3dStudioBody({ info, examples }: { info: Record<string, Model3dInf
   const finalAllowed = engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   // A run with a step on the visitor's own GPU: a guest gets the sign-up card, an account without a GPU "Connect your GPU".
-  const needs = refining !== null ? refineSetup : idolSplat && engine === "open" && idolTrim ? cleanSetup : null;
+  const needs = refining !== null ? refineSetup : idolSplat && engine === "open" && idolTrim ? cleanSetup : (site?.setup ?? null);
   const go = () => {
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
     if (needs) return void press(needs, start);
@@ -584,14 +589,22 @@ function Model3dStudioBody({ info, examples }: { info: Record<string, Model3dInf
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
-              <p className="mt-2 text-[12px] text-muted-foreground" aria-live="polite">
-                {blocker ? `${blocker} · ` : ""}
-                {preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}
-              </p>
+              {site ? (
+                // Hosted runs: the same place chip as the studios (its panel says the place, the wait, or the setup).
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground" aria-live="polite">
+                  {blocker && <span>{blocker}</span>}
+                  <RunPlaceChip place={site} runLabel={mode === "splat" ? "Make the splat" : "Make it 3D"} />
+                </div>
+              ) : (
+                <p className="mt-2 text-[12px] text-muted-foreground" aria-live="polite">
+                  {blocker ? `${blocker} · ` : ""}
+                  {preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}
+                </p>
+              )}
               <p className="mt-1 text-[12px] text-muted-foreground">
                 {idolSplat
                   ? engine === "open"
-                    ? "Idol cuts the object out, builds the splat and renders an orbit video on your GPU. One object per picture."
+                    ? `Idol cuts the object out, builds the splat and renders an orbit video${site?.where === "pool" ? "" : " on your GPU"}. One object per picture.`
                     : "Idol cuts the object out and builds the splat, ready to download. One object per picture."
                   : mode === "splat"
                     ? engine === "open"

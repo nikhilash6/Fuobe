@@ -26,7 +26,7 @@ import { connectNeeds } from "@/server/connect-refusal";
 import { BILLING_HEADER, BILLING_WAIT, holdsOn } from "@/server/billing";
 import { queueRelease } from "@/server/billing-outbox";
 import { runOnPool } from "@/server/hosted";
-import { decidePlace, moderateRun, policyWait, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal, type ReserveFacts, type ReserveWait } from "@/server/hosted-run";
+import { decidePlace, lateRefusal, moderateRun, policyWait, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal, type ReserveFacts, type ReserveWait } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { endTry, notePressRun, pressPrior, pressRun, pressTries, pressTry, readPressId } from "@/server/run-requests";
@@ -67,12 +67,17 @@ const accountRunAnswer = (r: AccountRunRefusal): Answer => ({
   headers: r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {},
 });
 
-/** The answer to a run the limits refuse as it is made (admitRun), or one with a step this install's GPUs don't take. */
-const limitAnswer = (r: AdmitRefused["refusal"]): Answer => ({
-  status: r.status,
-  body: { error: r.error, code: r.code },
-  headers: r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) },
-});
+/**
+ * The answer to a run the limits refuse as it is made (admitRun), or one with a step this install's GPUs don't take (its
+ * label, which opens Connect your GPU: lateRefusal).
+ */
+function limitAnswer(r: AdmitRefused["refusal"]): Answer {
+  if (r.code === "not-offered") {
+    const late = lateRefusal(r.error);
+    return { status: late.status, body: late.body as Answer["body"], headers: late.headers };
+  }
+  return { status: r.status, body: { error: r.error, code: r.code }, headers: { "Retry-After": String(r.retryAfterS ?? 30) } };
+}
 
 /** Start a generation; `?preview=1` only says what it would run as (model, operation, jobs, outputs, cost). */
 export async function POST(request: Request) {

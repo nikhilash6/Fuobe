@@ -21,6 +21,7 @@ import { readsBoxes } from "@/lib/layout-prompt";
 import { pickerPrice } from "@/lib/model-rows";
 import { cn } from "@/lib/utils";
 import { ownSetupLabel } from "@/lib/own-setup";
+import { answerPickModel } from "@/lib/pick-model";
 import { addKeyLabel, billedTo, CLOUD_KEY, CLOUD_PROVIDERS, needsKey, type CloudProvider } from "@/lib/your-keys";
 import { EngineSwitch } from "./engine-switch";
 import { ResponsivePanel } from "./responsive-panel";
@@ -213,6 +214,8 @@ interface PickerProps {
    * with that label in place of its price, never left out.
    */
   ownSetup?: (m: ModelDef) => OwnSetup | null;
+  /** This picker opens for "Pick another model" on a card (src/lib/pick-model.ts): the studio composer's own. */
+  answersPick?: boolean;
 }
 
 /**
@@ -231,7 +234,8 @@ export function phoneName(name: string): string {
 
 export function ModelPicker(props: PickerProps) {
   const [open, setOpen] = useState(false);
-  const { value, models, onChange } = props;
+  const { value, models, onChange, answersPick } = props;
+  useEffect(() => (answersPick ? answerPickModel(() => setOpen(true)) : undefined), [answersPick]);
   const made = !!value && value.id === props.madeWith;
   // The model a dimmed row was chosen for (by this picker only): picked once its key is saved and the studio knows it
   // (the status has the key, so the engine switch is on Cloud and nothing swaps the model back to an open one).

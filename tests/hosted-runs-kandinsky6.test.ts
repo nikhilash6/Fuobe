@@ -70,7 +70,8 @@ describe("Kandinsky 6.0 on this install's GPUs", () => {
       billing.resetBillingCache();
       const refused = await decidePlace(account, req, undefined);
       expect(refused.kind, req.modelId).toBe("refuse");
-      if (refused.kind === "refuse") expect(refused.refusal.body.code).toBe("not-offered");
+      // A label, never a refusal: the run's answer opens Connect your GPU.
+      if (refused.kind === "refuse") expect(refused.refusal.body).toMatchObject({ code: "connect-gpu", error: "This file runs on your own GPU", ownSetup: { need: "gpu" } });
       fake.policy = { ...FAKE_POLICY, uploads: { ...FAKE_POLICY.uploads, [kind]: true } };
       billing.resetBillingCache();
       expect((await decidePlace(account, req, undefined)).kind, req.modelId).toBe("pool");

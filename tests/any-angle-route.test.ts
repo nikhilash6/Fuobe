@@ -20,7 +20,9 @@ const { asAccount, createGenerations } = await import("@/server/generations");
 const { withRunStamp } = await import("@/server/run-stamp");
 const { viewKeyOf } = await import("@/server/any-angle");
 const { ANY_ANGLE } = await import("@/lib/catalog/any-angle");
-const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
+const { MODEL3D_SETUP, ownSetupLabel } = await import("@/lib/own-setup");
+/** The words a 3D run on this install's GPUs that no worker finishes is turned away in: its label. */
+const MODEL3D_LABEL = ownSetupLabel(MODEL3D_SETUP);
 const { ACCOUNT_LIMITS } = await import("@/server/account-files");
 const { db } = await import("@/server/db");
 const { hit, peek, resetRates } = await import("@/server/rate");
@@ -92,8 +94,8 @@ describe("Any Angle's 3D view through the route", () => {
       refused = e;
     }
     // Whatever else stops it here (no GPU connected in this test), it isn't the 3D finish that keeps accounts out.
-    expect((refused as Error | null)?.message ?? "").not.toBe(OWN_GPU_TOOL_MESSAGE);
-    expect(() => asAccount(a, () => withRunStamp({ place: "pool" }, () => createGenerations({ feature: "image-to-3d", modelId: "oss-triposplat", op: "splat", engine: "open", inputs: { images: [photo] } } as never)))).toThrow(OWN_GPU_TOOL_MESSAGE);
+    expect((refused as Error | null)?.message ?? "").not.toBe(MODEL3D_LABEL);
+    expect(() => asAccount(a, () => withRunStamp({ place: "pool" }, () => createGenerations({ feature: "image-to-3d", modelId: "oss-triposplat", op: "splat", engine: "open", inputs: { images: [photo] } } as never)))).toThrow(MODEL3D_LABEL);
 
   });
 });

@@ -326,7 +326,7 @@ describe("3D is allowed on the account's own GPU or key, and refused on this ins
   it("a run stamped for this install's GPUs is refused when it is made; the account's own is made", () => {
     const photo = runAsTenant({ kind: "account", id: a }, () => saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", name: "p.png" }).url);
     const req = fromImage(photo);
-    expect(() => asAccount(a, () => withRunStamp({ place: "pool" }, () => createGenerations(req)))).toThrow(access.OWN_GPU_TOOL_MESSAGE);
+    expect(() => asAccount(a, () => withRunStamp({ place: "pool" }, () => createGenerations(req)))).toThrow("Runs on your own GPU · 24 GB");
     const made = asAccount(a, () => createGenerations(req));
     expect(made[0].kind).toBe("model3d");
     expect(made[0].request.account).toBe(a);

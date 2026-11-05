@@ -10,7 +10,8 @@ import { NotFoundState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { signInHref, useEngine, useHydrated, useViewer } from "@/lib/api";
+import { signInHref, useEngine, useHydrated, usePlaceName, useViewer } from "@/lib/api";
+import { boardRunWords } from "@/lib/board-run-words";
 import type { Canvas } from "@/lib/catalog/canvas";
 import type { CanvasPage } from "@/lib/catalog/canvas-board";
 import type { Generation } from "@/lib/catalog/types";
@@ -94,15 +95,14 @@ const asCanvas = (b: { id: string; name: string; templateId: string | null; page
 
 function RunNeeds({ open, onOpenChange, who, oneStep }: { open: boolean; onOpenChange: (o: boolean) => void; who: Who; oneStep?: VisitorBoardData["oneStep"] }) {
   const here = usePathname();
+  // Hosted runs on: where the studio runs it, by its place name (null while they are off: today's words).
+  const words = boardRunWords(!!oneStep, usePlaceName());
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Running a board isn&apos;t available here</DialogTitle>
-          <DialogDescription>
-            You can build, change and keep boards here.{" "}
-            {oneStep ? "To make this result now, use the same effect in the Video studio: it runs every step at once." : "To make something now, use the Image, Video or Audio studio, or an app, effect or camera motion."}
-          </DialogDescription>
+          <DialogTitle>{words.title}</DialogTitle>
+          <DialogDescription>{words.body}</DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:justify-start">
           <Button asChild className="rounded-full">

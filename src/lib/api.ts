@@ -28,7 +28,7 @@ import {
 import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
 import { markRefusalShown, refusalShown, responseError } from "./refusals";
-import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER, RUNS_CHANGED_EVENT, shownHeader } from "./guest-access";
+import { OWN_SETUP_HEADER, PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER, RUNS_CHANGED_EVENT, shownHeader } from "./guest-access";
 import type { PoolRules } from "./pool-rules";
 import { HoldFilesCtx } from "./held-files";
 import { postFile } from "./upload";
@@ -36,6 +36,7 @@ import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest }
 import type { AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
 import type { Diagnosis } from "./diagnose";
+import type { OwnSetup } from "./own-setup";
 import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 import { knownPlace, notePlaceName, placeOf, type Place } from "./place-name";
 import { ENGINE_KEY, ENGINE_SLOT_KEY, engineSlot, SHARED_SLOT, slotToCache, storedEngine, type EngineSlot, type SlotFacts } from "./engine-pref";
@@ -1548,9 +1549,15 @@ export type RefusalCard = { kind: "guest"; here: string } | { kind: "gpu" };
 /** What a refusal card is about, for its words: a run (or any other change), or adding a file of one's own. */
 export type RefusalAction = "run" | "upload";
 
-/** What the cards' events may say (GUEST_PROMPT_EVENT, CONNECT_GPU_EVENT). Without it, a card is about a run. */
+/**
+ * What the cards' events may say (GUEST_PROMPT_EVENT, CONNECT_GPU_EVENT). Without it, a card is about a run. `setup`: the
+ * press was on an item that runs on one's own GPU or key (its label), so the card says what it needs and how to get
+ * there; `kept`: a guest's run a studio keeps through sign-up, which starts once the guest is in.
+ */
 export interface RefusalDetail {
   action?: RefusalAction;
+  setup?: OwnSetup;
+  kept?: boolean;
 }
 
 /** The requests that add a file of the visitor's own: their refusal's card says "add your own files", not "run this". */
@@ -1565,9 +1572,12 @@ function requestPath(input: RequestInfo | URL): string {
   }
 }
 
-/** Opens "Create a free account" on its own (GuestPrompt), e.g. before a guest's file chooser: it could only be refused. */
-export function askToSignUp(action: RefusalAction = "upload"): void {
-  window.dispatchEvent(new CustomEvent<RefusalDetail>(GUEST_PROMPT_EVENT, { detail: { action } }));
+/**
+ * Opens "Create a free account" on its own (GuestPrompt), e.g. before a guest's file chooser: it could only be refused.
+ * `more`: the label of the item pressed (`setup`), or a run kept through sign-up (`kept`).
+ */
+export function askToSignUp(action: RefusalAction = "upload", more: Pick<RefusalDetail, "setup" | "kept"> = {}): void {
+  window.dispatchEvent(new CustomEvent<RefusalDetail>(GUEST_PROMPT_EVENT, { detail: { action, ...more } }));
 }
 
 /**
@@ -1653,6 +1663,17 @@ export async function sendRunAgain(input: RequestInfo | URL, init: RequestInit |
 /** A body a run can be sent again with (a string: a form or a stream is read once). */
 const resendable = (input: RequestInfo | URL, init: RequestInit | undefined): boolean => !(input instanceof Request) && (init?.body === undefined || typeof init.body === "string");
 
+/** The own GPU a refused run's label names (OWN_SETUP_HEADER), or null. */
+function readSetupHeader(v: string | null): OwnSetup | null {
+  if (!v || v.length > 300) return null;
+  try {
+    const o = JSON.parse(decodeURIComponent(v)) as OwnSetup;
+    return o && typeof o === "object" && o.need === "gpu" ? o : null;
+  } catch {
+    return null;
+  }
+}
+
 export function watchGuestRefusals(): void {
   const w = window as typeof window & { __fuobeGuestFetch?: boolean };
   if (w.__fuobeGuestFetch) return;
@@ -1663,7 +1684,9 @@ export function watchGuestRefusals(): void {
     markRefusalShown(res);
     const needs = asNeeds(res.headers.get("x-fuobe-connect-needs"));
     const detail: ConnectGpuDetail = { action: UPLOAD_PATHS.has(path) ? "upload" : "run", ...(needs && { needs }) };
-    window.dispatchEvent(new CustomEvent(kind === "guest" ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT, { detail }));
+    // A run refused for what runs on the visitor's own GPU (a label, hosted runs on): the card says what it needs.
+    const setup = kind === "gpu" ? readSetupHeader(res.headers.get(OWN_SETUP_HEADER)) : null;
+    window.dispatchEvent(new CustomEvent(kind === "guest" ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT, { detail: { ...detail, ...(setup && { setup }) } }));
   };
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const res = await original(input, init);

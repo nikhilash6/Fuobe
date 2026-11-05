@@ -24,7 +24,7 @@ import {
   isLibraryChange,
   isPriceCheck,
   LIBRARY_MESSAGE,
-  OWN_GPU_TOOL_MESSAGE,
+  ownGpuToolMessage,
   ownerOnly,
   ownGpuRun,
   poolToolRun,
@@ -224,8 +224,11 @@ function guest(request: NextRequest): NextResponse {
   return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
 }
 
-/** A tool that doesn't run on an account's own GPU or key yet, for a guest or an account: one answer (no sign-up card). */
-const ownGpuTool = () => NextResponse.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403, headers: { "Cache-Control": "no-store" } });
+/**
+ * A tool that doesn't run on an account's own GPU or key yet, for a guest or an account: one answer (no sign-up card), in
+ * the words for this install (hosted runs on: no "isn't available here").
+ */
+const ownGpuTool = () => NextResponse.json({ error: ownGpuToolMessage(hostedRunsOn()), code: "own-gpu-tool" }, { status: 403, headers: { "Cache-Control": "no-store" } });
 
 /** Any change to Assist by a visitor (a guest, or an account with or without a GPU): one answer, which the Assist pages also show. */
 const assistOwner = () => NextResponse.json({ error: ASSIST_OWNER_MESSAGE, code: "assist-owner" }, { status: 403, headers: { "Cache-Control": "no-store" } });

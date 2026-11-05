@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Cpu, ExternalLink, KeyRound, LogIn, Sparkles } from "lucide-react";
+import { Cpu, ExternalLink, KeyRound, LogIn, Shuffle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -30,6 +30,9 @@ import { FAL_KEYS_URL } from "@/lib/connections";
 import { CLOUD_KEY } from "@/lib/your-keys";
 import { RUNS_CHANGED_EVENT } from "@/lib/guest-access";
 import { refreshPriceChecks } from "@/lib/hosted";
+import { ownSetupLabel, type OwnSetup } from "@/lib/own-setup";
+import { KEPT_RUN_WORDS, setupCardWords } from "@/lib/own-setup-card";
+import { canPickModel, pickAnotherModel } from "@/lib/pick-model";
 
 /**
  * The cards a public studio shows when something is refused (watchGuestRefusals): "Create a free
@@ -59,6 +62,11 @@ export function GuestPrompt() {
   // Opened by a tool only a GPU runs: no key offers on this card.
   const [gpuOnly, setGpuOnly] = useState(false);
   const [requirement, setRequirement] = useState<string | undefined>(undefined);
+  // Hosted runs: the press was on an item that runs on one's own GPU or key (its label), and the page has a model picker
+  // to pick another one from; or a guest's run a studio keeps through sign-up.
+  const [setup, setSetup] = useState<OwnSetup | null>(null);
+  const [canPick, setCanPick] = useState(false);
+  const [kept, setKept] = useState(false);
   const close = useCallback(() => {
     setOpen(false);
     setRetry(null);
@@ -80,6 +88,13 @@ export function GuestPrompt() {
   // Hosted runs: opened from an item that runs on one's own GPU only (its label's requirement), while everything else
   // runs on this studio's GPUs (said with their place name).
   const ownOnly = viewer?.hosted && !!requirement && needs !== "key" && !keyOnly ? placeOf(viewer.placeName) : null;
+  // Its words, when the label's setup is known: what it needs, and that everything else runs on this studio's GPUs.
+  const ownWords = ownOnly && setup ? setupCardWords(setup, ownOnly, "account") : null;
+  const guestWords = viewer?.hosted && setup ? setupCardWords(setup, placeOf(viewer.placeName), "guest") : null;
+  const pick = () => {
+    close();
+    pickAnotherModel();
+  };
   const start = () => {
     const r = retry;
     close();
@@ -100,8 +115,12 @@ export function GuestPrompt() {
       // Signed in a moment ago: not an offer to sign up, but to log in again; and the page asks who is looking.
       const out = was.current;
       if (show("guest")) {
+        const d = detail(e);
         setSignedOut(out);
-        setAction(detail(e).action ?? "run");
+        setAction(d.action ?? "run");
+        setSetup(d.setup ?? null);
+        setKept(!!d.kept);
+        setCanPick(canPickModel());
       }
       if (out) {
         was.current = null;
@@ -121,7 +140,9 @@ export function GuestPrompt() {
       setLook(!!d.look);
       setNeeds(d.needs ?? "gpu");
       setGpuOnly(!!d.gpuOnly);
-      setRequirement(typeof d.requirement === "string" && d.requirement ? d.requirement : undefined);
+      setSetup(d.setup ?? null);
+      setCanPick(canPickModel());
+      setRequirement(typeof d.requirement === "string" && d.requirement ? d.requirement : d.setup ? ownSetupLabel(d.setup) : undefined);
     };
     window.addEventListener(GUEST_PROMPT_EVENT, guest);
     // A run started from a toast (not a page's own button): the lists show it.
@@ -159,7 +180,15 @@ export function GuestPrompt() {
                   {keyOnly ? <KeyRound className="size-5" /> : <Cpu className="size-5" />}
                 </div>
                 <DialogTitle>
-                  {reason ? TITLES[reason] : keyOnly ? "Add an API key to run this" : ownOnly ? "This one runs on your own GPU" : action === "upload" && !keysAllowed ? "Connect your GPU to add your own files" : TITLES[action]}
+                  {reason
+                    ? TITLES[reason]
+                    : keyOnly
+                      ? "Add an API key to run this"
+                      : ownOnly
+                        ? (ownWords?.title ?? "This one runs on your own GPU")
+                        : action === "upload" && !keysAllowed
+                          ? "Connect your GPU to add your own files"
+                          : TITLES[action]}
                 </DialogTitle>
                 <DialogDescription>
                   {keyOnly ? (
@@ -171,13 +200,21 @@ export function GuestPrompt() {
                       "Your files are kept for your own runs on your own ComfyUI."
                     )
                   ) : ownOnly && !reason ? (
-                    `Connect yours, and this runs there. Everything else runs on ${ownOnly.text}.`
+                    (ownWords?.body ?? `Connect yours, and this runs there. Everything else runs on ${ownOnly.text}.`)
                   ) : (
                     <>{action === "connect" && !reason ? "Your runs go to the ComfyUI on your computer. It's free and private." : "Fuobe runs this on the ComfyUI on your computer. It's free and private."}</>
                   )}
                 </DialogDescription>
                 {/* What the item asked for needs (its own-setup label). */}
                 {requirement && <p className="text-[13px] font-medium text-brand-text">{requirement}</p>}
+                {/* Never a dead end (a phone rarely has a 48 GB card to connect): another model is one press away. */}
+                {ownOnly && !reason && canPick && (
+                  <div>
+                    <Button variant="secondary" size="sm" className="rounded-full" onClick={pick}>
+                      <Shuffle /> Pick another model
+                    </Button>
+                  </div>
+                )}
                 {/* Paid models run on the account's own key instead (Your keys), when the studio allows them. */}
                 {viewer?.kind === "account" && keysAllowed && !!viewer.keys?.length && (
                   <p className="text-[13px] text-muted-foreground">{`Or switch to Cloud to use your ${viewer.keys.map((k) => CLOUD_KEY[k].label).join(" or ")} key.`}</p>
@@ -212,16 +249,28 @@ export function GuestPrompt() {
                 <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
                   <Sparkles className="size-5" />
                 </div>
-                <DialogTitle>{action === "upload" ? "Create a free account to add your own files" : "Create a free account to run this"}</DialogTitle>
-                <DialogDescription>You&apos;re browsing as a guest. Sign up with an email and a password to generate, upload and keep your work.</DialogDescription>
+                <DialogTitle>{guestWords && action === "run" ? guestWords.title : action === "upload" ? "Create a free account to add your own files" : "Create a free account to run this"}</DialogTitle>
+                <DialogDescription>
+                  {guestWords && action === "run"
+                    ? guestWords.body
+                    : viewer?.hosted && kept && action === "run"
+                      ? KEPT_RUN_WORDS
+                      : "You're browsing as a guest. Sign up with an email and a password to generate, upload and keep your work."}
+                </DialogDescription>
               </DialogHeader>
-              <DialogFooter className="gap-2 sm:justify-start">
+              <DialogFooter className={guestWords ? "flex-wrap gap-2 sm:justify-start" : "gap-2 sm:justify-start"}>
                 <Button asChild>
                   <Link href={signInHref("signup", card?.here)} onClick={close}>
                     Sign up free
                   </Link>
                 </Button>
-                <Button asChild variant="secondary">
+                {/* An item that runs on one's own GPU or key: another model is the way on right now. */}
+                {guestWords && action === "run" && canPick && (
+                  <Button variant="secondary" onClick={pick}>
+                    <Shuffle /> Pick another model
+                  </Button>
+                )}
+                <Button asChild variant={guestWords && action === "run" && canPick ? "ghost" : "secondary"}>
                   <Link href={signInHref("login", card?.here)} onClick={close}>
                     Log in
                   </Link>

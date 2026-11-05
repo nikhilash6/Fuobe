@@ -13,6 +13,7 @@ import { ACCEPT, LibraryGrid } from "@/components/studio/media-slot";
 import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
 import { getModel } from "@/lib/catalog";
 import { loadModelViewer } from "@/components/model3d/model-viewer";
+import { PLACEHOLDER } from "@/lib/composer";
 import { askToSignUp, uploadFile, useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useIsGuest, useIsOwner, usePlaceName, useStatus } from "@/lib/api";
 import { ACTIVE_RUNS_CODE } from "@/lib/guest-access";
 import {
@@ -539,14 +540,20 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
 
   const cloudOnly = mode === "cloud";
   // Where the angles are made and their price, as the studios say it (the 3D view, then one picture per angle). The 3D
-  // view is built on the viewer's own GPU only (this studio's GPUs refuse it), so an account connects its own.
-  const place = useOpenRunPlace([getModel(ANY_ANGLE.buildModel)?.name, getModel(ANY_ANGLE.shotModel)?.name].filter((x): x is string => !!x), null, { ownGpuOnly: true });
+  // view is built on the viewer's own GPU, so an account connects its own; with hosted runs on, where the server's price
+  // check for the build says (this studio's GPUs where one of them builds it, else its label, which Run opens).
+  const hosted = !!useStatus().data?.viewer?.hosted;
+  const buildQuote = useMemo<GenerationRequest | null>(
+    () => (hosted ? { feature: ANY_ANGLE.stepFeature, modelId: ANY_ANGLE.buildModel, op: "splat", engine: "open", inputs: { images: [ref || PLACEHOLDER.image] } } : null),
+    [hosted, ref],
+  );
+  const place = useOpenRunPlace([getModel(ANY_ANGLE.buildModel)?.name, getModel(ANY_ANGLE.shotModel)?.name].filter((x): x is string => !!x), buildQuote, { ownGpuOnly: !hosted });
   const ready = !!view && !!ref;
   // A build that failed takes the angles waiting for it with it.
   const waiting = build?.status === "failed" || build?.status === "canceled" ? null : asked;
 
   const buildView = () => {
-    if (guest) return askToSignUp("run");
+    if (guest) return askToSignUp("run", place?.setup ? { setup: place.setup } : {});
     if (!ref) return;
     create.mutate(
       { feature: ANY_ANGLE.stepFeature, modelId: ANY_ANGLE.buildModel, op: "splat", engine: "open", inputs: { images: [ref] } },
@@ -592,7 +599,7 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
   };
 
   const make = async (list: AnglePick[], all = false) => {
-    if (guest) return askToSignUp("run");
+    if (guest) return askToSignUp("run", place?.setup ? { setup: place.setup } : {});
     if (!view || !ref || !list.length) return;
     const reqs = list.flatMap((p) => {
       const cam = cameraOf(p);
@@ -624,7 +631,7 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
   }, [waiting, ready]);
 
   const again = (g: Generation) => {
-    if (guest) return askToSignUp("run");
+    if (guest) return askToSignUp("run", place?.setup ? { setup: place.setup } : {});
     void send([{ ...g.request, account: undefined, params: { ...g.request.params, seed: newSeed() } } as GenerationRequest]);
   };
 
@@ -644,7 +651,7 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
   const building = busy(build);
   /** Make now, or (while the view builds) as soon as it is ready. */
   const start = (what: "picked" | "all") => {
-    if (guest) return askToSignUp("run");
+    if (guest) return askToSignUp("run", place?.setup ? { setup: place.setup } : {});
     if (ready) return void make(what === "all" ? options.filter((o) => !isCustom(o)) : picked, what === "all");
     if (building) setWaiting(what);
   };

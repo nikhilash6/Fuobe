@@ -1,4 +1,5 @@
 import type { MediaKind } from "./catalog/types";
+import type { OwnSetup } from "./own-setup";
 
 /**
  * A guest's whole studio draft through sign-up (hosted runs on): the words, the model and its settings, the preset and
@@ -139,12 +140,14 @@ export interface PendingRun {
   at: number;
   /** The draft Run was pressed on (draftPrint). */
   draft?: string;
+  /** Run was pressed on an item that runs on one's own GPU or key (its label): its setup opens once signed up. */
+  setup?: OwnSetup;
 }
 
-/** A guest pressed Run here on this draft: kept for this tab, to start once signed up. */
-export function savePendingRun(path: string, shown: ShownPrice, draft?: DraftLike): void {
+/** A guest pressed Run here on this draft: kept for this tab, to start (or open its setup: `setup`) once signed up. */
+export function savePendingRun(path: string, shown: ShownPrice, draft?: DraftLike, setup?: OwnSetup): void {
   try {
-    store()?.setItem(PENDING_KEY, JSON.stringify({ path, shown, at: Date.now(), ...(draft && { draft: draftPrint(draft) }) } satisfies PendingRun));
+    store()?.setItem(PENDING_KEY, JSON.stringify({ path, shown, at: Date.now(), ...(draft && { draft: draftPrint(draft) }), ...(setup && { setup }) } satisfies PendingRun));
   } catch {}
 }
 
@@ -213,8 +216,12 @@ export const PENDING_WORDS = {
  *   other runs, until the day's GPU time renews: the server takes it all the same); or the price can't be known now
  *   (the billing service doesn't answer: the run waits for it, and is priced against the price the guest saw);
  * - note: a new price, shown, and Run waits for a click;
+ * - setup: it runs on one's own GPU or key (the price check says its label, `setup`): that setup opens (Connect your GPU,
+ *   Add your key) with the draft back, and nothing starts;
  * - none: something is missing (the blocker says what), it would run elsewhere, it is refused now, or no price was shown
  *   to compare.
+ * A run pressed on such an item (`labelled`) never starts by itself: when it runs here now, the draft is back and Run
+ * waits for a click (`ask`).
  */
 export function pendingStep(o: {
   settled: boolean;
@@ -224,10 +231,15 @@ export function pendingStep(o: {
   quote?: { allowed: boolean; amount: number; text: string };
   lost: boolean;
   same: boolean;
-}): "wait" | "start" | "note" | "ask" | "lost" | "none" {
+  setup?: boolean;
+  labelled?: boolean;
+}): "wait" | "start" | "note" | "ask" | "lost" | "setup" | "none" {
   if (o.lost) return "lost";
   if (!o.settled) return "wait";
-  if (o.blocked || !o.pool) return "none";
+  if (o.blocked) return "none";
+  if (o.setup) return "setup";
+  if (o.labelled) return o.pool && o.quote?.allowed ? "ask" : "none";
+  if (!o.pool) return "none";
   if (!o.same) return o.quote?.allowed ? "ask" : "none";
   if (priceUnchanged(o.shown, o.quote)) return "start";
   // Allowed with no price said: the service doesn't answer now (the run is taken and waits for it).

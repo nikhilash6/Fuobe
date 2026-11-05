@@ -1,6 +1,6 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, GUEST_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, GUEST_HEADER, GUEST_RUN_MESSAGE, ownGpuToolMessage } from "@/lib/guest-access";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
 import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
@@ -14,12 +14,12 @@ import { accountInputProblem } from "./account-inputs";
 import { checkAccountLoras } from "./account-loras";
 import { requestViewer, type Account } from "./auth";
 import { accountRun, AccountRunError, asAccount, asVisitor, outputKind, previewChained, type AccountRunRefusal } from "./generations";
-import { BILLING_HEADER, type Quote } from "./billing";
+import type { Quote } from "./billing";
 import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
 import { runOnPool } from "./hosted";
-import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, policyWait, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ReserveFacts, type ReserveWait, type ToolPoolRun } from "./hosted-run";
+import { decideToolPlace, GUEST_PLAN, lateRefusal, madeRunProblem, moderateRun, policyWait, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ReserveFacts, type ReserveWait, type ToolPoolRun } from "./hosted-run";
 import { cancelGeneration, captureRun } from "./generations";
 import { AdmitRefused, admitRun, clientAddress, closeAdmission, forgetAdmission, openAdmission, ownActiveRuns, poolLimitPlan, type AdmitPlan } from "./pool-limits";
 import { heldGuessMs, holdRun, holdShape } from "./pool-holds";
@@ -67,7 +67,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 export const guestRun = () => Response.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: { [GUEST_HEADER]: "1", ...NO_STORE } });
 
 /** A tool (or a step of one) that doesn't run on an account's own GPU or key: one answer, no sign-up card. */
-export const ownGpuTool = () => Response.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403, headers: NO_STORE });
+export const ownGpuTool = () => Response.json({ error: ownGpuToolMessage(hostedRunsOn()), code: "own-gpu-tool" }, { status: 403, headers: NO_STORE });
 
 /**
  * Run `fn` as the viewer's work: the owner's as it is; an account's inside asAccount (its files, its runs, its GPU, its
@@ -605,7 +605,11 @@ async function startOnPool<T>(
   };
   /** Refused from here on: after its hold was made, when one was (it goes back). */
   const refused = (response: Response): AccountToolResult<T> => ({ ...back(response), ...(stamp.hold && { held: true }) });
-  const notOffered = (error: string) => refuse(403, error, { code: "not-offered" }, { [BILLING_HEADER]: "not-offered" });
+  // A step of the run as made that these GPUs don't take: its label, which opens Connect your GPU (lateRefusal).
+  const notOffered = (error: string) => {
+    const late = lateRefusal(error);
+    return refuse(late.status, late.body.error, late.body, late.headers);
+  };
   /**
    * What the start made: its capture (its value, and its rows, which keep coming while an awaiting start runs), its open
    * admission, and what the policy's limits decided (whether it waits to enter the line).

@@ -32,9 +32,12 @@ vi.mock("@/lib/api", async (load) => ({
   useEngineMode: () => "both",
 }));
 
-const { hostedGuestWords, hostedWords, outputsWords } = await import("@/server/hosted");
-const { gateText, ownGpuQuiet } = await import("@/server/hosted-run");
+const { hostedDetails, hostedGuestWords, hostedWords, outputsWords } = await import("@/server/hosted");
+const { gateDetail, gateText, ownGpuQuiet } = await import("@/server/hosted-run");
 const { needsGpu } = await import("@/server/pool-own-setup");
+const { KEPT_RUN_WORDS, setupCardWords } = await import("@/lib/own-setup-card");
+const { boardRunWords } = await import("@/lib/board-run-words");
+const { OWN_GPU_TOOL_HOSTED } = await import("@/lib/guest-access");
 const { SITE_HIDDEN_WORDS } = await import("@/server/output-checks");
 const { SITE_FAILED_WORDS } = await import("@/lib/comfy-compose");
 const { FILE_TROUBLE_WORDS, POOL_WORDS } = await import("@/lib/relay");
@@ -109,13 +112,21 @@ afterEach(() => notePlaceName(null));
 
 /** Every sentence a visitor reads from the server's word tables, for a place. */
 function serverWords(place: ReturnType<typeof placeOf>): string[] {
-  const reasons = ["notOffered", "rtxCard", "loras", "inputs"] as const;
+  const reasons = ["notOffered", "rtxCard", "loras", "inputs", "size", "model3d"] as const;
+  const setups = [needsGpu(), { need: "gpu" as const, vramGb: 48 }, { need: "gpu" as const, vramGb: 24, orKey: "fal" as const }, { need: "key" as const, provider: "fal" }];
   return [
     ...Object.values(hostedWords(place)),
     ...Object.values(hostedGuestWords()),
+    ...Object.values(hostedDetails(place, "8 megapixels")),
+    ...Object.values(hostedDetails(place)),
     ...[1, 3].flatMap((cap) => [outputsWords(cap, false, place), outputsWords(cap, true, place)]),
-    ...reasons.flatMap((reason) => [gateText({ ok: false, reason }, false, place), gateText({ ok: false, reason }, true, place)]),
+    ...reasons.flatMap((reason) => [gateText({ ok: false, reason }, false, place), gateText({ ok: false, reason }, true, place), gateDetail({ ok: false, reason, most: "10 s clips" }, place) ?? ""]),
     gateText({ ok: false, reason: "ownSetup", setup: needsGpu() }, false, place),
+    // The cards a labelled item opens (a guest's sign-up, an account's setup), and the other surfaces' labels.
+    ...setups.flatMap((s) => (["guest", "account"] as const).flatMap((who) => Object.values(setupCardWords(s, place, who)))),
+    KEPT_RUN_WORDS,
+    ...[true, false].flatMap((one) => Object.values(boardRunWords(one, place))),
+    OWN_GPU_TOOL_HOSTED,
     gateText({ ok: false, reason: "outputs", cap: 2 }, false, place),
     ownGpuQuiet(place),
     ...Object.values(POOL_WORDS),
@@ -131,6 +142,12 @@ function chipWords(place: ReturnType<typeof placeOf>): string[] {
   for (const audience of ["account", "guest"] as const)
     for (const pool of [undefined, { text: "" }, { text: "1 generation", wait: "ready in about 40 s" }, { text: "Free", wait: "starts when a GPU is free" }, { text: "You have 2 runs going.", refused: true }])
       for (const p of [runPlace({ audience, engine: "open", hosted: true, models: ["Z-Image Turbo"], pool, place, format: String })]) out.push(p.label, p.price, p.title, p.tip, p.send);
+  // A label (what runs on one's own GPU), and a tool for the studio's owner only.
+  for (const audience of ["account", "guest"] as const) {
+    const labelled = runPlace({ audience, engine: "open", hosted: true, pool: { text: "Runs on your own GPU · 48 GB", refused: true, setup: { need: "gpu", vramGb: 48 } }, place, format: String });
+    const ownerOnly = runPlace({ audience, engine: "cloud", hosted: true, ownerOnly: "Ads Studio", place, format: String });
+    for (const p of [labelled, ownerOnly]) out.push(p.label, p.price, p.title, p.tip, p.send);
+  }
   return out.filter(Boolean);
 }
 

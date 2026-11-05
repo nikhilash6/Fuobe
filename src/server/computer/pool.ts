@@ -954,6 +954,24 @@ export function workersCanRun(workflowId: string | null, o: { size?: Needs["size
   return ableWorkers(workflowId, o).length > 0;
 }
 
+/**
+ * The largest job of a workflow any worker that may and can run it makes (its PC's ceiling), each limit apart: undefined
+ * where one of them has no limit, and for a workflow none of them runs. Said before Run with a size they don't make.
+ */
+export function workersMost(workflowId: string): { maxMegapixels?: number; maxSeconds?: number; maxOutputs?: number } {
+  const ceilings = ableWorkers(workflowId).map(ceilingOf);
+  const most = (k: "maxMegapixels" | "maxSeconds" | "maxOutputs"): number | undefined => {
+    if (!ceilings.length || ceilings.some((c) => !c?.[k])) return undefined;
+    return Math.max(...ceilings.map((c) => c![k]!));
+  };
+  const out: { maxMegapixels?: number; maxSeconds?: number; maxOutputs?: number } = {};
+  for (const k of ["maxMegapixels", "maxSeconds", "maxOutputs"] as const) {
+    const v = most(k);
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
 /** The workers that may and can run this workflow (any workflow: null), whatever their state now (workersCanRun). */
 function ableWorkers(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean } = {}): WorkerRow[] {
   const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;

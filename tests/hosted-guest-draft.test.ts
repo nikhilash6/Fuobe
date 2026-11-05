@@ -151,6 +151,24 @@ describe("the run a guest pressed", () => {
     expect(composer).toMatch(/onSuccess: \(\) => \{[^}]*signedUp && viewerInfo\?\.hosted\) setPriceNote\(PENDING_WORDS\.made\)/);
   });
 
+  it("pressed on an item that runs on one's own GPU or key: never starts by itself; its setup opens once signed up", () => {
+    const setup = { need: "gpu" as const, vramGb: 48 };
+    draftLib.savePendingRun("/video", null, undefined, setup);
+    expect(draftLib.takePendingRun("/video")).toMatchObject({ path: "/video", shown: null, setup });
+    // Still labelled after sign-up: its setup opens (Connect your GPU, Add your key) with the draft back; nothing runs.
+    expect(step({ shown: null, setup: true, labelled: true })).toBe("setup");
+    // A kept run whose item is labelled now: its setup too, never a start.
+    expect(step({ setup: true })).toBe("setup");
+    // It runs here now: the draft is back and Run waits for a click.
+    expect(step({ shown: null, labelled: true })).toBe("ask");
+    expect(step({ labelled: true })).toBe("ask");
+    expect(step({ shown: null, labelled: true, quote: { allowed: false, amount: 0, text: "" } })).toBe("none");
+    expect(step({ shown: null, labelled: true, pool: false })).toBe("none");
+    // A missing file says so first, and a lost one is asked for again.
+    expect(step({ setup: true, blocked: true })).toBe("none");
+    expect(step({ setup: true, lost: true })).toBe("lost");
+  });
+
   it("never starts without a kept file that didn't come back, even in a slot the run could do without", () => {
     // When every run costs the same ("Free") and a reference photo or start frame is optional, only the lost file
     // stops it, and the person is asked to add it again.

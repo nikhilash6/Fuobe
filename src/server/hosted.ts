@@ -6,7 +6,7 @@ import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import type { Place } from "@/lib/place-name";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
-import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun, type LinePlace } from "./computer/pool";
+import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun, workersMost, type LinePlace } from "./computer/pool";
 import { db } from "./db";
 import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
@@ -86,6 +86,35 @@ export function poolTakes(endpoint: string | undefined): boolean {
   return picks.length > 0 && picks.every((id) => workersCanRun(id));
 }
 
+/** The size of one job, as a PC's ceiling reads it: its pictures' or frames' megapixels, a clip's seconds, its results. */
+export interface JobSize {
+  megapixels: number;
+  seconds: number;
+  outputs: number;
+}
+
+/**
+ * Does a job of this size fit a GPU here that runs its workflow (on the workers: one whose PC's ceiling holds it)? Yes
+ * for a workflow none of them runs (another check speaks for it), one that picks its graph at run time, and off the
+ * workers (this install's own ComfyUI has no ceiling).
+ */
+export function poolFitsSize(endpoint: string | undefined, size: JobSize): boolean {
+  if (!endpoint || endpoint.includes("{") || !poolOnWorkers() || !workersCanRun(endpoint)) return true;
+  return workersCanRun(endpoint, { size });
+}
+
+const tenth = (n: number) => Math.round(n * 10) / 10;
+
+/** The largest size the GPUs here make of the limit a job passes, in words ("8 megapixels", "10 s clips"), or null. */
+export function poolMostWords(endpoint: string | undefined, size: JobSize): string | null {
+  if (!endpoint || endpoint.includes("{")) return null;
+  const most = workersMost(endpoint);
+  if (most.maxMegapixels !== undefined && size.megapixels > most.maxMegapixels) return `${tenth(most.maxMegapixels)} megapixels`;
+  if (most.maxSeconds !== undefined && size.seconds > most.maxSeconds) return `${tenth(most.maxSeconds)} s clips`;
+  if (most.maxOutputs !== undefined && size.outputs > most.maxOutputs) return `${most.maxOutputs} results at a time`;
+  return null;
+}
+
 /**
  * Are this install's GPUs all away for this endpoint now (on the workers: every worker that could run it paused, silent or
  * outside its hours)? A run made then waits in line until one is back: the price check says it starts when a GPU is
@@ -146,13 +175,18 @@ export function runOnPool<T>(accountId: string | null, fn: () => T): T {
 /**
  * Words for runs on this install's GPUs, with the name visitors read for them (`place`, src/server/place-name.ts). Every
  * sentence fits any name: no verb agrees with it.
+ *
+ * What these GPUs don't run is a label, never a refusal: the price slot says where it runs ("Runs on your own GPU"), its
+ * tooltip says what to do (hostedDetails), and Run opens the way there (Connect your GPU, or a guest's sign-up). The
+ * same labels for a guest and an account.
  */
 export function hostedWords(place: Place) {
   return {
-    notOffered: "This one runs on your own GPU. Connect one in Settings, or pick another model.",
-    loras: "Extra LoRAs run on your own GPU. Connect one in Settings, or run without them.",
-    inputs: "This kind of file runs on your own GPU. Connect one in Settings, or use a picture.",
-    rtxCard: "This one needs an NVIDIA RTX card. Connect your own RTX GPU in Settings, or pick another choice.",
+    notOffered: "Runs on your own GPU",
+    loras: "LoRAs run on your own GPU",
+    inputs: "This file runs on your own GPU",
+    rtxCard: "Runs on your own RTX GPU",
+    size: "This size runs on your own GPU",
     notHosted: `Your account can't run on ${place.text} right now. Your own GPU or key still works.`,
   };
 }
@@ -160,14 +194,21 @@ export function hostedWords(place: Place) {
 /** The reasons a run on this install's GPUs is refused, by name (the same for every place name). */
 export type HostedReason = keyof ReturnType<typeof hostedWords>;
 
-/** The same refusals for a guest, who has no Settings to connect a GPU in yet (no place name in them). */
-export function hostedGuestWords() {
+/** A label's one sentence (the price slot's tooltip, the line under the toolbar on a phone). `most`: the largest size here. */
+export function hostedDetails(place: Place, most?: string | null) {
   return {
-    notOffered: "This one isn't offered here. Pick another model.",
-    rtxCard: "This one isn't offered here right now. Pick another choice.",
-    loras: "Extra LoRAs aren't offered here. Run without them.",
-    inputs: "This kind of file can't be used here. Use a picture instead.",
+    notOffered: "Connect your GPU to run this one, or pick another model.",
+    loras: "Connect your GPU to use them, or run without them.",
+    inputs: "Connect your GPU to use it, or use a picture.",
+    rtxCard: "This one needs an NVIDIA RTX card.",
+    size: `${most ? `Up to ${most} on ${place.text}. ` : ""}Pick a smaller size, or run it on your own GPU.`,
   };
+}
+
+/** The labels for a guest: the same as an account's (Run opens the sign-up for that label). */
+export function hostedGuestWords() {
+  const { notOffered, rtxCard, loras, inputs, size } = hostedWords({ label: "", text: "" });
+  return { notOffered, rtxCard, loras, inputs, size };
 }
 
 /**
@@ -179,6 +220,9 @@ export function outputsWords(cap: number, guest: boolean, place: Place): string 
   const pick = cap === 1 ? "Pick one" : `Pick ${cap} or fewer`;
   return guest ? `Makes ${most}. ${pick}.` : `Makes ${most} on ${place.text}. ${pick}, or connect your own GPU in Settings.`;
 }
+
+/** Are these words outputsWords (a run past the outputs a run here makes: the person picks fewer), not a label? */
+export const isOutputsWords = (words: string): boolean => /^Makes (one|up to \d+) at a time\b/.test(words);
 
 /** May this model (and app) run on this install's GPUs under this policy? */
 export function poolAllows(p: Pick<Policy, "pool">, modelId: string, presetId?: string | null): boolean {

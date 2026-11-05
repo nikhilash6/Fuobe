@@ -12,7 +12,7 @@ const { saveFile } = await import("@/server/storage");
 const { asAccount, createGenerations } = await import("@/server/generations");
 const { db } = await import("@/server/db");
 const { withRunStamp } = await import("@/server/run-stamp");
-const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
+const MODEL3D_LABEL = "Runs on your own GPU · 24 GB";
 afterAll(() => {
   delete process.env.FUOBE_TEST_SECRET;
 });
@@ -143,7 +143,7 @@ describe("an account's 3D model runs on its own GPU or key, never on this instal
   it("refuses the same run on this install's GPUs (the pool's stamp) before anything is queued", () => {
     const rows = () => (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
     const before = rows();
-    expect(() => asAccount("acct-1", () => withRunStamp({ place: "pool" }, () => createGenerations(request())))).toThrow(OWN_GPU_TOOL_MESSAGE);
+    expect(() => asAccount("acct-1", () => withRunStamp({ place: "pool" }, () => createGenerations(request())))).toThrow(MODEL3D_LABEL);
     expect(rows()).toBe(before);
   });
 
@@ -152,6 +152,6 @@ describe("an account's 3D model runs on its own GPU or key, never on this instal
       const made = asAccount("acct-1", () => createGenerations(request({ place })));
       expect(made[0].request.place, place).toBeUndefined();
     }
-    expect(() => asAccount("acct-1", () => withRunStamp({ place: "pool" }, () => createGenerations(request({ place: "own" }))))).toThrow(OWN_GPU_TOOL_MESSAGE);
+    expect(() => asAccount("acct-1", () => withRunStamp({ place: "pool" }, () => createGenerations(request({ place: "own" }))))).toThrow(MODEL3D_LABEL);
   });
 });

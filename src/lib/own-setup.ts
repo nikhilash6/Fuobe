@@ -158,7 +158,11 @@ export function ownSetupGraphs(id: string): readonly string[] {
 export const OWN_SETUP_IDS: readonly string[] = Object.keys(ITEMS);
 
 const KEY_NAME: Record<string, string> = { fal: "fal.ai", replicate: "Replicate" };
-const keyName = (p: string) => KEY_NAME[p] ?? p;
+/** A key provider's name as people read it: "fal.ai", "Replicate". */
+export const keyName = (p: string): string => KEY_NAME[p] ?? p;
+
+/** The own GPU a 3D model runs on when its workflow's index names no memory (hosted runs: one no worker finishes). */
+export const MODEL3D_SETUP: OwnSetup = { need: "gpu", vramGb: 24 };
 
 /**
  * The label next to an item: "Runs on your own GPU · 48 GB", "Set up on your computer", "Use your own

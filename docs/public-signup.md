@@ -681,16 +681,38 @@ With it on:
   one run on the key, and a note's link to a tool's cloud version opens that page on Cloud for that visit: neither
   moves the switch. (With hosted runs off, the browser keeps one switch, starting on Cloud, and saving a key moves it
   there, as before.)
-- A model, mode or option that runs only on a person's own GPU or key keeps its label there ("Runs on your own GPU ·
-  48 GB", `src/lib/own-setup.ts`), and Run opens that setup. So does a run that no worker can take (none holds its
-  files or may run its lane). Extra LoRAs added to a request stay on the account's own GPU.
-- A 3D model (Image to 3D, and Refine detail on its model) runs there only while a worker's CPU slot finishes it, and
-  only when the billing service's policy allows 3D (`kinds.model3d`). Every other 3D model stays on the account's
-  own GPU or key.
-- A choice that needs an NVIDIA RTX card (RTX Video's upscale, frame generation and HDR) doesn't go to the studio's
-  GPUs when their last GPU check says the card can't run it, or that their ComfyUI lacks the RTX Video nodes. The run
-  goes to the account's own GPU when it has one, or answers 403 `not-offered` ("This one needs an NVIDIA RTX card, and
-  this studio's GPUs can't run it right now…").
+- What this install's GPUs can't run is a label, never a refusal, the same for a guest and an account. The price
+  slot says where it runs and its tooltip what to do; Run opens the way there (Connect your GPU, Add your key, or a
+  guest's sign-up card for that label), and with the GPU or key already there, the first press runs on it:
+  - a model, mode or option that runs only on a person's own GPU or key ("Runs on your own GPU · 48 GB",
+    `src/lib/own-setup.ts`), and a run that no worker can take (none holds its files or may run its lane): "Runs on
+    your own GPU";
+  - extra LoRAs added to a request: "LoRAs run on your own GPU", with "Run without LoRAs";
+  - a kind of file the policy keeps off: "This file runs on your own GPU";
+  - a choice that needs an NVIDIA RTX card (RTX Video's upscale, frame generation and HDR) when the GPUs' last check
+    says their card can't run it, or that their ComfyUI lacks the RTX Video nodes: "Runs on your own RTX GPU";
+  - a size bigger than every GPU here makes (each worker's PC ceiling: megapixels, seconds, results at once), said
+    before Run: "This size runs on your own GPU", tooltip "Up to 8 megapixels on our GPUs. Pick a smaller size, or
+    run it on your own GPU." The run's own size check stays as the last guard;
+  - a 3D model no worker finishes (Image to 3D, and Refine detail on its model run there only while a worker's CPU
+    slot finishes them, and only when the policy allows 3D, `kinds.model3d`; Any Angle's 3D view runs there like a
+    picture): "Runs on your own GPU · 24 GB".
+
+  The answer to such a run is 403 with `code: "connect-gpu"` (or `"add-key"`), the label as `error`, `ownSetup` and
+  the `x-fuobe-connect-gpu` and `x-fuobe-own-setup` headers, so the card that opens says what it needs: "This one runs
+  on your own GPU" / "It needs a GPU with 48 GB of memory. Connect yours, and this runs there. Everything else runs on
+  our GPUs." with **Connect your GPU** and **Pick another model** (never a dead end on a phone). A guest's card says
+  "Sign up free, then connect yours in a few steps." instead, never that the run starts once signed in; after sign-up
+  the draft is back and that setup opens on the same page, and nothing runs by itself. Only a run past the outputs a
+  run here makes is still words (`not-offered`: "Makes up to 4 at a time on our GPUs…"; the tools cut the count).
+- Relight and Any Angle run there like the studios (the price check says where, or the label). Canvas board runs and
+  the Ads Studio, Ad Multiplier, Click to Ad and Marketing Studio don't run for accounts yet: a board's Run points at
+  the studio that makes it ("Make this in the Video studio", on our GPUs), and those tools' place chip says "Coming
+  soon" with the studios to use now. A tool no account's own GPU or key runs yet answers "This one isn't open to
+  accounts yet. Try the Image, Video or Audio studio, or an app, effect or camera motion."
+- A run on this install's GPUs that failed on the person's own files ("A clip or sound in this run couldn't be read.",
+  "This run couldn't finish with these files or settings.") offers **Reuse** first (the draft comes back to change),
+  and Retry second.
 - When a billing service names the models that may run on the studio's GPUs, that applies to every model a run uses,
   not only its main one.
 - An account can upload pictures for these runs. Clips and sound go to the workers only when the install allows them
@@ -754,7 +776,7 @@ Two optional services can go with it:
 The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side
 and the gate), `src/server/account-tool-run.ts` (a tool's run), `src/server/run-stamp.ts` (what every row of a run
 carries), `src/server/run-on.ts` (the account's pick of where its runs go) and `src/lib/hosted.ts` (the browser's
-side). The tests are `tests/hosted-runs.test.ts`, `tests/run-on.test.ts`,
+side). The tests are `tests/hosted-runs.test.ts`, `tests/run-on.test.ts`, `tests/hosted-surface-labels.test.ts`,
 `tests/hosted-tool-runs.test.ts`, `tests/pool-account-runs.test.ts`, `tests/billing-hook.test.ts`,
 `tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`.
 

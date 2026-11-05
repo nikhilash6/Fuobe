@@ -42,7 +42,6 @@ const billing = await import("@/server/billing");
 const { clearAccountLoras } = await import("@/server/account-loras");
 const { hostedWords } = await import("@/server/hosted");
 const HOSTED_WORDS = hostedWords((await import("@/lib/place-name")).placeOf(null));
-const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
 
 let fake: FakeBilling;
 const ids: Record<string, string> = {};
@@ -118,7 +117,7 @@ type Case = {
   url: string;
   body: (pic: string) => Record<string, unknown>;
   /** Refused on this install's GPUs before Run, in these words (a step that runs only on an own GPU for now). */
-  ownOnly?: string;
+  ownOnly?: string | RegExp;
 };
 const CASES: Case[] = [
   { name: "Photodump", route: routes.photodump, url: "/api/photodump", body: (pic) => ({ packId: "winter-special", engine: "open", selfie: pic, aspectRatio: "3:4" }) },
@@ -127,7 +126,7 @@ const CASES: Case[] = [
   { name: "Character Sheet", route: routes.character, url: "/api/photodump/character", body: () => ({ mode: "describe", engine: "open", prompt: "a surfer from Lisbon" }) },
   // The turnaround's angle LoRA isn't one this install's GPUs carry yet, and Fly around's path is drawn from a 3D step.
   { name: "Turnaround", route: routes.turnaround, url: "/api/turnaround", body: (pic) => ({ engine: "open", views: { front: pic, back: pic } }), ownOnly: HOSTED_WORDS.notOffered },
-  { name: "Fly around", route: routes.flyAround, url: "/api/fly-around", body: (pic) => ({ engine: "open", image: pic, orbit: { degrees: 90, direction: "cw" } }), ownOnly: OWN_GPU_TOOL_MESSAGE },
+  { name: "Fly around", route: routes.flyAround, url: "/api/fly-around", body: (pic) => ({ engine: "open", image: pic, orbit: { degrees: 90, direction: "cw" } }), ownOnly: /^Runs on your own GPU · \d+ GB$/ },
 ];
 
 describe("hosted runs off: an account's app runs as any tool run, on its own GPU", () => {
@@ -156,12 +155,15 @@ describe("hosted runs on: an account with no GPU of its own runs the apps on thi
       expect(priced.place, JSON.stringify(priced)).toBe("pool");
       if (c.ownOnly) {
         // Run stays off and says why; pressed anyway, nothing is held or made.
-        expect(priced.quote).toMatchObject({ allowed: false, text: c.ownOnly });
+        // A label (never a refusal): Run opens the own setup it names.
+        expect(priced.quote).toMatchObject({ allowed: false, text: typeof c.ownOnly === "string" ? c.ownOnly : expect.stringMatching(c.ownOnly), ownSetup: expect.objectContaining({ need: "gpu" }) });
         const before = reserves();
         const since = Date.now();
         const r = await c.route.POST(json(c.url, "POST", c.body(pic), "none"));
         expect(r.status).toBe(403);
-        expect(((await r.json()) as { error: string }).error).toBe(c.ownOnly);
+        const refusedWith = (await r.json()) as { error: string; code: string; ownSetup?: unknown };
+        expect(refusedWith.error).toMatch(typeof c.ownOnly === "string" ? new RegExp(`^${c.ownOnly}$`) : c.ownOnly);
+        expect(refusedWith).toMatchObject({ code: "connect-gpu", ownSetup: expect.objectContaining({ need: "gpu" }) });
         expect(reserves()).toBe(before);
         expect(places("none", since)).toEqual([]);
         return;
