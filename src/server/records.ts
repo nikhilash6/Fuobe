@@ -64,12 +64,23 @@ export function accountRecordExists(ref: RecordRef, accountId: string): boolean 
   }
 }
 
+/**
+ * recordExists for the owner or a guest (the proxy and the pages): never an account's row of a shared table, so an
+ * account's channel, episode, explainer or series page is a real 404 for them.
+ */
+export function installRecordExists(ref: RecordRef): boolean {
+  const kind = ACCOUNT_KINDS[ref.kind];
+  if (kind && SHARED_TABLE.has(ref.kind)) {
+    try {
+      if (accountProjectOwner(kind, ref.ids[0])) return false;
+    } catch {}
+  }
+  return recordExists(ref);
+}
+
 /** recordExists for whoever asks (a page's request headers): an account's own on a page kept per account. */
 export function recordFor(ref: RecordRef, headers: Headers): boolean {
   const account = requestAccount({ headers } as Request);
   if (account) return accountRecordExists(ref, account.id) ?? recordExists(ref);
-  // The owner's page never opens an account's row of a shared table.
-  const kind = ACCOUNT_KINDS[ref.kind];
-  if (kind && SHARED_TABLE.has(ref.kind) && accountProjectOwner(kind, ref.ids[0])) return false;
-  return recordExists(ref);
+  return installRecordExists(ref);
 }

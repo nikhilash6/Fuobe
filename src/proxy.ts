@@ -31,7 +31,7 @@ import {
 import { ADMIN_BEARER, authEnabled, crossSite, hasCloudKey, hostAllowed, LoginGuard, publicSignup, sessionCookieOf, sessionViewer, validSession, validToken, type Account, type Viewer } from "@/server/auth";
 import { fileAccount, generationAccount } from "@/server/account-library";
 import { hit } from "@/server/rate";
-import { accountRecordExists, recordExists } from "@/server/records";
+import { accountRecordExists, installRecordExists } from "@/server/records";
 import { findShare, shareGuard, shareTargetExists } from "@/server/share-access";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { authStoreFailed } from "@/server/auth-store";
@@ -72,8 +72,9 @@ function pass(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const app = /^\/apps\/([^/]+)\/?$/.exec(pathname)?.[1];
   if ((app && !APP_IDS.has(safeDecode(app))) || unknownHubMode(pathname) || unknownStarterPage(pathname)) return notFound(request);
+  // The owner's and a guest's rule: an account's row in a tool's shared table is never theirs to open.
   const record = recordForPath(pathname);
-  if (record && !recordExists(record)) return notFound(request);
+  if (record && !installRecordExists(record)) return notFound(request);
   return NextResponse.next();
 }
 

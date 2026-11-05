@@ -585,7 +585,9 @@ function advance(id: string, d: SeriesData): SeriesData {
       .finally(() => writing().delete(id));
     writing().set(id, job);
   }
-  return { ...d, analysis: { ...a, stage: a.engine === "open" ? "Writing the brief…" : "Claude is writing the brief…" } };
+  // An account's brief is written here from the clip's shape and words: no AI helper reads it.
+  const helper = a.engine !== "open" && !accountProjectOwner(SERIES_KIND, id);
+  return { ...d, analysis: { ...a, stage: helper ? "Claude is writing the brief…" : "Writing the brief…" } };
 }
 
 // ---------------------------------------------------------------------------
