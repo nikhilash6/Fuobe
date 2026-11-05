@@ -513,6 +513,35 @@ function pathFinish(photo = smallPng()) {
 }
 
 describe("finishing jobs and their run", () => {
+  it("a chain step's camera path waits at its run's place and in its class, from the run's first job", () => {
+    const first = generation(accountId, "image-to-video");
+    const rankAt = Date.now() - 20 * 60_000;
+    tasks.createTask({
+      principal: `acct:${accountId}`,
+      generationId: first,
+      graph: {},
+      workflowId: GPU_WORKFLOW,
+      pool: { pools: ["pool"], account: accountId, class: "paid", rankAt, lane: pool.poolLane(GPU_WORKFLOW), needs: { workflowId: GPU_WORKFLOW, files: [], packs: [], minVramBytes: 0 } },
+    });
+    // The step its path is drawn for waits on the first step, and has no job of its own yet. One press of Run made both:
+    // they share its batch and its class.
+    const step = generation(accountId, "image-to-video");
+    db().prepare("UPDATE generations SET depends_on = ? WHERE id = ?").run(first, step);
+    db().prepare("UPDATE generations SET batch_id = 'path-run', request_json = json_set(request_json, '$.class', 'paid') WHERE id IN (?, ?)").run(first, step);
+    const id = finish.queueFinish({
+      kind: "path",
+      generationId: step,
+      account: accountId,
+      step: 0,
+      inputs: [
+        { slot: "photo", data: smallPng(), contentType: "image/png", name: "photo.png" },
+        { slot: "depth", data: smallPng(), contentType: "image/png", name: "depth.png" },
+      ],
+      settings: { keys: finish.pathKeys([{ t: 0, azimuth: 0, elevation: 0, distance: 1 }, { t: 1, azimuth: 20, elevation: 4, distance: 0.8 }]), frames: 9, fps: 16 },
+    });
+    expect(row(id)).toMatchObject({ class: "paid", rank_at: rankAt, slot: "cpu" });
+  });
+
   it("are queued once for a run (and step), however often they are asked", () => {
     const gid = generation(accountId, "image-to-3d");
     const queue = () => finish.queueFinish({ kind: "model3d", generationId: gid, account: accountId, inputs: [{ slot: "model", data: Buffer.from("glTF fake model bytes"), contentType: "model/gltf-binary", name: "model.glb" }], settings: { material: "auto", turntable: true } });

@@ -11,7 +11,7 @@ import { ACCOUNT_TURNTABLE, accountFinishProblem, FINISHED_3D_OPS, MODEL_FINISH_
 import { getSetting } from "../settings";
 import { absolutePath, deleteAsset, getAsset, readRef, saveFile, type Asset } from "../storage";
 import { tenantAccount } from "../tenant";
-import { cpuSlotOf, poolWaitMs, RETRY_WINDOW_MS, ticketReady } from "./pool";
+import { cpuSlotOf, poolWaitMs, RETRY_WINDOW_MS, runPlaceOf, ticketReady } from "./pool";
 import { createTask, endTask, json, receivedFile, resultOf, stageInput, stagedInput, type FinishedPlan, type TaskRow } from "./tasks";
 import type { WorkerRow } from "./workers";
 
@@ -60,10 +60,6 @@ export function finishTask(generationId: string, kind: FinishKind, step = 0): Ta
   const rows = db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? AND finish_json IS NOT NULL ORDER BY created_at DESC").all(generationId) as TaskRow[];
   return rows.find((t) => ticketOf(t)?.kind === kind && (json<{ step?: number }>(t.extra_json, {}).step ?? 0) === step) ?? null;
 }
-
-/** The run's own task on the workers (its class and its place in line), when it had one. */
-const runTask = (generationId: string) =>
-  db().prepare("SELECT class, rank_at FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND finish_json IS NULL ORDER BY created_at DESC LIMIT 1").get(generationId) as Pick<TaskRow, "class" | "rank_at"> | undefined;
 
 /** The wait the run was stamped with (the billing service's limit), else this install's (FUOBE_POOL_WAIT_MIN). */
 function runWaitMs(generationId: string): number {
@@ -116,7 +112,9 @@ export function queueFinish(o: {
     .transaction((): string => {
       const again = queued();
       if (again) return again;
-      const run = runTask(o.generationId);
+      // The run's class and place in line (pool.ts runPlaceOf): a chain's camera path is queued for a step that has no
+      // job of its own yet, and keeps the place of the steps of its run before it.
+      const run = runPlaceOf(o.generationId);
       const now = Date.now();
       const t = createTask({
         principal,
@@ -129,8 +127,8 @@ export function queueFinish(o: {
         pool: {
           pools: ["pool"],
           account: o.account,
-          class: run?.class === "paid" ? "paid" : "free",
-          rankAt: run?.rank_at ?? now,
+          class: run?.class ?? "free",
+          rankAt: run?.rankAt ?? now,
           lane: "small",
           needs: { workflowId: `finish-${o.kind}`, files: [], packs: [], minVramBytes: 0 },
           notAfter: now + runWaitMs(o.generationId),

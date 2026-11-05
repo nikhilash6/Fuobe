@@ -995,7 +995,7 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
  */
 export function poolFields(
   workflowId: string,
-  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string } = {},
+  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; rankAt?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string } = {},
   now = Date.now(),
 ) {
   const index = loadIndex();
@@ -1010,12 +1010,61 @@ export function poolFields(
     ...(cpuWorkflow(workflowId) && { slot: "cpu" as const }),
     account: o.account,
     class: o.class ?? (o.account ? ("free" as const) : ("owner" as const)),
-    // A head start is only inside a class, and never more than a day.
-    rankAt: now - Math.max(0, Math.min(o.boostMs ?? 0, 24 * 60 * 60_000)),
+    // A head start is only inside a class, and never more than a day. A later step of a run keeps the run's place (rankAt).
+    rankAt: o.rankAt ?? now - Math.max(0, Math.min(o.boostMs ?? 0, 24 * 60 * 60_000)),
     lane,
     needs: needs ?? { workflowId, files: [], packs: [], minVramBytes: 0, ...extra },
     notAfter: o.waitMs ? now + o.waitMs : undefined,
     onlyWorker: o.onlyWorker,
+  };
+}
+
+/** SQL: row `g` was made by the same press of Run as the row asked about (@hold: its billing hold; with none, @batch). */
+const SAME_PRESS = "(CASE WHEN @hold IS NOT NULL THEN json_extract(g.request_json, '$.hold') IS @hold ELSE @batch IS NOT NULL AND g.batch_id IS @batch END)";
+
+/**
+ * Where a row's job waits in line on the workers as part of its run (one press of Run, which made the row and every step
+ * of its chain at once):
+ *
+ * - `class`: the run's ("paid" when the billing service said so, else "free").
+ * - `rankAt`: the run's place in line. The first job any of its rows had on the workers sets it (the row itself, or a
+ *   step of the same run that fed it). A later step with no such job yet keeps the time the run was made (less its head
+ *   start). Null for a run's first job: it waits from now.
+ * - `started`: a worker took one of those jobs. The run's wait limit no longer applies then (it applies only before the
+ *   run's first start).
+ *
+ * A chain's later step and a finishing job keep the run's place this way, instead of going behind every run sent after
+ * the run started. Only steps the same press made count (the same billing hold; with none, the same batch): a result
+ * kept from an earlier run that a step uses gives it neither that run's place nor its start. Null: no such row.
+ */
+export function runPlaceOf(generationId: string): { class: "paid" | "free"; rankAt: number | null; started: boolean } | null {
+  const d = db();
+  const g = d
+    .prepare(
+      `SELECT created_at, depends_on, batch_id, json_extract(request_json, '$.hold') AS hold, json_extract(request_json, '$.class') AS cls,
+         json_extract(request_json, '$.boostMs') AS boost FROM generations WHERE id = ?`,
+    )
+    .get(generationId) as { created_at: number; depends_on: string | null; batch_id: string | null; hold: unknown; cls: unknown; boost: unknown } | undefined;
+  if (!g) return null;
+  const press = { id: generationId, hold: typeof g.hold === "string" && g.hold ? g.hold : null, batch: g.batch_id };
+  const jobs = d
+    .prepare(
+      `WITH RECURSIVE fed(id) AS (
+         SELECT @id
+         UNION
+         SELECT d.value FROM fed JOIN generations g ON g.id = fed.id,
+           json_each(CASE WHEN substr(g.depends_on, 1, 1) = '[' AND json_valid(g.depends_on) THEN g.depends_on ELSE json_array(g.depends_on) END) d
+         WHERE g.depends_on IS NOT NULL AND (g.id = @id OR ${SAME_PRESS})
+       )
+       SELECT t.rank_at, t.claimed_at FROM fed JOIN generations g ON g.id = fed.id JOIN relay_tasks t ON t.generation_id = g.id
+       WHERE (g.id = @id OR ${SAME_PRESS}) AND t.pools IS NOT NULL AND t.rank_at IS NOT NULL ORDER BY t.rank_at ASC`,
+    )
+    .all(press) as Pick<TaskRow, "rank_at" | "claimed_at">[];
+  const boost = Math.max(0, Math.min(Number(g.boost) || 0, 24 * 60 * 60_000));
+  return {
+    class: g.cls === "paid" ? "paid" : "free",
+    rankAt: jobs[0]?.rank_at ?? (g.depends_on ? g.created_at - boost : null),
+    started: jobs.some((t) => t.claimed_at !== null),
   };
 }
 

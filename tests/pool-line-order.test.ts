@@ -50,6 +50,10 @@ const { loadManifest, comfyProvider, onComputer, NO_WORKER_FOR_LANE } = await im
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { POOL_WORDS } = await import("@/lib/relay");
+const hosted = await import("@/server/hosted");
+const { withRunStamp } = await import("@/server/run-stamp");
+const { getModel } = await import("@/lib/catalog");
+const { encodePng } = await import("@/lib/png-encode");
 
 const HOST = "localhost:3000";
 const SITE_HEADERS = { host: HOST, "sec-fetch-site": "same-origin", origin: `http://${HOST}` };
@@ -259,6 +263,114 @@ describe("the billing service's class and head start", () => {
     expect(f.rankAt).toBe(1_000_000_000_000 - 24 * 60 * MIN);
     expect(f.class).toBe("free");
     expect(pool.poolFields(loadManifest().workflows[0].id, {}, 0).class).toBe("owner");
+  });
+});
+
+describe("a run's later steps keep the run's place", () => {
+  const route = { provider: "comfyui", endpoint: "selftest-image", op: "edit" } as never;
+  const PICTURE = encodePng({ width: 64, height: 48, data: Buffer.alloc(64 * 48 * 4, 128) });
+  /**
+   * A row of an account's run on the workers. The rows one press of Run made share its batch (and its billing hold, when
+   * a billing service set one); a later step names the step it waits for.
+   */
+  function runRow(o: { batch: string; hold?: string; dependsOn?: string }) {
+    const gid = `run-step-${++gens}`;
+    const now = Date.now();
+    db()
+      .prepare("INSERT INTO generations (id, batch_id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, depends_on) VALUES (?, ?, 'image', 'oss-selftest-image', 'open', 'comfyui', 'edit', 'image', 'queued', ?, '[]', ?, ?, ?)")
+      .run(gid, o.batch, JSON.stringify({ account: accountId, place: "pool", ...(o.hold && { hold: o.hold }) }), now, now, o.dependsOn ?? null);
+    return gid;
+  }
+  /** Its job sent to the workers as a step of the run is: inside the run's stamp (its class and its wait). */
+  async function sendStep(gid: string, stamp: { class?: "paid" | "free"; waitMs: number }) {
+    const sent = await hosted.runOnPool(accountId, () =>
+      withRunStamp({ place: "pool", ...stamp }, async () => {
+        const name = (await comfyProvider.prepareFile!(PICTURE, "image/png", "me.png", route))!;
+        return comfyProvider.submit({ route, input: { images: [name], seed: 5 }, generationId: gid, model: getModel("oss-selftest-image") } as never);
+      }),
+    );
+    return rowOf(String((sent.meta as { relay: string }).relay));
+  }
+
+  it("a chain's next step keeps the run's class and place, waits past the run's wait limit behind a long line, and still runs first", async () => {
+    const w = standInWorker();
+    const wait = 5 * MIN;
+    const first = runRow({ batch: "chain-a" });
+    const one = await sendStep(first, { class: "paid", waitMs: wait });
+    expect(one.not_after).not.toBeNull();
+    // A worker takes step 1 (the run has started) and finishes it.
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(one.id);
+    done(one.id);
+    // Meanwhile, runs sent after this run started fill the line.
+    const line = [lineTask({ account: other, class: "paid" }), lineTask({ account: other, class: "paid" }), lineTask({ account: other })];
+    // Step 2, sent once step 1 is done: at the run's place, in its class, with no wait limit (the run has started).
+    const two = await sendStep(runRow({ batch: "chain-a", dependsOn: first }), { class: "paid", waitMs: wait });
+    expect(two.rank_at).toBe(one.rank_at);
+    expect(two.class).toBe("paid");
+    expect(two.not_after).toBeNull();
+    expect(pool.placeInLine(two).place).toBe(1);
+    // Long past the run's wait limit, it is still in line, and it is served before every run sent after the run started.
+    pool.sweepPool(Date.now() + 3 * wait);
+    expect(rowOf(two.id).state).toBe("waiting");
+    expect(served(w)).toEqual([two.id, ...line]);
+  });
+
+  it("a step sent before any job of its run was taken keeps the run's place and still has the run's wait limit", async () => {
+    standInWorker();
+    const wait = 5 * MIN;
+    const first = runRow({ batch: "chain-b" });
+    const one = await sendStep(first, { waitMs: wait });
+    const two = await sendStep(runRow({ batch: "chain-b", dependsOn: first }), { waitMs: wait });
+    expect(two.rank_at).toBe(one.rank_at);
+    expect(two.class).toBe("free");
+    expect(two.not_after).not.toBeNull();
+    pool.sweepPool(Date.now() + 2 * wait);
+    expect(rowOf(two.id).state).toBe("failed");
+  });
+
+  it("a later step with no job of its run on the workers yet waits from the time its run was made", async () => {
+    standInWorker();
+    const wait = 5 * MIN;
+    const first = runRow({ batch: "chain-c" });
+    const step = runRow({ batch: "chain-c", dependsOn: first });
+    // The run was made 20 minutes ago (its first step ran elsewhere, or was light work).
+    db().prepare("UPDATE generations SET created_at = ? WHERE id IN (?, ?)").run(Date.now() - 20 * MIN, first, step);
+    const two = await sendStep(step, { waitMs: wait });
+    const made = (db().prepare("SELECT created_at FROM generations WHERE id = ?").get(step) as { created_at: number }).created_at;
+    expect(two.rank_at).toBe(made);
+    expect(two.not_after).not.toBeNull();
+  });
+
+  it("a step that uses a result kept from an earlier run waits as a new run: its own place, and the wait limit", async () => {
+    const w = standInWorker();
+    const wait = 5 * MIN;
+    // An earlier run, long done: a worker took it.
+    const kept = runRow({ batch: "earlier", hold: "hold-earlier" });
+    const old = await sendStep(kept, { class: "paid", waitMs: wait });
+    db().prepare("UPDATE relay_tasks SET rank_at = ? WHERE id = ?").run(Date.now() - 60 * MIN, old.id);
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(old.id);
+    done(old.id);
+    const line = [lineTask({ account: other, class: "paid", agoMs: MIN })];
+    // A new run (another batch) whose step uses that result, and a rerun in the same batch under a hold of its own.
+    const two = await sendStep(runRow({ batch: "later", dependsOn: kept }), { class: "paid", waitMs: wait });
+    const three = await sendStep(runRow({ batch: "earlier", hold: "hold-again", dependsOn: kept }), { class: "paid", waitMs: wait });
+    for (const t of [two, three]) {
+      expect(t.rank_at!).toBeGreaterThan(Date.now() - MIN);
+      expect(t.not_after).not.toBeNull();
+    }
+    expect(served(w)).toEqual([...line, two.id, three.id]);
+  });
+
+  it("a run's first job waits in the order it came, with the run's wait limit, as before", async () => {
+    standInWorker();
+    const wait = 5 * MIN;
+    const before = Date.now();
+    const t = await sendStep(runRow({ batch: "chain-d" }), { waitMs: wait });
+    expect(t.rank_at!).toBeGreaterThanOrEqual(before);
+    expect(t.not_after! - t.created_at).toBeGreaterThanOrEqual(wait - 1000);
+    expect(t.not_after! - t.created_at).toBeLessThanOrEqual(wait + 1000);
   });
 });
 

@@ -83,7 +83,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, workersCanRun } from "../computer/pool";
+import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, runPlaceOf, workersCanRun } from "../computer/pool";
 import { catalogVersion } from "../computer/catalog-version";
 import { ticketProblem, type JobTicket } from "@/lib/job-ticket";
 import { catalogKnows, ticketFor } from "@/lib/ticket-compose";
@@ -278,6 +278,26 @@ export function installComfyLocal(worker: ComfyWorker = "main"): boolean {
 
 /** Said when a run on this install's GPUs can't go where it was planned (its row's own words then say it plainly). */
 export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this machine, so runs of accounts don't go to it.";
+
+/**
+ * Where an account's job waits in line on the workers, in its run's class (paid before free). Its run's first job: at
+ * the time it came (with the billing service's head start), with the run's wait limit. A later job of the same run (a
+ * chain's next step, sent once the steps before it are done): at the run's place (pool.ts runPlaceOf), and with no wait
+ * limit once a worker took any of the run's jobs (the wait limit applies only before the run's first start).
+ */
+function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string }) {
+  const stamp = runStamp();
+  const run = generationId ? runPlaceOf(generationId) : null;
+  return poolFields(workflowId, {
+    account,
+    class: stamp?.class ?? "free",
+    boostMs: stamp?.boostMs,
+    ...(run?.rankAt != null && { rankAt: run.rankAt }),
+    waitMs: run?.started ? undefined : stamp?.waitMs || poolWaitMs(),
+    size: o.size,
+    catalogVersion: o.catalogVersion,
+  });
+}
 
 /** Said to the owner when a job is larger than every worker's PC may ever run (its ceiling: `fuobe worker setup`). */
 export const NO_WORKER_FOR_SIZE = "No worker may run a job this large: each PC's limits, set with fuobe worker setup, are lower. Pick a smaller size, a shorter clip or fewer results.";
@@ -1805,7 +1825,7 @@ export const comfyProvider: ProviderAdapter = {
               : // An account's: the lane and files they need, in its class (paid before free), in the order they came
                 // (with the billing service's head start inside the class), with the wait set for the run.
                 // A ticket's task goes only to a worker built for its catalog, and inside that PC's ceiling.
-                poolFields(manifest.id, { account: computer.slice(5), class: runStamp()?.class ?? "free", boostMs: runStamp()?.boostMs, waitMs: runStamp()?.waitMs || poolWaitMs(), size: prepared.size, catalogVersion: ticket?.catalogVersion }),
+                accountPoolFields(manifest.id, computer.slice(5), generationId, { size: prepared.size, catalogVersion: ticket?.catalogVersion }),
         }),
       });
       // (`workers`: the run keeps its task's clocks, pool.ts, even when a poll of it fails.)
