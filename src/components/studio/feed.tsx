@@ -16,11 +16,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { onCloudKey } from "@/lib/before-run";
-import { openModelPicker } from "@/lib/open-model-picker";
-import { smallerRun } from "@/lib/smaller-run";
 import { useOptionalCatalog } from "./catalog";
-import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
+import { TroubleDetails } from "@/components/gpu/trouble";
+import { RunTroubleActions } from "@/components/gpu/run-trouble-actions";
 import { useCreateGeneration, useGenerationActions, useStatus } from "@/lib/api";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
@@ -75,7 +73,6 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   const where = local ? (local.here ? "Keep this tab open" : "Running in another Fuobe tab") : null;
   // Waiting for its own GPU or key to come back: what helps meanwhile, and until when it waits.
   const waiting = g.status === "queued" ? g.waiting : undefined;
-  const create = useCreateGeneration();
   const until = waiting?.until && waiting.until > now ? new Date(waiting.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
   return (
     // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
@@ -109,19 +106,8 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
             {left != null && <span className="before:mr-1.5 before:content-['·']">{leftLabel(left)}</span>}
             {until && <span className="before:mr-1.5 before:content-['·']">waits until {until}</span>}
           </p>
-          {waiting && (
-            <TroubleActions
-              className="mt-1.5"
-              actions={waiting.actions}
-              skip={["retry"]}
-              max={2}
-              compact
-              handlers={{
-                // This run moves to the key: it stops waiting, and the cloud run takes its place (one server call).
-                onRunWithKey: (a) => create.mutateAsync({ ...onCloudKey(g.request, a), replaces: g.id } as Generation["request"]).catch((e) => toastError(e)),
-              }}
-            />
-          )}
+          {/* Run with your key moves this run (and the rest of its batch not handed over yet) to the key, in one server call. */}
+          {waiting && <RunTroubleActions g={g} className="mt-1.5" actions={waiting.actions} skip={["retry"]} max={2} compact />}
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -151,14 +137,6 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
 /** A failed tile narrower than this (in px, at the feed's 224 px height) shows two trouble buttons, not three. */
 const NARROW_TILE_PX = 260;
 
-/** "Send a smaller copy": the run's file made smaller on the server, then the run started again with it. */
-async function smallerCopyRequest(g: Generation): Promise<{ request: Generation["request"]; note: string }> {
-  const res = await fetch(`/api/generations/${encodeURIComponent(g.id)}/smaller`, { method: "POST" });
-  const j = (await res.json().catch(() => ({}))) as { request?: Generation["request"]; note?: string; error?: string };
-  if (!res.ok || !j.request) throw new Error(j.error ?? "We couldn't make a smaller copy. Press Retry.");
-  return { request: j.request, note: j.note ?? "Sent a smaller copy." };
-}
-
 export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
   const create = useCreateGeneration();
   const feed = useContext(FeedCtx);
@@ -166,12 +144,6 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
   const trouble = g.status === "failed" ? g.trouble : undefined;
   const shape = Math.max(ratio, 0.8);
   const narrow = shape * 224 < NARROW_TILE_PX;
-  const run = (request: Generation["request"], done?: string) =>
-    create.mutateAsync(request).then(
-      () => void (done && toast.success(done)),
-      (e) => toastError(e),
-    );
-  const smaller = trouble ? smallerRun(g.request, catalog?.getModel(g.modelId)) : null;
   const [retrying, setRetrying] = useState(false);
   return (
     <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: shape }}>
@@ -181,30 +153,18 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
         {/* An account's own GPU or key: what came back, small, for the curious (the first thing cut when room is short). */}
         <TroubleDetails details={trouble?.details} className="min-h-0" />
       </div>
+      {/* In a studio, Pick another model brings its settings back into the composer and opens its model picker. */}
       {trouble && (
-        <TroubleActions
+        <RunTroubleActions
+          g={g}
+          reuse={feed?.reuse}
+          model={catalog?.getModel(g.modelId)}
           className="mt-2 shrink-0"
           actions={trouble.actions}
           skip={["retry"]}
           max={narrow ? 2 : 3}
           compact
           context="run"
-          handlers={{
-            onRunWithKey: (a) => run(onCloudKey(g.request, a)),
-            // In a studio: its settings come back into the composer, and its model picker opens.
-            onPickModel: feed?.reuse
-              ? () => {
-                  feed.reuse?.(g);
-                  openModelPicker();
-                }
-              : undefined,
-            onTrySmaller: smaller ? () => run(smaller.request, `Running it again at ${smaller.what}.`) : undefined,
-            onSendSmaller: () =>
-              smallerCopyRequest(g).then(
-                ({ request, note }) => run(request, note),
-                (e) => toastError(e),
-              ),
-          }}
         />
       )}
       <div className="mt-2 flex shrink-0 flex-wrap gap-1.5">

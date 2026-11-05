@@ -8,7 +8,7 @@
 import { dualEngine } from "./catalog/engines";
 import type { Engine, GenerationRequest } from "./catalog/types";
 import { beforeRunWords, withKeyAction, type Diagnosis, type TroubleAction } from "./diagnose";
-import { cloudVersion, isCloudProvider, type CloudProvider } from "./your-keys";
+import { CLOUD_KEY, cloudVersion, isCloudProvider, type CloudProvider } from "./your-keys";
 
 type Routed = { id: string; engine: string; engines?: Engine[]; routes: { provider: string }[] };
 
@@ -85,4 +85,15 @@ export function onCloudKey(request: GenerationRequest, a: Pick<TroubleAction, "m
   const { extra: _extra, ...params } = request.params ?? {};
   void _extra;
   return { ...request, engine: "cloud", modelId, params, ...(a.op && { op: a.op as GenerationRequest["op"] }), ...prefer };
+}
+
+/**
+ * "Run with your fal.ai key" from the composer: this run, once, on the tool's cloud version and that key (`start` sends
+ * it). Nothing else changes: the engine switch stays where it was, so the next run goes to the GPU again. Resolves with
+ * the words to say once it has started.
+ */
+export async function runOnceOnKey(request: GenerationRequest, a: Pick<TroubleAction, "modelId" | "op" | "target">, start: (r: GenerationRequest) => Promise<unknown>): Promise<string> {
+  await start(onCloudKey(request, a));
+  const label = isCloudProvider(a.target) ? CLOUD_KEY[a.target].label : "your key";
+  return `Running once on ${label} with your key. Your next runs go to your GPU again.`;
 }

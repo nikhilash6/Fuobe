@@ -12,6 +12,7 @@ import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
+import { RunTroubleActions } from "@/components/gpu/run-trouble-actions";
 import { DRAG_TYPE } from "./folders";
 import { ReviewBadge } from "./review";
 import type { Layout } from "./view-options";
@@ -48,7 +49,7 @@ const idsOf = (e: LibraryEntry) => (e.type === "single" ? [e.g.id] : e.items.map
  * (Start your pod, Check my GPU, Replace key…), the buttons kept in view first (the words give way on a small card).
  * `small`: a list row's thumbnail (the row's own text says the rest).
  */
-export function StatusCover({ g, small }: { g: Generation; small?: boolean }) {
+export function StatusCover({ g, small, actionable }: { g: Generation; small?: boolean; /** The account's own Library: the buttons act (Pick another model opens the run's studio with it). */ actionable?: boolean }) {
   if (g.status === "queued" || g.status === "running") {
     const pct = g.progress != null ? Math.round(g.progress * 100) : null;
     const waiting = g.status === "queued" ? g.waiting : undefined;
@@ -63,7 +64,12 @@ export function StatusCover({ g, small }: { g: Generation; small?: boolean }) {
               {elapsed(g.createdAt)}
             </p>
             {/* Waiting for its own GPU or key: what helps meanwhile (it goes on by itself). */}
-            {waiting && <TroubleActions actions={waiting.actions} skip={["retry", "run-with-key"]} max={2} compact />}
+            {waiting &&
+              (actionable ? (
+                <RunTroubleActions g={g} actions={waiting.actions} skip={["retry"]} max={2} compact />
+              ) : (
+                <TroubleActions actions={waiting.actions} skip={["retry", "run-with-key"]} max={2} compact />
+              ))}
           </div>
         )}
       </div>
@@ -79,13 +85,18 @@ export function StatusCover({ g, small }: { g: Generation; small?: boolean }) {
         {/* The details line goes first when the card is small. */}
         {trouble && <TroubleDetails details={trouble.details} className="hidden @[16rem]:block" />}
       </div>
-      {trouble && <TroubleActions className="shrink-0" actions={trouble.actions} skip={["retry"]} max={2} compact />}
+      {trouble &&
+        (actionable ? (
+          <RunTroubleActions g={g} className="shrink-0" actions={trouble.actions} skip={["retry"]} max={2} compact context="run" />
+        ) : (
+          <TroubleActions className="shrink-0" actions={trouble.actions} skip={["retry"]} max={2} compact />
+        ))}
     </div>
   );
 }
 
 function Cover({ g, fit }: { g: Generation; fit: boolean }) {
-  if (g.status !== "succeeded" || !g.outputs.length) return <StatusCover g={g} />;
+  if (g.status !== "succeeded" || !g.outputs.length) return <StatusCover g={g} actionable={!g.deletedAt} />;
   if (isLayered(g)) return <LayersStack g={g} />;
   return <MediaThumb output={g.outputs[0]} g={g} fit={fit} className={cn(fit && "bg-muted")} />;
 }
@@ -263,7 +274,7 @@ export const AssetCard = memo(function AssetCard({
           </p>
           {/* An account's own GPU or key: the way out, in the row (its thumbnail is too small for it). */}
           {!stack && !trashed && (g.status === "failed" ? g.trouble : g.status === "queued" ? g.waiting : undefined) && (
-            <TroubleActions className="mt-1" actions={(g.status === "failed" ? g.trouble : g.waiting)!.actions} skip={["retry", "run-with-key"]} max={1} compact />
+            <RunTroubleActions g={g} className="mt-1" actions={(g.status === "failed" ? g.trouble : g.waiting)!.actions} skip={["retry"]} max={1} compact context={g.status === "failed" ? "run" : "other"} />
           )}
         </div>
         {g.favorite && !stack && <Heart className="size-4 shrink-0 fill-highlight text-highlight" />}

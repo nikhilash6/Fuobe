@@ -90,7 +90,7 @@ import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, cloudVersion, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
-import { beforeRunTail, gpuBeforeRun, onCloudKey } from "@/lib/before-run";
+import { beforeRunTail, gpuBeforeRun, runOnceOnKey } from "@/lib/before-run";
 import { BILLING_URL, ISOLATED_ON_GPU_WHY, withKeyAction, type TroubleAction } from "@/lib/diagnose";
 import { openModelPicker } from "@/lib/open-model-picker";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
@@ -778,9 +778,8 @@ export function Composer({ docked }: { docked: boolean }) {
       buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
     );
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
-    const label = a.target && (a.target === "fal" || a.target === "replicate") ? CLOUD_KEY[a.target].label : "your key";
-    return create.mutateAsync(onCloudKey(withVoiceFirst, a)).then(
-      () => void toast.success(`Running once on ${label} with your key. Your next runs go to your GPU again.`),
+    return runOnceOnKey(withVoiceFirst, a, (r) => create.mutateAsync(r)).then(
+      (words) => void toast.success(words),
       (e) => toastError(e),
     );
   };
