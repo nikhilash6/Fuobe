@@ -223,7 +223,7 @@ its own results, once. The server never calls the person's computer. Runs wait w
 - **Fuobe Connect.** A page can read a ComfyUI on the computer only when ComfyUI lets that site in.
   Fuobe Connect (`integrations/fuobe-connect`, published as
   [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect); a git clone,
-  ComfyUI-Manager's Install via Git URL, or the Manager's search once the Comfy Registry lists it)
+  ComfyUI-Manager's Install via Git URL, or the Manager's search, which installs it from the Comfy Registry)
   lets in only the studios that the person trusts (`https://fuobe.com` unless they name others), and
   only for what a run needs. Every other website still meets ComfyUI's own check. It is optional.
   The card offers it while `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, as it is
@@ -494,8 +494,8 @@ address, with the box for it in focus.
 - **Fuobe Connect.** The steps install it from its repository: a `git clone` into `custom_nodes`,
   or its `.zip` or `.tar.gz` download where git is missing, then a restart of ComfyUI (ComfyUI
   Desktop, the portable build, Stability Matrix, a terminal, or a service on Linux). They say that
-  ComfyUI-Manager's search may not list it yet, and they make sure that ComfyUI answers
-  `GET /fuobe/connect`. In Chrome, Edge or Firefox on that computer, the tab connects by itself once
+  ComfyUI-Manager's search may offer no version to install, they count its install (the folder
+  `fuobe-connect`) as installed, and they make sure that ComfyUI answers `GET /fuobe/connect`. In Chrome, Edge or Firefox on that computer, the tab connects by itself once
   Fuobe Connect answers. On a phone, in Safari, on a page on plain http or in a browser that blocks
   the computer, the panel shows the box for the code that ComfyUI's **Connect to Fuobe** shows, and
   the setup is done once the paired ComfyUI is heard from (in the last minute). On a self-hosted

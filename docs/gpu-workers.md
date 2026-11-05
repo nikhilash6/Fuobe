@@ -16,9 +16,10 @@ the studio over HTTPS, and neither opens a port. With no worker added and nothin
 Fuobe Connect is an optional ComfyUI custom node pack. Its source is in `integrations/fuobe-connect`, and the
 [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect) repository is published from that
 folder. People install it from that repository: with `git clone` in ComfyUI's `custom_nodes` folder, or with
-ComfyUI-Manager's **Install via Git URL**. ComfyUI-Manager's search (`Fuobe Connect`) finds the versions that the
-[Comfy Registry](https://registry.comfy.org) lists. Its own README says how to install it and exactly what a trusted
-studio can do. It adds no nodes.
+ComfyUI-Manager's **Install via Git URL**. Each version is also published to the
+[Comfy Registry](https://registry.comfy.org), which ComfyUI-Manager's search (`Fuobe Connect`) reads. When the
+Manager shows no version to install, the git clone and Install via Git URL still work. Its own README says how to
+install it and what a trusted studio can do. It adds no nodes.
 
 Fuobe Connect is one of three ways to connect a person's own ComfyUI. None of them is required: a fal.ai or Replicate
 key also works, and so do the studio's own GPUs where it offers them.
@@ -40,43 +41,33 @@ git install. Fuobe Connect trusts `https://fuobe.com` by default. A self-hosted 
 **Direct mode.** ComfyUI turns away every other website. Fuobe Connect lets in only the studios that you trust. Each
 studio is an exact https origin, and the default is `https://fuobe.com` with `https://www.fuobe.com`. You can name your
 own studios, or `none`, in ComfyUI's settings or with `FUOBE_CONNECT_ORIGINS`. A trusted studio reaches the ComfyUI
-only at `127.0.0.1`, `::1` or `localhost` (a network address too with `FUOBE_CONNECT_LAN=1`), never under another name
-that leads to the computer. Fuobe Connect turns away every other request of a trusted studio itself, even when ComfyUI
-runs with `--enable-cors-header` naming that studio, so with the pack the studio doesn't need that setting. Fuobe
-Connect checks each request it lets through in Python, whatever the studio's page checked:
+only at `127.0.0.1`, `::1` or `localhost` (a network address too with `FUOBE_CONNECT_LAN=1`). Fuobe Connect turns
+away every other request of a trusted studio itself, even when ComfyUI runs with `--enable-cors-header` naming that
+studio, so with the pack the studio doesn't need that setting. Fuobe Connect checks each request it lets through in
+Python, whatever the studio's page checked:
 
 - a workflow runs only when every node type is on the list the pack ships (`fuobe_connect/allowed_nodes.json`, written
   by `node scripts/connect-nodes.mjs` from the same sources as the worker's list) or on the person's own list, and:
-  - no text names a place: an absolute path in any form (`/x`, `\x`, `//host/share`, `\\?\C:\x`, `C:\x`, `D:x`), a
-    `..` step, a home folder (`~`, `~user`), an environment variable at the start, a URL, a folder tag, or a JSON key
-    that names a file, a folder or an address. Spaces and quotes in front don't hide one;
+  - no text names a place on a disk or on the network: a path, a `..` step, a home folder, an environment variable, a
+    URL or a folder tag;
   - an input that a listed node reads as a file or a folder, or a name that it downloads, holds the one value or form
     the studio's own graphs use, written in the graph, never a link (`PATH_INPUTS` in `fuobe_connect/graph.py`);
-  - a link from an output that ComfyUI doesn't type-check ("any", match-typed or dropdown-typed, such as
-    `GetItemFromList`, `CreateList`, `VRAM_Debug` or `ComfySwitchNode`), and any link into a dropdown, feeds only what
-    the studio's own graphs feed that way (`loose` and `links` in `allowed_nodes.json`). ComfyUI checks a dropdown's
-    value against its list only when the graph writes it. Inside ComfyUI the pack also reads these kinds from every
-    node class;
-  - a link names its node's output with a whole number from 0, as the studio's graphs write it. ComfyUI also takes
-    `true`, `false`, a number with a point or `-1` as an output; the pack sees those as links too, and refuses them;
-  - `VHS_VideoCombine` takes only a plain format name and plain-word settings (they go into ffmpeg's arguments), and
-    a link only for its pictures, sound, batch, VAE and frame rate;
+  - a link into a dropdown, or from a loosely typed output (such as `GetItemFromList`, `CreateList`, `VRAM_Debug` or
+    `ComfySwitchNode`), feeds only what the studio's own graphs feed that way (`loose` and `links` in
+    `allowed_nodes.json`). Inside ComfyUI the pack also reads these kinds from every node class;
+  - a link has the form the studio's graphs write: a node id and an output number from 0;
+  - `VHS_VideoCombine` takes only a plain format name and plain-word settings, and a link only for its pictures, sound,
+    batch, VAE and frame rate;
   - every loader reads a Fuobe input (`fuobe_<id>.<ext>`). A written value is a text, a number, `true`, `false` or
-    `null`: never a list (ComfyUI reads one as a link) and never a JSON object, except a 3D view's entries in the exact
-    form of ComfyUI's 3D nodes (the camera and the models' placements are numbers only). No object holds `"__value__"`
-    at any depth (ComfyUI unwraps it, so a link inside would skip ComfyUI's check), and a node holds only `class_type`,
-    `inputs` and `_meta` (ComfyUI reads `is_changed`, `_loop_body` and `_loop_end` as its own);
-  - inside ComfyUI, every node that ComfyUI runs is one it checks first: a link goes only into an input the node lists
-    (worked out the way ComfyUI does it for dynamic inputs), no input names a hidden one, a node type ComfyUI would swap
-    before its check is refused, and a graph with a loop holds only nodes that lead to an output. A 3D node's camera and
-    placements in a run's history never count as one of its files;
+    `null`, except a 3D view's entries in the form of ComfyUI's 3D nodes, and a node holds only `class_type`,
+    `inputs` and `_meta`;
+  - inside ComfyUI, every node that ComfyUI runs is one it checks first. A 3D node's camera and placements in a run's
+    history never count as one of its files;
 - an upload goes only into the input folder, under a Fuobe input name, as a picture, clip, sound, 3D scene, array or
-  subtitle file (never `.json`, `.txt`, `.csv` or a file of no known type);
-- the studio sees, cancels, stops and downloads only its own prompts and their results; a prompt is its own only once
-  ComfyUI took it, never under an id that ComfyUI already holds in its queue or history; the queue shows other prompts
+  subtitle file;
+- the studio sees, cancels, stops and downloads only its own prompts and their results; the queue shows other prompts
   only as places in the line, the node list hides the names of the person's input files, and the model lists leave
-  out `custom_nodes` and `configs`. ComfyUI itself sends the live messages of a prompt queued without a client id to
-  every open socket, the studio's too.
+  out `custom_nodes` and `configs`.
 
 When a graph builder starts giving one of those inputs a new value, add its form to `PATH_INPUTS` and ship it with the
 next Fuobe Connect release (the pack's `tests/test_graph.py` runs every workflow in `workflows/comfyui` through the
@@ -84,11 +75,9 @@ checks). When a graph starts linking from an untyped output into a new input, or
 `node scripts/connect-nodes.mjs` too: until the pack ships the new link, people's ComfyUI refuses that graph.
 
 It cannot reach the Manager's install calls, the person's user files or settings, a file of the person's in the input
-folder, or the person's own results. Its workflows cannot name a file of the person's by its path: path-like text is
-refused, a file input takes only Fuobe's own form, and a value that another node works out can't reach a file input, a
-dropdown or ffmpeg's arguments. Fuobe
-Connect answers the CORS and Private Network Access preflights for the trusted origins only. Every other website still
-meets ComfyUI's own check.
+folder, or the person's own results, and its workflows cannot name a file of the person's by its path. Fuobe Connect
+answers the CORS and Private Network Access preflights for the trusted origins only. Every other website still meets
+ComfyUI's own check.
 
 You do not need a start flag or a guard file. In the studio, **Connect your GPU** finds ComfyUI after one browser
 "Allow" prompt, and then connects.
@@ -103,8 +92,7 @@ Connect get a refusal that asks them to update it.
    `FUOBE_CONNECT_PAIR=1`. Fuobe Connect asks the studio for a short code: `POST /api/gpu/pair/start`.
 2. The person opens `/connect?pair=1`, signs in, types the code that their own ComfyUI shows, checks the computer's
    name and GPU, and approves the code: `POST /api/gpu/pair`. A code is valid for 10 minutes and works only once. The
-   page never fills in a code from its link, so a link that someone else sends can't pair their ComfyUI with the
-   person's account in one click.
+   page never fills in a code from its link: the person types it.
 3. Fuobe Connect polls with a secret that only it knows: `POST /api/gpu/pair/poll`. After the approval, its next poll
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 

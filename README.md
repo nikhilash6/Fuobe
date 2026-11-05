@@ -188,7 +188,7 @@ To install Fuobe Connect, run this in ComfyUI's `custom_nodes` folder, then rest
 git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect
 ```
 
-You can also enter the same address in ComfyUI-Manager's **Install via Git URL**, or search for `Fuobe Connect` in ComfyUI-Manager once it lists the pack. Fuobe Connect trusts `https://fuobe.com` by default. If you run your own Fuobe studio, add its address in ComfyUI under **Settings → Fuobe Connect**. The source of Fuobe Connect is [`integrations/fuobe-connect`](integrations/fuobe-connect) in this repository, and the [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect) repository is published from it. [How it works →](docs/gpu-workers.md#fuobe-connect-a-persons-own-comfyui)
+You can also enter the same address in ComfyUI-Manager's **Install via Git URL**, or search for `Fuobe Connect` in ComfyUI-Manager, which installs it from the Comfy Registry (if the Manager shows no version to install, use the git address). Fuobe Connect trusts `https://fuobe.com` by default. If you run your own Fuobe studio, add its address in ComfyUI under **Settings → Fuobe Connect**. The source of Fuobe Connect is [`integrations/fuobe-connect`](integrations/fuobe-connect) in this repository, and the [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect) repository is published from it. [How it works →](docs/gpu-workers.md#fuobe-connect-a-persons-own-comfyui)
 
 ## Local models and cloud keys
 

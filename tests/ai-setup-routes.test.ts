@@ -380,7 +380,7 @@ describe("the guide and Fuobe's files", () => {
       const text = await g.text();
       expect(text).toContain("# Connect ComfyUI to Fuobe with Fuobe Connect");
       expect(text).toContain("git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect");
-      expect(text).toContain("ComfyUI-Manager's search may not list Fuobe Connect yet.");
+      expect(text).toContain("ComfyUI-Manager's search can show Fuobe Connect too, but it may offer no version to install.");
       expect(text).not.toContain("--enable-cors-header https://");
       expect(text).toContain("z_image_turbo_bf16.safetensors");
     }

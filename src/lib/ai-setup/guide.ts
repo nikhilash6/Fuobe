@@ -455,7 +455,7 @@ function addressSteps(i: GuideInput): string {
 function connectSteps(i: GuideInput): string {
   const c = curl(i.os);
   const s = sep(i.os);
-  const { gitUrl, folder, archive } = FUOBE_CONNECT;
+  const { gitUrl, folder, archive, registryFolder } = FUOBE_CONNECT;
   const dir = `<custom_nodes>${s}${folder}`;
   const own = !trustedByDefault(i.site);
   const download =
@@ -471,8 +471,8 @@ function connectSteps(i: GuideInput): string {
     "## Step 2: Install Fuobe Connect",
     "",
     `Fuobe Connect is a ComfyUI add-on (a custom node pack) from ${gitUrl} . It installs no Python packages.`,
-    "ComfyUI-Manager's search may not list Fuobe Connect yet. Install it with git or with the download below. The person can also use Install via Git URL in ComfyUI-Manager with the same address, if their Manager allows it.",
-    `1. Look in custom_nodes (Step 1) for a folder named ${folder}. If it is there, Fuobe Connect is installed: go to item 5.`,
+    "Install it with git or with the download below. ComfyUI-Manager's search can show Fuobe Connect too, but it may offer no version to install. The person can also use Install via Git URL in ComfyUI-Manager with the same address, if their Manager allows it.",
+    `1. Look in custom_nodes (Step 1) for a folder named ${folder}, or ${registryFolder} (ComfyUI-Manager's install). If one is there, Fuobe Connect is installed: go to item 5.`,
     "2. Look for git:",
     "   git --version",
     "   If it answers, clone Fuobe Connect into custom_nodes. Put the real folder in place of <custom_nodes>:",
