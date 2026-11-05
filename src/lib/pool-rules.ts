@@ -115,9 +115,11 @@ export function presetOffered(rules: PoolRules | undefined, p: { id: string; ope
  * The label a picker or gallery shows on a preset the rules keep off (presetOffered false), instead of leaving it out:
  * what its open model needs on the visitor's own setup (the rules' `own`, the static items), else any GPU of its own.
  */
-export function presetOwnSetup(rules: PoolRules | undefined, p: { id: string; open: { modelId?: string } | null; cloud: unknown }, engine?: "open" | "cloud"): OwnSetup | null {
+export function presetOwnSetup(rules: PoolRules | undefined, p: { id: string; open: unknown; cloud: unknown }, engine?: "open" | "cloud"): OwnSetup | null {
   if (presetOffered(rules, p, engine)) return null;
-  const model = p.open?.modelId;
+  // A catalog preset names its open model; a gallery card only says it has an open route.
+  const open = p.open && typeof p.open === "object" ? (p.open as { modelId?: unknown }) : null;
+  const model = typeof open?.modelId === "string" ? open.modelId : undefined;
   return (model && (rules?.own?.[model] ?? ownSetupOnly(model, "open"))) || ANY_GPU;
 }
 

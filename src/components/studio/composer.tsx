@@ -22,7 +22,8 @@ import { formatsOf } from "@/lib/av/formats";
 import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
 import { composerOnPool, composerPlace } from "@/lib/run-place";
 import { PoolNote } from "./pool-note";
-import { poolRunsModel } from "@/lib/pool-rules";
+import { modelOwnSetup, poolRunsModel } from "@/lib/pool-rules";
+import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { HoldFilesCtx } from "@/lib/held-files";
 import { pendingStep } from "@/lib/guest-draft";
 import { useGuestDraft } from "./guest-draft";
@@ -330,12 +331,14 @@ export function Composer({ docked }: { docked: boolean }) {
   }, []);
 
   const pickerOps = config.pickerOps ?? config.ops;
-  // For a viewer with no GPU of its own (hosted runs), the open models this studio's GPUs keep off are left out.
+  // For a viewer with no GPU of its own (hosted runs), the open models this studio's GPUs keep off stay in the list with
+  // what runs them (their own-setup label, src/lib/pool-rules.ts), as the models that run on a visitor's own setup only
+  // do: Run then opens that setup.
   const poolRules = status?.viewer?.hosted && !status.viewer.gpu.connected ? status.viewer.pool : undefined;
-  const models = useMemo(
-    () => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }).filter((m) => poolRunsModel(poolRules, m)),
-    [catalog.models, config.kind, pickerOps, poolRules],
-  );
+  const models = useMemo(() => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }), [catalog.models, config.kind, pickerOps]);
+  const setupViewer = useOwnSetupViewer();
+  const pressSetup = useOwnSetupPress();
+  const modelSetup = useCallback((m: ModelDef) => (setupViewer ? modelOwnSetup(poolRules, m) : null), [setupViewer, poolRules]);
   const model: ModelDef | undefined = catalog.getModel(draft.modelId);
   // MiniMax H3 on your GPU has a References mode (Pika H3 Flex): reference clips and voice or music clips beside the images.
   const refMode = config.ops.includes("ref2v") ? openReferenceMode(model) : null;
@@ -348,9 +351,10 @@ export function Composer({ docked }: { docked: boolean }) {
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
   // Fuobe DoP's orbit moves: the Exact switch films the orbit by its numbers through /api/fly-around.
-  // It starts with a 3D depth step and runs on the studio's own GPU: the owner's for now.
+  // It starts with a 3D depth step and films on a 48 GB GPU or a fal.ai key: a visitor sees it with that label, and Run
+  // opens the setup it lacks (own-setup.ts "fly-around:exact-orbit").
   const owner = useIsOwner();
-  const exactId = owner && preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
+  const exactId = preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
   const [exactBy, setExactBy] = useState<{ id: string; orbit: ExactOrbit } | null>(null);
   const exact = exactId && exactBy?.id === exactId ? exactBy.orbit : null;
   const exactImage = draft.slots.image?.ref;
@@ -475,13 +479,21 @@ export function Composer({ docked }: { docked: boolean }) {
     toast(`${offModel.name} is turned off in Settings → Models & licences, so this uses ${m.name}`, { id: "model-access" });
   }, [offModel, fallback, lockedModel, presetFallback, catalog, setDraft]);
 
-  // A model this studio's GPUs keep off, for a viewer with no GPU of its own (the studio's default, a link, a Reuse): the
-  // composer moves to the studio's default, else the first model of its list they run, before Run could fail on it.
-  const poolOff = model && !lockedModel && !presetFallback && !offModel && !poolRunsModel(poolRules, model) ? model : undefined;
-  const poolTo = poolOff ? [defaults[engine], ...models.filter((m) => m.engine === engine).map((m) => m.id)].find((id) => !!id && id !== poolOff.id && models.some((m) => m.id === id)) : undefined;
+  // The studio's untouched default that this studio's GPUs keep off, for a viewer with no GPU of its own: the composer
+  // moves to the first model of its list they run. A model the person picked (or a link, a Reuse) stays, with its label,
+  // and Run opens the setup that runs it.
+  const untouched = !!model && (model.id === config.defaultModels[engine] || model.id === defaults[engine]);
+  const poolOff = model && untouched && !lockedModel && !presetFallback && !offModel && !poolRunsModel(poolRules, model) ? model : undefined;
+  const poolTo = poolOff
+    ? [defaults[engine], ...models.filter((m) => m.engine === engine).map((m) => m.id)].find((id) => {
+        const m = id && id !== poolOff.id ? models.find((x) => x.id === id) : undefined;
+        return !!m && poolRunsModel(poolRules, m) && !modelSetup(m);
+      })
+    : undefined;
   useEffect(() => {
     const m = poolOff && poolTo ? catalog.getModel(poolTo) : undefined;
-    if (!m || !poolOff) return;
+    // A link that names the model keeps it.
+    if (!m || !poolOff || new URLSearchParams(window.location.search).get("model") === poolOff.id) return;
     setDraft((d) => (d.modelId !== poolOff.id ? {} : { modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(poolOff, m) }));
   }, [poolOff, poolTo, catalog, setDraft]);
 
@@ -667,6 +679,8 @@ export function Composer({ docked }: { docked: boolean }) {
   // the price, and where the run would stand in line with the wait.
   const poolState = poolPrice ? poolRunState(hostedCheck) : null;
   const poolRefused = !!poolState?.refused;
+  // Refused because it runs on the visitor's own GPU or key: Run opens that setup instead of staying off.
+  const poolSetup = poolRefused ? poolState?.setup : undefined;
   const resolvesOnServer = mentions.mentioned.length > 0 || !!draft.slots.mask?.ref || !!draft.slots.sketch?.ref;
 
   // Plan with stand-ins for attachments that are missing or still uploading, so the cost and the
@@ -813,12 +827,17 @@ export function Composer({ docked }: { docked: boolean }) {
       if (stop) return void toast(stop, { id: "composer-blocker" });
       if (fly.run.isPending) return;
       toast.dismiss("composer-blocker");
-      fly.run.mutate({ engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature });
+      pressSetup(owner ? null : "fly-around:exact-orbit", () => fly.run.mutate({ engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature }));
       return;
     }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
     // Refused by the price check (Run is off; Enter in the prompt lands here too): its words, and nothing is sent.
+    if (!blocker && poolSetup) {
+      // An account that has the setup (its own GPU, or the key that runs it) runs it there.
+      if (pressSetup(poolSetup)) setRunOn("own");
+      return;
+    }
     if (!blocker && poolRefused && poolState) return void toast(poolState.text, { id: "composer-blocker" });
     if (blocker || create.isPending || signature.lock.isPending) {
       if (blocker) {
@@ -1480,7 +1499,9 @@ export function Composer({ docked }: { docked: boolean }) {
           value={exact}
           defaults={exactDefaults(exactId)}
           onChange={(orbit) => setExactBy(orbit ? { id: exactId, orbit } : null)}
-          footer={exact && exactImage && fly.preview.data?.blocker ? <span>{fly.preview.data.blocker}</span> : undefined}
+          footer={
+            exact && exactImage && fly.preview.data?.blocker ? <span>{fly.preview.data.blocker}</span> : !owner ? <OwnSetupChip setup="fly-around:exact-orbit" className="mt-1" /> : undefined
+          }
         />
       )}
 
@@ -1624,6 +1645,7 @@ export function Composer({ docked }: { docked: boolean }) {
                   flat={appChoice}
                   madeWith={madeWith}
                   boxes={layoutOn}
+                  ownSetup={modelSetup}
                 />
               ) : (
                 <Chip icon={Loader2} disabled className="[&>svg]:animate-spin">
@@ -1744,7 +1766,7 @@ export function Composer({ docked }: { docked: boolean }) {
             <Button
               size="icon"
               onClick={submit}
-              disabled={create.isPending || signature.lock.isPending || poolRefused}
+              disabled={create.isPending || signature.lock.isPending || (poolRefused && !poolSetup)}
               aria-label={blocker ? `Generate — ${blocker.message}` : poolRefused && poolState ? `Generate — ${poolState.text}` : "Generate"}
               aria-busy={create.isPending || signature.lock.isPending || undefined}
               // Blocked, it stays the brand colour (paler, the arrow still 3:1 or more): pressing it still says what's missing and points at it.

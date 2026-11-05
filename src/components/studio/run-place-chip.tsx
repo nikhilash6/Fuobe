@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { openAddKey } from "@/components/keys/your-keys";
+import { useOwnSetupPress } from "@/components/own-setup";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Engine, GenerationRequest } from "@/lib/catalog/types";
@@ -95,6 +96,7 @@ export function RunPlaceChip({
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const press = useOwnSetupPress();
   // A phone's sheet says the title and the tip in its own header; the desktop popover says them here.
   const mobile = useIsMobile();
   if (!place) return null;
@@ -163,12 +165,17 @@ export function RunPlaceChip({
             <Link href={signInHref("signup", pathname)}>Sign up free</Link>
           </Button>
         )}
-        {place.needs === "gpu" && (
+        {place.setup && place.needs && place.needs !== "signup" && (
+          <Button size="sm" className="w-full" onClick={() => (setOpen(false), press(place.setup))}>
+            {place.needs === "key" ? "Add your key" : "Connect your GPU"}
+          </Button>
+        )}
+        {!place.setup && place.needs === "gpu" && (
           <Button size="sm" className="w-full" onClick={() => (setOpen(false), window.dispatchEvent(new Event(CONNECT_GPU_EVENT)))}>
             Connect your GPU
           </Button>
         )}
-        {place.needs === "key" && (
+        {!place.setup && place.needs === "key" && (
           <Button size="sm" className="w-full" onClick={() => (setOpen(false), openAddKey("fal"))}>
             Add your key
           </Button>

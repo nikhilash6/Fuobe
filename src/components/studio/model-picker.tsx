@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KEY_ADDED_EVENT, openAddKey } from "@/components/keys/your-keys";
 import { Badge } from "@/components/ui/badge";
+import { OwnSetupChip } from "@/components/own-setup";
+import type { OwnSetup } from "@/lib/own-setup";
 import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { RowDot } from "@/components/gpu/readiness-chip";
@@ -77,7 +79,7 @@ function starKey(e: React.KeyboardEvent<HTMLElement>, toggle: (id: string) => vo
   toggle(id);
 }
 
-function ModelRow({
+export function ModelRow({
   m,
   selected,
   starred,
@@ -90,6 +92,7 @@ function ModelRow({
   needs,
   made,
   edits,
+  setup,
 }: {
   m: ModelDef;
   selected: boolean;
@@ -109,6 +112,8 @@ function ModelRow({
   made?: boolean;
   /** The studio edits clips (Edit video): the price is an edit's, on the seconds in and out (Kling 4.0). */
   edits?: boolean;
+  /** It runs on the visitor's own GPU or key (own-setup.ts): its label in place of the price; Run then opens that setup. */
+  setup?: OwnSetup | null;
 }) {
   return (
     <>
@@ -149,7 +154,9 @@ function ModelRow({
           </span>
         )}
       </span>
-      {needs ? (
+      {setup && !needs ? (
+        <OwnSetupChip setup={setup} className="h-auto min-h-4 max-w-[45%]" />
+      ) : needs ? (
         // On a phone the short words, so the model's name keeps its room.
         <span className="shrink-0 text-right text-[11px] font-medium text-brand-text">
           <span className="sm:hidden">Add key</span>
@@ -197,6 +204,11 @@ interface PickerProps {
   flat?: boolean;
   /** The model the active preset's live preview really came from: "Used for this preview" on its row. */
   madeWith?: string;
+  /**
+   * What a model needs on the visitor's own setup (own-setup.ts, the hosted-run rules), or null: such a model is listed
+   * with that label in place of its price, never left out.
+   */
+  ownSetup?: (m: ModelDef) => OwnSetup | null;
 }
 
 /**
@@ -288,6 +300,7 @@ function PickerList({
   recipe,
   flat,
   madeWith,
+  ownSetup,
   onPicked,
   onNeedsKey,
 }: PickerProps & { onPicked: () => void; onNeedsKey?: (m: ModelDef, p: CloudProvider) => void }) {
@@ -414,6 +427,7 @@ function PickerList({
                   needs={needsKey(m, status)}
                   made={m.id === madeWith}
                   edits={editsClips}
+                  setup={ownSetup?.(m)}
                 />
               </CommandItem>
             ))}

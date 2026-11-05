@@ -12,7 +12,9 @@ import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
 import { usePoolRules, useTryFree } from "@/hooks/use-pool-rules";
-import { presetOffered } from "@/lib/pool-rules";
+import { presetOwnSetup } from "@/lib/pool-rules";
+import { OwnSetupChip } from "@/components/own-setup";
+import type { OwnSetup } from "@/lib/own-setup";
 import { useEngineMode, useViewer } from "@/lib/api";
 import { categoryFrom, skippedInAll } from "@/lib/gallery-category";
 import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
@@ -46,6 +48,7 @@ export const PresetCard = memo(function PresetCard({
   engine,
   gpu,
   gpuName,
+  setup,
 }: {
   preset: PresetCardData;
   href: string;
@@ -63,11 +66,13 @@ export const PresetCard = memo(function PresetCard({
   /** Its state on the viewer's GPU (a badge as one string, badgeKey), or none. */
   gpu?: string;
   gpuName?: string;
+  /** It runs on the visitor's own GPU only (the hosted-run rules keep it off this studio's GPUs): its label. */
+  setup?: OwnSetup | null;
 }) {
   const badge = engine !== "cloud" ? parseBadgeKey(gpu) : null;
   // Hosted runs on, and this preset runs on this studio's GPUs for the viewer: the card says it can be tried there.
   const card = useTryFree();
-  const tryFree = card && card.runs(preset) && !badge ? card.text : null;
+  const tryFree = card && card.runs(preset) && !badge && !setup ? card.text : null;
   const Icon = PRESET_ICONS[preset.icon] ?? Sparkles;
   const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(preset.id, preset.preview);
   const [more, setMore] = useState(false);
@@ -100,6 +105,11 @@ export const PresetCard = memo(function PresetCard({
         {badge && (
           <span className="pointer-events-none absolute top-1.5 right-1.5">
             <CardChip badge={badge} gpu={gpuName} />
+          </span>
+        )}
+        {setup && !badge && (
+          <span className="pointer-events-none absolute top-1.5 right-1.5 max-w-[calc(100%-0.75rem)]">
+            <OwnSetupChip setup={setup} className="bg-background/90" />
           </span>
         )}
         {tryFree && (
@@ -263,16 +273,15 @@ export function PresetGallery({
   const [q, setQ] = useState("");
   const [runsOnChoice, setRunsOn] = useState<RunsOn>("all");
   // For a viewer with no GPU of its own (hosted runs), a preset only this studio's GPUs could run, and which they keep
-  // off, is left out (src/lib/pool-rules.ts): nothing here fails at Run for it.
+  // off, stays with what runs it (its own-setup label, src/lib/pool-rules.ts): Run then opens that setup.
   const rules = usePoolRules();
-  const offered = useMemo(() => (rules ? presets.filter((p) => presetOffered(rules, p)) : presets), [presets, rules]);
   // "both" until hydrated, so the server HTML and the first client render agree.
   const mode = useEngineMode();
   const locked = mode === "both" ? undefined : mode;
   const runsOn: RunsOn = locked ?? runsOnChoice;
   const query = useDeferredValue(q.trim().toLowerCase());
 
-  const index = useMemo(() => offered.map((p) => [p, searchText(p)] as const), [offered]);
+  const index = useMemo(() => presets.map((p) => [p, searchText(p)] as const), [presets]);
   const cats = useMemo(() => ["All", ...categories], [categories]);
   const list = useMemo(
     () =>
@@ -308,7 +317,7 @@ export function PresetGallery({
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={`Search ${offered.length} ${noun}`}
+              placeholder={`Search ${presets.length} ${noun}`}
               aria-label={`Search ${noun}`}
               className="h-9 w-full rounded-full border bg-background pr-9 pl-9 text-[14px] outline-none placeholder:text-subtle-foreground focus:border-primary focus:ring-4 focus:ring-brand-faint [&::-webkit-search-cancel-button]:hidden"
             />
@@ -325,7 +334,7 @@ export function PresetGallery({
           </div>
           <div className="flex items-center justify-between gap-2 sm:ml-auto sm:justify-end">
             <span className="order-last text-[12px] whitespace-nowrap text-muted-foreground tabular-nums sm:order-first sm:mr-2" aria-live="polite">
-              {list.length === offered.length || (cat === "All" && !query && runsOn === "all") ? `${offered.length} ${noun}` : `${list.length} of ${offered.length}`}
+              {list.length === presets.length || (cat === "All" && !query && runsOn === "all") ? `${presets.length} ${noun}` : `${list.length} of ${presets.length}`}
             </span>
             <RunsOnControl value={runsOn} onChange={setRunsOn} locked={locked} owner={!!viewer?.owner} />
           </div>
@@ -370,7 +379,7 @@ export function PresetGallery({
               <LeadingCard key={c.href} card={c} />
             ))}
             {list.slice(0, shown).map((p) => (
-              <PresetCard key={p.id} preset={p} href={href.replace("{id}", p.id)} engine={locked} gpu={p.open ? badgeKey(badges?.presets[p.id]) : undefined} gpuName={badges?.gpu} />
+              <PresetCard key={p.id} preset={p} href={href.replace("{id}", p.id)} engine={locked} gpu={p.open ? badgeKey(badges?.presets[p.id]) : undefined} gpuName={badges?.gpu} setup={presetOwnSetup(rules, p)} />
             ))}
           </div>
           {hasMore && (

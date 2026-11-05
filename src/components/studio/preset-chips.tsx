@@ -12,7 +12,9 @@ import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { usePoolRules } from "@/hooks/use-pool-rules";
-import { presetOffered } from "@/lib/pool-rules";
+import { presetOwnSetup, type PoolRules } from "@/lib/pool-rules";
+import { OwnSetupChip } from "@/components/own-setup";
+import type { OwnSetup } from "@/lib/own-setup";
 import { loadFullCatalog, useCatalog } from "./catalog";
 import { Chip, ClearableChip } from "./chip";
 
@@ -26,7 +28,7 @@ import { Chip, ClearableChip } from "./chip";
 
 const tileClass = "group flex flex-col items-start gap-1 overflow-hidden rounded-lg p-1 text-left ring-primary transition hover:bg-accent";
 
-function PresetTile({ preset: p, picked, onPick }: { preset: Preset; picked: boolean; onPick: () => void }) {
+function PresetTile({ preset: p, picked, onPick, setup }: { preset: Preset; picked: boolean; onPick: () => void; setup?: OwnSetup | null }) {
   const { playing, handlers } = usePickerPlayback(p.id, { picked });
   const PI = PRESET_ICONS[p.look.icon] ?? Film;
   return (
@@ -43,11 +45,30 @@ function PresetTile({ preset: p, picked, onPick }: { preset: Preset; picked: boo
         }
       />
       <span className="w-full truncate px-0.5 text-[12px] font-medium">{p.name}</span>
+      {setup && <OwnSetupChip setup={setup} className="mx-0.5" />}
     </button>
   );
 }
 
-export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] | null; value?: string; onPick: (id: string | undefined) => void; noneLabel: string }) {
+/**
+ * The picker's grid. `rules` (hosted runs, a viewer with no GPU of its own): a preset only this studio's GPUs could run
+ * and which they keep off stays, with what runs it (its own-setup label); Run then opens that setup.
+ */
+export function PresetGrid({
+  list,
+  value,
+  onPick,
+  noneLabel,
+  rules,
+  engine,
+}: {
+  list: Preset[] | null;
+  value?: string;
+  onPick: (id: string | undefined) => void;
+  noneLabel: string;
+  rules?: PoolRules;
+  engine?: "open" | "cloud";
+}) {
   const [cat, setCat] = useState<string>("All");
   const box = useRef<HTMLDivElement>(null);
   const ordered = useMemo(() => (list ? featuredAll(list) : null), [list]);
@@ -89,7 +110,7 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
             {ordered
               .filter((p) => cat === "All" || p.category === cat)
               .map((p) => (
-                <PresetTile key={p.id} preset={p} picked={value === p.id} onPick={() => onPick(p.id)} />
+                <PresetTile key={p.id} preset={p} picked={value === p.id} onPick={() => onPick(p.id)} setup={presetOwnSetup(rules, p, engine)} />
               ))}
           </div>
         </div>
@@ -122,11 +143,10 @@ export function PresetChip({ type, value, onChange, engine }: { type: "motion" |
   const [open, setOpen] = useState(false);
   const { chip, side, measure } = usePickerSide();
   const catalog = useCatalog();
-  // For a viewer with no GPU of its own, what this studio's GPUs keep off is left out (src/lib/pool-rules.ts), unless
-  // the preset has a cloud route and the composer isn't on the open engine (the gallery keeps those too).
+  // For a viewer with no GPU of its own, what this studio's GPUs keep off shows with its own-setup label
+  // (src/lib/pool-rules.ts), unless the preset has a cloud route and the composer isn't on the open engine.
   const rules = usePoolRules();
-  const all = catalog.presets?.[type] ?? null;
-  const list = useMemo(() => (all && rules ? all.filter((p) => presetOffered(rules, p, engine)) : all), [all, rules, engine]);
+  const list = catalog.presets?.[type] ?? null;
   const selected = value ? catalog.getPreset(value) : undefined;
   // The picked preset's poster in place of its icon, as the Look chip shows its look.
   const cover = selected && presetCover(selected.id);
@@ -153,6 +173,8 @@ export function PresetChip({ type, value, onChange, engine }: { type: "motion" |
           <PresetGrid
             list={list}
             value={value}
+            rules={rules}
+            engine={engine}
             noneLabel="None"
             onPick={(id) => {
               onChange(id);
@@ -198,8 +220,8 @@ export function MixChip({
   const presets = catalog.presets;
   const rules = usePoolRules();
   const mixable = useMemo(
-    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage") && presetOffered(rules, p, engine)) : null),
-    [presets, primary.id, rules, engine],
+    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage")) : null),
+    [presets, primary.id],
   );
   return (
     <ClearableChip active={!!mix} onClear={() => onChange({ mix: undefined })} clearLabel="Remove the mix">
@@ -247,6 +269,8 @@ export function MixChip({
           <PresetGrid
             list={mixable}
             value={mix?.presetId}
+            rules={rules}
+            engine={engine}
             noneLabel="No mix"
             onPick={(id) => onChange({ mix: id ? { presetId: id, strength: mix?.strength ?? 0.6 } : undefined })}
           />

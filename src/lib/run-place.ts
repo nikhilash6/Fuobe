@@ -1,3 +1,4 @@
+import { ownSetupDetail, ownSetupLabel, type OwnSetup } from "./own-setup";
 import { lineWords } from "./pool-line";
 import { billedTo, CLOUD_KEY, type CloudProvider } from "./your-keys";
 
@@ -36,9 +37,10 @@ export interface RunPlaceInput {
   /**
    * The price of a run on this studio's GPUs (the billing service's words; empty text: free), undefined while pricing.
    * `refused`: the price check refused the run (its words are `text`), so it can't start now. `wait`: where it would
-   * stand in line, and the wait.
+   * stand in line, and the wait. `setup`: refused because it runs on the visitor's own setup (own-setup.ts), which the
+   * send button opens instead of staying off.
    */
-  pool?: { text: string; sub?: string; refused?: boolean; wait?: string } | null;
+  pool?: { text: string; sub?: string; refused?: boolean; wait?: string; setup?: OwnSetup } | null;
   /** The provider an account's paid run is billed to (its own key), or null when it has no key for this model. */
   payer?: CloudProvider | null;
   /** How a price reads: "$0.04". */
@@ -64,6 +66,8 @@ export interface RunPlace {
   refused?: string;
   /** The cloud model the chip names, when known (the label is "Cloud" without one). */
   model?: string;
+  /** It runs on the visitor's own setup (own-setup.ts): the send button opens that setup (`needs` says which). */
+  setup?: OwnSetup;
 }
 
 const list = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -111,6 +115,21 @@ export function runPlace(input: RunPlaceInput): RunPlace {
   // at the billing service's price (the studio composer's "This studio's GPUs" chip).
   if (open && input.hosted && audience !== "owner" && (!input.gpu || input.preferPool)) {
     const signup = audience === "guest";
+    // Runs on the visitor's own GPU or key only: said in the setup's own words, and the send button opens that setup.
+    const setup = !input.demo && input.pool?.refused ? input.pool.setup : undefined;
+    if (setup) {
+      const needs = signup ? "signup" : setup.need === "key" ? "key" : input.gpu ? undefined : "gpu";
+      return {
+        where: setup.need === "key" ? "cloud" : "gpu",
+        label: setup.need === "key" ? "Your key" : "Your GPU",
+        price: "",
+        title: ownSetupLabel(setup),
+        tip: `${ownSetupDetail(setup)}${signup ? " Create a free account to run it." : ""}`,
+        send: ownSetupLabel(setup),
+        ...(needs && { needs: needs as RunPlace["needs"] }),
+        setup,
+      };
+    }
     const refused = !input.demo && input.pool?.refused ? input.pool.text : undefined;
     const poolPrice = input.demo ? price : input.pool ? input.pool.text || "Free" : "";
     const tip = input.demo
@@ -228,12 +247,13 @@ export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "brows
  * `count`: runs one press starts (the quote is for one, said "each").
  */
 export function checkedPool(
-  check: { place?: "pool"; quote?: { text: string; sub?: string; allowed?: boolean }; line?: { place: number; etaSeconds: number | null } } | null | undefined,
+  check: { place?: "pool"; quote?: { text: string; sub?: string; allowed?: boolean; ownSetup?: OwnSetup }; line?: { place: number; etaSeconds: number | null } } | null | undefined,
   count = 1,
-): { text: string; sub?: string; refused?: boolean; wait?: string } | undefined {
+): { text: string; sub?: string; refused?: boolean; wait?: string; setup?: OwnSetup } | undefined {
   if (check?.place !== "pool" || !check.quote) return undefined;
-  const { text, sub } = check.quote;
-  // Refused before Run (busy, a limit, not offered here): its words, never priced "each".
-  if (check.quote.allowed === false) return { text, ...(sub && { sub }), refused: true };
+  const { text, sub, ownSetup } = check.quote;
+  // Refused before Run (busy, a limit, not offered here): its words, never priced "each"; with the visitor's own setup
+  // that runs it, when that is the answer.
+  if (check.quote.allowed === false) return { text, ...(sub && { sub }), refused: true, ...(ownSetup && { setup: ownSetup }) };
   return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }), ...(check.line && { wait: lineWords(check.line) }) };
 }

@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { poolRulesOf, poolRunsModel, poolRunsPreset, presetOffered, tryFreeFor } from "@/lib/pool-rules";
 
 /*
- * For a visitor with no GPU of its own (hosted runs), pickers leave out what this studio's GPUs keep off (the policy's
- * model and app lists and its kinds), the same rules the server checks on every run; and "Try free" on preset cards.
+ * For a visitor with no GPU of its own (hosted runs), pickers label what this studio's GPUs keep off (the policy's
+ * model and app lists and its kinds) with the visitor's own setup, the same rules the server checks on every run; and
+ * "Try free" on preset cards. (The labels themselves: tests/own-setup-labels.test.ts.)
  */
 
-describe("what pickers leave out for a visitor with no GPU of its own", () => {
+describe("what pickers label for a visitor with no GPU of its own", () => {
   const open = (id: string, kind: "image" | "video" | "model3d" = "image") => ({ id, kind, engine: "open" });
   it("the policy's lists and kinds, made into rules only when they keep something off", () => {
     expect(poolRulesOf({ pool: {} })).toBeUndefined();
@@ -75,7 +76,7 @@ describe("presets kept off with their model or the kind they make", () => {
   ];
   const tryFree = (pool: Parameters<typeof poolRulesOf>[0]) => tryFreeFor({ hosted: true, cardText: "Try free", gpu: { connected: false }, pool: poolRulesOf(pool, presets) }, "both")!.runs;
 
-  it("a preset on a model the policy denies, or of a kind it keeps off, says no Try free and leaves the pickers", () => {
+  it("a preset on a model the policy denies, or of a kind it keeps off, says no Try free and is labelled in the pickers", () => {
     const denied = tryFree({ pool: { deny: ["oss-face"] } });
     expect(denied({ id: "app-face", open: true })).toBe(false);
     expect(denied({ id: "app-portrait", open: true })).toBe(true);
