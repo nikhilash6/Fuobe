@@ -99,17 +99,20 @@ export function ClipDrop({
   onFile,
   onLibrary,
   disabled,
+  gpuOnly,
 }: {
   accept: string;
   limits: string;
   onFile: (f: File) => void;
   onLibrary: (url: string, name?: string) => void;
   disabled?: boolean;
+  /** A tool no key runs (Restore & colourise): an account without a GPU is asked for one, even when it has a key. */
+  gpuOnly?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [lib, setLib] = useState(false);
-  const askFirst = useAskBeforeUpload();
+  const askFirst = useAskBeforeUpload({ gpuOnly });
   return (
     <div
       aria-disabled={disabled || undefined}

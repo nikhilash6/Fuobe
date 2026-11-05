@@ -177,6 +177,7 @@ export function RestoreTool({ setup }: { setup?: OwnSetup | null } = {}) {
           <ClipDrop
             accept={RESTORE.accept}
             limits={LIMITS}
+            gpuOnly
             onFile={(f) => {
               // A visitor without its own GPU or key sets one up first (its files are kept for runs there).
               if (!press(item)) return;
