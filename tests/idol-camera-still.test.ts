@@ -176,6 +176,37 @@ describe("Assist: the chat's and the project's tiles", () => {
   });
 });
 
+describe("Canvas and Cinema tiles", () => {
+  it.each(both)("a Canvas node that ran the %s splat tiles the splat and its orbit, never the camera still", async (_, r) => {
+    const { foldResultsKeep } = await import("@/components/canvas/canvas-context");
+    const res = foldResultsKeep(undefined, [full(r)]);
+    // The node's tiles, its Viewer's arrows and "Use result as an input" all read these.
+    expect(res.outputs.map((x) => x.i)).toEqual([0, 1]);
+    expect(res.outputs.map((x) => x.o.url)).not.toContain(byRole(r, "preview").url);
+    expect(res.outputs.find((x) => ["image", "video", "audio"].includes(x.o.kind))?.o.url).toBe(byRole(r, "turntable").url);
+  });
+
+  it.each(both)("a Cinema project holding the %s splat tiles the splat and its orbit, at their own indexes", async (_, r) => {
+    const { units } = await import("@/components/cinema/cinema-feed");
+    const tiles = units([{ ...full(r), folderId: null, projectId: "p" } as never]);
+    expect(tiles.map((u) => u.index)).toEqual([0, 1]);
+    expect(tiles.map((u) => u.output?.url)).toEqual([r.outputs[0].url, byRole(r, "turntable").url]);
+  });
+
+  it("any other result keeps every tile (a picture run's takes, a grid's sheet)", async () => {
+    const { foldResultsKeep } = await import("@/components/canvas/canvas-context");
+    const { units } = await import("@/components/cinema/cinema-feed");
+    const takes = { ...full(runs.stiletto), kind: "image", op: "t2i", outputs: [{ url: "/api/files/1.png", kind: "image", meta: { role: "preview" } }, { url: "/api/files/2.png", kind: "image" }] } as Generation;
+    expect(foldResultsKeep(undefined, [takes]).outputs.map((x) => x.i)).toEqual([0, 1]);
+    expect(units([{ ...takes, folderId: null, projectId: "p" } as never]).map((u) => u.index)).toEqual([0, 1]);
+    const grid = { ...takes, feature: "cinema-grid" };
+    expect(units([{ ...grid, folderId: null, projectId: "p" } as never]).map((u) => [u.index, !!u.tile])).toEqual([
+      [0, false],
+      [0, true],
+    ]);
+  });
+});
+
 describe("the result card and its next steps", () => {
   it("a clean splat with no orbit: the photo, never the camera still", async () => {
     const r = runs.stiletto;

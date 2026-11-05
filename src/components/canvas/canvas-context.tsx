@@ -18,6 +18,7 @@ import {
 } from "@/lib/catalog/canvas";
 import type { Engine, Generation, GenerationStatus, ModelDef, Operation, OutputFile } from "@/lib/catalog/types";
 import type { EngineMode } from "@/lib/api";
+import { showableOutputs } from "@/lib/av/idol-camera-still";
 
 export { ICONS, NodeIcon } from "./node-icon";
 
@@ -42,7 +43,7 @@ export interface NodeResults {
   progress: number | null;
   message: string | null;
   error: string | null;
-  /** Every output of the latest run, in order. */
+  /** Every output of the latest run, in order, but a clean Idol splat's camera still (src/lib/av/idol-camera-still.ts). */
   outputs: { g: Generation; o: OutputFile; i: number }[];
 }
 
@@ -61,7 +62,7 @@ export function foldResults(gens: Generation[], out?: string): NodeResults {
     progress: progress && progress > 0 ? progress : null,
     message: live[0]?.message ?? null,
     error: gens.find((g) => g.status === "failed")?.error ?? null,
-    outputs: gens.flatMap((g) => (g.status === "succeeded" && (!out || g.id === out) ? g.outputs.map((o, i) => ({ g, o, i })) : [])),
+    outputs: gens.flatMap((g) => (g.status === "succeeded" && (!out || g.id === out) ? showableOutputs(g).map((i) => ({ g, o: g.outputs[i], i })) : [])),
   };
 }
 

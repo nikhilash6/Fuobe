@@ -54,6 +54,7 @@ import { useSoulFinish } from "@/components/studio/soul-finish";
 import { Viewer } from "@/components/studio/viewer";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { getModel } from "@/lib/catalog";
+import { showableOutputs } from "@/lib/av/idol-camera-still";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
@@ -120,7 +121,7 @@ function usePrefs(): [Prefs, (p: Partial<Prefs>) => void] {
 }
 
 /** One tile: a pending/failed take, one output of a take, a tile cut from a grid sheet, or a 3D scene (shown by its still). */
-interface Unit {
+export interface Unit {
   key: string;
   g: CinemaGeneration;
   output?: OutputFile;
@@ -131,7 +132,8 @@ interface Unit {
 
 const active = (g: Generation) => g.status === "queued" || g.status === "running";
 
-function units(items: CinemaGeneration[]): Unit[] {
+/** The feed's tiles, in order (exported for tests). */
+export function units(items: CinemaGeneration[]): Unit[] {
   const out: Unit[] = [];
   for (const g of items) {
     if (g.status !== "succeeded") {
@@ -146,8 +148,9 @@ function units(items: CinemaGeneration[]): Unit[] {
     }
     // Open-source grids return the sheet first, then its tiles.
     const sheetTiles = g.feature === "cinema-grid" && g.outputs.length > 1;
-    const outputs = sheetTiles ? g.outputs.slice(0, 1) : g.outputs;
-    outputs.forEach((o, i) => out.push({ key: `${g.id}:${i}`, g, output: o, index: i }));
+    // Every output but a clean Idol splat's camera still (src/lib/av/idol-camera-still.ts).
+    const shown = sheetTiles ? [0] : showableOutputs(g);
+    shown.forEach((i) => out.push({ key: `${g.id}:${i}`, g, output: g.outputs[i], index: i }));
     const tiles = g.tiles?.length ? g.tiles.map((t) => ({ url: t.url, row: t.row, col: t.col })) : sheetTiles ? g.outputs.slice(1).map((o, i) => ({ url: o.url, row: -1, col: i })) : [];
     tiles.forEach((t, i) => out.push({ key: `${g.id}:t${i}`, g, output: { url: t.url, kind: "image" }, index: i, tile: { row: t.row, col: t.col } }));
   }

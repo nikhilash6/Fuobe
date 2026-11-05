@@ -7,7 +7,8 @@ import type { Generation, OutputFile } from "@/lib/catalog/types";
  * here can tell a good one from a collapsed one, so the still is never a result's cover, poster, tile or shown piece:
  * the orbit (its still, else its first frame) and the photo stand in. Every place that lists a result's outputs or picks
  * its picture asks here: the card (model3d.ts), the Library and feed Viewer and tiles (output-actions.ts modelPreview),
- * share and Publish pages (output-actions.ts sharedOutputs), Assist's chat and project tiles.
+ * share and Publish pages (output-actions.ts sharedOutputs), Assist's chat and project tiles, a Canvas node's results
+ * (canvas-context.tsx foldResults) and a Cinema project's tiles (cinema-feed.tsx units).
  */
 
 /** Whether a splat came from the clean graph: its saved file says it was pruned (the core graph's says it wasn't). */
