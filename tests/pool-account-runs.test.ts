@@ -4,6 +4,7 @@ import { startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startLocalComfy, type LocalComfy } from "./helpers/fake-local-comfy";
 import { apiAs, loadRoutes, sha256, type ComputerRoutes } from "./helpers/computer-tab";
 import { tempDir } from "./helpers/temp-dir";
+import { composeOnWorker, graphOfTask } from "./helpers/ticket-worker";
 
 /**
  * Account runs on this install's GPUs go through the workers' line: each job of an account's run is a task for the
@@ -60,6 +61,7 @@ const { getModel } = await import("@/lib/catalog");
 const { ComputerRunner } = await import("@/lib/computer-runner");
 const { POOL_WORDS } = await import("@/lib/relay");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
+const { catalogVersion } = await import("@/server/computer/catalog-version");
 
 const HOST = "localhost:3000";
 const SITE_HEADERS = { host: HOST, "sec-fetch-site": "same-origin", origin: `http://${HOST}` };
@@ -118,12 +120,15 @@ function standInWorker(name = "stand-in", o: { paused?: boolean } = {}) {
   const lanes = allLanes(loadIndex(), sha);
   pool.patchWorker(w.id, { paused: !!o.paused, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l.lane, { delayMs: 0 }])), claimAfterMs: 0 });
   db()
-    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
-    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ? WHERE id = ?")
+    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
   return w;
 }
 
-/** The worker program's side, as `fuobe worker run` drives it: the shared runner with the worker's token and its own ComfyUI. */
+/**
+ * The worker program's side, as `fuobe worker run` drives it: the shared runner with the worker's token, its own
+ * ComfyUI, and its composer for job tickets.
+ */
 function workerRunner(token: string) {
   const api = apiAs(routes, null, { authorization: `Bearer ${token}` });
   return new ComputerRunner(
@@ -134,7 +139,8 @@ function workerRunner(token: string) {
       sha256,
       origin: "http://localhost:3000",
       sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 50))),
-      beatExtra: () => ({ protocol: 2, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
+      compose: (t) => composeOnWorker(t),
+      beatExtra: () => ({ protocol: 2, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null, catalogVersion: catalogVersion() }),
     },
     { device: "worker", port: comfy.port, clientId: "worker-test" },
   );
@@ -185,7 +191,7 @@ function accountTask(o: { lane?: string; account?: string; rankAt?: number; notA
 type WorkerRow = import("@/server/computer/workers").WorkerRow;
 const workerRow = (w: { id: string }) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
 const beatAs = (w: { id: string }, now = Date.now()) =>
-  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
+  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion() }), now);
 const claimAs = (w: { id: string }, running: string[] = [], now = Date.now()) => pool.workerClaim(workerRow(w), running, now);
 
 describe("with hosted runs off, nothing changes", () => {
@@ -349,9 +355,11 @@ describe("an account's run on the workers", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const t = await until(() => taskOf(r.body.items![0].id));
     expect(t).toBeDefined();
-    expect(t!.graph_json ?? "").not.toContain("fuobe_someone_elses.png");
-    // The picture its graph loads is the one this run sent, kept for its task.
-    const graph = JSON.parse(t!.graph_json ?? "{}") as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+    // It goes as a job ticket: no graph, and the name the run didn't send isn't in it.
+    expect(t!.graph_json).toBeNull();
+    expect(t!.ticket_json ?? "").not.toContain("fuobe_someone_elses.png");
+    // The picture the worker's graph loads is the one this run sent, kept for its task.
+    const graph = await graphOfTask(t!);
     const loaded = Object.values(graph)
       .filter((x) => x.class_type === "LoadImage")
       .map((x) => String(x.inputs.image));
@@ -648,7 +656,7 @@ describe("graphs and results for the workers", () => {
       const t = rowOf(String((sent.meta as { relay: string }).relay));
       expect(t.principal).toBe(`acct:${accountId}`);
       expect(t.pools).toBe("pool");
-      const graph = JSON.parse(t.graph_json ?? "{}") as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+      const graph = await graphOfTask(t);
       const saves = Object.values(graph).filter((n) => n.class_type === "VHS_VideoCombine");
       expect(saves.length).toBeGreaterThan(0);
       for (const node of saves) expect(node.inputs.save_metadata).toBe(false);

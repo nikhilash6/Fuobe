@@ -11,15 +11,18 @@
  *
  * Start a new driver with the same token to bring the worker back.
  *
- * Its beats speak the worker program's own protocol (bin/lib/worker/config.mjs), so it is the worker the studio expects
- * today. A beat answer that says the studio needs a newer worker program throws: a driver the studio would never give a
+ * Its beats speak the worker program's own protocol (bin/lib/worker/config.mjs) and say this checkout's catalog version,
+ * and it composes an account's job ticket with the studio's own composer, so it is the worker the studio expects today.
+ * A beat answer that says the studio needs a newer worker program throws: a driver the studio would never give a
  * job must fail loudly, never look like a feature that isn't built.
  */
 import { ComputerRunner } from "@/lib/computer-runner";
 import type { BeatAnswer } from "@/lib/relay";
+import { catalogVersion } from "@/server/computer/catalog-version";
 import { PROTOCOL } from "../../bin/lib/worker/config.mjs";
 import { apiAs, sha256, type ComputerRoutes } from "./computer-tab";
 import type { StandInComfy } from "./standin-comfy";
+import { composeOnWorker } from "./ticket-worker";
 
 /** The protocol the driver's beats speak: the worker program's. */
 export const DRIVER_PROTOCOL: number = PROTOCOL;
@@ -147,7 +150,8 @@ export function workerDriver(o: {
       sha256,
       origin: "http://localhost:3000",
       sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, o.sleepCapMs ?? 50))),
-      beatExtra: () => ({ protocol: DRIVER_PROTOCOL, version: "test", local: { paused: !!paused, why: paused, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
+      compose: (t) => composeOnWorker(t),
+      beatExtra: () => ({ protocol: DRIVER_PROTOCOL, version: "test", local: { paused: !!paused, why: paused, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null, catalogVersion: catalogVersion() }),
       // As the worker program does when a job ends here: its prompt leaves its ComfyUI's history (once its ComfyUI has
       // stopped it, when the job was taken back).
       ended: async (t) => {

@@ -74,12 +74,16 @@ import {
   resultOf,
   runnerFacts,
   stageInput,
+  stagedInput,
   taskProgress,
   type FinishedPlan,
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
 import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, workersCanRun } from "../computer/pool";
+import { catalogVersion } from "../computer/catalog-version";
+import { ticketProblem, type JobTicket } from "@/lib/job-ticket";
+import { catalogKnows, ticketFor } from "@/lib/ticket-compose";
 import { ownerWaitMs } from "../queue-settings";
 import { worldcastBase, worldcastHealth } from "../worldcast";
 
@@ -1104,13 +1108,38 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       accountOnInstall: !!tenantAccount() && !!(poolScope.getStore() || serverScope.getStore()),
       ownStudio: !ownGpu() && !computerScope() && !tenantAccount(),
     });
-    return { ...out, request: { endpoint: endpointTemplate, op: ctx.op, input: request, made, sent, ...(ctx.loraSlot && { loraSlot: true }) } };
+    // What the composer used: the request without the files it dropped (an account's file it didn't send).
+    const used = out.dropped.length && request.extra ? { ...request, extra: Object.fromEntries(Object.entries(request.extra).filter(([k]) => !out.dropped.includes(k))) } : request;
+    return { ...out, request: { endpoint: endpointTemplate, op: ctx.op, input: used, made, sent, ...(ctx.loraSlot && { loraSlot: true }) } };
   } catch (e) {
     if (e instanceof ComposeError) throw new ProviderError(e.message, e.status);
     throw e;
   }
 }
 
+
+/** Said when an account's run can't be put into a job ticket (its settings are outside the ticket's rules). */
+export const TICKET_REFUSED = "This run couldn't be made with these settings.";
+
+/**
+ * An account's run on the workers goes as a job ticket (src/lib/job-ticket.ts), never as a graph: the workflow, this
+ * studio's catalog version, the typed settings the composer was given, each input file by its slot and SHA-256, and how
+ * many results it makes. The ticket is checked here as the worker checks it before composing (ticketProblem).
+ */
+export function accountTicket(p: PreparedPrompt, principal: Principal, o: { outputs: number; kind?: MediaKind }): JobTicket {
+  const version = catalogVersion();
+  if (!version) throw new ProviderError(TICKET_REFUSED);
+  let ticket: JobTicket;
+  try {
+    ticket = ticketFor(p.request, { catalogVersion: version, sent: p.request.sent, file: (name) => stagedInput(principal, name), facts: mediaInfoFor, outputs: { count: o.outputs, kind: o.kind ?? "file" }, size: p.size });
+  } catch {
+    throw new ProviderError(TICKET_REFUSED);
+  }
+  const staged = ticket.inputs.map((i) => ({ name: i.name, sha256: stagedInput(principal, i.name)?.sha256 ?? "" }));
+  const catalog = { has: (id: string) => loadManifest().workflows.some((w) => w.id === id), get: getWorkflow };
+  if (ticketProblem(ticket, { catalogVersion: version, known: (id) => catalogKnows(catalog, id), inputs: staged })) throw new ProviderError(TICKET_REFUSED);
+  return ticket;
+}
 
 /** What ComfyUI's /prompt answers when it refuses a graph. */
 export type PromptRefusalBody = { error?: { type?: string; message?: string; extra_info?: { class_type?: string } }; node_errors?: unknown };
@@ -1571,7 +1600,7 @@ export const comfyProvider: ProviderAdapter = {
     if (worker === "isolated" && computerScope()) throw new ProviderError(ISOLATED_ON_COMPUTER);
     // A route's own graph settings (Fuobe Speak's InfiniteTalk recipe) go in unless the run sets them.
     const asked = route.extra ? { ...input, extra: { ...route.extra, ...input.extra } } : input;
-    const { manifest, workflow: wf, meta } = await prepareWorkflow(route.endpoint, asked, {
+    const prepared = await prepareWorkflow(route.endpoint, asked, {
       generationId,
       op: route.op,
       loraSlot: route.loraSlot === true,
@@ -1597,6 +1626,7 @@ export const comfyProvider: ProviderAdapter = {
       // The pack switched off in Settings → Models & licences: Idol 3D runs its core graph, as without the pack.
       idolPack: async () => ((await import("@/server/model-access")).readAccess().packs.includes(IDOL_PACK) ? false : comfyHasClass(IDOL_PACK_CLASS, worker)),
     });
+    const { manifest, workflow: wf, meta } = prepared;
     // MiniMax H3's 2K draft that kept its latent says where (the finish loads it only there: generations.ts latentHandOff).
     const latentAt = manifest.id === H3_LATENT_DRAFT_WORKFLOW ? comfyPlace() : null;
     if (latentAt) meta.latentAt = latentAt;
@@ -1618,26 +1648,31 @@ export const comfyProvider: ProviderAdapter = {
       // The owner's job that no worker is allowed and able to run would wait with no end (the owner's jobs have no wait
       // limit unless the owner sets one): it is refused now, as an account's run is.
       if (forPool && computer === "owner" && !workersCanRun(manifest.id)) throw new ProviderError(NO_WORKER_FOR_LANE);
+      const outputs = Math.max(1, manifest.outputs.length) * Math.max(1, Math.round(Number(input.numOutputs) || 1));
+      // An account's run on the workers: a job ticket, and the worker composes the graph (the owner's own jobs keep theirs).
+      const ticket = forPool && computer !== "owner" ? accountTicket(prepared, computer, { outputs, kind: model?.kind }) : undefined;
       const task = createTask({
         principal: computer,
         generationId,
         graph: forPool ? withoutSaveMetadata(wf) : wf,
+        ...(ticket && { ticket }),
         prefix: typeof meta.prefix === "string" ? meta.prefix : undefined,
         metaBatch,
         preview: true,
         workflowId: manifest.id,
         made: model?.kind,
         loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),
-        outputs: Math.max(1, manifest.outputs.length) * Math.max(1, Math.round(Number(input.numOutputs) || 1)),
+        outputs,
         ...(forPool && {
           pool:
             computer === "owner"
               ? // The owner's jobs on the workers: the lane and files they need, after every person's run (the owner's
                 // class), with the owner's own wait limit (none unless the owner sets one: queue-settings.ts).
-                poolFields(manifest.id, { class: "owner", waitMs: ownerWaitMs() })
+                poolFields(manifest.id, { class: "owner", waitMs: ownerWaitMs(), size: prepared.size })
               : // An account's: the lane and files they need, in its class (paid before free), in the order they came
                 // (with the billing service's head start inside the class), with the wait set for the run.
-                poolFields(manifest.id, { account: computer.slice(5), class: runStamp()?.class ?? "free", boostMs: runStamp()?.boostMs, waitMs: runStamp()?.waitMs || poolWaitMs() }),
+                // A ticket's task goes only to a worker built for its catalog, and inside that PC's ceiling.
+                poolFields(manifest.id, { account: computer.slice(5), class: runStamp()?.class ?? "free", boostMs: runStamp()?.boostMs, waitMs: runStamp()?.waitMs || poolWaitMs(), size: prepared.size, catalogVersion: ticket?.catalogVersion }),
         }),
       });
       // (`workers`: the run keeps its task's clocks, pool.ts, even when a poll of it fails.)

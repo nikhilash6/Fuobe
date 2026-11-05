@@ -60,6 +60,11 @@ or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected
    - a folder that a cloud drive syncs;
    - an ffmpeg path where no ffmpeg runs.
 
+   Setup then asks what this PC may ever run, its ceiling (see "Job tickets and the PC's ceiling"): the lanes or
+   workflows (`all`, or their names), the largest picture in megapixels, the longest clip in seconds and the most
+   results one run may ask for (0 for no limit). It also asks whether the PC runs the studio owner's own jobs, which
+   come as whole graphs. A name that isn't in the studio's catalog is refused. Run setup again to change any answer.
+
    On Windows it marks the worker folder as "not content indexed". The settings go to `worker.json`, and only you can
    read that file. Setup also pauses the worker on the PC.
 3. In Settings → Workers, set the worker's hours and the lanes it may run (with a delay for each lane), then press
@@ -364,6 +369,49 @@ median of the workers' measured runs). The billing service's line facts (`QueueF
 only. Rows are only added, and each is kept a year, like the admin API's log. The owner reads it at
 `GET /api/admin/workers/jobs` ([admin-api.md](admin-api.md)).
 
+### Job tickets and the PC's ceiling
+
+An account's run reaches a worker as a job ticket, never as a graph. The ticket names a workflow of the catalog, the
+catalog version it was made for, the run's settings, each input file (its slot, its name, its kind and its SHA-256),
+how many results it makes and how big it is, and the job's run and stall limits. The worker composes the graph itself,
+with the studio's own composer (`src/lib/ticket-compose.ts` and `src/lib/comfy-compose.ts`, built into
+`bin/lib/worker/dist/compose/`) and its own copy of the catalog (`workflows/comfyui` in its checkout). Every check in
+"What the worker checks itself" then runs on the graph it composed. The studio owner's own jobs still come as whole
+graphs, and so do a person's own computer's jobs (Fuobe Connect and the browser).
+
+- **Settings.** Each setting has a type and a rule: a choice from a list, a number in a range, true or false, or a list
+  of these. A person's words reach only the prompt fields (prompt, negative prompt, dialogue, shots and the voice's
+  words). No setting may hold a path: a drive, a share, a rooted or home path, a `..` step, a file address or, in a
+  setting that isn't free text, a slash, a file name, a web address or a variable. A file goes only in its slot. The
+  studio checks the ticket when it makes it, and the worker checks it again before it composes.
+- **Files the graph makes.** A few graphs read a small file that the composer makes (a palette swatch, a fade curve).
+  The worker makes it again, checks it against the SHA-256 in the ticket, and sends its own copy to its ComfyUI. It
+  never reads the studio's copy.
+- **The catalog version.** One SHA-256 over the composer's files and the catalog's workflows. The worker's build writes
+  it (`dist/catalog-version.json`), and the studio computes the same from its own files (or reads
+  `FUOBE_CATALOG_VERSION`). Each beat says the worker's version. A ticket goes only to a worker with the same version.
+  A worker built from another catalog takes the owner's own jobs, and its state in Settings → Workers reads **Update
+  the worker** while accounts' runs may come to the install's GPUs. Update it (see "Install and update").
+- **The PC is the ceiling.** `ceiling` in `worker.json` (setup asks for it) is the most the PC ever runs:
+  `{ "lanes": [...], "workflows": [...], "maxMegapixels": 4, "maxSeconds": 10, "maxOutputs": 4 }`. Leave out a field
+  for no limit of its own. Each beat says the ceiling. The lanes that the owner allows in Settings → Workers only
+  narrow inside it, and the studio never hands the worker a job outside it: not a lane or a workflow it doesn't list,
+  and not a bigger picture, a longer clip or more results. The worker checks each ticket against its ceiling again,
+  before and after it composes, and gives back a job outside it.
+- **Whole graphs.** Set `"acceptGraphs": false` in `worker.json` (setup asks) and the worker takes job tickets only,
+  so not even the owner's own jobs reach it as graphs. A graph for an account's job is refused in any case.
+- **Choices that depend on the PC.** The worker makes them from its own ComfyUI's answers (its GPU's memory, its RAM,
+  its device, the model files and node packs it has), never from the studio's.
+
+A ticket that the worker refuses before it runs (another catalog, or more than its PC allows) goes back in line at no
+cost to the run. That worker is not offered it again until its build or its ceiling changes. A ticket that the worker
+can't use at all fails the run, and the person who started it sees one plain sentence.
+
+After an update of the studio that changes the catalog version, each job still waiting in line gets its ticket made
+again for the new catalog before the next claim, with its place kept. The studio composes the same request again, so
+its settings and files are checked again. A job whose workflow is no longer in the catalog, or whose settings are no
+longer allowed, ends with one plain sentence. A job that a worker already holds finishes with the ticket it has.
+
 ### What the worker checks itself
 
 Before its ComfyUI gets a graph, the worker checks all of these. The studio cannot change these checks. To add a model,
@@ -422,7 +470,7 @@ alike. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows 
 `image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. The worker
 then makes each one again before its ComfyUI reads it (see "Clips and sound"). Every VideoHelperSuite save node of a
 graph for the workers is sent with `save_metadata` off, so no prompt rides inside a result. An account's run is shaped
-by the workers' own facts (the least VRAM and RAM of the workers allowed its lane), never by the account's own computer.
+by the worker that takes it (see "Job tickets and the PC's ceiling"), never by the account's own computer.
 
 ### Clips and sound
 
@@ -539,9 +587,14 @@ within 10 minutes of each other, each write an alert to the admin log (`worker.a
 its target), at most once an hour each.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
-  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept? }`. The answer adds `worker: { paused, pauseNow,
-  drain, autoResume, insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token?, tokenExpiresAt? }` (`token`:
-  the next token, above; `tokenExpiresAt`: when the token ends, for a token with a lifetime).
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept?, catalogVersion?, ceiling? }`. The answer
+  adds `worker: { paused, pauseNow, drain, autoResume, insideHours, nextChangeAt, lanes, lanesInside, minProtocol,
+  sendInventory, token?, tokenExpiresAt?, catalogVersion? }` (`token`: the next token, above; `tokenExpiresAt`: when
+  the token ends, for a token with a lifetime; `lanesInside`: the allowed lanes inside the PC's ceiling;
+  `catalogVersion`: the studio's).
+  - `catalogVersion` and `ceiling` say the catalog its build composes job tickets for and what its PC may ever run
+    (see "Job tickets and the PC's ceiling"). The facts it sends with its ComfyUI's add `gpuGen`, its GPU's
+    generation (compute capability), when nvidia-smi can say.
   - `protocol` is 2 for a worker that says which inputs it takes, makes clips and sound again, and keeps its ComfyUI
     behind the guard.
   - `held` (optional) names the jobs whose finished results the worker keeps on its disk. A pause now sends those
@@ -562,7 +615,9 @@ its target), at most once an hour each.
   (`bigvgan_vocoder/config.json`). The studio keeps only the files the index names, and hashes the list as it was
   sent, so its hash equals the worker's `inventoryHash`.
 - `POST /api/gpu/computer/claim`: the browser's claimed task plus
-  `{ lane, estMs, runLimitMs, stallMs, notAfter, attempt, models }`. See "The run limit" above for `runLimitMs`.
+  `{ lane, estMs, runLimitMs, stallMs, notAfter, attempt, models, class, workflowId }`. An account's job carries
+  `ticket` in place of `graph`, with its run and stall limits in it too. `class` is `owner` for the owner's own job,
+  the only kind that comes with a graph. See "The run limit" above for `runLimitMs`.
   `stallMs` is how long the job may go with no progress before the worker gives it back (see "The stall limit"). A
   worker ignores a `stallMs` under one minute, and uses its own 10 minutes then.
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
@@ -575,10 +630,13 @@ its target), at most once an hour each.
     and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
     before the studio hears that it was sent).
   - `give-back` with `why` (`stalled`, `run-limit` or `media`) puts the job back in line. The job keeps its place and
-    counts as an attempt. Only a worker's job can be given back.
+    counts as an attempt. Only a worker's job can be given back. With `update-worker` (a ticket for another catalog)
+    or `outside-ceiling` (more than its PC allows), the job never ran there: it costs no attempt, it waits as a job no
+    worker took (its wait limit holds, unless a worker ran it before), and that worker is not offered it again until
+    its build or its ceiling changes.
   - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,
-    `input-crashed` (its ComfyUI stopped twice on the job) or `input-unreadable` (ffmpeg could not read a clip or a
-    sound) as the reason. The worker's own log names the node and the input, never the value. For
+    `input-crashed` (its ComfyUI stopped twice on the job), `input-unreadable` (ffmpeg could not read a clip or a
+    sound) or `bad-ticket` (a ticket it can't use, or a graph where a ticket belongs) as the reason. The worker's own log names the node and the input, never the value. For
     `input-crashed` and `input-unreadable`, and for a job that a worker gave back for the last time, the person who
     started the run sees one plain sentence with no technical detail.
 
@@ -586,7 +644,10 @@ Each worker counts against its own rate limits, so three workers that beat every
 
 ### For the owner
 
-- `GET /api/admin/workers` and `POST /api/admin/workers` (`{ name, pool? }`; the answer shows the token once).
+- `GET /api/admin/workers` and `POST /api/admin/workers` (`{ name, pool? }`; the answer shows the token once). Each
+  worker shows its PC's `ceiling`, the allowed lanes inside it (`lanesInside`), its `catalogVersion` and whether that
+  is the studio's (`catalogCurrent`). Its state is `update-worker` while it is built from another catalog and accounts'
+  runs may come to the install's GPUs.
 - `PATCH /api/admin/workers/<id>`: `{ paused, pauseNow, drain, autoResume, hours, allow, claimAfterMs, switchAfterMs,
   rotate, revoke }`. Hours are `{ "always": true }` or `{ "tz": "Asia/Kolkata", "days": { "mon": [["01:00", "09:00"]] } }`.
   A window can go past midnight.

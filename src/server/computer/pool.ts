@@ -1,10 +1,13 @@
 import "server-only";
 import crypto from "node:crypto";
+import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
 import { allLanes, laneLabel, lanesFor, MEDIA_KINDS, needsOf, type Inventory, type Needs } from "@/lib/lanes";
 import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
+import { hostedRunsOn } from "../hosted-switch";
+import { catalogVersion } from "./catalog-version";
 import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
@@ -60,7 +63,7 @@ export const classRank = (t: Pick<TaskRow, "class" | "account">): number => (t.c
  */
 const LINE_ORDER = `${CLASS_RANK}, rank_at, created_at, id`;
 /** The columns the line's counts read (never a task's graph or files). */
-const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class";
+const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class, extra_json";
 /**
  * A task a worker took that is still sending its files to its ComfyUI this long after the claim (or after its ComfyUI lost
  * it and it began sending them again on the same claim) goes back in line.
@@ -98,8 +101,18 @@ const capableOf = (w: WorkerRow) => json<{ lanes: string[]; workflows: string[] 
 const factsOf = (w: WorkerRow) => json<ComputerFacts>(w.facts_json, {});
 const hoursOf = (w: WorkerRow): Hours | null => parseHours(json<unknown>(w.hours_json, null));
 const benchOf = (w: WorkerRow) => json<Record<string, { medianMs?: number; p90Ms?: number; loadMs?: number; peakVramBytes?: number }>>(w.bench_json, {});
+/** What its PC may ever run, as its last beat said (null: no ceiling of its own). */
+export const ceilingOf = (w: Pick<WorkerRow, "ceiling_json">): Ceiling | null => (w.ceiling_json ? cleanCeiling(json<unknown>(w.ceiling_json, {})) : null);
+/**
+ * Its build composes job tickets for this studio's catalog (src/lib/job-ticket.ts). A worker built from another catalog
+ * (or too old to say) takes the owner's own jobs, and no account's run until it is updated.
+ */
+export const catalogCurrent = (w: Pick<WorkerRow, "catalog_version">): boolean => {
+  const v = catalogVersion();
+  return !!v && w.catalog_version === v;
+};
 
-export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "models-not-ready" | "waiting-for-yield" | "offline";
+export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "models-not-ready" | "waiting-for-yield" | "update-worker" | "offline";
 
 /** The state in one word, and in words for the owner ("Paused here until 16:30", "Your GPU is busy (blender.exe)"). */
 export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerState; words: string } {
@@ -128,6 +141,8 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
     if (why.endsWith(":no-answer")) return { state: "waiting-for-yield", words: "Waiting for local ComfyUI work to make room (no answer after 3 minutes)" };
     return { state: "waiting-for-yield", words: `Waiting for local ComfyUI work to make room${w.local_until ? ` (starts about ${clock(w.local_until, tz)})` : ""}` };
   }
+  // Built from another catalog while people's runs may come here: it takes the owner's own jobs, and theirs once updated.
+  if (hostedRunsOn() && catalogVersion() && !catalogCurrent(w)) return { state: "update-worker", words: "Update the worker: it takes only your own jobs until then" };
   return { state: "idle", words: "Ready" };
 }
 
@@ -172,6 +187,8 @@ export function cleanBeat(b: unknown): WorkerBeat {
       tempC: num(gpu.tempC),
     },
     ...(o.facts !== undefined && { facts: cleanFacts(o.facts) }),
+    ...(typeof o.catalogVersion === "string" && /^[0-9a-f]{64}$/.test(o.catalogVersion) && { catalogVersion: o.catalogVersion }),
+    ...(o.ceiling !== undefined && o.ceiling !== null && { ceiling: cleanCeiling(o.ceiling) }),
     inventoryHash: text(o.inventoryHash, 80),
     warmLane: text(o.warmLane, 16),
     running: Array.isArray(o.running) ? (o.running.slice(0, MAX_RUNNING) as WorkerBeat["running"]) : [],
@@ -196,8 +213,8 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     const facts = b.facts ? { ...b.facts, loras: undefined } : undefined;
     d.prepare(
       `UPDATE relay_workers SET seen_at = ?, device = ?, protocol = ?, version = ?, paused_local = ?, local_why = ?, local_until = ?,
-         warm_lane = ?, facts_json = COALESCE(?, facts_json) WHERE id = ?`,
-    ).run(now, device, b.protocol, b.version, b.local.paused ? 1 : 0, b.local.why, b.local.until, b.warmLane, facts ? JSON.stringify(facts) : null, w.id);
+         warm_lane = ?, facts_json = COALESCE(?, facts_json), catalog_version = ?, ceiling_json = ? WHERE id = ?`,
+    ).run(now, device, b.protocol, b.version, b.local.paused ? 1 : 0, b.local.why, b.local.until, b.warmLane, facts ? JSON.stringify(facts) : null, b.catalogVersion ?? null, b.ceiling ? JSON.stringify(b.ceiling) : null, w.id);
     // Its PC slept: a job taken back from it for going quiet meanwhile counts against no one.
     if (b.slept) forgiveSleep(w, b.slept, now);
     for (const r of b.running) {
@@ -250,7 +267,9 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         insideHours: h.inside,
         nextChangeAt: h.nextChangeAt,
         lanes: Object.keys(allowOf(fresh)),
+        lanesInside: lanesInside(Object.keys(allowOf(fresh)), ceilingOf(fresh)),
         minProtocol: MIN_PROTOCOL,
+        ...(catalogVersion() && { catalogVersion: catalogVersion()! }),
         // While a model folder isn't there, the studio keeps the list it has (its lanes don't go missing meanwhile).
         sendInventory: b.local.why !== MODELS_NOT_READY && (!fresh.inventory_hash || fresh.inventory_hash !== b.inventoryHash),
         ...(nextToken && { token: nextToken }),
@@ -371,15 +390,22 @@ function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): Claimed
   if (t.state === "waiting") logWorkerJob("claimed", t, w.id, now);
   // A worker that lost track of its own task gets it again with its first claim's time, so the sending clock (SENDING_MS)
   // is never wound back by asking again.
-  const c = takeTask(t, device, now, { worker_id: w.id, ...(t.state !== "waiting" && t.device === device && t.claimed_at && { claimed_at: t.claimed_at }) });
+  // A job ticket's task keeps the time of its claim before this one: a refusal of the ticket (another catalog, more
+  // than the PC allows) puts it back as it was, so a task no worker ever ran keeps its wait limit.
+  const before = t.ticket_json && t.state === "waiting" ? { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), claimedBefore: t.claimed_at ?? null }) } : {};
+  const c = takeTask(t, device, now, { worker_id: w.id, ...before, ...(t.state !== "waiting" && t.device === device && t.claimed_at && { claimed_at: t.claimed_at }) });
+  // A job given back once for running past its limit gets the whole run ceiling on its next try (a lane's times may
+  // come from shorter jobs than this one); past that, it fails.
+  const limit = runLimitedOf(t) ? runCeilingMs(t.lane) : runLimitMs(bench?.p90Ms, t.lane, bench?.loadMs);
+  const stall = stallLimitMs(t.lane);
   return {
     ...c,
+    // A job ticket carries its run and stall limits too.
+    ...(c.ticket && { ticket: { ...c.ticket, runLimitMs: limit, stallMs: stall } }),
     lane: t.lane ?? undefined,
     estMs: estOn(t, w),
-    // A job given back once for running past its limit gets the whole run ceiling on its next try (a lane's times may
-    // come from shorter jobs than this one); past that, it fails.
-    runLimitMs: runLimitedOf(t) ? runCeilingMs(t.lane) : runLimitMs(bench?.p90Ms, t.lane, bench?.loadMs),
-    stallMs: stallLimitMs(t.lane),
+    runLimitMs: limit,
+    stallMs: stall,
     notAfter: t.not_after,
     attempt: t.requeues + 1,
     models: needs?.files ?? [],
@@ -391,7 +417,11 @@ function estOn(t: TaskRow, w: WorkerRow): number | null {
   return (t.lane && benchOf(w)[t.lane]?.medianMs) || t.est_ms || null;
 }
 
-/** May this worker run this task: its pool, its lane allowed and capable, its files, its VRAM, and the delays. */
+/**
+ * May this worker run this task: its pool, its lane allowed and capable, its PC's ceiling (the lanes or workflows it
+ * may ever run, the largest picture, the longest clip, the most results), its build's catalog for a job ticket, its
+ * files, its VRAM, and the delays.
+ */
 function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   if (!(t.pools ?? "").split(",").includes(w.pool)) return false;
   if (t.only_worker && t.only_worker !== w.id) return false;
@@ -401,6 +431,9 @@ function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   if (!(lane in allow)) return false;
   const cap = capableOf(w);
   const needs = json<Needs | null>(t.needs_json, null);
+  if (ceilingProblem(ceilingOf(w), { workflowId: needs?.workflowId, lane, size: needs?.size })) return false;
+  if (needs?.catalogVersion && needs.catalogVersion !== w.catalog_version) return false;
+  if (refusedBy(t).includes(refusalKey(w))) return false;
   if (needs?.workflowId ? !cap.workflows.includes(needs.workflowId) : !cap.lanes.includes(lane)) return false;
   const vram = factsOf(w).vramBytes ?? 0;
   if ((needs?.minVramBytes ?? 0) > vram) return false;
@@ -607,6 +640,15 @@ setPoolClocks((t, now) => {
 /** The words of a run that a worker gave back for the last time. */
 export const GAVE_BACK_WORDS = "This run couldn't finish.";
 
+/** Workers that refused a task's job ticket without running it (another catalog, or more than their PC allows). */
+const refusedBy = (t: Pick<TaskRow, "extra_json">): string[] => json<{ refusedBy?: string[] }>(t.extra_json ?? null, {}).refusedBy ?? [];
+/**
+ * A worker as it was when it refused a ticket: its id, its build's catalog and its PC's ceiling. Once it is updated or
+ * its ceiling changes, it may be offered the task again.
+ */
+const refusalKey = (w: Pick<WorkerRow, "id" | "catalog_version" | "ceiling_json">) =>
+  `${w.id}:${crypto.createHash("sha256").update(`${w.catalog_version ?? ""}\n${w.ceiling_json ?? ""}`).digest("hex").slice(0, 16)}`;
+
 /** A task a worker gave back for running past its run limit (its next try gets the whole run ceiling). */
 const runLimitedOf = (t: TaskRow) => json<{ runLimited?: boolean }>(t.extra_json, {}).runLimited === true;
 
@@ -617,6 +659,15 @@ const runLimitedOf = (t: TaskRow) => json<{ runLimited?: boolean }>(t.extra_json
  * fails at once: one more try would only hold a GPU as long again.
  */
 setPoolGiveBack((t, why) => {
+  // A job ticket the worker refused before running it (built from another catalog, or more than its PC allows): back in
+  // line at no cost, never offered to that worker again, and waiting as a task no worker took (its wait limit holds).
+  if (why === "update-worker" || why === "outside-ceiling") {
+    const w = t.worker_id ? (db().prepare("SELECT id, catalog_version, ceiling_json FROM relay_workers WHERE id = ?").get(t.worker_id) as Pick<WorkerRow, "id" | "catalog_version" | "ceiling_json"> | undefined) : undefined;
+    const { claimedBefore, ...rest } = json<Record<string, unknown>>(t.extra_json, {});
+    const extra = { ...rest, refusedBy: [...new Set([...refusedBy(t), ...(w ? [refusalKey(w)] : [])])].slice(-64) };
+    if (backInLine(t, { blame: false })) setTask(t.id, { extra_json: JSON.stringify(extra), claimed_at: typeof claimedBefore === "number" ? claimedBefore : null });
+    return;
+  }
   if (why === "run-limit") {
     if (runLimitedOf(t)) return backInLine(t, { blame: true, why: GAVE_BACK_WORDS, last: true });
     setTask(t.id, { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), runLimited: true }) });
@@ -750,8 +801,10 @@ export function workersCanRun(workflowId: string | null): boolean {
     if (w.pool !== "pool") return false;
     const allow = allowOf(w);
     const cap = capableOf(w);
-    if (workflowId === null) return cap.workflows.some((id) => poolLane(id) in allow);
-    if (!needs || !(lane! in allow) || !cap.workflows.includes(workflowId)) return false;
+    // Inside its PC's ceiling too: the lanes or workflows that PC may ever run.
+    const ceiling = ceilingOf(w);
+    if (workflowId === null) return cap.workflows.some((id) => poolLane(id) in allow && insideCeiling(ceiling, { workflowId: id, lane: poolLane(id) }));
+    if (!needs || !(lane! in allow) || !cap.workflows.includes(workflowId) || !insideCeiling(ceiling, { workflowId, lane })) return false;
     return needs.minVramBytes <= (factsOf(w).vramBytes ?? 0);
   });
 }
@@ -796,9 +849,16 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
  * What a task for workers stores: its lane, its needs, its class and its place in line. A person's run is "free" unless
  * the billing service said "paid"; the owner's own jobs are the "owner" class, served after every person's.
  */
-export function poolFields(workflowId: string, o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; waitMs?: number; onlyWorker?: string } = {}, now = Date.now()) {
+export function poolFields(
+  workflowId: string,
+  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string } = {},
+  now = Date.now(),
+) {
   const index = loadIndex();
-  const needs = needsOf(index, workflowId);
+  const found = needsOf(index, workflowId);
+  // How big the job is (a PC's ceiling reads it), and a job ticket's catalog version (only a worker built for it takes it).
+  const extra = { ...(o.size && { size: o.size }), ...(o.catalogVersion && { catalogVersion: o.catalogVersion }) };
+  const needs = found && { ...found, ...extra };
   const lane = poolLane(workflowId);
   return {
     pools: ["pool"],
@@ -807,7 +867,7 @@ export function poolFields(workflowId: string, o: { account?: string; class?: "p
     // A head start is only inside a class, and never more than a day.
     rankAt: now - Math.max(0, Math.min(o.boostMs ?? 0, 24 * 60 * 60_000)),
     lane,
-    needs: needs ?? { workflowId, files: [], packs: [], minVramBytes: 0 },
+    needs: needs ?? { workflowId, files: [], packs: [], minVramBytes: 0, ...extra },
     notAfter: o.waitMs ? now + o.waitMs : undefined,
     onlyWorker: o.onlyWorker,
   };
@@ -852,6 +912,12 @@ export interface WorkerView {
   switchAfterMs: number;
   warmLane: string | null;
   lanes: string[];
+  /** What its PC may ever run (null: no ceiling of its own), and the allowed lanes inside it. */
+  ceiling: Ceiling | null;
+  lanesInside: string[];
+  /** The catalog version its build composes job tickets for, and whether it is this studio's (else: update the worker). */
+  catalogVersion: string | null;
+  catalogCurrent: boolean;
   facts: ComputerFacts;
   bench: ReturnType<typeof benchOf>;
   seenAt: number | null;
@@ -883,6 +949,10 @@ export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
     switchAfterMs: w.switch_after_ms,
     warmLane: w.warm_lane,
     lanes: capableOf(w).lanes,
+    ceiling: ceilingOf(w),
+    lanesInside: lanesInside(Object.keys(allowOf(w)), ceilingOf(w)),
+    catalogVersion: w.catalog_version ?? null,
+    catalogCurrent: catalogCurrent(w),
     facts: factsOf(w),
     bench: benchOf(w),
     seenAt: w.seen_at,

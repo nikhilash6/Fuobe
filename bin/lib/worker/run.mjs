@@ -20,7 +20,7 @@ import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
-import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
+import { GpuWatch, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
 import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
@@ -28,6 +28,7 @@ import { takeLock, workerLives } from "./lock.mjs";
 import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
 import { withPlainResults } from "./results.mjs";
 import { retrying } from "./retry.mjs";
+import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -151,7 +152,8 @@ export function siteOf(answer) {
  * Run until `signal` aborts or the studio stops it. Returns why it ended: "aborted" (Ctrl+C, the scheduled task's end),
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
  * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
- * options), readCounters, readListeners, gpuEveryMs }.
+ * options), readCounters, readListeners, gpuEveryMs, readGpuGen, and for job tickets: composer (src/lib/ticket-compose.ts
+ * as built), catalogVersion, catalogDir, allLanes }.
  */
 export async function runWorker(saved, deps) {
   // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
@@ -191,6 +193,17 @@ async function work(saved, deps, owner) {
   const hold = new Hold(path.join(cfg.workDir, "hold"));
   const allowed = deps.allowed ?? allowedNodes(cfg.allowNodesFile);
   const rules = deps.rules ?? inputRules();
+  // Job tickets (tickets.mjs): the catalog version its build composes for, its own copy of the catalog, and its PC's
+  // ceiling (worker.json `ceiling`), the most it ever runs. Full graphs only for the owner's own jobs, and none at all
+  // when worker.json says `acceptGraphs: false`.
+  const catalogVersion = deps.catalogVersion !== undefined ? deps.catalogVersion : builtCatalogVersion();
+  const catalogDir = deps.catalogDir ?? path.join(ROOT, "workflows/comfyui");
+  const ceiling = ceilingOf(cfg.ceiling);
+  let composer = deps.composer ?? null;
+  let laneOf = null;
+  let gpuGen = null;
+  let studioCatalog = null;
+  log(`This PC runs ${ceilingWords(ceiling)}${cfg.acceptGraphs === false ? ", from job tickets only" : ""}.`);
   const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [], log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy });
   // Only its own ComfyUI, and only while the process it started is up and ready: never whatever listens on that port.
   // Its results come without what a save node writes into them unasked (results.mjs).
@@ -214,6 +227,8 @@ async function work(saved, deps, owner) {
   // Two busy readings in a row pause it when it tells programs apart (a reading can catch memory on its way).
   const gpu = new GpuWatch({ autoResume: !!cfg.autoResume, resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000, resumeBelowC: cfg.resumeBelowC ?? 75, busyReadings: turns ? 2 : 1 });
   const awake = deps.awake ?? new StayAwake({ now, log });
+  // Its GPU's generation, once (tests give their own reader: the GPU's own tool is never run there).
+  gpuGen = await (deps.readGpuGen ?? (deps.readGpu ? async () => null : () => readGpuGen(cfg.nvidiaSmi)))().catch(() => null);
   // ffmpeg: worker.json's, or the PATH's when worker.json names none (an older setup's never did).
   const ffmpegBin = ffmpegOf(cfg);
   const ffmpeg = ffmpegBin ? await (deps.ffmpegVersion ?? ffmpegVersion)(ffmpegBin) : null;
@@ -376,10 +391,26 @@ async function work(saved, deps, owner) {
     return arrayBuffer(fs.readFileSync(made));
   }
 
+  /** A job ticket's graph, composed here (or why it is refused). */
+  async function composeJob(t) {
+    if (!catalogVersion) return { refused: "update-worker" };
+    composer ??= await import("./dist/compose/lib/ticket-compose.mjs");
+    // Each workflow's lane, when its ceiling names lanes.
+    if (ceiling?.lanes && !laneOf) laneOf = laneMap(index, deps.allLanes ?? (await import("./dist/lanes.mjs")).allLanes);
+    const facts = composer.workerFactsFrom(await readPcAnswers(own, comfy.base));
+    const r = await composer.composeTicket({ ticket: t.ticket, generationId: t.generationId, inputs: t.inputs }, { catalog: workerCatalog(catalogDir), catalogVersion, ceiling, laneOf, facts });
+    if (r.ok) return { graph: r.graph, made: r.made };
+    // Why, for the PC's owner (never a setting's value: those are someone's prompt).
+    log(`Refused job ${t.id}: ${r.reason === "update-worker" ? "its ticket is for another catalog (update the worker)" : r.reason === "outside-ceiling" ? "it is more than this PC runs (its ceiling in worker.json)" : "its ticket isn't one it can use"}.`);
+    return { refused: r.reason };
+  }
+
   const runner = new ComputerRunner(
     {
       api: call,
       local: own,
+      compose: composeJob,
+      factsExtra: () => (gpuGen ? { gpuGen } : {}),
       sha256: async (data) => sha256(Buffer.from(data)),
       origin: site,
       socket: typeof WebSocket === "function" ? (url) => (comfy.ready ? new WebSocket(comfy.rebase(url), { headers: comfy.headers() }) : null) : undefined,
@@ -420,6 +451,9 @@ async function work(saved, deps, owner) {
           gpu: gpuInfo,
           inventoryHash: invHash,
           warmLane: null,
+          // The catalog its build composes job tickets for, and what its PC may ever run.
+          catalogVersion,
+          ...(ceiling && { ceiling }),
           // The jobs whose results it keeps: a pause doesn't send them back in line, so they go up instead of running again.
           held: hold.ids().slice(0, 16),
           // The PC slept: a job taken back from it meanwhile goes on with no blame.
@@ -433,6 +467,10 @@ async function work(saved, deps, owner) {
         // A studio that takes jobs only from a newer worker program: say so once (it sends this worker none).
         const min = Number(a?.worker?.minProtocol);
         if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
+        // A studio whose catalog is another than this build's: its people's runs wait for an updated worker. Said once.
+        const theirs = a?.worker?.catalogVersion;
+        if (typeof theirs === "string" && theirs !== catalogVersion && theirs !== studioCatalog) log("The studio's catalog is another than this worker's: it takes only the owner's own jobs until it is updated (docs/gpu-workers.md, \"Install and update\").");
+        if (typeof theirs === "string") studioCatalog = theirs;
         answer = a;
         takeToken(a?.worker?.token);
         // A token from the environment with a lifetime: said once for each end date, so it is replaced there in time.
@@ -448,6 +486,8 @@ async function work(saved, deps, owner) {
       worker: {
         hold,
         input: takeInput,
+        graphs: cfg.acceptGraphs !== false,
+        inside: (t) => graphInside(ceiling, t),
         // The studio's stall limit comes with each job; a stallMin in worker.json wins over it on this PC.
         stallMs: 10 * 60_000,
         stallLocalMs: Number(cfg.stallMin) > 0 ? Number(cfg.stallMin) * 60_000 : null,

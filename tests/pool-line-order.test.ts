@@ -43,6 +43,7 @@ const { setSetting } = await import("@/server/settings");
 const { getGeneration } = await import("@/server/generations");
 const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
+const { catalogVersion } = await import("@/server/computer/catalog-version");
 const billing = await import("@/server/billing");
 const qs = await import("@/server/queue-settings");
 const { loadManifest, comfyProvider, onComputer, NO_WORKER_FOR_LANE } = await import("@/server/providers/comfyui");
@@ -106,7 +107,7 @@ function standInWorker(name = "stand-in") {
 type WorkerRow = import("@/server/computer/workers").WorkerRow;
 const workerRow = (w: { id: string }) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
 const beatAs = (w: { id: string }, now = Date.now()) =>
-  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
+  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion() }), now);
 const claimAs = (w: { id: string }, now = Date.now()) => pool.workerClaim(workerRow(w), [], now);
 const rowOf = (id: string) => db().prepare("SELECT * FROM relay_tasks WHERE id = ?").get(id) as import("@/server/computer/tasks").TaskRow;
 const taskOf = (generationId: string) => db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? ORDER BY created_at DESC").get(generationId) as import("@/server/computer/tasks").TaskRow | undefined;

@@ -7,6 +7,8 @@
  * Pure (no I/O): the server's checks and the tab's script share it. None of these words reach the UI.
  */
 
+import type { Ceiling, JobTicket } from "./job-ticket";
+
 /** Where a task is. */
 export type RelayState = "waiting" | "sending" | "queued" | "running" | "collecting" | "done" | "failed" | "canceled";
 
@@ -24,18 +26,20 @@ export interface HistoryEntryLike {
 }
 
 /**
- * Why the tab gave up on a task by itself (the server says it in plain words). A worker adds two: its ComfyUI stopped
- * twice while running the task ("input-crashed"), and a clip or a sound that couldn't be made again ("input-unreadable").
+ * Why the tab gave up on a task by itself (the server says it in plain words). A worker adds three: its ComfyUI stopped
+ * twice while running the task ("input-crashed"), a clip or a sound that couldn't be made again ("input-unreadable"),
+ * and a job ticket it refused (src/lib/job-ticket.ts), or a graph where a ticket belongs ("bad-ticket").
  */
-export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified", "input-crashed", "input-unreadable"] as const;
+export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified", "input-crashed", "input-unreadable", "bad-ticket"] as const;
 export type TabFailure = (typeof TAB_FAILURES)[number];
 
 /**
  * Why a worker gives a task back to the line (another worker, or this one later, runs it): it made no progress for too
  * long ("stalled"), it ran past its run limit ("run-limit"), or it takes clips or sound and this worker can't make them
- * again ("media").
+ * again ("media"). Two more cost the task nothing (it never ran there): its job ticket was made for another catalog
+ * than the worker's ("update-worker"), or the job is more than its PC allows ("outside-ceiling").
  */
-export const GIVE_BACK = ["stalled", "run-limit", "media"] as const;
+export const GIVE_BACK = ["stalled", "run-limit", "media", "update-worker", "outside-ceiling"] as const;
 export type GiveBackWhy = (typeof GIVE_BACK)[number];
 
 /** What the tab reports about one task. */
@@ -120,7 +124,12 @@ export interface ClaimedTask {
   generationId: string;
   /** The claim's token: every call about this task carries it. */
   lease: string;
-  graph: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  /**
+   * The graph exactly as the server built it: a person's own computer's tasks, and the owner's own jobs on the workers.
+   * An account's run on the workers carries a job ticket instead (`ticket`), and the worker composes the graph itself.
+   */
+  graph?: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  ticket?: JobTicket;
   promptId: string;
   /** Ask ComfyUI for live previews of this prompt. */
   preview: boolean;
@@ -144,6 +153,9 @@ export interface ClaimedTask {
   notAfter?: number | null;
   attempt?: number;
   models?: { folder: string; name: string; size: number; sha256: string | null }[];
+  /** A worker's task: its class in the line ("owner": the owner's own job), and its workflow. */
+  class?: "paid" | "free" | "owner";
+  workflowId?: string;
 }
 
 /** The tab's facts about its ComfyUI (never its command line: that holds paths and user names). */
@@ -161,6 +173,8 @@ export interface ComputerFacts {
   guard?: boolean;
   /** Its LoRA files (sent now and then, not on every beat). */
   loras?: string[];
+  /** A worker's GPU generation (its compute capability, "8.9"). */
+  gpuGen?: string;
 }
 
 export const FACT_LIMITS = { loras: 20_000, loraName: 256, text: 120 };
@@ -209,6 +223,10 @@ export interface WorkerAnswer {
    * token (one given in its environment) says so before then.
    */
   tokenExpiresAt?: number;
+  /** The catalog version the studio makes job tickets for (src/lib/job-ticket.ts): a worker with another one is told to update. */
+  catalogVersion?: string;
+  /** The lanes it may take now: the owner's allowed lanes (`lanes`), narrowed to its PC's ceiling. */
+  lanesInside?: string[];
 }
 
 /** What a worker says in its beat, on top of a browser's. */
@@ -234,6 +252,10 @@ export interface WorkerBeat {
   stopped: string[];
   /** The tasks whose finished results the worker keeps on its disk (a stop-now leaves them its own, to send them up). */
   held?: string[];
+  /** The catalog version its build composes job tickets for (absent: an older worker, which takes no ticket). */
+  catalogVersion?: string | null;
+  /** What its PC may ever run (worker.json `ceiling`, src/lib/job-ticket.ts Ceiling). The studio only narrows inside it. */
+  ceiling?: Ceiling;
   /**
    * How long its PC slept (ms) since its last beat that the studio answered. A job the studio took back from it for
    * going quiet during that sleep goes on with no blame: no attempt counted, and this worker may take it again.
@@ -430,6 +452,8 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
       return "This run couldn't finish with these files or settings.";
     case "input-unreadable":
       return "A clip or sound in this run couldn't be read.";
+    case "bad-ticket":
+      return "This run couldn't be made with these settings.";
     default:
       return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }

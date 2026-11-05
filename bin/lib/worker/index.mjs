@@ -40,7 +40,7 @@ export async function worker(args, io) {
         return 2;
       }
       const dist = io.distDir ?? path.join(here, "dist");
-      if (!["computer-runner.mjs", "allowed-nodes.json", "input-rules.json", "file-pins.json"].every((f) => fs.existsSync(path.join(dist, f)))) {
+      if (!["computer-runner.mjs", "allowed-nodes.json", "input-rules.json", "file-pins.json", "catalog-version.json", "compose/lib/ticket-compose.mjs"].every((f) => fs.existsSync(path.join(dist, f)))) {
         io.stderr.write("The worker's shared parts aren't built. Run: node scripts/build-worker.mjs\n");
         return 2;
       }
@@ -209,6 +209,29 @@ async function setup(home, io, say) {
     return 2;
   }
   const autoResume = /^y/i.test(await ask("Resume by itself when the GPU has been free for 10 minutes? (y/N)", old.autoResume ? "y" : "n"));
+  // The PC's ceiling: the most it ever runs. The studio and its panel can only narrow inside it. Run setup again to change it.
+  const { ceilingFrom, ceilingWords, workerCatalog } = await import("./tickets.mjs");
+  const was = old.ceiling ?? {};
+  const num = (v) => (typeof v === "number" && v > 0 ? String(v) : "0");
+  let catalog = null;
+  try {
+    catalog = workerCatalog(io.catalogDir ?? path.resolve(here, "../../../workflows/comfyui"));
+  } catch {}
+  const limits = ceilingFrom(
+    {
+      work: await ask("Which lanes or workflows may this PC run? all, or their names separated by commas", was.lanes || was.workflows ? [...(was.lanes ?? []), ...(was.workflows ?? [])].join(",") : "all"),
+      megapixels: await ask("The largest picture it makes, in megapixels (0 for no limit)", num(was.maxMegapixels)),
+      seconds: await ask("The longest clip it makes, in seconds (0 for no limit)", num(was.maxSeconds)),
+      outputs: await ask("The most results one run may ask for (0 for no limit)", num(was.maxOutputs)),
+    },
+    (id) => !catalog || catalog.has(id) || (id.includes("{n}") && [1, 2, 3, 4].some((n) => catalog.has(id.replace("{n}", String(n))))),
+  );
+  if (limits.error) {
+    io.stderr.write(`${limits.error}\n`);
+    return 2;
+  }
+  // The owner's own jobs come as full graphs; answering no takes job tickets only.
+  const acceptGraphs = !/^n/i.test(await ask("Also run the studio owner's own jobs, which come as whole graphs? (Y/n)", old.acceptGraphs === false ? "n" : "y"));
   fs.mkdirSync(workDir, { recursive: true });
   if (process.platform === "win32") {
     // Not content indexed: jobs' files stay out of Windows Search.
@@ -220,9 +243,12 @@ async function setup(home, io, say) {
   const saved = savedConfig(home);
   const port = Number(saved.port) === OLD_SETUP_PORT ? null : (saved.port ?? null);
   // A token given in FUOBE_WORKER_TOKEN stays out of the file.
-  saveConfig(home, { ...saved, port, site: site.replace(/\/+$/, ""), token: token || saved.token, comfyDir, modelDirs, workDir, ffmpeg, autoResume });
+  const { ceiling: _was, ...rest } = saved;
+  void _was;
+  saveConfig(home, { ...rest, port, site: site.replace(/\/+$/, ""), token: token || saved.token, comfyDir, modelDirs, workDir, ffmpeg, autoResume, ...(limits.ceiling && { ceiling: limits.ceiling }), acceptGraphs });
   writeControl(home, { paused: true, now: false, until: null });
   say(`Saved in ${path.join(home, "worker.json")} (readable by you only). The worker starts paused here.`);
+  say(`This PC runs ${ceilingWords(limits.ceiling)}. Run fuobe worker setup again to change it.`);
   say("Next: fuobe worker run. Resume it here with fuobe worker resume, and on the website in Settings → Workers.");
   return 0;
 }

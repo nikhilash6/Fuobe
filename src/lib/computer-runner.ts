@@ -28,6 +28,9 @@ import {
   type WantedFile,
 } from "./relay";
 
+/** A file's bytes as an ArrayBuffer of exactly its length. */
+const toArrayBuffer = (d: ArrayBuffer | Uint8Array): ArrayBuffer => (d instanceof Uint8Array ? (d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer) : d);
+
 /** The parts of a WebSocket the runner uses (the browser's, or Node's). */
 export interface SocketLike {
   binaryType: string;
@@ -64,11 +67,28 @@ export interface RunnerDeps {
   vet?: (t: ClaimedTask) => TabFailure | null | Promise<TabFailure | null>;
   /** A job ended here, done or not: a worker deletes its files. */
   ended?: (t: ClaimedTask, phase: LocalJob["phase"]) => void | Promise<void>;
+  /**
+   * A worker program's composer (src/lib/ticket-compose.ts): the graph of a job ticket (src/lib/job-ticket.ts), built
+   * from its own copy of the catalog, with the small files the graph makes itself; or why it refuses the ticket. A
+   * browser tab has none: it never gets a ticket.
+   */
+  compose?: (t: ClaimedTask) => Promise<ComposedJob | { refused: TicketRefused }>;
+  /** More facts to send with its ComfyUI's (a worker's GPU generation). */
+  factsExtra?: () => Partial<ComputerFacts>;
   /** More to say in each beat (a worker's pause, its GPU, its inventory), and what the studio answered. */
   beatExtra?: () => Record<string, unknown>;
   onBeat?: (a: BeatAnswer) => void;
   /** What only a worker program does (docs/gpu-workers.md). A browser tab has none of it. */
   worker?: WorkerHooks;
+}
+
+/** Why a worker refuses a job ticket: another catalog, more than its PC allows, or a ticket it can't use (or a graph where a ticket belongs). */
+export type TicketRefused = "update-worker" | "outside-ceiling" | "bad-ticket";
+
+/** A job ticket composed on the worker: its graph, and the files the graph makes itself (sent to its ComfyUI with the inputs). */
+export interface ComposedJob {
+  graph: NonNullable<ClaimedTask["graph"]>;
+  made: { name: string; data: ArrayBuffer | Uint8Array; contentType: string }[];
 }
 
 /** A finished job's results as a worker keeps them on its own disk: its entries (one, or a meta-batch's passes). */
@@ -113,6 +133,13 @@ export interface WorkerHooks {
   stallLocalMs?: number | null;
   /** Free its ComfyUI's memory (before the one retry after it ran out). */
   free(): Promise<void>;
+  /**
+   * It takes full graphs from the studio for the owner's own jobs (false: job tickets only). A graph for anyone else's
+   * job is refused whatever this says: an account's run comes as a ticket.
+   */
+  graphs?: boolean;
+  /** Is a graph job (the owner's own) inside its PC's ceiling, by its lane or workflow? A ticket's are the composer's to check. */
+  inside?(t: ClaimedTask): boolean;
   /** How many times its ComfyUI stopped while it ran this task. */
   crashes(t: ClaimedTask): number;
   /** Its ComfyUI won't let go of a prompt: stop it (the worker starts it again). */
@@ -360,7 +387,7 @@ export class ComputerRunner {
     const l = await this.look();
     if (l.comfy !== "ok") return null;
     if (o.guard || this.guard === undefined) this.guard = await this.read<unknown>("/fuobe/guard").then(isGuard, () => false);
-    const f: ComputerFacts = statsFacts(l.stats, this.deps.origin, this.guard);
+    const f: ComputerFacts = { ...statsFacts(l.stats, this.deps.origin, this.guard), ...this.deps.factsExtra?.() };
     if (o.loras) {
       const loras = await this.read<unknown>("/models/loras").catch(() => null);
       if (Array.isArray(loras)) f.loras = loras.filter((x): x is string => typeof x === "string");
@@ -556,6 +583,8 @@ export class ComputerRunner {
 
   private leases = new Map<string, string>();
   private promptOf = new Map<string, string>();
+  /** The files a composed job ticket's graph makes, by task and name: sent from here, never read from the studio. */
+  private madeOf = new Map<string, Map<string, { data: ArrayBuffer | Uint8Array; contentType: string }>>();
   private stoppedDone = new Set<string>();
 
   /**
@@ -606,6 +635,7 @@ export class ComputerRunner {
     try {
       await this.runJob(t);
     } finally {
+      this.madeOf.delete(t.id);
       const phase = this.view.jobs.find((j) => j.taskId === t.id)?.phase;
       if (this.deps.ended && (phase === "done" || phase === "failed")) await Promise.resolve(this.deps.ended(t, phase)).catch(() => {});
     }
@@ -621,7 +651,17 @@ export class ComputerRunner {
       // A worker's results kept from before (it stopped after its ComfyUI finished): they go up, the job doesn't run again.
       const held = worker ? await worker.hold.get(t).catch(() => null) : null;
       if (!held) {
-        const problem = graphProblem(t.graph, t.inputs.map((i) => i.name));
+        // A job ticket becomes its graph here (a worker's composer); a graph comes only for the owner's own jobs.
+        const notMine = await this.graphOf(t);
+        if (notMine === "update-worker" || notMine === "outside-ceiling") {
+          await this.giveBack(t, notMine);
+          return this.job(t, { phase: "failed" });
+        }
+        if (notMine) {
+          await this.report(t, { event: "failed", reason: "bad-ticket" });
+          return this.job(t, { phase: "failed" });
+        }
+        const problem = graphProblem(t.graph!, t.inputs.map((i) => i.name));
         if (problem) {
           await this.report(t, { event: "failed", reason: "unsafe-graph" });
           return this.job(t, { phase: "failed" });
@@ -690,6 +730,27 @@ export class ComputerRunner {
   }
 
   /**
+   * The job's graph, or why it is refused. A ticket is composed by the worker's own composer (a runner without one gives
+   * it back to a worker that has one, or refuses it in a browser). A graph is taken as it is by a browser tab; a worker
+   * takes one only for the owner's own job, and only while it takes graphs at all.
+   */
+  private async graphOf(t: ClaimedTask): Promise<TicketRefused | null> {
+    const worker = this.deps.worker;
+    if (t.ticket !== undefined) {
+      if (!this.deps.compose) return worker ? "update-worker" : "bad-ticket";
+      const c = await this.deps.compose(t).catch((): { refused: TicketRefused } => ({ refused: "bad-ticket" }));
+      if ("refused" in c) return c.refused;
+      t.graph = c.graph;
+      this.madeOf.set(t.id, new Map(c.made.map((m) => [m.name, { data: m.data, contentType: m.contentType }])));
+      return null;
+    }
+    if (!t.graph || typeof t.graph !== "object") return "bad-ticket";
+    if (worker && ((t.class !== undefined && t.class !== "owner") || worker.graphs === false)) return "bad-ticket";
+    if (worker?.inside && !worker.inside(t)) return "outside-ceiling";
+    return null;
+  }
+
+  /**
    * A worker's report of a finished job: its entries, its ComfyUI's execution time and its GPU's name (`kept`: results
    * kept from an earlier try).
    */
@@ -742,7 +803,7 @@ export class ComputerRunner {
   private async resend(t: ClaimedTask): Promise<boolean> {
     const own = { promptIds: [t.promptId] };
     await this.send("/history", { delete: [t.promptId] }, own, { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: [t.promptId] }) }).catch(() => null);
-    const body = { prompt: t.graph, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
+    const body = { prompt: t.graph!, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
     const res = await this.send("/prompt", body, own, { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     const answer = (await res?.json().catch(() => ({}))) as { prompt_id?: string } | undefined;
     if (!res?.ok || typeof answer?.prompt_id !== "string") return false;
@@ -774,9 +835,12 @@ export class ComputerRunner {
     if (!there) await this.waitForComfy(t);
     const names = t.inputs.map((i) => i.name);
     const worker = this.deps.worker;
+    const made = this.madeOf.get(t.id);
     for (const input of t.inputs) {
       // From the studio, checked against its SHA-256. A worker reads it at most once a job (it keeps a copy), so a
-      // studio that says it was read enough times (429) means it failed.
+      // studio that says it was read enough times (429) means it failed. A file a composed ticket's graph makes itself
+      // is the worker's own (its composer checked it against the ticket): the studio's copy is never read.
+      const own = made?.get(input.name);
       const read = async (): Promise<ArrayBuffer | TabFailure> => {
         const res = await this.deps.api(`/api/gpu/computer/tasks/${t.id}/inputs/${input.n}`, { headers: { "X-Fuobe-Lease": t.lease } });
         if (res.status === 404 || res.status === 409) throw new Stopped();
@@ -785,7 +849,7 @@ export class ComputerRunner {
         const data = await res.arrayBuffer();
         return (await this.deps.sha256(data)) === input.sha256 ? data : "input-changed";
       };
-      const got = worker ? await worker.input(t, input, read) : await read();
+      const got = own ? toArrayBuffer(own.data) : worker ? await worker.input(t, input, read) : await read();
       if (got === "give-back") return got;
       if (typeof got === "string") {
         await this.report(t, { event: "failed", reason: got });
@@ -808,7 +872,7 @@ export class ComputerRunner {
         return false;
       }
     }
-    const body = { prompt: t.graph, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
+    const body = { prompt: t.graph!, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
     const res = await this.send("/prompt", body, { promptIds: [t.promptId] }, { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     if (!res) {
       await this.waitForComfy(t);

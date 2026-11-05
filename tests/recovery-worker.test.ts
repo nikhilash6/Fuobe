@@ -22,7 +22,8 @@ import { tempDir } from "./helpers/temp-dir";
  * the checks after it always run against all of them.
  *
  * Each job's graph is the stand-in's own (a sampler and the run's save node, with the run's file prefix), so the
- * worker's node and model checks pass without model files; everything else about the job is the studio's.
+ * worker's node and model checks pass without model files; everything else about the job is the studio's. An account's
+ * job comes as a job ticket, so the worker's composer here gives the stand-in's graph for it.
  */
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -69,7 +70,16 @@ let studio: {
   lanes: () => string[];
   workflows: () => string[];
 };
-let program: { runWorker: Any; rules: Any; parseCounters: Any; ComputerRunner: unknown };
+let program: { runWorker: Any; rules: Any; parseCounters: Any; ComputerRunner: unknown; catalogVersion: string };
+/** The stand-in graph of each run's job, by the run's id: what the worker's composer gives for its ticket. */
+const standInGraphs = new Map<string, Record<string, unknown>>();
+const composer = {
+  workerFactsFrom: () => ({}),
+  composeTicket: async (job: { generationId: string }) => {
+    const graph = standInGraphs.get(job.generationId);
+    return graph ? { ok: true, graph, workflowId: "stand-in", size: { megapixels: 0, seconds: 0, outputs: 1 }, made: [] } : { ok: false, reason: "bad-ticket", detail: "no stand-in graph" };
+  },
+};
 let routes: ComputerRoutes;
 let svc: StandInBilling;
 let a1 = "";
@@ -105,7 +115,7 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
     const { runWorker } = await load("bin/lib/worker/run.mjs");
     const { inputRules, readCatalog } = await load("scripts/lib/worker-catalog.mjs");
     const { parseCounters } = await load("bin/lib/worker/local-work.mjs");
-    program = { runWorker, rules: inputRules(readCatalog(ROOT)), parseCounters, ComputerRunner: (await import("@/lib/computer-runner")).ComputerRunner };
+    program = { runWorker, rules: inputRules(readCatalog(ROOT)), parseCounters, ComputerRunner: (await import("@/lib/computer-runner")).ComputerRunner, catalogVersion: (await import("@/server/computer/catalog-version")).catalogVersion()! };
     routes = await loadRoutes();
     svc = await startStandInBilling();
     auth.setPassword("install password");
@@ -176,7 +186,9 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
       await sleep(20);
       t = taskOf(id);
     }
-    const graph = JSON.parse(t!.graph_json!) as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+    // The graph the studio built for the run's ticket: its save node and file prefix stay.
+    const { graphOfTask } = await import("./helpers/ticket-worker");
+    const graph = await graphOfTask(t!);
     const save = Object.entries(graph).find(([, n]) => n.class_type === "SaveImage")!;
     let input: string | null = null;
     if (o.input) {
@@ -190,7 +202,8 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
       [save[0]]: { class_type: "SaveImage", inputs: { images: ["3", 0], filename_prefix: save[1].inputs.filename_prefix } },
     };
     const needs = { ...(JSON.parse(t!.needs_json ?? "{}") as object), files: [], packs: [], minVramBytes: 0 };
-    studio.db().prepare("UPDATE relay_tasks SET graph_json = ?, needs_json = ? WHERE id = ?").run(JSON.stringify(own), JSON.stringify(needs), t!.id);
+    studio.db().prepare("UPDATE relay_tasks SET needs_json = ? WHERE id = ?").run(JSON.stringify(needs), t!.id);
+    standInGraphs.set(id, own);
     return { id, task: t! };
   }
 
@@ -330,6 +343,8 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
         readGpu: async () => null,
         sleep: (ms: number) => sleep(Math.min(ms, 50)),
         log: (line: string) => void p.logs.push(line),
+        composer,
+        catalogVersion: program.catalogVersion,
         // The folders are looked at again on both clocks: a full rescan, and the check for model folders that were missing.
         ...(o.rescanMs && { rescanMs: o.rescanMs, modelsCheckMs: o.rescanMs }),
         ...o.gpu,

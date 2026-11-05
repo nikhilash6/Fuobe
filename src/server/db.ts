@@ -1016,6 +1016,11 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_workers", "seen_json", "TEXT"],
   ["relay_workers", "last_network", "TEXT"],
   ["relay_workers", "last_net_at", "INTEGER"],
+  // Job tickets (src/lib/job-ticket.ts): an account's task for workers carries one in place of a graph; a worker says
+  // the catalog version its build composes for, and what its PC may ever run (its ceiling).
+  ["relay_tasks", "ticket_json", "TEXT"],
+  ["relay_workers", "catalog_version", "TEXT"],
+  ["relay_workers", "ceiling_json", "TEXT"],
 ];
 
 declare global {

@@ -23,6 +23,7 @@ import {
   type TaskInput,
   type WantedFile,
 } from "@/lib/relay";
+import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 import { runCeilingMs } from "../queue-settings";
 
@@ -79,6 +80,8 @@ export interface TaskRow {
   device: string | null;
   lease_hash: string | null;
   graph_json: string | null;
+  /** An account's task for workers: its job ticket (src/lib/job-ticket.ts), in place of a graph (graph_json is NULL). */
+  ticket_json?: string | null;
   prompt_id: string;
   prefix: string | null;
   meta_batch: number;
@@ -290,6 +293,12 @@ export function stageInput(principal: Principal, data: Buffer, contentType: stri
   return staged;
 }
 
+/** An input a principal staged and no task has taken yet: its SHA-256 and content type (a job ticket names both). */
+export function stagedInput(principal: Principal, name: string): { sha256: string; contentType: string } | null {
+  const r = rdb().prepare("SELECT sha256, content_type FROM relay_inputs WHERE principal = ? AND name = ? AND task_id IS NULL").get(principal, name) as { sha256: string; content_type: string } | undefined;
+  return r ? { sha256: r.sha256, contentType: r.content_type } : null;
+}
+
 /** Every string a graph's nodes take (the names of the inputs it loads are among them). */
 function graphStrings(graph: Record<string, { inputs?: Record<string, unknown> }>): Set<string> {
   const out = new Set<string>();
@@ -301,6 +310,11 @@ export interface NewTask {
   principal: Principal;
   generationId: string;
   graph: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  /**
+   * An account's run on the workers: its job ticket. The task then keeps no graph (the worker composes it), and takes the
+   * inputs the ticket names.
+   */
+  ticket?: JobTicket;
   prefix?: string;
   metaBatch?: boolean;
   preview?: boolean;
@@ -321,18 +335,18 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   const promptId = crypto.randomUUID();
   const now = Date.now();
   const d = rdb();
-  const named = graphStrings(t.graph);
+  const named = t.ticket ? new Set(t.ticket.inputs.map((i) => i.name)) : graphStrings(t.graph);
   d.transaction(() => {
     const pool = t.pool;
     d.prepare(
       `INSERT INTO relay_tasks (id, principal, generation_id, state, graph_json, prompt_id, prefix, meta_batch, preview, workflow_id, extra_json, created_at, updated_at,
-         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class)
-       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class, ticket_json)
+       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       t.principal,
       t.generationId,
-      JSON.stringify(t.graph),
+      t.ticket ? null : JSON.stringify(t.graph),
       promptId,
       t.prefix ?? null,
       t.metaBatch ? 1 : 0,
@@ -350,6 +364,7 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
       pool?.notAfter ?? null,
       pool?.onlyWorker ?? null,
       pool ? (pool.class ?? (pool.account ? "free" : "owner")) : null,
+      t.ticket ? JSON.stringify(t.ticket) : null,
     );
     const free = d.prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL ORDER BY created_at").all(t.principal) as { name: string }[];
     let n = 0;
@@ -426,6 +441,7 @@ export function cleanFacts(f: unknown, keep?: ComputerFacts): ComputerFacts {
     ...(typeof o.portable === "boolean" && { portable: o.portable }),
     ...((o.cors === "exact" || o.cors === "any" || o.cors === "other") && { cors: o.cors }),
     ...(typeof o.guard === "boolean" && { guard: o.guard }),
+    ...(typeof o.gpuGen === "string" && /^\d{1,2}\.\d{1,2}$/.test(o.gpuGen) && { gpuGen: o.gpuGen }),
     ...(loras && { loras }),
   };
 }
@@ -538,11 +554,14 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
   setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...(fresh && t.pools && { attempts: 0, sending_since: null }), ...fields });
   if (fresh) rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
   const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
+  // An account's task for workers hands out its job ticket, never a graph (src/lib/job-ticket.ts).
+  const ticket = t.ticket_json ? json<JobTicket | null>(t.ticket_json, null) : null;
   return {
     id: t.id,
     generationId: t.generation_id,
     lease,
-    graph: json(t.graph_json, {}),
+    ...(ticket ? { ticket } : { graph: json(t.graph_json, {}) }),
+    ...(t.pools && { class: (t.class === "paid" || t.class === "owner" ? t.class : t.class === "free" || t.account ? "free" : "owner") as "paid" | "free" | "owner", ...(t.workflow_id && { workflowId: t.workflow_id }) }),
     promptId: t.prompt_id,
     preview: !!t.preview,
     ...(t.prefix && { prefix: t.prefix }),
@@ -904,7 +923,7 @@ export function sweepRelay(now = Date.now()): { inputs: number; tasks: number } 
     .all(now - RELAY_TIMES.keepMs) as { id: string; finished_at: number | null }[];
   for (const t of ended) {
     fs.rmSync(taskDir(t.id), { recursive: true, force: true });
-    d.prepare("UPDATE relay_tasks SET graph_json = NULL WHERE id = ?").run(t.id);
+    d.prepare("UPDATE relay_tasks SET graph_json = NULL, ticket_json = NULL WHERE id = ?").run(t.id);
   }
   const old = d.prepare("DELETE FROM relay_tasks WHERE state IN ('done','failed','canceled') AND finished_at < ?").run(now - RELAY_TIMES.keepMs);
   return { inputs: stale.length, tasks: old.changes };
