@@ -202,6 +202,7 @@ export function accountOwnRead(pathname: string): boolean {
     pathname === "/api/generations" ||
     pathname === "/api/account/gpu" ||
     pathname === "/api/account/keys" ||
+    pathname === "/api/account/run-on" ||
     ACCOUNT_CANVASES.test(pathname) ||
     GPU_READS.has(pathname) ||
     COMPUTER_READ.test(pathname) ||
@@ -254,6 +255,8 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if (method === "POST" && pathname === "/api/auth/logout") return true;
   if ((method === "PUT" || method === "DELETE") && pathname === "/api/account/gpu") return true;
   if ((method === "PUT" || method === "DELETE") && /^\/api\/account\/keys\/(fal|replicate)$/.test(pathname)) return true;
+  // Where its runs go (hosted runs: the Run on list, Settings, the one-time note). The route keeps its own pick only.
+  if (method === "PUT" && pathname === "/api/account/run-on") return true;
   // GPU pre-flight: checking its own ComfyUI (reads only; the routes check the target and the request themselves).
   if ((method === "POST" && pathname === "/api/gpu/check") || (method === "PUT" && pathname === "/api/gpu/inventory")) return true;
   // Running its own jobs on its own computer, and pairing (or unpairing) its own ComfyUI.

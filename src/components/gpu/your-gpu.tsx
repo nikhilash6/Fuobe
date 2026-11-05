@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useStatus, type GpuTroubleView } from "@/lib/api";
 import { canSaveAnyway } from "@/lib/diagnose";
+import { placeOf } from "@/lib/place-name";
+import { runsGoNowText, useSetRunOn } from "@/lib/run-on";
 import { responseError, toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +79,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   const live = viewer?.gpu;
   // Hosted runs: runs go to this studio's GPUs too, so these words say what goes to Your GPU, not "your runs".
   const hosted = !!viewer?.hosted;
+  const setRunOn = useSetRunOn();
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState<"test" | "save" | "anyway" | "remove" | null>(null);
@@ -107,6 +110,12 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
         qc.setQueryData(["account-gpu"], { gpu: r.gpu });
         linked();
         if (r.offline) toast(hosted ? "Your address is saved. Runs on Your GPU start as soon as it answers." : "Your address is saved. Your runs start as soon as your GPU answers.");
+        // Hosted runs: runs stay on this studio's GPUs unless the person sends them here, with one press.
+        else if (hosted && viewer?.runOn !== "gpu")
+          toast.success("Your GPU is connected.", {
+            description: "You can change this any time from Free ▾, next to the run button.",
+            action: { label: "Use it for my runs", onClick: () => setRunOn.mutate({ runOn: "gpu" }) },
+          });
         else toast.success(hosted ? "Your GPU is connected." : "Your GPU is connected. Runs go to your ComfyUI now.");
         setUrl("");
         setToken("");
@@ -155,9 +164,12 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   const remove = async () => {
     setBusy("remove");
     try {
-      qc.setQueryData(["account-gpu"], await call<GpuState>("DELETE"));
+      const r = await call<GpuState & { runOnCleared?: true }>("DELETE");
+      qc.setQueryData(["account-gpu"], { gpu: r.gpu });
       void qc.invalidateQueries({ queryKey: ["status"] });
       setInfo(null);
+      // Hosted runs: the account's runs went to this GPU by its pick, so they go to this studio's GPUs now.
+      if (r.runOnCleared && hosted) toast(runsGoNowText(placeOf(viewer?.placeName)), { id: "run-on" });
     } catch (e) {
       toastError(e);
     } finally {

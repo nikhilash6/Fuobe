@@ -7,7 +7,8 @@
  */
 import { dualEngine } from "./catalog/engines";
 import type { Engine, GenerationRequest } from "./catalog/types";
-import { withKeyAction, type Diagnosis, type TroubleAction } from "./diagnose";
+import { runOnSiteAction, withKeyAction, type Diagnosis, type TroubleAction } from "./diagnose";
+import type { Place } from "./place-name";
 import { cloudVersion, type CloudProvider } from "./your-keys";
 
 type Routed = { id: string; engine: string; engines?: Engine[]; routes: { provider: string }[] };
@@ -43,6 +44,12 @@ export function gpuBeforeRun(o: {
   preset?: Parameters<typeof cloudVersion>[0];
   has: (id: string) => boolean;
   getModel: (id: string) => Routed | undefined;
+  /** Hosted runs are on: a key's offer then says its price, and with none known isn't made (never a key billed unpriced). */
+  hosted?: boolean;
+  /** Hosted runs, for an item this install's GPUs take: their name. "Run on Our GPUs" then comes first (this run, once). */
+  site?: Place | null;
+  /** The key's price for this run's cloud version ("≈ $0.04"), when known. */
+  keyPrice?: string | null;
 }): BeforeRun | null {
   const { viewer, model } = o;
   if (viewer?.kind !== "account" || !model || o.onPool) return null;
@@ -51,7 +58,8 @@ export function gpuBeforeRun(o: {
   const gpu = viewer.gpu;
   if (!toOwnGpu || !gpu.connected || gpu.mode !== "link" || gpu.online !== false) return null;
   // The cloud version itself (its model and operation there), so one click runs it, once.
-  const twin = viewer.paidAllowed !== false ? cloudVersion(o.preset, model, viewer.keys ?? [], o.has, o.getModel) : null;
+  const found = viewer.paidAllowed !== false ? cloudVersion(o.preset, model, viewer.keys ?? [], o.has, o.getModel) : null;
+  const twin = found && (!o.hosted || o.keyPrice) ? found : null;
   const base: TroubleAction[] = gpu.trouble?.actions ?? [
     { kind: "check-gpu", label: "Check my GPU" },
     { kind: "gpu-settings", label: "Open Settings → Your GPU", target: "/settings#your-gpu" },
@@ -59,7 +67,11 @@ export function gpuBeforeRun(o: {
   return {
     words: gpu.trouble?.words ?? GPU_OFF_WORDS,
     ...(gpu.trouble?.details && { details: gpu.trouble.details }),
-    actions: [...base.filter((a) => a.kind !== "retry" && a.kind !== "run-with-key"), ...(twin ? [withKeyAction(twin.provider, twin.modelId, twin.op)] : [])],
+    actions: [
+      ...(o.site ? [runOnSiteAction(o.site.label)] : []),
+      ...base.filter((a) => a.kind !== "retry" && a.kind !== "run-with-key" && a.kind !== "run-on-site"),
+      ...(twin ? [withKeyAction(twin.provider, twin.modelId, twin.op, o.hosted ? o.keyPrice : undefined)] : []),
+    ],
   };
 }
 

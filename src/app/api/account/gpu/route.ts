@@ -7,7 +7,9 @@ import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES } from "@/server/account-files";
 import { clearAccountLoras } from "@/server/account-loras";
 import { forgetComputer } from "@/server/computer/tasks";
 import { dropSnapshots } from "@/server/gpu/snapshots";
+import { poolReady } from "@/server/hosted";
 import { hit } from "@/server/rate";
+import { clearRunOnFor } from "@/server/run-on";
 
 /**
  * "Your GPU" (public sign-up): the account's own ComfyUI, where its runs go. Either the ComfyUI on the person's own
@@ -129,5 +131,7 @@ export async function DELETE(request: Request) {
   setAccountGpu(a.id, null);
   clearAccountLoras(a.id);
   forgetComputer(`acct:${a.id}`);
-  return Response.json({ gpu: null });
+  // Its runs went to this GPU by its own pick (hosted runs): that pick goes, and the page says where runs go now.
+  const runOnCleared = poolReady() && clearRunOnFor(a.id, { gpu: true });
+  return Response.json({ gpu: null, ...(runOnCleared && { runOnCleared: true }) });
 }

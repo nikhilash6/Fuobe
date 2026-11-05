@@ -22,6 +22,8 @@ import { onCloudKey } from "@/lib/before-run";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { useCreateGeneration, useGenerationActions, useMakingPoolRuns, usePlaceName, useStatus } from "@/lib/api";
 import { knownPlace } from "@/lib/place-name";
+import { runOnSiteAction } from "@/lib/diagnose";
+import { offersRunOnSite, retryRequest } from "@/lib/run-place";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
@@ -170,6 +172,9 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
 export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
   const create = useCreateGeneration();
   const trouble = g.status === "failed" ? g.trouble : undefined;
+  // Hosted runs: a run that failed on the person's own GPU can run once on this studio's GPUs instead.
+  const site = usePlaceName();
+  const onSite = !!trouble && offersRunOnSite(g, !!site);
   // A run on this studio's GPUs that couldn't finish: one plain sentence (the server's), nothing technical.
   const poolFailed = g.place === "pool" && g.status === "failed";
   return (
@@ -189,10 +194,13 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
       {trouble && (
         <TroubleActions
           className="mt-2"
-          actions={trouble.actions}
+          actions={onSite && site ? [runOnSiteAction(site.label), ...trouble.actions] : trouble.actions}
           skip={["retry"]}
           max={3}
-          handlers={{ onRunWithKey: (a) => create.mutate(onCloudKey(g.request, a), { onError: (e) => toastError(e) }) }}
+          handlers={{
+            onRunWithKey: (a) => create.mutate(onCloudKey(g.request, a), { onError: (e) => toastError(e) }),
+            onRunOnSite: () => create.mutate({ ...g.request, place: "pool" } as Generation["request"], { onError: (e) => toastError(e) }),
+          }}
         />
       )}
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -502,6 +510,9 @@ export function Feed({
   const [open, setOpen] = useState<{ id: string; index: number } | null>(null);
   const create = useCreateGeneration();
   const making = useMakingPoolRuns();
+  // Hosted runs: Retry sends a run to the place it ran (read through a ref: the feed's callbacks stay the same).
+  const hosted = !!useStatus().data?.viewer?.hosted;
+  const hostedRef = useRef(hosted);
   // Fuobe Soul results get their look's grade and overlay here, once.
   useSoulFinish(items);
   // Groups get stable callbacks that read the latest props through refs.
@@ -510,6 +521,7 @@ export function Feed({
   useEffect(() => {
     createRef.current = create;
     reuseRef.current = onReuse;
+    hostedRef.current = hosted;
   });
   const hasReuse = !!onReuse;
   const aiTag = useAiTag();
@@ -517,7 +529,7 @@ export function Feed({
   const api = useMemo<FeedApi>(
     () => ({
       open: openAt,
-      retry: (g) => createRef.current.mutate(g.request, { onError: (e) => toastError(e) }),
+      retry: (g) => createRef.current.mutate(retryRequest(g, hostedRef.current), { onError: (e) => toastError(e) }),
       reuse: hasReuse ? (g) => reuseRef.current?.(g) : undefined,
       runner: { onOpen: openAt, onReuse: hasReuse ? (g) => reuseRef.current?.(g) : undefined },
       ...(aiTag && { aiTag }),

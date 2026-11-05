@@ -54,10 +54,10 @@ export function StatusDot({ ok }: { ok: boolean | undefined }) {
 }
 
 /** A status dot centred in a slot as wide as the rows' icons (16 px in the menu, 18 px in the You sheet: --nav-icon). */
-function DotSlot({ ok }: { ok: boolean | undefined }) {
+function DotSlot({ ok, hidden }: { ok: boolean | undefined; hidden?: boolean }) {
   return (
     <span aria-hidden className="grid w-[var(--nav-icon,16px)] shrink-0 place-items-center">
-      <StatusDot ok={ok} />
+      {!hidden && <StatusDot ok={ok} />}
     </span>
   );
 }
@@ -80,7 +80,7 @@ function Actionable({ item, className, children }: { item?: boolean; className: 
  * "Your GPU": a visitor's own (public sign-up), never the install's, or the owner's computer. A guest is sent to sign up
  * first; anyone else without one opens "Connect your GPU"; a connected one says whether it answers.
  */
-export function YourGpuChip({ gpu, guest, hosted, item }: { gpu: Viewer["gpu"]; guest: boolean; hosted?: boolean; item?: boolean }) {
+export function YourGpuChip({ gpu, guest, hosted, quiet, item }: { gpu: Viewer["gpu"]; guest: boolean; hosted?: boolean; quiet?: boolean; item?: boolean }) {
   const g = gpu;
   // ComfyUI on this computer is closed, or runs without Fuobe's setting: the finder, at that step (elsewhere: /connect).
   const fix = awayFix(g.connected ? g : undefined, useComputerSupport());
@@ -89,8 +89,11 @@ export function YourGpuChip({ gpu, guest, hosted, item }: { gpu: Viewer["gpu"]; 
     const inner = (
       <>
         <span className="flex w-full items-center gap-3">
-          <DotSlot ok={g.online} /> Your GPU
-          <span className="ml-auto">{g.online ? "online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "needs a setting" : shortState(g.trouble?.cause)}</span>
+          {/* Hosted runs, a GPU its runs don't go to (quiet): a green dot while it answers, and nothing else about it. */}
+          {quiet && !g.online ? <DotSlot ok={undefined} hidden /> : <DotSlot ok={g.online} />} Your GPU
+          {!quiet && (
+            <span className="ml-auto">{g.online ? "online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "needs a setting" : shortState(g.trouble?.cause)}</span>
+          )}
         </span>
         {(g.device || vram || g.mode === "computer") && (
           <span className="truncate pl-7 text-[11px]">{[g.mode === "computer" && "Your computer", deviceLabel(g.device), vram && `${vram} VRAM`].filter(Boolean).join(" · ")}</span>
@@ -324,7 +327,9 @@ export function VisitorGpu({ item }: { item?: boolean }) {
   const v = status?.viewer;
   if (!v) return null;
   if (v.balance) return item ? <BalanceSection viewer={v} /> : <BalanceChip viewer={v} />;
-  return <YourGpuChip gpu={v.gpu} guest={v.kind === "guest"} hosted={!!v.hosted} item={item} />;
+  // Hosted runs: its GPU, when its runs don't go there (its pick, or this studio's GPUs first), says only that it answers.
+  const quiet = !!v.hosted && v.runOn !== "gpu" && (!!v.runOn || v.prefer === "pool");
+  return <YourGpuChip gpu={v.gpu} guest={v.kind === "guest"} hosted={!!v.hosted} quiet={quiet} item={item} />;
 }
 
 /** The owner's "Placeholders on", while it is on (the owner's runs only make placeholders). */

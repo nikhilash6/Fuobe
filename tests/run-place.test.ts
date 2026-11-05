@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { placeOf } from "@/lib/place-name";
 import { quoteBody } from "@/lib/hosted";
-import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, refusedBeforeRun, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, offersRunOnSite, openCheckPlace, placePrice, placeRows, refusedBeforeRun, retryRequest, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
 import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
 import { lineWords } from "@/lib/pool-line";
 
@@ -200,17 +200,117 @@ describe("the main model of a pipeline", () => {
 });
 
 describe("where a composer's run goes, and the place it names", () => {
-  it("the person's pick, named", () => {
-    expect(composerPlace("own", false, true)).toEqual({ runOn: "own", place: "own" });
-    expect(composerPlace("pool", true, false)).toEqual({ runOn: "pool", place: "pool" });
+  it("a place picked for this run, named", () => {
+    expect(composerPlace("own", undefined, false, true)).toEqual({ runOn: "own", place: "own" });
+    expect(composerPlace("pool", undefined, true, false)).toEqual({ runOn: "pool", place: "pool" });
+    // A one-off place wins over the remembered pick.
+    expect(composerPlace("pool", "gpu", true, false)).toEqual({ runOn: "pool", place: "pool" });
+    expect(composerPlace("own", "site", true, true)).toEqual({ runOn: "own", place: "own" });
   });
   it("its own GPU while online, named; this studio's GPUs when it isn't, named", () => {
-    expect(composerPlace(null, true, false)).toEqual({ runOn: "own", place: "own" });
-    expect(composerPlace(null, false, false)).toEqual({ runOn: "pool", place: "pool" });
-    expect(composerPlace(null, false, true)).toEqual({ runOn: "pool", place: "pool" });
+    expect(composerPlace(null, undefined, true, false)).toEqual({ runOn: "own", place: "own" });
+    expect(composerPlace(null, undefined, false, false)).toEqual({ runOn: "pool", place: "pool" });
+    expect(composerPlace(null, undefined, false, true)).toEqual({ runOn: "pool", place: "pool" });
   });
   it("this studio's GPUs first while its own GPU is online: shown, but not named, so the server can still use its own GPU", () => {
-    expect(composerPlace(null, true, true)).toEqual({ runOn: "pool", place: undefined });
+    expect(composerPlace(null, undefined, true, true)).toEqual({ runOn: "pool", place: undefined });
+  });
+  it("the remembered GPU: named, online or not, whatever the studio prefers (never moved without a word)", () => {
+    for (const online of [true, false]) for (const prefer of [true, false]) expect(composerPlace(null, "gpu", online, prefer)).toEqual({ runOn: "own", place: "own" });
+  });
+  it("the remembered studio's GPUs (or key, whose open runs come here): first, even where its own GPU would be", () => {
+    for (const pick of ["site", "key"] as const) {
+      expect(composerPlace(null, pick, true, false)).toEqual({ runOn: "pool", place: undefined });
+      expect(composerPlace(null, pick, true, true)).toEqual({ runOn: "pool", place: undefined });
+      expect(composerPlace(null, pick, false, false)).toEqual({ runOn: "pool", place: "pool" });
+    }
+  });
+});
+
+describe("the place a tool's price check names, with the remembered pick", () => {
+  const v = { audience: "account" as const, gpu: true, hosted: true, preferPool: false };
+  it("its own GPU picked: no check here (the run goes there)", () => {
+    expect(openCheckPlace({ ...v, preferPool: true, runOn: "gpu" })).toBeNull();
+  });
+  it("this studio's GPUs or the key picked: checked with no place, so the server decides as for the run", () => {
+    expect(openCheckPlace({ ...v, runOn: "site" })).toBeUndefined();
+    expect(openCheckPlace({ ...v, runOn: "key" })).toBeUndefined();
+  });
+  it("no pick: as before", () => {
+    expect(openCheckPlace(v)).toBeNull();
+    expect(openCheckPlace({ ...v, preferPool: true })).toBeUndefined();
+    expect(openCheckPlace({ ...v, gpu: false, runOn: "gpu" })).toBe("pool");
+    expect(openCheckPlace({ ...v, hosted: false, runOn: "site" })).toBeNull();
+  });
+});
+
+describe("Retry and Run on <the place> on a run's tile", () => {
+  const request = { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" };
+  it("Retry names the place the run ran (hosted runs on), so the pick never moves it", () => {
+    expect(retryRequest({ request, place: "pool" }, true)).toEqual({ ...request, place: "pool" });
+    expect(retryRequest({ request }, true)).toEqual({ ...request, place: "own" });
+  });
+  it("hosted runs off: the request as it was", () => {
+    expect(retryRequest({ request, place: "pool" }, false)).toBe(request);
+    expect(retryRequest({ request }, false)).toBe(request);
+  });
+  it("Run on <the place>: an open run that failed on the person's own GPU, while hosted runs are on", () => {
+    expect(offersRunOnSite({ engine: "open", status: "failed" }, true)).toBe(true);
+    expect(offersRunOnSite({ engine: "open", status: "failed", place: "pool" }, true)).toBe(false);
+    expect(offersRunOnSite({ engine: "cloud", status: "failed" }, true)).toBe(false);
+    expect(offersRunOnSite({ engine: "open", status: "canceled" }, true)).toBe(false);
+    expect(offersRunOnSite({ engine: "open", status: "failed" }, false)).toBe(false);
+  });
+});
+
+describe("the Run on list", () => {
+  const account = { kind: "account" as const, hosted: true, prefer: "pool" as const, placeName: "Studio North GPUs", gpu: { connected: false } };
+  const gpu = { connected: true, online: true, device: "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync" };
+  const quote = { text: "Free", wait: "Next in line · about 40 s" };
+  it("no control without a choice: none for a guest, hosted runs off, nothing of one's own, or an item only one's own runs", () => {
+    expect(placeRows({ ...account, kind: "guest", gpu }, {}, quote)).toBeNull();
+    expect(placeRows({ ...account, hosted: false, gpu }, {}, quote)).toBeNull();
+    expect(placeRows(account, {}, quote)).toBeNull();
+    expect(placeRows(account, { key: null }, quote)).toBeNull();
+    expect(placeRows({ ...account, gpu }, { siteRuns: false }, quote)).toBeNull();
+    expect(placeRows(undefined, {}, quote)).toBeNull();
+  });
+  it("a GPU: this studio's GPUs first and picked by default, its GPU with a green dot and its card", () => {
+    expect(placeRows({ ...account, gpu }, {}, quote)).toEqual({
+      on: "site",
+      rows: [
+        { id: "site", label: "Studio North GPUs", sub: "Free · Next in line · about 40 s", selected: true },
+        { id: "gpu", label: "Your GPU", sub: "Free · RTX 4090", online: true, selected: false },
+      ],
+    });
+  });
+  it("a GPU that doesn't answer: said, never greyed out, and picking it stays allowed", () => {
+    const r = placeRows({ ...account, runOn: "gpu", gpu: { connected: true, online: false } }, {}, quote)!;
+    expect(r.on).toBe("gpu");
+    expect(r.rows[1]).toEqual({ id: "gpu", label: "Your GPU", sub: "Free · not answering right now", selected: true });
+  });
+  it("a key that runs this item's cloud version: its price first, and who bills it", () => {
+    const r = placeRows(account, { key: { provider: "fal", price: "≈ $0.04" } }, quote)!;
+    expect(r.rows.map((x) => x.label)).toEqual(["Studio North GPUs", "Your fal.ai key"]);
+    expect(r.rows[1].sub).toBe("≈ $0.04 · billed to your fal.ai account");
+    expect(placeRows(account, { key: { provider: "replicate" } }, quote)!.rows[1]).toMatchObject({ label: "Your Replicate key", sub: "Billed to your Replicate account" });
+  });
+  it("the remembered key: picked on the item's cloud version; on its open version the run is here", () => {
+    const keyed = { ...account, runOn: "key" as const };
+    expect(placeRows(keyed, { key: { provider: "fal", price: "≈ $0.04" }, cloud: true }, quote)!.on).toBe("key");
+    expect(placeRows(keyed, { key: { provider: "fal", price: "≈ $0.04" } }, quote)!.on).toBe("site");
+  });
+  it("the remembered key on an item with no cloud version: here this once, and the chip says why", () => {
+    const r = placeRows({ ...account, runOn: "key", gpu }, { key: null }, quote)!;
+    expect(r.on).toBe("site");
+    expect(r.note).toBe("Runs on Studio North GPUs. This one has no cloud version.");
+  });
+  it("no pick on an install that puts one's own GPU first: its GPU while it answers", () => {
+    expect(placeRows({ ...account, prefer: undefined, gpu }, {}, quote)!.on).toBe("gpu");
+    expect(placeRows({ ...account, prefer: undefined, gpu: { connected: true, online: false } }, {}, quote)!.on).toBe("site");
+  });
+  it("this studio's row says Free when the check has no words yet, and the name falls back to Our GPUs", () => {
+    expect(placeRows({ ...account, placeName: undefined, gpu }, {})!.rows[0]).toEqual({ id: "site", label: "Our GPUs", sub: "Free", selected: true });
   });
 });
 

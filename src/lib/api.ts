@@ -972,6 +972,13 @@ export interface StatusInfo {
      * "key" starts its engine switch on Cloud (src/lib/engine-pref.ts).
      */
     runOn?: "site" | "gpu" | "key";
+    /** With `runOn` "key": the provider whose key runs them. */
+    runKey?: CloudProvider;
+    /**
+     * The account ran on its own GPU or key before it first ran on this studio's GPUs, and picked no place since: the
+     * one-time note (src/components/studio/place-intro.tsx) says where runs go now. Only with `hosted`.
+     */
+    ranOwn?: true;
     /** The words a preset card shows when its run would go to this studio's GPUs ("Try free"), from the server. None: no words. */
     cardText?: string;
     /** What this studio's GPUs keep off, for a viewer with no GPU of its own: its pickers leave it out (src/lib/pool-rules.ts). */

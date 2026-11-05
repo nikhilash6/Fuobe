@@ -23,6 +23,9 @@ export async function register() {
   const { ensureRelaySweep } = await import("./server/computer/tasks");
   const { onAccountDeleted } = await import("./server/account-files");
   ensureRelaySweep(onAccountDeleted);
+  // Where a deleted account's runs went (its pick of a place, hosted runs) goes with it.
+  const { clearRunOn } = await import("./server/run-on");
+  onAccountDeleted(clearRunOn);
   // Faceless / Explainer renders whose narration was timed while the server was down continue with their scenes.
   const { ensureFacelessRunner } = await import("./server/faceless");
   ensureFacelessRunner();

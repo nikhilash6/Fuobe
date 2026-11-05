@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { poolRulesOf, poolRunsModel, poolRunsPreset, presetOffered, tryFreeFor } from "@/lib/pool-rules";
+import { modelOwnSetup, pickerRules, poolRulesOf, poolRunsModel, poolRunsPreset, presetOffered, tryFreeFor } from "@/lib/pool-rules";
 
 /*
  * For a visitor with no GPU of its own (hosted runs), pickers label what this studio's GPUs keep off (the policy's
@@ -63,6 +63,28 @@ describe("what pickers label for a visitor with no GPU of its own", () => {
         expect(client, JSON.stringify({ pool, model, app })).toBe(poolAllows({ pool }, model, app));
       }
     }
+  });
+});
+
+describe("labels for a viewer with a GPU of its own (hosted runs)", () => {
+  const pool = { deny: ["oss-x"] };
+  const open = { id: "oss-x", kind: "image" as const, engine: "open" };
+  const gpu = { connected: true };
+  it("its runs go to this studio's GPUs (their default, or its pick of them or its key): what they keep off is labelled", () => {
+    for (const v of [{ hosted: true, prefer: "pool" as const, gpu, pool }, { hosted: true, runOn: "site", gpu, pool }, { hosted: true, runOn: "key", gpu, pool }]) {
+      expect(pickerRules(v)).toEqual(pool);
+      expect(modelOwnSetup(pickerRules(v), open)?.need).toBe("gpu");
+    }
+  });
+  it("its runs go to its own GPU (its pick, or an install that puts it first): no labels", () => {
+    expect(pickerRules({ hosted: true, prefer: "pool", runOn: "gpu", gpu, pool })).toBeUndefined();
+    expect(pickerRules({ hosted: true, gpu, pool })).toBeUndefined();
+  });
+  it("no GPU of its own: labelled as before; hosted runs off or nothing kept off: none", () => {
+    expect(pickerRules({ hosted: true, gpu: { connected: false }, pool })).toEqual(pool);
+    expect(pickerRules({ hosted: false, gpu: { connected: false }, pool })).toBeUndefined();
+    expect(pickerRules({ hosted: true, gpu: { connected: false } })).toBeUndefined();
+    expect(pickerRules(undefined)).toBeUndefined();
   });
 });
 

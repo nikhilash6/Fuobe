@@ -2,7 +2,9 @@ import { z } from "zod";
 import { isCloudProvider, NOT_ACCOUNT_KEYS, type CloudProvider } from "@/lib/your-keys";
 import { accountKeyInfo, cleanKey, removeAccountKey, saveAccountKey } from "@/server/account-keys";
 import { accountKeyRecord, LoginGuard, requestAccount } from "@/server/auth";
+import { poolReady } from "@/server/hosted";
 import { hit, unhit } from "@/server/rate";
+import { clearRunOnFor } from "@/server/run-on";
 import { SecretBoxError } from "@/server/secret-box";
 import { checkKey, runsGoingMessage, runsOnKey, stopRunsOnKey } from "@/server/your-keys";
 
@@ -91,5 +93,8 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/account/k
   if (going.length && !stopRuns) return answer(409, { code: "runs-going", count: going.length, error: runsGoingMessage(going.length, false) });
   if (going.length) await stopRunsOnKey(id, provider);
   removeAccountKey(id, provider);
-  return answer(200, { keys: accountKeyInfo(id) });
+  // Its runs went to this key by its own pick (hosted runs): with no key left for it, that pick goes, and the page says
+  // where runs go now.
+  const runOnCleared = poolReady() && clearRunOnFor(id, { key: provider });
+  return answer(200, { keys: accountKeyInfo(id), ...(runOnCleared && { runOnCleared: true }) });
 }

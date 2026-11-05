@@ -2,6 +2,7 @@ import { RUN_SHOWN_HEADER, shownHeader } from "./guest-access";
 import { ownSetupDetail, ownSetupLabel, type OwnSetup } from "./own-setup";
 import { placeOf, type Place } from "./place-name";
 import { lineWords } from "./pool-line";
+import { deviceLabel } from "./gpu/readiness";
 import { billedTo, CLOUD_KEY, type CloudProvider } from "./your-keys";
 
 /**
@@ -72,6 +73,8 @@ export interface RunPlace {
   model?: string;
   /** It runs on the visitor's own setup (own-setup.ts): the send button opens that setup (`needs` says which). */
   setup?: OwnSetup;
+  /** False: this studio's GPUs don't take this run for this viewer (hosted runs), so there is no Run on choice for it. */
+  siteRuns?: boolean;
 }
 
 const list = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -206,16 +209,28 @@ export function mainModel(steps: readonly { modelName: string; costUsd: number |
   return best?.modelName;
 }
 
+/** Where an account picked its runs to go (the Run on list; hosted runs): this studio's GPUs, its own GPU, or its key. */
+export type RunOnPick = "site" | "gpu" | "key";
+
 /**
- * Where a studio composer's run goes, with hosted runs on: the person's pick, else its own GPU while that is online
- * (unless the studio puts its own GPUs first), else this studio's GPUs. `place` is what the run names beside the request:
- * none when the default is this studio's GPUs only because the studio puts them first, so the server decides, and a
+ * Where a studio composer's run goes, with hosted runs on, in one order: a place picked for this run (`pick`), then the
+ * account's remembered pick (`runOn`): its own GPU, sent there even while it doesn't answer (never moved anywhere else
+ * without a word: the check before Run says so and offers a run elsewhere); this studio's GPUs first (a pick of them,
+ * or of its key, whose runs come here on the Open source engine). With no pick: its own GPU while that is online (unless
+ * the studio puts its own GPUs first), else this studio's GPUs. `place` is what the run names beside the request: none
+ * when this studio's GPUs go first while its own GPU is online, so the server decides (it reads the same pick), and a
  * model this studio's GPUs don't take still runs on the account's own GPU.
  */
-export function composerPlace(pick: "own" | "pool" | null, ownOnline: boolean, preferPool: boolean): { runOn: "own" | "pool"; place: "own" | "pool" | undefined } {
+export function composerPlace(
+  pick: "own" | "pool" | null,
+  runOn: RunOnPick | null | undefined,
+  ownOnline: boolean,
+  preferPool: boolean,
+): { runOn: "own" | "pool"; place: "own" | "pool" | undefined } {
   if (pick) return { runOn: pick, place: pick };
+  if (runOn === "gpu") return { runOn: "own", place: "own" };
   if (!ownOnline) return { runOn: "pool", place: "pool" };
-  return preferPool ? { runOn: "pool", place: undefined } : { runOn: "own", place: "own" };
+  return preferPool || runOn === "site" || runOn === "key" ? { runOn: "pool", place: undefined } : { runOn: "own", place: "own" };
 }
 
 /**
@@ -236,10 +251,107 @@ export function composerOnPool(place: "own" | "pool" | undefined, checked: { pla
  * to that GPU, and the check says so). Null: no check (the owner, hosted runs off, a tool for the person's own GPU only,
  * or a viewer whose runs go to its own GPU).
  */
-export function openCheckPlace(v: { audience: RunAudience; gpu: boolean; hosted: boolean; preferPool: boolean } | null, ownGpuOnly = false): "pool" | undefined | null {
+export function openCheckPlace(
+  v: { audience: RunAudience; gpu: boolean; hosted: boolean; preferPool: boolean; runOn?: RunOnPick | null } | null,
+  ownGpuOnly = false,
+): "pool" | undefined | null {
   if (!v || ownGpuOnly || v.audience === "owner" || !v.hosted) return null;
   if (!v.gpu) return "pool";
-  return v.preferPool ? undefined : null;
+  // Its own GPU, by its own pick: the run goes there (the server reads the same pick), so nothing is priced here.
+  if (v.runOn === "gpu") return null;
+  return v.preferPool || v.runOn === "site" || v.runOn === "key" ? undefined : null;
+}
+
+/**
+ * A run's request to send again (Retry): with hosted runs on, to the place it ran, named, so it never moves (a run on this
+ * studio's GPUs stays there, one on the person's own GPU or key stays there), whatever the account's pick says now.
+ * Hosted runs off: the request as it was.
+ */
+export function retryRequest<R extends object>(g: { request: R; place?: "pool" }, hosted: boolean): R {
+  return hosted ? { ...g.request, place: g.place === "pool" ? "pool" : "own" } : g.request;
+}
+
+/**
+ * "Run on Our GPUs" on a run that failed on the person's own GPU (hosted runs): an open run that ran there. One-off: it
+ * is sent again here, named, and the account's pick stays as it was.
+ */
+export const offersRunOnSite = (g: { place?: "pool"; engine: string; status: string }, hosted: boolean): boolean => hosted && g.place !== "pool" && g.engine === "open" && g.status === "failed";
+
+/** One row of the Run on list: a place, the line under it, and whether this item's runs go there now. */
+export interface RunOnRow {
+  id: RunOnPick;
+  /** "Our GPUs", "Your GPU", "Your fal.ai key". */
+  label: string;
+  /** "Free · Next in line · about 40 s", "Free · RTX 4090", "≈ $0.04 · billed to your fal.ai account". */
+  sub: string;
+  /** Your GPU: it answers now (a green dot). Not answering is said in `sub`; the row can still be picked. */
+  online?: boolean;
+  /** This item's next run goes here. */
+  selected: boolean;
+}
+
+/** The Run on list for one item, and where its next run goes. */
+export interface RunOnRows {
+  rows: RunOnRow[];
+  /** Where the next run goes (the chip's words follow it). */
+  on: RunOnPick;
+  /** The remembered place can't run this item, so this run goes to this studio's GPUs: said in the chip's tooltip. */
+  note?: string;
+}
+
+/** What the Run on list knows of the viewer (the status's viewer). */
+export interface RunOnViewer {
+  kind?: "guest" | "account";
+  hosted?: boolean;
+  prefer?: "pool";
+  placeName?: string;
+  runOn?: RunOnPick;
+  gpu: { connected: boolean; online?: boolean; device?: string };
+}
+
+/** The footer under the list: a pick holds for later runs too. */
+export const RUN_ON_FOOTER = "Your next runs go here too.";
+
+/** The words of a key's row: its price first when known, and who bills it. */
+export const keyRowSub = (p: CloudProvider, price?: string | null): string => (price ? `${price} · billed to ${billedTo(p)}` : `Billed to ${billedTo(p)}`);
+
+/**
+ * The Run on list for an item (hosted runs; an account only): this studio's GPUs always, its own GPU when one is
+ * connected (picking it is allowed while it doesn't answer: the check before Run says so), and the key that runs this
+ * item's cloud version (`item.key`, with its price when known). Null when there is nothing to choose: hosted runs off, a
+ * guest, no GPU and no key for this item ("No control without a choice"), or an item this studio's GPUs can't run (its
+ * label says where it runs instead). `quote`: the price check's words for a run here, and where it would stand in line.
+ * `item.cloud`: the item is on its cloud version now (the Cloud engine), so a pick of the key runs it there; on its open
+ * version a pick of the key runs it on this studio's GPUs (the key runs what has a cloud version only).
+ */
+export function placeRows(
+  viewer: RunOnViewer | undefined | null,
+  item: { key?: { provider: CloudProvider; price?: string | null } | null; siteRuns?: boolean; cloud?: boolean },
+  quote: { text?: string; wait?: string } = {},
+): RunOnRows | null {
+  if (!viewer?.hosted || viewer.kind !== "account" || item.siteRuns === false) return null;
+  const gpu = viewer.gpu.connected ? viewer.gpu : null;
+  const key = item.key ?? null;
+  if (!gpu && !key) return null;
+  const place = placeOf(viewer.placeName);
+  // Where the next run goes: the pick when this item runs there; with none, its own GPU while that is online on an
+  // install that puts it first (composerPlace), else this studio's GPUs.
+  const picked = viewer.runOn;
+  let on: RunOnPick = "site";
+  let note: string | undefined;
+  if (picked === "gpu" && gpu) on = "gpu";
+  else if (picked === "key") {
+    if (key && item.cloud) on = "key";
+    else if (!key) note = `Runs on ${place.text}. This one has no cloud version.`;
+  } else if (!picked && gpu?.online && viewer.prefer !== "pool") on = "gpu";
+  const rows: RunOnRow[] = [{ id: "site", label: place.label, sub: [quote.text || "Free", quote.wait].filter(Boolean).join(" · "), selected: on === "site" }];
+  if (gpu) {
+    // "RTX 4090", not ComfyUI's whole device name.
+    const device = deviceLabel(gpu.device).replace(/^NVIDIA\s+(GeForce\s+)?/i, "");
+    rows.push({ id: "gpu", label: "Your GPU", sub: gpu.online ? ["Free", device].filter(Boolean).join(" · ") : "Free · not answering right now", ...(gpu.online && { online: true }), selected: on === "gpu" });
+  }
+  if (key) rows.push({ id: "key", label: `Your ${CLOUD_KEY[key.provider].label} key`, sub: keyRowSub(key.provider, key.price), selected: on === "key" });
+  return { rows, on, ...(note && { note }) };
 }
 
 /** Drawn in this browser (a Kinetic template, Click to Ad's end card): the same place and price whoever looks. */

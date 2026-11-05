@@ -75,7 +75,12 @@ export type TroubleActionKind =
   /** Pair a ComfyUI with a code (/connect): no web address needed. */
   | "pair"
   /** Run on the ComfyUI on this computer instead. */
-  | "use-computer";
+  | "use-computer"
+  /**
+   * Hosted runs: run this once on this install's GPUs ("Run on Our GPUs"), offered only where they take it. One-off:
+   * the account's pick of where its runs go stays as it was.
+   */
+  | "run-on-site";
 
 export interface TroubleAction {
   kind: TroubleActionKind;
@@ -169,16 +174,20 @@ const A = {
   pair: (): TroubleAction => ({ kind: "pair", label: "Pair with a code", target: "/connect" }),
   pick: (): TroubleAction => ({ kind: "pick-model", label: "Pick another model" }),
   credit: (p: CloudProvider): TroubleAction => ({ kind: "add-credit", label: `Add credit on ${CLOUD_KEY[p].label}`, target: BILLING_URL[p] }),
-  withKey: (p: CloudProvider): TroubleAction => ({ kind: "run-with-key", label: `Run with your ${CLOUD_KEY[p].label} key`, target: p }),
+  withKey: (p: CloudProvider, price?: string | null): TroubleAction => ({ kind: "run-with-key", label: `Run with your ${CLOUD_KEY[p].label} key${price ? ` · ${price}` : ""}`, target: p }),
 };
 
 /**
  * "Run with your fal.ai key": offered on a GPU trouble when the account has a key that runs this tool's cloud version
- * (`modelId`). An explicit click: it spends the person's own credit.
+ * (`modelId`). An explicit click: it spends the person's own credit, so with its price when known ("Run with your
+ * fal.ai key · ≈ $0.04").
  */
-export function withKeyAction(p: CloudProvider, modelId?: string, op?: string): TroubleAction {
-  return { ...A.withKey(p), ...(modelId && { modelId }), ...(modelId && op && { op }) };
+export function withKeyAction(p: CloudProvider, modelId?: string, op?: string, price?: string | null): TroubleAction {
+  return { ...A.withKey(p, price), ...(modelId && { modelId }), ...(modelId && op && { op }) };
 }
+
+/** "Run on Our GPUs": this run, once, on this install's GPUs (hosted runs), by the name visitors read for them. */
+export const runOnSiteAction = (placeLabel: string): TroubleAction => ({ kind: "run-on-site", label: `Run on ${placeLabel}` });
 
 // ---------------------------------------------------------------------------
 // Your GPU

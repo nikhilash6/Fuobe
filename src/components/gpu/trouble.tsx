@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { CreditCard, ExternalLink, KeyRound, Loader2, Play, RefreshCw, RotateCcw, Settings2, Shuffle, Stethoscope, Monitor } from "lucide-react";
+import { CreditCard, ExternalLink, KeyRound, Loader2, Play, RefreshCw, RotateCcw, Server, Settings2, Shuffle, Stethoscope, Monitor } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ const ICONS: Record<TroubleActionKind, typeof Play> = {
   "start-gpu": Play,
   pair: RefreshCw,
   "use-computer": Monitor,
+  "run-on-site": Server,
 };
 
 /** The first button stands out (the one most likely to help); the rest are quieter. */
@@ -63,6 +64,8 @@ export interface TroubleHandlers {
   onPickModel?: () => void;
   /** "Use this computer": the caller switches runs to the ComfyUI on this computer. */
   onUseComputer?: () => void;
+  /** "Run on Our GPUs": the caller sends this run once to this install's GPUs (hosted runs). */
+  onRunOnSite?: () => void;
 }
 
 /**
@@ -78,6 +81,7 @@ export function TroubleActions({ actions, handlers = {}, max, skip = [], classNa
     if (a.kind === "run-with-key") return !!handlers.onRunWithKey;
     if (a.kind === "pick-model") return !!handlers.onPickModel;
     if (a.kind === "use-computer") return !!handlers.onUseComputer;
+    if (a.kind === "run-on-site") return !!handlers.onRunOnSite;
     return true;
   });
   const shown = max ? usable.slice(0, max) : usable;
@@ -124,7 +128,9 @@ export function TroubleActions({ actions, handlers = {}, max, skip = [], classNa
                   ? handlers.onPickModel
                   : a.kind === "use-computer"
                     ? handlers.onUseComputer
-                    : undefined;
+                    : a.kind === "run-on-site"
+                      ? handlers.onRunOnSite
+                      : undefined;
         return (
           <button
             key={a.kind}

@@ -650,8 +650,27 @@ With it on:
   one price. The run goes to this install's GPUs: its workers, when Settings says ComfyUI runs on workers
   ([gpu-workers.md](gpu-workers.md)), or else its own ComfyUI server, only when that is on this machine. An install
   whose ComfyUI runs on the owner's computer doesn't offer hosted runs.
-- An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU", or the
-  place name of this install's GPUs), and the person can pick either.
+- Where an account's runs go is one order: a place the run names (a one-off "Run on …", Retry, which goes back to
+  where the run ran), then what only one place can run (a model this install's GPUs don't take runs on the account's
+  own GPU; a cloud-only model on its key), then the account's own pick, then the install's default. With no pick, an
+  account whose own GPU is online runs there first, unless the billing service's policy puts this install's GPUs first
+  (`prefer: "pool"`).
+- **Run on**: for an account with a choice for an item (its GPU, or a key that runs the item's cloud version), the
+  composer's price chip opens a list ("Free ▾"): this install's GPUs, Your GPU (with a green dot while it answers; it
+  can be picked while it doesn't, and the check before Run then offers **Run on …** for that run), and Your fal.ai or
+  Replicate key with its price. A tool page's place chip lists the same rows, and Settings → Your GPU starts with
+  **Where your runs go**. A pick applies at once and holds for the account's later runs on every device: it is kept on
+  the server (`PUT /api/account/run-on`, `src/server/run-on.ts`), sent in the status to that account only, and read by
+  every run and price check that names no place. A pick of the account's GPU sends its runs there without asking,
+  even while it doesn't answer; a pick of this install's GPUs or of the key sends open runs here first (the key runs
+  what has a cloud version, on the Cloud engine). Forgetting the GPU or removing the key drops a pick of it ("Your runs
+  go to … now."), and a deleted account's pick goes with it.
+- An account that ran on its own GPU or key before hosted runs went on (and has picked nothing since) sees one note
+  above its run button, in a studio or on a tool page: "Runs now go to …, free." with **Keep my GPU as the default**
+  (or key) and **OK**. Both keep a pick, so the note shows once for the account, on any device.
+- A connected GPU runs what this install's GPUs don't take with the first press ("Free · your GPU"). A key runs such an
+  item only when the key is the account's pick; otherwise the press shows "Run with your fal.ai key · ≈ $0.04" (one run,
+  its price first) and Connect your GPU. A key is never billed by a press that showed "Free".
 - Visitors read this install's GPUs by one place name: "Runs on our GPUs", "Made on: Our GPUs", "Run on Our GPUs".
   The billing service's policy sets it (`placeName`); without one, Settings → Workers → Name for your GPUs, else
   `FUOBE_PLACE_NAME`, else "Our GPUs". It is never sent while hosted runs are off.
@@ -695,7 +714,8 @@ Two optional services can go with it:
 
 The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side
 and the gate), `src/server/account-tool-run.ts` (a tool's run), `src/server/run-stamp.ts` (what every row of a run
-carries) and `src/lib/hosted.ts` (the browser's side). The tests are `tests/hosted-runs.test.ts`,
+carries), `src/server/run-on.ts` (the account's pick of where its runs go) and `src/lib/hosted.ts` (the browser's
+side). The tests are `tests/hosted-runs.test.ts`, `tests/run-on.test.ts`,
 `tests/hosted-tool-runs.test.ts`, `tests/pool-account-runs.test.ts`, `tests/billing-hook.test.ts`,
 `tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`.
 

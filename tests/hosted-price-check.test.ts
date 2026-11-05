@@ -222,7 +222,7 @@ describe("a run's state after a refresh or on a second device", () => {
 });
 
 describe("what this install's GPUs keep off, in the status", () => {
-  it("is told to a visitor with no GPU of its own, only when the policy keeps something off, and never with hosted runs off", async () => {
+  it("is told to every visitor, a GPU of its own or not, only when the policy keeps something off, and never with hosted runs off", async () => {
     process.env.FUOBE_BILLING_URL = fake.url;
     process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
     fake.policy = { ...FAKE_POLICY, pool: { deny: ["oss-z-image-turbo"], apps: { deny: ["app-x"] } }, kinds: { model3d: false } };
@@ -237,9 +237,10 @@ describe("what this install's GPUs keep off, in the status", () => {
     expect(s.viewer.pool?.apps?.deny).toEqual(expect.arrayContaining(["app-x", ...offWithModel]));
     expect(s.viewer.pool?.apps?.deny).not.toContain(PRESETS.find((p) => p.open && !offWithModel.includes(p.id))!.id);
     expect((await visitorStatus(null)).viewer.pool).toEqual(s.viewer.pool);
-    // Its own GPU runs what this install's GPUs don't: nothing is left out of its pickers.
+    // A GPU of its own: told too, so its pickers label what runs on its own GPU while its runs go to this install's GPUs
+    // (src/lib/pool-rules.ts pickerRules; none while its runs go to its own GPU).
     auth.setAccountGpu(a, { mode: "computer" });
-    expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toEqual(s.viewer.pool);
     auth.setAccountGpu(a, null);
     billing.resetBillingCache();
     fake.policy = { ...FAKE_POLICY };

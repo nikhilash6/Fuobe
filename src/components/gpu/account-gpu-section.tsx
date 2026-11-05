@@ -2,6 +2,7 @@
 
 import { ConnectChoice } from "@/components/gpu/connect-choice";
 import { PairedComfyUIs } from "@/components/gpu/fuobe-connect";
+import { WhereRunsGo } from "@/components/gpu/where-runs-go";
 import { useHydrated, useStatus, useViewer } from "@/lib/api";
 
 /**
@@ -25,6 +26,8 @@ export function AccountGpuSection() {
         </p>
       </div>
       <div className="min-w-0 space-y-4">
+        {/* Hosted runs: where the account's runs go, first. */}
+        {hosted && <WhereRunsGo />}
         <ConnectChoice />
         <PairedComfyUIs className="sm:max-w-[36rem]" />
       </div>

@@ -139,3 +139,15 @@ export function tryFreeFor(
   const rules = viewer.gpu.connected ? undefined : viewer.pool;
   return { text: viewer.cardText, runs: (p) => p.open && poolRunsPreset(rules, p.id) };
 }
+
+/**
+ * The rules a viewer's pickers label with (hosted runs): for every viewer whose runs go to this studio's GPUs, a GPU of
+ * its own or not. A viewer with a GPU sees what they keep off labelled "Runs on your own GPU", and that runs there at
+ * once; one whose runs go to its own GPU (its pick, or an install that puts it first) sees no labels. Undefined while
+ * hosted runs are off, or with nothing kept off.
+ */
+export function pickerRules(v: { hosted?: boolean; prefer?: "pool"; runOn?: string; gpu: { connected: boolean }; pool?: PoolRules } | undefined): PoolRules | undefined {
+  if (!v?.hosted || !v.pool) return undefined;
+  const here = !v.gpu.connected || v.runOn === "site" || v.runOn === "key" || (!v.runOn && v.prefer === "pool");
+  return here ? v.pool : undefined;
+}

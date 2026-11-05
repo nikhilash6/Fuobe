@@ -16,6 +16,7 @@ import { balance as billingBalance, policy as billingPolicy, type Action, type B
 import { poolReady } from "./hosted";
 import { placeName } from "./place-name";
 import { poolOwnModels } from "./pool-own-setup";
+import { ranOwnFirst, runOnOf, type RunOn } from "./run-on";
 import { poolRulesOf, type PoolRules, type PresetModel } from "@/lib/pool-rules";
 import { diagnoseAddress, diagnoseGpu, gpuHostOf, type Diagnosis, type GpuFailure, type GpuPlace, type GpuStage } from "@/lib/diagnose";
 
@@ -331,6 +332,17 @@ export interface VisitorView {
   /** The name visitors read for this install's GPUs ("Runs on Our GPUs"; src/server/place-name.ts). Only with `hosted`. */
   placeName?: string;
   /**
+   * Where the account's runs go, as it picked (run-on.ts; only with `hosted`, only to that account). Absent: the
+   * install's default. `runKey`: with "key", the provider whose key runs them.
+   */
+  runOn?: RunOn;
+  runKey?: CloudProvider;
+  /**
+   * The account ran on its own GPU or key before it first ran on this install's GPUs, and has picked no place yet:
+   * the one-time note says runs go to this install's GPUs now (only with `hosted`, only to that account).
+   */
+  ranOwn?: true;
+  /**
    * The words a preset card shows when its run would go to this install's GPUs (the billing service's policy, such as
    * "Try free"; with no service, "Try free": those runs are free). Absent: the cards show none.
    */
@@ -399,9 +411,19 @@ export async function visitorStatus(account: Account | null) {
     if (p?.hosted) viewer.placeName = placeName(p);
     const card = p?.hosted && typeof p.cardText === "string" ? p.cardText.trim().slice(0, 40) : "";
     if (card) viewer.cardText = card;
+    // The account's own pick of where its runs go, and whether the one-time note is for it (it had runs on its own GPU
+    // or key before, and has picked nothing yet).
+    if (account && p?.hosted) {
+      const pick = runOnOf(account.id, keys);
+      if (pick) {
+        viewer.runOn = pick.runOn;
+        if (pick.runKey) viewer.runKey = pick.runKey;
+      } else if ((gpu || keys.length) && ranOwnFirst(account.id)) viewer.ranOwn = true;
+    }
     // What this studio's GPUs keep off, the open models they can't run right now among it: shown in the pickers with
-    // what the visitor needs to run them on its own setup.
-    const rules = p?.hosted && !gpu ? poolRulesOf(p, presetModels(), poolOwnModels()) : undefined;
+    // what the visitor needs to run them on its own setup. For every viewer, a GPU of its own or not: its runs go
+    // there first too, and the label says what runs on its own GPU instead.
+    const rules = p?.hosted ? poolRulesOf(p, presetModels(), poolOwnModels()) : undefined;
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;

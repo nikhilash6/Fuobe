@@ -13,6 +13,9 @@ import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "
 import { settingProblem } from "@/lib/connections";
 import { CLOUD_KEY, CLOUD_PROVIDERS, keySavedText, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
 import { engineAfterKeySave } from "@/lib/engine-pref";
+import { placeOf } from "@/lib/place-name";
+import { placeRows } from "@/lib/run-place";
+import { runsGoNowText } from "@/lib/run-on";
 import { cn } from "@/lib/utils";
 
 /**
@@ -184,14 +187,17 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
   const [replacing, setReplacing] = useState(false);
   const [confirm, setConfirm] = useState<null | { going?: string }>(null);
   const [busy, setBusy] = useState(false);
+  const viewer = useStatus().data?.viewer;
 
   const remove = async (stopRuns: boolean) => {
     setBusy(true);
     try {
-      await call(`/api/account/keys/${provider}`, "DELETE", stopRuns ? { stopRuns: true } : {});
+      const r = await call<{ runOnCleared?: true }>(`/api/account/keys/${provider}`, "DELETE", stopRuns ? { stopRuns: true } : {});
       setConfirm(null);
       changed();
       toast.success(`Your ${p.label} key is removed.`);
+      // Hosted runs: the account's runs went to this key by its pick, so they go to this studio's GPUs now.
+      if (r.runOnCleared && viewer?.hosted) toast(runsGoNowText(placeOf(viewer.placeName)), { id: "run-on" });
     } catch (e) {
       const k = e as KeyError;
       if (k.body?.code === "runs-going") setConfirm({ going: k.message });
@@ -285,6 +291,10 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
   // Hosted runs: the limits below are a key's own (runs on this studio's GPUs have theirs).
   const hosted = !!viewer?.hosted;
   if (!hydrated || !account || paidOff) return null;
+  // Hosted runs: where the account's runs go now (Settings → Your GPU changes it).
+  const keys = viewer?.keys ?? [];
+  const runKey = viewer?.runKey && keys.includes(viewer.runKey) ? viewer.runKey : keys.includes("fal") ? "fal" : keys[0];
+  const goesTo = hosted && viewer ? (placeRows(viewer, { key: runKey ? { provider: runKey } : null, cloud: true })?.rows.find((r) => r.selected)?.label ?? placeOf(viewer.placeName).label) : null;
   return (
     <section id="your-keys" aria-labelledby="your-keys-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
       <div className="min-w-0">
@@ -296,6 +306,14 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
         </p>
       </div>
       <div className="grid min-w-0 gap-4">
+        {goesTo && (
+          <p className="text-[13px] text-muted-foreground">
+            Where your runs go: <span className="font-medium text-foreground">{goesTo}</span> ·{" "}
+            <a href="#where-runs-go" className="font-medium text-brand-text underline-offset-2 hover:underline">
+              Change
+            </a>
+          </p>
+        )}
         <ul className="grid gap-1.5 text-[13px] text-muted-foreground">
           {prices && (
             <li>

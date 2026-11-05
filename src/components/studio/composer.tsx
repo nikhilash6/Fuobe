@@ -15,15 +15,18 @@ import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
-import { dualEngine } from "@/lib/catalog/engines";
+import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
-import { composerOnPool, composerPlace } from "@/lib/run-place";
+import { composerOnPool, composerPlace, placeRows, type RunOnPick } from "@/lib/run-place";
+import { useSetRunOn } from "@/lib/run-on";
+import { RunOnChip } from "./run-on";
+import { PlaceIntro } from "./place-intro";
 import { PoolNote } from "./pool-note";
-import { modelOwnSetup, poolRunsModel } from "@/lib/pool-rules";
-import { controlSetup, keyOnlySetup, movedToOwnText } from "@/lib/own-setup-controls";
+import { modelOwnSetup, pickerRules, poolRunsModel } from "@/lib/pool-rules";
+import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
 import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { HoldFilesCtx } from "@/lib/held-files";
@@ -99,9 +102,9 @@ import { qwen21Note } from "@/lib/qwen21-speed";
 import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
-import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
+import { addKeyLabel, billedTo, CLOUD_KEY, cloudVersion, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
 import { gpuBeforeRun, onCloudKey } from "@/lib/before-run";
-import type { TroubleAction } from "@/lib/diagnose";
+import { withKeyAction, type TroubleAction } from "@/lib/diagnose";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { cn } from "@/lib/utils";
 import { h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
@@ -338,14 +341,16 @@ export function Composer({ docked }: { docked: boolean }) {
   }, []);
 
   const pickerOps = config.pickerOps ?? config.ops;
-  // For a viewer with no GPU of its own (hosted runs), the open models this studio's GPUs keep off stay in the list with
+  // For a viewer whose runs go to this studio's GPUs (hosted runs), the open models they keep off stay in the list with
   // what runs them (their own-setup label, src/lib/pool-rules.ts), as the models that run on a visitor's own setup only
-  // do: Run then opens that setup.
+  // do: Run then opens that setup, or runs it on the viewer's own GPU at once. Only a viewer with no GPU of its own is
+  // moved off an untouched default they keep off (poolOff, below).
   const poolRules = status?.viewer?.hosted && !status.viewer.gpu.connected ? status.viewer.pool : undefined;
+  const labelRules = pickerRules(status?.viewer);
   const models = useMemo(() => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }), [catalog.models, config.kind, pickerOps]);
   const setupViewer = useOwnSetupViewer();
   const pressSetup = useOwnSetupPress();
-  const modelSetup = useCallback((m: ModelDef) => (setupViewer ? modelOwnSetup(poolRules, m) : null), [setupViewer, poolRules]);
+  const modelSetup = useCallback((m: ModelDef) => (setupViewer ? modelOwnSetup(labelRules, m) : null), [setupViewer, labelRules]);
   const model: ModelDef | undefined = catalog.getModel(draft.modelId);
   // MiniMax H3 on your GPU has a References mode (Pika H3 Flex): reference clips and voice or music clips beside the images.
   const refMode = config.ops.includes("ref2v") ? openReferenceMode(model) : null;
@@ -658,13 +663,15 @@ export function Composer({ docked }: { docked: boolean }) {
   };
   const { mentions, sketched, signed } = prepare(draft);
   // Hosted runs: an open model may run on this studio's GPUs. Its price there is the server's (the words of the
-  // studio's billing service, or free), asked again 300 ms after a change. With the account's own GPU online, that
-  // GPU is the default, unless the studio puts its own GPUs first; the person can pick either.
+  // studio's billing service, or free), asked again 300 ms after a change. Where the run goes, in one order: the
+  // account's own pick (the Run on list, kept on the server for every device), else its own GPU while online unless
+  // the studio puts its own GPUs first. A place named for one run only ("Run on …") is sent with that run.
   const viewerInfo = status?.viewer;
   const ownOnline = !!viewerInfo?.gpu.connected && !!viewerInfo.gpu.online;
-  const [runOnPick, setRunOn] = useState<RunOn | null>(null);
-  // (The place the run names: none when the default is the studio's GPUs only because the studio puts them first.)
-  const { runOn, place: runPlace } = composerPlace(runOnPick, ownOnline, viewerInfo?.prefer === "pool");
+  const runOnPicked = viewerInfo?.hosted ? viewerInfo.runOn : undefined;
+  const setRunOn = useSetRunOn();
+  // (The place the run names: none when the default is the studio's GPUs only because they go first.)
+  const { runOn, place: runPlace } = composerPlace(null, runOnPicked, ownOnline, viewerInfo?.prefer === "pool");
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
   // The name visitors read for this studio's GPUs ("Our GPUs"): said only while hosted runs are on.
   const sitePlace = placeOf(viewerInfo?.placeName);
@@ -835,7 +842,34 @@ export function Composer({ docked }: { docked: boolean }) {
   // strip's, every 30 s; nothing here asks the GPU) shows what is wrong and its fixes before Run. A run started anyway
   // waits for the GPU. One of the account's keys that runs this tool's cloud version is offered too (an explicit click:
   // it spends the person's own credit).
-  const gpuDown = gpuBeforeRun({ viewer: status?.viewer, model, engine, onPool: hostedHere && runOn === "pool", preset, has, getModel: catalog.getModel });
+  // Hosted runs: the key that runs this item's cloud version (a row of the Run on list, "Run with your fal.ai key"), and
+  // its price there, so a key is offered with its price and a press that showed "Free" never bills it.
+  const keyTwin =
+    viewerInfo?.hosted && viewerInfo.kind === "account" && viewerInfo.paidAllowed !== false && model ? cloudVersion(preset, model, viewerInfo.keys ?? [], has, catalog.getModel) : null;
+  const keyPrice = (() => {
+    const m = keyTwin ? catalog.getModel(keyTwin.modelId) : undefined;
+    if (!m) return null;
+    try {
+      const usd = estimateCost(onEngine(m, "cloud"), draft.params, 1, (keyTwin?.op ?? op) as Operation | undefined, false, today);
+      return usd != null && usd > 0 ? `≈ ${formatCost(usd)}` : null;
+    } catch {
+      return null;
+    }
+  })();
+  // What this studio's GPUs take (no label of an own setup), so the check before Run offers a run on them only then.
+  const siteTakes = !!viewerInfo?.hosted && !!model && model.engine === "open" && !modelSetup(model) && !poolSetup;
+  const gpuDown = gpuBeforeRun({
+    viewer: status?.viewer,
+    model,
+    engine,
+    onPool: hostedHere && runOn === "pool",
+    preset,
+    has,
+    getModel: catalog.getModel,
+    hosted: !!viewerInfo?.hosted,
+    site: siteTakes ? sitePlace : null,
+    keyPrice,
+  });
   // "Run with your fal.ai key". While hosted runs are on: this run, once, on the tool's cloud version and that key; the
   // engine switch stays where it was, so the next run goes where runs go (the person picks Cloud themselves to stay
   // there). Otherwise (as always): the switch moves to Cloud, and once it has moved the tool to its cloud model, it runs.
@@ -855,11 +889,18 @@ export function Composer({ docked }: { docked: boolean }) {
         setEngine("cloud");
         setCloudRun(true);
       };
+  // "Run on Our GPUs": this run, once, on this studio's GPUs; the account's pick stays as it was.
+  const onRunOnSite = () => submitRef.current(undefined, undefined, "pool");
+  // A choice before Run for an item this studio's GPUs can't run, for an account whose key runs its cloud version (and no
+  // GPU): run it once on the key, at its price, or connect a GPU. Nothing runs until one is pressed.
+  const [keyChoice, setKeyChoice] = useState(false);
 
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here). `withKey`: this run
-  // only, on the cloud version that action names and the account's key (hosted runs on; see onRunWithKey).
-  const submit = (skip?: unknown, withKey?: TroubleAction) => {
+  // only, on the cloud version that action names and the account's key (hosted runs on; see onRunWithKey). `once`: a
+  // place for this run only (hosted runs: "Run on Our GPUs", or the account's GPU for what only it runs).
+  const submit = (skip?: unknown, withKey?: TroubleAction, once?: "own" | "pool"): void => {
     const skipGpu = skip === true;
+    setKeyChoice(false);
     if (exact) {
       // An exact orbit: the still filmed along the orbit's numbers (Fly around), priced in its panel.
       const stop = !exactImage ? "Add a start frame to film an exact orbit" : fly.preview.data?.blocker;
@@ -870,18 +911,21 @@ export function Composer({ docked }: { docked: boolean }) {
       return;
     }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
-    if (!blocker && gpuSetup && !skipGpu && !withKey && !create.isPending) return openGpuFix();
+    if (!blocker && gpuSetup && !skipGpu && !withKey && once !== "pool" && !create.isPending) return openGpuFix();
     // It runs on the visitor's own setup: Run opens it (Connect your GPU, Add your key, a guest's sign-up), and nothing
-    // is sent. An account that has it (its own GPU, or the key that runs it) is moved there, to run with the next press.
-    if (!blocker && poolSetup && !withKey) {
-      if (pressSetup(poolSetup)) {
-        setRunOn("own");
-        toast(movedToOwnText(!!viewerInfo?.gpu.connected), { id: "composer-blocker" });
+    // is sent. An account that has its GPU runs it there with this press (the chip said "Free · your GPU"). One whose key
+    // runs its cloud version runs it there only when its key is where its runs go; otherwise it picks, at the key's price.
+    if (!blocker && poolSetup && !withKey && !once) {
+      if (viewerInfo?.gpu.connected && poolSetup.need === "gpu") return submitRef.current(skip, undefined, "own");
+      if (keyTwin && keyPrice && !viewerInfo?.gpu.connected) {
+        if (runOnPicked === "key") return submitRef.current(skip, withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice));
+        return void setKeyChoice(true);
       }
+      if (pressSetup(poolSetup)) return submitRef.current(skip, undefined, "own");
       return;
     }
     // Refused by the price check (Run is off; Enter in the prompt lands here too): its words, and nothing is sent.
-    if (!blocker && poolRefused && poolState && !withKey) return void toast(poolState.text, { id: "composer-blocker" });
+    if (!blocker && poolRefused && poolState && !withKey && !once) return void toast(poolState.text, { id: "composer-blocker" });
     if (blocker || create.isPending || signature.lock.isPending) {
       if (blocker) {
         // One blocker toast at a time (pressing Generate again replaces it), gone once a run starts.
@@ -910,15 +954,17 @@ export function Composer({ docked }: { docked: boolean }) {
     );
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
     // A run on the account's key names neither: the key is where it goes.
-    const hosted = viewerInfo?.hosted && !withKey ? { ...(runPlace && { place: runPlace }), ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
+    const placeNow = once ?? runPlace;
+    const shownHere = poolPrice && !once && hostedQuote;
+    const hosted = viewerInfo?.hosted && !withKey ? { ...(placeNow && { place: placeNow }), ...(shownHere && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
     // Open palette lock: the images are recoloured to the palette by a chained step (POST /api/palettes/lock).
     // (An account's lock runs on this studio's GPUs only: sent there by name.)
     if (sent.lock) {
       const request = withKey ? onCloudKey(sent.request, withKey) : sent.request;
-      return signature.lock.mutate({ request, colors: sent.lock.colors, ...hosted, ...(poolPrice && !withKey && { place: "pool" as const }) }, { onError: (e) => toastError(e) });
+      return signature.lock.mutate({ request, colors: sent.lock.colors, ...hosted, ...(poolPrice && !withKey && once !== "own" && { place: "pool" as const }) }, { onError: (e) => toastError(e) });
     }
     // If the server's pre-flight stops it (409 gpu-setup), the guided fix that opens can try again, or run it anyway.
-    if (!withKey)
+    if (!withKey && once !== "pool")
       setGpuRetry(
         () => submitRef.current(),
         () => submitRef.current(true),
@@ -1054,6 +1100,42 @@ export function Composer({ docked }: { docked: boolean }) {
   const exactPrice = exact ? fly.price : "";
   const costText = exactPrice || (poolPrice ? (poolState?.refused ? poolState.text : hostedQuote?.text || ownCostText) : ownCostText);
   const payerText = poolPrice ? "" : ownPayerText;
+  // Hosted runs: the Run on list, for an account with a choice for this item (its GPU, or a key that runs its cloud
+  // version): the price chip opens it ("Free ▾"). On the Cloud engine, for an account whose runs go to its key, so it
+  // has the way back. An item this studio's GPUs don't take for this account runs on its GPU, said so, with no list.
+  const siteMissed = runOn === "pool" && shownOn === "own";
+  const onKeyNow = engine === "cloud" && runOnPicked === "key" && model?.engine === "cloud" && !!payer;
+  const runOnRows =
+    !viewerInfo?.hosted || exact || demo
+      ? null
+      : hostedHere
+        ? placeRows(
+            viewerInfo,
+            { key: keyTwin && { provider: keyTwin.provider, price: keyPrice }, siteRuns: siteTakes && !siteMissed },
+            { text: hostedQuote?.allowed ? hostedQuote.text : undefined, wait: poolState?.wait },
+          )
+        : onKeyNow
+          ? placeRows(viewerInfo, { key: { provider: viewerInfo.runKey ?? payer, price: cost ? `≈ ${formatCost(cost)}` : null }, cloud: true })
+          : null;
+  const ownGpuHere = hostedHere && !!viewerInfo?.gpu.connected && siteMissed && !runOnRows;
+  const runOnText = runOnRows?.on === "gpu" || ownGpuHere ? "Free · your GPU" : runOnRows?.on === "key" ? `${costText} · your key` : costText;
+  const runOnTip =
+    runOnRows?.on === "gpu"
+      ? `Runs on your own GPU${viewerInfo?.gpu.online ? "" : " · not answering right now"}`
+      : runOnRows?.on === "key"
+        ? `Estimated cost, billed to ${billedTo(viewerInfo?.runKey ?? payer ?? "fal")}`
+        : runOnRows?.note
+          ? runOnRows.note
+          : poolState?.refused
+            ? (poolState.sub ?? poolState.text)
+            : [hostedQuote?.sub ?? `Runs on ${sitePlace.text}`, poolState?.wait].filter(Boolean).join(" · ");
+  /** A pick from the Run on list: kept for the account; the key runs on the Cloud engine, the others on Open source. */
+  const pickRunOn = (id: RunOnPick) => {
+    const key = id === "key" ? (keyTwin?.provider ?? viewerInfo?.runKey ?? payer ?? undefined) : undefined;
+    setRunOn.mutate({ runOn: id, ...(key && { key }) });
+    if (id === "key" && engine !== "cloud") setEngine("cloud");
+    if (id !== "key" && onKeyNow) setEngine("open");
+  };
 
   // Attachments: only when something is attached, a required slot is still empty, or none of a "one of these" group is filled (U8).
   const kinds = [...attach.kinds];
@@ -1774,30 +1856,32 @@ export function Composer({ docked }: { docked: boolean }) {
           />
           <span className="contents max-sm:hidden">{styleChips}</span>
         </div>
-        {hostedHere && viewerInfo?.gpu.connected && (
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setRunOn(shownOn === "own" ? "pool" : "own")}
-            aria-label={`Runs on ${shownOn === "own" ? "your GPU" : sitePlace.text}. Change where it runs`}
-            className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground underline decoration-border-strong underline-offset-2 hover:text-foreground"
-          >
-            {shownOn === "own" ? "Your GPU" : sitePlace.label}
-          </button>
+        {runOnRows && runOnText && (
+          <RunOnChip
+            rows={runOnRows.rows}
+            text={runOnText}
+            tooltip={runOnTip}
+            ariaLabel={`${runOnRows.on === "gpu" ? "Runs on your GPU" : runOnRows.on === "key" ? "Runs with your key" : `Runs on ${sitePlace.text}`}. Change where it runs`}
+            onPick={pickRunOn}
+            pending={setRunOn.isPending}
+            className={cn(poolRefused && runOnRows.on === "site" && "max-w-48")}
+          />
         )}
-        {costText && (
+        {!runOnRows && costText && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className={cn("shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums", poolRefused && "min-w-0 shrink truncate max-sm:hidden")} data-pool-refused={poolRefused || undefined}>
                 <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : keyOnly && cost == null ? ownSetupShort(keyOnly) : costLabel({ demo, cost: cost ?? freeHere, compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
                 <span className="hidden sm:inline">
-                  {costText}
+                  {ownGpuHere ? runOnText : costText}
                   {payerText}
                 </span>
               </span>
             </TooltipTrigger>
             <TooltipContent className="max-w-72">
-              {poolPrice
+              {ownGpuHere
+                ? "This one runs on your own GPU."
+                : poolPrice
                 ? poolState?.refused
                   ? (poolState.sub ?? poolState.text)
                   : [hostedQuote?.sub ?? `Runs on ${sitePlace.text}`, poolState?.wait].filter(Boolean).join(" · ")
@@ -1894,7 +1978,29 @@ export function Composer({ docked }: { docked: boolean }) {
             <span className="font-medium text-foreground">{gpuDown.words}</span> A run you start now waits for it.
           </p>
           <TroubleDetails details={gpuDown.details} />
-          <TroubleActions actions={gpuDown.actions} skip={["retry"]} handlers={{ onRunWithKey }} />
+          <TroubleActions actions={gpuDown.actions} skip={["retry"]} handlers={{ onRunWithKey, onRunOnSite }} />
+        </div>
+      )}
+      {/* Once, for an account whose runs moved to this studio's GPUs when hosted runs went on. */}
+      <PlaceIntro run="Generate" onKeep={(r) => r === "key" && engine !== "cloud" && setEngine("cloud")} />
+      {/* An item that runs on an own GPU, for an account whose key runs its cloud version: one run on the key, at its price. */}
+      {keyChoice && poolSetup && keyTwin && keyPrice && (
+        <div role="note" aria-live="polite" className="mx-1 mt-2 space-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">This one runs on your own GPU.</span>{" "}
+            {"vramGb" in poolSetup && poolSetup.vramGb ? `It needs a GPU with ${poolSetup.vramGb} GB of memory. ` : ""}
+            Your {CLOUD_KEY[keyTwin.provider].label} key runs its cloud version.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <TroubleActions actions={[withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice)]} handlers={{ onRunWithKey }} />
+            <button
+              type="button"
+              onClick={() => (setKeyChoice(false), window.dispatchEvent(new Event(CONNECT_GPU_EVENT)))}
+              className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
+            >
+              Connect your GPU
+            </button>
+          </div>
         </div>
       )}
       {outcome && (

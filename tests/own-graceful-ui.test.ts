@@ -67,6 +67,38 @@ describe("the check before Run", () => {
   });
 });
 
+describe("the check before Run while hosted runs are on", () => {
+  const place = { label: "Studio North GPUs", text: "Studio North GPUs" };
+  const base = { model: h3, engine: "open" as const, preset: fpv, has, getModel, hosted: true };
+  it("a GPU picked as the place that doesn't answer: Run on <the place> first, for this run only", () => {
+    const shown = gpuBeforeRun({ ...base, viewer: account(offline), site: place })!;
+    expect(shown.actions[0]).toEqual({ kind: "run-on-site", label: "Run on Studio North GPUs" });
+    expect(shown.actions.map((a) => a.kind)).toEqual(["run-on-site", "start-gpu", "check-gpu", "gpu-settings"]);
+  });
+  it("an item only its own GPU runs: no Run on <the place>", () => {
+    expect(gpuBeforeRun({ ...base, viewer: account(offline), site: null })!.actions.map((a) => a.kind)).not.toContain("run-on-site");
+  });
+  it("a key's offer says its price, and with no price known it isn't made", () => {
+    const priced = gpuBeforeRun({ ...base, viewer: account(offline, ["fal"]), site: place, keyPrice: "≈ $0.20" })!;
+    expect(priced.actions.at(-1)).toEqual(withKeyAction("fal", "minimax-h3", "i2v", "≈ $0.20"));
+    expect(priced.actions.at(-1)?.label).toBe("Run with your fal.ai key · ≈ $0.20");
+    expect(gpuBeforeRun({ ...base, viewer: account(offline, ["fal"]), site: place })!.actions.map((a) => a.kind)).not.toContain("run-with-key");
+  });
+  it("hosted runs off: the same buttons as before (no place, the key's offer without a price)", () => {
+    const off = gpuBeforeRun({ viewer: account(offline, ["fal"]), model: h3, engine: "open", preset: fpv, has, getModel, keyPrice: "≈ $0.20" })!;
+    expect(off.actions.map((a) => a.kind)).toEqual(["start-gpu", "check-gpu", "gpu-settings", "run-with-key"]);
+    expect(off.actions.at(-1)?.label).toBe("Run with your fal.ai key");
+  });
+  it("Run on <the place> shows only where the page can send the run there", () => {
+    const actions = [{ kind: "run-on-site" as const, label: "Run on Studio North GPUs" }, ...stopped.actions];
+    expect(render(createElement(TroubleActions, { actions }))).not.toContain("Run on Studio North GPUs");
+    const html = render(createElement(TroubleActions, { actions, handlers: { onRunOnSite: () => {} } }));
+    expect(html).toContain("Run on Studio North GPUs");
+    // First, in the main style.
+    expect(html.indexOf("Run on Studio North GPUs")).toBeLessThan(html.indexOf("Start your pod"));
+  });
+});
+
 describe("Run with your key on a failed run", () => {
   it("asks for the same run on the cloud version: its model and operation there, without the open graph's settings", () => {
     const req = { feature: "video" as const, modelId: "oss-minimax-h3", presetId: "motion-fpv-drone", op: "i2v" as const, prompt: "", inputs: { images: ["/files/a.png"] }, params: { duration: 6, extra: { quality: "draft" } } };

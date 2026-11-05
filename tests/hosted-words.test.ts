@@ -229,3 +229,35 @@ describe("the pages a visitor reads while hosted runs are on", () => {
     expect(textOf(render(createElement(EngineSwitch, { value: "open", onChange: () => {} })))).not.toMatch(FORBIDDEN);
   });
 });
+
+describe("where runs go: the Run on list, Settings and the one-time note", () => {
+  const gpu = { connected: true, online: true, device: "cuda:0 NVIDIA GeForce RTX 4090" };
+  it("plain words, the place by its name, and no verb that agrees with it", async () => {
+    const { placeRows, RUN_ON_FOOTER } = await import("@/lib/run-place");
+    const { placeIntro } = await import("@/lib/place-intro");
+    const { runsGoNowText } = await import("@/lib/run-on");
+    const { runOnSiteAction, withKeyAction } = await import("@/lib/diagnose");
+    const agrees = /(Studio North GPUs|our GPUs|Our GPUs)\s+(is|are|was|were|make|makes|run|runs|has|have|need|needs)\b/;
+    for (const place of [NAMED, DEFAULT]) {
+      const viewer = { kind: "account" as const, hosted: true, prefer: "pool" as const, placeName: place.label, gpu };
+      const rows = [
+        ...placeRows(viewer, { key: { provider: "fal", price: "≈ $0.04" } }, { text: "Free", wait: "Next in line · about 40 s" })!.rows,
+        ...placeRows({ ...viewer, runOn: "gpu", gpu: { connected: true, online: false } }, { key: { provider: "replicate" } })!.rows,
+      ].flatMap((r) => [r.label, r.sub]);
+      const note = placeRows({ ...viewer, runOn: "key" }, { key: null })!.note!;
+      const intros = [placeIntro({ ...viewer, ranOwn: true }, "Generate")!, placeIntro({ ...viewer, ranOwn: true, gpu: { connected: false }, keys: ["fal"] }, "Run")!].flatMap((i) => [i.lead, i.rest, i.keep.label]);
+      state.status = hostedStatus({ placeName: place.label, gpu, keys: ["fal"] });
+      const settings = textOf(render(createElement((await import("@/components/gpu/where-runs-go")).WhereRunsGo)));
+      state.status = hostedStatus({ placeName: place.label });
+      const nothing = textOf(render(createElement((await import("@/components/gpu/where-runs-go")).WhereRunsGo)));
+      const words = [...rows, note, ...intros, RUN_ON_FOOTER, runsGoNowText(place), runOnSiteAction(place.label).label, withKeyAction("fal", "m", "t2i", "≈ $0.04").label, settings, nothing];
+      for (const w of words) {
+        expect(w, w).not.toMatch(FORBIDDEN);
+        expect(w, w).not.toMatch(agrees);
+      }
+      expect(settings).toContain("Where your runs go");
+      expect(settings).toContain(`Runs on ${place.text}: nothing to set up.`);
+      expect(nothing).toContain(`Your runs go to ${place.text}. Connect a GPU or add a key to have a choice.`);
+    }
+  });
+});

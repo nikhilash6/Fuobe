@@ -46,6 +46,7 @@ import { needsGpu, ownSetupHere, poolCardRefuses, requestOwnSetup } from "./pool
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
 import { placeOf, type Place } from "@/lib/place-name";
 import { placeFor, placeOfAccount } from "./place-name";
+import { rememberedPlace } from "./run-on";
 
 export { poolCardRefuses };
 
@@ -166,6 +167,17 @@ const askPlace = (place: Place): Refusal => ({ status: 409, body: { error: ownGp
 
 /** Does the policy put runs on this install's GPUs first, before the account's own GPU? */
 const prefersPool = (p: Policy | null | undefined): boolean => !!p?.hosted && p.prefer === "pool";
+
+/**
+ * Where the account's own pick sends a run that names no place (run-on.ts, hosted runs only): "own" its GPU, at once and
+ * never asked about; "pool" this install's GPUs first, as if the policy put them first for this account (what they
+ * can't take still runs on its own GPU); undefined with no pick, or for a run that names its place (a one-off: Retry,
+ * "Run on …", the first picture of a GPU's setup), which the pick never changes.
+ */
+const pickedPlace = (account: Account | null, wish: PlaceWish): PlaceWish => (account && !wish ? rememberedPlace(account.id) : undefined);
+
+/** This install's GPUs go first for this run: the policy says so, or the account picked them. */
+const poolFirst = (p: Policy | null | undefined, picked: PlaceWish): boolean => prefersPool(p) || picked === "pool";
 
 /** May a run of this kind use this install's GPUs under the policy (`kinds` absent: every kind)? */
 export const kindAllowed = (p: Pick<Policy, "kinds">, kind: RunFacts["kind"]): boolean => p.kinds?.[kind] !== false;
@@ -425,9 +437,16 @@ export function poolRequest(req: GenerationRequest, p: Pick<Policy, "limits"> | 
  * offered, LoRAs, inputs, a step no worker takes, 3D) goes to its own GPU, even while that GPU doesn't answer. Only a run
  * this install's GPUs would take, that named no place, whose own GPU doesn't answer, is asked about (never moved there,
  * and charged, unasked).
+ *
+ * One order (the place a run names, then what only one place can run, then the account's own pick, then the policy):
+ * a run that names no place follows the account's pick (run-on.ts): its own GPU, at once and never asked about; or this
+ * install's GPUs first, whatever the policy prefers. What these GPUs can't take still runs on its own GPU.
  */
 export async function decidePlace(account: Account, asked: GenerationRequest, wish: PlaceWish): Promise<PlaceDecision> {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return OWN;
+  // The account's own pick, for a run that names no place: its GPU at once, or this install's GPUs first.
+  const picked = pickedPlace(account, wish);
+  if (picked === "own") return OWN;
   let planned: Planned;
   try {
     planned = runOnPool(account.id, () => previewGeneration(asked));
@@ -445,10 +464,10 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   // call to the billing service); when none is kept, it is read while the GPU is checked.
   let p = cachedPolicy(account.id);
   let ownOffline = false;
-  if (ownFallback && !prefersPool(p)) {
+  if (ownFallback && !poolFirst(p, picked)) {
     const [online, read] = await Promise.all([ownGpuOnline(account.id), p === undefined ? billingPolicy(account.id) : Promise.resolve(p)]);
     p = read;
-    if (!prefersPool(p)) {
+    if (!poolFirst(p, picked)) {
       if (online) return OWN;
       ownOffline = true;
     }
@@ -649,6 +668,9 @@ export async function poolQuote(
   o: { addr?: () => string | null } = {},
 ): Promise<{ planned: Planned | null; quote: Quote; line: PoolLine } | null> {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return null;
+  // The account's own pick, as its run would follow it: its GPU (no price here), or this install's GPUs first.
+  const picked = pickedPlace(account, wish);
+  if (picked === "own") return null;
   // A guest is priced under the billing service's policy for guests (none set: as an account would be, once signed up).
   const p = await billingPolicy(account?.id ?? null);
   // Priced for the outputs it would make: the studio's cap per run, and the policy's when lower (as the run is).
@@ -665,7 +687,7 @@ export async function poolQuote(
   }
   if (planned.route.provider !== "comfyui") return null;
   const hasGpu = !!account && !!accountGpu(account.id);
-  if (account && hasGpu && wish !== "pool" && !prefersPool(p) && (await ownGpuOnline(account.id))) return null;
+  if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked) && (await ownGpuOnline(account.id))) return null;
   if (p && !p.hosted) return null;
   const line = (facts: { ahead: number; etaS: number | null }, q?: Quote): PoolLine => ({ place: Math.max(0, facts.ahead) + 1, etaSeconds: q?.etaS ?? facts.etaS ?? null });
   // What this install's GPUs won't take goes to the viewer's own GPU when it has one (as the run would); otherwise the
@@ -784,13 +806,15 @@ export function toolGate(
  */
 export async function decideToolPlace(account: Account, steps: ToolRunStep[], wish: PlaceWish): Promise<ToolPlaceDecision> {
   if (!hostedRunsOn() || wish === "own" || !poolReady() || !steps.length) return OWN;
+  const picked = pickedPlace(account, wish);
+  if (picked === "own") return OWN;
   const ownFallback = !!accountGpu(account.id) && wish !== "pool";
   let p = cachedPolicy(account.id);
   let ownOffline = false;
-  if (ownFallback && !prefersPool(p)) {
+  if (ownFallback && !poolFirst(p, picked)) {
     const [online, read] = await Promise.all([ownGpuOnline(account.id), p === undefined ? billingPolicy(account.id) : Promise.resolve(p)]);
     p = read;
-    if (!prefersPool(p)) {
+    if (!poolFirst(p, picked)) {
       if (online) return OWN;
       ownOffline = true;
     }
@@ -820,9 +844,11 @@ export async function toolPoolQuote(
   o: { addr?: () => string | null } = {},
 ): Promise<{ quote: Quote; line: PoolLine } | null> {
   if (!hostedRunsOn() || wish === "own" || !poolReady() || !steps.length) return null;
+  const picked = pickedPlace(account, wish);
+  if (picked === "own") return null;
   const p = await billingPolicy(account?.id ?? null);
   const hasGpu = !!account && !!accountGpu(account.id);
-  if (account && hasGpu && wish !== "pool" && !prefersPool(p) && (await ownGpuOnline(account.id))) return null;
+  if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked) && (await ownGpuOnline(account.id))) return null;
   if (p && !p.hosted) return null;
   const gate = toolGate(p, account?.id ?? null, steps);
   if (gate === "unplanned") return null;
@@ -853,5 +879,7 @@ export async function toolPoolQuote(
  */
 export function poolMayTake(account: Account | null, wish: PlaceWish): boolean {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return false;
-  return !account || !accountGpu(account.id) || wish === "pool" || prefersPool(cachedPolicy(account.id));
+  const picked = pickedPlace(account, wish);
+  if (picked === "own") return false;
+  return !account || !accountGpu(account.id) || wish === "pool" || poolFirst(cachedPolicy(account.id), picked);
 }

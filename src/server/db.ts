@@ -1194,6 +1194,8 @@ function open(): Database.Database {
   db.exec(SKILL_TABLES);
   // An account's own canvases (account-canvas.ts): not a numbered migration, so branches never clash over its place.
   db.exec(ACCOUNT_CANVAS_TABLES);
+  // Where an account's runs go, as it picked (run-on.ts): read only while hosted runs are on, empty otherwise.
+  db.exec(RUN_ON_TABLES);
   // Its list reads this small summary, never every board's pages (a table made before it had the column gets it).
   if (!(db.prepare("PRAGMA table_info(account_canvases)").all() as { name: string }[]).some((c) => c.name === "summary_json")) {
     addColumn(db, "ALTER TABLE account_canvases ADD COLUMN summary_json TEXT");
@@ -1227,6 +1229,17 @@ const ACCOUNT_CANVAS_TABLES = `CREATE TABLE IF NOT EXISTS account_canvases (
     summary_json TEXT
   );
   CREATE INDEX IF NOT EXISTS account_canvases_account ON account_canvases(account_id, updated_at DESC);`;
+
+/**
+ * Where an account's runs go while hosted runs are on, as it picked (run-on.ts): this install's GPUs, its own GPU, or
+ * its own key (`run_key`: which provider's). No row: the install's default. Not a numbered migration either.
+ */
+const RUN_ON_TABLES = `CREATE TABLE IF NOT EXISTS account_run_on (
+    account_id TEXT PRIMARY KEY,
+    run_on TEXT NOT NULL CHECK (run_on IN ('site', 'gpu', 'key')),
+    run_key TEXT CHECK (run_key IS NULL OR run_key IN ('fal', 'replicate')),
+    updated_at INTEGER NOT NULL
+  );`;
 
 /**
  * The runs let in whose rows are still being made (a tool's start that awaits before it makes them), counted until they

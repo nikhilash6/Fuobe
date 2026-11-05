@@ -241,4 +241,29 @@ describe("a self-hosted install with hosted runs off", () => {
     }
     expect(engineAfterKeySave(false)).toBe("cloud");
   });
+
+  it("where runs go: the route doesn't exist, nothing reads a pick, and the composer and tools pick as before", async () => {
+    vi.doMock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
+    const route = await import("@/app/api/account/run-on/route");
+    const { setRunOn } = await import("@/server/run-on");
+    const { decidePlace } = await import("@/server/hosted-run");
+    const { composerPlace, openCheckPlace, placeRows, retryRequest } = await import("@/lib/run-place");
+    const { pickerRules } = await import("@/lib/pool-rules");
+    const a = auth.createAccount("self-host-run-on@example.com", "long enough");
+    const cookie = `${auth.SESSION_COOKIE}=${auth.createSession(a.id).value}`;
+    const put = await route.PUT(new Request("http://localhost:3000/api/account/run-on", { method: "PUT", headers: { cookie, host: "localhost:3000" }, body: JSON.stringify({ runOn: "site" }) }));
+    expect(put.status).toBe(404);
+    expect((await route.GET(new Request("http://localhost:3000/api/account/run-on", { headers: { cookie, host: "localhost:3000" } }))).status).toBe(404);
+    // A pick left in the table changes nothing while hosted runs are off.
+    setRunOn(a.id, { runOn: "site" });
+    expect((await visitorStatus(a)).viewer).not.toHaveProperty("runOn");
+    expect((await decidePlace(a, { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" }, undefined)).kind).toBe("own");
+    // The browser: no pick is sent, so the composer, the tools' price check, the Run on list and Retry are as before.
+    expect(composerPlace(null, undefined, true, false)).toEqual({ runOn: "own", place: "own" });
+    expect(openCheckPlace({ audience: "account", gpu: true, hosted: false, preferPool: false })).toBeNull();
+    expect(placeRows({ kind: "account", gpu: { connected: true, online: true } }, { key: { provider: "fal" } })).toBeNull();
+    const request = { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" };
+    expect(retryRequest({ request }, false)).toBe(request);
+    expect(pickerRules({ gpu: { connected: true }, pool: { deny: ["x"] } })).toBeUndefined();
+  });
 });
