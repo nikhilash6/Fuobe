@@ -139,14 +139,14 @@ Columns: licence as written by the publisher; VRAM as published (guesses are mar
 - **Speed:** few-step LoRAs for everything (H3: Turbo v4 / PTD / DMAD / PDMD / HyperFlow / SMD; Qwen-Image 2.1: 2-8 steps; Krea 2: 2-3 steps; MOSS: 4-8 steps); decoder distillation (Sol-H3-VAE, LightVAE); sparse attention (Spark-H3, Veda, Ref2VA VSA, core); progressive-resolution sampling (SelfLift, H3 SPEED V2); an RTX 30 BF16 unlock kernel module (+31-60% BF16 on a 3090 Ti; system-level).
 - **Long video and continuity:** obvpm Timeline (extend / prepend / bridge / loop H3 clips), ComfyUI-Continuity 3.2 (casts and seam control across H3, LTX 2.5), H3 Anti-Burn LoRA for chained clips, TaoMate streaming, Hy-Nomas turns.
 - **Multi-reference and identity:** Pika Flex Ref2VA (12 refs), FastH3 Omni, H3 RefMods (1 MB zero-training reference adapters), OmniChar `.char` files across H3 / FLUX.2 / Krea 2, Fizgig LoRA isolation (one face, no leakage).
-- **Front ends and rebuilds (competitors and sources of recipes):** Comfy Org's **#OpenSourceHiggsfield challenge** ($25,000, closed 10-30) produced **Freefield** (MIT; 120 Higgsfield-style apps as ComfyUI workflows with `app.json` manifests; FLUX 3 Klein is its image default since 10-24); **ComfyArt** (MIT, a Lovart-style canvas agent), **Comfy Agent** on Comfy Cloud (10-01), HEISS UI (no-graph front end), Vlo 0.3 (video editor with a ComfyUI bridge), AI Movie Studio 2, OpenFill (GIMP / PhotoCraft fill), Scumble, Kokon (Qwen-Image 2.1 desktop editor with an MCP server), Character Card Studio, StableGen 0.4.
+- **Front ends and rebuilds (competitors and sources of recipes):** Comfy Org's **#OpenSourceStudio challenge** ($25,000, closed 10-30) produced **Freefield** (MIT; 120 parity-studio-style apps as ComfyUI workflows with `app.json` manifests; FLUX 3 Klein is its image default since 10-24); **ComfyArt** (MIT, a Lovart-style canvas agent), **Comfy Agent** on Comfy Cloud (10-01), HEISS UI (no-graph front end), Vlo 0.3 (video editor with a ComfyUI bridge), AI Movie Studio 2, OpenFill (GIMP / PhotoCraft fill), Scumble, Kokon (Qwen-Image 2.1 desktop editor with an MCP server), Character Card Studio, StableGen 0.4.
 
 ### 2.10 Competing apps
 
 | App | What shipped (Sep-Oct 2026) | Fuobe |
 |---|---|---|
 | Kling | Kling 4.0 (3-30 s, 10 keyframes, 15 references, edit up to 5 clips, 10-bit HDR and 2-minute extension "coming soon"); 4.0 Flash early access 09-28 | Kling 4.0 no → `nm10-kling-4`; Frames mode via FLUX 3 Max yes |
-| Higgsfield | Kling 4.0 since 10-21; features built with GPT-6 Astra (09-21); Explainer (07), Supercomputer agent, Personal Clipper, CLI (05) | Explainer, Assist, CLI yes; clipper no |
+| The parity studio | Kling 4.0 since 10-21; features built with GPT-6 Astra (09-21); Explainer (07), Supercomputer agent, Personal Clipper, CLI (05) | Explainer, Assist, CLI yes; clipper no |
 | Pika | Pika H3 Flex (open, 10-29), app on 11-02 with 4K and 5 audio stems (hosted) | `nm10-pika-flex` (open half only) |
 | CapCut 19.9 (10-23, from the APK) | EditPilot agent editing the timeline, AI Audio Studio (text-to-audio, voice clone and extraction, audio polish), Skill Templates | Assist + skills yes; voice design / speech edit no → `nm10-voice-design`, `nm10-speech-edit` |
 | Vidu | Q4 (10-07): 15 image + 3 audio references, 4K; first AI-cast feature film (10-27) | `nm10-hosted-catchup` |
@@ -155,7 +155,7 @@ Columns: licence as written by the publisher; VRAM as published (guesses are mar
 | MiniMax | H3 Max lip sync, relight, insert, styles, Director realtime, Turbo | `nm10-hosted-catchup` |
 | Topaz / Adobe | Adobe completed its Topaz acquisition (reported 09-23); no new Topaz model found in October | Topaz yes |
 | Runway, Luma, Hedra, Freepik (now Magnific), OpenArt | no dated October launch found (searches returned nothing primary) | — |
-| Comfy | Comfy Agent (10-01), #OpenSourceHiggsfield challenge, RTX Video nodes, partner nodes for VEED, Mirelo, Krea 3, Fish Audio Drama 3, HY Image 3.5, Seedream 5 Flash | see above |
+| Comfy | Comfy Agent (10-01), #OpenSourceStudio challenge, RTX Video nodes, partner nodes for VEED, Mirelo, Krea 3, Fish Audio Drama 3, HY Image 3.5, Seedream 5 Flash | see above |
 
 ## 3. What Fuobe already covers
 
@@ -217,7 +217,7 @@ The build order in §6.1 groups these by priority: the H3 packages (ranks 5-6) a
 
 ## 6. Build plan
 
-Rules this plan follows (docs/HANDOFF.md): no Higgsfield API, keys or models; licences are information, not gates (every package records its licences in Settings → Models & licences, all switched on); each engine does all it can, the cloud uses only models hosted on fal or Replicate with no substitute model, and the open engine keeps every capability it has; no SAM Audio stand-in in the cloud (nothing here proposes one). Put each thing where people already work. Each brief in the JSON twin is self-contained and ends with the standard CLOUD, MAIN CHANGED and PUBLIC SIGN-UP paragraphs copied from the queue.
+Rules this plan follows (docs/HANDOFF.md): no parity-studio API, keys or models; licences are information, not gates (every package records its licences in Settings → Models & licences, all switched on); each engine does all it can, the cloud uses only models hosted on fal or Replicate with no substitute model, and the open engine keeps every capability it has; no SAM Audio stand-in in the cloud (nothing here proposes one). Put each thing where people already work. Each brief in the JSON twin is self-contained and ends with the standard CLOUD, MAIN CHANGED and PUBLIC SIGN-UP paragraphs copied from the queue.
 
 ### 6.1 Order
 
@@ -243,7 +243,7 @@ Why this order: the P0 packages are either catalog-only wins on the newest hoste
 
 _Lane R · priority P0 · effort small · depends on none_
 
-**Why.** Kling 4.0 is the flagship closed video model of the month (Higgsfield has offered it since 2026-10-21). Round 4 recorded its four fal endpoints but held them back as 'playground-only'. On 2026-11-01 the llms.txt pages for kling/v4/text-to-video and kling/v4/video-to-video/edit document live fal.run endpoints with no 'coming soon', and Replicate lists kwaivgi/kling-v4.0. It is the cheapest big win: catalog work only.
+**Why.** Kling 4.0 is the flagship closed video model of the month (the parity studio has offered it since 2026-10-21). Round 4 recorded its four fal endpoints but held them back as 'playground-only'. On 2026-11-01 the llms.txt pages for kling/v4/text-to-video and kling/v4/video-to-video/edit document live fal.run endpoints with no 'coming soon', and Replicate lists kwaivgi/kling-v4.0. It is the cheapest big win: catalog work only.
 
 **Where it shows up.** Video studio model menu (Best list), Cinema Studio takes (multi-shot up to 30 s, @Elements), Edit video (Kling 4 edit), Genjutsu Swap / Insert model picker, Assist and MCP model lists.
 

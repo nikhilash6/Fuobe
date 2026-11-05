@@ -1,6 +1,6 @@
 # UX and speed audit, round 4
 
-_As of 2026-10-22. Branch `claude/fuobe-parity-4` at commit `d781de1`. The yardstick is the user's bar ("fast, friendly and amazing to use", shadcn UI, Liner as the design inspiration), Liner's design language as recorded in [`liner-ui.md`](liner-ui.md), and Higgsfield's flows as recorded in [`higgsfield-inventory.md`](higgsfield-inventory.md) §1.3 and §8, [`higgsfield-studios.md`](higgsfield-studios.md) and [`higgsfield-marketing-agents.md`](higgsfield-marketing-agents.md). No code was changed for this audit._
+_As of 2026-10-22. Branch `claude/fuobe-parity-4` at commit `d781de1`. The yardstick is the user's bar ("fast, friendly and amazing to use", shadcn UI, Liner as the design inspiration), Liner's design language as recorded in [`liner-ui.md`](liner-ui.md), and the parity studio's flows as recorded in [`parity-inventory.md`](parity-inventory.md) §1.3 and §8, [`parity-studios.md`](parity-studios.md) and [`parity-marketing-agents.md`](parity-marketing-agents.md). No code was changed for this audit._
 
 ## 1. The short version
 
@@ -193,7 +193,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
   - On first visit the only hint is a grey sentence under the composer: "You're in demo mode — outputs are placeholders. Add a fal.ai key or connect ComfyUI to generate for real." (`desktop-light-01-home.png`). axe also flags its link (UX-06).
   - Nothing explains the three ways to use Fuobe or what each costs. Nothing lets you connect without leaving Home.
   - Settings opens on three large engine cards; on a phone, the first key field is three screens down (`phone-dark-10-settings.png`).
-  - Higgsfield is hosted, so its first run is a sign-up. Liner's first run asks "What do you want to do?" with chips ([`liner-ui.md`](liner-ui.md) §3.15). Fuobe's self-hosted equivalent is "connect something, or try the demo".
+  - The parity studio is hosted, so its first run is a sign-up. Liner's first run asks "What do you want to do?" with chips ([`liner-ui.md`](liner-ui.md) §3.15). Fuobe's self-hosted equivalent is "connect something, or try the demo".
 - **Fix:** when `nothingConnected` and `localStorage["fuobe:onboarded"]` is unset, replace the sentence with a dismissible "Get started" card under the composer, made of shadcn `Card`s in a 3-column grid that becomes 1 column on phones:
   1. **"Use paid models"**: an inline fal.ai key field with "Save & test" (UX-01), a "Get a key" link to `https://fal.ai/dashboard/keys`, and "about $0.03–0.15 per image".
   2. **"Use your GPU"**: the ComfyUI URL prefilled with `http://127.0.0.1:8188`, "Save & test", and a link to `/workflows` for the models each workflow needs.
@@ -221,7 +221,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
 - **Evidence:**
   - Typing on Home and pressing Enter lands on `/image?prompt=…` with the prompt in the composer, no generation, and a second hero question ("What should we make today?" after "What will you create today?") (`desktop-light-01d-home-to-image.png`; the flow log shows `feedItems: 0`).
   - Liner's home composer answers straight away.
-  - Higgsfield's home entry `/start/agent?model=wan3_0&mode=video` opens the agent with the request (inventory §1.1).
+  - The parity studio's home entry `/start/agent?model=wan3_0&mode=video` opens the agent with the request (inventory §1.1).
 - **Fix:**
   - Push `${mode.href}?prompt=…&go=1`.
   - In `HandoffSync`, once the catalog is ready and `go=1`, call the composer's `submit()` once if `blockerFor()` returns nothing, then `router.replace()` the URL without `go`.
@@ -264,7 +264,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
   - "Library" sits above "Create".
   - ⌘K only goes Home.
   - 123 apps, 108 motions and 255 effects can only be found on their gallery pages.
-  - Liner's sidebar has a handful of rows. Higgsfield has about 10 top-level items with menus (inventory §1.1).
+  - Liner's sidebar has a handful of rows. The parity studio has about 10 top-level items with menus (inventory §1.1).
 - **Fix:**
   - Default `closed` to `["studios", "engine"]` when `localStorage["fuobe:nav-closed"]` is absent (`readClosed()` and `SIDEBAR_STATE_SCRIPT`). Move the Library group below Create.
   - Add a command palette on ⌘K / Ctrl+K: `CommandDialog` from `src/components/ui/command.tsx`, already used by the model picker. It should search:
@@ -281,7 +281,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
   - The reason ("Add a target photo") is only in a tooltip and the `aria-label`, and tooltips don't open on touch (`phone-light-04b-app.png`).
   - Pressing the grey button does toast the reason and open the slot, but nothing invites the press.
   - Marketing Studio already prints its blocker as text under the composer (`phone-light-07-marketing.png`).
-  - Higgsfield states validation in words (inventory §8.2).
+  - The parity studio states validation in words (inventory §8.2).
 - **Fix:** when `blocker && (collapsed || !canHover)`, render `<p className="px-2 pt-1 text-[12px] text-muted-foreground">{blocker.message}</p>` under the toolbar, and make tapping the text open the slot (`firstMissingSlot`). Give the button the brand color with lower opacity instead of the "disabled" grey, so it still reads as pressable.
 
 **UX-09 · Layout shifts on Assist (phone), Cinema, Home and Library.** The components:
@@ -308,7 +308,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
   - The fal.ai placeholder is "fal_…", but fal keys have the form `key_id:key_secret` (fal.ai API reference, `POST /v1/keys`, fetched 2026-10-22).
   - There is no Test for the Anthropic key or Ollama.
 - **Fix:**
-  - Add a sticky status strip at the top: "fal.ai · not set — Replicate · not set — Higgsfield · not set — ComfyUI · offline — Claude/Ollama · off". Each item is an anchor to its section and goes green when connected.
+  - Add a sticky status strip at the top: "fal.ai · not set — Replicate · not set — the parity studio · not set — ComfyUI · offline — Claude/Ollama · off". Each item is an anchor to its section and goes green when connected.
   - Shorten the select labels to "Automatic", with the order in the hint line below, or use `w-full sm:w-auto sm:min-w-80`.
   - Set the placeholder to `key_id:key_secret` and warn when there is no `:`.
   - Add `<TestButton provider="llm" />` under the Prompt enhancement fields.
@@ -328,7 +328,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
 
 - **Evidence:**
   - At 1440 px, Cinema has three columns: the 248 px app sidebar, the 240 px scenes sidebar, and a 950 px feed. Assist has the same layout with its 256 px chat rail, leaving a 935 px conversation (`desktop-light-05g-cinema-shot.png`, `desktop-dark-06c-assist-plan.png`).
-  - Higgsfield's Cinema Studio has its own single-sidebar shell (inventory §1.3).
+  - The parity studio's Cinema Studio has its own single-sidebar shell (inventory §1.3).
 - **Fix:** on those routes, collapse the app sidebar to its 52 px rail on mount (`setOpen(false)` without writing the cookie) and restore it on leave. Add a "Hide app sidebar" toggle to the workspace's ⋯ menu.
 
 **UX-13 · Marketing Studio's composer covers the template gallery.** `/marketing` · `src/components/marketing/marketing-studio.tsx` (the composer around line 360), `template-gallery.tsx`.
@@ -358,8 +358,8 @@ The format for each finding: **Route · component**, then what is wrong, the evi
 
 - **Evidence:**
   - The tile shows `elapsed(g.createdAt)`, which re-renders only when the generation changes. In a demo run it held "2s" for 1.5 s between progress events (the timer check in the scratch scripts).
-  - With a provider that reports rarely (a fal queue position, a Higgsfield status), the clock will stand still for long stretches. This is inferred, since no real provider ran here.
-  - Higgsfield shows "{m}m {s}s left" and the elapsed time (inventory §8.3).
+  - With a provider that reports rarely (a fal queue position, a parity-studio status), the clock will stand still for long stretches. This is inferred, since no real provider ran here.
+  - The parity studio shows "{m}m {s}s left" and the elapsed time (inventory §8.3).
 - **Fix:** add a shared 1 s ticker (`useNow(1000)`, one `setInterval` per page while at least one `PendingTile` is mounted) and render `elapsed(g.createdAt, now)`.
 
 **UX-17 · Filled slots lose their role label.** `/apps/*`, `/video` · `src/components/studio/media-slot.tsx`, `src/components/studio/composer.tsx` (the attachment row).
@@ -372,12 +372,12 @@ The format for each finding: **Route · component**, then what is wrong, the evi
 - **Evidence:**
   - Once a result lands, the only visible actions are "Reuse" and ⋯ on the group. Animate, Upscale and Edit appear only on hover or in the viewer (`desktop-light-02d-image-result.png`).
   - Liner shows refine chips and follow-ups after an answer ([`liner-ui.md`](liner-ui.md) §3.13, §5.6).
-  - Higgsfield puts Animate and Use in video one click away (inventory §8.5).
+  - The parity studio puts Animate and Use in video one click away (inventory §8.5).
 - **Fix:** under the newest succeeded group only, render 3 secondary chips (`h-8 rounded-full bg-secondary text-[13px]`) from `outputActions()`: Animate (images) or Extend (videos), Upscale, and "More like this" (Reuse with a new seed).
 
 **UX-19 · The Library has no "Select all".** `/library` · `src/components/library-view.tsx` (bulk bar, line 636).
 
-- **Evidence:** selection works by clicking tiles or Shift-clicking a range. There is no select-all, no per-day select and no ⌘A. Higgsfield has bulk actions plus "Unselect All (Esc)" (inventory §8.7).
+- **Evidence:** selection works by clicking tiles or Shift-clicking a range. There is no select-all, no per-day select and no ⌘A. The parity studio has bulk actions plus "Unselect All (Esc)" (inventory §8.7).
 - **Fix:**
   - Add "Select all (N)" to the bulk bar, covering everything loaded under the current filters.
   - Add a "Select" link on each date header (`Today 13`).
@@ -475,7 +475,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
 - **Real provider latency and progress cadence.** With no paid keys or GPU, every generation ran on the demo provider. UX-16 is inferred from the code and the demo cadence.
 - **Video decoding.** Headless Chromium can't play the demo H.264 clips, so video tiles look empty in these screenshots. Real Chrome and Safari play them.
 - **Absolute times.** They come from a shared, loaded container (load average 2–7) and CPU throttling, not a real phone. Use §3 to compare routes, not as field data.
-- **Higgsfield's logged-in screens** were not observed in this audit. Higgsfield behaviour is quoted from the earlier research files.
+- **The parity studio's logged-in screens** were not observed in this audit. The parity studio's behaviour is quoted from the earlier research files.
 
 ## 8. Sources
 
@@ -486,7 +486,7 @@ The format for each finding: **Route · component**, then what is wrong, the evi
   - `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/use-link-status.md`
 - axe-core 4.14.0 rules: `node_modules/.pnpm/axe-core@4.14.0/node_modules/axe-core/axe.min.js`. Rule help is at https://dequeuniversity.com/rules/axe/4.14/.
 - Liner's design language: [`liner-ui.md`](liner-ui.md) (researched 2026-10-16).
-- Higgsfield's flows: [`higgsfield-inventory.md`](higgsfield-inventory.md) §1.1, §1.3 and §8; [`higgsfield-studios.md`](higgsfield-studios.md) §1; [`higgsfield-marketing-agents.md`](higgsfield-marketing-agents.md).
+- The parity studio's flows: [`parity-inventory.md`](parity-inventory.md) §1.1, §1.3 and §8; [`parity-studios.md`](parity-studios.md) §1; [`parity-marketing-agents.md`](parity-marketing-agents.md).
 - The raw data from this audit is in `/tmp/claude-0/r4-ux-shots/`:
   - `metrics-*.json`, `transitions-*.json`, `axe-*.json`, `notes-*.json` (flow notes, console errors and Event Timing)
   - `js-per-route.json`, `flows.log`, and 168 screenshots.

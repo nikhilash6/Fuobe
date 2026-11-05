@@ -39,8 +39,8 @@ import { buildPayload } from "@/lib/catalog/payload";
 import { HARMONIES, harmonyPalette, hexToRgb, kmeans, paletteFromPixels, rgbToHsl, type RGB } from "@/components/cinema/color-math";
 import { equalSpans, findCuts, lineStats, tileRects } from "@/components/cinema/grid-math";
 
-const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/higgsfield-studios.json"), "utf8")).cinemaStudio;
-const imageResearch = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/higgsfield-image-studios.json"), "utf8"));
+const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/parity-studios.json"), "utf8")).cinemaStudio;
+const imageResearch = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/parity-image-studios.json"), "utf8"));
 const dp = research.directorsPanel;
 
 describe("Cinema Studio data matches the research", () => {
@@ -157,7 +157,7 @@ describe("compileDirector", () => {
     expect(applyEmotions("@kaiser turns", e)).toBe("@kaiser turns");
   });
 
-  it("validates the custom rig and references with Higgsfield's messages", () => {
+  it("validates the custom rig and references with the researched messages", () => {
     const l = { direction: "front", color: "#ffffff", brightness: 50, diffuse: 50 };
     expect(rigError([l, l, l])).toBe("A custom rig supports at most 2 light sources");
     expect(rigError([{ ...l, color: "white" }])).toBe("color must be a #RRGGBB hex value");
@@ -236,7 +236,7 @@ describe("planCinema", () => {
     expect(req.params!.duration).toBe(10);
     expect(planCinema(base({ modelId: "kling-3", duration: 30 }), ctx).steps[0].request.params!.duration).toBe(15);
     expect(planCinema(base({ modelId: "veo-3-1", duration: 30 }), ctx).steps[0].request.params!.duration).toBe(8);
-    // An old pick (Cinema Studio 4.0 on Higgsfield) falls back to the Original.
+    // An old pick (Cinema Studio 4.0, a retired model) falls back to the Original.
     expect(planCinema(base({ modelId: "cinema-studio-4" }), ctx).model.id).toBe("fuobe-cinema");
     expect(CINEMA_MODELS.video.cloud).not.toContain("cinema-studio-4");
     expect(CINEMA_MODELS.image.cloud).not.toContain("soul-cinema");

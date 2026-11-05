@@ -167,7 +167,7 @@ export function expandJobs(suite, opts) {
             // A training case's "{character}" becomes the trained element's @handle in the runner.
             ...(prompt && { prompt }),
             ...(p.negative && { negativePrompt: p.negative }),
-            // The Original applies the look on the server, named by its Fuobe id ("v1-general"): a Higgsfield look id never leaves the harness.
+            // The Original applies the look on the server, named by its Fuobe id ("v1-general"): a legacy look id never leaves the harness.
             ...(lookOnServer ? { presetId: recipe.look.slug } : presetId ? { presetId } : {}),
             ...(variant.presetStrength !== undefined && presetId && { presetStrength: variant.presetStrength }),
             ...(kase.mix && variant.mix !== false && presetId && { mix: kase.mix }),

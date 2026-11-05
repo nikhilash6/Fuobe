@@ -133,7 +133,7 @@
    "id": "layer-decompose",
    "title": "Image layer decomposition (Layers: split into editable RGBA layers, \"Separate layer\")",
    "gap": "Layers",
-   "higgsfield": "Layers studio: decompose an image into named, positioned layers; edit each, \"Separate layer\" recursively, export a zip of cropped/positioned layers",
+   "parity": "Layers studio: decompose an image into named, positioned layers; edit each, \"Separate layer\" recursively, export a zip of cropped/positioned layers",
    "summary": "Qwen-Image-Layered (Apache-2.0) is native in ComfyUI 0.41 (EmptyQwenImageLayeredLatentImage + ReferenceLatent + LatentCut/LatentCutToBatch, official template image_qwen_image_layered). It returns full-canvas RGBA layers; the app computes each layer's bbox from alpha for the cropped/positioned export. The prompt-guided DiffSynth Layered-Control variant pulls out a named element (click/describe to separate).",
    "recommended": {
     "name": "Layer decomposition: Qwen-Image-Layered (RGBA layers)",
@@ -1332,7 +1332,7 @@
      "downloadGB": 50.49,
      "vramGB": 24,
      "license": "Apache-2.0 (DiffSynth-Studio Layered-Control)",
-     "notes": "prompt names the element(s) to separate (\"guitar\", \"the headline text\"); layers=2 gives [element, rest]. Use it for Higgsfield Layers \"Separate layer\" / click-to-extract. 40.9 GB download, cast to fp8 at load.",
+     "notes": "prompt names the element(s) to separate (\"guitar\", \"the headline text\"); layers=2 gives [element, rest]. Use it for Layers \"Separate layer\" / click-to-extract. 40.9 GB download, cast to fp8 at load.",
      "inferred": [],
      "validation": {
       "postPrompt": true,
@@ -1809,7 +1809,7 @@
    "id": "layer-edit-text",
    "title": "Edit text inside an image / a layer, and remove background (Layers editor tools)",
    "gap": "Layers",
-   "higgsfield": "Layers editor: \"Edit text\" (rewrite a headline in place, keep the font look), remove background, recolor/replace a layer",
+   "parity": "Layers editor: \"Edit text\" (rewrite a headline in place, keep the font look), remove background, recolor/replace a layer",
    "summary": "No new graph needed: Qwen-Image-Edit-2511 (library qwen-image-edit-2511, Apache) handles in-place text replacement with an instruction like 'Replace the text \"SUMMER SALE\" with \"WINTER DEALS\", keep the same font, colour, size and position'; run it on the composite or on one RGBA layer (flatten onto a neutral background first, then re-cut with bg-remove-birefnet). Background removal is the library bg-remove-birefnet (MIT).",
    "recommended": {
     "name": "Qwen-Image-Edit-2511 instruction edit (library qwen-image-edit-2511) + BiRefNet (bg-remove-birefnet)",
@@ -1845,8 +1845,8 @@
    "id": "style-reference",
    "title": "Moodboards: generate in the style of 4-20 reference images",
    "gap": "Moodboards",
-   "higgsfield": "Moodboards: upload 5-80 images, \"Building your moodboard...\", then generate with that style (personal style id on Soul 2.0)",
-   "summary": "Two tiers. Instant (zero-shot): the app turns the board into 1-2 contact-sheet collages and Qwen-Image-Edit-2511 + Lightning generates a NEW image (empty latent) conditioned on them with a \"match the look, not the content\" instruction (Apache, weights already in the library). Persistent (1:1 with Higgsfield, which trains moodboards): an AI-Toolkit style LoRA on Z-Image Turbo from the 5-80 images (same training path as characters, style preset below), then z-image-turbo-t2i + LoRA. Purpose-built style-reference models exist but are licence-gated: Krea-2 + Ostris style_reference LoRA (Krea 2 Community) and USO on FLUX.1 dev (non-commercial base).",
+   "parity": "Moodboards: upload 5-80 images, \"Building your moodboard...\", then generate with that style (personal style id on Soul 2.0)",
+   "summary": "Two tiers. Instant (zero-shot): the app turns the board into 1-2 contact-sheet collages and Qwen-Image-Edit-2511 + Lightning generates a NEW image (empty latent) conditioned on them with a \"match the look, not the content\" instruction (Apache, weights already in the library). Persistent (1:1 with the parity studio, which trains moodboards): an AI-Toolkit style LoRA on Z-Image Turbo from the 5-80 images (same training path as characters, style preset below), then z-image-turbo-t2i + LoRA. Purpose-built style-reference models exist but are licence-gated: Krea-2 + Ostris style_reference LoRA (Krea 2 Community) and USO on FLUX.1 dev (non-commercial base).",
    "recommended": {
     "name": "Moodboard style reference: Qwen-Image-Edit-2511 + Lightning, new image from 2 board collages",
     "workflowId": "style-ref-qwen-edit-2511",
@@ -2687,7 +2687,7 @@
       ]
      },
      "captioning": "Caption each board image with its CONTENT only (Qwen3-VL / Claude), prefixed by the trigger, so the LoRA learns the look rather than the subjects; no face crop; 5-80 images, >=512 px.",
-     "notes": "Higgsfield moodboards take 5-80 images and build a style asynchronously (\"Building your moodboard...\"), i.e. training. 2000 steps rank 32 is ~20-40 min on a 24 GB GPU (inferred). The LoRA is injected by the existing injectLoras path."
+     "notes": "The parity studio's moodboards take 5-80 images and build a style asynchronously (\"Building your moodboard...\"), i.e. training. 2000 steps rank 32 is ~20-40 min on a 24 GB GPU (inferred). The LoRA is injected by the existing injectLoras path."
     }
    },
    "alternatives": [
@@ -5115,7 +5115,7 @@
    "id": "palette",
    "title": "Soul HEX colour signatures: palette-conditioned generation",
    "gap": "Soul HEX / Color Transfer",
-   "higgsfield": "Soul HEX: pick or extract a 1-12 colour signature (+ background), generate in those colours; Cinema Studio colour palettes",
+   "parity": "Soul HEX: pick or extract a 1-12 colour signature (+ background), generate in those colours; Cinema Studio colour palettes",
    "summary": "No maintained palette ControlNet exists for current open models (the colour T2I-Adapter is SD1.5-era). Best route: put the hex list in the prompt and lock it deterministically with core ColorTransfer against a swatch the app renders, in ONE job (palette-zimage-hex on Z-Image Turbo, Apache). The existing palette-transfer-image/-video graphs do the lock as a post-step for any model (cloud outputs too).",
    "recommended": {
     "name": "Soul HEX: Z-Image Turbo with the hex palette in the prompt + ColorTransfer lock to a swatch",
@@ -5801,7 +5801,7 @@
    "id": "video-segment",
    "title": "Video trim / segment extraction / fps resample (Shorts Studio segments, Mixed Media frame sampling)",
    "gap": "Shorts Studio / Mixed Media",
-   "higgsfield": "Shorts Studio splits a <=2 min upload into segments (<=10 s out each), Mixed Media samples 4-24 fps, Cinema Studio trims reference videos",
+   "parity": "Shorts Studio splits a <=2 min upload into segments (<=10 s out each), Mixed Media samples 4-24 fps, Cinema Studio trims reference videos",
    "summary": "Core \"Video Slice\" (Trim Video) cuts by seconds and keeps audio; VHS_LoadVideo (force_rate, skip_first_frames, frame_load_cap, custom size) resamples to a model fps and cuts by frames, and the graph also saves the first frame for restyling. Both ran for real on the CPU ComfyUI (trim 0.25 s + 0.5 s -> 8 frames @16 fps with 0.5 s audio; resample to 8 fps, skip 1, 5 frames, 64x48 + first-frame PNG).",
    "recommended": {
     "name": "Cut a segment at a target fps and size, plus its first frame (VHS loader)",
@@ -6422,7 +6422,7 @@
    "id": "video-restyle",
    "title": "Shorts Studio: restyle your own footage with a preset (<=2 min in, segments out)",
    "gap": "Shorts Studio",
-   "higgsfield": "Shorts Studio: pick one of 44 presets (or a custom preset from up to 10 reference images/videos), upload 4 s-2 min footage, get restyled 9:16/16:9 720p segments (<=10 s each), stitch or download parts",
+   "parity": "Shorts Studio: pick one of 44 presets (or a custom preset from up to 10 reference images/videos), upload 4 s-2 min footage, get restyled 9:16/16:9 720p segments (<=10 s each), stitch or download parts",
    "summary": "Chained open route: (1) video-segment-resample cuts <=5 s windows at 16 fps and saves each first frame; (2) qwen-image-edit-2511 (or -multi with the custom-preset references) restyles that frame with the preset prompt; (3) video-restyle-wan22-fun-vace re-renders the segment with Wan 2.2 Fun VACE: frame 0 = restyled frame (kept), frames 1..N = Depth Anything 3 depth maps (generated), restyled frame also as VACE reference; (4) video-concat-N joins the segments. Grade-type presets (Warm Glow, Monochrome Vibes, Green Contrast...) are cheaper with video-relight-bernini-r (prompt-driven video edit) or palette-transfer-video, caption presets add the captions route.",
    "recommended": {
     "name": "Restyle a <=5 s segment: Wan 2.2 Fun VACE, depth control + restyled first frame (Shorts Studio)",
@@ -7936,8 +7936,8 @@
    "id": "video-stylize-frames",
    "title": "Mixed Media: stylised VFX looks applied frame by frame at 4-24 fps",
    "gap": "Mixed Media",
-   "higgsfield": "Mixed Media: 33 presets (Sketch, Comic, Paper, Noir, Toxic...), 1-10 s source, 4/8/10/12/24 fps, per-preset colour/option params, 1 preview frame, priced per output frame",
-   "summary": "Higgsfield charges per output frame, i.e. per-frame stylisation. Open route: VHS samples the clip at the target fps, Z-Image Turbo img2img (denoise ~0.7) + Z-Image Fun Union ControlNet (Canny) restyles each frame with the preset prompt, fixed batch noise for less flicker, VHS meta-batching keeps VRAM flat, frames re-assembled at the same fps with the source audio. Preview = frames 1.",
+   "parity": "Mixed Media: 33 presets (Sketch, Comic, Paper, Noir, Toxic...), 1-10 s source, 4/8/10/12/24 fps, per-preset colour/option params, 1 preview frame, priced per output frame",
+   "summary": "The parity studio charges per output frame, i.e. per-frame stylisation. Open route: VHS samples the clip at the target fps, Z-Image Turbo img2img (denoise ~0.7) + Z-Image Fun Union ControlNet (Canny) restyles each frame with the preset prompt, fixed batch noise for less flicker, VHS meta-batching keeps VRAM flat, frames re-assembled at the same fps with the source audio. Preview = frames 1.",
    "recommended": {
     "name": "Mixed Media: per-frame stylisation at 4-24 fps (Z-Image Turbo img2img + Fun Union ControlNet canny)",
     "workflowId": "mixed-media-zimage-frames",
@@ -8303,10 +8303,10 @@
     "downloadGB": 23.79,
     "vramGB": 16,
     "license": "Apache-2.0 (Z-Image Turbo, Z-Image-Turbo-Fun-Controlnet-Union)",
-    "notes": "Matches Higgsfield Mixed Media: frames sampled at 4/8/10/12/24 fps (force_rate), each frame restyled, re-assembled at the same fps with the source audio. VHS_BatchManager re-queues the prompt every framesPerBatch frames so VRAM stays flat (VHS meta_batch). LatentBatchSeedBehavior fixed = same noise on every frame (less flicker). Preview = frames 1. denoise 0.55-0.8 trades fidelity for style; the preset prompt + param_configs (colours, options) become the prompt text. Canny keeps outlines; swap node 4 for DA3 depth for looser styles.",
+    "notes": "Matches Mixed Media: frames sampled at 4/8/10/12/24 fps (force_rate), each frame restyled, re-assembled at the same fps with the source audio. VHS_BatchManager re-queues the prompt every framesPerBatch frames so VRAM stays flat (VHS meta_batch). LatentBatchSeedBehavior fixed = same noise on every frame (less flicker). Preview = frames 1. denoise 0.55-0.8 trades fidelity for style; the preset prompt + param_configs (colours, options) become the prompt text. Canny keeps outlines; swap node 4 for DA3 depth for looser styles.",
     "inferred": [
      "QwenImageDiffsynthControlnet with a control-image batch matching the latent batch (one control frame per latent)",
-     "temporal flicker at denoise >0.7 (per-frame method; Higgsfield output is also per-frame/stop-motion-like)"
+     "temporal flicker at denoise >0.7 (per-frame method; the parity studio's output is also per-frame/stop-motion-like)"
     ],
     "validation": {
      "postPrompt": true,
@@ -8931,7 +8931,7 @@
    "id": "sfx",
    "title": "Open-source sound effects (text-to-audio)",
    "gap": "Open-source sound effects",
-   "higgsfield": "Sound effects / Audio: describe a sound, get a clip (ElevenLabs SFX on the paid side)",
+   "parity": "Sound effects / Audio: describe a sound, get a clip (ElevenLabs SFX on the paid side)",
    "summary": "Stable Audio 3.0 Small SFX is native in ComfyUI (core nodes, 2.3 GB, 8-step distilled) and is the recommended default; Stable Audio Open 1.0 is the older native option (47 s). Both are Stability Community License (free < US$1M revenue). For a permissive licence, ThinkSound (Apache-2.0 weights) works through a stale wrapper (validated in an isolated worker); HunyuanVideo-Foley (text-only works) is territory-restricted; MMAudio text mode is non-commercial.",
    "recommended": {
     "name": "Sound effects: Stable Audio 3.0 Small SFX (native, 8 steps)",
@@ -10858,7 +10858,7 @@
    "id": "dubbing",
    "title": "Open-source translate & dub (voice clone in the target language, optional lip re-sync)",
    "gap": "Open-source dubbing",
-   "higgsfield": "Translate & dub: upload a talking video, pick a language, get the same voice speaking the translation with lips re-synced (HeyGen / ElevenLabs Dubbing on the paid side)",
+   "parity": "Translate & dub: upload a talking video, pick a language, get the same voice speaking the translation with lips re-synced (HeyGen / ElevenLabs Dubbing on the paid side)",
    "summary": "Five chained jobs, all validated: (1) dub-prepare-separate-transcribe: MelBand RoFormer splits voice/background, Qwen3-ASR 1.7B + ForcedAligner transcribes the voice into timed cues (52 languages); (2) translation by Fuobe's LLM (Claude / Ollama) or in ComfyUI with translate-qwen35-textgen (Gemma 4 E4B can also go speech->translated text in one step); (3) tts-chatterbox-multilingual with voiceAudio = the separated vocals (23 target languages, zero-shot clone of the speaker); (4) lip re-sync: lipsync-v2v-infinitetalk (Apache, WanVideoWrapper, no new weights) or lipsync-latentsync16 (mouth-only, OpenRAIL++, isolated worker); (5) video-mux-audio puts voice + background back (also the no-lipsync \"voice-over dub\").",
    "recommended": {
     "name": "Dubbing step 1: split voice / background (MelBand RoFormer) and transcribe the voice with timestamps (Qwen3-ASR + ForcedAligner)",
@@ -14543,7 +14543,7 @@
    "id": "captions",
    "title": "Captions / transcription for Faceless Studio and Shorts (burn-in)",
    "gap": "Faceless Studio / Shorts Studio captions",
-   "higgsfield": "Auto captions on Shorts presets (Bold Caption...), Faceless/Explainer videos with on-screen captions; 33 caption languages with auto-detect",
+   "parity": "Auto captions on Shorts presets (Bold Caption...), Faceless/Explainer videos with on-screen captions; 33 caption languages with auto-detect",
    "summary": "Transcribe with Qwen3-ASR 0.6B + Qwen3-ForcedAligner (Apache weights, ComfyUI-QwenASR) into timed cues; render styled captions with ffmpeg + libass (ASS karaoke tags give word-by-word highlight) on the server - verified here by burning an ASS file into the fixture clip. The all-ComfyUI alternative is Whisper large-v3-turbo + \"Add Subtitles To Frames\" (ComfyUI-Whisper), whose code licence is non-commercial.",
    "recommended": {
     "name": "Captions / transcription: Qwen3-ASR 0.6B + ForcedAligner, timed cues + SRT (commercially clean weights)",
@@ -15511,7 +15511,7 @@
    "id": "image-to-3d",
    "title": "Image to 3D for product spins (textured GLB + turntable)",
    "gap": "Ads / Click to Ad / product spins",
-   "higgsfield": "Product 360 spins in ads/marketing flows; Cinema Studio \"3D scene\" recomposition",
+   "parity": "Product 360 spins in ads/marketing flows; Cinema Studio \"3D scene\" recomposition",
    "summary": "TRELLIS.2 (MIT) is native in ComfyUI 0.41 with a full PBR pipeline (official template 3d_pixal3d_trellis2_image_to_model): cut-out -> structure -> shape -> upsample -> texture -> remesh -> UV unwrap -> baked base colour/metallic/roughness/AO/normal -> GLB. The graph adds a 36-view turntable (RotateMesh + RenderMesh, all core) saved as an MP4, so one job yields the GLB for an interactive viewer and a spin video for ads. Hunyuan3D 2.1 native is shape-only and territory-restricted.",
    "recommended": {
     "name": "Image to textured 3D (TRELLIS.2, PBR GLB) + 36-view turntable MP4 for product spins",
@@ -19033,7 +19033,7 @@
    "id": "try-on",
    "title": "Virtual try-on and product shots (Fashion Factory outfit step, Click to Ad, packshots)",
    "gap": "Fashion Factory / Ads",
-   "higgsfield": "Fashion Factory step 4 \"Upload outfit / Generate outfit\"; product packshots and product-in-scene ads",
+   "parity": "Fashion Factory step 4 \"Upload outfit / Generate outfit\"; product packshots and product-in-scene ads",
    "summary": "FLUX.2 [klein] 4B + the xocialize try-on LoRA (all Apache) takes person + top + bottom; the person is made clothing-agnostic in-graph with ComfyUI-RMBG ClothesSegment (as the LoRA was trained). Zero-shot fallback with no new weights: qwen-image-edit-2511-multi (\"dress the person in image 1 in the garments of images 2 and 3\"). Product shots/ads reuse qwen-image-edit-2511-multi (product + scene/reference ad), relight-qwen-edit-2509(-reference) and bg-remove-birefnet.",
    "recommended": {
     "name": "Virtual try-on: FLUX.2 [klein] 4B + try-on LoRA, person (clothes masked out) + top + bottom (all Apache)",
@@ -20321,7 +20321,7 @@
    "id": "image-grid",
    "title": "Cinema Studio image grid / contact sheet (2x2, 3x3, 4x4; freeform, zooms, shots)",
    "gap": "Cinema Studio 4.0",
-   "higgsfield": "Cinema Studio grid generation: one prompt -> a full grid sharing the same context, same cost as one image; sizes 2x2/3x3/4x4; types freeform, zooms, shots, next_shots, prev_shots",
+   "parity": "Cinema Studio grid generation: one prompt -> a full grid sharing the same context, same cost as one image; sizes 2x2/3x3/4x4; types freeform, zooms, shots, next_shots, prev_shots",
    "summary": "One Z-Image Turbo generation of an N x N contact sheet, then KJNodes ImageGridtoBatch cuts it into tiles (both the sheet and the tiles are saved). next_shots / prev_shots continue from a chosen tile with the library storyboard-qwen-edit-2509-next-scene.",
    "recommended": {
     "name": "Cinema Studio image grid: one Z-Image Turbo contact sheet (2x2 / 3x3 / 4x4) + the tiles cut out",
@@ -20582,7 +20582,7 @@
     "downloadGB": 20.69,
     "vramGB": 14,
     "license": "Apache-2.0 (Z-Image Turbo)",
-    "notes": "Matches Higgsfield's \"full grid from a single prompt, every image shares the same context\": one generation, then the sheet is cut into equal tiles (ImageGridtoBatch, max 8x8). gridPrompt is chosen by the app per size/type: freeform, zooms (\"the same frame at 9 increasing zoom levels\"), shots (\"nine different shot sizes of the same moment\"), next_shots / prev_shots (use storyboard-qwen-edit-2509-next-scene from a picked tile instead). Width/height: 2048x2048 for square tiles; 2048x1152 makes 16:9 tiles in a 3x3 grid only if the model keeps equal cells, so the app should crop each tile to the requested ratio. Gutters: keep them thin; the app can trim a few px per tile.",
+    "notes": "Matches the parity studio's \"full grid from a single prompt, every image shares the same context\": one generation, then the sheet is cut into equal tiles (ImageGridtoBatch, max 8x8). gridPrompt is chosen by the app per size/type: freeform, zooms (\"the same frame at 9 increasing zoom levels\"), shots (\"nine different shot sizes of the same moment\"), next_shots / prev_shots (use storyboard-qwen-edit-2509-next-scene from a picked tile instead). Width/height: 2048x2048 for square tiles; 2048x1152 makes 16:9 tiles in a 3x3 grid only if the model keeps equal cells, so the app should crop each tile to the requested ratio. Gutters: keep them thin; the app can trim a few px per tile.",
     "inferred": [
      "how reliably Z-Image Turbo draws an exact NxN grid with equal cells (Qwen-Image 2512 is the stronger layout follower if it drifts)"
     ],
@@ -20972,7 +20972,7 @@
    "id": "character-sheet",
    "title": "Soul Cast AI actors (and Soul Location)",
    "gap": "Cinema Studio 4.0",
-   "higgsfield": "Soul Cast: build a cast member from 17 fields (genre, budget, era, archetype, appearance...), batch up to 10; Soul Location: describe/upload a set, get the empty location and other views",
+   "parity": "Soul Cast: build a cast member from 17 fields (genre, budget, era, archetype, appearance...), batch up to 10; Soul Location: describe/upload a set, get the empty location and other views",
    "summary": "Z-Image Turbo turnaround sheet (front, three-quarter, profile, back) from the compiled casting prompt, cut into 4 views; save as a character element, optionally train an AI-Toolkit LoRA from the views. Soul Location reuses z-image-turbo-t2i / qwen-image-2512 at 16:9 plus Qwen-Image-Edit-2511 + Multiple-Angles LoRA for other views.",
    "recommended": {
     "name": "Soul Cast AI actor: Z-Image Turbo character turnaround sheet (4 views) from the compiled casting prompt",
@@ -21622,7 +21622,7 @@
    "id": "faceless-explainer",
    "title": "Faceless Studio / Explainer: script -> scenes -> narrated, captioned video",
    "gap": "Faceless Studio / Explainer",
-   "higgsfield": "Faceless / Explainer studio: script or topic -> scene list -> visuals per scene -> voice-over -> captions -> one video",
+   "parity": "Faceless / Explainer studio: script or topic -> scene list -> visuals per scene -> voice-over -> captions -> one video",
    "summary": "No new model: a chain of validated graphs. Script and scene split by Fuobe's LLM; per scene z-image-turbo-t2i (or a storyboard) -> wan22-i2v-14b-lightx2v (or Ken Burns in the browser); narration tts-chatterbox-multilingual; captions-qwen3-asr on the narration (exact timings) -> ASS burn-in; video-concat-N joins scenes; video-mux-audio adds narration + music bed (music-ace-step-15).",
    "recommended": {
     "name": "Chained Faceless pipeline on existing + round-3 graphs",

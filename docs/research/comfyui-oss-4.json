@@ -7664,7 +7664,7 @@
    "image-to-splat-triposplat (validated)",
    "reference-brief-gemma4 (validated)"
   ],
-  "fpsTargets": "FrameInterpolate takes an integer multiplier 2-16. For Higgsfield's exact FPS Boost targets interpolate by m, then keep every n-th frame (VHS_SelectEveryNthImage) with src*m/n = target: 24->30 m5 n4; 24->60 m5 n2; 24->90 m15 n4; 24->120 m5 n1; 30->60 m2; 30->90 m3; 30->120 m4; 60->90 m3 n2; 60->120 m2. Not built or timed.",
-  "depthColormaps": "The installed VideoDepthAnythingOutput offers only 'gray' and 'inferno'; MoGeRender offers 'depth' and 'depth_colored'. Higgsfield's Turbo / Magma / Viridis need a LUT step (not researched)."
+  "fpsTargets": "FrameInterpolate takes an integer multiplier 2-16. For the parity studio's exact FPS Boost targets interpolate by m, then keep every n-th frame (VHS_SelectEveryNthImage) with src*m/n = target: 24->30 m5 n4; 24->60 m5 n2; 24->90 m15 n4; 24->120 m5 n1; 30->60 m2; 30->90 m3; 30->120 m4; 60->90 m3 n2; 60->120 m2. Not built or timed.",
+  "depthColormaps": "The installed VideoDepthAnythingOutput offers only 'gray' and 'inferno'; MoGeRender offers 'depth' and 'depth_colored'. The parity studio's Turbo / Magma / Viridis need a LUT step (not researched)."
  }
 }

@@ -1146,7 +1146,7 @@
    "section": "§7.9"
   },
   {
-   "decision": "No Higgsfield models or API; licences are information",
+   "decision": "No parity-studio models or API; licences are information",
    "choice": "Kept",
    "fromOwner": true,
    "section": "§4, §10.3"
@@ -1915,7 +1915,7 @@
   "node_modules/next/dist/docs/01-app (authentication, cache components, proxy, cookies, route, revalidateTag, cli)",
   "/home/user/ext/npm-better-auth-1.7.14, npm-better-auth-sso-1.7.14, npm-better-auth-stripe-1.7.14, npm-saml-jackson-26.2.0, comfyui-v0.43.1, owasp-asvs, owasp-cheatsheets",
   "https://registry.npmjs.org and https://api.osv.dev (2026-10-29)",
-  "Higgsfield help centre, pages, Clerk environment and client bundle (parity only)",
+  "The parity studio's help centre, pages, Clerk environment and client bundle (parity only)",
   "Krea, Runway, Magnific, Leonardo, Kling, Midjourney, Canva, Figma, Liner pages",
   "Open WebUI, Immich, n8n, Gitea/Forgejo, Jellyfin, Nextcloud docs",
   "Stripe, Paddle, Polar, fal, Replicate docs; LibreChat, Dify, new-api source",

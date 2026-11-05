@@ -1,6 +1,6 @@
 {
  "asOf": "2026-10-23",
- "scope": "Open-weight recipes for the Fuobe Originals (everything Higgsfield ships as its own), on ComfyUI and on hosted open models (fal, Replicate) that accept LoRA URLs. No Higgsfield API.",
+ "scope": "Open-weight recipes for the Fuobe Originals (everything the parity studio ships as its own), on ComfyUI and on hosted open models (fal, Replicate) that accept LoRA URLs. No parity-studio API.",
  "conventions": {
   "lora": "name, url (direct file URL), page, file (local file name to use; civitai files are renamed because several are called V1.safetensors), trigger, strength, base, licence, commercial (outputs may be sold), hostedOk (may run on a third-party service such as fal/Replicate), download (direct | civitai-token | hf-gated), released, notes",
   "template": "final prompt = triggers + ', ' + template with {prompt} replaced; Fuobe's current withOssLoras() does the same for motions",
@@ -9,62 +9,62 @@
   "motionsEffectsMaps": "Added 2026-10-26 (o/dop): a motionsEffects row may carry funCamera {preset: Wan 2.2 Fun Camera pose} (open engine), cameraLora {preset: LTX-2.3 camera_lora} (cloud), cameraMotion {preset: LTX-2.5 camera_motion} (hosted-native) and aliasOf {preset: the key in src/lib/catalog/oss-loras.generated.ts whose LoRAs it reuses}. scripts/gen-oss-loras.py reads them."
  },
  "hypothesisCheck": {
-  "claim": "Higgsfield's in-house models are open models repackaged with LoRAs or better wrapping.",
-  "verdict": "Partly right. Five Higgsfield-branded tools are open models with public LoRAs, confirmed in its web client: Angles (Qwen-Image-Edit 2509 + Multiple-angles + Lightning LoRAs), Animate / Recast (Wan 2.2 Animate), Infinite Talk (InfiniteTalk + FusioniX), Depth Map (Video Depth Anything), Remove Background (SAM 3). Soul 2.0 styles carry lora / lora_2 fields and DoP accepts raw .safetensors motions, so Soul and DoP presets are LoRAs on a self-hosted base that is not named anywhere public. Cinema Studio 4.0, Shorts Studio, Marketing Studio Image and Ads Studio run on closed partner models (Seedance 2.5, Gemini Omni Flash, GPT Image 2.5). Updated by the critic pass on 2026-10-23 from higgsfield-originals-5.json.",
+  "claim": "The parity studio's in-house models are open models repackaged with LoRAs or better wrapping.",
+  "verdict": "Partly right. Five parity-studio-branded tools are open models with public LoRAs, confirmed in its web client: Angles (Qwen-Image-Edit 2509 + Multiple-angles + Lightning LoRAs), Animate / Recast (Wan 2.2 Animate), Infinite Talk (InfiniteTalk + FusioniX), Depth Map (Video Depth Anything), Remove Background (SAM 3). Soul 2.0 styles carry lora / lora_2 fields and DoP accepts raw .safetensors motions, so Soul and DoP presets are LoRAs on a self-hosted base that is not named anywhere public. Cinema Studio 4.0, Shorts Studio, Marketing Studio Image and Ads Studio run on closed partner models (Seedance 2.5, Gemini Omni Flash, GPT Image 2.5). Updated by the critic pass on 2026-10-23 from parity-originals-5.json.",
   "evidenceFor": [
    {
-    "fact": "The web bundle's job types include open models run by Higgsfield: infinite_talk (InfiniteTalk, Apache-2.0), sam_3_video (SAM 3), depth_anything_video, z_image (Z-Image), plus wan2_2 ... wan3_0 jobs.",
-    "source": "docs/research/higgsfield-inventory.md §3 job-type ids (bundle crawl, 2026-10-16)"
+    "fact": "The web bundle's job types include open models run by the parity studio: infinite_talk (InfiniteTalk, Apache-2.0), sam_3_video (SAM 3), depth_anything_video, z_image (Z-Image), plus wan2_2 ... wan3_0 jobs.",
+    "source": "docs/research/parity-inventory.md §3 job-type ids (bundle crawl, 2026-10-16)"
    },
    {
     "fact": "Cinema Studio 4.0 runs on Seedance 2.5 (ByteDance) and Speak has a wan2_5_speak job: flagship 'studios' wrap third-party models.",
-    "source": "higgsfield-inventory.md (2026-10-16)"
+    "source": "parity-inventory.md (2026-10-16)"
    },
    {
     "fact": "Soul v1 takes style_id + style_strength 0-1 and custom_reference_id + custom_reference_strength 0-1; 'custom_reference_strength=0 uses the selected style's default character strength'. A per-style weight plus a per-user weight is how stacked LoRAs/adapters are exposed.",
-    "source": "docs/research/higgsfield-api.json (docs.higgsfield.ai/docs/models/soul*, 2026-10-16)"
+    "source": "docs/research/parity-api.json ({studio-docs}/docs/models/soul*, 2026-10-16)"
    },
    {
     "fact": "Soul ID trains a reusable character from 1-100 photos into an id with a 0-1 strength, the usual shape of a per-user LoRA.",
-    "source": "higgsfield-api.json soul-id/create"
+    "source": "parity-api.json soul-id/create"
    },
    {
     "fact": "The legacy DoP API takes motions: [{id, strength}] for dop-lite / dop-turbo / dop-standard, the same shape as stacking camera LoRAs on one base.",
-    "source": "npm @higgsfield/client 0.2.6 types (higgsfield-api.json legacy/dop; unverified, possibly retired)"
+    "source": "npm {studio-npm}/client 0.2.6 types (parity-api.json legacy/dop; unverified, possibly retired)"
    },
    {
-    "fact": "Soul 2.0 costs $0.0032 per 720p image on Higgsfield's API, the price class of a 4-6B distilled open model (fal: Z-Image Turbo $0.005/MP, FLUX.2 klein 4B $0.01/MP). This is an inference from price only.",
-    "source": "higgsfield-api.json pricing (dash.higgsfield.ai/api/v2/pricing/models, 2026-10-16); fal llms.txt 2026-10-23"
+    "fact": "Soul 2.0 costs $0.0032 per 720p image on the parity studio's API, the price class of a 4-6B distilled open model (fal: Z-Image Turbo $0.005/MP, FLUX.2 klein 4B $0.01/MP). This is an inference from price only.",
+    "source": "parity-api.json pricing ({studio-dashboard}/api/v2/pricing/models, 2026-10-16); fal llms.txt 2026-10-23"
    },
    {
-    "fact": "Client job types name open models under Higgsfield product names: QWEN_CAMERA_CONTROL = 'Higgsfield Angles' (sends loras [{lightx}, {camera_angle}]), WAN2_2_ANIMATE_V3 = 'Higgsfield Recast', InfiniteTalk with a 'fusex' LoRA at rank 32.",
-    "source": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-rSfLYhMkPbN1soeD.js ; -j-8rpwEzEMqpgGav.js ; -WdalZTpoZ_pO7J7g.js (re-checked 2026-10-23)"
+    "fact": "Client job types name open models under the parity studio's product names: QWEN_CAMERA_CONTROL = 'Angles' (sends loras [{lightx}, {camera_angle}]), WAN2_2_ANIMATE_V3 = 'Recast', InfiniteTalk with a 'fusex' LoRA at rank 32.",
+    "source": "{studio-assets}/tanstack/assets/1a2c0e3d-rSfLYhMkPbN1soeD.js ; -j-8rpwEzEMqpgGav.js ; -WdalZTpoZ_pO7J7g.js (re-checked 2026-10-23)"
    },
    {
-    "fact": "Every Soul 2.0 / Soul Cinema style record has lora and lora_2 fields, shown to staff as 'LoRA 1' / 'LoRA 2' next to '(Dev) Preset Strength' and '(Dev) Character Strength' sliders; DoP's motion picker accepts loras/<name>.safetensors ids ('Higgsfield Canary').",
-    "source": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-OWMkRGYJAoV9LLH0.js ; -ggrIiLPSJckmqaiD.js ; -Iy-LDiMETMj_D3ZQ.js (re-checked 2026-10-23)"
+    "fact": "Every Soul 2.0 / Soul Cinema style record has lora and lora_2 fields, shown to staff as 'LoRA 1' / 'LoRA 2' next to '(Dev) Preset Strength' and '(Dev) Character Strength' sliders; DoP's motion picker accepts loras/<name>.safetensors ids ('Canary').",
+    "source": "{studio-assets}/tanstack/assets/1a2c0e3d-OWMkRGYJAoV9LLH0.js ; -ggrIiLPSJckmqaiD.js ; -Iy-LDiMETMj_D3ZQ.js (re-checked 2026-10-23)"
    }
   ],
   "evidenceAgainst": [
    {
-    "fact": "Higgsfield calls Soul, Popcorn and DOP 'native' models and publishes no model card or base model.",
-    "source": "https://higgsfield.ai/creator-hub/help-center/ai-models/which-ai-model-should-i-use (read 2026-10-23)"
+    "fact": "The parity studio calls Soul, Popcorn and DOP 'native' models and publishes no model card or base model.",
+    "source": "{studio-site}/creator-hub/help-center/ai-models/which-ai-model-should-i-use (read 2026-10-23)"
    },
    {
     "fact": "Weak: on Soul 2.0's public API, style_strength 'is accepted by the request schema but currently has no effect'. The web client still has a staff preset-strength slider next to the LoRA fields, so the public API ignoring the field does not show that styles aren't LoRAs.",
-    "source": "higgsfield-api.json higgsfield-ai/soul/v2/standard ; https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-OWMkRGYJAoV9LLH0.js"
+    "source": "parity-api.json {studio}/soul/v2/standard ; {studio-assets}/tanstack/assets/1a2c0e3d-OWMkRGYJAoV9LLH0.js"
    },
    {
     "fact": "No public statement, model card or leak found that names Soul's or DoP's base model.",
     "source": "web searches 2026-10-23 (see sources)"
    }
   ],
-  "consequence": "It does not change the plan: every Original below is built from open weights Fuobe can name and licence, whatever Higgsfield uses inside.",
-  "trainingNote": "Do not train Fuobe LoRAs on Higgsfield outputs or preset preview images. Higgsfield's Terms of Use (https://higgsfield.ai/terms-of-use-agreement, last updated 2026-10-23) forbid it. Section 5.2(iv) bars using 'the Service, any Outputs, or any data derived therefrom to train, fine-tune, distill, or otherwise transfer knowledge to any machine-learning model ... whether or not such system competes with the Service'. Section 5.1(iii) bars using Outputs to 'develop, modify, fine-tune, distill, or improve' competing products, and 5.2(v) bars reverse engineering the Service. Copyright also applies. Use Fuobe-owned or licensed references.",
+  "consequence": "It does not change the plan: every Original below is built from open weights Fuobe can name and licence, whatever the parity studio uses inside.",
+  "trainingNote": "Do not train Fuobe LoRAs on the parity studio outputs or preset preview images. The parity studio's Terms of Use ({studio-site}/terms-of-use-agreement, last updated 2026-10-23) forbid it. Section 5.2(iv) bars using 'the Service, any Outputs, or any data derived therefrom to train, fine-tune, distill, or otherwise transfer knowledge to any machine-learning model ... whether or not such system competes with the Service'. Section 5.1(iii) bars using Outputs to 'develop, modify, fine-tune, distill, or improve' competing products, and 5.2(v) bars reverse engineering the Service. Copyright also applies. Use Fuobe-owned or licensed references.",
   "evidenceNeutral": [
    {
-    "fact": "Higgsfield ships Genjutsu Motion Transfer as a ComfyUI partner node. It is a cloud API node that downloads no model and bills per output second, so it says nothing about the model inside (moved from evidenceFor by the critic pass).",
-    "source": "https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer (read 2026-10-23)"
+    "fact": "The parity studio ships Genjutsu Motion Transfer as a ComfyUI partner node. It is a cloud API node that downloads no model and bills per output second, so it says nothing about the model inside (moved from evidenceFor by the critic pass).",
+    "source": "https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer (read 2026-10-23)"
    }
   ]
  },
@@ -9026,7 +9026,7 @@
     "enable_prompt_expansion": false,
     "output_format": "png",
     "loras": "[{path, scale}] max 3",
-    "price": "$0.0085 per megapixel (a 1 MP image is about $0.0085; Soul 2.0 is $0.0032 at 720p on Higgsfield's API)"
+    "price": "$0.0085 per megapixel (a 1 MP image is about $0.0085; Soul 2.0 is $0.0032 at 720p on the parity studio's API)"
    },
    "seeds": "Soul accepts 1-1,000,000; keep the same range so Reuse works"
   },
@@ -9043,7 +9043,7 @@
    "newGradePresetsApplied": "Invertethereal now carries grade invert and Surreal solarization grade solarize (both were null with the instruction in their notes). Corrected 2026-10-25 (o/soul)."
   },
   "soulId": {
-   "what": "Higgsfield's Soul ID trains a reusable character from 1-100 photos (POST /v1/custom-references, model_version v1 | v2 | cinema) and is used as custom_reference_id with a 0-1 strength.",
+   "what": "The parity studio's Soul ID trains a reusable character from 1-100 photos (POST /v1/custom-references, model_version v1 | v2 | cinema) and is used as custom_reference_id with a 0-1 strength.",
    "open": "AI-Toolkit job (existing aiToolkitJob in src/lib/catalog/training.ts) on Z-Image Turbo with ostris/zimage_turbo_training_adapter v2 (Apache-2.0), 10-30 photos, captions with a unique trigger, rank 16-32, 1,500-2,500 steps; output copied into ComfyUI/models/loras.",
    "hosted": "fal-ai/z-image-turbo-trainer-v2: image_data_url (zip of 001.jpg + 001.txt pairs), steps (default 2,000), default_caption, learning_rate 5e-4; $0.85 per 1,000 steps (500-step billing floor), so a default run is $1.70. Output diffusers_lora_file is passed as a loras[] path to fal-ai/z-image/turbo/lora.",
    "strength": "custom_reference_strength 0-1 maps to the character LoRA's scale (0.6-1.0); it takes one of the three LoRA slots.",
@@ -9080,8 +9080,8 @@
    "model": "soul-v1",
    "name": "General",
    "category": "All presets",
-   "higgsfieldDescription": "Clean, balanced, and natural—your go-to look with true-to-life colors and soft lighting. Effortlessly versatile for any style",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Clean, balanced, and natural—your go-to look with true-to-life colors and soft lighting. Effortlessly versatile for any style",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Clean, balanced and natural look, soft daylight, true-to-life colours. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -9139,8 +9139,8 @@
    "model": "soul-v1",
    "name": "iPhone",
    "category": "Instagram Aesthetics",
-   "higgsfieldDescription": "Natural light, casual framing, soft HDR glow. Looks real, but a little better",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Natural light, casual framing, soft HDR glow. Looks real, but a little better",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Shot on an iPhone, natural light, casual framing, soft HDR glow, looks real but a little better. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
    "triggers": "amateur digital snapshot, candid, smartphone capture",
@@ -9198,8 +9198,8 @@
    "model": "soul-v1",
    "name": "Realistic",
    "category": "Instagram Aesthetics",
-   "higgsfieldDescription": "No filters, just flawless clarity. Light, pores, fabric—everything exactly as it is, but better",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "No filters, just flawless clarity. Light, pores, fabric—everything exactly as it is, but better",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. No filters, flawless clarity, light, pores and fabric weave exactly as they are. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "Realism",
@@ -9255,8 +9255,8 @@
    "model": "soul-v1",
    "name": "DigitalCam",
    "category": "TikTok Core",
-   "higgsfieldDescription": "Harsh flash, timestamp corner, and raw textures. Feels like 2007 captured forever",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Harsh flash, timestamp corner, and raw textures. Feels like 2007 captured forever",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 2007 point-and-shoot digital camera, harsh on-camera flash, raw textures. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "retrodigicam, hardflashy",
@@ -9315,8 +9315,8 @@
    "model": "soul-v1",
    "name": "Flight mode",
    "category": "New",
-   "higgsfieldDescription": "Airports, terminals — everything designed to feel like you're traveling. Modern architecture, clean lines, and a subtle “main character leaves town” aura.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Airports, terminals — everything designed to feel like you're traveling. Modern architecture, clean lines, and a subtle “main character leaves town” aura.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Airport terminal, modern architecture, clean lines, travel outfit, departures board, main character leaves town. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -9372,8 +9372,8 @@
    "model": "soul-v1",
    "name": "Sunset beach",
    "category": "New",
-   "higgsfieldDescription": "Golden-hour dreams. The sky melts from purple to peach while you pose like you don’t know the sun’s watching. Glowy skin, backlit outlines, and luxury vacation stillness.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Golden-hour dreams. The sky melts from purple to peach while you pose like you don’t know the sun’s watching. Glowy skin, backlit outlines, and luxury vacation stillness.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Golden-hour beach, sky melting from purple to peach, backlit rim light, glowy skin, luxury swimwear, candid pose. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "golden hour, sunset, warm tones, soft light",
@@ -9429,8 +9429,8 @@
    "model": "soul-v1",
    "name": "Mt. Fuji",
    "category": "New",
-   "higgsfieldDescription": "Postcard surrealism. Crystal-blue skies, iconic mountain symmetry, and convenience store drama.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Postcard surrealism. Crystal-blue skies, iconic mountain symmetry, and convenience store drama.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Postcard surrealism, crystal-blue sky, symmetrical Mt. Fuji behind a Japanese convenience store, playful drama. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -9470,7 +9470,7 @@
    "model": "soul-v1",
    "name": "Street view",
    "category": "New",
-   "higgsfieldDescription": "Candid street-level shot, as if caught by a passing camera on a city sidewalk",
+   "parityDescription": "Candid street-level shot, as if caught by a passing camera on a city sidewalk",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Candid street-level shot, as if caught by a passing camera on a city sidewalk. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -9527,8 +9527,8 @@
    "model": "soul-v1",
    "name": "Tokyo Streetstyle",
    "category": "All presets",
-   "higgsfieldDescription": "Layered looks, sharp silhouettes, and fearless color. A street-level runway of innovation and self-expression",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Layered looks, sharp silhouettes, and fearless color. A street-level runway of innovation and self-expression",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Tokyo street style, layered looks, sharp silhouettes, fearless colour, street-level runway. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "fe85f14",
@@ -9584,8 +9584,8 @@
    "model": "soul-v1",
    "name": "Bimbocore",
    "category": "TikTok Core",
-   "higgsfieldDescription": "Hyperfeminine overload: glossed lips, tiny skirts, and confidence cranked to 100. Plastic fantastic, but make it powerful",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Hyperfeminine overload: glossed lips, tiny skirts, and confidence cranked to 100. Plastic fantastic, but make it powerful",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Hyperfeminine Bimbocore, glossy lips, tiny skirt, plastic-fantastic pink styling, confident pose. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "hardflashy",
@@ -9641,8 +9641,8 @@
    "model": "soul-v1",
    "name": "CCTV",
    "category": "TikTok Core",
-   "higgsfieldDescription": "Grainy surveillance vibe. Raw, unfiltered and highly realistic",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Grainy surveillance vibe. Raw, unfiltered and highly realistic",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Grainy CCTV surveillance still from a high corner camera, wide angle, low resolution, green-grey cast, motion smear.",
    "triggers": "",
@@ -9668,7 +9668,7 @@
    "model": "soul-v1",
    "name": "Elevator Mirror",
    "category": "All presets",
-   "higgsfieldDescription": "Full-body mirror selfie in a metallic elevator, phone in hand",
+   "parityDescription": "Full-body mirror selfie in a metallic elevator, phone in hand",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Full-body mirror selfie in a brushed-steel elevator, phone in hand, flash bouncing off the mirror. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
@@ -9725,8 +9725,8 @@
    "model": "soul-v1",
    "name": "Y2K",
    "category": "TikTok Core",
-   "higgsfieldDescription": "Gloss, glitter, and baby tees. A shiny reboot of early 2000s maximalism—flip phones and all",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Gloss, glitter, and baby tees. A shiny reboot of early 2000s maximalism—flip phones and all",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Y2K gloss and glitter, baby tee, flip phone, shiny early-2000s maximalism. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "y2k style, early 2000s aesthetic, digicam flash photography, ccd grain",
@@ -9782,8 +9782,8 @@
    "model": "soul-v1",
    "name": "RingSelfie",
    "category": "All presets",
-   "higgsfieldDescription": "Manicured hands, glossy lips, and a flash that catches the sparkle. Casual flex, maximal impact",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Manicured hands, glossy lips, and a flash that catches the sparkle. Casual flex, maximal impact",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Close-up selfie of manicured hands with rings, glossy lips, direct flash catching the sparkle. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "hardflashy",
@@ -9839,8 +9839,8 @@
    "model": "soul-v1",
    "name": "Spotlight",
    "category": "Mood",
-   "higgsfieldDescription": "Direct light creating high-contrast drama, paparazzi flash, and instant icon energy",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Direct light creating high-contrast drama, paparazzi flash, and instant icon energy",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Direct spotlight, high-contrast drama, paparazzi flash, deep shadows, instant icon energy. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "hardflashy",
@@ -9896,8 +9896,8 @@
    "model": "soul-v1",
    "name": "Y2K Posters",
    "category": "TikTok Core",
-   "higgsfieldDescription": "Chrome text, airbrushed skin, and floating objects. Early internet meets teen bedroom wall",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Chrome text, airbrushed skin, and floating objects. Early internet meets teen bedroom wall",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Early-internet teen bedroom poster, chrome bubble text, airbrushed skin, floating objects, glossy print.",
    "triggers": "80s Air Brush style, y2k style, early 2000s aesthetic, digicam flash photography, ccd grain",
@@ -9953,8 +9953,8 @@
    "model": "soul-v1",
    "name": "Nail Check",
    "category": "Surreal",
-   "higgsfieldDescription": "Close-up hands showing off nail art, rings, and textures. Precision beauty with attitude",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Close-up hands showing off nail art, rings, and textures. Precision beauty with attitude",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Macro close-up of hands showing nail art, rings and textures, precise beauty with attitude. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -10010,8 +10010,8 @@
    "model": "soul-v1",
    "name": "Gorpcore",
    "category": "All presets",
-   "higgsfieldDescription": "Function becomes fashion. Technical fabrics, bulky sneakers, and colorblocked gear that looks runway-ready - on a hike or in the city",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Function becomes fashion. Technical fabrics, bulky sneakers, and colorblocked gear that looks runway-ready - on a hike or in the city",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Gorpcore, technical fabrics, bulky trail sneakers, colour-blocked outdoor gear that looks runway-ready. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -10051,8 +10051,8 @@
    "model": "soul-v1",
    "name": "90s Grain",
    "category": "Beauty",
-   "higgsfieldDescription": "Warm tones, film texture, and a soft blur—retro mood in every pixel",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Warm tones, film texture, and a soft blur—retro mood in every pixel",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 1990s film photo, warm tones, soft blur, heavy film grain, retro mood. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "AmateurPhotos90s-77",
@@ -10108,8 +10108,8 @@
    "model": "soul-v1",
    "name": "0.5 Selfie",
    "category": "All presets",
-   "higgsfieldDescription": "Front cam, half-body, mirror or not. Unfiltered fits and real-life lighting - effortlessly authentic",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Front cam, half-body, mirror or not. Unfiltered fits and real-life lighting - effortlessly authentic",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 0.5x ultra-wide front-camera selfie, half body, wide-angle distortion, real-life lighting. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
    "triggers": "amateur digital snapshot, candid, smartphone capture",
@@ -10167,8 +10167,8 @@
    "model": "soul-v1",
    "name": "0.5 Outfit",
    "category": "All presets",
-   "higgsfieldDescription": "Shot from the waist down with wide-angle distortion. Casual, candid, and effortlessly cool—your fit, half-framed, full vibe",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Shot from the waist down with wide-angle distortion. Casual, candid, and effortlessly cool—your fit, half-framed, full vibe",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Shot from the waist down with a 0.5x ultra-wide phone lens, outfit check, casual and candid. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
    "triggers": "amateur digital snapshot, candid, smartphone capture",
@@ -10210,8 +10210,8 @@
    "model": "soul-v1",
    "name": "Medieval",
    "category": "All presets",
-   "higgsfieldDescription": "Chainmail chic, velvet drapes, and candlelit intrigue. Courtly vibes with cinematic weight",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Chainmail chic, velvet drapes, and candlelit intrigue. Courtly vibes with cinematic weight",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Chainmail, velvet drapes, candle-lit castle hall, courtly intrigue, cinematic weight. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
    "triggers": "CINEMATIC, FILM STILL",
@@ -10267,8 +10267,8 @@
    "model": "soul-v1",
    "name": "Japandi",
    "category": "All presets",
-   "higgsfieldDescription": "Minimalism with warmth. Clean lines, natural light, and a serene sense of balance between form and feeling",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Minimalism with warmth. Clean lines, natural light, and a serene sense of balance between form and feeling",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Japandi interior, minimalism with warmth, clean lines, light oak and linen, natural light, serene balance. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "negative space, minimalist frame, empty background",
@@ -10324,8 +10324,8 @@
    "model": "soul-v1",
    "name": "Coquette core",
    "category": "All presets",
-   "higgsfieldDescription": "Soft focus and lace daydreams. Bows, blush, and a wink - sweetness laced with irony",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Soft focus and lace daydreams. Bows, blush, and a wink - sweetness laced with irony",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Coquette core, soft focus, lace, bows, blush tones, sweetness with a wink. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "dreamy glow, soft bloom, ethereal mist, pastel wash",
@@ -10381,8 +10381,8 @@
    "model": "soul-v1",
    "name": "Sand",
    "category": "Mood",
-   "higgsfieldDescription": "Sculptural silhouettes in windswept dunes. Neutral tones, survivalist edge-high fashion lost in a dust storm",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Sculptural silhouettes in windswept dunes. Neutral tones, survivalist edge-high fashion lost in a dust storm",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Sculptural silhouettes in windswept sand dunes, neutral tones, high fashion lost in a dust storm. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
    "triggers": "CINEMATIC, FILM STILL",
@@ -10438,8 +10438,8 @@
    "model": "soul-v1",
    "name": "2000s Cam",
    "category": "Camera Presets",
-   "higgsfieldDescription": "Low-rise everything, rhinestones, and visible thongs. Nostalgia wrapped in early paparazzi glam",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Low-rise everything, rhinestones, and visible thongs. Nostalgia wrapped in early paparazzi glam",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Early-2000s paparazzi digital snapshot, low-rise jeans, rhinestones, harsh flash. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "retrodigicam, y2k style, early 2000s aesthetic, digicam flash photography, ccd grain",
@@ -10495,7 +10495,7 @@
    "model": "soul-v1",
    "name": "Quiet luxury",
    "category": "All presets",
-   "higgsfieldDescription": "Understated old-money styling: neutral cashmere, tailored lines, no logos",
+   "parityDescription": "Understated old-money styling: neutral cashmere, tailored lines, no logos",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Quiet luxury, neutral cashmere, tailored lines, no logos, old-money ease. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -10552,8 +10552,8 @@
    "model": "soul-v1",
    "name": "Giant Accessory",
    "category": "Surreal",
-   "higgsfieldDescription": "One item exaggerated to surreal scale—bags, bows, or earrings blown up for visual drama",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "One item exaggerated to surreal scale—bags, bows, or earrings blown up for visual drama",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. One accessory blown up to a surreal giant scale, bag, bow or earring dwarfing the subject. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -10595,8 +10595,8 @@
    "model": "soul-v1",
    "name": "HairClips",
    "category": "All presets",
-   "higgsfieldDescription": "Chunky, colorful, or pearl-lined-accessories that turn heads and frame the face with playful precision",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Chunky, colorful, or pearl-lined-accessories that turn heads and frame the face with playful precision",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Chunky, colourful or pearl-lined hair clips framing the face, playful precision, close-up. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -10636,7 +10636,7 @@
    "model": "soul-v1",
    "name": "505room",
    "category": "All presets",
-   "higgsfieldDescription": "Moody hotel-room scene in low warm lamp light",
+   "parityDescription": "Moody hotel-room scene in low warm lamp light",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Moody hotel room, low warm lamp light, late night, rumpled sheets. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -10693,7 +10693,7 @@
    "model": "soul-v1",
    "name": "Eating Food",
    "category": "All presets",
-   "higgsfieldDescription": "Candid close-up mid-bite, casual food-diary energy",
+   "parityDescription": "Candid close-up mid-bite, casual food-diary energy",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Candid close-up mid-bite, casual food-diary energy, phone camera. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
@@ -10734,8 +10734,8 @@
    "model": "soul-v1",
    "name": "Rainy Day",
    "category": "Mood",
-   "higgsfieldDescription": "Moody skies, reflections in wet pavement, soft sweaters. A slow, cinematic quiet",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Moody skies, reflections in wet pavement, soft sweaters. A slow, cinematic quiet",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Moody rainy day, reflections in wet pavement, soft sweater, slow cinematic quiet. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
    "triggers": "rain effect, steady rain, wet asphalt, puddle reflections, foggy window",
@@ -10791,8 +10791,8 @@
    "model": "soul-v1",
    "name": "Foggy Morning",
    "category": "Mood",
-   "higgsfieldDescription": "Muted colors, blurred horizons, and quiet light. Dreamlike stillness in early hours",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Muted colors, blurred horizons, and quiet light. Dreamlike stillness in early hours",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Foggy morning, muted colours, blurred horizon, quiet early light, dreamlike stillness. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -10848,8 +10848,8 @@
    "model": "soul-v1",
    "name": "Avant-garde",
    "category": "Mood",
-   "higgsfieldDescription": "Sculptural beauty, unexpected forms. A look that speaks in bold shapes and silent statements",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Sculptural beauty, unexpected forms. A look that speaks in bold shapes and silent statements",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Avant-garde sculptural fashion, unexpected forms, bold shapes, gallery light. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -10905,8 +10905,8 @@
    "model": "soul-v1",
    "name": "Tumblr",
    "category": "All presets",
-   "higgsfieldDescription": "Grainy gifs, soft blur, and blue-toned melancholy—effortlessly curated and emotionally charged",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Grainy gifs, soft blur, and blue-toned melancholy—effortlessly curated and emotionally charged",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 2013 Tumblr photo, grainy, soft blur, blue-toned melancholy, effortlessly curated. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "AmateurPhotos90s-77",
@@ -10962,8 +10962,8 @@
    "model": "soul-v1",
    "name": "Through The Glass",
    "category": "All presets",
-   "higgsfieldDescription": "Shot behind fogged-up windows or café panes. A quiet moment seen, not staged",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Shot behind fogged-up windows or café panes. A quiet moment seen, not staged",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Seen through a fogged-up café window, condensation and reflections, a quiet unstaged moment. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -11005,8 +11005,8 @@
    "model": "soul-v1",
    "name": "Vintage PhotoBooth",
    "category": "All presets",
-   "higgsfieldDescription": "Flash-lit nostalgia in strip form. Grain, glare, and a kiss of chaos",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Flash-lit nostalgia in strip form. Grain, glare, and a kiss of chaos",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Vintage photo booth snapshot, flash glare, grain, a kiss of chaos. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "Polaroid Photo, PolaroidRedAF, hardflashy",
@@ -11063,8 +11063,8 @@
    "model": "soul-v1",
    "name": "Fisheye",
    "category": "Camera Presets",
-   "higgsfieldDescription": "Exaggerated depth and playful proportions. Face or object up close, background stretched to infinity",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Exaggerated depth and playful proportions. Face or object up close, background stretched to infinity",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Fisheye lens, exaggerated depth and playful proportions, face up close, background stretched to infinity. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "Fish Eye Lens, Fish eye camera",
@@ -11120,8 +11120,8 @@
    "model": "soul-v1",
    "name": "Geominimal",
    "category": "All presets",
-   "higgsfieldDescription": "Clean lines, geometric overlays. Sharp, modern, minimalist settings",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Clean lines, geometric overlays. Sharp, modern, minimalist settings",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Geominimal, clean lines, geometric overlays, sharp modern minimalist set. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "negative space, minimalist frame, empty background",
@@ -11177,8 +11177,8 @@
    "model": "soul-v1",
    "name": "7\\",
    "category": "All presets",
-   "higgsfieldDescription": "Distorted realism of Aphex Twin with eerie edits, glitch vibes, cult-classic weirdness",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Distorted realism of Aphex Twin with eerie edits, glitch vibes, cult-classic weirdness",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Distorted eerie realism, uncanny wide grin, glitch edits, cult-classic weirdness. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "gl1tch",
@@ -11234,8 +11234,8 @@
    "model": "soul-v1",
    "name": "Selfcare",
    "category": "All presets",
-   "higgsfieldDescription": "Candles, skincare, robes. Glowing peace in muted tones and soft light",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Candles, skincare, robes. Glowing peace in muted tones and soft light",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Self-care evening, candles, skincare, bathrobe, glowing calm, muted soft light. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "dreamy glow, soft bloom, ethereal mist, pastel wash",
@@ -11291,8 +11291,8 @@
    "model": "soul-v1",
    "name": "Babydoll MakeUp",
    "category": "All presets",
-   "higgsfieldDescription": "Fluttery lashes, pouty lips, and porcelain skin-sweet meets surreal in a hyper-feminine glow-up",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Fluttery lashes, pouty lips, and porcelain skin-sweet meets surreal in a hyper-feminine glow-up",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Babydoll makeup, fluttery lashes, pouty lips, porcelain skin, hyper-feminine glow. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -11332,8 +11332,8 @@
    "model": "soul-v1",
    "name": "Fairycore",
    "category": "Mood",
-   "higgsfieldDescription": "Glittery woodland fantasy. Soft pastels, magical sparkles, enchanted innocence",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Glittery woodland fantasy. Soft pastels, magical sparkles, enchanted innocence",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Fairycore, glittery woodland fantasy, soft pastels, magical sparkles. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "dreamy glow, soft bloom, ethereal mist, pastel wash",
@@ -11389,8 +11389,8 @@
    "model": "soul-v1",
    "name": "Office beach",
    "category": "All presets",
-   "higgsfieldDescription": "Corporate meets coastal. Suits and sand, spreadsheets with sunglasses - chaotic and sun-bleached",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Corporate meets coastal. Suits and sand, spreadsheets with sunglasses - chaotic and sun-bleached",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Office beach, business suit on sand, spreadsheets and sunglasses, sun-bleached chaos. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "Act1vate!",
@@ -11446,8 +11446,8 @@
    "model": "soul-v1",
    "name": "Swords Hill",
    "category": "All presets",
-   "higgsfieldDescription": "High fantasy on a mountain slope. Capes, steel, wind-blown drama—part legend, part editorial",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "High fantasy on a mountain slope. Capes, steel, wind-blown drama—part legend, part editorial",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. High fantasy on a mountain slope, capes, steel, wind-blown drama, part legend part editorial. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
    "triggers": "CINEMATIC, FILM STILL",
@@ -11503,8 +11503,8 @@
    "model": "soul-v1",
    "name": "Amalfi Summer",
    "category": "All presets",
-   "higgsfieldDescription": "Lemon light, sunkissed skin, linen dresses fluttering on cobblestone-luxury by the sea",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Lemon light, sunkissed skin, linen dresses fluttering on cobblestone-luxury by the sea",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Amalfi summer, lemon light, sun-kissed skin, linen dress fluttering on cobblestones by the sea. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "golden hour, sunset, warm tones, soft light",
@@ -11560,8 +11560,8 @@
    "model": "soul-v1",
    "name": "Creatures",
    "category": "Surreal",
-   "higgsfieldDescription": "Animalistic details fused with human edge, strange, eerie and beautiful",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Animalistic details fused with human edge, strange, eerie and beautiful",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Animalistic details fused with human features, strange, eerie and beautiful. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -11619,8 +11619,8 @@
    "model": "soul-v1",
    "name": "Grunge",
    "category": "All presets",
-   "higgsfieldDescription": "Distressed denim, oversized flannel, and don’t-care hair. Moody, messy, iconic",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Distressed denim, oversized flannel, and don’t-care hair. Moody, messy, iconic",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Grunge, distressed denim, oversized flannel, don't-care hair, moody and messy. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "rebelessence, AmateurPhotos90s-77",
@@ -11676,8 +11676,8 @@
    "model": "soul-v1",
    "name": "Glazed doll skin makeup",
    "category": "All presets",
-   "higgsfieldDescription": "Glass-like skin with high-shine finish. Dewy, doll-like, and flawlessly unreal",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Glass-like skin with high-shine finish. Dewy, doll-like, and flawlessly unreal",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Glazed doll skin makeup, glass-like high-shine skin, dewy, flawlessly unreal. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -11717,8 +11717,8 @@
    "model": "soul-v1",
    "name": "Invertethereal",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Negative tones and ghostly hues. Dreamlike, eerie, and light turned inside out",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Negative tones and ghostly hues. Dreamlike, eerie, and light turned inside out",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Negative tones and ghostly hues, light turned inside out, dreamlike and eerie. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -11758,8 +11758,8 @@
    "model": "soul-v1",
    "name": "Indie sleaze",
    "category": "All presets",
-   "higgsfieldDescription": "Flash-lit chaos, smudged eyeliner, and blurry rebellion. Tumblr-era nightlife energy in its rawest, hottest form",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Flash-lit chaos, smudged eyeliner, and blurry rebellion. Tumblr-era nightlife energy in its rawest, hottest form",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Indie sleaze, flash-lit nightlife chaos, smudged eyeliner, blurry rebellion. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "hardflashy, emoessence",
@@ -11815,8 +11815,8 @@
    "model": "soul-v1",
    "name": "Mixed Media",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Layers of photo, paint, text, and texture. A visual collage with chaotic elegance",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Layers of photo, paint, text, and texture. A visual collage with chaotic elegance",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Mixed-media collage of photo, paint, text and texture, chaotic elegance.",
    "triggers": "xuplx",
@@ -11856,8 +11856,8 @@
    "model": "soul-v1",
    "name": "Paper Face",
    "category": "Graphic Art",
-   "higgsfieldDescription": "A face collaged from torn paper, textures, and cutouts-raw edges meet artistic expression. Mixed media magic with a surreal twist",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "A face collaged from torn paper, textures, and cutouts-raw edges meet artistic expression. Mixed media magic with a surreal twist",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. A face collaged from torn paper, cutouts and textures, raw edges, mixed-media surrealism.",
    "triggers": "xuplx, layered paper diorama, cut paper art",
@@ -11915,8 +11915,8 @@
    "model": "soul-v1",
    "name": "2000s Fashion",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Flashy fits, shiny textures, and Y2K icons—low-rise, high-attitude, totally throwback",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Flashy fits, shiny textures, and Y2K icons—low-rise, high-attitude, totally throwback",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 2000s fashion, flashy fits, shiny textures, Y2K icons, low-rise and high-attitude. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "y2k style, early 2000s aesthetic, digicam flash photography, ccd grain",
@@ -11972,7 +11972,7 @@
    "model": "soul-v1",
    "name": "Movie",
    "category": "All presets",
-   "higgsfieldDescription": "Widescreen film-still look with cinematic lighting and grade",
+   "parityDescription": "Widescreen film-still look with cinematic lighting and grade",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Widescreen film still, cinematic lighting and grade, anamorphic feel. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -12029,8 +12029,8 @@
    "model": "soul-v1",
    "name": "Overexposed",
    "category": "Mood",
-   "higgsfieldDescription": "Washed-out whites, crushed detail, and intense brightness. A raw visual effect that feels accidental, emotional, and unfiltered",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Washed-out whites, crushed detail, and intense brightness. A raw visual effect that feels accidental, emotional, and unfiltered",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Overexposed, washed-out whites, crushed detail, intense brightness, accidental and emotional. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "Act1vate!",
@@ -12086,8 +12086,8 @@
    "model": "soul-v1",
    "name": "Long legs",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Elongated limbs and stretched proportions. Stylized drama with a runway edge",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Elongated limbs and stretched proportions. Stylized drama with a runway edge",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Elongated limbs and stretched proportions from a very low camera angle, runway edge. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -12129,8 +12129,8 @@
    "model": "soul-v1",
    "name": "Night Beach",
    "category": "All presets",
-   "higgsfieldDescription": "Moonlit waves, dark silhouettes, and salt in the air. Intimate and a little unreal",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Moonlit waves, dark silhouettes, and salt in the air. Intimate and a little unreal",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Night beach, moonlit waves, dark silhouettes, salt in the air, a little unreal. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "4ft3rd4rk",
@@ -12186,8 +12186,8 @@
    "model": "soul-v1",
    "name": "90’s Editorial",
    "category": "All presets",
-   "higgsfieldDescription": "Retro fashion magazine style image with film grain, soft blur, moody colors, and pure nostalgia",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Retro fashion magazine style image with film grain, soft blur, moody colors, and pure nostalgia",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 1990s fashion magazine editorial, film grain, soft blur, moody colours, nostalgia. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -12243,8 +12243,8 @@
    "model": "soul-v1",
    "name": "Sitting on the Street",
    "category": "All presets",
-   "higgsfieldDescription": "Laid-back pose meets city grit. Candid, cool, and consciously unbothered",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Laid-back pose meets city grit. Candid, cool, and consciously unbothered",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Sitting on a city curb, laid-back pose, city grit, candid and unbothered. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "ff-crp",
@@ -12300,8 +12300,8 @@
    "model": "soul-v1",
    "name": "Glitch",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Pixel drag, color distortion, and digital noise. Beautiful errors in motion",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Pixel drag, color distortion, and digital noise. Beautiful errors in motion",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Glitch art, pixel drag, colour distortion, digital noise, beautiful errors.",
    "triggers": "Glitchcore",
@@ -12341,8 +12341,8 @@
    "model": "soul-v1",
    "name": "FashionShow",
    "category": "All presets",
-   "higgsfieldDescription": "Backstage flashes, bold looks, and runway energy—where chaos meets couture",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Backstage flashes, bold looks, and runway energy—where chaos meets couture",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Backstage at a fashion show, flashes going off, bold looks, runway energy. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "hardflashy",
@@ -12398,8 +12398,8 @@
    "model": "soul-v1",
    "name": "Artwork",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Framed moments with painterly depth. A still life of emotion, texture, and light",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Framed moments with painterly depth. A still life of emotion, texture, and light",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Framed artwork with painterly depth, a still life of emotion, texture and light.",
    "triggers": "class1cpa1nt",
@@ -12439,8 +12439,8 @@
    "model": "soul-v1",
    "name": "Graffiti",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Spray textures, bold lines, and rebellious color. Raw energy in every frame",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Spray textures, bold lines, and rebellious color. Raw energy in every frame",
+   "descriptionSource": "{studio}",
    "base": "qwen-image-2512",
    "template": "{prompt}. Graffiti, spray-paint textures, bold lines, rebellious colour on a city wall.",
    "triggers": "",
@@ -12463,8 +12463,8 @@
    "model": "soul-v1",
    "name": "Angel Wings",
    "category": "All presets",
-   "higgsfieldDescription": "Soft look with delicate wings giving dreamy and weightless",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Soft look with delicate wings giving dreamy and weightless",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Soft dreamy look with delicate feathered angel wings, weightless. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "angel_twin, duality, dreamy glow, soft bloom, ethereal mist, pastel wash",
@@ -12520,8 +12520,8 @@
    "model": "soul-v1",
    "name": "PixeletedFace",
    "category": "All presets",
-   "higgsfieldDescription": "Retro-glitch vibe with a pixelated face—playful, edgy, straight out of an early-internet dream",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Retro-glitch vibe with a pixelated face—playful, edgy, straight out of an early-internet dream",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Retro early-internet portrait with the face pixelated into large blocks. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -12563,8 +12563,8 @@
    "model": "soul-v1",
    "name": "Grillz Selfie",
    "category": "All presets",
-   "higgsfieldDescription": "Flash-heavy close-up of shiny teeth, with grills, bold attitude, underground luxury",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Flash-heavy close-up of shiny teeth, with grills, bold attitude, underground luxury",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Flash-heavy close-up of shiny gold grillz, bold attitude, underground luxury. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
    "triggers": "hardflashy",
@@ -12622,8 +12622,8 @@
    "model": "soul-v1",
    "name": "Shoe Check",
    "category": "Surreal",
-   "higgsfieldDescription": "A visual trend where the focus is on footwear, often captured from a top-down or ground-level angle",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "A visual trend where the focus is on footwear, often captured from a top-down or ground-level angle",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Shoe check, footwear in focus, top-down or ground-level angle. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
    "triggers": "amateur digital snapshot, candid, smartphone capture",
@@ -12663,8 +12663,8 @@
    "model": "soul-v1",
    "name": "Bleached Brows",
    "category": "All presets",
-   "higgsfieldDescription": "Barely-there brows, futuristic face. A blank canvas for bold energy and alien glam",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Barely-there brows, futuristic face. A blank canvas for bold energy and alien glam",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Bleached barely-there brows, futuristic blank-canvas face, alien glam. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "",
@@ -12706,8 +12706,8 @@
    "model": "soul-v1",
    "name": "Object Makeup",
    "category": "All presets",
-   "higgsfieldDescription": "Collage-style layers. An object below, makeup above, colors duplicated for surreal, editorial face art",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Collage-style layers. An object below, makeup above, colors duplicated for surreal, editorial face art",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Collage-style object makeup: an object below, makeup above, colours duplicated, surreal face art. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "xuplx",
@@ -12765,8 +12765,8 @@
    "model": "soul-v1",
    "name": "360 cam",
    "category": "Camera Presets",
-   "higgsfieldDescription": "Wrap-around perspective with immersive distortion. Captures everything-warped, wide, and wonderfully weird",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Wrap-around perspective with immersive distortion. Captures everything-warped, wide, and wonderfully weird",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. 360 camera wrap-around perspective, immersive warped distortion, everything in frame. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "360, 360 VIEW, Fish Eye Lens, Fish eye camera",
@@ -12822,7 +12822,7 @@
    "model": "soul-v1",
    "name": "Giant People",
    "category": "All presets",
-   "higgsfieldDescription": "Surreal scale play: the subject towers over a miniature world",
+   "parityDescription": "Surreal scale play: the subject towers over a miniature world",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Surreal scale: the subject towers over a miniature city, tilt-shift look. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -12865,7 +12865,7 @@
    "model": "soul-v1",
    "name": "Help It's Too Big",
    "category": "All presets",
-   "higgsfieldDescription": "Comedic oversized prop or garment dwarfing the subject",
+   "parityDescription": "Comedic oversized prop or garment dwarfing the subject",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Comedic oversized prop or garment dwarfing the subject. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -12908,8 +12908,8 @@
    "model": "soul-v1",
    "name": "Duplicate",
    "category": "Graphic Art",
-   "higgsfieldDescription": "Echoed figures, mirrored forms, or repeated poses-surreal symmetry that bends perception",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Echoed figures, mirrored forms, or repeated poses-surreal symmetry that bends perception",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Duplicate: echoed figures, mirrored forms, repeated poses, surreal symmetry. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "twins, identical twins, doppelganger effect, mirror reflection",
@@ -12949,8 +12949,8 @@
    "model": "soul-v1",
    "name": "Library",
    "category": "New",
-   "higgsfieldDescription": "Soft indoor lighting meets cozy academia. Perfect for quiet power, timeless knits, and capturing the stillness of thought between the shelves.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Soft indoor lighting meets cozy academia. Perfect for quiet power, timeless knits, and capturing the stillness of thought between the shelves.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Cosy academia library, soft indoor light, timeless knits, stillness between the shelves. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "fe85f14",
@@ -13006,8 +13006,8 @@
    "model": "soul-v1",
    "name": "Escalator",
    "category": "New",
-   "higgsfieldDescription": "Gliding style in motion. This preset captures that effortless  mall paparazzi look — structured outfits, steel gradients, and motion frozen in frame.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Gliding style in motion. This preset captures that effortless  mall paparazzi look — structured outfits, steel gradients, and motion frozen in frame.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Mall escalator paparazzi look, structured outfit, steel gradients, motion frozen. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "ff-crp",
@@ -13063,8 +13063,8 @@
    "model": "soul-v1",
    "name": "Gallery",
    "category": "New",
-   "higgsfieldDescription": "Neutral walls, high taste. This preset frames your subject like a work of art — minimal, polished, and modern.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Neutral walls, high taste. This preset frames your subject like a work of art — minimal, polished, and modern.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Gallery, neutral walls, subject framed like a work of art, minimal and polished. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "negative space, minimalist frame, empty background",
@@ -13120,8 +13120,8 @@
    "model": "soul-v1",
    "name": "Crossing the street",
    "category": "New",
-   "higgsfieldDescription": "Boss walk energy. Overhead angles, harsh midday shadows, and that perfect step mid-cross. Looks stolen from a fashion mag.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Boss walk energy. Overhead angles, harsh midday shadows, and that perfect step mid-cross. Looks stolen from a fashion mag.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Crossing the street mid-stride, overhead angle, harsh midday shadows, boss-walk energy. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "Act1vate!",
@@ -13177,8 +13177,8 @@
    "model": "soul-v1",
    "name": "Sunbathing",
    "category": "New",
-   "higgsfieldDescription": "Clear turquoise water, woven bags, towel texture, and heat-soaked skin.",
-   "descriptionSource": "higgsfield",
+   "parityDescription": "Clear turquoise water, woven bags, towel texture, and heat-soaked skin.",
+   "descriptionSource": "{studio}",
    "base": "z-image-turbo",
    "template": "{prompt}. Sunbathing, clear turquoise water, woven bag, towel texture, heat-soaked skin. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
    "triggers": "golden hour, sunset, warm tones, soft light",
@@ -13234,7 +13234,7 @@
    "model": "soul-v1",
    "name": "Subway",
    "category": "New",
-   "higgsfieldDescription": "Fluorescent-lit subway car or platform, candid commuter vibe",
+   "parityDescription": "Fluorescent-lit subway car or platform, candid commuter vibe",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Fluorescent-lit subway car or platform, candid commuter. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13291,7 +13291,7 @@
    "model": "soul-v1",
    "name": "birthday mess",
    "category": "All presets",
-   "higgsfieldDescription": "Flash-lit party aftermath with cake, balloons and confetti",
+   "parityDescription": "Flash-lit party aftermath with cake, balloons and confetti",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Flash-lit party aftermath with cake, balloons and confetti. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -13348,7 +13348,7 @@
    "model": "soul-v1",
    "name": "static glow",
    "category": "All presets",
-   "higgsfieldDescription": "Soft TV-static haze and analog light bloom",
+   "parityDescription": "Soft TV-static haze and analog light bloom",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Soft TV-static haze, analog light bloom, CRT glow. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13405,7 +13405,7 @@
    "model": "soul-v1",
    "name": "Clouded Dream",
    "category": "All presets",
-   "higgsfieldDescription": "Dreamy pastel sky, soft clouds and airy haze",
+   "parityDescription": "Dreamy pastel sky, soft clouds and airy haze",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Dreamy pastel sky, soft clouds, airy haze. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13446,7 +13446,7 @@
    "model": "soul-v1",
    "name": "Double take",
    "category": "All presets",
-   "higgsfieldDescription": "The same subject appears twice in one frame",
+   "parityDescription": "The same subject appears twice in one frame",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. The same person appears twice in one frame. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13487,7 +13487,7 @@
    "model": "soul-v1",
    "name": "Red balloon",
    "category": "All presets",
-   "higgsfieldDescription": "Minimal scene with a single red balloon as the accent",
+   "parityDescription": "Minimal scene with a single red balloon as the accent",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Minimal scene with a single red balloon as the only accent colour. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13544,7 +13544,7 @@
    "model": "soul-v1",
    "name": "tokyo drift",
    "category": "All presets",
-   "higgsfieldDescription": "Neon Tokyo night streets and car culture, motion-blurred lights",
+   "parityDescription": "Neon Tokyo night streets and car culture, motion-blurred lights",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Neon Tokyo night streets, car culture, motion-blurred lights. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -13601,7 +13601,7 @@
    "model": "soul-v1",
    "name": "Rhyme & blues",
    "category": "All presets",
-   "higgsfieldDescription": "Moody 90s R&B album-cover look, deep blues and a soft spotlight",
+   "parityDescription": "Moody 90s R&B album-cover look, deep blues and a soft spotlight",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. 1990s R&B album cover, deep blues, soft spotlight. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13658,7 +13658,7 @@
    "model": "soul-v1",
    "name": "Bike mafia",
    "category": "All presets",
-   "higgsfieldDescription": "Crew posing with motorbikes, gritty street attitude",
+   "parityDescription": "Crew posing with motorbikes, gritty street attitude",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Crew posing with motorbikes, gritty street attitude. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13699,7 +13699,7 @@
    "model": "soul-v1",
    "name": "dmv",
    "category": "All presets",
-   "higgsfieldDescription": "Flat, harsh ID-photo lighting like a driver's-licence portrait",
+   "parityDescription": "Flat, harsh ID-photo lighting like a driver's-licence portrait",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Flat, harsh frontal flash, driver's-licence ID photo, plain blue-grey backdrop, passport framing. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -13740,7 +13740,7 @@
    "model": "soul-v1",
    "name": "Sea breeze",
    "category": "All presets",
-   "higgsfieldDescription": "Windswept seaside portrait, linen and salt air",
+   "parityDescription": "Windswept seaside portrait, linen and salt air",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Windswept seaside portrait, linen and salt air. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13797,7 +13797,7 @@
    "model": "soul-v1",
    "name": "It’s french",
    "category": "All presets",
-   "higgsfieldDescription": "Parisian chic: stripes, berets, cafe terraces",
+   "parityDescription": "Parisian chic: stripes, berets, cafe terraces",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Parisian chic, Breton stripes, beret, café terrace. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13854,7 +13854,7 @@
    "model": "soul-v1",
    "name": "Fish-eye twin",
    "category": "All presets",
-   "higgsfieldDescription": "Fisheye close-up with a mirrored twin",
+   "parityDescription": "Fisheye close-up with a mirrored twin",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Fisheye close-up with a mirrored twin. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -13911,7 +13911,7 @@
    "model": "soul-v1",
    "name": "hallway noir",
    "category": "All presets",
-   "higgsfieldDescription": "Dark hallway, hard single-source light, noir shadows",
+   "parityDescription": "Dark hallway, hard single-source light, noir shadows",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Dark hallway, one hard light source, noir shadows. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -13952,7 +13952,7 @@
    "model": "soul-v1",
    "name": "burgundy suit",
    "category": "All presets",
-   "higgsfieldDescription": "Tailored burgundy suit editorial on a muted backdrop",
+   "parityDescription": "Tailored burgundy suit editorial on a muted backdrop",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Tailored burgundy suit editorial on a muted backdrop. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14009,7 +14009,7 @@
    "model": "soul-v1",
    "name": "Nicotine glow",
    "category": "All presets",
-   "higgsfieldDescription": "Warm smoky low light, amber haze, late-night mood",
+   "parityDescription": "Warm smoky low light, amber haze, late-night mood",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Warm smoky low light, amber haze, late-night mood. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14066,7 +14066,7 @@
    "model": "soul-v1",
    "name": "green editorial",
    "category": "All presets",
-   "higgsfieldDescription": "Fashion editorial built around saturated greens",
+   "parityDescription": "Fashion editorial built around saturated greens",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Fashion editorial built around saturated greens. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14123,7 +14123,7 @@
    "model": "soul-v1",
    "name": "afterparty cam",
    "category": "All presets",
-   "higgsfieldDescription": "Direct-flash point-and-shoot snaps from the after-party",
+   "parityDescription": "Direct-flash point-and-shoot snaps from the after-party",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Direct-flash point-and-shoot snaps from the after-party. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -14180,7 +14180,7 @@
    "model": "soul-v1",
    "name": "2049",
    "category": "All presets",
-   "higgsfieldDescription": "Dystopian sci-fi haze in orange and teal",
+   "parityDescription": "Dystopian sci-fi haze in orange and teal",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Dystopian sci-fi haze in orange and teal, vast brutalist scale. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -14237,7 +14237,7 @@
    "model": "soul-v1",
    "name": "Fireproof",
    "category": "All presets",
-   "higgsfieldDescription": "Posing amid flames and sparks, heat-haze drama",
+   "parityDescription": "Posing amid flames and sparks, heat-haze drama",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Posing amid flames and sparks, heat-haze drama. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -14294,7 +14294,7 @@
    "model": "soul-v1",
    "name": "Night rider",
    "category": "All presets",
-   "higgsfieldDescription": "Night ride under streetlights with motion streaks",
+   "parityDescription": "Night ride under streetlights with motion streaks",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Night ride under streetlights with motion streaks. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -14351,7 +14351,7 @@
    "model": "soul-v1",
    "name": "chrome exit",
    "category": "All presets",
-   "higgsfieldDescription": "Chrome and metallic surfaces, futuristic styling",
+   "parityDescription": "Chrome and metallic surfaces, futuristic styling",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Chrome and metallic surfaces, futuristic styling. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14408,7 +14408,7 @@
    "model": "soul-v1",
    "name": "brick shade",
    "category": "All presets",
-   "higgsfieldDescription": "Streetwear portrait against a brick wall in hard shade",
+   "parityDescription": "Streetwear portrait against a brick wall in hard shade",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Streetwear portrait against a brick wall in hard shade. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14465,7 +14465,7 @@
    "model": "soul-v1",
    "name": "blackout fit",
    "category": "All presets",
-   "higgsfieldDescription": "All-black monochrome outfit",
+   "parityDescription": "All-black monochrome outfit",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. All-black monochrome outfit, sleek silhouette. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14506,7 +14506,7 @@
    "model": "soul-v1",
    "name": "cocktail",
    "category": "All presets",
-   "higgsfieldDescription": "Glamorous cocktail-bar scene in warm bar light",
+   "parityDescription": "Glamorous cocktail-bar scene in warm bar light",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Glamorous cocktail bar, warm bar light, drink in hand. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14563,7 +14563,7 @@
    "model": "soul-v1",
    "name": "mount view",
    "category": "All presets",
-   "higgsfieldDescription": "Mountain-top portrait with a panoramic vista",
+   "parityDescription": "Mountain-top portrait with a panoramic vista",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Mountain-top portrait with a panoramic vista. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14620,7 +14620,7 @@
    "model": "soul-v1",
    "name": "Sunburnt",
    "category": "All presets",
-   "higgsfieldDescription": "Sun-baked warm tones, flushed skin, harsh midday light",
+   "parityDescription": "Sun-baked warm tones, flushed skin, harsh midday light",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Sun-baked warm tones, flushed skin, harsh midday light. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14677,7 +14677,7 @@
    "model": "soul-v2",
    "name": "General",
    "category": "All presets",
-   "higgsfieldDescription": "Soul 2.0's neutral default look",
+   "parityDescription": "Soul 2.0's neutral default look",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Neutral default look, natural light, true colour. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14734,7 +14734,7 @@
    "model": "soul-v2",
    "name": "Warm ambient",
    "category": "Styles",
-   "higgsfieldDescription": "Soft warm interior ambience with golden practical light",
+   "parityDescription": "Soft warm interior ambience with golden practical light",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Warm ambient interior, golden practical lamps. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -14791,7 +14791,7 @@
    "model": "soul-v2",
    "name": "Y2K studio",
    "category": "Camera",
-   "higgsfieldDescription": "Glossy early-2000s studio shoot on coloured seamless",
+   "parityDescription": "Glossy early-2000s studio shoot on coloured seamless",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Glossy early-2000s studio shoot on coloured seamless paper. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -14848,7 +14848,7 @@
    "model": "soul-v2",
    "name": "Swag era",
    "category": "Mood",
-   "higgsfieldDescription": "2010s swag streetwear: snapbacks, bling, flash",
+   "parityDescription": "2010s swag streetwear: snapbacks, bling, flash",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. 2010s swag streetwear, snapbacks, bling, flash. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -14905,7 +14905,7 @@
    "model": "soul-v2",
    "name": "Theatrical light",
    "category": "Styles",
-   "higgsfieldDescription": "Stage-style spotlighting and deep shadows",
+   "parityDescription": "Stage-style spotlighting and deep shadows",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Stage spotlighting, deep shadows, theatrical drama. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -14962,7 +14962,7 @@
    "model": "soul-v2",
    "name": "Y2K street",
    "category": "Styles",
-   "higgsfieldDescription": "Early-2000s street fashion snapped outdoors",
+   "parityDescription": "Early-2000s street fashion snapped outdoors",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Early-2000s street fashion snapped outdoors. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
@@ -15019,7 +15019,7 @@
    "model": "soul-v2",
    "name": "Flash editorial",
    "category": "Styles",
-   "higgsfieldDescription": "Direct on-camera flash fashion editorial",
+   "parityDescription": "Direct on-camera flash fashion editorial",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Direct on-camera flash fashion editorial. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -15076,7 +15076,7 @@
    "model": "soul-v2",
    "name": "Old smartphone",
    "category": "Camera",
-   "higgsfieldDescription": "Low-res early phone camera: noise, soft focus, blown highlights",
+   "parityDescription": "Low-res early phone camera: noise, soft focus, blown highlights",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Low-resolution early camera-phone photo, noise, soft focus, blown highlights. Unretouched smartphone photo, natural skin texture, slight sensor noise, true-to-life colour.",
@@ -15135,7 +15135,7 @@
    "model": "soul-v2",
    "name": "Street photography",
    "category": "Camera",
-   "higgsfieldDescription": "Candid documentary street photography",
+   "parityDescription": "Candid documentary street photography",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Candid documentary street photography. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15192,7 +15192,7 @@
    "model": "soul-v2",
    "name": "Retro BW",
    "category": "Camera",
-   "higgsfieldDescription": "Grainy black-and-white film portrait",
+   "parityDescription": "Grainy black-and-white film portrait",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Grainy black-and-white film portrait. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15249,7 +15249,7 @@
    "model": "soul-v2",
    "name": "Asian nostalgia",
    "category": "Mood",
-   "higgsfieldDescription": "Nostalgic East Asian film tones and settings",
+   "parityDescription": "Nostalgic East Asian film tones and settings",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Nostalgic East Asian film tones and settings. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15306,7 +15306,7 @@
    "model": "soul-v2",
    "name": "Surreal solarization",
    "category": "Mood",
-   "higgsfieldDescription": "Solarised, partly inverted tones for a surreal glow",
+   "parityDescription": "Solarised, partly inverted tones for a surreal glow",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Solarised, partly inverted tones, surreal glow. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15347,7 +15347,7 @@
    "model": "soul-v2",
    "name": "Subtle flash",
    "category": "Styles",
-   "higgsfieldDescription": "Gentle fill flash for natural editorial snaps",
+   "parityDescription": "Gentle fill flash for natural editorial snaps",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Gentle fill flash, natural editorial snap. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15404,7 +15404,7 @@
    "model": "soul-v2",
    "name": "Digital camera",
    "category": "Camera",
-   "higgsfieldDescription": "2000s compact digicam look with harsh flash",
+   "parityDescription": "2000s compact digicam look with harsh flash",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. 2000s compact digital camera, harsh flash. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -15461,7 +15461,7 @@
    "model": "soul-v2",
    "name": "Siren",
    "category": "Mood",
-   "higgsfieldDescription": "Dark alluring siren make-up and moody glamour",
+   "parityDescription": "Dark alluring siren make-up and moody glamour",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Dark alluring siren makeup, moody glamour. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15518,7 +15518,7 @@
    "model": "soul-v2",
    "name": "Mystique city",
    "category": "Mood",
-   "higgsfieldDescription": "Mysterious night city, haze and neon",
+   "parityDescription": "Mysterious night city, haze and neon",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Mysterious night city, haze and neon. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -15575,7 +15575,7 @@
    "model": "soul-v2",
    "name": "Candy pop",
    "category": "Styles",
-   "higgsfieldDescription": "Bright candy-coloured pop styling",
+   "parityDescription": "Bright candy-coloured pop styling",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Bright candy-coloured pop styling. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15616,7 +15616,7 @@
    "model": "soul-v2",
    "name": "Double exposure",
    "category": "Mood",
-   "higgsfieldDescription": "Two images blended in-camera",
+   "parityDescription": "Two images blended in-camera",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Two images blended in-camera, double exposure. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15657,7 +15657,7 @@
    "model": "soul-v2",
    "name": "2000s band",
    "category": "Styles",
-   "higgsfieldDescription": "Early-2000s band promo photo",
+   "parityDescription": "Early-2000s band promo photo",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Early-2000s band promo photo. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -15714,7 +15714,7 @@
    "model": "soul-v2",
    "name": "Frutiger aero",
    "category": "Styles",
-   "higgsfieldDescription": "Glossy aqua, bubbles and sky-blue 2000s tech optimism",
+   "parityDescription": "Glossy aqua, bubbles and sky-blue 2000s tech optimism",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Frutiger Aero, glossy aqua, bubbles, sky blue, 2000s tech optimism.",
@@ -15740,7 +15740,7 @@
    "model": "soul-v2",
    "name": "Drain",
    "category": "Styles",
-   "higgsfieldDescription": "Washed-out, melancholic emo-rap aesthetic",
+   "parityDescription": "Washed-out, melancholic emo-rap aesthetic",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Washed-out melancholic emo-rap aesthetic. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15797,7 +15797,7 @@
    "model": "soul-v2",
    "name": "Extraterrestrial",
    "category": "All presets",
-   "higgsfieldDescription": "Otherworldly sci-fi light and alien landscapes",
+   "parityDescription": "Otherworldly sci-fi light and alien landscapes",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Otherworldly sci-fi light, alien landscape. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -15854,7 +15854,7 @@
    "model": "soul-v2",
    "name": "Editorial street style",
    "category": "Styles",
-   "higgsfieldDescription": "Fashion-week street-style snaps",
+   "parityDescription": "Fashion-week street-style snaps",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Fashion-week street-style snap. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15911,7 +15911,7 @@
    "model": "soul-v2",
    "name": "Nature light",
    "category": "All presets",
-   "higgsfieldDescription": "Natural outdoor daylight, soft and true to life",
+   "parityDescription": "Natural outdoor daylight, soft and true to life",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Natural outdoor daylight, soft and true to life. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -15968,7 +15968,7 @@
    "model": "soul-v2",
    "name": "New Indie",
    "category": "All presets",
-   "higgsfieldDescription": "Modern indie look: film grain, candid framing, soft colour",
+   "parityDescription": "Modern indie look: film grain, candid framing, soft colour",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Modern indie look, film grain, candid framing, soft colour. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -16025,7 +16025,7 @@
    "model": "soul-v2",
    "name": "Underwater",
    "category": "All presets",
-   "higgsfieldDescription": "Submerged portrait with caustic light",
+   "parityDescription": "Submerged portrait with caustic light",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Submerged underwater portrait, caustic light, bubbles. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -16068,7 +16068,7 @@
    "model": "soul-v2",
    "name": "80s horror",
    "category": "All presets",
-   "higgsfieldDescription": "1980s horror lighting: red and blue gels, fog",
+   "parityDescription": "1980s horror lighting: red and blue gels, fog",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. 1980s horror lighting, red and blue gels, fog. Cinematic film still, motivated lighting, natural skin texture, fine film grain, shallow depth of field.",
@@ -16125,7 +16125,7 @@
    "model": "soul-v2",
    "name": "Disposable camera",
    "category": "All presets",
-   "higgsfieldDescription": "Disposable film camera flash snapshots",
+   "parityDescription": "Disposable film camera flash snapshots",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Disposable film camera flash snapshot. Direct on-camera flash, hard shadow behind the subject, natural skin texture, slight grain.",
@@ -16182,7 +16182,7 @@
    "model": "soul-v2",
    "name": "Neutral pastel film",
    "category": "All presets",
-   "higgsfieldDescription": "Film stock with neutral pastel tones",
+   "parityDescription": "Film stock with neutral pastel tones",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Film stock with neutral pastel tones. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -16239,7 +16239,7 @@
    "model": "soul-v2",
    "name": "Warm vivid film",
    "category": "All presets",
-   "higgsfieldDescription": "Saturated warm film stock",
+   "parityDescription": "Saturated warm film stock",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Saturated warm film stock. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -16296,7 +16296,7 @@
    "model": "soul-v2",
    "name": "BW film",
    "category": "All presets",
-   "higgsfieldDescription": "Classic black-and-white film stock",
+   "parityDescription": "Classic black-and-white film stock",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Classic black-and-white film stock. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -16353,7 +16353,7 @@
    "model": "soul-v2",
    "name": "Warm contrast film",
    "category": "All presets",
-   "higgsfieldDescription": "Warm, high-contrast film",
+   "parityDescription": "Warm, high-contrast film",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Warm high-contrast film. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -16410,7 +16410,7 @@
    "model": "soul-v2",
    "name": "Muted cool film",
    "category": "All presets",
-   "higgsfieldDescription": "Desaturated cool-toned film",
+   "parityDescription": "Desaturated cool-toned film",
    "descriptionSource": "inferred",
    "base": "z-image-turbo",
    "template": "{prompt}. Desaturated cool-toned film. Editorial photograph, natural skin texture with visible pores and fine hair, true-to-life colour, realistic light fall-off, subtle film grain.",
@@ -18643,7 +18643,7 @@
    "loras": [],
    "hosted": {},
    "newSinceMid2026": false,
-   "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used.",
+   "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used.",
    "bothEnginesToday": false
   },
   {
@@ -18715,8 +18715,8 @@
  "studios": [
   {
    "id": "genjutsu",
-   "higgsfield": "Genjutsu: motion transfer, object swap, restyle (higgsfield/genjutsu/*/v1.0; Lite variants); also a paid ComfyUI partner node. Underneath (higgsfield-originals-5.json): likely Seedance 2.5 edit / reference mode with Higgsfield prompts; Genjutsu Lite likely Wan 3.0 reference-to-video. Neither is open, so the Original is a substitute, not a copy. The ComfyUI partner node is a cloud API node.",
-   "higgsfieldInputs": "prompt, video_url (4-30 s, trimmed at 30 s), image_urls (up to 5), resolution 480p/720p/1080p; restyle adds preset_id",
+   "parity": "Genjutsu: motion transfer, object swap, restyle ({studio}/genjutsu/*/v1.0; Lite variants); also a paid ComfyUI partner node. Underneath (parity-originals-5.json): likely Seedance 2.5 edit / reference mode with the parity studio's prompts; Genjutsu Lite likely Wan 3.0 reference-to-video. Neither is open, so the Original is a substitute, not a copy. The ComfyUI partner node is a cloud API node.",
+   "parityInputs": "prompt, video_url (4-30 s, trimmed at 30 s), image_urls (up to 5), resolution 480p/720p/1080p; restyle adds preset_id",
    "modes": [
     {
      "mode": "motion transfer",
@@ -18753,7 +18753,7 @@
   },
   {
    "id": "evolution",
-   "higgsfield": "Higgsfield Evolution (hf_evolution, a gated test model): one video plus up to 40 reference images or elements, change_intensity low / medium / high, an optional creative direction of up to 10,000 characters, 480p / 720p / 1080p. What runs underneath is speculative (7 credits a second at 720p, Seedance 2.5's price): see higgsfield-originals-5.md §3.20.",
+   "parity": "Evolution (hf_evolution, a gated test model): one video plus up to 40 reference images or elements, change_intensity low / medium / high, an optional creative direction of up to 10,000 characters, 480p / 720p / 1080p. What runs underneath is speculative (7 credits a second at 720p, Seedance 2.5's price): see parity-originals-5.md §3.20.",
    "open": "Fuobe video-evolution-wan22-fun-vace: per ≤81-frame segment at 16 fps, the segment's first frame is taken toward the creative direction by Qwen-Image-Edit 2511 (images 2–3 = the first references), then Wan 2.2 Fun VACE re-renders the segment starting from the segment itself, noised to the intensity's denoise, with depth control and the direction frame as the VACE reference",
    "hosted": [
     "fal-ai/ltx-2.3-22b/video-to-video (video_strength = 1 − denoise; $0.001605 per megapixel of video)",
@@ -18763,7 +18763,7 @@
    "original": {
     "model": "fuobe-evolution",
     "added": "2026-10-29 (build plan O13)",
-    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (decided 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
+    "source": "Fuobe's own recipe for Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (decided 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
     "intensity": {
      "low": 0.45,
      "medium": 0.65,
@@ -18816,20 +18816,20 @@
   },
   {
    "id": "mixed-media",
-   "higgsfield": "Mixed Media: 33 per-frame stylisation presets on a source video",
+   "parity": "Mixed Media: 33 per-frame stylisation presets on a source video",
    "open": "Fuobe mixed-media-zimage-frames: Z-Image Turbo img2img + Fun Union ControlNet per frame at 4-24 fps (VHS meta-batch), with the look's Z-Image LoRA injected (same LoRA library as Fuobe Soul)",
    "hosted": [
     "per frame: fal-ai/z-image/turbo/controlnet/lora ($0.01 per megapixel; a 5 s clip at 12 fps is 60 frames, about $0.30-0.60 at 0.5-1 MP), then join with fal ffmpeg",
     "temporally smoother: restyle frame 0 with fal-ai/z-image/turbo/image-to-image/lora, then fal-ai/wan-22-vace-fun-a14b/depth (the Fun VACE restyle route)",
     "or fal-ai/krea-wan-14b/video-to-video (Wan 2.1 based, strength 0-1, $0.025 per output second)"
    ],
-   "note": "The per-frame route is what Higgsfield's Mixed Media looks like (flicker as a style); Fun VACE is the smooth option.",
+   "note": "The per-frame route is what the parity studio's Mixed Media looks like (flicker as a style); Fun VACE is the smooth option.",
    "licence": "Apache-2.0 throughout",
    "original": {
     "id": "fuobe-mixed-media",
     "name": "Fuobe Mixed Media",
     "built": "2026-10-28 (o/o9-mixed-shorts, build plan O9)",
-    "behaviour": "Per-frame stylisation and reassembly, as Higgsfield's Mixed Media (higgsfield-originals-5.md §3.11): every frame drawn again at one fixed seed, the flicker being part of the look; Smooth is the temporally stable option.",
+    "behaviour": "Per-frame stylisation and reassembly, as the parity studio's Mixed Media (parity-originals-5.md §3.11): every frame drawn again at one fixed seed, the flicker being part of the look; Smooth is the temporally stable option.",
     "limits": {
      "minSeconds": 1,
      "maxSeconds": 10,
@@ -18839,7 +18839,7 @@
      "framesPerClip": 200,
      "framesPerExtract": 500
     },
-    "frames": "floor(seconds × fps), as Higgsfield counts and charges them: 10 s at 24 fps is 240 frames, made as two clips of 120 joined (images-to-video takes up to 200 images)",
+    "frames": "floor(seconds × fps), as the parity studio counts and charges them: 10 s at 24 fps is 240 frames, made as two clips of 120 joined (images-to-video takes up to 200 images)",
     "seed": 424242,
     "cloud": {
      "frame": "fal-ai/z-image/turbo/controlnet/lora",
@@ -18973,12 +18973,12 @@
   },
   {
    "id": "shorts",
-   "higgsfield": "Shorts Studio: restyle your footage into a new look with 44 presets or a custom moodboard, powered by Gemini Omni Flash (higgsfield-originals-5.md §3.12)",
+   "parity": "Shorts Studio: restyle your footage into a new look with 44 presets or a custom moodboard, powered by Gemini Omni Flash (parity-originals-5.md §3.12)",
    "open": "per segment: video-segment-resample (up to 81 frames at 16 fps, plus its first frame) → qwen-image-edit-2511 restyles frame 0 with the look (references as images 2 and 3) → video-restyle-wan22-fun-vace (depth, the restyled frame as reference) → video-concat-N → video-mux-audio",
    "hosted": [
     "per segment of up to 241 frames (and 10 s): fal-ai/workflow-utilities/trim-video → fal-ai/workflow-utilities/scale-video (centre crop to 9:16 or 16:9) → fal-ai/ffmpeg-api/extract-frame (first) → fal-ai/qwen-image-edit-2511 (the look; /lora with a LoRA) → fal-ai/wan-22-vace-fun-a14b/depth (first_frame_url, match_input_num_frames, match_input_frames_per_second) → fal-ai/ffmpeg-api/merge-videos → fal-ai/ffmpeg-api/merge-audio-video"
    ],
-   "note": "Higgsfield's Shorts runs Gemini Omni Flash, a closed partner model; the Original is the open Shorts chain (Qwen edit of frame 0, then Wan 2.2 Fun VACE by depth) on both engines. Gemini Omni Flash and the other partners stay as choices.",
+   "note": "The parity studio's Shorts runs Gemini Omni Flash, a closed partner model; the Original is the open Shorts chain (Qwen edit of frame 0, then Wan 2.2 Fun VACE by depth) on both engines. Gemini Omni Flash and the other partners stay as choices.",
    "licence": "Apache-2.0 throughout (Qwen-Image-Edit 2511, Wan 2.2 Fun VACE; Depth Anything 3 mono-large and lightx2v on the open engine)",
    "original": {
     "id": "fuobe-shorts",
@@ -19019,7 +19019,7 @@
   },
   {
    "id": "cinema-studio",
-   "higgsfield": "Cinema Studio 4.0: Director's Panel (genre, era, pacing, light, camera body, lens, aperture, move, palette) over Seedance 2.5 (a ByteDance model, not open); image mode with camera stills and grids",
+   "parity": "Cinema Studio 4.0: Director's Panel (genre, era, pacing, light, camera body, lens, aperture, move, palette) over Seedance 2.5 (a ByteDance model, not open); image mode with camera stills and grids",
    "open": "Wan 2.2 14B I2V (+ Lightning 4-step) or LTX-2.5 22B (audio + video, up to 4K, gated weights) with the panel compiled into the prompt; camera moves from the Motions map (camera LoRAs, Fun Camera poses); palette lock (oss-palette-video); stills from Fuobe Soul (Z-Image) with camera/lens words; Soul Cinema look for image mode; multi-shot as one clip per shot then join, or the Cinematic Hard Cut / Fast Cutting Wan LoRAs inside one clip",
    "hosted": [
     "fal-ai/ltx-2.3-22b/image-to-video/lora (camera_lora dolly_in/out/left/right, jib_up/down, static + up to N loras, generate_audio, num_frames up to 481; $0.001805 per megapixel of video: 121 frames at 1280x720 is about $0.20)",
@@ -19135,7 +19135,7 @@
   },
   {
    "id": "upscale",
-   "higgsfield": "Upscale image/video (4 models), SDR to HDR, FPS Boost",
+   "parity": "Upscale image/video (4 models), SDR to HDR, FPS Boost",
    "open": "SeedVR2 3B/7B (Apache-2.0; Fuobe upscale-image-seedvr2, upscale-video-seedvr2; ESRGAN fallback); RIFE/FILM for FPS boost; LTX-2.5 IC-LoRA Refine-Details / Pixel-Spatial-Upscaler and SDR-To-HDR (LTX-2.x Community, gated) as newer options",
    "hosted": [
     "fal-ai/seedvr/upscale/image ($0.001 per megapixel)",
@@ -19148,10 +19148,10 @@
   },
   {
    "id": "speak",
-   "higgsfield": "Speak 2.0 / Lipsync Studio (job types in the bundle include infinite_talk and wan2_5_speak)",
+   "parity": "Speak 2.0 / Lipsync Studio (job types in the bundle include infinite_talk and wan2_5_speak)",
    "open": "InfiniteTalk (Apache-2.0; Fuobe infinitetalk-native / -wanwrapper, lipsync-v2v-infinitetalk) with Chatterbox / IndexTTS-2 voices; Wan 2.2 S2V (wan22-s2v-14b) as the second option",
    "hosted": [
-    "fal-ai/infinitalk (required image_url + audio_url + prompt; num_frames 41-721, default 145; resolution 480p default or 720p; acceleration none|regular|high; $0.20 per second; re-read 2026-10-23). No motion_frame / shift / guidance / LoRA fields, so the like-for-like copy of Higgsfield's engine (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5) runs only on the open engine.",
+    "fal-ai/infinitalk (required image_url + audio_url + prompt; num_frames 41-721, default 145; resolution 480p default or 720p; acceleration none|regular|high; $0.20 per second; re-read 2026-10-23). No motion_frame / shift / guidance / LoRA fields, so the like-for-like copy of the parity studio's engine (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5) runs only on the open engine.",
     "fal-ai/infinitalk/single-text (text + voice, $0.20 per second)",
     "fal-ai/infinitalk/video-to-video (re-sync a video, $0.30 per second)",
     "fal-ai/wan/v2.2-14b/speech-to-video ($0.10/0.15/0.20 per second at 480/580/720p)",
@@ -19173,7 +19173,7 @@
       "colorCorrection": 1,
       "scheduler": "unipc"
      },
-     "note": "Higgsfield's 'Infinite Talk' form: motion_frame 15, sample_steps 25, sample_shift 10, sample_text_guide_scale 5, sample_audio_guide_scale 5, color_correction_strength 1, LoRA fusex at 1 (higgsfield-originals-5.md §3.13). In kijai's WanVideoWrapper: WanVideoImageToVideoMultiTalk motion_frame, WanVideoSampler steps / shift / cfg / scheduler (InfiniteTalk's default solver is UniPC), MultiTalkWav2VecEmbeds audio_cfg_scale, and colormatch 'reinhard' for the colour correction (InfiniteTalk matches each window's Lab mean and spread to the portrait, which is Reinhard's transfer; the wrapper has no strength, so 1 = on)."
+     "note": "The parity studio's 'Infinite Talk' form: motion_frame 15, sample_steps 25, sample_shift 10, sample_text_guide_scale 5, sample_audio_guide_scale 5, color_correction_strength 1, LoRA fusex at 1 (parity-originals-5.md §3.13). In kijai's WanVideoWrapper: WanVideoImageToVideoMultiTalk motion_frame, WanVideoSampler steps / shift / cfg / scheduler (InfiniteTalk's default solver is UniPC), MultiTalkWav2VecEmbeds audio_cfg_scale, and colormatch 'reinhard' for the colour correction (InfiniteTalk matches each window's Lab mean and spread to the portrait, which is Reinhard's transfer; the wrapper has no strength, so 1 = on)."
     },
     "cloud": {
      "endpoint": "fal-ai/infinitalk",
@@ -19196,14 +19196,14 @@
       "fps": 16,
       "note": "num_frames 40–120 (a multiple of 4) at 16 fps: 2.5–7.5 s a call; $0.10 / $0.15 / $0.20 per video second at 480p / 580p / 720p."
      },
-     "note": "A Speak v1-like route: Higgsfield's Speak (v1) is a DoP-family image-to-video job driven by audio; Wan 2.2 S2V is the open model that does that (body and scene motion with the speech)."
+     "note": "A Speak v1-like route: the parity studio's Speak (v1) is a DoP-family image-to-video job driven by audio; Wan 2.2 S2V is the open model that does that (body and scene motion with the speech)."
     },
     "licence": "InfiniteTalk Apache-2.0; Wan 2.1 / 2.2 Apache-2.0; FusioniX Apache-2.0 card (merged LoRAs unchecked)"
    }
   },
   {
    "id": "soul-id",
-   "higgsfield": "Soul ID character training",
+   "parity": "Soul ID character training",
    "open": "AI-Toolkit job (existing aiToolkitJob in src/lib/catalog/training.ts) on Z-Image Turbo with ostris/zimage_turbo_training_adapter v2 (Apache-2.0), 10-30 photos, captions with a unique trigger, rank 16-32, 1,500-2,500 steps; output copied into ComfyUI/models/loras.",
    "hosted": [
     "fal-ai/z-image-turbo-trainer-v2: image_data_url (zip of 001.jpg + 001.txt pairs), steps (default 2,000), default_caption, learning_rate 5e-4; $0.85 per 1,000 steps (500-step billing floor), so a default run is $1.70. Output diffusers_lora_file is passed as a loras[] path to fal-ai/z-image/turbo/lora."
@@ -19212,7 +19212,7 @@
   },
   {
    "id": "dop-motions",
-   "higgsfield": "DoP (dop-lite / dop-turbo / dop-standard) with motions [{id, strength}] stacking",
+   "parity": "DoP (dop-lite / dop-turbo / dop-standard) with motions [{id, strength}] stacking",
    "open": "Wan 2.2 14B I2V with the preset → LoRA map (src/lib/catalog/oss-loras.generated.ts + this file's motionsEffects); Mix = two LoRAs stacked by strength (already built)",
    "hosted": [
     "fal-ai/wan/v2.2-a14b/image-to-video/lora (loras with transformer high|low|both)",
@@ -19223,7 +19223,7 @@
   },
   {
    "id": "popcorn",
-   "higgsfield": "Popcorn storyboards (consistent frames)",
+   "parity": "Popcorn storyboards (consistent frames)",
    "open": "Qwen-Image-Edit 2509 + next-scene LoRA (Fuobe storyboard-qwen-edit-2509-next-scene); stills from Fuobe Soul",
    "hosted": [
     "fal-ai/qwen-image-edit-plus-lora-gallery/next-scene ($0.035/MP)",
@@ -19241,7 +19241,7 @@
   },
   {
    "id": "marketing",
-   "higgsfield": "Marketing Studio Image (GPT Image 2.5 + prompt templates), Ads Studio (LLM concepts + GPT Image 2.5), AI Influencer (a prompt compiler on an image model), Photodump (Soul batch), Instadump (Popcorn keyframes), Fashion Factory (Soul v1 base shots, Nano Banana outfit and photoset)",
+   "parity": "Marketing Studio Image (GPT Image 2.5 + prompt templates), Ads Studio (LLM concepts + GPT Image 2.5), AI Influencer (a prompt compiler on an image model), Photodump (Soul batch), Instadump (Popcorn keyframes), Fashion Factory (Soul v1 base shots, Nano Banana outfit and photoset)",
    "open": "qwen-image-edit-2511-multi + template prompts; product-shot-qwen-edit-2509 for a standalone product shot; qwen-image-2512-t2i without a product; soul-cast-sheet-zimage with the Realistic look for the AI Influencer sheet; z-image-turbo-t2i + character LoRA (Photodump, Fashion base shots); tryon-flux2-klein-4b; qwen-image-edit-2511-multi (Instadump, Fashion photoset, Add your face)",
    "hosted": "fal-ai/qwen-image-edit-2511/lora, fal-ai/qwen-image-2512/lora, fal-ai/z-image/turbo/lora, fal-ai/flux-2/klein/4b/edit/lora (with the try-on LoRA)",
    "licence": "Apache-2.0 weights throughout (Qwen-Image 2512 / Edit 2511 / Edit 2509, Z-Image Turbo, FLUX.2 [klein] 4B, the White_to_Scene and try-on LoRAs)",
@@ -19290,7 +19290,7 @@
   },
   {
    "id": "angles",
-   "higgsfield": "Higgsfield Angles (job QWEN_CAMERA_CONTROL: rotate_degree, move_forward_level, vertical_angle, sample_steps, loras lightx + camera_angle)",
+   "parity": "Angles (job QWEN_CAMERA_CONTROL: rotate_degree, move_forward_level, vertical_angle, sample_steps, loras lightx + camera_angle)",
    "open": "Qwen-Image-Edit 2509 + dx8152 Multiple-angles LoRA (1.25) + Qwen-Image-Lightning (Fuobe qwen-image-edit-2509-angles); Qwen-Image-Edit 2511 + fal's Multiple-Angles LoRA stays the Angles app's default (with fal's Qwen Multiple Angles in the cloud) until the angles eval suite (scripts/eval/cases/angles.json) promotes Fuobe Angles, which is its own app next to it, and stays for Cinema's recomposition and Soul Location's views",
    "hosted": [
     "fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles ($0.035 per megapixel; rotate_right_left −90…90 (positive = left), vertical_angle −1…1 (−1 bird's-eye, 1 worm's-eye), move_forward 0–10, wide_angle_lens, lora_scale 1.25, 6 steps; no prompt field)"
@@ -19317,7 +19317,7 @@
   {
    "id": "archive-restore",
    "name": "Restore & colourise (archive footage)",
-   "higgsfield": "none: a Fuobe original (2026-10-29), not a Higgsfield product",
+   "parity": "none: a Fuobe original (2026-10-29), not a parity-studio product",
    "original": {
     "model": "fuobe-restore",
     "recipe": "Lightricks' LTX Restore IC-LoRA card (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore at 79245e197a6cd3251e77d178dc380b0e9f2d6563)",
@@ -19500,23 +19500,23 @@
    "what": "LTX-2.x Community License: US$10M revenue threshold, 2026-10-23"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/ai-models/which-ai-model-should-i-use",
-   "what": "Higgsfield calls Soul, Popcorn, DOP 'native', 2026-10-23"
+   "url": "{studio-site}/creator-hub/help-center/ai-models/which-ai-model-should-i-use",
+   "what": "The parity studio calls Soul, Popcorn, DOP 'native', 2026-10-23"
   },
   {
-   "url": "https://higgsfield.ai/terms-of-use-agreement",
-   "what": "Higgsfield Terms of Use, last updated 2026-10-23: sections 5.1(iii), 5.2(iv), 5.2(v), read 2026-10-23 (replaces the secondary licenseorg.com summary)"
+   "url": "{studio-site}/terms-of-use-agreement",
+   "what": "The parity studio's Terms of Use, last updated 2026-10-23: sections 5.1(iii), 5.2(iv), 5.2(v), read 2026-10-23 (replaces the secondary licenseorg.com summary)"
   },
   {
-   "url": "https://mindstudio.ai/blog/higgsfield-terms-of-service-backlash",
-   "what": "secondary: Higgsfield Terms revision"
+   "url": "https://mindstudio.ai/blog/{studio}-terms-of-service-backlash",
+   "what": "secondary: the parity studio's Terms revision"
   },
   {
-   "url": "docs/research/higgsfield-api.json, higgsfield-inventory.md, higgsfield-image-studios.json, comfyui-oss*.json",
+   "url": "docs/research/parity-api.json, parity-inventory.md, parity-image-studios.json, comfyui-oss*.json",
    "what": "Fuobe's earlier rounds (2026-10-16 … 10-22)"
   },
   {
-   "url": "https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer",
+   "url": "https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer",
    "what": "Genjutsu partner node is a cloud API node that downloads no model, 2026-10-23"
   }
  ],
@@ -19576,44 +19576,44 @@
    "checked": "2026-10-23"
   },
   {
-   "fact": "Higgsfield client facts marked confirmed (Soul lora/lora_2, InfiniteTalk + fusex, Angles LoRAs, .safetensors motions, Popcorn checkpoints, product labels)",
+   "fact": "The parity studio's client facts marked confirmed (Soul lora/lora_2, InfiniteTalk + fusex, Angles LoRAs, .safetensors motions, Popcorn checkpoints, product labels)",
    "source": "8 bundle chunks of build 1a2c0e3d",
-   "result": "holds, with two corrections in higgsfield-originals-5. WAN2_2_ANIMATE is \"Wan 2.2 Animate\" in the main label map. InfiniteTalk's TeaCache and APG are off by default",
+   "result": "holds, with two corrections in parity-originals-5. WAN2_2_ANIMATE is \"Wan 2.2 Animate\" in the main label map. InfiniteTalk's TeaCache and APG are off by default",
    "checked": "2026-10-23"
   },
   {
    "fact": "\"Cinema Studio 4.0 runs on Seedance 2.5\"",
-   "source": "Higgsfield help center",
+   "source": "The parity studio's help center",
    "result": "holds, verbatim",
    "checked": "2026-10-23"
   },
   {
-   "fact": "Higgsfield Terms forbid training on outputs",
-   "source": "https://higgsfield.ai/terms-of-use-agreement (last updated 2026-10-23)",
+   "fact": "The parity studio's Terms forbid training on outputs",
+   "source": "{studio-site}/terms-of-use-agreement (last updated 2026-10-23)",
    "result": "holds. Fixed: both files quoted secondary or paraphrased text. The exact 5.1(iii) / 5.2(iv) wording is now in, plus 5.2(v) (no reverse engineering)",
    "checked": "2026-10-23"
   },
   {
-   "fact": "\"Higgsfield ships Genjutsu as a ComfyUI partner node\" counted as evidence for the hypothesis",
-   "source": "https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer",
+   "fact": "\"The parity studio ships Genjutsu as a ComfyUI partner node\" counted as evidence for the hypothesis",
+   "source": "https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer",
    "result": "reclassified as neutral. It is a cloud API node that downloads no model",
    "checked": "2026-10-23"
   }
  ],
  "buildPlan": {
   "asOf": "2026-10-23",
-  "summary": "No Higgsfield provider, key or preset id; every Higgsfield in-house product becomes a Fuobe Original on ComfyUI and on open weights hosted by fal / Replicate; partner models stay as separate choices.",
+  "summary": "No parity-studio provider, key or preset id; every parity-studio in-house product becomes a Fuobe Original on ComfyUI and on open weights hosted by fal / Replicate; partner models stay as separate choices.",
   "licencePolicy": [
    "Default = commercial-safe on both engines. An Original's default base and default LoRAs must allow selling outputs *and* running the weights on the user's GPU *and* on fal/Replicate: Apache-2.0, MIT, OpenRAIL-M, the SAM License, or civitai permissions that include Image and Rent. LTX-2.x is allowed by default, but About & licences shows its US$10M-revenue condition.",
    "Flag, never default: FLUX.1 / FLUX.2 [dev], FLUX.1 Krea [dev], FLUX.2 [klein] 9B, Video-Depth-Anything Base/Large, DA3 Large/Giant/Nested, MMAudio, inswapper (ReActor): non-commercial weights. HunyuanVideo 1.5, HunyuanVideo-Foley, Hunyuan3D 2.1, MiniMax H3: territory-restricted. Krea 2, Stable Audio 3: revenue-tier community licences. A flagged model may be offered as a labelled alternative. A non-commercial model that fal hosts under its own output licence (e.g. fal-ai/depth-anything-video, fal-ai/mmaudio-v2) is \"hosted only, fal's output terms\", never an Original.",
    "civitai RentCivit-only LoRAs (Wiggle, RackFocus, Medieval-CE…) are local-only: they run on the user's GPU and are never sent to fal or Replicate. LoRAs without Image (FrutigerAero, Mobile Cell Phone, Japan 1980s, Time-lapse, Eyes In, DroneShot) are not used at all.",
-   "No Higgsfield data. Per Terms §5.1(iii) / §5.2(iv) / §5.2(v): no training, captions, prompts, covers or tests built from Higgsfield outputs, preview media or client code. Preset *names* that are generic words stay; Higgsfield preset UUIDs survive only in a one-way migration map for old saved settings.",
+   "No parity-studio data. Per Terms §5.1(iii) / §5.2(iv) / §5.2(v): no training, captions, prompts, covers or tests built from the parity studio outputs, preview media or client code. Preset *names* that are generic words stay; the parity studio's preset UUIDs survive only in a one-way migration map for old saved settings.",
    "Enforced by tests: the generators fail when an Original's default LoRA has commercial: false, when a cloud payload carries a LoRA with hostedOk: false, or when a civitai entry has no pinned version id or permission snapshot."
   ],
   "coverage": [
    {
     "product": "Soul v1 (106 presets)",
-    "underneath": "C · self-hosted base + LoRA-like presets; base unknown (likely shares Higgsfield's Wan 2.2 image pipeline)",
+    "underneath": "C · self-hosted base + LoRA-like presets; base unknown (likely shares the parity studio's Wan 2.2 image pipeline)",
     "original": "fuobe-soul (v1 looks)",
     "open": "z-image-turbo-t2i + injectLoras (≤3 LoRAs, 8 steps, cfg 1, shift 3)",
     "hostedOpen": "fal-ai/z-image/turbo/lora; Replicate prunaai/z-image-turbo-lora",
@@ -19705,7 +19705,7 @@
     "product": "Speak v2",
     "underneath": "unknown engine",
     "original": "fuobe-speak",
-    "open": "InfiniteTalk (Higgsfield defaults preset)",
+    "open": "InfiniteTalk (the parity studio defaults preset)",
     "hostedOpen": "fal-ai/infinitalk (+ /single-text)",
     "licence": "Apache-2.0",
     "package": "O11"
@@ -19721,7 +19721,7 @@
    },
    {
     "product": "Genjutsu · motion transfer",
-    "underneath": "A · likely Seedance 2.5 edit with Higgsfield prompts",
+    "underneath": "A · likely Seedance 2.5 edit with the parity studio's prompts",
     "original": "fuobe-genjutsu-move",
     "open": "wan-animate2 (Wan Animate 2)",
     "hostedOpen": "fal-ai/wan/v2.2-14b/animate/move; animals / groups fal-ai/scail-2",
@@ -19785,14 +19785,14 @@
    {
     "product": "Lipsync Studio 'Infinite Talk'",
     "underneath": "B · confirmed InfiniteTalk + FusioniX",
-    "original": "oss-infinitetalk with a 'Higgsfield defaults' preset",
+    "original": "oss-infinitetalk with a 'the parity studio defaults' preset",
     "open": "infinitetalk-wanwrapper + FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5",
     "hostedOpen": "fal-ai/infinitalk (no tuning fields), /video-to-video",
     "licence": "Apache-2.0 (FusioniX merges other LoRAs; their licences unchecked)",
     "package": "O11"
    },
    {
-    "product": "Upscale (legacy 'Higgsfield Upscale')",
+    "product": "Upscale (legacy 'Upscale')",
     "underneath": "unknown; today's engines are named partners",
     "original": "fuobe-upscale",
     "open": "upscale-video-seedvr2, upscale-image-seedvr2, ESRGAN, interpolate-rife; SDR→HDR and FPS from r4/video-finish",
@@ -19873,7 +19873,7 @@
     "package": "O13"
    },
    {
-    "product": "Higgsfield Angles",
+    "product": "Angles",
     "underneath": "B · confirmed Qwen-Image-Edit 2509 + Multiple-angles + Lightning",
     "original": "Angles app",
     "open": "existing 2511 route; new qwen-image-edit-2509-angles (dx8152 LoRA + Qwen-Image-Lightning) for an exact copy",
@@ -19882,7 +19882,7 @@
     "package": "O11"
    },
    {
-    "product": "Higgsfield Animate / Recast",
+    "product": "Animate / Recast",
     "underneath": "B · confirmed Wan 2.2 Animate",
     "original": "Motion Control / Recast",
     "open": "wan-animate2",
@@ -19920,25 +19920,25 @@
   ],
   "replacements": [
    {
-    "fuobeToday": "soul-1 (higgsfield-ai/soul/standard)",
+    "fuobeToday": "soul-1 ({studio}/soul/standard)",
     "replacedBy": "fuobe-soul with the Soul v1 looks",
     "partnerAlternativesOrNotes": "Nano Banana Pro, Seedream 5.0 Pro",
     "package": "O2"
    },
    {
-    "fuobeToday": "soul-2 t2i (higgsfield-ai/soul/v2/standard)",
+    "fuobeToday": "soul-2 t2i ({studio}/soul/v2/standard)",
     "replacedBy": "fuobe-soul with the Soul 2.0 looks",
     "partnerAlternativesOrNotes": "same",
     "package": "O2"
    },
    {
-    "fuobeToday": "soul-2 edit (higgsfield-ai/soul/v2/image-to-image)",
+    "fuobeToday": "soul-2 edit ({studio}/soul/v2/image-to-image)",
     "replacedBy": "fuobe-soul edit route (z-image-turbo-i2i / fal-ai/z-image/turbo/image-to-image/lora)",
     "partnerAlternativesOrNotes": "Nano Banana Pro edit",
     "package": "O2"
    },
    {
-    "fuobeToday": "soul-cinema (higgsfield-ai/soul/cinema)",
+    "fuobeToday": "soul-cinema ({studio}/soul/cinema)",
     "replacedBy": "fuobe-soul-cinema",
     "partnerAlternativesOrNotes": "Nano Banana Pro, Seedream 5.0 Pro camera stills",
     "package": "O2 / O6"
@@ -19950,13 +19950,13 @@
     "package": "O7 maps, O10 builds"
    },
    {
-    "fuobeToday": "ads-studio (higgsfield/ads-studio/v1.0)",
+    "fuobeToday": "ads-studio ({studio}/ads-studio/v1.0)",
     "replacedBy": "Fuobe Ads pipeline (LLM copy → Qwen visual → browser compositing)",
     "partnerAlternativesOrNotes": "Nano Banana Pro / GPT Image 2.5 visuals",
     "package": "O7 maps, O10 builds"
    },
    {
-    "fuobeToday": "cinema-studio-4 (higgsfield/cinema-studio/4.0)",
+    "fuobeToday": "cinema-studio-4 ({studio}/cinema-studio/4.0)",
     "replacedBy": "fuobe-cinema",
     "partnerAlternativesOrNotes": "Seedance 2.5, Kling 3.0, Veo 3.1 with the panel compiled into the prompt (today's no-key path)",
     "package": "O6"
@@ -19986,13 +19986,13 @@
     "package": "O5"
    },
    {
-    "fuobeToday": "happy-horse-1-1 (Higgsfield's resale of Alibaba Happy Horse 1.1)",
+    "fuobeToday": "happy-horse-1-1 (the parity studio's resale of Alibaba Happy Horse 1.1)",
     "replacedBy": "not an Original. Add fal routes alibaba/happy-horse/v1.1/{text,image,reference}-to-video (OpenAPI answers 200 on 2026-10-23; schemas still to be researched) or hide the model",
     "partnerAlternativesOrNotes": "—",
     "package": "O7"
    },
    {
-    "fuobeToday": "HIGGSFIELD_ROUTES on 24 partner models",
+    "fuobeToday": "STUDIO_ROUTES on 24 partner models",
     "replacedBy": "removed; 22 keep every op on fal (Kling 2.5 Turbo and Wan 2.7 also on Replicate)",
     "partnerAlternativesOrNotes": "lost ops: seedance-2-5 v2v (Seedance 2.5 video edit; bytedance/seedance-2.5/video-edit is 404 on fal) → Kling O3 edit, Happy Horse video edit or the Wan VACE Original; ltx-2-5 flf2v → fal-ai/ltx-2.3-22b/image-to-video/lora with end_image_url, or Wan 2.2 FLF2V",
     "package": "O7"
@@ -20004,19 +20004,19 @@
     "package": "O3"
    },
    {
-    "fuobeToday": "Elements with a Higgsfield Soul ID (ElementLora.referenceId)",
+    "fuobeToday": "Elements with a Soul ID (ElementLora.referenceId)",
     "replacedBy": "\"Retrain for Fuobe Soul\" from the element's stored photos (Soul IDs are not exportable)",
     "partnerAlternativesOrNotes": "—",
     "package": "O3"
    },
    {
-    "fuobeToday": "Soul preset list: live /api/providers/higgsfield/presets + SOUL_PRESETS style_ids",
-    "replacedBy": "SOUL_ORIGINALS (Fuobe looks); Higgsfield UUIDs only in a migration map",
+    "fuobeToday": "Soul preset list: live /api/providers/{studio}/presets + SOUL_PRESETS style_ids",
+    "replacedBy": "SOUL_ORIGINALS (Fuobe looks); the parity studio's UUIDs only in a migration map",
     "partnerAlternativesOrNotes": "—",
     "package": "O2 / O7"
    },
    {
-    "fuobeToday": "Genjutsu looks (Higgsfield preset_id, live list)",
+    "fuobeToday": "Genjutsu looks (the parity studio's preset_id, live list)",
     "replacedBy": "Fuobe looks (a Soul look LoRA on frame 0)",
     "partnerAlternativesOrNotes": "—",
     "package": "O5"
@@ -20034,7 +20034,7 @@
     "package": "O3"
    },
    {
-    "fuobeToday": "Setting higgsfieldKey (HIGGSFIELD_API_KEY), connection test, vendor mark",
+    "fuobeToday": "Setting parityKey (STUDIO_API_KEY), connection test, vendor mark",
     "replacedBy": "removed; a civitaiKey secret is added (O1)",
     "partnerAlternativesOrNotes": "—",
     "package": "O7"
@@ -20123,10 +20123,10 @@
     "priority": "P0",
     "title": "Fuobe Soul: Soul v1, Soul 2.0, Soul Cinema and HEX",
     "scope": [
-     "scripts/gen-soul-originals.py → src/lib/catalog/soul-originals.generated.ts. It holds the 139 looks from presets[]: Fuobe id, name, family v1 / v2, categories, look sentence, tail, triggers, loras [key@strength], grade, base (z-image or qwen-2512), train flag, note, and legacyStyleId (the Higgsfield UUID, migration only).",
+     "scripts/gen-soul-originals.py → src/lib/catalog/soul-originals.generated.ts. It holds the 139 looks from presets[]: Fuobe id, name, family v1 / v2, categories, look sentence, tail, triggers, loras [key@strength], grade, base (z-image or qwen-2512), train flag, note, and legacyStyleId (the parity studio's UUID, migration only).",
      "New ModelDefs: fuobe-soul (open: z-image-turbo-t2i + LoRAs; cloud: fal-ai/z-image/turbo/lora; Replicate prunaai/z-image-turbo-lora), fuobe-soul-hd (Qwen-Image 2512 for lettering presets) and fuobe-soul-cinema (filmstill 0.7 + moviewide 0.5, cine tail, 16:9 default). Options as Soul: 7 aspects, 720p / 1080p tiers from §4.3, batch 1 or 4, seed 1–1,000,000. Preset strength 0–1 multiplies the look's LoRA scales; character strength 0–1 maps to a character-LoRA scale of 0.6–1.0.",
      "Prompt builder src/lib/catalog/soul.ts: triggers + the user's prompt (short prompts expanded to 60–120 words by the existing enhancer) + look + tail. Slot rule within fal's 3: character LoRA first, then the look's LoRAs, then the core LoRA if a slot is left.",
-     "Edit route (Soul 2.0 image-to-image): new z-image-turbo-i2i / fal-ai/z-image/turbo/image-to-image/lora. An optional refiner pass at denoise ≈ 0.17 (Higgsfield's time_denoise_from 0.83) is an experiment until O8.",
+     "Edit route (Soul 2.0 image-to-image): new z-image-turbo-i2i / fal-ai/z-image/turbo/image-to-image/lora. An optional refiner pass at denoise ≈ 0.17 (the parity studio's time_denoise_from 0.83) is an experiment until O8.",
      "Post steps: the grade preset is applied in the browser when the result arrives (the existing WebGL grade in src/lib/grade.ts), stored as a derived output with meta.grade. API and MCP clients get meta.grade. New invert and solarize presets. Palette lock (oss-palette-image) when a HEX palette is picked on the open engine; hex in the prompt on the cloud. Date-stamp, CCTV and photo-booth overlays are drawn in the browser. The face mosaic waits for O11.",
      "Pickers read SOUL_ORIGINALS instead of SOUL_PRESETS. Covers stay procedural until O8 renders real ones."
     ],
@@ -20176,9 +20176,9 @@
     "title": "Fuobe Soul ID and personal moodboards (training)",
     "scope": [
      "Remove the soul-id-v2 and soul-id-cinema targets. Keep fal-z-image (fal-ai/z-image-turbo-trainer-v2: 2,000 steps, lr 5e-4, about $1.70) and aitk-z-image (rank 16–32, 1,500–2,500 steps), retargeted to fuobe-soul / fuobe-soul-cinema. Optionally add fal-ai/qwen-image-2512-trainer for fuobe-soul-hd.",
-     "Photo rules from Higgsfield's help center: 20+ photos recommended (80 max on the web); no sunglasses, groups, filters or cropped faces; one full-body shot. Keep the consent checkbox. \"Upgrade character\" retrains the same photos on another base.",
+     "Photo rules from the parity studio's help center: 20+ photos recommended (80 max on the web); no sunglasses, groups, filters or cropped faces; one full-body shot. Keep the consent checkbox. \"Upgrade character\" retrains the same photos on another base.",
      "Personal moodboards become a style LoRA: the AI-Toolkit style preset (exists) or fal-ai/z-image-trainer with training_type: style. The result is used as a Fuobe look.",
-     "Elements holding a Higgsfield Soul ID can't be exported, so they get a \"Retrain for Fuobe Soul\" action using their stored photos. The soulId() path in packs.ts goes."
+     "Elements holding a Soul ID can't be exported, so they get a \"Retrain for Fuobe Soul\" action using their stored photos. The soulId() path in packs.ts goes."
     ],
     "files": [
      "src/lib/catalog/training.ts",
@@ -20200,13 +20200,13 @@
      "training targets"
     ],
     "tests": [
-     "training.test.ts: no higgsfield provider and every target resolves",
+     "training.test.ts: no {studio} provider and every target resolves",
      "training-runtime.test.ts: fal trainer payload (zip of 001.jpg + 001.txt, default_caption, steps) and diffusers_lora_file → ElementLora.url",
      "elements test: an @mention puts the LoRA on fuobe-soul",
      "image-studios: Photodump with a trained character"
     ],
     "replaces": [
-     "soul-id-v2, soul-id-cinema; custom_reference_id + strength → character LoRA + scale; Higgsfield moodboard training"
+     "soul-id-v2, soul-id-cinema; custom_reference_id + strength → character LoRA + scale; the parity studio's moodboard training"
     ],
     "dependsOn": [
      "O1",
@@ -20254,7 +20254,7 @@
      "open-engine.test.ts bindings for the LTX-2.3 graphs"
     ],
     "replaces": [
-     "Higgsfield DoP and the higgsfield preset family. Fuobe has no DoP catalog model today; the 108 presets ran as prompts on partner models"
+     "DoP and the {studio} preset family. Fuobe has no DoP catalog model today; the 108 presets ran as prompts on partner models"
     ],
     "dependsOn": [
      "O1"
@@ -20271,8 +20271,8 @@
     "scope": [
      "Hosted-open routes in the merged genjutsu.ts. Motion transfer → fal-ai/wan/v2.2-14b/animate/move (480 / 580 / 720p, $0.04–0.08/s), or fal-ai/scail-2 for animals and several people. Object swap → fal-ai/sam-3-1/video mask → fal-ai/wan-vace-14b/inpainting with mask_video_url and ref_image_urls; people → fal-ai/wan/v2.2-14b/animate/replace or SCAIL-2 replacement. Restyle → frame 0 by fal-ai/qwen-image-edit-2511/lora or a Soul look on fal-ai/z-image/turbo/image-to-image/lora, then fal-ai/wan-22-vace-fun-a14b/depth with first_frame_url.",
      "Lite: 480p plus use_turbo on fal animate; Wan Animate 2 with the lightx2v distill LoRA on the open engine.",
-     "Higgsfield's limits: source trimmed to 4–30 s (Lite 15 s), ≤10 references, keep audio on (the original sound is muxed back).",
-     "The look picker lists Fuobe looks (O2) instead of Higgsfield preset_ids. Katana's and Ad Multiplier's Genjutsu option points at the Original."
+     "The parity studio's limits: source trimmed to 4–30 s (Lite 15 s), ≤10 references, keep audio on (the original sound is muxed back).",
+     "The look picker lists Fuobe looks (O2) instead of the parity studio's preset_ids. Katana's and Ad Multiplier's Genjutsu option points at the Original."
     ],
     "files": [
      "src/lib/catalog/genjutsu.ts",
@@ -20317,10 +20317,10 @@
      "Open: Wan 2.2 14B Lightning + camera LoRA / Fun Camera (exists), or LTX-2.5 22B (ltx25-i2v / -t2v, gated weights) for audio + video. Palette lock via oss-palette-video.",
      "Extend → fal-ai/ltx-2.3-22b/extend-video/lora or Wan Fun VACE extend. Edit → fal-ai/ltx-2.3-22b/video-to-video/lora or Wan Fun VACE restyle. Reference clips: none on the open engine (keep the note); one clip via fal-ai/ltx-2.3-22b/reference-video-to-video/lora (to verify).",
      "Image mode uses fuobe-soul-cinema. Soul Cast uses fuobe-soul + the 17-field compiler. Soul Location uses fuobe-soul + Multiple-angles views.",
-     "Remove HIGGSFIELD_ONLY from cinema.ts."
+     "Remove STUDIO_ONLY from cinema.ts."
     ],
     "files": [
-     "src/lib/catalog/cinema.ts (HIGGSFIELD_ONLY, CINEMA_MODELS, CAST_MODELS, LOCATION_MODELS)",
+     "src/lib/catalog/cinema.ts (STUDIO_ONLY, CINEMA_MODELS, CAST_MODELS, LOCATION_MODELS)",
      "src/server/cinema-generate.ts",
      "src/server/cinema-director.ts",
      "src/server/cinema.ts",
@@ -20336,7 +20336,7 @@
      "Cinema model lists"
     ],
     "tests": [
-     "cinema.test.ts, cinema-api.test.ts, cinema-refs.test.ts with no Higgsfield context",
+     "cinema.test.ts, cinema-api.test.ts, cinema-refs.test.ts with no parity-studio context",
      "payload: all 33 moves → camera_lora or a LoRA; duration → frames; estimate"
     ],
     "replaces": [
@@ -20355,17 +20355,17 @@
    {
     "id": "O7",
     "priority": "P1",
-    "title": "Remove the Higgsfield provider (the switch)",
+    "title": "Remove the parity studio's provider (the switch)",
     "scope": [
-     "Delete the provider, its generated catalog, its generator, the settings key, the connection test, the presets API and the higgsfield training provider.",
+     "Delete the provider, its generated catalog, its generator, the settings key, the connection test, the presets API and the {studio} training provider.",
      "Add src/lib/catalog/replaced.ts (REPLACED_BY: old model id or style id → Original + a note). Reuse, saved Cinema / Canvas projects and Assist plans resolve through it. Past generations stay viewable, because the Library reads outputs, not providers.",
      "Close the partner gaps: Seedance 2.5 v2v and LTX-2.5 flf2v (table above); Happy Horse 1.1 gets fal routes or is hidden. Marketing Studio Image and Ads Studio map to their partner / Fuobe pipelines until O10 makes the Originals default.",
-     "Docs: docs/STATUS.md rows, docs/research/README.md (the Higgsfield research files become history and feed no generator), About & licences."
+     "Docs: docs/STATUS.md rows, docs/research/README.md (the parity studio's research files become history and feed no generator), About & licences."
     ],
     "files": [
-     "delete src/server/providers/higgsfield.ts, src/lib/catalog/higgsfield-models.generated.ts, scripts/gen-higgsfield-models.py, src/app/api/providers/higgsfield/presets/route.ts, tests/higgsfield.test.ts",
+     "delete src/server/providers/{studio}.ts, src/lib/catalog/{studio}-models.generated.ts, scripts/gen-studio-models.py, src/app/api/providers/{studio}/presets/route.ts, tests/{studio}.test.ts",
      "src/server/providers/index.ts",
-     "src/lib/catalog/models.ts (the HIGGSFIELD_* merge)",
+     "src/lib/catalog/models.ts (the STUDIO_* merge)",
      "src/server/settings.ts",
      "src/lib/connections.ts",
      "src/components/{settings-form.tsx,get-started.tsx,app-sidebar.tsx,studio/vendor-mark.tsx}",
@@ -20376,7 +20376,7 @@
      "src/app/(studio)/settings/about/page.tsx",
      "package.json",
      "scripts/gen-cloud-models.py",
-     "122 files mention Higgsfield today; most are UI copy"
+     "122 files mention the parity studio today; most are UI copy"
     ],
     "comfyWorkflows": [
      "none"
@@ -20386,8 +20386,8 @@
      "Happy Horse 1.1 fal routes (research their schemas first)"
     ],
     "tests": [
-     "catalog integrity: no route has provider: \"higgsfield\"; every REPLACED_BY target exists and runs on both engines",
-     "a grep guard: no higgsfield in src/ outside an allowlist of attribution copy",
+     "catalog integrity: no route has provider: \"{studio}\"; every REPLACED_BY target exists and runs on both engines",
+     "a grep guard: no {studio} in src/ outside an allowlist of attribution copy",
      "update providers, connections, engine-mode, cloud-catalog*, studio-pickers, home-start tests",
      "e2e no-horizontal-scroll.mjs and composer-flows.mjs in demo mode"
     ],
@@ -20410,7 +20410,7 @@
     "title": "Evaluation harness and real preset covers (task #65)",
     "scope": [
      "scripts/eval/: render every Soul look, motion and effect on a GPU (ComfyUI) and on fal under a spend cap, with and without its LoRAs, at the listed strengths. Write a contact sheet and a JSON log (time, VRAM, $). Lower the strengths that over-cook, and record each result back into the research JSON.",
-     "The renders become the preview media (no Higgsfield previews)."
+     "The renders become the preview media (no parity-studio previews)."
     ],
     "files": [
      "scripts/eval/{run.mjs,plan.mjs,report.mjs} (new)",
@@ -20464,7 +20464,7 @@
      "shorts.test.ts hosted-open route"
     ],
     "replaces": [
-     "Higgsfield Mixed Media and Shorts as products (Gemini Omni and other partners stay as choices)"
+     "Mixed Media and Shorts as products (Gemini Omni and other partners stay as choices)"
     ],
     "dependsOn": [
      "O1",
@@ -20498,10 +20498,10 @@
      "default model lists"
     ],
     "tests": [
-     "marketing-catalog, marketing-api, image-studios, image-studios-api without Higgsfield"
+     "marketing-catalog, marketing-api, image-studios, image-studios-api without the parity studio"
     ],
     "replaces": [
-     "marketing-studio-image, ads-studio (as defaults), the AI Influencer app's Higgsfield route, and the Soul-based Photodump and Fashion defaults"
+     "marketing-studio-image, ads-studio (as defaults), the AI Influencer app's parity-studio route, and the Soul-based Photodump and Fashion defaults"
     ],
     "dependsOn": [
      "O2",
@@ -20517,9 +20517,9 @@
     "priority": "P2",
     "title": "Rebranded open tools, Speak and finishing",
     "scope": [
-     "Angles: a route on fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles with Higgsfield-like controls (rotate −90…90°, vertical −1…1, forward 0–10, wide-angle; lora_scale 1.25, 6 steps). Open: new qwen-image-edit-2509-angles (dx8152 Multiple-angles + Qwen-Image-Lightning) next to the 2511 route.",
+     "Angles: a route on fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles with parity-studio-like controls (rotate −90…90°, vertical −1…1, forward 0–10, wide-angle; lora_scale 1.25, 6 steps). Open: new qwen-image-edit-2509-angles (dx8152 Multiple-angles + Qwen-Image-Lightning) next to the 2511 route.",
      "Depth Map defaults to VDA-Small / DA3 Mono-Large. VDA-Large is flagged non-commercial; fal-ai/depth-anything-video is hosted-only under fal's terms.",
-     "Speak / Lipsync: an InfiniteTalk \"Higgsfield defaults\" preset (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5 / 5, colour correction 1) on the open engine; fal-ai/infinitalk hosted; a Speak-v1-like route on Wan 2.2 S2V.",
+     "Speak / Lipsync: an InfiniteTalk \"the parity studio defaults\" preset (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5 / 5, colour correction 1) on the open engine; fal-ai/infinitalk hosted; a Speak-v1-like route on Wan 2.2 S2V.",
      "Upscale: SeedVR2 (exists) plus FPS boost and SDR→HDR from r4/video-finish; hosted fal-ai/seedvr/upscale/video, fal-ai/rife/video, fal-ai/ltx-2.3-quality/hdr/lora.",
      "Soul face mosaic: SAM 3.1 face mask + mosaic (open graph; hosted fal-ai/sam-3-1/image)."
     ],
@@ -20541,7 +20541,7 @@
      "ComfyUI binding tests for the new / extended graphs"
     ],
     "replaces": [
-     "the Higgsfield-branded tools (none of them is in Fuobe's Higgsfield catalog, so nothing is deleted)"
+     "the parity-studio-branded tools (none of them is in Fuobe's parity-studio catalog, so nothing is deleted)"
     ],
     "dependsOn": [
      "O1"
@@ -20605,7 +20605,7 @@
      "planner tests"
     ],
     "replaces": [
-     "the Higgsfield Popcorn and Evolution products"
+     "the Popcorn and Evolution products"
     ],
     "dependsOn": [
      "O2",
@@ -24514,7 +24514,7 @@
     "fuobe-angles"
    ],
    "hostedEndpoint": "fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles",
-   "notes": "The camera-move LoRA behind Higgsfield Angles (higgsfield-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
+   "notes": "The camera-move LoRA behind the Angles recipe in the parity research (parity-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
   },
   {
    "key": "qwen-image-21-any-angle",
@@ -24558,7 +24558,7 @@
    "usedBy": [
     "fuobe-speak"
    ],
-   "notes": "The LoRA Higgsfield's 'Infinite Talk' engine loads ('fusex', scale 1, rank 32; higgsfield-originals-5.md §3.13) and InfiniteTalk's README recommends. Fuobe Speak loads it on InfiniteTalk (kijai's WanVideoWrapper) on the GPU in place of the lightx2v distill LoRA. fal's InfiniteTalk takes no LoRA, so the cloud half runs without it. Check on the first live run: the licences of the LoRAs merged into it."
+   "notes": "The LoRA the parity studio's 'Infinite Talk' engine loads ('fusex', scale 1, rank 32; parity-originals-5.md §3.13) and InfiniteTalk's README recommends. Fuobe Speak loads it on InfiniteTalk (kijai's WanVideoWrapper) on the GPU in place of the lightx2v distill LoRA. fal's InfiniteTalk takes no LoRA, so the cloud half runs without it. Check on the first live run: the licences of the LoRAs merged into it."
   },
   {
    "key": "ltx-2-5-22b-ic-lora-restore-1-0",

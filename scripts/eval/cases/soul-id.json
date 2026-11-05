@@ -2,7 +2,7 @@
   "$schema": "./case.schema.json",
   "suite": "soul-id",
   "title": "Fuobe Soul ID · character and look training",
-  "description": "Train a character from a folder of photos you supply (local/characters/<name>/, 20+ photos of one consenting person: no sunglasses, groups, filters or cropped faces, one full-body shot), then make N images of them on each family's model. Identity is measured against the same photos, and A/B'd against the same element used as reference photos on an edit model. Set \"consent\": true in your copy only when the person agreed. The look case trains a moodboard's style (local/styles/<name>/, 20+ images in one style) and measures style against those images. Demo runs don't train (they use reference images on drawn faces). Use Fuobe-owned or licensed photos only, never Higgsfield outputs.",
+  "description": "Train a character from a folder of photos you supply (local/characters/<name>/, 20+ photos of one consenting person: no sunglasses, groups, filters or cropped faces, one full-body shot), then make N images of them on each family's model. Identity is measured against the same photos, and A/B'd against the same element used as reference photos on an edit model. Set \"consent\": true in your copy only when the person agreed. The look case trains a moodboard's style (local/styles/<name>/, 20+ images in one style) and measures style against those images. Demo runs don't train (they use reference images on drawn faces). Use Fuobe-owned or licensed photos only, never copied outputs.",
   "original": "fuobe-soul-id",
   "kind": "image",
   "targets": {

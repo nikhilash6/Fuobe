@@ -1,8 +1,8 @@
 # Fuobe Originals: open-weight recipes (round 5)
 
-_As of 2026-10-23. Machine-readable twin: [`fuobe-originals-recipes-5.json`](fuobe-originals-recipes-5.json) (`hostedLoraEndpoints`, `trainers`, `loraLibrary`, `soul`, `presets`, `fuobeTrainedLoras`, `motionsEffects`, `studios`, plus `criticSpotChecks` and `buildPlan` from the critic pass). The implementation order is in the [Build plan](#build-plan) at the end. It builds on [`comfyui-oss.md`](comfyui-oss.md) (LoRAs, base models), [`higgsfield-image-studios.md`](higgsfield-image-studios.md) (the 139 Soul presets), [`higgsfield-api.md`](higgsfield-api.md) (what each Higgsfield product takes) and [`comfyui-oss-4.md`](comfyui-oss-4.md) (Genjutsu routes)._
+_As of 2026-10-23. Machine-readable twin: [`fuobe-originals-recipes-5.json`](fuobe-originals-recipes-5.json) (`hostedLoraEndpoints`, `trainers`, `loraLibrary`, `soul`, `presets`, `fuobeTrainedLoras`, `motionsEffects`, `studios`, plus `criticSpotChecks` and `buildPlan` from the critic pass). The implementation order is in the [Build plan](#build-plan) at the end. It builds on [`comfyui-oss.md`](comfyui-oss.md) (LoRAs, base models), [`parity-image-studios.md`](parity-image-studios.md) (the 139 Soul presets), [`parity-api.md`](parity-api.md) (what each parity-studio product takes) and [`comfyui-oss-4.md`](comfyui-oss-4.md) (Genjutsu routes)._
 
-**The decision this serves.** Fuobe stops calling Higgsfield. Every product Higgsfield sells as its own (Soul and its presets, Soul ID, Soul Cinema, DoP motions and effects, Genjutsu, Mixed Media, Cinema Studio, Upscale, Speak, Popcorn) becomes a *Fuobe Original*: open weights plus LoRAs, runnable (1) on the user's GPU through ComfyUI and (2) in the cloud through hosted *open* models on fal.ai or Replicate. Partner models (Kling, Seedance, Veo, Nano Banana, GPT Image…) stay as separate choices.
+**The decision this serves.** Fuobe stops calling the parity studio. Every product the parity studio sells as its own (Soul and its presets, Soul ID, Soul Cinema, DoP motions and effects, Genjutsu, Mixed Media, Cinema Studio, Upscale, Speak, Popcorn) becomes a *Fuobe Original*: open weights plus LoRAs, runnable (1) on the user's GPU through ComfyUI and (2) in the cloud through hosted *open* models on fal.ai or Replicate. Partner models (Kling, Seedance, Veo, Nano Banana, GPT Image…) stay as separate choices.
 
 **How this was checked (all on 2026-10-23).** fal: the OpenAPI file of every endpoint below (`https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>`), prices from `https://fal.ai/models/<id>/llms.txt`, status and `license_type` from the catalog API (`https://api.fal.ai/v1/models`, 1,523 endpoints). Replicate: the schema and billing embedded in each model page. LoRAs: the Hugging Face model API and README of each repo, and civitai's public API (`/api/v1/models/<id>`: permissions, versions, files). Licences: model cards and the LTX licence on GitHub. No paid call and no GPU run was made, so **nothing here is a quality result**: strengths are the authors' advice or a starting point, and every preset needs an A/B check on a GPU. Facts that could not be confirmed are marked **unverified**.
 
@@ -10,38 +10,38 @@ _As of 2026-10-23. Machine-readable twin: [`fuobe-originals-recipes-5.json`](fuo
 
 ## 1. The short version
 
-- **Hypothesis check.** **Partly right** (§2, and in detail [`higgsfield-originals-5.md`](higgsfield-originals-5.md)). Five Higgsfield-branded tools are open models with public LoRAs, confirmed in its web client: Angles (Qwen-Image-Edit 2509 + Multiple-angles + Lightning LoRAs), Animate / Recast (Wan 2.2 Animate), Infinite Talk (InfiniteTalk + FusioniX), Depth Map (Video Depth Anything) and Remove Background (SAM 3). Soul 2.0 styles carry `lora` / `lora_2` fields, and DoP accepts raw `.safetensors` motions, so Soul and DoP presets are LoRAs on a self-hosted base. That base is not named anywhere public. Cinema Studio 4.0 (Seedance 2.5), Shorts Studio (Gemini Omni Flash), Marketing Studio Image and Ads Studio (GPT Image 2.5) are closed partner models with Higgsfield's prompts on top. The plan does not depend on the answer.
+- **Hypothesis check.** **Partly right** (§2, and in detail [`parity-originals-5.md`](parity-originals-5.md)). Five parity-studio-branded tools are open models with public LoRAs, confirmed in its web client: Angles (Qwen-Image-Edit 2509 + Multiple-angles + Lightning LoRAs), Animate / Recast (Wan 2.2 Animate), Infinite Talk (InfiniteTalk + FusioniX), Depth Map (Video Depth Anything) and Remove Background (SAM 3). Soul 2.0 styles carry `lora` / `lora_2` fields, and DoP accepts raw `.safetensors` motions, so Soul and DoP presets are LoRAs on a self-hosted base. That base is not named anywhere public. Cinema Studio 4.0 (Seedance 2.5), Shorts Studio (Gemini Omni Flash), Marketing Studio Image and Ads Studio (GPT Image 2.5) are closed partner models with the parity studio's prompts on top. The plan does not depend on the answer.
 - **Cloud engine for Originals = fal's open-weight LoRA endpoints.** 37 fal and 8 Replicate endpoints were checked (§3). The ones to use: `fal-ai/z-image/turbo/lora` ($0.0085/MP, ≤3 LoRAs), `fal-ai/qwen-image-2512/lora` and `fal-ai/qwen-image-edit-2511/lora` ($0.035/MP, ≤3), `fal-ai/flux-2/klein/4b/lora` ($0.01/MP, ≤3), `fal-ai/wan/v2.2-a14b/image-to-video/lora` ($0.10/s, per-LoRA `transformer: high|low|both`) and `fal-ai/ltx-2.3-22b/image-to-video/lora` ($0.001805 per megapixel of video, plus a built-in `camera_lora`).
 - **Licence rule.** Originals only use Apache/MIT bases (Z-Image, Qwen-Image, FLUX.2 [klein] 4B, Wan 2.1/2.2, Wan Animate 2, SeedVR2, InfiniteTalk) or LTX-2.x (free under US$10M annual revenue). FLUX.1/FLUX.2 [dev], Krea [dev] and klein 9B weights are non-commercial: fal clears its *own hosted outputs* of them for commercial use, but self-hosting the same weights is not cleared, so they are not Originals. MiniMax H3 is territory-restricted.
 - **Fuobe Soul = Z-Image Turbo + LoRAs + a prompt template + a post grade** (§4). One slot holds the core look (Shakker-Labs AWPortrait-Z, or a phone-realism LoRA), two slots hold the preset's LoRAs. 8 steps, cfg 1, `res_multistep`, shift 3.
 - **All 139 Soul presets are mapped** (§5): 108 with a look LoRA, 28 with the core LoRA and words only, 3 prompt-only. Every LoRA used allows commercial outputs and third-party hosting. 87 presets use at least one civitai LoRA, which needs a civitai token or a mirrored copy.
-- **16 presets should get a Fuobe-trained LoRA** (CCTV, 0.5x lens, scale surrealism, through-glass, old phone, Frutiger aero, underwater, paper collage, beauty details), plus one `fuobe-soul-core` style LoRA for the overall look (§6). Train on Fuobe-owned or licensed images only, never on Higgsfield outputs.
+- **16 presets should get a Fuobe-trained LoRA** (CCTV, 0.5x lens, scale surrealism, through-glass, old phone, Frutiger aero, underwater, paper collage, beauty details), plus one `fuobe-soul-core` style LoRA for the overall look (§6). Train on Fuobe-owned or licensed images only, never on the parity studio outputs.
 - **Motions and effects** (§7): of the 78 motions and 219 effects that are prompt-only today, 55 get a LoRA candidate and 6 relights get a relight route (56 of those 61 run on both engines today; the rest are LTX-2.5-only, licence-unclear or LTX-2 19B), 18 get an alias or a Fun Camera pose, 15 colour grades become a post step, 32 Mixed Media looks move to the Mixed Media route and 13 sports moves should use a driving-clip motion library. New since mid-2026: mostly LTX-2.3/2.5 LoRAs (FPV, slow motion, exploded view, wind, car jump, relight) and two Wan 2.2 camera LoRAs (shaky handheld, head-mounted camera). Wan 2.2 LoRA releases have slowed sharply since May 2026.
 - **Studios** (§8): Genjutsu = Wan Animate 2 / SCAIL-2 / Wan VACE + SAM 3.1 / Fun VACE restyle; Mixed Media = per-frame Z-Image with the same LoRA library; Cinema Studio = Wan 2.2 or LTX-2.5 with the Director's Panel compiled into the prompt; Upscale = SeedVR2; Speak = InfiniteTalk. Each has a hosted open twin on fal; there is **no hosted Wan Animate 2** (fal has Wan 2.2 Animate, SCAIL-2 and 'Wan Motion').
 
 ---
 
-## 2. Is Higgsfield “open models plus LoRAs”?
+## 2. Is the parity studio “open models plus LoRAs”?
 
-**Claim (the user's):** Higgsfield's in-house models are open models repackaged with LoRAs or better wrapping.  
-**Verdict:** Partly right. Higgsfield runs several open models under its own names, and its Soul and DoP presets are LoRA files in the client code. But no source names the base model of Soul or DoP, and its flagship studios run on closed partner models. *(Updated by the critic pass on 2026-10-23 with the client-code evidence from [`higgsfield-originals-5.md`](higgsfield-originals-5.md) §2.3 and §3.22, re-checked against the cited bundle chunks.)*
+**Claim (the user's):** the parity studio's in-house models are open models repackaged with LoRAs or better wrapping.  
+**Verdict:** Partly right. The parity studio runs several open models under its own names, and its Soul and DoP presets are LoRA files in the client code. But no source names the base model of Soul or DoP, and its flagship studios run on closed partner models. *(Updated by the critic pass on 2026-10-23 with the client-code evidence from [`parity-originals-5.md`](parity-originals-5.md) §2.3 and §3.22, re-checked against the cited bundle chunks.)*
 
 | | Evidence | Source |
 |---|---|---|
-| for | The web bundle's job types include open models run by Higgsfield: infinite_talk (InfiniteTalk, Apache-2.0), sam_3_video (SAM 3), depth_anything_video, z_image (Z-Image), plus wan2_2 ... wan3_0 jobs. | docs/research/higgsfield-inventory.md §3 job-type ids (bundle crawl, 2026-10-16) |
-| for | Cinema Studio 4.0 runs on Seedance 2.5 (ByteDance) and Speak has a wan2_5_speak job: flagship 'studios' wrap third-party models. | higgsfield-inventory.md (2026-10-16) |
-| for | Soul v1 takes style_id + style_strength 0-1 and custom_reference_id + custom_reference_strength 0-1; 'custom_reference_strength=0 uses the selected style's default character strength'. A per-style weight plus a per-user weight is how stacked LoRAs/adapters are exposed. | docs/research/higgsfield-api.json (docs.higgsfield.ai/docs/models/soul*, 2026-10-16) |
-| for | Soul ID trains a reusable character from 1-100 photos into an id with a 0-1 strength, the usual shape of a per-user LoRA. | higgsfield-api.json soul-id/create |
-| for | The legacy DoP API takes motions: [{id, strength}] for dop-lite / dop-turbo / dop-standard, the same shape as stacking camera LoRAs on one base. | npm @higgsfield/client 0.2.6 types (higgsfield-api.json legacy/dop; unverified, possibly retired) |
-| for | Soul 2.0 costs $0.0032 per 720p image on Higgsfield's API, the price class of a 4-6B distilled open model (fal: Z-Image Turbo $0.005/MP, FLUX.2 klein 4B $0.01/MP). This is an inference from price only. | higgsfield-api.json pricing (dash.higgsfield.ai/api/v2/pricing/models, 2026-10-16); fal llms.txt 2026-10-23 |
-| for | Client job types name open models under Higgsfield product names: QWEN_CAMERA_CONTROL = 'Higgsfield Angles' (sends `loras [{lightx}, {camera_angle}]`), WAN2_2_ANIMATE_V3 = 'Higgsfield Recast', InfiniteTalk with a 'fusex' LoRA at rank 32. | `assets.higgsfield.ai/tanstack/assets/1a2c0e3d-rSfLYhMkPbN1soeD.js`, `-j-8rpwEzEMqpgGav.js`, `-WdalZTpoZ_pO7J7g.js` (re-checked 2026-10-23) |
-| for | Every Soul 2.0 / Soul Cinema style record has `lora` and `lora_2` fields, shown to staff as 'LoRA 1' / 'LoRA 2' next to '(Dev) Preset Strength' and '(Dev) Character Strength' sliders. DoP's motion picker accepts `loras/<name>.safetensors` ids ('Higgsfield Canary'). | `1a2c0e3d-OWMkRGYJAoV9LLH0.js`, `-ggrIiLPSJckmqaiD.js`, `-Iy-LDiMETMj_D3ZQ.js` (re-checked 2026-10-23) |
-| neutral | Higgsfield ships Genjutsu Motion Transfer as a ComfyUI partner node. It is a cloud API node that "downloads no model" and bills per output second, so it says nothing about the model inside. *(Was listed as evidence "for"; moved by the critic pass.)* | https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer (read 2026-10-23) |
-| against | Higgsfield calls Soul, Popcorn and DOP 'native' models and publishes no model card or base model. | https://higgsfield.ai/creator-hub/help-center/ai-models/which-ai-model-should-i-use (read 2026-10-23) |
-| against (weak) | On Soul 2.0's public API, style_strength 'is accepted by the request schema but currently has no effect'. The web client still has a staff preset-strength slider next to the LoRA fields, so the public API ignoring the field does not show that styles aren't LoRAs. | higgsfield-api.json higgsfield-ai/soul/v2/standard; `1a2c0e3d-OWMkRGYJAoV9LLH0.js` |
+| for | The web bundle's job types include open models run by the parity studio: infinite_talk (InfiniteTalk, Apache-2.0), sam_3_video (SAM 3), depth_anything_video, z_image (Z-Image), plus wan2_2 ... wan3_0 jobs. | docs/research/parity-inventory.md §3 job-type ids (bundle crawl, 2026-10-16) |
+| for | Cinema Studio 4.0 runs on Seedance 2.5 (ByteDance) and Speak has a wan2_5_speak job: flagship 'studios' wrap third-party models. | parity-inventory.md (2026-10-16) |
+| for | Soul v1 takes style_id + style_strength 0-1 and custom_reference_id + custom_reference_strength 0-1; 'custom_reference_strength=0 uses the selected style's default character strength'. A per-style weight plus a per-user weight is how stacked LoRAs/adapters are exposed. | docs/research/parity-api.json ({studio-docs}/docs/models/soul*, 2026-10-16) |
+| for | Soul ID trains a reusable character from 1-100 photos into an id with a 0-1 strength, the usual shape of a per-user LoRA. | parity-api.json soul-id/create |
+| for | The legacy DoP API takes motions: [{id, strength}] for dop-lite / dop-turbo / dop-standard, the same shape as stacking camera LoRAs on one base. | npm {studio-npm}/client 0.2.6 types (parity-api.json legacy/dop; unverified, possibly retired) |
+| for | Soul 2.0 costs $0.0032 per 720p image on the parity studio's API, the price class of a 4-6B distilled open model (fal: Z-Image Turbo $0.005/MP, FLUX.2 klein 4B $0.01/MP). This is an inference from price only. | parity-api.json pricing ({studio-dashboard}/api/v2/pricing/models, 2026-10-16); fal llms.txt 2026-10-23 |
+| for | Client job types name open models under the parity studio's product names: QWEN_CAMERA_CONTROL = 'Angles' (sends `loras [{lightx}, {camera_angle}]`), WAN2_2_ANIMATE_V3 = 'Recast', InfiniteTalk with a 'fusex' LoRA at rank 32. | `{studio-assets}/tanstack/assets/1a2c0e3d-rSfLYhMkPbN1soeD.js`, `-j-8rpwEzEMqpgGav.js`, `-WdalZTpoZ_pO7J7g.js` (re-checked 2026-10-23) |
+| for | Every Soul 2.0 / Soul Cinema style record has `lora` and `lora_2` fields, shown to staff as 'LoRA 1' / 'LoRA 2' next to '(Dev) Preset Strength' and '(Dev) Character Strength' sliders. DoP's motion picker accepts `loras/<name>.safetensors` ids ('Canary'). | `1a2c0e3d-OWMkRGYJAoV9LLH0.js`, `-ggrIiLPSJckmqaiD.js`, `-Iy-LDiMETMj_D3ZQ.js` (re-checked 2026-10-23) |
+| neutral | The parity studio ships Genjutsu Motion Transfer as a ComfyUI partner node. It is a cloud API node that "downloads no model" and bills per output second, so it says nothing about the model inside. *(Was listed as evidence "for"; moved by the critic pass.)* | https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer (read 2026-10-23) |
+| against | The parity studio calls Soul, Popcorn and DOP 'native' models and publishes no model card or base model. | {studio-site}/creator-hub/help-center/ai-models/which-ai-model-should-i-use (read 2026-10-23) |
+| against (weak) | On Soul 2.0's public API, style_strength 'is accepted by the request schema but currently has no effect'. The web client still has a staff preset-strength slider next to the LoRA fields, so the public API ignoring the field does not show that styles aren't LoRAs. | parity-api.json {studio}/soul/v2/standard; `1a2c0e3d-OWMkRGYJAoV9LLH0.js` |
 | against | No public statement, model card or leak found that names Soul's or DoP's base model. | web searches 2026-10-23 (see sources) |
 
-It does not change the plan: every Original below is built from open weights Fuobe can name and licence, whatever Higgsfield uses inside. Do not train Fuobe LoRAs on Higgsfield outputs or preset preview images. Higgsfield's Terms of Use (https://higgsfield.ai/terms-of-use-agreement, last updated 2026-10-23, read that day) forbid it. Section 5.2(iv) bars using "the Service, any Outputs, or any data derived therefrom to train, fine-tune, distill, or otherwise transfer knowledge to any machine-learning model ... whether or not such system competes with the Service". Section 5.1(iii) bars using Outputs to "develop, modify, fine‑tune, distill, or improve" competing products, and 5.2(v) bars reverse engineering the Service. Copyright also applies. Use Fuobe-owned or licensed references. *(Was "secondary sources, unverified wording"; now read from the primary page.)*
+It does not change the plan: every Original below is built from open weights Fuobe can name and licence, whatever the parity studio uses inside. Do not train Fuobe LoRAs on the parity studio outputs or preset preview images. The parity studio's Terms of Use ({studio-site}/terms-of-use-agreement, last updated 2026-10-23, read that day) forbid it. Section 5.2(iv) bars using "the Service, any Outputs, or any data derived therefrom to train, fine-tune, distill, or otherwise transfer knowledge to any machine-learning model ... whether or not such system competes with the Service". Section 5.1(iii) bars using Outputs to "develop, modify, fine‑tune, distill, or improve" competing products, and 5.2(v) bars reverse engineering the Service. Copyright also applies. Use Fuobe-owned or licensed references. *(Was "secondary sources, unverified wording"; now read from the primary page.)*
 
 ---
 
@@ -101,7 +101,7 @@ Every row was read from the provider's schema on 2026-10-23. *Weights licence* i
 
 Extra fields that matter:
 
-- **Wan 2.2 on fal** (`fal-ai/wan/v2.2-a14b/*/lora`): each LoRA item is `{path, scale 0–4, transformer: high|low|both (default high), weight_name}`. A high/low-noise pair is two items with the same scale and different `transformer`. 17–161 frames (default 81), 480p/580p/720p (default 720p), 2–40 steps (default 27), shift 1–10 (default 5), `guidance_scale` 3.5 and `guidance_scale_2` 4 by default. **Frame rate trap (critic re-check, fal OpenAPI 2026-10-23):** `frames_per_second` defaults to 16, but `interpolator_model` defaults to `film` with `num_interpolated_frames` 1 and `adjust_fps_for_interpolation` true, so a default request returns 32 fps with doubled frames. For DoP parity (49 or 81 frames at 16 fps) send `interpolator_model: "none"` (or `num_interpolated_frames: 0`). Higgsfield's DoP preset pages use 20 steps and guide scale 6.
+- **Wan 2.2 on fal** (`fal-ai/wan/v2.2-a14b/*/lora`): each LoRA item is `{path, scale 0–4, transformer: high|low|both (default high), weight_name}`. A high/low-noise pair is two items with the same scale and different `transformer`. 17–161 frames (default 81), 480p/580p/720p (default 720p), 2–40 steps (default 27), shift 1–10 (default 5), `guidance_scale` 3.5 and `guidance_scale_2` 4 by default. **Frame rate trap (critic re-check, fal OpenAPI 2026-10-23):** `frames_per_second` defaults to 16, but `interpolator_model` defaults to `film` with `num_interpolated_frames` 1 and `adjust_fps_for_interpolation` true, so a default request returns 32 fps with doubled frames. For DoP parity (49 or 81 frames at 16 fps) send `interpolator_model: "none"` (or `num_interpolated_frames: 0`). The parity studio's DoP preset pages use 20 steps and guide scale 6.
 - **LTX-2.3 on fal** (`fal-ai/ltx-2.3-22b/*/lora`): `loras` is **required** (send at least one item), plus `camera_lora` = `dolly_in | dolly_out | dolly_left | dolly_right | jib_up | jib_down | static | none` with `camera_lora_scale` 0–1, `distill_lora_first/second_pass_scale` (defaults 0.2 / 0.5), 9–481 frames (default 121), `fps` (default 24), 8–50 steps (default 40). Two defaults must be overridden for Originals: `enable_prompt_expansion` defaults to **true** (it would rewrite Fuobe's compiled Director prompt) and `generate_audio` defaults to **true** (set it from the user's audio toggle). Price: $0.001805 per megapixel of generated video (121 frames at 1280×720 ≈ 111.5 MP ≈ $0.20); distilled $0.001405. The *quality* family (`fal-ai/ltx-2.3-quality/*/lora`) caps LoRAs at 3, scale 0–2, adds `transformer` high/low/both, $0.0027075/MP, and only accepts direct `.safetensors` URLs up to 3 GB.
 - **Replicate Wan 2.2 fast** takes exactly one LoRA per expert (`lora_weights_transformer` = high, `lora_weights_transformer_2` = low), so a motion and an effect cannot be stacked there.
 - *Added 2026-10-24 (o/lora-plumbing):* the full input schemas of the endpoints Fuobe's catalog routes LoRAs to are now in the JSON (`hostedLoraEndpoints[].inputs` and `keyFields`, plus `hostedBaseEndpoints` for the plain LTX-2.3 22B and FLUX.2 [klein] 4B endpoints), read with `scripts/fetch-hosted-schemas.py` from fal's OpenAPI files and Replicate's schema page. Findings: the plain LTX-2.3 22B endpoints cost $0.001605 per megapixel of video (the `/lora` ones $0.001805); FLUX.2 [klein] 4B costs $0.005/MP plain and $0.01/MP with LoRAs and has no `negative_prompt`; Replicate's `prunaai/z-image-turbo-lora` takes `width` / `height` (no `aspect_ratio`, no `num_outputs`) and runs only by version (`usesVersionlessApi: false`). The plain LTX-2.3 22B `extend-video` and `video-to-video` endpoints were read too: both take `num_frames` (9–481, default 121) and `match_input_fps` (default true); `num_frames` is the length extend adds, and video-to-video follows the input clip's length while `match_video_length` is true (its default). Replicate's `wan-video/wan-2.2-t2v-fast` defaults `interpolate_output` to **true** (30 fps, the same trap as fal's `interpolator_model`), takes only 16:9 / 9:16 and 480p / 720p, and both fast models render 81–121 frames.
@@ -198,7 +198,7 @@ Before the template, expand short user prompts to 60-120 words with Fuobe's prom
 
 ComfyUI: steps 8, cfg 1.0, sampler `res_multistep`, scheduler `simple`, shift 3.0 (`ModelSamplingAuraFlow`), `EmptySD3LatentImage`, batch 1 or 4 (Soul's batch sizes). Source: docs.comfy.org Z-Image Turbo tutorial (via comfyui-oss.md round 1); 1080p sizes are a Fuobe choice (multiples of 16), unverified on output quality.
 
-fal: `fal-ai/z-image/turbo/lora` with `num_inference_steps` 8 (the schema's maximum), `acceleration` none (quality), regular (default) or high (fastest), `image_size` {width, height} from the table above, `enable_prompt_expansion` false, `output_format` png, `loras` [{path, scale}] max 3. $0.0085 per megapixel (a 1 MP image is about $0.0085; Soul 2.0 is $0.0032 at 720p on Higgsfield's API).
+fal: `fal-ai/z-image/turbo/lora` with `num_inference_steps` 8 (the schema's maximum), `acceleration` none (quality), regular (default) or high (fastest), `image_size` {width, height} from the table above, `enable_prompt_expansion` false, `output_format` png, `loras` [{path, scale}] max 3. $0.0085 per megapixel (a 1 MP image is about $0.0085; Soul 2.0 is $0.0032 at 720p on the parity studio's API).
 
 | aspect | 720p tier (≈1 MP) | 1080p tier (≈2 MP) |
 |---|---|---|
@@ -220,7 +220,7 @@ fal: `fal-ai/z-image/turbo/lora` with `num_inference_steps` 8 (the schema's maxi
 
 ### 4.5 Soul ID and Soul Cinema
 
-- **What Higgsfield does:** Higgsfield's Soul ID trains a reusable character from 1-100 photos (POST /v1/custom-references, model_version v1 | v2 | cinema) and is used as custom_reference_id with a 0-1 strength.
+- **What the parity studio does:** the parity studio's Soul ID trains a reusable character from 1-100 photos (POST /v1/custom-references, model_version v1 | v2 | cinema) and is used as custom_reference_id with a 0-1 strength.
 - **Open:** AI-Toolkit job (existing aiToolkitJob in src/lib/catalog/training.ts) on Z-Image Turbo with ostris/zimage_turbo_training_adapter v2 (Apache-2.0), 10-30 photos, captions with a unique trigger, rank 16-32, 1,500-2,500 steps; output copied into ComfyUI/models/loras.
 - **Cloud:** fal-ai/z-image-turbo-trainer-v2: image_data_url (zip of 001.jpg + 001.txt pairs), steps (default 2,000), default_caption, learning_rate 5e-4; $0.85 per 1,000 steps (500-step billing floor), so a default run is $1.70. Output diffusers_lora_file is passed as a loras[] path to fal-ai/z-image/turbo/lora.
 - **Strength:** custom_reference_strength 0-1 maps to the character LoRA's scale (0.6-1.0); it takes one of the three LoRA slots. Keep the consent checkbox from round 4 (delta-4 G-items).
@@ -472,7 +472,7 @@ Each row is a Fuobe Soul run: the template is `{prompt}. <look>. <tail>` with th
 
 ## 6. LoRAs Fuobe should train itself
 
-Train only on images Fuobe owns or has licensed for AI training (own shoots, purchased stock with training rights, public-domain or CC0 sets). Do not use Higgsfield outputs or preview images (§2).
+Train only on images Fuobe owns or has licensed for AI training (own shoots, purchased stock with training rights, public-domain or CC0 sets). Do not use the parity studio outputs or preview images (§2).
 
 | LoRA | kind | presets | data | trainer | steps | use |
 |---|---|---|---|---|---|---|
@@ -597,7 +597,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 - **effect · post-grade** — Film Colors, Black Gloss, Candy Pink, Lime Jam, Nostalgic Blue, Soft Palette, Overtime, Crimson Vigil, Bleach Bypass, Bleached Warm, Classic BW, Cold Steel, Hyper Neon, Naturalistic Clean, Sodium Decay. A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow. Route: `none (grade in the browser or oss-palette-video on ComfyUI)`.
 - **effect · mixed-media-route** — Acid, Akrill, Broken Mirror, Bubbles, Cannabis, Cold Vision, Comic, Flash Comic, Fragments, Hand Paint, LSD, Lava, Layer Mixed Media, Magazine, Marble, Modern, Multiverse, Noir, Ocean, Origami, Overexposed, Palette, Paper, Particles, Random Glow, Sketch, Toxic, Tracking, Two Color, Ultraviolet, Vintage, Windows. These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt). Route: `per-frame fal-ai/z-image/turbo/controlnet/lora, or fal-ai/wan-22-vace-fun-a14b/depth with a restyled first frame`.
 - **effect · prompt-only** — Lens Crack, Head Off, Water Splash, Flood, Sand Storm, Earth Element, Earth Wave, Water Element, Water Bending, Ice Rose, Clone Explosion, Duplicate, Portal, Angel Wings, Glowshift, Invisible, Soul Jump, Luminous Gaze, Objects Around, Shadow Smoke, Turn Into Statue, Melting, Medusa Gorgona, Diamond, Werewolf, Gorilla Transfer, Polygon, Wireframe, Point Cloud, Gas Transformation, Bloom Mouth, Floral Eyes, Garden Bloom, Sakura Petals, Floating Fish, Glowing Fish, Jelly Drift, Black Tears, Tentacles, Spiders from Mouth, Paint Splash, Dirty Lens, Paparazzi, X-Ray, Pixelated Face, Censorship, Glow Trace, Visor X, Push To Glass, Super Fast Run, Starship Troopers, Wonderland, Earth Zoom Out, Tiny Planet. No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post.
-- **effect · prompt-only** — Aquarium, Attack of Clones, Beach Ride, Boiling Point, Clothes Rain, Color Rain, Cotton Cloud, Dream Date, Drunk Master, Fairies Around, Firework, Giant Grab, Group Photo, Helicopter Escape, Live Concert, Look, Boom!, Mystification, Northern Lights, Oni Mask, Pizza Fall, Pool Jump, Spirit Animal, Tattoo Animation, Train Rush, Turning Monkey. Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used.
+- **effect · prompt-only** — Aquarium, Attack of Clones, Beach Ride, Boiling Point, Clothes Rain, Color Rain, Cotton Cloud, Dream Date, Drunk Master, Fairies Around, Firework, Giant Grab, Group Photo, Helicopter Escape, Live Concert, Look, Boom!, Mystification, Northern Lights, Oni Mask, Pizza Fall, Pool Jump, Spirit Animal, Tattoo Animation, Train Rush, Turning Monkey. Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used.
 - **effect · prompt-only** — Ballet, Eating, Fix and Pose, Hair Style, Handheld Run, Happy, Morning Routine, Motor Ride, Outfit Check, Peak Moment, Plate Check, Sand Cut, Selfie, Selfie Outfit, Selfie Posing, Static Posing, Sunglasses, Yacht. UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked.
 - **effect · prompt-only** — Studio Slide, Smash and Grab, High Flip, Cutout, Act Natural, World Morphing, Lacewalker, Boarding Pass, Monster Dab, Floating Fall, Architecture Wave, Clones, Infinite Clones, Scrapbook Collage, Stop World, Agamemnon, Fallen Angel, Cyclope, Frozen in Motion, Pigeons, Fairytale Castle, Skatedog, Blue Depth, Moonwalk, Dolphin Ride. Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA.
 
@@ -614,7 +614,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### genjutsu
 
-**Higgsfield:** Genjutsu: motion transfer, object swap, restyle (higgsfield/genjutsu/*/v1.0; Lite variants); also a paid ComfyUI partner node (a cloud API node). Inputs: prompt, video_url (4-30 s, trimmed at 30 s), image_urls (up to 5), resolution 480p/720p/1080p; restyle adds preset_id. What is underneath (from [`higgsfield-originals-5.md`](higgsfield-originals-5.md) §3.9): **likely** Seedance 2.5 edit / reference mode with Higgsfield prompts (same credit ladder, Ad Multiplier lineage, Seedance's 409,600-pixel floor). Genjutsu Lite is **likely** Wan 3.0 reference-to-video (identical price and billing rule). Neither is open, so the Original below is a substitute, not a copy.
+**The parity studio:** Genjutsu: motion transfer, object swap, restyle ({studio}/genjutsu/*/v1.0; Lite variants); also a paid ComfyUI partner node (a cloud API node). Inputs: prompt, video_url (4-30 s, trimmed at 30 s), image_urls (up to 5), resolution 480p/720p/1080p; restyle adds preset_id. What is underneath (from [`parity-originals-5.md`](parity-originals-5.md) §3.9): **likely** Seedance 2.5 edit / reference mode with the parity studio's prompts (same credit ladder, Ad Multiplier lineage, Seedance's 409,600-pixel floor). Genjutsu Lite is **likely** Wan 3.0 reference-to-video (identical price and billing rule). Neither is open, so the Original below is a substitute, not a copy.
 
 - **motion transfer** — open: Wan Animate 2 14B (Apache-2.0; ComfyUI template video_wan_animate2, Fuobe workflow wan-animate2; distilled 10-step variant for 'Lite')
   - hosted: fal-ai/wan/v2.2-14b/animate/move (Wan 2.2 Animate; video_url + image_url; $0.04/0.06/0.08 per video second at 480/580/720p)
@@ -635,18 +635,18 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### mixed-media
 
-**Higgsfield:** Mixed Media: 33 per-frame stylisation presets on a source video.
+**The parity studio:** Mixed Media: 33 per-frame stylisation presets on a source video.
 
 - **Open (ComfyUI):** Fuobe mixed-media-zimage-frames: Z-Image Turbo img2img + Fun Union ControlNet per frame at 4-24 fps (VHS meta-batch), with the look's Z-Image LoRA injected (same LoRA library as Fuobe Soul)
 - **Hosted:** per frame: fal-ai/z-image/turbo/controlnet/lora ($0.01 per megapixel; a 5 s clip at 12 fps is 60 frames, about $0.30-0.60 at 0.5-1 MP), then join with fal ffmpeg
 - **Hosted:** temporally smoother: restyle frame 0 with fal-ai/z-image/turbo/image-to-image/lora, then fal-ai/wan-22-vace-fun-a14b/depth (the Fun VACE restyle route)
 - **Hosted:** or fal-ai/krea-wan-14b/video-to-video (Wan 2.1 based, strength 0-1, $0.025 per output second)
-- **Note:** The per-frame route is what Higgsfield's Mixed Media looks like (flicker as a style); Fun VACE is the smooth option.
+- **Note:** The per-frame route is what the parity studio's Mixed Media looks like (flicker as a style); Fun VACE is the smooth option.
 - **Licences:** Apache-2.0 throughout
 
 ### cinema-studio
 
-**Higgsfield:** Cinema Studio 4.0: Director's Panel (genre, era, pacing, light, camera body, lens, aperture, move, palette) over Seedance 2.5 (a ByteDance model, not open); image mode with camera stills and grids.
+**The parity studio:** Cinema Studio 4.0: Director's Panel (genre, era, pacing, light, camera body, lens, aperture, move, palette) over Seedance 2.5 (a ByteDance model, not open); image mode with camera stills and grids.
 
 - **Open (ComfyUI):** Wan 2.2 14B I2V (+ Lightning 4-step) or LTX-2.5 22B (audio + video, up to 4K, gated weights) with the panel compiled into the prompt; camera moves from the Motions map (camera LoRAs, Fun Camera poses); palette lock (oss-palette-video); stills from Fuobe Soul (Z-Image) with camera/lens words; Soul Cinema look for image mode; multi-shot as one clip per shot then join, or the Cinematic Hard Cut / Fast Cutting Wan LoRAs inside one clip
 - **Hosted:** fal-ai/ltx-2.3-22b/image-to-video/lora (camera_lora dolly_in/out/left/right, jib_up/down, static + up to N loras, generate_audio, num_frames up to 481; $0.001805 per megapixel of video: 121 frames at 1280x720 is about $0.20)
@@ -663,7 +663,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### upscale
 
-**Higgsfield:** Upscale image/video (4 models), SDR to HDR, FPS Boost.
+**The parity studio:** Upscale image/video (4 models), SDR to HDR, FPS Boost.
 
 - **Open (ComfyUI):** SeedVR2 3B/7B (Apache-2.0; Fuobe upscale-image-seedvr2, upscale-video-seedvr2; ESRGAN fallback); RIFE/FILM for FPS boost; LTX-2.5 IC-LoRA Refine-Details / Pixel-Spatial-Upscaler and SDR-To-HDR (LTX-2.x Community, gated) as newer options
 - **Hosted:** fal-ai/seedvr/upscale/image ($0.001 per megapixel)
@@ -675,10 +675,10 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### speak
 
-**Higgsfield:** Speak 2.0 / Lipsync Studio (job types in the bundle include infinite_talk and wan2_5_speak).
+**The parity studio:** Speak 2.0 / Lipsync Studio (job types in the bundle include infinite_talk and wan2_5_speak).
 
 - **Open (ComfyUI):** InfiniteTalk (Apache-2.0; Fuobe infinitetalk-native / -wanwrapper, lipsync-v2v-infinitetalk) with Chatterbox / IndexTTS-2 voices; Wan 2.2 S2V (wan22-s2v-14b) as the second option
-- **Hosted:** fal-ai/infinitalk (required image_url + audio_url + prompt; num_frames 41–721, default 145; resolution 480p (default) or 720p; acceleration none/regular/high; $0.20 per second; fields re-read from fal's OpenAPI on 2026-10-23). It exposes none of Higgsfield's InfiniteTalk knobs (motion_frame, shift, guidance, LoRA), so the like-for-like copy of Higgsfield's engine (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5) runs only on the open engine.
+- **Hosted:** fal-ai/infinitalk (required image_url + audio_url + prompt; num_frames 41–721, default 145; resolution 480p (default) or 720p; acceleration none/regular/high; $0.20 per second; fields re-read from fal's OpenAPI on 2026-10-23). It exposes none of the parity studio's InfiniteTalk knobs (motion_frame, shift, guidance, LoRA), so the like-for-like copy of the parity studio's engine (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5) runs only on the open engine.
 - **Hosted:** fal-ai/infinitalk/single-text (text + voice, $0.20 per second)
 - **Hosted:** fal-ai/infinitalk/video-to-video (re-sync a video, $0.30 per second)
 - **Hosted:** fal-ai/wan/v2.2-14b/speech-to-video ($0.10/0.15/0.20 per second at 480/580/720p)
@@ -687,7 +687,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### soul-id
 
-**Higgsfield:** Soul ID character training.
+**The parity studio:** Soul ID character training.
 
 - **Open (ComfyUI):** AI-Toolkit job (existing aiToolkitJob in src/lib/catalog/training.ts) on Z-Image Turbo with ostris/zimage_turbo_training_adapter v2 (Apache-2.0), 10-30 photos, captions with a unique trigger, rank 16-32, 1,500-2,500 steps; output copied into ComfyUI/models/loras.
 - **Hosted:** fal-ai/z-image-turbo-trainer-v2: image_data_url (zip of 001.jpg + 001.txt pairs), steps (default 2,000), default_caption, learning_rate 5e-4; $0.85 per 1,000 steps (500-step billing floor), so a default run is $1.70. Output diffusers_lora_file is passed as a loras[] path to fal-ai/z-image/turbo/lora.
@@ -695,7 +695,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### dop-motions
 
-**Higgsfield:** DoP (dop-lite / dop-turbo / dop-standard) with motions [{id, strength}] stacking.
+**The parity studio:** DoP (dop-lite / dop-turbo / dop-standard) with motions [{id, strength}] stacking.
 
 - **Open (ComfyUI):** Wan 2.2 14B I2V with the preset → LoRA map (src/lib/catalog/oss-loras.generated.ts + this file's motionsEffects); Mix = two LoRAs stacked by strength (already built)
 - **Hosted:** fal-ai/wan/v2.2-a14b/image-to-video/lora (loras with transformer high\|low\|both)
@@ -705,7 +705,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### popcorn
 
-**Higgsfield:** Popcorn storyboards (consistent frames).
+**The parity studio:** Popcorn storyboards (consistent frames).
 
 - **Open (ComfyUI):** Qwen-Image-Edit 2509 + next-scene LoRA (Fuobe storyboard-qwen-edit-2509-next-scene); stills from Fuobe Soul
 - **Hosted:** fal-ai/qwen-image-edit-plus-lora-gallery/next-scene ($0.035/MP)
@@ -715,7 +715,7 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ### evolution
 
-**Higgsfield:** Evolution (`hf_evolution`, a gated test model): one video plus up to 40 references, `change_intensity` low / medium / high, an optional creative direction of up to 10,000 characters, 480p / 720p / 1080p ([`higgsfield-originals-5.md`](higgsfield-originals-5.md) §3.20; the engine underneath is speculative).
+**The parity studio:** Evolution (`hf_evolution`, a gated test model): one video plus up to 40 references, `change_intensity` low / medium / high, an optional creative direction of up to 10,000 characters, 480p / 720p / 1080p ([`parity-originals-5.md`](parity-originals-5.md) §3.20; the engine underneath is speculative).
 
 *Added 2026-10-29 for O13 (JSON: `studios[evolution]`). Fuobe's own recipe, unmeasured until the evaluation harness runs the `evolution` suite.*
 
@@ -730,9 +730,9 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 
 ## 9. What Fuobe has to build
 
-*This list is the researcher's summary. The [Build plan](#build-plan) below turns it into ordered packages (O0–O13), with files, workflows, tests and the replacement for each Higgsfield model.*
+*This list is the researcher's summary. The [Build plan](#build-plan) below turns it into ordered packages (O0–O13), with files, workflows, tests and the replacement for each parity-studio model.*
 
-1. **A preset generator for Soul.** Read `presets[]` (template, triggers, loras, grade, base) into the preset catalog; route open runs to `z-image-turbo-t2i` (+ `injectLoras`) and cloud runs to `fal-ai/z-image/turbo/lora` (`loras[{path: url, scale: strength}]`, `num_inference_steps: 8`). Replace the Higgsfield `style_id` path.
+1. **A preset generator for Soul.** Read `presets[]` (template, triggers, loras, grade, base) into the preset catalog; route open runs to `z-image-turbo-t2i` (+ `injectLoras`) and cloud runs to `fal-ai/z-image/turbo/lora` (`loras[{path: url, scale: strength}]`, `num_inference_steps: 8`). Replace the parity studio `style_id` path.
 2. **LoRA fetching.** Download HF files directly; for civitai, ask for a civitai key in Settings (or mirror allowed files to Fuobe storage once). Store them under the `file` names given here.
 3. **Post steps for Soul:** server-side grade presets (port `src/lib/grade.ts`), new `invert` and `solarize` presets, text overlays (date stamp, CCTV), the photo-booth strip compositor, SAM 3.1 face mosaic, SeedVR2 for the 1080p tier.
 4. **Soul ID on Z-Image:** `fal-ai/z-image-turbo-trainer-v2` in the cloud, AI-Toolkit with the ostris turbo adapter on the GPU; the trained LoRA takes one of the three slots.
@@ -750,8 +750,8 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 - **Mirrors.** `neph1/80s_*` are the author's own mirrors of civitai models (same uploader name); their HF repos carry no licence field, so Fuobe relies on the civitai permissions.
 - **Gated Lightricks LoRAs** (LTX-2.5 Slow-Motion-Control and Cinemagraph, LTX-2.3 IC-LoRA Relight) answer 401 without an HF token and their cards could not be read; usage settings are unverified. The other 40 direct Hugging Face LoRA URLs in this file answered with a download redirect (HEAD check, 2026-10-23).
 - **fal behaviour not confirmed:** whether `path` accepts a tokenised civitai URL; whether the Wan 2.2 trainer's single `lora_file` should be applied to both experts; whether LTX-2.3 LoRA endpoints load LTX-2 19B LoRAs (EarthZoomOut).
-- **Higgsfield Terms** on training were read on the primary page (https://higgsfield.ai/terms-of-use-agreement, last updated 2026-10-23); see §2. Terms change: re-read them before any training run that touches look references.
-- **The Soul look itself** is a target judged by eye. Without Higgsfield's API Fuobe cannot A/B against Soul outputs it did not pay for; compare against public Soul examples by eye only, and do not train on them.
+- **The parity studio's Terms** on training were read on the primary page ({studio-site}/terms-of-use-agreement, last updated 2026-10-23); see §2. Terms change: re-read them before any training run that touches look references.
+- **The Soul look itself** is a target judged by eye. Without the parity studio's API Fuobe cannot A/B against Soul outputs it did not pay for; compare against public Soul examples by eye only, and do not train on them.
 
 ## Sources
 
@@ -765,20 +765,20 @@ Also new and worth a later look: Lightricks LTX-2.5 **Cinemagraph** (2026-09-10,
 - https://civitai.com/api/v1/models?types=LORA&baseModels=ZImageTurbo|Wan Video 2.2 I2V-A14B|LTXV 2.3|LTXV 2.5|LTXV2 — civitai LoRA lists (3,979 Z-Image Turbo, sorted by downloads), 2026-10-23
 - https://civitai.com/api/v1/models/<id> — allowCommercialUse / allowNoCredit / versions / files of every civitai LoRA used, 2026-10-23
 - https://raw.githubusercontent.com/Lightricks/LTX-2/main/LICENSE-2_x — LTX-2.x Community License: US$10M revenue threshold, 2026-10-23
-- https://higgsfield.ai/creator-hub/help-center/ai-models/which-ai-model-should-i-use — Higgsfield calls Soul, Popcorn, DOP 'native', 2026-10-23
-- https://higgsfield.ai/terms-of-use-agreement — Higgsfield Terms of Use, last updated 2026-10-23: sections 5.1(iii), 5.2(iv), 5.2(v), read 2026-10-23 (replaces the secondary licenseorg.com summary used before the critic pass)
-- https://mindstudio.ai/blog/higgsfield-terms-of-service-backlash — secondary: Higgsfield Terms revision
-- https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer — the Genjutsu partner node is a cloud API node that downloads no model, 2026-10-23
-- docs/research/higgsfield-api.json, higgsfield-inventory.md, higgsfield-image-studios.json, comfyui-oss*.json — Fuobe's earlier rounds (2026-10-16 … 10-22)
+- {studio-site}/creator-hub/help-center/ai-models/which-ai-model-should-i-use — the parity studio calls Soul, Popcorn, DOP 'native', 2026-10-23
+- {studio-site}/terms-of-use-agreement — the parity studio's Terms of Use, last updated 2026-10-23: sections 5.1(iii), 5.2(iv), 5.2(v), read 2026-10-23 (replaces the secondary licenseorg.com summary used before the critic pass)
+- https://mindstudio.ai/blog/{studio}-terms-of-service-backlash — secondary: the parity studio's Terms revision
+- https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer — the Genjutsu partner node is a cloud API node that downloads no model, 2026-10-23
+- docs/research/parity-api.json, parity-inventory.md, parity-image-studios.json, comfyui-oss*.json — Fuobe's earlier rounds (2026-10-16 … 10-22)
 - Every LoRA page and file URL is in §5.2 and §7.2 and in the JSON (`loraLibrary`, `motionsEffects[].loras`), each with `checked: 2026-10-23`.
 
 ---
 
 ## Build plan
 
-_Critic and planner pass, 2026-10-23. It reads this file and [`higgsfield-originals-5.md`](higgsfield-originals-5.md), re-checks their key facts, closes the coverage gaps and orders the work. JSON twin: `buildPlan` and `criticSpotChecks` in [`fuobe-originals-recipes-5.json`](fuobe-originals-recipes-5.json). No code, model or paid call was run; nothing in `src/` was changed._
+_Critic and planner pass, 2026-10-23. It reads this file and [`parity-originals-5.md`](parity-originals-5.md), re-checks their key facts, closes the coverage gaps and orders the work. JSON twin: `buildPlan` and `criticSpotChecks` in [`fuobe-originals-recipes-5.json`](fuobe-originals-recipes-5.json). No code, model or paid call was run; nothing in `src/` was changed._
 
-The end state is no Higgsfield provider, key or preset id in Fuobe. Every product Higgsfield sells as its own becomes a **Fuobe Original** that runs (1) on the user's GPU through ComfyUI and (2) in the cloud on open weights hosted by fal (Replicate where it fits). Partner models (Seedance, Kling, Veo, Nano Banana, GPT Image…) stay as separate choices on fal and Replicate. The order is plumbing first (LoRAs on both engines), then the products Fuobe calls Higgsfield for today (Soul, Soul ID, DoP, Genjutsu, Cinema Studio), then the switch-off, then the rest.
+The end state is no parity-studio provider, key or preset id in Fuobe. Every product the parity studio sells as its own becomes a **Fuobe Original** that runs (1) on the user's GPU through ComfyUI and (2) in the cloud on open weights hosted by fal (Replicate where it fits). Partner models (Seedance, Kling, Veo, Nano Banana, GPT Image…) stay as separate choices on fal and Replicate. The order is plumbing first (LoRAs on both engines), then the products Fuobe calls the parity studio for today (Soul, Soul ID, DoP, Genjutsu, Cinema Studio), then the switch-off, then the rest.
 
 ### Critic's spot-checks
 
@@ -795,26 +795,26 @@ All read on 2026-10-23. Wrong or loose facts were fixed in place in both researc
 | 7 | Hugging Face licences: AWPortrait-Z, Lenovo UltraReal, chsengni LTX-2.3 FPV, joyfox LTX-2.3 Transition (Apache-2.0); Digicam (BigScience OpenRAIL-M) | https://huggingface.co/api/models/<repo> | holds |
 | 8 | civitai permissions and pinned version ids: V67 Y2K 3422541, Shaky handheld 2912574, Hard Flash, AfterDark 2470291, Headbob 3203908, EXPLOSION Redmond, Tilt-up Overhead (Image + Rent); FrutigerAero (RentCivit + Rent only, so outputs may not be sold) | https://civitai.com/api/v1/models/<id> | holds. New risk: the *newest* version of Y2K, AfterDark, Shaky handheld and Headbob is for another base (Krea 2, MiniMax H3), so the downloader must pin version ids, never "latest" |
 | 9 | Base licences: Z-Image Turbo, FLUX.2 klein 4B, InfiniteTalk, Wan 2.2 Animate, SeedVR2 3B/7B, ThinkSound Apache-2.0; klein 9B FLUX Non-Commercial; LTX-2.x free under US$10M revenue (LICENSE-2_x §2.1); SAM License royalty-free and commercial use allowed | Hugging Face API; github.com/Lightricks/LTX-2 LICENSE-2_x; github.com/facebookresearch/sam3 LICENSE | holds. **New flags:** Video-Depth-Anything-Large, DA3 Large/Giant and MMAudio are CC-BY-NC-4.0; HunyuanVideo 1.5 is Tencent Hunyuan Community (territory-restricted) |
-| 10 | Higgsfield client facts marked confirmed (Soul `lora`/`lora_2`, InfiniteTalk + fusex, Angles LoRAs, `.safetensors` motions, Popcorn checkpoints, product labels) | 8 bundle chunks of build 1a2c0e3d | holds, with two corrections in `higgsfield-originals-5`. `WAN2_2_ANIMATE` is "Wan 2.2 Animate" in the main label map. InfiniteTalk's TeaCache and APG are off by default |
-| 11 | "Cinema Studio 4.0 runs on Seedance 2.5" | Higgsfield help center | holds, verbatim |
-| 12 | Higgsfield Terms forbid training on outputs | https://higgsfield.ai/terms-of-use-agreement (last updated 2026-10-23) | holds. **Fixed:** both files quoted secondary or paraphrased text. The exact 5.1(iii) / 5.2(iv) wording is now in, plus 5.2(v) (no reverse engineering) |
-| 13 | "Higgsfield ships Genjutsu as a ComfyUI partner node" counted as evidence for the hypothesis | https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer | **reclassified as neutral.** It is a cloud API node that downloads no model |
+| 10 | The parity studio's client facts marked confirmed (Soul `lora`/`lora_2`, InfiniteTalk + fusex, Angles LoRAs, `.safetensors` motions, Popcorn checkpoints, product labels) | 8 bundle chunks of build 1a2c0e3d | holds, with two corrections in `parity-originals-5`. `WAN2_2_ANIMATE` is "Wan 2.2 Animate" in the main label map. InfiniteTalk's TeaCache and APG are off by default |
+| 11 | "Cinema Studio 4.0 runs on Seedance 2.5" | The parity studio's help center | holds, verbatim |
+| 12 | The parity studio's Terms forbid training on outputs | {studio-site}/terms-of-use-agreement (last updated 2026-10-23) | holds. **Fixed:** both files quoted secondary or paraphrased text. The exact 5.1(iii) / 5.2(iv) wording is now in, plus 5.2(v) (no reverse engineering) |
+| 13 | "The parity studio ships Genjutsu as a ComfyUI partner node" counted as evidence for the hypothesis | https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer | **reclassified as neutral.** It is a cloud API node that downloads no model |
 
 ### Licence rules for Originals
 
 - **Default = commercial-safe on both engines.** An Original's default base and default LoRAs must allow selling outputs *and* running the weights on the user's GPU *and* on fal/Replicate: Apache-2.0, MIT, OpenRAIL-M, the SAM License, or civitai permissions that include `Image` and `Rent`. LTX-2.x is allowed by default, but About & licences shows its US$10M-revenue condition.
 - **Flag, never default:** FLUX.1 / FLUX.2 [dev], FLUX.1 Krea [dev], FLUX.2 [klein] 9B, Video-Depth-Anything Base/Large, DA3 Large/Giant/Nested, MMAudio, inswapper (ReActor): non-commercial weights. HunyuanVideo 1.5, HunyuanVideo-Foley, Hunyuan3D 2.1, MiniMax H3: territory-restricted. Krea 2, Stable Audio 3: revenue-tier community licences. A flagged model may be offered as a labelled alternative. A non-commercial model that fal hosts under its own output licence (e.g. `fal-ai/depth-anything-video`, `fal-ai/mmaudio-v2`) is "hosted only, fal's output terms", never an Original.
 - **civitai `RentCivit`-only LoRAs** (Wiggle, RackFocus, Medieval-CE…) are `local-only`: they run on the user's GPU and are never sent to fal or Replicate. LoRAs without `Image` (FrutigerAero, Mobile Cell Phone, Japan 1980s, Time-lapse, Eyes In, DroneShot) are not used at all.
-- **No Higgsfield data.** Per Terms §5.1(iii) / §5.2(iv) / §5.2(v): no training, captions, prompts, covers or tests built from Higgsfield outputs, preview media or client code. Preset *names* that are generic words stay; Higgsfield preset UUIDs survive only in a one-way migration map for old saved settings.
+- **No parity-studio data.** Per Terms §5.1(iii) / §5.2(iv) / §5.2(v): no training, captions, prompts, covers or tests built from the parity studio outputs, preview media or client code. Preset *names* that are generic words stay; the parity studio's preset UUIDs survive only in a one-way migration map for old saved settings.
 - **Enforced by tests:** the generators fail when an Original's default LoRA has `commercial: false`, when a cloud payload carries a LoRA with `hostedOk: false`, or when a civitai entry has no pinned version id or permission snapshot.
 
-### Coverage: every Higgsfield in-house product
+### Coverage: every parity-studio in-house product
 
-Every product from [`higgsfield-originals-5.md`](higgsfield-originals-5.md), with the five rebranded open tools listed one by one. *Underneath*: A = closed partner model + Higgsfield prompts and UI, B = open model + public LoRAs under a Higgsfield name, C = self-hosted model with LoRA presets (base not public). Each row has an open recipe and a hosted-open recipe; no row needs a proprietary API.
+Every product from [`parity-originals-5.md`](parity-originals-5.md), with the five rebranded open tools listed one by one. *Underneath*: A = closed partner model + the parity studio's prompts and UI, B = open model + public LoRAs under a parity-studio name, C = self-hosted model with LoRA presets (base not public). Each row has an open recipe and a hosted-open recipe; no row needs a proprietary API.
 
-| # | Higgsfield product | underneath | Fuobe Original | open (ComfyUI) | hosted open (fal / Replicate) | licence | package |
+| # | The parity studio's product | underneath | Fuobe Original | open (ComfyUI) | hosted open (fal / Replicate) | licence | package |
 |---|---|---|---|---|---|---|---|
-| 1 | Soul v1 (106 presets) | C · self-hosted base + LoRA-like presets; base unknown (likely shares Higgsfield's Wan 2.2 image pipeline) | `fuobe-soul` (v1 looks) | `z-image-turbo-t2i` + `injectLoras` (≤3 LoRAs, 8 steps, cfg 1, shift 3) | `fal-ai/z-image/turbo/lora`; Replicate `prunaai/z-image-turbo-lora` | all 106 commercial + hostable; 87 presets need a civitai key or a mirror | O2 |
+| 1 | Soul v1 (106 presets) | C · self-hosted base + LoRA-like presets; base unknown (likely shares the parity studio's Wan 2.2 image pipeline) | `fuobe-soul` (v1 looks) | `z-image-turbo-t2i` + `injectLoras` (≤3 LoRAs, 8 steps, cfg 1, shift 3) | `fal-ai/z-image/turbo/lora`; Replicate `prunaai/z-image-turbo-lora` | all 106 commercial + hostable; 87 presets need a civitai key or a mirror | O2 |
 | 2 | Soul 2.0 (33 presets / curated moodboards) | C · `lora` + `lora_2` per style confirmed in client | `fuobe-soul` (v2 looks) | same + new `z-image-turbo-i2i` for edit / refiner | `fal-ai/z-image/turbo/lora`; edit `fal-ai/z-image/turbo/image-to-image/lora` | as above | O2 |
 | 3 | Soul Cinema | C · fixed style slot on the Soul 2.0 pipeline (likely) | `fuobe-soul-cinema` | Fuobe Soul + filmstill 0.7 + moviewide 0.5, `cine` tail, teal-orange grade, camera / lens words | `fal-ai/z-image/turbo/lora` with the same LoRAs | moviewide is civitai (Image, Rent, Sell; token) | O2 |
 | 4 | Soul ID | C · per-person training run (`training_args`) | Fuobe Soul ID (character LoRA) | AI-Toolkit job, Z-Image Turbo + ostris adapter v2 (`aiToolkitJob` exists) | `fal-ai/z-image-turbo-trainer-v2` → LoRA URL in `loras[]` | Apache / MIT; consent checkbox; user's own photos | O3 |
@@ -824,17 +824,17 @@ Every product from [`higgsfield-originals-5.md`](higgsfield-originals-5.md), wit
 | 8 | Soul Location | confirmed Soul 2.0 job | `fuobe-soul` + another-view edit | `z-image-turbo-t2i`; views: `qwen-image-edit-2511` + Multiple-Angles LoRA | `fal-ai/z-image/turbo/lora`; `fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles` | Apache-2.0 | O6 |
 | 9 | DoP camera motions (113) + Mix | C · motions are LoRA files in client; base likely Wan-14B lineage (16 fps, 49/81 frames) | `fuobe-dop` | `wan22-i2v-14b-lora` + motion map, `wan22-fun-camera-14b`; new `ltx23-i2v-lora` for LTX LoRAs | `fal-ai/wan/v2.2-a14b/image-to-video/lora` (`transformer` per file, `interpolator_model: none`); `fal-ai/ltx-2.3-22b/image-to-video/lora` (`camera_lora`); Replicate `wan-video/wan-2.2-i2v-fast` | per LoRA; `local-only` LoRAs never hosted | O4 |
 | 10 | Speak v1 (DoP + audio) | C · DoP-family job `image2video_extend` | `fuobe-speak` | `wan22-s2v-14b` or `infinitetalk-*` | `fal-ai/wan/v2.2-14b/speech-to-video`, `fal-ai/infinitalk` | Apache-2.0 | O11 |
-| 11 | Speak v2 | unknown engine | `fuobe-speak` | InfiniteTalk (Higgsfield defaults preset) | `fal-ai/infinitalk` (+ `/single-text`) | Apache-2.0 | O11 |
+| 11 | Speak v2 | unknown engine | `fuobe-speak` | InfiniteTalk (the parity studio defaults preset) | `fal-ai/infinitalk` (+ `/single-text`) | Apache-2.0 | O11 |
 | 12 | Visual Effects (274) / Effects 2.0 chains | older: presets per model family; 2.0: node chains, 38 of 50 'Prompt based'; engine speculative | `fuobe-dop` effects + chain presets | `wan22-i2v-14b-lora` + effect LoRA (35 today + §7.2); post-grade group → grade step; Mixed Media group → O9 | `fal-ai/wan/v2.2-a14b/image-to-video/lora`; transitions `fal-ai/ltx-2.3-22b/image-to-video/lora` with `end_image_url`; chain step 1 `fal-ai/qwen-image-edit-2511/lora` | Wan 2.1 LoRAs unproven on 2.2; ~130 effects stay prompt-only | O4 |
-| 13 | Genjutsu · motion transfer | A · likely Seedance 2.5 edit with Higgsfield prompts | `fuobe-genjutsu-move` | `wan-animate2` (Wan Animate 2) | `fal-ai/wan/v2.2-14b/animate/move`; animals / groups `fal-ai/scail-2` | Apache-2.0 / MIT | O5 |
+| 13 | Genjutsu · motion transfer | A · likely Seedance 2.5 edit with the parity studio's prompts | `fuobe-genjutsu-move` | `wan-animate2` (Wan Animate 2) | `fal-ai/wan/v2.2-14b/animate/move`; animals / groups `fal-ai/scail-2` | Apache-2.0 / MIT | O5 |
 | 14 | Genjutsu · object swap | A · likely Seedance 2.5 edit | `fuobe-genjutsu-swap` | SAM 3.1 + `video-swap-wan-vace` / `video-insert-wan-vace` | `fal-ai/sam-3-1/video` → `fal-ai/wan-vace-14b/inpainting`; people `fal-ai/wan/v2.2-14b/animate/replace` or `fal-ai/scail-2` (`mode: replacement`) | SAM License (commercial OK) | O5 |
 | 15 | Genjutsu · restyle | A · likely Seedance 2.5 edit; looks are `preset_id`s | `fuobe-genjutsu-restyle` | `video-restyle-wan22-fun-vace` (frame 0 by Qwen edit or a Soul look) | frame 0 `fal-ai/qwen-image-edit-2511/lora` or `fal-ai/z-image/turbo/image-to-image/lora` → `fal-ai/wan-22-vace-fun-a14b/depth` | Apache-2.0 | O5 |
 | 16 | Genjutsu Lite | A · likely Wan 3.0 reference-to-video (same price and billing rule) | Lite variants of the three | Wan Animate 2 with the lightx2v distill LoRA, 480p | same endpoints at 480p (`use_turbo` on animate) | Apache-2.0 | O5 |
 | 17 | Cinema Studio 4.0 (3.x) | A · confirmed Seedance 2.5 (3.x likely Seedance 2.0) | `fuobe-cinema` | Wan 2.2 14B Lightning + camera LoRA / Fun Camera; LTX-2.5 22B (`ltx25-i2v/t2v`) for audio; palette lock | `fal-ai/ltx-2.3-22b/{image,text}-to-video/lora` (`camera_lora`, `generate_audio`); `fal-ai/wan/v2.2-a14b/image-to-video/lora` | LTX-2.x < US$10M; HunyuanVideo 1.5 territory-restricted, not default | O6 |
 | 18 | Mixed Media | per-frame chain confirmed; engine speculative (Nano Banana Pro by price) | `fuobe-mixed-media` | `mixed-media-zimage-frames` + look LoRA (exists) | `fal-ai/ffmpeg-api/extract-frame` → `fal-ai/z-image/turbo/controlnet/lora` per frame → `fal-ai/ffmpeg-api/images-to-video` → mux | Apache-2.0 | O9 |
 | 19 | Shorts Studio restyle | A · confirmed Gemini Omni Flash | `fuobe-shorts` | segment → Qwen edit frame 0 → `video-restyle-wan22-fun-vace` → join → mux (exists) | `fal-ai/qwen-image-edit-2511/lora` → `fal-ai/wan-22-vace-fun-a14b/depth` per segment → `fal-ai/ffmpeg-api/merge-videos` | Apache-2.0 | O9 |
-| 20 | Lipsync Studio 'Infinite Talk' | B · confirmed InfiniteTalk + FusioniX | `oss-infinitetalk` with a 'Higgsfield defaults' preset | `infinitetalk-wanwrapper` + FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5 | `fal-ai/infinitalk` (no tuning fields), `/video-to-video` | Apache-2.0 (FusioniX merges other LoRAs; their licences unchecked) | O11 |
-| 21 | Upscale (legacy 'Higgsfield Upscale') | unknown; today's engines are named partners | `fuobe-upscale` | `upscale-video-seedvr2`, `upscale-image-seedvr2`, ESRGAN, `interpolate-rife`; SDR→HDR and FPS from r4/video-finish | `fal-ai/seedvr/upscale/video` / `/image`, `fal-ai/rife/video`, `fal-ai/ltx-2.3-quality/hdr/lora` | SeedVR2 Apache-2.0, RIFE MIT | O11 |
+| 20 | Lipsync Studio 'Infinite Talk' | B · confirmed InfiniteTalk + FusioniX | `oss-infinitetalk` with a 'the parity studio defaults' preset | `infinitetalk-wanwrapper` + FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5/5 | `fal-ai/infinitalk` (no tuning fields), `/video-to-video` | Apache-2.0 (FusioniX merges other LoRAs; their licences unchecked) | O11 |
+| 21 | Upscale (legacy 'Upscale') | unknown; today's engines are named partners | `fuobe-upscale` | `upscale-video-seedvr2`, `upscale-image-seedvr2`, ESRGAN, `interpolate-rife`; SDR→HDR and FPS from r4/video-finish | `fal-ai/seedvr/upscale/video` / `/image`, `fal-ai/rife/video`, `fal-ai/ltx-2.3-quality/hdr/lora` | SeedVR2 Apache-2.0, RIFE MIT | O11 |
 | 22 | Marketing Studio Image | A · confirmed GPT Image 2.5 + prompt templates | `fuobe-marketing-image` | `qwen-image-edit-2511(-multi)` + template prompts; `product-shot-qwen-edit-2509` | `fal-ai/qwen-image-edit-2511/lora`, `fal-ai/qwen-image-2512/lora` | Apache-2.0; FLUX.2 [dev] edit = hosted-only alternative | O10 |
 | 23 | Ads Studio | A · confirmed LLM concepts + GPT Image 2.5 | Fuobe Ads pipeline | local LLM or offline copy → `qwen-image-2512-t2i` / Qwen edit → browser compositing (exists) | Claude (or none) → `fal-ai/qwen-image-2512/lora` / `fal-ai/qwen-image-edit-2511/lora` | Apache-2.0 | O10 |
 | 24 | AI Influencer | speculative (Seedream 5.0 sheet); builder is a prompt compiler | builder → `fuobe-soul` sheet | `soul-cast-sheet-zimage`; 'Add your face' `qwen-image-edit-2511` | `fal-ai/z-image/turbo/lora`; `fal-ai/qwen-image-edit-2511/lora` | Apache-2.0 | O10 |
@@ -843,38 +843,38 @@ Every product from [`higgsfield-originals-5.md`](higgsfield-originals-5.md), wit
 | 27 | Popcorn storyboards | C · self-trained checkpoints; base speculative (Wan-style flags) | next-scene storyboard | `storyboard-qwen-edit-2509-next-scene` (exists) | `fal-ai/qwen-image-edit-plus-lora-gallery/next-scene` | Apache-2.0 | O13 |
 | 28 | Fashion Factory | half Soul v1 (base shots), half Nano Banana (outfit, photoset) | Soul base shots + open try-on | `z-image-turbo-t2i` + character LoRA → `tryon-flux2-klein-4b` → Qwen edit photoset | `fal-ai/z-image/turbo/lora` → `fal-ai/flux-2/klein/4b/edit/lora` (try-on LoRA; hosting right to check) → `fal-ai/qwen-image-edit-2511/lora` | klein **4B** only (9B is non-commercial) | O10 |
 | 29 | Evolution (staff test model) | speculative (Seedance 2.5 by price) | `fuobe-evolution` | `video-restyle-wan22-fun-vace` with denoise by intensity 0.45 / 0.65 / 0.85 | `fal-ai/ltx-2.3-22b/video-to-video/lora` or `fal-ai/wan-vace-apps/video-edit` | LTX-2.x < US$10M | O13 |
-| 30 | Higgsfield Angles | B · confirmed Qwen-Image-Edit 2509 + Multiple-angles + Lightning | Angles app | existing 2511 route; new `qwen-image-edit-2509-angles` (dx8152 LoRA + Qwen-Image-Lightning) for an exact copy | `fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles` (rotate −90…90°, vertical −1…1, forward 0–10, `lora_scale` 1.25, 6 steps) | Apache-2.0 | O11 |
-| 31 | Higgsfield Animate / Recast | B · confirmed Wan 2.2 Animate | Motion Control / Recast | `wan-animate2` | `fal-ai/wan/v2.2-14b/animate/move`, `/replace` | Apache-2.0 | O5 |
+| 30 | Angles | B · confirmed Qwen-Image-Edit 2509 + Multiple-angles + Lightning | Angles app | existing 2511 route; new `qwen-image-edit-2509-angles` (dx8152 LoRA + Qwen-Image-Lightning) for an exact copy | `fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles` (rotate −90…90°, vertical −1…1, forward 0–10, `lora_scale` 1.25, 6 steps) | Apache-2.0 | O11 |
+| 31 | Animate / Recast | B · confirmed Wan 2.2 Animate | Motion Control / Recast | `wan-animate2` | `fal-ai/wan/v2.2-14b/animate/move`, `/replace` | Apache-2.0 | O5 |
 | 32 | Depth Map | B · confirmed Video Depth Anything **Large** | depth tool | `video-depth-vda-small` or `video-depth-da3` (DA3 Mono-Large) | `fal-ai/depth-anything-video` (fal output terms; variant not stated) | **VDA-Large is CC-BY-NC-4.0: do not self-host it** | O11 |
 | 33 | Remove Background (video) | B · confirmed SAM 3 | video matte | `video-bg-remove-sam3` (SAM 3.1) | `fal-ai/sam-3-1/video` | SAM License | O11 |
 | 34 | Mirelo SFX / Sonilo music | partner vendors, labelled as such | not an Original (stays a partner) | ThinkSound, Stable Audio 3 Small, ACE-Step 1.5 | partner `mirelo-ai/sfx2.0/*`, `sonilo/v1.1/*`; open-hosted `fal-ai/thinksound`, `fal-ai/ace-step` | MMAudio non-commercial: not a default | — |
 
-### What replaces each Higgsfield model when the provider is removed
+### What replaces each parity-studio model when the provider is removed
 
-Fuobe's Higgsfield surface today: 12 models only on Higgsfield (`HIGGSFIELD_MODELS`), extra Higgsfield routes on 24 partner models (`HIGGSFIELD_ROUTES`), two Soul ID training targets, the live preset lists, and a settings key. Checked against `src/lib/catalog/higgsfield-models.generated.ts` and `cloud-models.generated.ts` on this branch.
+Fuobe's parity-studio surface today: 12 models only on the parity studio (`STUDIO_MODELS`), extra the parity studio routes on 24 partner models (`STUDIO_ROUTES`), two Soul ID training targets, the live preset lists, and a settings key. Checked against `src/lib/catalog/{studio}-models.generated.ts` and `cloud-models.generated.ts` on this branch.
 
 | Fuobe item today | replaced by | partner alternatives kept / notes | package |
 |---|---|---|---|
-| `soul-1` (`higgsfield-ai/soul/standard`) | `fuobe-soul` with the Soul v1 looks | Nano Banana Pro, Seedream 5.0 Pro | O2 |
-| `soul-2` t2i (`higgsfield-ai/soul/v2/standard`) | `fuobe-soul` with the Soul 2.0 looks | same | O2 |
-| `soul-2` edit (`higgsfield-ai/soul/v2/image-to-image`) | `fuobe-soul` edit route (`z-image-turbo-i2i` / `fal-ai/z-image/turbo/image-to-image/lora`) | Nano Banana Pro edit | O2 |
-| `soul-cinema` (`higgsfield-ai/soul/cinema`) | `fuobe-soul-cinema` | Nano Banana Pro, Seedream 5.0 Pro camera stills | O2 / O6 |
+| `soul-1` (`{studio}/soul/standard`) | `fuobe-soul` with the Soul v1 looks | Nano Banana Pro, Seedream 5.0 Pro | O2 |
+| `soul-2` t2i (`{studio}/soul/v2/standard`) | `fuobe-soul` with the Soul 2.0 looks | same | O2 |
+| `soul-2` edit (`{studio}/soul/v2/image-to-image`) | `fuobe-soul` edit route (`z-image-turbo-i2i` / `fal-ai/z-image/turbo/image-to-image/lora`) | Nano Banana Pro edit | O2 |
+| `soul-cinema` (`{studio}/soul/cinema`) | `fuobe-soul-cinema` | Nano Banana Pro, Seedream 5.0 Pro camera stills | O2 / O6 |
 | `marketing-studio-image` (`marketing-studio/image`) | `fuobe-marketing-image` (Qwen-Image-Edit 2511 + templates) | GPT Image 2.5, Nano Banana Pro via fal | O7 maps, O10 builds |
-| `ads-studio` (`higgsfield/ads-studio/v1.0`) | Fuobe Ads pipeline (LLM copy → Qwen visual → browser compositing) | Nano Banana Pro / GPT Image 2.5 visuals | O7 maps, O10 builds |
-| `cinema-studio-4` (`higgsfield/cinema-studio/4.0`) | `fuobe-cinema` | Seedance 2.5, Kling 3.0, Veo 3.1 with the panel compiled into the prompt (today's no-key path) | O6 |
+| `ads-studio` (`{studio}/ads-studio/v1.0`) | Fuobe Ads pipeline (LLM copy → Qwen visual → browser compositing) | Nano Banana Pro / GPT Image 2.5 visuals | O7 maps, O10 builds |
+| `cinema-studio-4` (`{studio}/cinema-studio/4.0`) | `fuobe-cinema` | Seedance 2.5, Kling 3.0, Veo 3.1 with the panel compiled into the prompt (today's no-key path) | O6 |
 | `genjutsu-motion-transfer` | `fuobe-genjutsu-move` | Kling 3.0 Motion Control | O5 |
 | `genjutsu-object-swap` | `fuobe-genjutsu-swap` | Kling O3 edit | O5 |
 | `genjutsu-restyle` | `fuobe-genjutsu-restyle` | Kling O3 edit, Lucy Edit Pro, LTX 2.3 Reference Restyle | O5 |
 | `genjutsu-lite-motion-transfer`, `genjutsu-lite-object-swap` | Lite variants (480p, distilled / turbo) | — | O5 |
-| `happy-horse-1-1` (Higgsfield's resale of Alibaba Happy Horse 1.1) | not an Original. Add fal routes `alibaba/happy-horse/v1.1/{text,image,reference}-to-video` (OpenAPI answers 200 on 2026-10-23; schemas still to be researched) or hide the model | — | O7 |
-| `HIGGSFIELD_ROUTES` on 24 partner models | removed; 22 keep every op on fal (Kling 2.5 Turbo and Wan 2.7 also on Replicate) | lost ops: `seedance-2-5` **v2v** (Seedance 2.5 video edit; `bytedance/seedance-2.5/video-edit` is 404 on fal) → Kling O3 edit, Happy Horse video edit or the Wan VACE Original; `ltx-2-5` **flf2v** → `fal-ai/ltx-2.3-22b/image-to-video/lora` with `end_image_url`, or Wan 2.2 FLF2V | O7 |
+| `happy-horse-1-1` (the parity studio's resale of Alibaba Happy Horse 1.1) | not an Original. Add fal routes `alibaba/happy-horse/v1.1/{text,image,reference}-to-video` (OpenAPI answers 200 on 2026-10-23; schemas still to be researched) or hide the model | — | O7 |
+| `STUDIO_ROUTES` on 24 partner models | removed; 22 keep every op on fal (Kling 2.5 Turbo and Wan 2.7 also on Replicate) | lost ops: `seedance-2-5` **v2v** (Seedance 2.5 video edit; `bytedance/seedance-2.5/video-edit` is 404 on fal) → Kling O3 edit, Happy Horse video edit or the Wan VACE Original; `ltx-2-5` **flf2v** → `fal-ai/ltx-2.3-22b/image-to-video/lora` with `end_image_url`, or Wan 2.2 FLF2V | O7 |
 | Training targets `soul-id-v2`, `soul-id-cinema` | `fal-z-image` (`fal-ai/z-image-turbo-trainer-v2`) and `aitk-z-image`, retargeted to `fuobe-soul` / `fuobe-soul-cinema` | — | O3 |
-| Elements with a Higgsfield Soul ID (`ElementLora.referenceId`) | "Retrain for Fuobe Soul" from the element's stored photos (Soul IDs are not exportable) | — | O3 |
-| Soul preset list: live `/api/providers/higgsfield/presets` + `SOUL_PRESETS` style_ids | `SOUL_ORIGINALS` (Fuobe looks); Higgsfield UUIDs only in a migration map | — | O2 / O7 |
-| Genjutsu looks (Higgsfield `preset_id`, live list) | Fuobe looks (a Soul look LoRA on frame 0) | — | O5 |
+| Elements with a Soul ID (`ElementLora.referenceId`) | "Retrain for Fuobe Soul" from the element's stored photos (Soul IDs are not exportable) | — | O3 |
+| Soul preset list: live `/api/providers/{studio}/presets` + `SOUL_PRESETS` style_ids | `SOUL_ORIGINALS` (Fuobe looks); the parity studio's UUIDs only in a migration map | — | O2 / O7 |
+| Genjutsu looks (the parity studio `preset_id`, live list) | Fuobe looks (a Soul look LoRA on frame 0) | — | O5 |
 | Native Soul HEX palette (`color_palette` on Soul and Cinema Studio) | hex in prompt + palette lock (`oss-palette-image` / `oss-palette-video`) | Recraft V4.1 / Ideogram 3.0 native palettes | O2 / O6 |
 | Curated moodboards (Soul 2.0 style_ids); personal moodboards | Fuobe looks; style LoRA per personal board | Recraft V4 Styles, Nano Banana Pro references | O3 |
-| Setting `higgsfieldKey` (`HIGGSFIELD_API_KEY`), connection test, vendor mark | removed; a `civitaiKey` secret is added (O1) | — | O7 |
+| Setting `parityKey` (`STUDIO_API_KEY`), connection test, vendor mark | removed; a `civitaiKey` secret is added (O1) | — | O7 |
 
 ### Packages, in priority order
 
@@ -883,19 +883,19 @@ Fuobe's Higgsfield surface today: 12 models only on Higgsfield (`HIGGSFIELD_MODE
 | O0 | Land round 4 first | P0 | — | nothing; avoids rebasing every Originals package over 91 unmerged commits |
 | O1 | LoRA plumbing on both engines | P0 | O0 | nothing directly; every later package needs it |
 | O2 | Fuobe Soul: Soul v1, Soul 2.0, Soul Cinema and HEX | P0 | O1 | `soul-1`, `soul-2`, `soul-cinema`, Soul style_ids and curated moodboards, the native Soul HEX palette |
-| O3 | Fuobe Soul ID and personal moodboards (training) | P0 | O1, O2 | `soul-id-v2`, `soul-id-cinema`; `custom_reference_id` + strength → character LoRA + scale; Higgsfield moodboard training |
-| O4 | Fuobe DoP: camera motions, Mix and effects | P0 | O1 | Higgsfield DoP and the `higgsfield` preset family. Fuobe has no DoP catalog model today; the 108 presets ran as prompts on partner models |
+| O3 | Fuobe Soul ID and personal moodboards (training) | P0 | O1, O2 | `soul-id-v2`, `soul-id-cinema`; `custom_reference_id` + strength → character LoRA + scale; the parity studio's moodboard training |
+| O4 | Fuobe DoP: camera motions, Mix and effects | P0 | O1 | DoP and the `{studio}` preset family. Fuobe has no DoP catalog model today; the 108 presets ran as prompts on partner models |
 | O5 | Fuobe Genjutsu (motion transfer, object swap, restyle, Lite) | P1 | O0, O1, O2 | `genjutsu-motion-transfer`, `genjutsu-object-swap`, `genjutsu-restyle`, `genjutsu-lite-*`, Genjutsu looks |
 | O6 | Fuobe Cinema (Cinema Studio 4.0 Original) and Soul Cast / Location | P1 | O0, O2, O4 | `cinema-studio-4`; Cinema's `soul-cinema`, Soul Cast and Soul Location defaults |
-| O7 | Remove the Higgsfield provider (the switch) | P1 | O2, O3, O5, O6 | every row of the replacement table |
+| O7 | Remove the parity studio's provider (the switch) | P1 | O2, O3, O5, O6 | every row of the replacement table |
 | O8 | Evaluation harness and real preset covers (task #65) | P1 | O2, O4 | the "quality unverified" caveat; it gates calling any Original "verified" |
-| O9 | Mixed Media and Shorts on hosted open models | P2 | O1, O2 | Higgsfield Mixed Media and Shorts as products (Gemini Omni and other partners stay as choices) |
-| O10 | Marketing, Ads, AI Influencer, Photodump and Fashion on Originals | P2 | O2, O3, O7 | `marketing-studio-image`, `ads-studio` (as defaults), the AI Influencer app's Higgsfield route, and the Soul-based Photodump and Fashion defaults |
-| O11 | Rebranded open tools, Speak and finishing | P2 | O1 | the Higgsfield-branded tools (none of them is in Fuobe's Higgsfield catalog, so nothing is deleted) |
+| O9 | Mixed Media and Shorts on hosted open models | P2 | O1, O2 | Mixed Media and Shorts as products (Gemini Omni and other partners stay as choices) |
+| O10 | Marketing, Ads, AI Influencer, Photodump and Fashion on Originals | P2 | O2, O3, O7 | `marketing-studio-image`, `ads-studio` (as defaults), the AI Influencer app's parity-studio route, and the Soul-based Photodump and Fashion defaults |
+| O11 | Rebranded open tools, Speak and finishing | P2 | O1 | the parity-studio-branded tools (none of them is in Fuobe's parity-studio catalog, so nothing is deleted) |
 | O12 | Train Fuobe's own LoRAs and the motion library | P2 | O8 | the 16 "train" looks and the prompt-only motions |
-| O13 | Popcorn, Evolution and Effects 2.0 chains | P3 | O2, O5 | the Higgsfield Popcorn and Evolution products |
+| O13 | Popcorn, Evolution and Effects 2.0 chains | P3 | O2, O5 | the Popcorn and Evolution products |
 
-P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it needs; P2 = product parity after the switch; P3 = nice to have.
+P0 = needed before any parity-studio model can go; P1 = the switch-off and what it needs; P2 = product parity after the switch; P3 = nice to have.
 
 #### O0 · Land round 4 first (P0)
 
@@ -934,10 +934,10 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 #### O2 · Fuobe Soul: Soul v1, Soul 2.0, Soul Cinema and HEX (P0)
 
 - **Scope**
-  - `scripts/gen-soul-originals.py` → `src/lib/catalog/soul-originals.generated.ts`. It holds the 139 looks from `presets[]`: Fuobe id, name, family v1 / v2, categories, look sentence, tail, triggers, `loras [key@strength]`, grade, base (`z-image` or `qwen-2512`), train flag, note, and `legacyStyleId` (the Higgsfield UUID, migration only).
+  - `scripts/gen-soul-originals.py` → `src/lib/catalog/soul-originals.generated.ts`. It holds the 139 looks from `presets[]`: Fuobe id, name, family v1 / v2, categories, look sentence, tail, triggers, `loras [key@strength]`, grade, base (`z-image` or `qwen-2512`), train flag, note, and `legacyStyleId` (the parity studio's UUID, migration only).
   - New ModelDefs: `fuobe-soul` (open: `z-image-turbo-t2i` + LoRAs; cloud: `fal-ai/z-image/turbo/lora`; Replicate `prunaai/z-image-turbo-lora`), `fuobe-soul-hd` (Qwen-Image 2512 for lettering presets) and `fuobe-soul-cinema` (filmstill 0.7 + moviewide 0.5, `cine` tail, 16:9 default). Options as Soul: 7 aspects, 720p / 1080p tiers from §4.3, batch 1 or 4, seed 1–1,000,000. Preset strength 0–1 multiplies the look's LoRA scales; character strength 0–1 maps to a character-LoRA scale of 0.6–1.0.
   - Prompt builder `src/lib/catalog/soul.ts`: triggers + the user's prompt (short prompts expanded to 60–120 words by the existing enhancer) + look + tail. Slot rule within fal's 3: character LoRA first, then the look's LoRAs, then the core LoRA if a slot is left.
-  - Edit route (Soul 2.0 image-to-image): new `z-image-turbo-i2i` / `fal-ai/z-image/turbo/image-to-image/lora`. An optional refiner pass at denoise ≈ 0.17 (Higgsfield's `time_denoise_from` 0.83) is an experiment until O8.
+  - Edit route (Soul 2.0 image-to-image): new `z-image-turbo-i2i` / `fal-ai/z-image/turbo/image-to-image/lora`. An optional refiner pass at denoise ≈ 0.17 (the parity studio's `time_denoise_from` 0.83) is an experiment until O8.
   - Post steps: the grade preset is applied in the browser when the result arrives (the existing WebGL grade in `src/lib/grade.ts`), stored as a derived output with `meta.grade`. API and MCP clients get `meta.grade`. New `invert` and `solarize` presets. Palette lock (`oss-palette-image`) when a HEX palette is picked on the open engine; hex in the prompt on the cloud. Date-stamp, CCTV and photo-booth overlays are drawn in the browser. The face mosaic waits for O11.
   - Pickers read `SOUL_ORIGINALS` instead of `SOUL_PRESETS`. Covers stay procedural until O8 renders real ones.
 - **Files likely touched (`src/`, `scripts/`):** `scripts/gen-soul-originals.py` (new), `src/lib/catalog/soul-originals.generated.ts` (new), `src/lib/catalog/soul.ts` (new), `src/lib/catalog/models.ts`, `src/lib/catalog/packs.ts` (`presetFallback`, `presetPrompt`), `src/lib/catalog/palettes.ts` (`styleWords`, `SIGNATURE_MODELS`), `src/lib/grade.ts`, `src/components/moodboards/{logic.ts,cards.tsx,soul-preset-cards.tsx}`, `src/components/studio/{preset-chips.tsx,model-controls.tsx}`, `src/lib/studio-catalog.ts`, `src/server/generations.ts` (post-step meta), `package.json`
@@ -955,18 +955,18 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 
 - **Scope**
   - Remove the `soul-id-v2` and `soul-id-cinema` targets. Keep `fal-z-image` (`fal-ai/z-image-turbo-trainer-v2`: 2,000 steps, lr 5e-4, about $1.70) and `aitk-z-image` (rank 16–32, 1,500–2,500 steps), retargeted to `fuobe-soul` / `fuobe-soul-cinema`. Optionally add `fal-ai/qwen-image-2512-trainer` for `fuobe-soul-hd`.
-  - Photo rules from Higgsfield's help center: 20+ photos recommended (80 max on the web); no sunglasses, groups, filters or cropped faces; one full-body shot. Keep the consent checkbox. "Upgrade character" retrains the same photos on another base.
+  - Photo rules from the parity studio's help center: 20+ photos recommended (80 max on the web); no sunglasses, groups, filters or cropped faces; one full-body shot. Keep the consent checkbox. "Upgrade character" retrains the same photos on another base.
   - Personal moodboards become a style LoRA: the AI-Toolkit style preset (exists) or `fal-ai/z-image-trainer` with `training_type: style`. The result is used as a Fuobe look.
-  - Elements holding a Higgsfield Soul ID can't be exported, so they get a "Retrain for Fuobe Soul" action using their stored photos. The `soulId()` path in `packs.ts` goes.
+  - Elements holding a Soul ID can't be exported, so they get a "Retrain for Fuobe Soul" action using their stored photos. The `soulId()` path in `packs.ts` goes.
 - **Files likely touched (`src/`, `scripts/`):** `src/lib/catalog/training.ts`, `src/server/training.ts`, `src/lib/catalog/elements.ts`, `src/lib/catalog/packs.ts`, `src/server/photodump.ts`, `src/app/api/photodump/character/route.ts`, `src/server/moodboards.ts`, `src/server/elements.ts`, `src/components/moodboards/*`, `src/components/photodump/subject.tsx`, element training UI
 - **ComfyUI workflows:** none (AI-Toolkit runs outside ComfyUI; the LoRA is copied into `ComfyUI/models/loras`)
 - **Catalog changes:** training targets
 - **Tests**
-  - `training.test.ts`: no `higgsfield` provider and every target resolves
+  - `training.test.ts`: no `{studio}` provider and every target resolves
   - `training-runtime.test.ts`: fal trainer payload (zip of `001.jpg` + `001.txt`, `default_caption`, `steps`) and `diffusers_lora_file` → `ElementLora.url`
   - elements test: an @mention puts the LoRA on `fuobe-soul`
   - image-studios: Photodump with a trained character
-- **Replaces:** `soul-id-v2`, `soul-id-cinema`; `custom_reference_id` + strength → character LoRA + scale; Higgsfield moodboard training
+- **Replaces:** `soul-id-v2`, `soul-id-cinema`; `custom_reference_id` + strength → character LoRA + scale; the parity studio's moodboard training
 - **Depends on:** O1, O2
 - **Check on the first live run:** identity quality against Soul ID is untested; add face crops as extra samples if likeness is weak
 
@@ -988,7 +988,7 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
   - `tests/dop-originals.test.ts`: 49 / 81 frames, `interpolator_model: none`, 16 fps, Mix scales
   - motions catalog: every motion and effect has an open and a cloud route
   - `open-engine.test.ts` bindings for the LTX-2.3 graphs
-- **Replaces:** Higgsfield DoP and the `higgsfield` preset family. Fuobe has no DoP catalog model today; the 108 presets ran as prompts on partner models
+- **Replaces:** DoP and the `{studio}` preset family. Fuobe has no DoP catalog model today; the 108 presets ran as prompts on partner models
 - **Depends on:** O1
 - **Check on the first live run:** Wan 2.1 LoRAs on Wan 2.2 (strength, expert); whether LTX-2 19B LoRAs load on fal's LTX-2.3 endpoints
 
@@ -997,8 +997,8 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 - **Scope**
   - Hosted-open routes in the merged `genjutsu.ts`. Motion transfer → `fal-ai/wan/v2.2-14b/animate/move` (480 / 580 / 720p, $0.04–0.08/s), or `fal-ai/scail-2` for animals and several people. Object swap → `fal-ai/sam-3-1/video` mask → `fal-ai/wan-vace-14b/inpainting` with `mask_video_url` and `ref_image_urls`; people → `fal-ai/wan/v2.2-14b/animate/replace` or SCAIL-2 `replacement`. Restyle → frame 0 by `fal-ai/qwen-image-edit-2511/lora` or a Soul look on `fal-ai/z-image/turbo/image-to-image/lora`, then `fal-ai/wan-22-vace-fun-a14b/depth` with `first_frame_url`.
   - Lite: 480p plus `use_turbo` on fal animate; Wan Animate 2 with the lightx2v distill LoRA on the open engine.
-  - Higgsfield's limits: source trimmed to 4–30 s (Lite 15 s), ≤10 references, keep audio on (the original sound is muxed back).
-  - The look picker lists Fuobe looks (O2) instead of Higgsfield `preset_id`s. Katana's and Ad Multiplier's Genjutsu option points at the Original.
+  - The parity studio's limits: source trimmed to 4–30 s (Lite 15 s), ≤10 references, keep audio on (the original sound is muxed back).
+  - The look picker lists Fuobe looks (O2) instead of the parity studio `preset_id`s. Katana's and Ad Multiplier's Genjutsu option points at the Original.
 - **Files likely touched (`src/`, `scripts/`):** `src/lib/catalog/genjutsu.ts`, the r4 Genjutsu server module and API routes, `src/components/genjutsu/{genjutsu-studio.tsx,look-picker.tsx,setup-code.tsx}`, `src/lib/av/katana.ts`, `src/lib/catalog/marketing.ts` (Ad Multiplier), `src/lib/catalog/models.ts`
 - **ComfyUI workflows:** reuse `wan-animate2`, `video-swap-wan-vace`, `video-insert-wan-vace`, `video-restyle-wan22-fun-vace`, `video-bg-remove-sam3`, `video-mux-audio`; optional **add** `scail2-animate` / `scail2-replace` from the ComfyUI core templates
 - **Catalog changes:** 5 Original ModelDefs (3 modes + 2 Lite)
@@ -1018,30 +1018,30 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
   - Open: Wan 2.2 14B Lightning + camera LoRA / Fun Camera (exists), or LTX-2.5 22B (`ltx25-i2v` / `-t2v`, gated weights) for audio + video. Palette lock via `oss-palette-video`.
   - Extend → `fal-ai/ltx-2.3-22b/extend-video/lora` or Wan Fun VACE extend. Edit → `fal-ai/ltx-2.3-22b/video-to-video/lora` or Wan Fun VACE restyle. Reference clips: none on the open engine (keep the note); one clip via `fal-ai/ltx-2.3-22b/reference-video-to-video/lora` (to verify).
   - Image mode uses `fuobe-soul-cinema`. Soul Cast uses `fuobe-soul` + the 17-field compiler. Soul Location uses `fuobe-soul` + Multiple-angles views.
-  - Remove `HIGGSFIELD_ONLY` from `cinema.ts`.
-- **Files likely touched (`src/`, `scripts/`):** `src/lib/catalog/cinema.ts` (`HIGGSFIELD_ONLY`, `CINEMA_MODELS`, `CAST_MODELS`, `LOCATION_MODELS`), `src/server/cinema-generate.ts`, `src/server/cinema-director.ts`, `src/server/cinema.ts`, `src/components/cinema/{director-panel.tsx,prompt-bar.tsx,soul-builders.tsx,hooks.ts,cinema-feed.tsx}`, `src/app/api/cinema/projects/[id]/route.ts`, `src/lib/catalog/models.ts`
+  - Remove `STUDIO_ONLY` from `cinema.ts`.
+- **Files likely touched (`src/`, `scripts/`):** `src/lib/catalog/cinema.ts` (`STUDIO_ONLY`, `CINEMA_MODELS`, `CAST_MODELS`, `LOCATION_MODELS`), `src/server/cinema-generate.ts`, `src/server/cinema-director.ts`, `src/server/cinema.ts`, `src/components/cinema/{director-panel.tsx,prompt-bar.tsx,soul-builders.tsx,hooks.ts,cinema-feed.tsx}`, `src/app/api/cinema/projects/[id]/route.ts`, `src/lib/catalog/models.ts`
 - **ComfyUI workflows:** reuse `wan22-i2v-14b-lightx2v`, `wan22-fun-camera-14b`, `ltx25-i2v`, `ltx25-t2v`, `palette-transfer-video`, `video-extend-wan22-fun-vace`, `video-restyle-wan22-fun-vace`; `ltx23-*-lora` from O4
 - **Catalog changes:** `fuobe-cinema`; Cinema model lists
 - **Tests**
-  - `cinema.test.ts`, `cinema-api.test.ts`, `cinema-refs.test.ts` with no Higgsfield context
+  - `cinema.test.ts`, `cinema-api.test.ts`, `cinema-refs.test.ts` with no parity-studio context
   - payload: all 33 moves → `camera_lora` or a LoRA; duration → frames; estimate
 - **Replaces:** `cinema-studio-4`; Cinema's `soul-cinema`, Soul Cast and Soul Location defaults
 - **Depends on:** O0, O2, O4
 - **Check on the first live run:** LTX-2.3 reference-video for Cinema references; quality will not match Seedance 2.5; the partner models stay pickable
 
-#### O7 · Remove the Higgsfield provider (the switch) (P1)
+#### O7 · Remove the parity studio's provider (the switch) (P1)
 
 - **Scope**
-  - Delete the provider, its generated catalog, its generator, the settings key, the connection test, the presets API and the `higgsfield` training provider.
+  - Delete the provider, its generated catalog, its generator, the settings key, the connection test, the presets API and the `{studio}` training provider.
   - Add `src/lib/catalog/replaced.ts` (`REPLACED_BY`: old model id or style id → Original + a note). Reuse, saved Cinema / Canvas projects and Assist plans resolve through it. Past generations stay viewable, because the Library reads outputs, not providers.
   - Close the partner gaps: Seedance 2.5 v2v and LTX-2.5 flf2v (table above); Happy Horse 1.1 gets fal routes or is hidden. Marketing Studio Image and Ads Studio map to their partner / Fuobe pipelines until O10 makes the Originals default.
-  - Docs: `docs/STATUS.md` rows, `docs/research/README.md` (the Higgsfield research files become history and feed no generator), About & licences.
-- **Files likely touched (`src/`, `scripts/`):** **delete** `src/server/providers/higgsfield.ts`, `src/lib/catalog/higgsfield-models.generated.ts`, `scripts/gen-higgsfield-models.py`, `src/app/api/providers/higgsfield/presets/route.ts`, `tests/higgsfield.test.ts`, `src/server/providers/index.ts`, `src/lib/catalog/models.ts` (the `HIGGSFIELD_*` merge), `src/server/settings.ts`, `src/lib/connections.ts`, `src/components/{settings-form.tsx,get-started.tsx,app-sidebar.tsx,studio/vendor-mark.tsx}`, `src/lib/catalog/{training,cinema,packs,palettes,marketing,apps,canvas,faceless,storyboard,shorts-models,remove-object}.ts`, `src/server/{generations,training,photodump,ads,marketing,cinema,cinema-generate,canvas,palettes,layers,brand}.ts`, `src/server/assist/studio-tools.ts`, `src/lib/{assist,composer,library,studio-catalog}.ts`, `src/app/(studio)/settings/about/page.tsx`, `package.json`, `scripts/gen-cloud-models.py`, 122 files mention Higgsfield today; most are UI copy
+  - Docs: `docs/STATUS.md` rows, `docs/research/README.md` (the parity studio's research files become history and feed no generator), About & licences.
+- **Files likely touched (`src/`, `scripts/`):** **delete** `src/server/providers/{studio}.ts`, `src/lib/catalog/{studio}-models.generated.ts`, `scripts/gen-studio-models.py`, `src/app/api/providers/{studio}/presets/route.ts`, `tests/{studio}.test.ts`, `src/server/providers/index.ts`, `src/lib/catalog/models.ts` (the `STUDIO_*` merge), `src/server/settings.ts`, `src/lib/connections.ts`, `src/components/{settings-form.tsx,get-started.tsx,app-sidebar.tsx,studio/vendor-mark.tsx}`, `src/lib/catalog/{training,cinema,packs,palettes,marketing,apps,canvas,faceless,storyboard,shorts-models,remove-object}.ts`, `src/server/{generations,training,photodump,ads,marketing,cinema,cinema-generate,canvas,palettes,layers,brand}.ts`, `src/server/assist/studio-tools.ts`, `src/lib/{assist,composer,library,studio-catalog}.ts`, `src/app/(studio)/settings/about/page.tsx`, `package.json`, `scripts/gen-cloud-models.py`, 122 files mention the parity studio today; most are UI copy
 - **ComfyUI workflows:** none
 - **Catalog changes:** `replaced.ts`; Happy Horse 1.1 fal routes (research their schemas first)
 - **Tests**
-  - catalog integrity: no route has `provider: "higgsfield"`; every `REPLACED_BY` target exists and runs on both engines
-  - a grep guard: no `higgsfield` in `src/` outside an allowlist of attribution copy
+  - catalog integrity: no route has `provider: "{studio}"`; every `REPLACED_BY` target exists and runs on both engines
+  - a grep guard: no `{studio}` in `src/` outside an allowlist of attribution copy
   - update `providers`, `connections`, `engine-mode`, `cloud-catalog*`, `studio-pickers`, `home-start` tests
   - e2e `no-horizontal-scroll.mjs` and `composer-flows.mjs` in demo mode
 - **Replaces:** every row of the replacement table
@@ -1052,7 +1052,7 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 
 - **Scope**
   - `scripts/eval/`: render every Soul look, motion and effect on a GPU (ComfyUI) and on fal under a spend cap, with and without its LoRAs, at the listed strengths. Write a contact sheet and a JSON log (time, VRAM, $). Lower the strengths that over-cook, and record each result back into the research JSON.
-  - The renders become the preview media (no Higgsfield previews).
+  - The renders become the preview media (no parity-studio previews).
 - **Files likely touched (`src/`, `scripts/`):** `scripts/eval/{run.mjs,plan.mjs,report.mjs}` (new), `src/lib/preset-cards.ts`, `public/previews/*`
 - **ComfyUI workflows:** reuse all
 - **Catalog changes:** strength updates in the research JSON → `gen:catalog`
@@ -1075,7 +1075,7 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
   - `mixed-media.test.ts`: frames = floor(seconds × fps) and cost
   - pipeline fan-out
   - `shorts.test.ts` hosted-open route
-- **Replaces:** Higgsfield Mixed Media and Shorts as products (Gemini Omni and other partners stay as choices)
+- **Replaces:** Mixed Media and Shorts as products (Gemini Omni and other partners stay as choices)
 - **Depends on:** O1, O2
 - **Check on the first live run:** per-frame cost and flicker
 
@@ -1091,17 +1091,17 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 - **ComfyUI workflows:** reuse `qwen-image-edit-2511`, `qwen-image-edit-2511-multi`, `qwen-image-2512-t2i`, `product-shot-qwen-edit-2509`, `tryon-flux2-klein-4b`, `soul-cast-sheet-zimage`
 - **Catalog changes:** `fuobe-marketing-image`; default model lists
 - **Tests**
-  - `marketing-catalog`, `marketing-api`, `image-studios`, `image-studios-api` without Higgsfield
-- **Replaces:** `marketing-studio-image`, `ads-studio` (as defaults), the AI Influencer app's Higgsfield route, and the Soul-based Photodump and Fashion defaults
+  - `marketing-catalog`, `marketing-api`, `image-studios`, `image-studios-api` without the parity studio
+- **Replaces:** `marketing-studio-image`, `ads-studio` (as defaults), the AI Influencer app's parity-studio route, and the Soul-based Photodump and Fashion defaults
 - **Depends on:** O2, O3, O7
 - **Check on the first live run:** the try-on LoRA's hosting right
 
 #### O11 · Rebranded open tools, Speak and finishing (P2)
 
 - **Scope**
-  - Angles: a route on `fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles` with Higgsfield-like controls (rotate −90…90°, vertical −1…1, forward 0–10, wide-angle; `lora_scale` 1.25, 6 steps). Open: new `qwen-image-edit-2509-angles` (dx8152 Multiple-angles + Qwen-Image-Lightning) next to the 2511 route.
+  - Angles: a route on `fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles` with parity-studio-like controls (rotate −90…90°, vertical −1…1, forward 0–10, wide-angle; `lora_scale` 1.25, 6 steps). Open: new `qwen-image-edit-2509-angles` (dx8152 Multiple-angles + Qwen-Image-Lightning) next to the 2511 route.
   - Depth Map defaults to VDA-Small / DA3 Mono-Large. VDA-Large is flagged non-commercial; `fal-ai/depth-anything-video` is hosted-only under fal's terms.
-  - Speak / Lipsync: an InfiniteTalk "Higgsfield defaults" preset (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5 / 5, colour correction 1) on the open engine; `fal-ai/infinitalk` hosted; a Speak-v1-like route on Wan 2.2 S2V.
+  - Speak / Lipsync: an InfiniteTalk "the parity studio defaults" preset (FusioniX LoRA, motion_frame 15, 25 steps, shift 10, guidance 5 / 5, colour correction 1) on the open engine; `fal-ai/infinitalk` hosted; a Speak-v1-like route on Wan 2.2 S2V.
   - Upscale: SeedVR2 (exists) plus FPS boost and SDR→HDR from `r4/video-finish`; hosted `fal-ai/seedvr/upscale/video`, `fal-ai/rife/video`, `fal-ai/ltx-2.3-quality/hdr/lora`.
   - Soul face mosaic: SAM 3.1 face mask + mosaic (open graph; hosted `fal-ai/sam-3-1/image`).
 - **Files likely touched (`src/`, `scripts/`):** `src/lib/catalog/{apps,models}.ts`, `src/server/providers/comfyui.ts` (InfiniteTalk params), video-tools and lipsync components
@@ -1110,7 +1110,7 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 - **Tests**
   - apps tests
   - ComfyUI binding tests for the new / extended graphs
-- **Replaces:** the Higgsfield-branded tools (none of them is in Fuobe's Higgsfield catalog, so nothing is deleted)
+- **Replaces:** the parity-studio-branded tools (none of them is in Fuobe's parity-studio catalog, so nothing is deleted)
 - **Depends on:** O1
 - **Check on the first live run:** licences of the LoRAs merged into FusioniX
 
@@ -1140,7 +1140,7 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 - **Catalog changes:** `fuobe-evolution`
 - **Tests**
   - planner tests
-- **Replaces:** the Higgsfield Popcorn and Evolution products
+- **Replaces:** the Popcorn and Evolution products
 - **Depends on:** O2, O5
 
 ### Still unverified after this pass
@@ -1148,4 +1148,4 @@ P0 = needed before any Higgsfield model can go; P1 = the switch-off and what it 
 - Nothing was rendered: every look, motion, effect and studio route needs the O8 GPU pass before it can be called verified.
 - fal behaviour: tokenised civitai URLs in `path`; whether LTX-2.3 LoRA calls need a real LoRA when only `camera_lora` is wanted; whether the Wan 2.2 trainer's single `lora_file` belongs on both experts; whether LTX-2 19B LoRAs load on LTX-2.3; sub-1 MP price rounding.
 - civitai permissions can change; the fetcher stores a snapshot with each mirrored file (O1).
-- Higgsfield's base models for Soul, DoP and Popcorn remain unknown; the plan does not depend on them.
+- The parity studio's base models for Soul, DoP and Popcorn remain unknown; the plan does not depend on them.

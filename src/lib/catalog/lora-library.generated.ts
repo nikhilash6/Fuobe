@@ -3170,7 +3170,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
     },
     "released": "2025-10-31",
     "hostedEndpoint": "fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles",
-    "notes": "The camera-move LoRA behind Higgsfield Angles (higgsfield-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
+    "notes": "The camera-move LoRA behind the Angles recipe in the parity research (parity-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
   },
   {
     "key": "qwen-image-21-any-angle",
@@ -3215,7 +3215,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0 (the repository's card); FusioniX merges other LoRAs (CausVid, AccVideo, MoviiGen, MPS reward…) whose own licences were not checked"
     },
     "released": "2025-06-10",
-    "notes": "The LoRA Higgsfield's 'Infinite Talk' engine loads ('fusex', scale 1, rank 32; higgsfield-originals-5.md §3.13) and InfiniteTalk's README recommends. Fuobe Speak loads it on InfiniteTalk (kijai's WanVideoWrapper) on the GPU in place of the lightx2v distill LoRA. fal's InfiniteTalk takes no LoRA, so the cloud half runs without it. Check on the first live run: the licences of the LoRAs merged into it."
+    "notes": "The LoRA the parity studio's 'Infinite Talk' engine loads ('fusex', scale 1, rank 32; parity-originals-5.md §3.13) and InfiniteTalk's README recommends. Fuobe Speak loads it on InfiniteTalk (kijai's WanVideoWrapper) on the GPU in place of the lightx2v distill LoRA. fal's InfiniteTalk takes no LoRA, so the cloud half runs without it. Check on the first live run: the licences of the LoRAs merged into it."
   },
   {
     "key": "ltx-2-5-22b-ic-lora-restore-1-0",
@@ -3423,7 +3423,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
   }
 ];
 
-/** Motion and effect presets (Higgsfield's generic names) → their LoRA keys in LORA_LIBRARY, with the research's status. */
+/** Motion and effect presets (the parity studio's generic names) → their LoRA keys in LORA_LIBRARY, with the research's status. */
 export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
   {
     "kind": "motion",
@@ -4307,7 +4307,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   {
     "kind": "effect",

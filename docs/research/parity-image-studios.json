@@ -1,229 +1,229 @@
 {
  "asOf": "2026-10-17",
- "method": "Higgsfield web app (TanStack Start SPA) production bundles under assets.higgsfield.ai/tanstack/assets (8,020 chunks crawled), the full English i18n catalog /_i18n/en.dd219392ea.json (36,878 strings) plus 266 route catalogs from /_i18n/routes/index.en.json, unauthenticated public JSON endpoints the app itself calls (fnf-api-gw.higgsfield.ai/fnf/* and cms.higgsfield.ai/*), SSR HTML of /soul/<id> preset pages, Help Center, blog, and ComfyUI/fal/Hugging Face for the open and cloud routes. Logged-in screens were not observed directly: layout statements derived from component code are exact for copy, options, limits and step order; spatial layout is flagged (inferred) where it is.",
+ "method": "The studio's web app (TanStack Start SPA) production bundles under {studio-assets}/tanstack/assets (8,020 chunks crawled), the full English i18n catalog /_i18n/en.dd219392ea.json (36,878 strings) plus 266 route catalogs from /_i18n/routes/index.en.json, unauthenticated public JSON endpoints the app itself calls ({studio-api}/fnf/* and {studio-cms}/*), SSR HTML of /soul/<id> preset pages, Help Center, blog, and ComfyUI/fal/Hugging Face for the open and cloud routes. Logged-in screens were not observed directly: layout statements derived from component code are exact for copy, options, limits and step order; spatial layout is flagged (inferred) where it is.",
  "sources": [
   {
-   "url": "https://higgsfield.ai/_i18n/en.dd219392ea.json",
+   "url": "{studio-site}/_i18n/en.dd219392ea.json",
    "what": "full English UI catalog (36,878 strings)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/index.en.json",
+   "url": "{studio-site}/_i18n/routes/index.en.json",
    "what": "route -> catalog index (308 routes)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.3dcce34304.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.3dcce34304.json",
    "what": "Layers editor route catalog (/_private/layers/$projectId)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.87ff01a9a5.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.87ff01a9a5.json",
    "what": "Layers projects list (/layers)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.097ba0205f.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.097ba0205f.json",
    "what": "Image route (/ai/image): Soul, HEX, Moodboard, Photodump, Fashion Factory modals"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.64b150fe20.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.64b150fe20.json",
    "what": "Moodboard route (/moodboard)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.8593b18fb1.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.8593b18fb1.json",
    "what": "Character sheet route (/character-sheet)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-ERgtR3BC6GQvWcKM.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-ERgtR3BC6GQvWcKM.js",
    "what": "Layer Decomposition screen (settings, states, cost table)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-1KQA7feBk63lHN1Y.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-1KQA7feBk63lHN1Y.js",
    "what": "Edit text tool (detect -> replace -> generate)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-ILbXyNfOaxQwkfc7.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-ILbXyNfOaxQwkfc7.js",
    "what": "Remove background tool"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-sqR16Ho_oz6tgoem.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-sqR16Ho_oz6tgoem.js",
    "what": "downloadLayerProjectZip (cropped/positioned zip)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-Oq-fTRNofPVKXPEJ.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-Oq-fTRNofPVKXPEJ.js",
    "what": "layer export bounds + file naming"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-ZXR16OLz11e1PB_2.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-ZXR16OLz11e1PB_2.js",
    "what": "Layers download menu (Cropped / Positioned / PNG, Copy JSON)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-eLK-oT8F2VNN_bGV.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-eLK-oT8F2VNN_bGV.js",
    "what": "editor tool registry (image + video tools)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-rEkEuZWqVaPh1lXr.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-rEkEuZWqVaPh1lXr.js",
    "what": "Layers panel (layer actions)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-0UrhtHZxNaHqx4P6.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-0UrhtHZxNaHqx4P6.js",
    "what": "per-layer generate / revisions"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-SJty_4AtM6RZTyiT.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-SJty_4AtM6RZTyiT.js",
    "what": "Regional Editing (rectangle + merge)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-5dDDu8syfVfvelzc.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-5dDDu8syfVfvelzc.js",
    "what": "Expand & Crop"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-XW6u_AGSsuJMbXNX.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-XW6u_AGSsuJMbXNX.js",
    "what": "Layers landing + projects grid"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-RKOpfURlZ9ONJsxV.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-RKOpfURlZ9ONJsxV.js",
    "what": "Soul HEX / color signature panel"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-8ozerfD9HHP8wqg_.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-8ozerfD9HHP8wqg_.js",
    "what": "palette helpers (random palettes, validation)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-zr_t1hwukVT3H0Zz.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-zr_t1hwukVT3H0Zz.js",
    "what": "color-presets API client"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-LtqpfG6k0jv3xJ_C.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-LtqpfG6k0jv3xJ_C.js",
    "what": "Moodboard builder (MIN 5 / MAX 80)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-xvkSw2TO5vFeQXSp.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-xvkSw2TO5vFeQXSp.js",
    "what": "Moodboard modal / sharing"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-4h419T1mmCQ022es.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-4h419T1mmCQ022es.js",
    "what": "Image page modals: Photodump v2 steps, Fashion Factory"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-8IkO6Gt6P12Hjb4y.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-8IkO6Gt6P12Hjb4y.js",
    "what": "Fashion Factory flow (template -> character -> generation -> clothing -> photoset)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-8HyjZqw80lR39N6c.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-8HyjZqw80lR39N6c.js",
    "what": "Fashion Factory outfit step"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-Br8cTodmLMFsJREW.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-Br8cTodmLMFsJREW.js",
    "what": "Fashion Factory template grid"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js",
    "what": "Instadump (single-photo photodump) flow"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-eXmPENdTeOHFROId.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-eXmPENdTeOHFROId.js",
    "what": "legacy Photodump Studio (Soul v1, 26 shots)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-cv-yEBKsDZ_tKbHw.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-cv-yEBKsDZ_tKbHw.js",
    "what": "Soul style picker + category tabs"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-fOdtGn0S5DhEKNKf.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-fOdtGn0S5DhEKNKf.js",
    "what": "Soul 2.0 job + credit table"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-eyOFyQbqr0JSXe5k.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-eyOFyQbqr0JSXe5k.js",
    "what": "Character Sheet ('Build Your AI Avatar')"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js",
    "what": "Soul Cast option lists"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/soul/presets",
+   "url": "{studio-api}/fnf/soul/presets",
    "what": "Soul v1 presets (106)"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/soul/preset-categories",
+   "url": "{studio-api}/fnf/soul/preset-categories",
    "what": "Soul v1 categories (8)"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/soul-v2/presets",
+   "url": "{studio-api}/fnf/soul-v2/presets",
    "what": "Soul 2.0 presets / curated moodboards (33)"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/soul-v2/preset-categories",
+   "url": "{studio-api}/fnf/soul-v2/preset-categories",
    "what": "Soul 2.0 categories Mood / Styles / Camera"
   },
   {
-   "url": "https://cms.higgsfield.ai/soul-styles?lang=en&size=200",
+   "url": "{studio-cms}/soul-styles?lang=en&size=200",
    "what": "Soul v1 presets with descriptions + publish dates"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/color-presets/with-presets?size=50",
+   "url": "{studio-api}/fnf/color-presets/with-presets?size=50",
    "what": "50 built-in palettes with exact hex (shared by Soul HEX and Cinema Studio 4.0)"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/photo-dump/packs?version=v2&size=20",
+   "url": "{studio-api}/fnf/photo-dump/packs?version=v2&size=20",
    "what": "Soul 2.0 Photodump packs (9)"
   },
   {
-   "url": "https://fnf-api-gw.higgsfield.ai/fnf/photo-dump/packs?size=20",
+   "url": "{studio-api}/fnf/photo-dump/packs?size=20",
    "what": "Instadump community packs (5)"
   },
   {
-   "url": "https://cms.higgsfield.ai/fashion-factories?lang=en&size=50",
+   "url": "{studio-cms}/fashion-factories?lang=en&size=50",
    "what": "Fashion Factory templates (6)"
   },
   {
-   "url": "https://higgsfield.ai/higgsfield-layers",
+   "url": "{studio-site}/{studio}-layers",
    "what": "Layers landing ('Powered by Seedream 5.0')"
   },
   {
-   "url": "https://higgsfield.ai/soul",
+   "url": "{studio-site}/soul",
    "what": "Soul preset pages index (100 /soul/<id> pages)"
   },
   {
-   "url": "https://higgsfield.ai/character-sheet",
+   "url": "{studio-site}/character-sheet",
    "what": "Build Your AI Avatar"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-soul-to-generate-images",
+   "url": "{studio-site}/creator-hub/help-center/ai-models/how-do-i-use-soul-to-generate-images",
    "what": "Soul family, Moodboards, HEX, settings"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-create-and-use-a-soul-id-character",
+   "url": "{studio-site}/creator-hub/help-center/ai-models/how-do-i-create-and-use-a-soul-id-character",
    "what": "Soul ID rules (20-80 photos)"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-soul-cinema",
+   "url": "{studio-site}/creator-hub/help-center/ai-models/how-do-i-use-soul-cinema",
    "what": "Soul Cinema (HEX + Soul ID, no presets)"
   },
   {
-   "url": "https://higgsfield.ai/blog/how-to-create-ai-photodump-higgsfield-soul",
+   "url": "{studio-site}/blog/how-to-create-ai-photodump-studio-soul",
    "what": "Soul 2.0 Photodump (Male Archive / Cool Girl Dump, 15 photos)"
   },
   {
-   "url": "https://higgsfield.ai/blog/Higgsfield-Photodump-Studio-Your-Viral-Photoshoot",
+   "url": "{studio-site}/blog/{studio}-Photodump-Studio-Your-Viral-Photoshoot",
    "what": "legacy Photodump Studio (26 shots, 25+ photos)"
   },
   {
-   "url": "https://higgsfield.ai/blog/Create-Ai-Photoshoots-With-Instadump",
+   "url": "{studio-site}/blog/Create-Ai-Photoshoots-With-Instadump",
    "what": "Instadump (one photo, 20+ presets or own references)"
   },
   {
-   "url": "https://higgsfield.ai/blog/create-custom-ai-moodboard-soul-2",
+   "url": "{studio-site}/blog/create-custom-ai-moodboard-soul-2",
    "what": "Moodboards (up to 80 refs, 20-30 recommended)"
   },
   {
-   "url": "https://higgsfield.ai/blog/hex-codes-ai-image-generation-color-control-soul",
+   "url": "{studio-site}/blog/hex-codes-ai-image-generation-color-control-soul",
    "what": "Soul HEX (up to 20 photos)"
   },
   {
-   "url": "https://higgsfield.ai/blog/ai-fashion-photo-generator",
+   "url": "{studio-site}/blog/ai-fashion-photo-generator",
    "what": "21 curated Soul 2.0 presets, four brand anchors"
   },
   {
-   "url": "https://higgsfield.ai/blog/consistent-characters-locations",
+   "url": "{studio-site}/blog/consistent-characters-locations",
    "what": "characters + locations workflow"
   },
   {
@@ -865,7 +865,7 @@
     "name": "Cool Girl Dump",
     "count": 15,
     "description": "Tailored compositions, settings, and styling for female characters",
-    "descriptionSource": "higgsfield blog 2026-02-26",
+    "descriptionSource": "studio blog 2026-02-26",
     "id": "417116dd-21e0-4b9c-b215-56dd880200c4",
     "version": "v2 (Soul 2.0 Photodump)",
     "styleIds": [
@@ -890,7 +890,7 @@
     "name": "Male Archive",
     "count": 15,
     "description": "Tailored compositions, settings, and styling for male characters",
-    "descriptionSource": "higgsfield blog 2026-02-26",
+    "descriptionSource": "studio blog 2026-02-26",
     "id": "14d68d47-3946-4a31-83e6-88df9ad62db6",
     "version": "v2 (Soul 2.0 Photodump)",
     "styleIds": [
@@ -960,7 +960,7 @@
     "name": "Photodump Studio (legacy, Soul v1)",
     "count": 26,
     "description": "One fixed 26-shot set of trend styles for a trained Soul v1 character (Sep 2025)",
-    "descriptionSource": "higgsfield blog 2025-09-18 + i18n \"Generate 26 unique photos in different styles\"",
+    "descriptionSource": "studio blog 2025-09-18 + i18n \"Generate 26 unique photos in different styles\"",
     "version": "legacy"
    }
   ]
@@ -1018,11 +1018,7 @@
     "description": "Bold, saturated colour-blocked studio fashion",
     "descriptionSource": "inferred",
     "id": "6dfebdbd-c474-4366-8e53-f3a96ea8d143",
-    "previews": [
-     "https://cdn.higgsfield.ai/card/88843cd9-3be8-415f-94d0-775022f4a604.webp",
-     "https://cdn.higgsfield.ai/card/34bfd2f0-b4f2-4b42-a048-74b09386e04b.webp",
-     "https://cdn.higgsfield.ai/card/42825560-341f-47bc-934c-df072057db9f.webp"
-    ]
+    "previews": []
    },
    {
     "name": "Blue-Green Gradient",
@@ -1031,11 +1027,7 @@
     "description": "Studio set on a blue-to-green gradient backdrop",
     "descriptionSource": "inferred",
     "id": "cc02bdd1-3701-4095-9c29-302075bdb78f",
-    "previews": [
-     "https://cdn.higgsfield.ai/card/28737b7c-b398-4ecd-b996-30e23186c7aa.webp",
-     "https://cdn.higgsfield.ai/card/b1f368fc-14bc-470f-b76b-75cd79f7b3b6.webp",
-     "https://cdn.higgsfield.ai/card/3f28ac59-8b16-4f9a-9464-8a7bf7cd886a.webp"
-    ]
+    "previews": []
    },
    {
     "name": "Street style Paparazzi",
@@ -1044,11 +1036,7 @@
     "description": "Street-style shots with paparazzi flash energy",
     "descriptionSource": "inferred",
     "id": "72e4c773-dafa-475b-b3d2-bd34828e7d1e",
-    "previews": [
-     "https://cdn.higgsfield.ai/card/b7a27d47-22c7-45ca-8aeb-fa3c0cdc4266.webp",
-     "https://cdn.higgsfield.ai/card/c43052e9-d4d6-4347-8e0c-4e094e885fe1.webp",
-     "https://cdn.higgsfield.ai/card/8683dbdc-27b9-42db-ba13-c50e50853aa5.webp"
-    ]
+    "previews": []
    },
    {
     "name": "View from the top",
@@ -1057,11 +1045,7 @@
     "description": "High-angle / top-down fashion framing",
     "descriptionSource": "inferred",
     "id": "5fa94115-b1b9-494b-8e5d-cf1079d93918",
-    "previews": [
-     "https://cdn.higgsfield.ai/card/af737411-217b-4411-b53e-b94983af8236.webp",
-     "https://cdn.higgsfield.ai/card/525ef060-1238-48f4-bb4a-db827d5a91bc.webp",
-     "https://cdn.higgsfield.ai/card/fb7e15bc-b257-43ba-924b-5f91d6a28a06.webp"
-    ]
+    "previews": []
    },
    {
     "name": "Light blue studio",
@@ -1070,11 +1054,7 @@
     "description": "Clean pale-blue studio seamless",
     "descriptionSource": "inferred",
     "id": "e8375a6b-a192-45da-9492-a3ee867d9689",
-    "previews": [
-     "https://cdn.higgsfield.ai/card/a1cd4c0d-8576-46ae-be9f-dabd3fa5e534.webp",
-     "https://cdn.higgsfield.ai/card/6915c352-d931-4729-af40-b7b13d32cf52.webp",
-     "https://cdn.higgsfield.ai/card/e0133832-be4d-4560-ab31-5f0b9cb268c3.webp"
-    ]
+    "previews": []
    },
    {
     "name": "Red room",
@@ -1083,11 +1063,7 @@
     "description": "Monochrome all-red set",
     "descriptionSource": "inferred",
     "id": "b22b05c2-549f-49d1-85fd-afeb8bed80a0",
-    "previews": [
-     "https://cdn.higgsfield.ai/card/3ffe7815-9bfe-4e87-97c1-0745d3b2e0f0.webp",
-     "https://cdn.higgsfield.ai/card/176425fc-43a7-45c3-9e62-6d7d6c504e6e.webp",
-     "https://cdn.higgsfield.ai/card/a4fc5618-2d2d-4d10-b19e-a8be3e6135ae.webp"
-    ]
+    "previews": []
    }
   ],
   "banner": {
@@ -1400,7 +1376,7 @@
  },
  "soulHex": {
   "summary": "Colour control for Soul 2.0 and Soul Cinema. 'Soul Hex extracts colors from any image and turns them into your signature style.' A saved palette is a 'color signature'. The palette library is the same one Cinema Studio 4.0 uses for its colour palettes.",
-  "entry": "Generation-bar chip (tooltip 'Color signature', label = selected signature name with a 16px thumbnail, X to clear) opens the 'Higgsfield Hex' panel (popover on desktop, drawer on mobile).",
+  "entry": "Generation-bar chip (tooltip 'Color signature', label = selected signature name with a 16px thumbnail, X to clear) opens the 'Hex' panel (popover on desktop, drawer on mobile).",
   "panel": {
    "banner": [
     "Control Your Colors with Soul Hex",
@@ -1417,7 +1393,7 @@
    ],
    "grid": "16:9 cards: thumbnail with a 5px colour strip of the palette along the bottom (or a pure stripe card when no thumbnail), name under it, selected = brand ring + check; extracting = spinner, tooltip 'Extracting colors from your images. You can use this palette once it's ready.'; '…' menu 'Palette options' -> Delete (user palettes only)",
    "createOptions": {
-    "title": "Higgsfield Hex — 'Upload photo or create manually to continue'",
+    "title": "Hex — 'Upload photo or create manually to continue'",
     "cards": [
      "Upload from device (JPEG/PNG/WebP, multiple)",
      "Pick colors manually"
@@ -1434,7 +1410,7 @@
    ]
   },
   "manualEditor": {
-   "title": "Higgsfield Hex — 'Create manually to continue'",
+   "title": "Hex — 'Create manually to continue'",
    "currentPalette": {
     "label": "Current palette",
     "clear": "Clear all",
@@ -1499,7 +1475,7 @@
      "#69483B"
     ],
     "background": "#69483B",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/abbce116-ac86-4d35-84d9-b0adff031962.webp",
+    "preview": null,
     "id": "7ac582a2-b859-51a3-a65e-6a480c14b0cf"
    },
    {
@@ -1520,7 +1496,7 @@
      "#764019"
     ],
     "background": "#764019",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/7104bc8d-f658-414e-b5c5-a34b87c7dfae.webp",
+    "preview": null,
     "id": "692eef14-243b-54e9-a532-5ba70ea919c3"
    },
    {
@@ -1541,7 +1517,7 @@
      "#881913"
     ],
     "background": "#881913",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5b59386f-4fe9-48c2-9723-d98783458ccf.webp",
+    "preview": null,
     "id": "12f136f4-b12b-5817-a519-17e9a974563a"
    },
    {
@@ -1562,7 +1538,7 @@
      "#B82D1C"
     ],
     "background": "#B82D1C",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/74e3315e-c581-47d8-bd42-89f67993ca55.webp",
+    "preview": null,
     "id": "21e1a8e0-3987-5adc-9041-6ca93d34eb27"
    },
    {
@@ -1583,7 +1559,7 @@
      "#1D481B"
     ],
     "background": "#1D481B",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/269a3671-1c7f-4f8f-900d-cf1192cbdcc1.webp",
+    "preview": null,
     "id": "668b8c7a-0dfa-5438-bf9b-1654b0190b26"
    },
    {
@@ -1604,7 +1580,7 @@
      "#0F1C79"
     ],
     "background": "#0F1C79",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/dfa8708a-adbf-4375-a3df-768f4465e6a8.webp",
+    "preview": null,
     "id": "751800dc-d9ad-54ed-ade1-a84192e49b99"
    },
    {
@@ -1625,7 +1601,7 @@
      "#B8B592"
     ],
     "background": "#B8B592",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/3a1a5e27-f010-490e-b88d-84a480e2d440.webp",
+    "preview": null,
     "id": "aa21cbda-928f-5962-8582-bfa68b3be25c"
    },
    {
@@ -1646,7 +1622,7 @@
      "#8D7941"
     ],
     "background": "#8D7941",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/8d5f2cc0-959e-44ac-a4a8-89803cb4ffe8.webp",
+    "preview": null,
     "id": "a6381ac3-ac6b-53f1-8176-877b9fb9b697"
    },
    {
@@ -1667,7 +1643,7 @@
      "#942417"
     ],
     "background": "#942417",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/db7fd459-9518-43de-8f75-25d57c8cf783.webp",
+    "preview": null,
     "id": "948a7e8b-33ba-5370-8d1a-0b1af410e279"
    },
    {
@@ -1688,7 +1664,7 @@
      "#638A63"
     ],
     "background": "#638A63",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5a3f634a-3a49-47b8-a3df-438f42b9ee5e.webp",
+    "preview": null,
     "id": "b6852892-53b5-5277-b8e4-d305678a10c4"
    },
    {
@@ -1709,7 +1685,7 @@
      "#9F140B"
     ],
     "background": "#9F140B",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5353b968-27ea-4f7d-a218-391a3ddabafd.webp",
+    "preview": null,
     "id": "c1393c83-5db5-5032-914e-1f4c1aeab407"
    },
    {
@@ -1730,7 +1706,7 @@
      "#988357"
     ],
     "background": "#988357",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/0cec6501-eabd-4705-99ed-f5e18d40f553.webp",
+    "preview": null,
     "id": "8802475f-c8cb-5ce7-b965-222924e84386"
    },
    {
@@ -1751,7 +1727,7 @@
      "#561B11"
     ],
     "background": "#561B11",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/37cb0b27-ebd2-410a-8ca3-ef3fa29ce9f7.webp",
+    "preview": null,
     "id": "683fd56e-21de-5135-92f3-396a8d65b72c"
    },
    {
@@ -1772,7 +1748,7 @@
      "#814F21"
     ],
     "background": "#814F21",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/4ba81239-256f-481e-a08c-cabf39f67a58.webp",
+    "preview": null,
     "id": "cf0d5f2c-7df5-55da-9891-88597379c530"
    },
    {
@@ -1793,7 +1769,7 @@
      "#0A5A0E"
     ],
     "background": "#0A5A0E",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5cd8b81f-1513-4818-a3e6-a25962051900.webp",
+    "preview": null,
     "id": "6cac8784-0610-51d7-8b13-13224f8bef1e"
    },
    {
@@ -1814,7 +1790,7 @@
      "#20345C"
     ],
     "background": "#20345C",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/501cc86b-9d4c-47f3-aafc-a776b81ed705.webp",
+    "preview": null,
     "id": "e5d5e174-966b-5b3e-bbb4-a86ded861d6b"
    },
    {
@@ -1835,7 +1811,7 @@
      "#8B2926"
     ],
     "background": "#8B2926",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/073ad22b-dc27-4f1f-98cc-acf72a597aed.webp",
+    "preview": null,
     "id": "f032c6ea-bb4c-5180-97a5-37ac4b7c7a44"
    },
    {
@@ -1856,7 +1832,7 @@
      "#D20C25"
     ],
     "background": "#D20C25",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/ac8c3167-88ab-42ec-a0f4-ed867fa51903.webp",
+    "preview": null,
     "id": "883c13ed-9540-5895-950a-143d321d7fee"
    },
    {
@@ -1877,7 +1853,7 @@
      "#446BC7"
     ],
     "background": "#446BC7",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/34a5d30a-2a78-499c-a508-945639e43876.webp",
+    "preview": null,
     "id": "22361adf-5694-5883-8fb4-ccc95330ead1"
    },
    {
@@ -1898,7 +1874,7 @@
      "#255E54"
     ],
     "background": "#255E54",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/fb85bdb0-3f50-4851-ba03-dfc14af15afe.webp",
+    "preview": null,
     "id": "f996e2ef-94e5-549b-96d4-854f271b996c"
    },
    {
@@ -1919,7 +1895,7 @@
      "#B02610"
     ],
     "background": "#B02610",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/bca2f827-575d-445a-9759-e3fbe534f11c.webp",
+    "preview": null,
     "id": "00f51967-7a56-50f8-a83d-a326dd993679"
    },
    {
@@ -1940,7 +1916,7 @@
      "#688AD2"
     ],
     "background": "#688AD2",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/ca2aa394-3bc5-40f8-9ba4-98fa03062454.webp",
+    "preview": null,
     "id": "93102b8c-c74f-5672-84e5-862fa7984b81"
    },
    {
@@ -1961,7 +1937,7 @@
      "#2A7C8E"
     ],
     "background": "#2A7C8E",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/191a57bc-a4ce-4efe-af8d-5d01c9fd87ab.webp",
+    "preview": null,
     "id": "76709091-d5a3-5986-8471-265b1ed73863"
    },
    {
@@ -1982,7 +1958,7 @@
      "#0D8B06"
     ],
     "background": "#0D8B06",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/d98f2171-6d51-42d1-9c49-4ce0c6bda59f.webp",
+    "preview": null,
     "id": "969f10a2-7389-5d53-aa75-9831fc70b7d3"
    },
    {
@@ -2003,7 +1979,7 @@
      "#CB9336"
     ],
     "background": "#CB9336",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/eecd43cb-bb64-4c97-b321-d65a20799984.webp",
+    "preview": null,
     "id": "3f109139-62e7-5e5a-8c8e-c7e68fbbb821"
    },
    {
@@ -2024,7 +2000,7 @@
      "#533115"
     ],
     "background": "#533115",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/b25f124a-9d9a-4089-af35-310dbb6c3499.webp",
+    "preview": null,
     "id": "70452f00-2a2b-5f31-8cbd-510c17468a1a"
    },
    {
@@ -2045,7 +2021,7 @@
      "#D3AC74"
     ],
     "background": "#D3AC74",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/7d84b77a-6f4d-46e6-b03c-f7d0b4011d56.webp",
+    "preview": null,
     "id": "9b6b695c-8046-5f5e-9c3d-e6022b86efaf"
    },
    {
@@ -2066,7 +2042,7 @@
      "#101821"
     ],
     "background": "#101821",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/da660656-b056-4cce-ab47-fc7d10c82717.webp",
+    "preview": null,
     "id": "d99c12be-6bff-5545-aecc-15a4a55473c4"
    },
    {
@@ -2087,7 +2063,7 @@
      "#1D1885"
     ],
     "background": "#1D1885",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/2b79ccd9-9d52-48db-858a-5dc6c40949fd.webp",
+    "preview": null,
     "id": "aad90fc7-11d1-54c9-bc40-92d0022eb556"
    },
    {
@@ -2108,7 +2084,7 @@
      "#C72F1F"
     ],
     "background": "#C72F1F",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/ac138053-fb87-45bf-b439-a03b395e6c01.webp",
+    "preview": null,
     "id": "c240d1b6-13ee-57d9-87d1-92711819864e"
    },
    {
@@ -2129,7 +2105,7 @@
      "#5B3B29"
     ],
     "background": "#5B3B29",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/8a61aef3-dfb8-4350-b345-9b3e34df3258.webp",
+    "preview": null,
     "id": "26ad2630-86a4-5a5e-b686-0abf011d791a"
    },
    {
@@ -2150,7 +2126,7 @@
      "#CECFA5"
     ],
     "background": "#CECFA5",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/fd113bb2-7a8d-4d97-b911-345ca3725fcf.webp",
+    "preview": null,
     "id": "b07bac01-184a-569a-bfd1-d97940ee8095"
    },
    {
@@ -2171,7 +2147,7 @@
      "#954924"
     ],
     "background": "#954924",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/719dd469-2359-44f9-939a-253449b08b3a.webp",
+    "preview": null,
     "id": "adde19e3-c8ac-5646-bc4d-036c7f9ce34f"
    },
    {
@@ -2192,7 +2168,7 @@
      "#AA637E"
     ],
     "background": "#AA637E",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/c4e8a13c-b592-4380-9063-0ac5ab1d42df.webp",
+    "preview": null,
     "id": "064d2be8-8f98-5f92-af1c-95267f49a436"
    },
    {
@@ -2213,7 +2189,7 @@
      "#EBD41A"
     ],
     "background": "#EBD41A",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/601447d6-50c3-484f-89ac-0ea903da700b.webp",
+    "preview": null,
     "id": "ba4ad5a1-27db-583c-9ca2-ddace123b7a0"
    },
    {
@@ -2234,7 +2210,7 @@
      "#282A48"
     ],
     "background": "#282A48",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/060c55ca-4d90-46b5-adf0-2b09393818b1.webp",
+    "preview": null,
     "id": "f1f8872f-d6c5-5983-8ba9-9a589a071f4d"
    },
    {
@@ -2255,7 +2231,7 @@
      "#8D4F28"
     ],
     "background": "#8D4F28",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/49f43893-8596-4128-baec-fc5a97d38c13.webp",
+    "preview": null,
     "id": "bac4ed23-9bb1-5af6-8571-ced0e830554e"
    },
    {
@@ -2276,7 +2252,7 @@
      "#564ABB"
     ],
     "background": "#564ABB",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/a9cced71-101f-4087-a2e8-fa46751c93cf.webp",
+    "preview": null,
     "id": "e1071a20-a872-544d-abeb-630e4d97484b"
    },
    {
@@ -2297,7 +2273,7 @@
      "#0C1640"
     ],
     "background": "#0C1640",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/c2777a88-e03d-4d16-976e-71653df883d0.webp",
+    "preview": null,
     "id": "430860de-eb6b-5e39-b538-a984803c231f"
    },
    {
@@ -2318,7 +2294,7 @@
      "#672A0E"
     ],
     "background": "#672A0E",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/e07c6bdc-2aa8-4f33-89e1-7649967fb433.webp",
+    "preview": null,
     "id": "fe2b444f-593c-5d94-9d65-c161bb3c2d2b"
    },
    {
@@ -2339,7 +2315,7 @@
      "#771C1E"
     ],
     "background": "#771C1E",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/82415e51-078f-4768-ab7d-d1d419f1481a.webp",
+    "preview": null,
     "id": "5f7b2b80-c890-5b6a-af87-064a0b77483b"
    },
    {
@@ -2360,7 +2336,7 @@
      "#725738"
     ],
     "background": "#725738",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/a7ad4990-2fd2-49a3-8bc2-34121cbfbd65.webp",
+    "preview": null,
     "id": "244f079e-6083-56d4-8447-ebc637b87e78"
    },
    {
@@ -2381,7 +2357,7 @@
      "#883063"
     ],
     "background": "#883063",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/6da58732-b68e-482b-b3cb-047b9d74bb18.webp",
+    "preview": null,
     "id": "dcb9a51f-f659-51e3-b503-9e9132e0bfc5"
    },
    {
@@ -2402,7 +2378,7 @@
      "#866B22"
     ],
     "background": "#866B22",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/3a35c32e-eb66-42c8-a0d3-61d74c080b80.webp",
+    "preview": null,
     "id": "ce1ddaef-1b9c-5aa2-8314-b5b420056a18"
    },
    {
@@ -2423,7 +2399,7 @@
      "#6C93F4"
     ],
     "background": "#6C93F4",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/07dfe24f-02f0-4d60-ab97-3c868cff6224.webp",
+    "preview": null,
     "id": "d1e8171d-6431-5fd1-a4be-78f034969263"
    },
    {
@@ -2444,7 +2420,7 @@
      "#865517"
     ],
     "background": "#865517",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/72fb06de-7e63-4a4e-9a12-adf7975cd37c.webp",
+    "preview": null,
     "id": "62e6a1b1-426f-5de9-82e7-8c8ff01bcbab"
    },
    {
@@ -2465,7 +2441,7 @@
      "#BE1205"
     ],
     "background": "#BE1205",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5e34c2ee-9c27-478c-acc7-cebffebccd22.webp",
+    "preview": null,
     "id": "7de2a6ee-4a22-5602-9e92-86dded2a817b"
    },
    {
@@ -2486,7 +2462,7 @@
      "#BF6909"
     ],
     "background": "#BF6909",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/eaf40a03-fa08-4751-a529-ffbe3d070b9d.webp",
+    "preview": null,
     "id": "6b8a6770-c716-5993-bf9c-b560bf22f562"
    },
    {
@@ -2507,7 +2483,7 @@
      "#B70204"
     ],
     "background": "#B70204",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/d1422d51-c566-449c-b015-e8f073bb4c25.webp",
+    "preview": null,
     "id": "9cc1ddd8-1b4f-5ba2-a7c6-71a4b1989616"
    },
    {
@@ -2528,7 +2504,7 @@
      "#B36521"
     ],
     "background": "#B36521",
-    "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/29e586cb-7476-4506-94fd-c12c3ea22e59.webp",
+    "preview": null,
     "id": "17db280d-8f23-531f-8ca9-1b9704823382"
    }
   ],
@@ -2597,9 +2573,9 @@
    "categories": [],
    "name": "General",
    "description": "Clean, balanced, and natural—your go-to look with true-to-life colors and soft lighting. Effortlessly versatile for any style",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "464ea177-8d40-4940-8d9d-b438bab269c7",
-   "preview": "https://cdn.higgsfield.ai/soul-style/671935ec-51a6-4f9d-9cb4-39661b9a9814.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2612,9 +2588,9 @@
    ],
    "name": "iPhone",
    "description": "Natural light, casual framing, soft HDR glow. Looks real, but a little better",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "1b798b54-03da-446a-93bf-12fcba1050d7",
-   "preview": "https://cdn.higgsfield.ai/soul-style/9627c330-e5e0-428d-8414-aeae83d57819.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2625,9 +2601,9 @@
    ],
    "name": "Realistic",
    "description": "No filters, just flawless clarity. Light, pores, fabric—everything exactly as it is, but better",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "1cb4b936-77bf-4f9a-9039-f3d349a4cdbe",
-   "preview": "https://cdn.higgsfield.ai/soul-style/acf8f24d-f567-4b7a-bede-aa63cb7c90dd.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2640,9 +2616,9 @@
    ],
    "name": "DigitalCam",
    "description": "Harsh flash, timestamp corner, and raw textures. Feels like 2007 captured forever",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "ca4e6ad3-3e93-4e03-81a0-d1722d2c128b",
-   "preview": "https://cdn.higgsfield.ai/soul-style/0e82377e-e3dd-48a8-94fd-04a4ed038be4.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2655,9 +2631,9 @@
    ],
    "name": "Flight mode",
    "description": "Airports, terminals — everything designed to feel like you're traveling. Modern architecture, clean lines, and a subtle “main character leaves town” aura.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "3f90dc5b-f474-4259-95c4-d29fbd6be645",
-   "preview": "https://cdn.higgsfield.ai/soul-style/91490e65-80c2-42a0-bbec-971392a77462.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2672,9 +2648,9 @@
    ],
    "name": "Sunset beach",
    "description": "Golden-hour dreams. The sky melts from purple to peach while you pose like you don’t know the sun’s watching. Glowy skin, backlit outlines, and luxury vacation stillness.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "26241c54-ed78-4ea7-b1bf-d881737c9feb",
-   "preview": "https://cdn.higgsfield.ai/soul-style/71d9f310-f966-41ec-a009-a87167bcbebe.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2687,9 +2663,9 @@
    ],
    "name": "Mt. Fuji",
    "description": "Postcard surrealism. Crystal-blue skies, iconic mountain symmetry, and convenience store drama.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "de0118ba-7c27-49f7-9841-38abe2aae8e1",
-   "preview": "https://cdn.higgsfield.ai/soul-style/7bc1844f-33b1-4578-b25c-2c8ab373e350.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2704,7 +2680,7 @@
    "description": "Candid street-level shot, as if caught by a passing camera on a city sidewalk",
    "descriptionSource": "inferred",
    "id": "a13917c7-02a4-450f-b007-e72d53151980",
-   "preview": "https://cdn.higgsfield.ai/soul-style/1c59f291-cf9d-45c1-92b0-53768f372d0e.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2713,9 +2689,9 @@
    "categories": [],
    "name": "Tokyo Streetstyle",
    "description": "Layered looks, sharp silhouettes, and fearless color. A street-level runway of innovation and self-expression",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "99de6fc5-1177-49b9-b2e9-19e17d95bcaf",
-   "preview": "https://cdn.higgsfield.ai/soul-style/b8665543-a419-4fda-a8d0-b10f07b8c03d.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2726,9 +2702,9 @@
    ],
    "name": "Bimbocore",
    "description": "Hyperfeminine overload: glossed lips, tiny skirts, and confidence cranked to 100. Plastic fantastic, but make it powerful",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "f96913e8-2fcf-4358-8545-75dd6c34c518",
-   "preview": "https://cdn.higgsfield.ai/soul-style/fb283ea7-2fdb-4b50-acd3-f38d83d2c93e.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2742,9 +2718,9 @@
    ],
    "name": "CCTV",
    "description": "Grainy surveillance vibe. Raw, unfiltered and highly realistic",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "07a85fb3-4407-4122-a4eb-42124e57734c",
-   "preview": "https://cdn.higgsfield.ai/soul-style/ed84e65b-1c57-4ce2-bef0-8e98c9e6667f.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2755,7 +2731,7 @@
    "description": "Full-body mirror selfie in a metallic elevator, phone in hand",
    "descriptionSource": "inferred",
    "id": "524be50a-4388-4ff5-a843-a73d2dd7ef87",
-   "preview": "https://cdn.higgsfield.ai/soul-style/0139a8e4-eb76-474a-a13c-d764d38674d1.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2766,9 +2742,9 @@
    ],
    "name": "Y2K",
    "description": "Gloss, glitter, and baby tees. A shiny reboot of early 2000s maximalism—flip phones and all",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "6b9e6b4d-325a-4a78-a0fb-a00ddf612380",
-   "preview": "https://cdn.higgsfield.ai/soul-style/75e73009-dd0c-4b9d-b0ef-93544b7e4491.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2777,9 +2753,9 @@
    "categories": [],
    "name": "RingSelfie",
    "description": "Manicured hands, glossy lips, and a flash that catches the sparkle. Casual flex, maximal impact",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "9de8ed26-c8dd-413c-a5e3-47eec97bc243",
-   "preview": "https://cdn.higgsfield.ai/soul-style/d5d6f14d-9ba1-4f29-96d9-792280f50782.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2790,9 +2766,9 @@
    ],
    "name": "Spotlight",
    "description": "Direct light creating high-contrast drama, paparazzi flash, and instant icon energy",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "40ff999c-f576-443c-b5b3-c7d1391a666e",
-   "preview": "https://cdn.higgsfield.ai/soul-style/47181b3d-429b-4f87-bb7c-2c5ca96da893.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2803,9 +2779,9 @@
    ],
    "name": "Y2K Posters",
    "description": "Chrome text, airbrushed skin, and floating objects. Early internet meets teen bedroom wall",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "cbefda85-0f76-49bd-82d7-9bcd65be00ca",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a8d0899d-ec67-49a4-af7f-5fcf0a8f27be.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2816,9 +2792,9 @@
    ],
    "name": "Nail Check",
    "description": "Close-up hands showing off nail art, rings, and textures. Precision beauty with attitude",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "4b66c2db-8166-4293-b1aa-5269c9effb07",
-   "preview": "https://cdn.higgsfield.ai/soul-style/dc1274f0-b58d-4603-9f01-97337e512cac.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2827,9 +2803,9 @@
    "categories": [],
    "name": "Gorpcore",
    "description": "Function becomes fashion. Technical fabrics, bulky sneakers, and colorblocked gear that looks runway-ready - on a hike or in the city",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "96758335-d1d1-42b7-9c21-5ac38c433485",
-   "preview": "https://cdn.higgsfield.ai/soul-style/fbbfa936-7e5e-44f4-ac9c-774b38967130.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2840,9 +2816,9 @@
    ],
    "name": "90s Grain",
    "description": "Warm tones, film texture, and a soft blur—retro mood in every pixel",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "f5c094c7-4671-4d86-90d2-369c8fdbd7a5",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a5c20546-38eb-4d61-8eb2-5290908d55bc.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2851,9 +2827,9 @@
    "categories": [],
    "name": "0.5 Selfie",
    "description": "Front cam, half-body, mirror or not. Unfiltered fits and real-life lighting - effortlessly authentic",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "8dd89de9-1cff-402e-88a8-580c29d91473",
-   "preview": "https://cdn.higgsfield.ai/soul-style/add67dde-7dbf-4565-93e9-a9bb121e03b9.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2862,9 +2838,9 @@
    "categories": [],
    "name": "0.5 Outfit",
    "description": "Shot from the waist down with wide-angle distortion. Casual, candid, and effortlessly cool—your fit, half-framed, full vibe",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "71fecd8c-6696-42df-b5eb-f69e4150ca01",
-   "preview": "https://cdn.higgsfield.ai/soul-style/d014f6a2-792e-429b-b47a-33352ed95e2d.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2873,9 +2849,9 @@
    "categories": [],
    "name": "Medieval",
    "description": "Chainmail chic, velvet drapes, and candlelit intrigue. Courtly vibes with cinematic weight",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "1fc861ed-5923-41a6-9963-b9f04681dddd",
-   "preview": "https://cdn.higgsfield.ai/soul-style/6d384dd7-f756-41de-9628-06c6cb204423.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2884,9 +2860,9 @@
    "categories": [],
    "name": "Japandi",
    "description": "Minimalism with warmth. Clean lines, natural light, and a serene sense of balance between form and feeling",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "0089e17c-d0f0-4d0c-b522-6d25c88a29fc",
-   "preview": "https://cdn.higgsfield.ai/soul-style/c63129ae-e4db-4bdf-9617-f7201f4a4cd1.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2895,9 +2871,9 @@
    "categories": [],
    "name": "Coquette core",
    "description": "Soft focus and lace daydreams. Bows, blush, and a wink - sweetness laced with irony",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "bd78cfc6-9b92-4889-9347-f21dbf0a269c",
-   "preview": "https://cdn.higgsfield.ai/soul-style/9ce0b7cb-2252-4047-8c9a-291a90395e66.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2908,9 +2884,9 @@
    ],
    "name": "Sand",
    "description": "Sculptural silhouettes in windswept dunes. Neutral tones, survivalist edge-high fashion lost in a dust storm",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "ba3d7634-447e-455c-98e3-63705d5403b8",
-   "preview": "https://cdn.higgsfield.ai/soul-style/665ca5a4-e1e7-4fed-8d53-01177ae0518d.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2922,9 +2898,9 @@
    ],
    "name": "2000s Cam",
    "description": "Low-rise everything, rhinestones, and visible thongs. Nostalgia wrapped in early paparazzi glam",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "181b3796-008a-403b-b31e-a9b760219f17",
-   "preview": "https://cdn.higgsfield.ai/soul-style/acc02fcd-ce68-4019-b517-089025455ed6.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2935,7 +2911,7 @@
    "description": "Understated old-money styling: neutral cashmere, tailored lines, no logos",
    "descriptionSource": "inferred",
    "id": "ff1ad8a2-94e7-4e70-a12f-e992ca9a0d36",
-   "preview": "https://cdn.higgsfield.ai/soul-style/af2a00ab-3f9f-451b-8c0b-4abc81adb12a.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2946,9 +2922,9 @@
    ],
    "name": "Giant Accessory",
    "description": "One item exaggerated to surreal scale—bags, bows, or earrings blown up for visual drama",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "70fbb531-5ee2-492e-8c53-5dbd6923e8c2",
-   "preview": "https://cdn.higgsfield.ai/soul-style/f66daa40-480f-49f1-90ed-6b2af23a4554.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2957,9 +2933,9 @@
    "categories": [],
    "name": "HairClips",
    "description": "Chunky, colorful, or pearl-lined-accessories that turn heads and frame the face with playful precision",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "ea6f4dc0-d6dd-4bdf-a8cf-94ed1db91ab2",
-   "preview": "https://cdn.higgsfield.ai/soul-style/35a6bbaa-4332-4537-8fce-28012da558be.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2970,7 +2946,7 @@
    "description": "Moody hotel-room scene in low warm lamp light",
    "descriptionSource": "inferred",
    "id": "673cf0d4-c193-4fa2-8ad3-b4db4611e3ae",
-   "preview": "https://cdn.higgsfield.ai/soul-style/293ed3aa-0d8e-4073-839a-d1698eafdf85.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2981,7 +2957,7 @@
    "description": "Candid close-up mid-bite, casual food-diary energy",
    "descriptionSource": "inferred",
    "id": "7df83cc9-1e13-4bd0-b6ff-1e6a456b9e5a",
-   "preview": "https://cdn.higgsfield.ai/soul-style/d58fc1ab-f332-4e9b-bdd3-257164e92930.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -2992,9 +2968,9 @@
    ],
    "name": "Rainy Day",
    "description": "Moody skies, reflections in wet pavement, soft sweaters. A slow, cinematic quiet",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "53bdadfa-8eb6-4eaa-8923-ebece4faa91c",
-   "preview": "https://cdn.higgsfield.ai/soul-style/dfa98f2e-9b22-4272-a030-a5296b3b9b6a.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3005,9 +2981,9 @@
    ],
    "name": "Foggy Morning",
    "description": "Muted colors, blurred horizons, and quiet light. Dreamlike stillness in early hours",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "0fe8ad66-ff61-411f-9186-b392e140b18c",
-   "preview": "https://cdn.higgsfield.ai/soul-style/3cbfe1d2-421e-421a-b7bd-dbee471a1d65.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3018,9 +2994,9 @@
    ],
    "name": "Avant-garde",
    "description": "Sculptural beauty, unexpected forms. A look that speaks in bold shapes and silent statements",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "0c636e12-3411-4a65-8d86-67858caf2fa7",
-   "preview": "https://cdn.higgsfield.ai/soul-style/62cfc3fb-bb46-4977-9fbb-cee0b68504d4.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3029,9 +3005,9 @@
    "categories": [],
    "name": "Tumblr",
    "description": "Grainy gifs, soft blur, and blue-toned melancholy—effortlessly curated and emotionally charged",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "0367d609-dfa1-4a81-a983-b2b19ecd6480",
-   "preview": "https://cdn.higgsfield.ai/soul-style/8d797478-cc70-47e1-9a35-242852667eb0.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3040,9 +3016,9 @@
    "categories": [],
    "name": "Through The Glass",
    "description": "Shot behind fogged-up windows or café panes. A quiet moment seen, not staged",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "1900111a-4ce8-42a7-9394-7367f0e0385c",
-   "preview": "https://cdn.higgsfield.ai/soul-style/c6ffc0df-5487-417b-82d9-2ec54d2aa122.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3051,9 +3027,9 @@
    "categories": [],
    "name": "Vintage PhotoBooth",
    "description": "Flash-lit nostalgia in strip form. Grain, glare, and a kiss of chaos",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "83caff04-691c-468c-b4a0-fd6bbabe062b",
-   "preview": "https://cdn.higgsfield.ai/soul-style/e41faf36-e634-485d-be55-edcce8099043.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3065,9 +3041,9 @@
    ],
    "name": "Fisheye",
    "description": "Exaggerated depth and playful proportions. Face or object up close, background stretched to infinity",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "cc4e7248-dcfe-4c93-b264-2ab418a7556b",
-   "preview": "https://cdn.higgsfield.ai/soul-style/cacbe40f-8551-481a-a8f3-57692fc4ba4d.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3076,9 +3052,9 @@
    "categories": [],
    "name": "Geominimal",
    "description": "Clean lines, geometric overlays. Sharp, modern, minimalist settings",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "372cc37b-9add-4952-a415-53db3998139f",
-   "preview": "https://cdn.higgsfield.ai/soul-style/670dae78-6481-4aab-b986-5060b1ae43ed.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3087,9 +3063,9 @@
    "categories": [],
    "name": "7\\",
    "description": "Distorted realism of Aphex Twin with eerie edits, glitch vibes, cult-classic weirdness",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "5659c554-9367-4a27-8c66-333c072cbbc2",
-   "preview": "https://cdn.higgsfield.ai/soul-style/ebdf01bb-e964-4d7e-9d75-f0735492a5aa.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3098,9 +3074,9 @@
    "categories": [],
    "name": "Selfcare",
    "description": "Candles, skincare, robes. Glowing peace in muted tones and soft light",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "d24c016c-9fb1-47d0-9909-19f57a2830d4",
-   "preview": "https://cdn.higgsfield.ai/soul-style/6a5baf93-e0dc-4123-9f7b-868eab9b4e04.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3109,9 +3085,9 @@
    "categories": [],
    "name": "Babydoll MakeUp",
    "description": "Fluttery lashes, pouty lips, and porcelain skin-sweet meets surreal in a hyper-feminine glow-up",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "b7c621b5-9d3c-46a3-8efb-4cdfbc592271",
-   "preview": "https://cdn.higgsfield.ai/soul-style/1d334a76-18b8-4d7e-9f77-1f3b5623d872.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3122,9 +3098,9 @@
    ],
    "name": "Fairycore",
    "description": "Glittery woodland fantasy. Soft pastels, magical sparkles, enchanted innocence",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "7f21e7bd-4df6-4cef-a9a9-9746bceaea1d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a9f12667-0dd4-452e-b704-4ac8f29a69d9.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3133,9 +3109,9 @@
    "categories": [],
    "name": "Office beach",
    "description": "Corporate meets coastal. Suits and sand, spreadsheets with sunglasses - chaotic and sun-bleached",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "e454956b-caf2-4913-a398-dbc03f1cbedf",
-   "preview": "https://cdn.higgsfield.ai/soul-style/71391c5d-1171-4b32-9c74-6e97413ab33c.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3144,9 +3120,9 @@
    "categories": [],
    "name": "Swords Hill",
    "description": "High fantasy on a mountain slope. Capes, steel, wind-blown drama—part legend, part editorial",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "5b6f467e-f509-4afe-a8db-4c07a6f3770d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/fe9aa7ca-01be-443f-be91-d55efb7691e7.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3155,9 +3131,9 @@
    "categories": [],
    "name": "Amalfi Summer",
    "description": "Lemon light, sunkissed skin, linen dresses fluttering on cobblestone-luxury by the sea",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "dab472a6-23f4-4cf8-98fe-f3e256f1b549",
-   "preview": "https://cdn.higgsfield.ai/soul-style/61d13bb8-fbe2-4816-8d2b-231e5ef68930.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3168,9 +3144,9 @@
    ],
    "name": "Creatures",
    "description": "Animalistic details fused with human edge, strange, eerie and beautiful",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "b3c8075a-cb4c-42de-b8b3-7099dd2df672",
-   "preview": "https://cdn.higgsfield.ai/soul-style/ce4416fd-37a7-42fe-af0d-10167d2cfa0a.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3179,9 +3155,9 @@
    "categories": [],
    "name": "Grunge",
    "description": "Distressed denim, oversized flannel, and don’t-care hair. Moody, messy, iconic",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "ad9de607-3941-4540-81ea-ba978ef1550b",
-   "preview": "https://cdn.higgsfield.ai/soul-style/dc742858-f56d-4fcc-9736-e7c2a3005b84.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3190,9 +3166,9 @@
    "categories": [],
    "name": "Glazed doll skin makeup",
    "description": "Glass-like skin with high-shine finish. Dewy, doll-like, and flawlessly unreal",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "a2a42ada-75cc-42a9-be12-cb16c1dec2a8",
-   "preview": "https://cdn.higgsfield.ai/soul-style/3c0eb808-90bf-4c84-b6fa-caae44265ef3.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3203,9 +3179,9 @@
    ],
    "name": "Invertethereal",
    "description": "Negative tones and ghostly hues. Dreamlike, eerie, and light turned inside out",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "82edba1e-b093-4484-a25e-9276e0454999",
-   "preview": "https://cdn.higgsfield.ai/soul-style/5a70012c-02c4-45aa-934b-768587a2d0e4.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3214,9 +3190,9 @@
    "categories": [],
    "name": "Indie sleaze",
    "description": "Flash-lit chaos, smudged eyeliner, and blurry rebellion. Tumblr-era nightlife energy in its rawest, hottest form",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "5a72fec7-a12e-43db-8ef3-1d193b4f7ab4",
-   "preview": "https://cdn.higgsfield.ai/soul-style/3a5a91b6-330d-407e-8b55-c3900a95f0db.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3227,9 +3203,9 @@
    ],
    "name": "Mixed Media",
    "description": "Layers of photo, paint, text, and texture. A visual collage with chaotic elegance",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "2fcf02e2-919a-4642-8b31-d58bde5e6bd9",
-   "preview": "https://cdn.higgsfield.ai/soul-style/ca50ff8d-ed44-4043-b1ec-1c62247d4e44.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3240,9 +3216,9 @@
    ],
    "name": "Paper Face",
    "description": "A face collaged from torn paper, textures, and cutouts-raw edges meet artistic expression. Mixed media magic with a surreal twist",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "7fa63380-64b7-48b1-b684-4c9ef37560a9",
-   "preview": "https://cdn.higgsfield.ai/soul-style/51362a07-60b0-4270-9125-03dea74ed03e.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3253,9 +3229,9 @@
    ],
    "name": "2000s Fashion",
    "description": "Flashy fits, shiny textures, and Y2K icons—low-rise, high-attitude, totally throwback",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "facaafeb-4ab5-4384-92a1-b4086180e9ac",
-   "preview": "https://cdn.higgsfield.ai/soul-style/12160548-47c0-4652-9e2e-3fc9fb413d47.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3266,7 +3242,7 @@
    "description": "Widescreen film-still look with cinematic lighting and grade",
    "descriptionSource": "inferred",
    "id": "811de7ab-7aaf-4a6b-b352-cdea6c34c8f1",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a8417fb3-3801-4e00-b86f-57a55d59eacd.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3277,9 +3253,9 @@
    ],
    "name": "Overexposed",
    "description": "Washed-out whites, crushed detail, and intense brightness. A raw visual effect that feels accidental, emotional, and unfiltered",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "d8a35238-ba42-48a0-a76a-186a97734b9d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/e668934b-9b36-4263-86e0-cdd58f7c267b.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3290,9 +3266,9 @@
    ],
    "name": "Long legs",
    "description": "Elongated limbs and stretched proportions. Stylized drama with a runway edge",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "12eda704-18e5-4783-aa0f-deba5296cc83",
-   "preview": "https://cdn.higgsfield.ai/soul-style/69a45320-c6ad-4242-8154-915121f42937.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3301,9 +3277,9 @@
    "categories": [],
    "name": "Night Beach",
    "description": "Moonlit waves, dark silhouettes, and salt in the air. Intimate and a little unreal",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "62ba1751-63af-4648-a11c-711ac64e216a",
-   "preview": "https://cdn.higgsfield.ai/soul-style/270b4eb1-e9b1-4909-9f5e-50ce99697cc6.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3312,9 +3288,9 @@
    "categories": [],
    "name": "90’s Editorial",
    "description": "Retro fashion magazine style image with film grain, soft blur, moody colors, and pure nostalgia",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "710f9073-f580-48dc-b5c3-9bbc7cbb7f37",
-   "preview": "https://cdn.higgsfield.ai/soul-style/9cff0472-88b6-4ee2-a1e6-0976f79cdbe8.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3323,9 +3299,9 @@
    "categories": [],
    "name": "Sitting on the Street",
    "description": "Laid-back pose meets city grit. Candid, cool, and consciously unbothered",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "7696fd45-6e67-47d7-b800-096ce21cd449",
-   "preview": "https://cdn.higgsfield.ai/soul-style/e4cce90c-943a-45be-a324-0a92fe0fcb9d.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3336,9 +3312,9 @@
    ],
    "name": "Glitch",
    "description": "Pixel drag, color distortion, and digital noise. Beautiful errors in motion",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "62355e77-7096-45ae-9bea-e7c5b88c3b70",
-   "preview": "https://cdn.higgsfield.ai/soul-style/bed53d7d-3061-4666-bcd6-2ad890387f97.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3347,9 +3323,9 @@
    "categories": [],
    "name": "FashionShow",
    "description": "Backstage flashes, bold looks, and runway energy—where chaos meets couture",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "86fc814e-856a-4af0-98b0-d4da75d0030b",
-   "preview": "https://cdn.higgsfield.ai/soul-style/c056f71c-31c6-48f5-8d4c-b13bab458ede.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3360,9 +3336,9 @@
    ],
    "name": "Artwork",
    "description": "Framed moments with painterly depth. A still life of emotion, texture, and light",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "b9e2d7dc-78e6-4f7d-95dd-b62690e7b200",
-   "preview": "https://cdn.higgsfield.ai/soul-style/40243714-8b1c-44bc-87f2-ef3aacc2daf9.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3373,9 +3349,9 @@
    ],
    "name": "Graffiti",
    "description": "Spray textures, bold lines, and rebellious color. Raw energy in every frame",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "0b4dac9a-f73a-4e5b-a5a7-1a40ee40d6ac",
-   "preview": "https://cdn.higgsfield.ai/soul-style/65d773e0-b947-4edc-982e-493ce1f04dc3.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3384,9 +3360,9 @@
    "categories": [],
    "name": "Angel Wings",
    "description": "Soft look with delicate wings giving dreamy and weightless",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "4c24b43b-1984-407a-a0ae-c514f29b7e66",
-   "preview": "https://cdn.higgsfield.ai/soul-style/2c8e708f-9fef-498c-bf66-bebfd8452705.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3395,9 +3371,9 @@
    "categories": [],
    "name": "PixeletedFace",
    "description": "Retro-glitch vibe with a pixelated face—playful, edgy, straight out of an early-internet dream",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "34c50302-83ff-487d-b3a9-e35e501d80a7",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a6bf56b4-eb67-49e5-aa26-e2dd45882100.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3406,9 +3382,9 @@
    "categories": [],
    "name": "Grillz Selfie",
    "description": "Flash-heavy close-up of shiny teeth, with grills, bold attitude, underground luxury",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "255f4045-d68b-42b1-9e4c-f49d3263a9d7",
-   "preview": "https://cdn.higgsfield.ai/soul-style/f20194ec-4c8f-4ed5-9f23-152f7d09ecec.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3419,9 +3395,9 @@
    ],
    "name": "Shoe Check",
    "description": "A visual trend where the focus is on footwear, often captured from a top-down or ground-level angle",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "30458874-d9c0-4d5a-b2b7-597e0eee2404",
-   "preview": "https://cdn.higgsfield.ai/soul-style/55009845-16f0-43b0-a395-48c2bbe1f4d8.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3430,9 +3406,9 @@
    "categories": [],
    "name": "Bleached Brows",
    "description": "Barely-there brows, futuristic face. A blank canvas for bold energy and alien glam",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "cc099663-9621-422e-8626-c8ee68953a0c",
-   "preview": "https://cdn.higgsfield.ai/soul-style/aa99b83d-fe92-4542-8dab-b0c708d0cf30.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3441,9 +3417,9 @@
    "categories": [],
    "name": "Object Makeup",
    "description": "Collage-style layers. An object below, makeup above, colors duplicated for surreal, editorial face art",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "b7908955-2868-4e35-87a0-35e50cb92e5d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/bb5c5572-693a-4b21-ba6e-329dc7da2af3.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3455,9 +3431,9 @@
    ],
    "name": "360 cam",
    "description": "Wrap-around perspective with immersive distortion. Captures everything-warped, wide, and wonderfully weird",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "294bb3ee-eaef-4d2a-93e3-164268803db4",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a8951200-becf-4fa3-b41b-3a58e7ebcd72.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3468,7 +3444,7 @@
    "description": "Surreal scale play: the subject towers over a miniature world",
    "descriptionSource": "inferred",
    "id": "a5f63c3b-70eb-4979-af5e-98c7ee1e18e8",
-   "preview": "https://cdn.higgsfield.ai/soul-style/b6552305-c29f-4f41-9252-49c5470b2b73.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3479,7 +3455,7 @@
    "description": "Comedic oversized prop or garment dwarfing the subject",
    "descriptionSource": "inferred",
    "id": "5ad23bca-4a4b-4316-8c59-b80d7709d8ee",
-   "preview": "https://cdn.higgsfield.ai/soul-style/77e056f6-89db-4c06-833a-91f143ad4612.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3490,9 +3466,9 @@
    ],
    "name": "Duplicate",
    "description": "Echoed figures, mirrored forms, or repeated poses-surreal symmetry that bends perception",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "88126a43-86fb-4047-a2d6-c9146d6ca6ce",
-   "preview": "https://cdn.higgsfield.ai/soul-style/0f7a191d-93ea-40a5-ad16-ca2b85fdd753.jpg",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3503,9 +3479,9 @@
    ],
    "name": "Library",
    "description": "Soft indoor lighting meets cozy academia. Perfect for quiet power, timeless knits, and capturing the stillness of thought between the shelves.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "6fb3e1f5-d721-4523-ac38-9902f2b2b850",
-   "preview": "https://cdn.higgsfield.ai/soul-style/4d95d3b1-0db6-4125-a0d7-ba9ba770872f.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3516,9 +3492,9 @@
    ],
    "name": "Escalator",
    "description": "Gliding style in motion. This preset captures that effortless  mall paparazzi look — structured outfits, steel gradients, and motion frozen in frame.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "bab6e4bd-9093-4bb5-a371-01ef6cbd58ad",
-   "preview": "https://cdn.higgsfield.ai/soul-style/c23eef21-0f45-4e93-8818-1da4a3061d01.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3529,9 +3505,9 @@
    ],
    "name": "Gallery",
    "description": "Neutral walls, high taste. This preset frames your subject like a work of art — minimal, polished, and modern.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "36061eb7-4907-4cba-afb1-47afcf699873",
-   "preview": "https://cdn.higgsfield.ai/soul-style/88d27015-a635-4c0f-bf47-19f7c280a659.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3542,9 +3518,9 @@
    ],
    "name": "Crossing the street",
    "description": "Boss walk energy. Overhead angles, harsh midday shadows, and that perfect step mid-cross. Looks stolen from a fashion mag.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "d3e2b71d-b24b-462e-bd96-12f7a22b5142",
-   "preview": "https://cdn.higgsfield.ai/soul-style/9ef39e1b-693e-4560-89e0-6dfb670f42ea.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3555,9 +3531,9 @@
    ],
    "name": "Sunbathing",
    "description": "Clear turquoise water, woven bags, towel texture, and heat-soaked skin.",
-   "descriptionSource": "higgsfield",
+   "descriptionSource": "{studio}",
    "id": "bc00b419-f8ca-4887-a990-e2760c3cb761",
-   "preview": "https://cdn.higgsfield.ai/soul-style/97b9e378-ad9d-415e-b3f4-f4c8890dfb60.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3570,7 +3546,7 @@
    "description": "Fluorescent-lit subway car or platform, candid commuter vibe",
    "descriptionSource": "inferred",
    "id": "d2e8ba04-9935-4dee-8bc4-39ac789746fc",
-   "preview": "https://cdn.higgsfield.ai/soul-style/af958840-be6d-4444-b441-22b7e1891f5d.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3581,7 +3557,7 @@
    "description": "Flash-lit party aftermath with cake, balloons and confetti",
    "descriptionSource": "inferred",
    "id": "2d47f079-c021-4b8e-b2c0-3b927a80fc31",
-   "preview": "https://cdn.higgsfield.ai/soul-style/ea75ae9f-fa9a-4706-b1e0-8a01e01389cc.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3592,7 +3568,7 @@
    "description": "Soft TV-static haze and analog light bloom",
    "descriptionSource": "inferred",
    "id": "fb9cee2b-632f-4fd4-ae4f-4664deecc0f4",
-   "preview": "https://cdn.higgsfield.ai/soul-style/443e1d53-353b-4459-b39e-56f91d141994.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3603,7 +3579,7 @@
    "description": "Dreamy pastel sky, soft clouds and airy haze",
    "descriptionSource": "inferred",
    "id": "493bda5b-bb4b-46fe-9343-7d5e414534ef",
-   "preview": "https://cdn.higgsfield.ai/soul-style/9ce258c5-ae02-423d-86c7-15cd8073fb61.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3614,7 +3590,7 @@
    "description": "The same subject appears twice in one frame",
    "descriptionSource": "inferred",
    "id": "2a1898d0-548f-4433-8503-5721157b93a1",
-   "preview": "https://cdn.higgsfield.ai/soul-style/f457ae4c-f11a-448d-b2ec-058835039e58.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3625,7 +3601,7 @@
    "description": "Minimal scene with a single red balloon as the accent",
    "descriptionSource": "inferred",
    "id": "3de71b9e-3973-4828-b246-a34c606e25a7",
-   "preview": "https://cdn.higgsfield.ai/soul-style/504909f4-dad4-4f3a-b398-65e09e644200.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3636,7 +3612,7 @@
    "description": "Neon Tokyo night streets and car culture, motion-blurred lights",
    "descriptionSource": "inferred",
    "id": "ce9a88c2-c962-45e2-abaa-c8979d48f8d5",
-   "preview": "https://cdn.higgsfield.ai/soul-style/f3d48ef2-efd7-40fa-ae07-f19bc8795f54.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3647,7 +3623,7 @@
    "description": "Moody 90s R&B album-cover look, deep blues and a soft spotlight",
    "descriptionSource": "inferred",
    "id": "c7ea4e7a-c40c-498d-948c-1f6919631f60",
-   "preview": "https://cdn.higgsfield.ai/soul-style/d39c18e3-0b96-41ab-bcc7-4b6b29e953d5.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3658,7 +3634,7 @@
    "description": "Crew posing with motorbikes, gritty street attitude",
    "descriptionSource": "inferred",
    "id": "90df2935-3ded-477f-8253-1d67dd939cbe",
-   "preview": "https://cdn.higgsfield.ai/soul-style/6e02af81-a6ab-4282-b432-da392a92bc31.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3669,7 +3645,7 @@
    "description": "Flat, harsh ID-photo lighting like a driver's-licence portrait",
    "descriptionSource": "inferred",
    "id": "923e4fb0-d4ea-480c-876d-ac7cad862b9d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/8feebd5a-7c6d-436a-8d38-bbeac7b65f34.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3680,7 +3656,7 @@
    "description": "Windswept seaside portrait, linen and salt air",
    "descriptionSource": "inferred",
    "id": "71ac929c-4002-4640-9b65-cb06402844c6",
-   "preview": "https://cdn.higgsfield.ai/soul-style/2f0a3204-759e-446c-bac9-ce83605b6833.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3691,7 +3667,7 @@
    "description": "Parisian chic: stripes, berets, cafe terraces",
    "descriptionSource": "inferred",
    "id": "79bfaa63-4e12-4ea2-8ada-7d4406eecece",
-   "preview": "https://cdn.higgsfield.ai/soul-style/5facd514-6d55-4d45-82a5-ff2e8d5feb99.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3702,7 +3678,7 @@
    "description": "Fisheye close-up with a mirrored twin",
    "descriptionSource": "inferred",
    "id": "d4775423-d214-4862-b061-47baa1978208",
-   "preview": "https://cdn.higgsfield.ai/soul-style/dbd126c8-0c0f-4bfc-bb10-76a2cf5a536c.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3713,7 +3689,7 @@
    "description": "Dark hallway, hard single-source light, noir shadows",
    "descriptionSource": "inferred",
    "id": "a643a36a-85e6-4e3d-80db-13e4997203cc",
-   "preview": "https://cdn.higgsfield.ai/soul-style/8f90d994-1b8d-4760-8afb-738da2975a50.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3724,7 +3700,7 @@
    "description": "Tailored burgundy suit editorial on a muted backdrop",
    "descriptionSource": "inferred",
    "id": "84c23cef-7eda-4f8f-9931-e3e6af8192d9",
-   "preview": "https://cdn.higgsfield.ai/soul-style/c23aa132-6ff5-4654-9db5-8de98013a0d7.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3735,7 +3711,7 @@
    "description": "Warm smoky low light, amber haze, late-night mood",
    "descriptionSource": "inferred",
    "id": "5dbb6a20-0541-4f06-8352-a2408d8781dc",
-   "preview": "https://cdn.higgsfield.ai/soul-style/e1e573d1-530b-49e3-aea6-be773312a6a1.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3746,7 +3722,7 @@
    "description": "Fashion editorial built around saturated greens",
    "descriptionSource": "inferred",
    "id": "91abc4fe-1cf8-4a77-8ade-d36d46699014",
-   "preview": "https://cdn.higgsfield.ai/soul-style/17e1f0f2-fbb0-4380-b5c9-e3e179f1f3a9.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3757,7 +3733,7 @@
    "description": "Direct-flash point-and-shoot snaps from the after-party",
    "descriptionSource": "inferred",
    "id": "5765d07d-1525-4d4d-ae06-9091e2bdac2d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/529d10c2-8394-44ac-bcea-e2760586e50e.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3768,7 +3744,7 @@
    "description": "Dystopian sci-fi haze in orange and teal",
    "descriptionSource": "inferred",
    "id": "53959c8a-4323-4b78-9888-e9f6fb0f6b98",
-   "preview": "https://cdn.higgsfield.ai/soul-style/cb9644f9-8fe2-4b97-b248-0a232d8de01d.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3779,7 +3755,7 @@
    "description": "Posing amid flames and sparks, heat-haze drama",
    "descriptionSource": "inferred",
    "id": "373420f7-489e-4a5d-930e-cc4ecfcc23cc",
-   "preview": "https://cdn.higgsfield.ai/soul-style/a687cfa3-b2b4-4870-af9a-20ac2d1320ad.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3790,7 +3766,7 @@
    "description": "Night ride under streetlights with motion streaks",
    "descriptionSource": "inferred",
    "id": "1fba888b-9ab0-447f-a6a4-9ce5251ec2a6",
-   "preview": "https://cdn.higgsfield.ai/soul-style/4e5723ab-845d-43b2-b540-0202516e2e46.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3801,7 +3777,7 @@
    "description": "Chrome and metallic surfaces, futuristic styling",
    "descriptionSource": "inferred",
    "id": "5e01339d-745e-4bba-96f7-e8ce4af79f17",
-   "preview": "https://cdn.higgsfield.ai/soul-style/45e057de-7a33-4b62-9106-27eb95dcf7fe.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3812,7 +3788,7 @@
    "description": "Streetwear portrait against a brick wall in hard shade",
    "descriptionSource": "inferred",
    "id": "f3968a4f-a125-4c16-8673-45ce9874520e",
-   "preview": "https://cdn.higgsfield.ai/soul-style/1c8925f9-3dd0-4d5d-9ca7-b5caa9cb9956.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3823,7 +3799,7 @@
    "description": "All-black monochrome outfit",
    "descriptionSource": "inferred",
    "id": "f8dac072-d11f-438a-b283-fd52fe8aa744",
-   "preview": "https://cdn.higgsfield.ai/soul-style/482a1096-74a2-4ae8-b96b-07192a6b575d.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3834,7 +3810,7 @@
    "description": "Glamorous cocktail-bar scene in warm bar light",
    "descriptionSource": "inferred",
    "id": "aed71142-673c-4908-a6a7-326d5252eb06",
-   "preview": "https://cdn.higgsfield.ai/soul-style/efb9b05f-91b9-49a7-a102-4beb2aeb7639.webp",
+   "preview": null,
    "publishedAt": "2025-09-20"
   },
   {
@@ -3845,7 +3821,7 @@
    "description": "Mountain-top portrait with a panoramic vista",
    "descriptionSource": "inferred",
    "id": "3c975998-cb5b-4980-80fc-7977e4c60972",
-   "preview": "https://cdn.higgsfield.ai/soul-style/18867377-6b27-4c64-b141-393fd9f18280.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3856,7 +3832,7 @@
    "description": "Sun-baked warm tones, flushed skin, harsh midday light",
    "descriptionSource": "inferred",
    "id": "e439bd89-8176-4729-b6a4-a9977120507d",
-   "preview": "https://cdn.higgsfield.ai/soul-style/d423099d-851a-42f4-8bd3-f5535ff6c48c.webp",
+   "preview": null,
    "publishedAt": "2025-09-18"
   },
   {
@@ -3867,7 +3843,7 @@
    "description": "Soul 2.0's neutral default look",
    "descriptionSource": "inferred",
    "id": "3db34ab5-3439-4317-9e03-08dc30852e69",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/f33d85f2-6521-4fa8-8e8f-894cfbdee578.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3880,7 +3856,7 @@
    "description": "Soft warm interior ambience with golden practical light",
    "descriptionSource": "inferred",
    "id": "fafd3087-0d0f-4fb1-9af6-91b7d304687c",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/18e79fc7-3ce8-499b-a129-2daba3165707.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3893,7 +3869,7 @@
    "description": "Glossy early-2000s studio shoot on coloured seamless",
    "descriptionSource": "inferred",
    "id": "7ee16ff3-c0b0-4f5f-a0e1-e7fc46144230",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/c1d13313-1a78-4f55-acd3-125e789d202f.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3906,7 +3882,7 @@
    "description": "2010s swag streetwear: snapbacks, bling, flash",
    "descriptionSource": "inferred",
    "id": "6dffca48-f9fe-43f2-8589-da58a172fa3e",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/35702530-c33b-4259-84c8-170c7d043882.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3919,7 +3895,7 @@
    "description": "Stage-style spotlighting and deep shadows",
    "descriptionSource": "inferred",
    "id": "7876c2a5-aa83-4530-ad09-2b368bbb5e95",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/2a79c49e-29cd-46b3-b60e-d6eed72b40ec.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3932,7 +3908,7 @@
    "description": "Early-2000s street fashion snapped outdoors",
    "descriptionSource": "inferred",
    "id": "d7e58c26-b74e-4a72-8c78-d061d600c9a5",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/1235a986-ef50-4920-9ca1-0a9e2dee1768.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3945,7 +3921,7 @@
    "description": "Direct on-camera flash fashion editorial",
    "descriptionSource": "inferred",
    "id": "5e87c5bd-86b6-491a-94ab-046891d1e35e",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/9f132343-278b-4fd1-b614-c11e07472cf5.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3958,7 +3934,7 @@
    "description": "Low-res early phone camera: noise, soft focus, blown highlights",
    "descriptionSource": "inferred",
    "id": "a7cb654b-eba7-4e9b-af41-8eaa482bf7c9",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/b7f45834-8736-4858-bba8-30029048e1e5.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3971,7 +3947,7 @@
    "description": "Candid documentary street photography",
    "descriptionSource": "inferred",
    "id": "95151de0-e0e5-4e04-bd45-c58c8a4ac023",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/bf3defc5-e184-4a21-bf1f-cae4a66ace97.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3984,7 +3960,7 @@
    "description": "Grainy black-and-white film portrait",
    "descriptionSource": "inferred",
    "id": "069f5a5f-8c4b-4591-a3dd-bde488672228",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/efe5394f-d88b-4587-8417-d22f462af786.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -3997,7 +3973,7 @@
    "description": "Nostalgic East Asian film tones and settings",
    "descriptionSource": "inferred",
    "id": "99716f25-c133-438a-829a-ec53258980b4",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/ddda68b0-a93b-43c0-a26f-bf0b3e683469.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4010,7 +3986,7 @@
    "description": "Solarised, partly inverted tones for a surreal glow",
    "descriptionSource": "inferred",
    "id": "26bb19d1-25cc-4455-9a80-522eb136a4de",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/776961b9-336d-4234-b569-bdd57021ffcf.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4023,7 +3999,7 @@
    "description": "Gentle fill flash for natural editorial snaps",
    "descriptionSource": "inferred",
    "id": "e62e75c2-b1bb-433d-9192-f1196faed74e",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/2134d88a-8e98-4f4a-9477-19a59343bd2d.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4036,7 +4012,7 @@
    "description": "2000s compact digicam look with harsh flash",
    "descriptionSource": "inferred",
    "id": "74abc530-cec8-4c13-88a6-2b3f78bfd0ff",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/4663f0a8-7e42-405d-ab2d-2f0fdceb5246.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4049,7 +4025,7 @@
    "description": "Dark alluring siren make-up and moody glamour",
    "descriptionSource": "inferred",
    "id": "cfd92ced-4801-42c4-b8ca-e096a405ff1a",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/feec6fd0-995d-4491-adfe-12dc3a1abec1.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4062,7 +4038,7 @@
    "description": "Mysterious night city, haze and neon",
    "descriptionSource": "inferred",
    "id": "d6371f60-a70c-4a43-9393-6e3d8206590c",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/06fd4ff1-b3e0-4ad6-ad00-bb91d2268ca5.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4075,7 +4051,7 @@
    "description": "Bright candy-coloured pop styling",
    "descriptionSource": "inferred",
    "id": "cd55643f-812c-461d-9837-baa9a88dff2e",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/bd012736-2b24-40fd-84b8-d73b0d2ebee4.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4088,7 +4064,7 @@
    "description": "Two images blended in-camera",
    "descriptionSource": "inferred",
    "id": "7a42d44e-0dab-4dd1-be49-c83fec827251",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/e4057886-2c14-4a51-998d-26fa24a9941c.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4101,7 +4077,7 @@
    "description": "Early-2000s band promo photo",
    "descriptionSource": "inferred",
    "id": "330789e8-cb50-410c-a31f-b1ba10188176",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/254355c4-d976-46b0-b066-baa1cc6dc8a1.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4114,7 +4090,7 @@
    "description": "Glossy aqua, bubbles and sky-blue 2000s tech optimism",
    "descriptionSource": "inferred",
    "id": "599d96ce-be5b-4071-9ee0-5b3494f6c757",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/ea15a9bb-ef1d-49ce-8d49-fd311f6ea270.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4127,7 +4103,7 @@
    "description": "Washed-out, melancholic emo-rap aesthetic",
    "descriptionSource": "inferred",
    "id": "8261de31-258b-4a58-997c-b65bbd6d367f",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/4c796bd9-ee7e-476f-b588-083b3df529e1.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4138,7 +4114,7 @@
    "description": "Otherworldly sci-fi light and alien landscapes",
    "descriptionSource": "inferred",
    "id": "82e55816-3b41-4f01-8500-d36f235e08e6",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/6938b497-ce2f-4d80-9760-00be2a2a3277.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4151,7 +4127,7 @@
    "description": "Fashion-week street-style snaps",
    "descriptionSource": "inferred",
    "id": "3d5584b2-4d15-48d2-8a09-c1073259f4c6",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/84b09184-9077-4f93-b4aa-1340f3641631.webp",
+   "preview": null,
    "curatedMoodboard": true
   },
   {
@@ -4162,7 +4138,7 @@
    "description": "Natural outdoor daylight, soft and true to life",
    "descriptionSource": "inferred",
    "id": "dbe816eb-c651-4361-aee3-9386f8372121",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/f795f856-42c9-4f09-991f-ff3f5d1b7db4.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4173,7 +4149,7 @@
    "description": "Modern indie look: film grain, candid framing, soft colour",
    "descriptionSource": "inferred",
    "id": "184401c9-65d8-4d4b-b2e1-fd6a87a5b60c",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/200949a2-c394-468c-adbb-5a88a5b3105b.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4184,7 +4160,7 @@
    "description": "Submerged portrait with caustic light",
    "descriptionSource": "inferred",
    "id": "04022c41-6164-47d9-b33f-cf241f0b5e15",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/3b6c09ce-e318-4cf3-82ca-770b4e1f753d.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4195,7 +4171,7 @@
    "description": "1980s horror lighting: red and blue gels, fog",
    "descriptionSource": "inferred",
    "id": "313f3e05-0d79-4d2f-a56a-d9d289321fd8",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/06e57621-847a-4a51-a10c-a607548a27e8.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4206,7 +4182,7 @@
    "description": "Disposable film camera flash snapshots",
    "descriptionSource": "inferred",
    "id": "7ef8747e-c925-4851-b9e9-6400ddb19df9",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/00e8d173-cf5e-45c4-8896-23af3d8d37ce.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4217,7 +4193,7 @@
    "description": "Film stock with neutral pastel tones",
    "descriptionSource": "inferred",
    "id": "adbca234-bfff-4c19-835f-f8647655d295",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/e70fc9f9-648e-4016-a411-7564fa47bab5.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4228,7 +4204,7 @@
    "description": "Saturated warm film stock",
    "descriptionSource": "inferred",
    "id": "dbaabc25-7fee-438c-bd65-ae4d1775d4ab",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/576fb6f0-e000-4da9-ba05-a4cc5f5e2462.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4239,7 +4215,7 @@
    "description": "Classic black-and-white film stock",
    "descriptionSource": "inferred",
    "id": "3ece570b-a9a3-4b86-8c20-8eaa7c58cc4f",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/30b6d8ca-1a73-429d-9a16-b19905d69756.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4250,7 +4226,7 @@
    "description": "Warm, high-contrast film",
    "descriptionSource": "inferred",
    "id": "2c109e42-bf29-47a2-ae16-aa6cbbba8b8a",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/fd7b86d1-e90f-4198-a429-c764bd9b1996.webp",
+   "preview": null,
    "curatedMoodboard": false
   },
   {
@@ -4261,7 +4237,7 @@
    "description": "Desaturated cool-toned film",
    "descriptionSource": "inferred",
    "id": "a15510bf-2439-4964-a2cc-0e35d1b5e70f",
-   "preview": "https://cdn.higgsfield.ai/soul-v2-style/c50c0350-dffe-49fc-acc4-e6fcfa5a6140.webp",
+   "preview": null,
    "curatedMoodboard": false
   }
  ],
@@ -4290,7 +4266,7 @@
   ],
   "button": "Create AI Avatar",
   "result": "a character sheet image saved as a reusable reference element (@ mention in Seedance / Cinema Studio / Genjutsu)",
-  "aiInfluencerApi": "Public API equivalent: POST /higgsfield/ai-influencer ($0.05 per sheet) — already in Fuobe as the AI Influencer app",
+  "aiInfluencerApi": "Public API equivalent: POST /{studio}/ai-influencer ($0.05 per sheet) — already in Fuobe as the AI Influencer app",
   "soulCast": {
    "title": [
     "Build Your Cast",
@@ -4484,7 +4460,7 @@
     "batchSize": 10,
     "genre": "random if unset"
    },
-   "details": "distinguishing details free text ≤300 chars (inventory); every option card has an image (static.higgsfield.ai/cast/...)",
+   "details": "distinguishing details free text ≤300 chars (inventory); every option card has an image (...)",
    "credits": "0.125 credits per image"
   }
  },
@@ -4521,7 +4497,7 @@
    {
     "id": "shared-data",
     "effort": "S",
-    "what": "scripts/gen-higgsfield-presets.py -> src/lib/catalog/higgsfield-presets.generated.ts (Soul v1/v2 presets with categories, 50 palettes, Fashion Factory templates, Photodump packs); fallback for higgsfieldPresets() and category tabs in the style picker"
+    "what": "scripts/gen-studio-presets.py -> src/lib/catalog/{studio}-presets.generated.ts (Soul v1/v2 presets with categories, 50 palettes, Fashion Factory templates, Photodump packs); fallback for parityPresets() and category tabs in the style picker"
    },
    {
     "id": "layers",
@@ -4560,7 +4536,7 @@
    {
     "id": "photodump",
     "effort": "M",
-    "what": "/photodump: pack -> character element or one selfie -> aspect -> batch (one job per style) -> grid with Download All/Animate/Edit; Fuobe prompt packs mirroring Higgsfield names/sizes; Create pack from <=15 refs"
+    "what": "/photodump: pack -> character element or one selfie -> aspect -> batch (one job per style) -> grid with Download All/Animate/Edit; Fuobe prompt packs mirroring the studio names/sizes; Create pack from <=15 refs"
    },
    {
     "id": "fashion-factory",

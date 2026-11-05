@@ -711,7 +711,7 @@
   "splatViewer": "idol-4 (2026-11-03): @sparkjsdev/spark 2.3.1 (MIT, World Labs, published 2026-10-01; peer three >=0.180.0; .spz/.ply/.ksplat/.splat; WebGL2; 0.92 MB gzipped, dynamic import only) chosen over @mkkellogg/gaussian-splats-3d 0.4.7 (MIT, last release 2025-01-25, no .spz). Phone frame time unmeasured (SwiftShader here: ~8 s per frame at 262,144). Haze cut-off starts at 0.05 for Idol 3D, 0 for TripoSplat.",
   "canvas": "canvas.ts KIND_OP model3d -> image-to-3d (L404); splat takes images (L516); modelChoices L434; sliders on nodes (canvas/nodes.tsx L627)",
   "outputActions": "image next steps animate, upscale, edit (output-actions.ts L169-170); model3d 'View in 3D' (L146); no 3D action on images",
-  "nameClash": "apps.ts L1486 'Idol' K-pop video app (higgsfield-inventory.md L414)",
+  "nameClash": "apps.ts L1486 'Idol' K-pop video app (parity-inventory.md L414)",
   "licences": "src/lib/licences.ts: rows from manifest licence strings + NODE_PACKS (L406); DINOv3 License in KNOWN (L270)",
   "eval": "scripts/eval: kinds image | video | audio; no 3D suite",
   "localComfyUI": "127.0.0.1:8188 v0.41.0, CPU, 14.3 GB RAM; every stock TripoSplat and splat node; model folders empty; Idol classes not installed"

@@ -8,7 +8,7 @@ import path from "node:path";
 import { RESEARCH_DIR } from "./paths.mjs";
 
 export const RECIPES_FILE = "docs/research/fuobe-originals-recipes-5.json";
-export const LOOKS_FILE = "docs/research/higgsfield-image-studios.json";
+export const LOOKS_FILE = "docs/research/parity-image-studios.json";
 
 let cache = null;
 

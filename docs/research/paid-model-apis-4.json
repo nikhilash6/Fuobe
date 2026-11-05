@@ -1,14 +1,14 @@
 {
  "asOf": "2026-10-22",
- "method": "fal: full catalog https://api.fal.ai/v1/models (paged, 1,527 active endpoints on 2026-10-22; 105 dated 2026-09-15 or later), then 225 endpoint ids (catalog hits plus guessed ids) probed at https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>: 153 served a schema, 72 did not (listed in gaps). Schemas parsed by the same rules as part 3 (refs resolved, anyOf-null -> nullable, nested item/field schemas kept, output schema kept as outputFields); price = '## Pricing' of https://fal.ai/models/<id>/llms.txt; title, licence and status from ?endpoint_id= catalog lookups (unlisted = schema served but no catalog entry). The parser was checked against parts 1-3: 58 re-fetched endpoints reproduced their recorded inputs, with the drift listed in gaps. Replicate: search API https://replicate.com/api/search, the newest-models feed https://replicate.com/api/latest-models?page=1..12, and each model page's embedded dereferenced_openapi_schema, billingConfig and latest version (38 pages fetched). Higgsfield: https://dash.higgsfield.ai/api/v2/pricing/models/?page=1..4 compared with higgsfield-api.json, and per-model https://dash.higgsfield.ai/models/<id>/llms.txt for the new family. World Labs: https://docs.worldlabs.ai/api/reference/openapi.yaml and https://docs.worldlabs.ai/api/pricing.md. Licences of community models from the upstream LICENSE files or Hugging Face model cards. Bria's mask polarity was inferred by measuring Bria's own example mask video with ffmpeg. No paid inference calls were made.",
+ "method": "fal: full catalog https://api.fal.ai/v1/models (paged, 1,527 active endpoints on 2026-10-22; 105 dated 2026-09-15 or later), then 225 endpoint ids (catalog hits plus guessed ids) probed at https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>: 153 served a schema, 72 did not (listed in gaps). Schemas parsed by the same rules as part 3 (refs resolved, anyOf-null -> nullable, nested item/field schemas kept, output schema kept as outputFields); price = '## Pricing' of https://fal.ai/models/<id>/llms.txt; title, licence and status from ?endpoint_id= catalog lookups (unlisted = schema served but no catalog entry). The parser was checked against parts 1-3: 58 re-fetched endpoints reproduced their recorded inputs, with the drift listed in gaps. Replicate: search API https://replicate.com/api/search, the newest-models feed https://replicate.com/api/latest-models?page=1..12, and each model page's embedded dereferenced_openapi_schema, billingConfig and latest version (38 pages fetched). The parity studio: {studio-dashboard}/api/v2/pricing/models/?page=1..4 compared with parity-api.json, and per-model {studio-dashboard}/models/<id>/llms.txt for the new family. World Labs: https://docs.worldlabs.ai/api/reference/openapi.yaml and https://docs.worldlabs.ai/api/pricing.md. Licences of community models from the upstream LICENSE files or Hugging Face model cards. Bria's mask polarity was inferred by measuring Bria's own example mask video with ffmpeg. No paid inference calls were made.",
  "conventions": {
   "operation": "Part 1-3 values plus: erase-video, inpaint-video, segment-video, swap-video, insert-video, character-swap, v2v, ref2v, motion-transfer, interpolate, sdr-to-hdr, upscale-video, utility, ocr, detect, vlm, image-to-splat, image-to-3d, image-to-world, image-to-pano, angles, depth, t2v, i2v, keyframes2v, t2i, edit, t2svg, vectorize, tts, avatar, reframe, outpaint.",
   "inputs": "JSON-schema const values are recorded as a one-value enum. Otherwise the same per-field shape as part 3 ({type, required, default, values, valueType, minimum, maximum, minimumExclusive, minLength, maxLength, minItems, maxItems, nullable, desc, examples}; arrays of objects carry itemSchema/itemRequired, arrays of enums items 'enum' + itemValues, objects fields/fieldRequired, unions variants).",
   "keyFields": "Fuobe canonical slot -> exact field name, as in parts 2-3 (dotted = nested). Slots new in part 4 are listed in newKeyFieldSlots. scripts/gen-cloud-models.py's build_route does not read them; studio code should read them from the route's research record, as with part 3.",
-  "output": "Main result path; outputShape = one-line summary per top-level output field ('object<Video|File>{...}' marks a union of two file shapes); outputFields = full output schema (fal, Higgsfield and World Labs records).",
-  "pricing": "price = the vendor's own sentence (fal llms.txt '## Pricing', Replicate billingConfig tiers, Higgsfield llms.txt, World Labs pricing page); pricing = {usd, unit, note} for the default tier. 'compute-second' at $0 means fal lists the app as compute-billed without a public rate. Replicate community models have only a note.",
-  "status": "fal: active = in https://api.fal.ai/v1/models; deprecated = catalog status deprecated (still served); unlisted = schema served but no catalog entry; playground-only (new) = in the catalog with a schema, but the model page says API access is not open yet (Kling 4.0). Replicate, Higgsfield, World Labs: active.",
-  "providers": "fal and replicate as in parts 1-3. New: 'higgsfield' (Genjutsu Light; same request lifecycle as higgsfield-api.json, which gen-higgsfield-models.py reads, so copy these into that file to use them) and 'worldlabs' (World Labs Marble API: header WLT-Api-Key, async operations; Fuobe has no provider for it yet).",
+  "output": "Main result path; outputShape = one-line summary per top-level output field ('object<Video|File>{...}' marks a union of two file shapes); outputFields = full output schema (fal, the parity studio and World Labs records).",
+  "pricing": "price = the vendor's own sentence (fal llms.txt '## Pricing', Replicate billingConfig tiers, the parity studio's llms.txt, World Labs pricing page); pricing = {usd, unit, note} for the default tier. 'compute-second' at $0 means fal lists the app as compute-billed without a public rate. Replicate community models have only a note.",
+  "status": "fal: active = in https://api.fal.ai/v1/models; deprecated = catalog status deprecated (still served); unlisted = schema served but no catalog entry; playground-only (new) = in the catalog with a schema, but the model page says API access is not open yet (Kling 4.0). Replicate, the parity studio, World Labs: active.",
+  "providers": "fal and replicate as in parts 1-3. New: '{studio}' (Genjutsu Light; same request lifecycle as parity-api.json, which gen-studio-models.py reads, so copy these into that file to use them) and 'worldlabs' (World Labs Marble API: header WLT-Api-Key, async operations; Fuobe has no provider for it yet).",
   "replicateCommunity": "As in part 3: community models are recorded as 'owner/name:<version>' and POST /v1/predictions {version, input}; billed by GPU time.",
   "reverified": "Records whose notes start with 'Part N endpoint, re-verified 2026-10-22' repeat an endpoint from parts 1-3 with the current schema, outputFields and new key-field slots. gen-cloud-models.py merges them over the older record exactly like part 3 (keyFields merged, everything else replaced).",
   "capability": "Grouping used by paid-model-apis-4.md: erase | swap | finish (interpolation, HDR, codecs, upscalers) | videoutil | ocr | scene3d | frontier.",
@@ -75,9 +75,9 @@
  "recommendations": [
   {
    "feature": "Video: remove an object (type its name, click it, or paint it)",
-   "default": "prompt: fal-ai/kling-video/o3/pro/video-to-video/edit (Higgsfield's own route) | clicks: bria/video/erase/keypoints | painted or SAM mask: bria/video/erase/mask",
+   "default": "prompt: fal-ai/kling-video/o3/pro/video-to-video/edit (the parity studio's own route) | clicks: bria/video/erase/keypoints | painted or SAM mask: bria/video/erase/mask",
    "alt": [
-    "fal-ai/kling-video/o3/4k/video-to-video/edit (part 3, in the catalog: Higgsfield's 'Run Kling 3.0 Omni Edit in 4K mode')",
+    "fal-ai/kling-video/o3/4k/video-to-video/edit (part 3, in the catalog: the parity studio's 'Run Kling 3.0 Omni Edit in 4K mode')",
     "bria/video/erase/prompt (name the object; <5 s; $0.14/s)",
     "replicate:bria/video-erase-object (same Bria model, mask only, $0.05/s instead of $0.14/s; auto_trim defaults to false)",
     "fal-ai/void-video-inpainting (mask_prompt; also removes shadows, reflections and knock-on effects; <=197 frames; $0.05-0.15 per clip)",
@@ -89,13 +89,13 @@
     "non-commercial only: replicate:ayushunleashed/minimax-remover (CC BY-NC 4.0 weights), replicate:jd7h/propainter (S-Lab licence)",
     "burned-in captions: replicate:hjunior29/video-text-remover (no mask)"
    ],
-   "fields": "Kling O3 edit: prompt 'Remove the coffee cup from her hands ... keep everything else the same' (reference the clip as @Video1) + video_url (3-15 s, 720-3840 px, <=200 MB) + keep_audio true; $0.168/s. Higgsfield's /remove-object-from-video page runs exactly this ('Prompt · Kling 3.0 Omni Edit · Remove Object', per higgsfield-delta-4.md, the parallel round-4 Higgsfield research; not re-checked here). Bria: video_url (<5 s per call; Fuobe cuts longer clips into <=5 s segments with trim-video and joins them) + keypoints[\"{'x':X,'y':Y,'type':'positive'|'negative'}\"] or mask_video_url (white = erase, inferred from Bria's example); preserve_audio true; output_container_and_codec mp4_h264 (mov_proresks for ProRes); $0.14/s. Higgsfield's server-side remove_object job (3 / 4.5 / 12 credits per second + 3.5 frame credits) suggests 'edit the first frame, then propagate' (inferred)."
+   "fields": "Kling O3 edit: prompt 'Remove the coffee cup from her hands ... keep everything else the same' (reference the clip as @Video1) + video_url (3-15 s, 720-3840 px, <=200 MB) + keep_audio true; $0.168/s. The parity studio's /remove-object-from-video page runs exactly this ('Prompt · Kling 3.0 Omni Edit · Remove Object', per parity-delta-4.md, the parallel round-4 parity research; not re-checked here). Bria: video_url (<5 s per call; Fuobe cuts longer clips into <=5 s segments with trim-video and joins them) + keypoints[\"{'x':X,'y':Y,'type':'positive'|'negative'}\"] or mask_video_url (white = erase, inferred from Bria's example); preserve_audio true; output_container_and_codec mp4_h264 (mov_proresks for ProRes); $0.14/s. The parity studio's server-side remove_object job (3 / 4.5 / 12 credits per second + 3.5 frame credits) suggests 'edit the first frame, then propagate' (inferred)."
   },
   {
    "feature": "Video: swap an object or person, or insert one, from a reference image",
-   "default": "fal-ai/kling-video/o3/pro/video-to-video/edit (in the catalog); with a Higgsfield key higgsfield:higgsfield/genjutsu-light/object-swap/v1.0",
+   "default": "fal-ai/kling-video/o3/pro/video-to-video/edit (in the catalog); with a parity-studio key {studio}:{studio}/genjutsu-light/object-swap/v1.0",
    "alt": [
-    "higgsfield:higgsfield/genjutsu/object-swap/v1.0 (30 s sources, in higgsfield-api.json)",
+    "{studio}:{studio}/genjutsu/object-swap/v1.0 (30 s sources, in parity-api.json)",
     "fal-ai/wan-22-vace-fun-a14b/inpainting (mask_video_url + ref_image_urls: swaps exactly the masked region)",
     "alibaba/happy-horse/video-edit (part 3: 3-60 s sources, <=5 reference images)",
     "fal-ai/pika/v2/pikaswaps (unlisted: modify_region text + image_url, $0.465/video)",
@@ -112,13 +112,13 @@
    "alt": [
     "fal-ai/rife/video ($0.0013 per compute second; the same model as the open route)",
     "fal-ai/film/video (large motion)",
-    "fal-ai/bytedance-upscaler/upscale/video target_fps 24-120 (part 1; Higgsfield's ByteDance engine, when upscaling anyway)",
+    "fal-ai/bytedance-upscaler/upscale/video target_fps 24-120 (part 1; the parity studio's ByteDance engine, when upscaling anyway)",
     "topaz/upscale/video/{precision,generative,creative} target_fps 16-60 (part 1)",
     "replicate:topazlabs/video-upscale target_fps 15-60 (part 1)",
     "replicate:zsxkib/st-mfnet (x2-x32, custom fps up to 240)",
     "fal-ai/amt-interpolation"
    ],
-   "fields": "video_url + target_fps 16-120 (default 60) + slowdown_factor 1-8 (slow motion) + model Apollo|Chronos|Aion + H264_output (default H.265). 10 s 30->60 fps at 1080p: $0.30 (Apollo/Chronos), $0.50 (Aion). Higgsfield's FPS Boost offers 24/30/60/90/120."
+   "fields": "video_url + target_fps 16-120 (default 60) + slowdown_factor 1-8 (slow motion) + model Apollo|Chronos|Aion + H264_output (default H.265). 10 s 30->60 fps at 1080p: $0.30 (Apollo/Chronos), $0.50 (Aion). The parity studio's FPS Boost offers 24/30/60/90/120."
   },
   {
    "feature": "Video: SDR to HDR",
@@ -129,7 +129,7 @@
     "luma/agent/ray/v3.2/video-to-video hdr / exr_export (part 2)",
     "fal-ai/bytedance-upscaler/upscale/video bit_depth 10|12 (10/12-bit SDR, not HDR)"
    ],
-   "fields": "video_url + output_format mp4 (10-bit H.265 HDR10) | prores (10-bit ProRes 422 HQ .mov). $2.40 per 10 s up to 1080p, $5.10 at 4K. Hyperion 2.5 is the model Higgsfield lists under Topaz Video."
+   "fields": "video_url + output_format mp4 (10-bit H.265 HDR10) | prores (10-bit ProRes 422 HQ .mov). $2.40 per 10 s up to 1080p, $5.10 at 4K. Hyperion 2.5 is the model the parity studio lists under Topaz Video."
   },
   {
    "feature": "Video: ProRes and high-bitrate export",
@@ -140,7 +140,7 @@
     "bria/video/erase/* and bria/video/background-removal(/v3) mov_proresks",
     "fal-ai/ltx-2.3-quality/hdr exr_frames_url (EXR sequence)"
    ],
-   "fields": "Higgsfield's Upscale offers H.264, H.265 10-bit, ProRes 10-bit and EXR 16-bit. On the cloud engine Fuobe should keep its downloaded result and transcode locally; the open engine already has ffmpeg.",
+   "fields": "The parity studio's Upscale offers H.264, H.265 10-bit, ProRes 10-bit and EXR 16-bit. On the cloud engine Fuobe should keep its downloaded result and transcode locally; the open engine already has ffmpeg.",
    "criticNote": "2026-10-22: the Fuobe server runs no ffmpeg today (no ffmpeg process in src/ at d781de1), so a local transcode is a new server dependency; otherwise use the open engine's video-export-pro / video-export-exr (comfyui-oss-4 §f) when a ComfyUI is connected."
   },
   {
@@ -206,16 +206,16 @@
     "fal-ai/qwen-image-edit-plus-lora-gallery/multiple-angles, replicate:qwen/qwen-edit-multiangle (coarser 2509 LoRA controls)",
     "research-only: replicate:kfarr/sharp-ml (Apple SHARP)"
    ],
-   "fields": "marigold-v2: image_url + prediction_type depth -> image.url ($0.03). Qwen 2511 multiple angles: image_urls + horizontal_angle 0-360 + vertical_angle -30..90 + zoom 0-10 ($0.035/MP). This is the cloud twin of the open plan in higgsfield-studios.md (Depth Anything 3 point cloud -> Qwen-Image-Edit-2511 + Multiple-Angles LoRA). Higgsfield: 'Create 3D scene' -> move across three axes -> pick the keyframe -> recomposition (source_job_id, image, aspect_ratio; 2 credits). higgsfield-delta-4.md (parallel round-4 research) reports that Higgsfield's scene is a Gaussian splat (3 credits) in a WASD viewer and suggests tripo3d/triposplat; TripoSplat's own output schema says it removes the background first, so it gives the subject, not the scene. Whole-scene splats: World Labs Marble (draft $0.184), or splats/points built in the browser from the depth map.",
+   "fields": "marigold-v2: image_url + prediction_type depth -> image.url ($0.03). Qwen 2511 multiple angles: image_urls + horizontal_angle 0-360 + vertical_angle -30..90 + zoom 0-10 ($0.035/MP). This is the cloud twin of the open plan in parity-studios.md (Depth Anything 3 point cloud -> Qwen-Image-Edit-2511 + Multiple-Angles LoRA). The parity studio: 'Create 3D scene' -> move across three axes -> pick the keyframe -> recomposition (source_job_id, image, aspect_ratio; 2 credits). parity-delta-4.md (parallel round-4 research) reports that the parity studio's scene is a Gaussian splat (3 credits) in a WASD viewer and suggests tripo3d/triposplat; TripoSplat's own output schema says it removes the background first, so it gives the subject, not the scene. Whole-scene splats: World Labs Marble (draft $0.184), or splats/points built in the browser from the depth map.",
    "criticNote": "2026-10-22: open twin found: ComfyUI core MoGe nodes build a textured whole-scene GLB (scene-mesh-moge, ran on CPU, comfyui-oss-4 §i); core also has native TripoSplat nodes (subject only)."
   },
   {
    "feature": "New video models (2026-09-15 to 2026-10-22)",
-   "default": "keep bytedance/seedance-2.5 (Higgsfield's default); add the models below as options",
+   "default": "keep bytedance/seedance-2.5 (the parity studio's default); add the models below as options",
    "alt": [
     "blackforestlabs/flux-3-max/{text,image,keyframes}-to-video ($0.0425/s promo to 2026-11-07, then $0.17/s 720p)",
     "heygen/heygen-video/{text,image,reference}-to-video ($0.02/s at 768p, up to 2K)",
-    "xai/grok-imagine-video/v1.5/{text,image,reference}-to-video and /v1.5/lite/* (Higgsfield offers Grok 1.5 and 1.5 Lite)",
+    "xai/grok-imagine-video/v1.5/{text,image,reference}-to-video and /v1.5/lite/* (the parity studio offers Grok 1.5 and 1.5 Lite)",
     "replicate:pixverse/pixverse-v6-max",
     "replicate:prunaai/p-video-2-pro-reference (MiniMax H3 based, from $0.015/s)",
     "creatify/boreal (UGC with audio, $0.01/s 720p)",
@@ -231,7 +231,7 @@
    "default": "keep fal-ai/nano-banana-pro and ElevenLabs v4; add the models below as options",
    "alt": [
     "krea/v3/text-to-image + krea/v3/edit (replicate:krea/krea-3)",
-    "xai/grok-imagine-image/v2.0/text-to-image + /edit (Higgsfield offers Grok Imagine 2.0)",
+    "xai/grok-imagine-image/v2.0/text-to-image + /edit (the parity studio offers Grok Imagine 2.0)",
     "bria/fibo-2/generate + /edit (licensed-data model)",
     "replicate:alibaba/qwen-image-3-pro",
     "ideogram/vector/text-to-vector + image-to-vector (SVG)",
@@ -247,15 +247,15 @@
   "Video erasers are short: Bria's eraser (fal and Replicate) takes clips under 5 s, VOID takes at most 197 frames, Kling O3 edit 3-15 s. Longer clips must be split into segments and joined, and seams between segments are untested.",
   "No MiniMax-Remover, DiffuEraser or ProPainter on fal (fal-ai/minimax-remover, fal-ai/minimax-remover/video, fal-ai/diffueraser, fal-ai/propainter, fal-ai/video-object-removal, fal-ai/object-removal/video, fal-ai/video-eraser: no OpenAPI). On Replicate they exist only as community models with non-commercial weights (MiniMax-Remover CC BY-NC 4.0 on Hugging Face zibojia/minimax-remover; ProPainter S-Lab License 1.0).",
   "No Vidu video-edit endpoint (fal-ai/vidu/q2/reference-to-video/edit, fal-ai/vidu/q3/video-edit, fal-ai/vidu/q4/video-edit: no OpenAPI). Pika: fal-ai/pika/v2/pikaswaps is unlisted and fal-ai/pika/v2/pikadditions deprecated; fal-ai/pika/v2.2/pikaswaps, fal-ai/pika/v2.2/pikadditions and fal-ai/pika/pikaswaps do not exist.",
-  "Kling 4.0 (kling/v4/text-to-video, image-to-video, reference-to-video, video-to-video/edit) is in fal's catalog with schemas, but every page says 'API access is coming soon' (playground and fal Agent only). Replicate has no Kling 4 (kwaivgi/kling-v4, kling-v4-video, kling-v4-omni-video: 404). Higgsfield's pricing API (its public API, checked 2026-10-22) has no Kling 4.0 either, although higgsfield-delta-4.md reports Kling 4.0 in Higgsfield's web app since 2026-10-21. So no API route reaches Kling 4.0 yet. Update 2026-11-01 (nm10-kling-4): all four fal endpoints are live (catalog status active, llms.txt with no 'coming soon') and Replicate now lists the official kwaivgi/kling-v4.0 (version f4dc4504, 2026-10-26).",
+  "Kling 4.0 (kling/v4/text-to-video, image-to-video, reference-to-video, video-to-video/edit) is in fal's catalog with schemas, but every page says 'API access is coming soon' (playground and fal Agent only). Replicate has no Kling 4 (kwaivgi/kling-v4, kling-v4-video, kling-v4-omni-video: 404). The parity studio's pricing API (its public API, checked 2026-10-22) has no Kling 4.0 either, although parity-delta-4.md reports Kling 4.0 in the parity studio's web app since 2026-10-21. So no API route reaches Kling 4.0 yet. Update 2026-11-01 (nm10-kling-4): all four fal endpoints are live (catalog status active, llms.txt with no 'coming soon') and Replicate now lists the official kwaivgi/kling-v4.0 (version f4dc4504, 2026-10-26).",
   "No general transcode, FPS change, speed, loop, fade, crop or zoompan endpoint: fal-ai/ffmpeg-api/{transcode, convert, loop-audio, loop, extend-audio, concat-audio, concat-audios, mix-audios, mix-audio, slideshow, zoompan, ken-burns, image-to-video, overlay, speed, change-speed, fps, change-fps, gif, compress, trim-audio} and fal-ai/workflow-utilities/{transcode, convert-video, change-fps, fps, speed-video, change-speed, loop-video, loop-audio, concat-audio, mix-audio, trim-audio, ken-burns, zoompan, crop-video, pad-video, fade, crossfade} have no OpenAPI. The Ken Burns piece exists as the unlisted fal-ai/workflow-utilities/image-to-video. Replicate's community utilities (fofr/toolkit, nicolascoutureau/video-utils) convert only to mp4 or GIF.",
   "ProRes output exists only as an option of other jobs: topaz/sdr-to-hdr/video (ProRes 422 HQ, HDR) and Bria's video endpoints (mov_proresks: eraser, background removal, increase-resolution). A plain SDR ProRes or EXR export needs a local ffmpeg step.",
   "Topaz frame interpolation and SDR-to-HDR are fal-only (replicate topazlabs/video-interpolate and topazlabs/sdr-to-hdr: 404). Replicate's topazlabs/video-upscale has only video, target_resolution and target_fps (15-60).",
   "No hosted PaddleOCR, Qwen-VL OCR, Surya, DeepSeek-OCR, dots.ocr or Mistral OCR on fal (fal-ai/paddleocr, paddle-ocr, ppocr, qwen-vl, qwen3-vl, qwen-2.5-vl, surya-ocr, deepseek-ocr, dots-ocr, mistral-ocr: no OpenAPI). Florence-2 OCR with region is the only fal endpoint that returns text and boxes in one call; Replicate has community ports (easyocr, pp-ocr-v4, florence-2-large, deepseek-ocr, qwen3-vl) billed by GPU time and datalab-to/ocr (official).",
   "No World Labs Marble, Apple SHARP, Stable Virtual Camera or HunyuanWorld-Play on fal (fal-ai/marble, fal-ai/world-labs/marble, worldlabs/marble, fal-ai/sharp, fal-ai/apple-sharp, fal-ai/seva, fal-ai/stable-virtual-camera, fal-ai/hunyuan-worldplay: no OpenAPI). Marble is reachable only through World Labs' own API (separate key and credits; Fuobe has no worldlabs provider). SHARP is on Replicate as a community port with research-only weights.",
   "fal's 'worlds' category (alibaba/abot-world-0, robbyant/lingbot-world-2, minimax/h3-max/director, minimax/h3-max/reference-director; 2026-09-03 to 2026-10-16) is realtime WebRTC (fal.realtime.open), not queue jobs; the two director ids serve no queue OpenAPI. They do not fit Fuobe's queue runner.",
-  "Higgsfield's public API (pricing API, 32 families on 2026-10-22) gained one family since 2026-10-16: Genjutsu Light (motion-transfer and object-swap, released 2026-10-20). It still has no endpoint for Cinema Studio 3D scene / recomposition, Cinema Studio remove_object / swap_object, FPS Boost or the Hyperion upscale.",
-  "An OpenAI customer story (openai.com/index/higgsfield-longer-videos-voice, dated 2026-10-13 in search results) says Higgsfield uses 'GPT-6 Astra' for videos over ten minutes. It is not on fal, Replicate or Higgsfield's public API, and the page returned 403 to WebFetch: unverified.",
+  "The parity studio's public API (pricing API, 32 families on 2026-10-22) gained one family since 2026-10-16: Genjutsu Light (motion-transfer and object-swap, released 2026-10-20). It still has no endpoint for Cinema Studio 3D scene / recomposition, Cinema Studio remove_object / swap_object, FPS Boost or the Hyperion upscale.",
+  "An OpenAI customer story (openai.com/index/{studio}-longer-videos-voice, dated 2026-10-13 in search results) says the parity studio uses 'GPT-6 Astra' for videos over ten minutes. It is not on fal, Replicate or the parity studio's public API, and the page returned 403 to WebFetch: unverified.",
   "Pre-release ids: fal serves OpenAPI documents for pixverse/v6-max/{text,image}-to-video and fal-ai/pixverse/v6-max/{text,image}-to-video with no catalog entry, category 'unknown' and a $0 placeholder price. Use Replicate pixverse/pixverse-v6-max until fal lists it.",
   "Prices that cannot be checked without a key: '$0 per compute second' on fal-ai/workflow-utilities/{image-to-video, overlay-image, overlay-video, video-to-gif}, fal-ai/amt-interpolation(/frame-interpolation), fal-ai/ffmpeg-api/{images-to-video, waveform} and fal-ai/florence-2-large/*; '$0.02 per unit' on fal-ai/sam-3/3d-* (unit undefined); GPU-time billing on every Replicate community model.",
   "Schema drift found by re-fetching 58 endpoints from parts 1-3: topaz/upscale/video/{precision,generative,creative} and fal-ai/topaz/upscale/video gained enable_safety_checker; blackforestlabs/flux-3/klein/{text-to-image,edit-image} gained sync_mode. Nothing was removed or renamed. (Kling O3 shot_type is a JSON-schema const 'customize': part 1 recorded it as a string, part 4 as a one-value enum; not a change.)",
@@ -269,7 +269,7 @@
   "endpoints": 114,
   "fal": 89,
   "replicate": 22,
-  "higgsfield": 2,
+  "parity": 2,
   "worldlabs": 1,
   "reverified": 14,
   "new": 100
@@ -2668,9 +2668,7 @@
      "maxItems": 10,
      "required": false,
      "desc": "Reference images, referenced as @Image1, @Image2, ...",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "video_urls": {
      "nullable": true,
@@ -2679,9 +2677,7 @@
      "maxItems": 4,
      "required": false,
      "desc": "Reference videos, referenced as @Video2, @Video3, ... (max 4). The source, reference and element videos must total at most 30s.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "elements": {
      "nullable": true,
@@ -2718,9 +2714,7 @@
      "maxItems": 7,
      "required": false,
      "desc": "Characters/objects, referenced as @Element1, @Element2, ... (max 7). Up to 3 elements may carry a voice_id and up to 3 may be video elements.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "voice_ids": {
      "nullable": true,
@@ -2729,9 +2723,7 @@
      "maxItems": 3,
      "required": false,
      "desc": "Voices referenced in the prompt as @Voice1, @Voice2, ... (max 3, including voices bound to elements). Create one with https://fal.ai/models/fal-ai/kling-video/create-voice",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "duration": {
      "nullable": true,
@@ -2740,9 +2732,7 @@
      "minimum": 3,
      "maximum": 30,
      "desc": "Output duration in seconds (3-30). Defaults to the source video's length.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "resolution": {
      "type": "enum",
@@ -2879,9 +2869,7 @@
      "minItems": 1,
      "required": false,
      "desc": "Per-shot prompts for multi-shot generation. The video duration is the sum of the shot durations.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "duration": {
      "type": "integer",
@@ -2904,9 +2892,7 @@
      "maxItems": 8,
      "required": false,
      "desc": "Optional ordered keyframes between the first and last frames (max 8). Count toward the image reference limit.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "end_image_url": {
      "nullable": true,
@@ -2921,9 +2907,7 @@
      "maxItems": 10,
      "required": false,
      "desc": "Reference images, referenced as @Image1, @Image2, ... (max 10).",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "video_urls": {
      "nullable": true,
@@ -2932,9 +2916,7 @@
      "maxItems": 5,
      "required": false,
      "desc": "Reference videos (3-30s each, 30s combined with element videos), referenced as @Video1, @Video2, ... (max 5).",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "elements": {
      "nullable": true,
@@ -2971,9 +2953,7 @@
      "maxItems": 7,
      "required": false,
      "desc": "Characters/objects, referenced as @Element1, @Element2, ... (max 7). Up to 3 elements may carry a voice_id and up to 3 may be video elements.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "voice_ids": {
      "nullable": true,
@@ -2982,9 +2962,7 @@
      "maxItems": 3,
      "required": false,
      "desc": "Voices referenced in the prompt as @Voice1, @Voice2, ... (max 3, including voices bound to elements). Create one with https://fal.ai/models/fal-ai/kling-video/create-voice",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "resolution": {
      "type": "enum",
@@ -4149,7 +4127,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Image endpoint: replace one object in a still from a plain-language instruction. Use it for the first frame in a Higgsfield-style swap (edit the first frame, then propagate it with a video model that takes a start or keyframe image, e.g. Luma Ray 3.2 video-to-video or Runway Aleph 2 keyframes). Returns image, images[] and the structured instruction it used.",
+   "notes": "Image endpoint: replace one object in a still from a plain-language instruction. Use it for the first frame in a parity-studio-style swap (edit the first frame, then propagate it with a video model that takes a start or keyframe image, e.g. Luma Ray 3.2 video-to-video or Runway Aleph 2 keyframes). Returns image, images[] and the structured instruction it used.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/bria/fibo-edit/replace_object_by_text/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=bria/fibo-edit/replace_object_by_text",
@@ -4277,7 +4255,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "FPS boost and slow motion with Topaz Apollo (general), Chronos (real-world motion) or Aion (extreme motion). target_fps 16-120 (default 60). slowdown_factor 1-8 stretches the clip (2 = twice as long at target_fps). Output is H.265 unless H264_output is true. A 10 s 30->60 fps job: Apollo/Chronos $0.30 at 1080p, $0.60 at 4K; Aion $0.50 / $1.70. Slow motion bills the whole output duration. Higgsfield's Upscale lists 'FPS Boost' to 24/30/60/90/120.",
+   "notes": "FPS boost and slow motion with Topaz Apollo (general), Chronos (real-world motion) or Aion (extreme motion). target_fps 16-120 (default 60). slowdown_factor 1-8 stretches the clip (2 = twice as long at target_fps). Output is H.265 unless H264_output is true. A 10 s 30->60 fps job: Apollo/Chronos $0.30 at 1080p, $0.60 at 4K; Aion $0.50 / $1.70. Slow motion bills the whole output duration. The parity studio's Upscale lists 'FPS Boost' to 24/30/60/90/120.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/topaz/interpolate/video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=topaz/interpolate/video",
@@ -4379,7 +4357,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Hyperion 2.5, the model Higgsfield's Upscale lists under Topaz Video. output_format mp4 = 10-bit H.265 HDR10; prores = 10-bit ProRes 422 HQ in a .mov (Topaz's recommended grading format, much larger files). Same price for both: 10 s costs $2.40 up to 1080p or $5.10 at 4K (30 fps); one minute $13.90 / $30.60. No other inputs.",
+   "notes": "Hyperion 2.5, the model the parity studio's Upscale lists under Topaz Video. output_format mp4 = 10-bit H.265 HDR10; prores = 10-bit ProRes 422 HQ in a .mov (Topaz's recommended grading format, much larger files). Same price for both: 10 s costs $2.40 up to 1080p or $5.10 at 4K (30 fps); one minute $13.90 / $30.60. No other inputs.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/topaz/sdr-to-hdr/video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=topaz/sdr-to-hdr/video",
@@ -12314,9 +12292,7 @@
      "maxItems": 2,
      "desc": "Exactly two distinct speaker aliases and their prebuilt voices for dialogue.",
      "nullable": true,
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "turns": {
      "type": "array",
@@ -12346,9 +12322,7 @@
      "minItems": 1,
      "desc": "Ordered dialogue turns, each identifying a configured speaker.",
      "nullable": true,
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "enable_safety_checker": {
      "type": "boolean",
@@ -12545,9 +12519,7 @@
      "maxItems": 2,
      "desc": "Exactly two distinct speaker aliases and their prebuilt voices for dialogue.",
      "nullable": true,
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "turns": {
      "type": "array",
@@ -12577,9 +12549,7 @@
      "minItems": 1,
      "desc": "Ordered dialogue turns, each identifying a configured speaker.",
      "nullable": true,
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "enable_safety_checker": {
      "type": "boolean",
@@ -14625,7 +14595,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Grok Imagine Video 1.5 is in Higgsfield's lineup (pricing API slug xai/grok-imagine-video/v1.5/reference-to-video); Fuobe reaches it only through a Higgsfield key today. This fal route fills that gap. Released on fal before 2026-09-15, recorded here because no earlier part has it. The price sentence ('480p at $0.08/sec') does not match parse_price, so give the model an explicit pricing tuple. 1-15 s, 480p/720p/1080p at $0.08/$0.14/$0.25 per second.",
+   "notes": "Grok Imagine Video 1.5 is in the parity studio's lineup (pricing API slug xai/grok-imagine-video/v1.5/reference-to-video); Fuobe reaches it only through a parity-studio key today. This fal route fills that gap. Released on fal before 2026-09-15, recorded here because no earlier part has it. The price sentence ('480p at $0.08/sec') does not match parse_price, so give the model an explicit pricing tuple. 1-15 s, 480p/720p/1080p at $0.08/$0.14/$0.25 per second.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/xai/grok-imagine-video/v1.5/text-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=xai/grok-imagine-video/v1.5/text-to-video",
@@ -14780,7 +14750,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Grok Imagine Video 1.5 is in Higgsfield's lineup (pricing API slug xai/grok-imagine-video/v1.5/reference-to-video); Fuobe reaches it only through a Higgsfield key today. This fal route fills that gap. Released on fal before 2026-09-15, recorded here because no earlier part has it. The price sentence ('480p at $0.08/sec') does not match parse_price, so give the model an explicit pricing tuple. $0.08/$0.14/$0.25 per second plus $0.01 per input image.",
+   "notes": "Grok Imagine Video 1.5 is in the parity studio's lineup (pricing API slug xai/grok-imagine-video/v1.5/reference-to-video); Fuobe reaches it only through a parity-studio key today. This fal route fills that gap. Released on fal before 2026-09-15, recorded here because no earlier part has it. The price sentence ('480p at $0.08/sec') does not match parse_price, so give the model an explicit pricing tuple. $0.08/$0.14/$0.25 per second plus $0.01 per input image.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/xai/grok-imagine-video/v1.5/image-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=xai/grok-imagine-video/v1.5/image-to-video",
@@ -14956,7 +14926,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Grok Imagine Video 1.5 is in Higgsfield's lineup (pricing API slug xai/grok-imagine-video/v1.5/reference-to-video); Fuobe reaches it only through a Higgsfield key today. This fal route fills that gap. Released on fal before 2026-09-15, recorded here because no earlier part has it. The price sentence ('480p at $0.08/sec') does not match parse_price, so give the model an explicit pricing tuple. 1-7 reference images, 480p/720p only, $0.08/$0.14 per second + $0.01 per image.",
+   "notes": "Grok Imagine Video 1.5 is in the parity studio's lineup (pricing API slug xai/grok-imagine-video/v1.5/reference-to-video); Fuobe reaches it only through a parity-studio key today. This fal route fills that gap. Released on fal before 2026-09-15, recorded here because no earlier part has it. The price sentence ('480p at $0.08/sec') does not match parse_price, so give the model an explicit pricing tuple. 1-7 reference images, 480p/720p only, $0.08/$0.14 per second + $0.01 per image.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/xai/grok-imagine-video/v1.5/reference-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=xai/grok-imagine-video/v1.5/reference-to-video",
@@ -15119,7 +15089,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "New 2026-10-01 (Higgsfield's lineup names 'Grok Imagine Video 1.5 Lite'). 1-15 s; $0.02 (480p), $0.03 (720p), $0.14 (1080p) per second: one of the cheapest 720p video models.",
+   "notes": "New 2026-10-01 (the parity studio's lineup names 'Grok Imagine Video 1.5 Lite'). 1-15 s; $0.02 (480p), $0.03 (720p), $0.14 (1080p) per second: one of the cheapest 720p video models.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/xai/grok-imagine-video/v1.5/lite/text-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=xai/grok-imagine-video/v1.5/lite/text-to-video",
@@ -15459,7 +15429,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Grok Imagine Image 2.0 is in Higgsfield's lineup (xai/grok-imagine-image-2.0); Fuobe reaches it only through a Higgsfield key today. This fal route fills that gap. 1k|2k, quality low|medium: $0.04/$0.06 at 1K, $0.06/$0.08 at 2K.",
+   "notes": "Grok Imagine Image 2.0 is in the parity studio's lineup (xai/grok-imagine-image-2.0); Fuobe reaches it only through a parity-studio key today. This fal route fills that gap. 1k|2k, quality low|medium: $0.04/$0.06 at 1K, $0.06/$0.08 at 2K.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/xai/grok-imagine-image/v2.0/text-to-image/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=xai/grok-imagine-image/v2.0/text-to-image",
@@ -15657,7 +15627,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Grok Imagine Image 2.0 is in Higgsfield's lineup (xai/grok-imagine-image-2.0); Fuobe reaches it only through a Higgsfield key today. This fal route fills that gap. Same prices + $0.01 per input image.",
+   "notes": "Grok Imagine Image 2.0 is in the parity studio's lineup (xai/grok-imagine-image-2.0); Fuobe reaches it only through a parity-studio key today. This fal route fills that gap. Same prices + $0.01 per input image.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/xai/grok-imagine-image/v2.0/edit/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=xai/grok-imagine-image/v2.0/edit",
@@ -16490,9 +16460,7 @@
      "minItems": 1,
      "required": false,
      "desc": "Per-shot prompts for multi-shot generation. The video duration is the sum of the shot durations.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "duration": {
      "type": "integer",
@@ -16636,9 +16604,7 @@
      "maxItems": 8,
      "required": false,
      "desc": "Ordered keyframes between the first and last frames (max 8).",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "end_image_url": {
      "nullable": true,
@@ -16676,9 +16642,7 @@
      "minItems": 1,
      "required": false,
      "desc": "Per-shot prompts for multi-shot generation. The video duration is the sum of the shot durations.",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "duration": {
      "type": "integer",
@@ -19420,10 +19384,10 @@
    "family": "genjutsu",
    "model": "Genjutsu Light Object Swap",
    "title": "Genjutsu Light · Object Swap",
-   "vendor": "Higgsfield",
+   "vendor": "The parity studio",
    "operation": "swap-video",
-   "provider": "higgsfield",
-   "endpoint": "higgsfield/genjutsu-light/object-swap/v1.0",
+   "provider": "{studio}",
+   "endpoint": "{studio}/genjutsu-light/object-swap/v1.0",
    "falCategory": null,
    "status": "active",
    "inputs": {
@@ -19498,21 +19462,21 @@
    },
    "replicateEquivalent": null,
    "license": "commercial (vendor terms)",
-   "notes": "New on Higgsfield's public API (pricing API released_on 2026-10-20). Higgsfield's own object swap: replaces objects, characters or clothes with 1-8 reference images, keeps the source audio. Same inputs as Genjutsu Object Swap (higgsfield-api.json) but uses only the first 15 s of the source (Genjutsu: 30 s) and costs $0.05/$0.10/$0.20 per second at 480p/720p/1080p (Genjutsu: $0.318/$0.681/$1.632); the pricing API shows 50% off ($0.025/s from). duration is read-only (from the source, 4-15 s). Not in higgsfield-api.json yet: gen-higgsfield-models.py reads that file, so this record is the source to add it there.",
+   "notes": "New on the parity studio's public API (pricing API released_on 2026-10-20). The parity studio's own object swap: replaces objects, characters or clothes with 1-8 reference images, keeps the source audio. Same inputs as Genjutsu Object Swap (parity-api.json) but uses only the first 15 s of the source (Genjutsu: 30 s) and costs $0.05/$0.10/$0.20 per second at 480p/720p/1080p (Genjutsu: $0.318/$0.681/$1.632); the pricing API shows 50% off ($0.025/s from). duration is read-only (from the source, 4-15 s). Not in parity-api.json yet: gen-studio-models.py reads that file, so this record is the source to add it there.",
    "verified": true,
-   "sourceUrl": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/object-swap/v1.0/llms.txt",
-   "schemaUrl": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/object-swap/v1.0/llms.txt (Input JSON Schema)",
+   "sourceUrl": "{studio-dashboard}/models/{studio}/genjutsu-light/object-swap/v1.0/llms.txt",
+   "schemaUrl": "{studio-dashboard}/models/{studio}/genjutsu-light/object-swap/v1.0/llms.txt (Input JSON Schema)",
    "capability": "swap",
-   "apiUrl": "https://api.higgsfield.ai/higgsfield/genjutsu-light/object-swap/v1.0"
+   "apiUrl": "{studio-api}/{studio}/genjutsu-light/object-swap/v1.0"
   },
   {
    "family": "genjutsu",
    "model": "Genjutsu Light Motion Transfer",
    "title": "Genjutsu Light · Motion Transfer",
-   "vendor": "Higgsfield",
+   "vendor": "The parity studio",
    "operation": "motion-transfer",
-   "provider": "higgsfield",
-   "endpoint": "higgsfield/genjutsu-light/motion-transfer/v1.0",
+   "provider": "{studio}",
+   "endpoint": "{studio}/genjutsu-light/motion-transfer/v1.0",
    "falCategory": null,
    "status": "active",
    "inputs": {
@@ -19589,10 +19553,10 @@
    "license": "commercial (vendor terms)",
    "notes": "New 2026-10-20. Transfers the source video's motion onto reference characters and scenes (1-8 images); first 15 s of the source; keeps the source audio. A cheaper Genjutsu Motion Transfer for Katana and Motion Control.",
    "verified": true,
-   "sourceUrl": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/motion-transfer/v1.0/llms.txt",
-   "schemaUrl": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/motion-transfer/v1.0/llms.txt (Input JSON Schema)",
+   "sourceUrl": "{studio-dashboard}/models/{studio}/genjutsu-light/motion-transfer/v1.0/llms.txt",
+   "schemaUrl": "{studio-dashboard}/models/{studio}/genjutsu-light/motion-transfer/v1.0/llms.txt (Input JSON Schema)",
    "capability": "swap",
-   "apiUrl": "https://api.higgsfield.ai/higgsfield/genjutsu-light/motion-transfer/v1.0"
+   "apiUrl": "{studio-api}/{studio}/genjutsu-light/motion-transfer/v1.0"
   },
   {
    "family": "marble",
@@ -20691,7 +20655,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Added by the catalog-4 package on 2026-10-22 from the OpenAPI file and llms.txt (higgsfield-delta-4.md §2.3 / G15 names this route; part 4 had not recorded its schema). Auto-rigs a humanoid GLB (model_url) and returns rigged_character_glb / rigged_character_fbx plus basic walking and running animations; with enable_animation true, animation_action_id (0-696 in Meshy's library, default 92) adds animation_glb / animation_fbx. height_meters default 1.7. $0.20, +$0.12 with an animation. Catalog date 2026-05-19.",
+   "notes": "Added by the catalog-4 package on 2026-10-22 from the OpenAPI file and llms.txt (parity-delta-4.md §2.3 / G15 names this route; part 4 had not recorded its schema). Auto-rigs a humanoid GLB (model_url) and returns rigged_character_glb / rigged_character_fbx plus basic walking and running animations; with enable_animation true, animation_action_id (0-696 in Meshy's library, default 92) adds animation_glb / animation_fbx. height_meters default 1.7. $0.20, +$0.12 with an animation. Catalog date 2026-05-19.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/fal-ai/meshy/rigging/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/meshy/rigging",
@@ -21066,7 +21030,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Added by the catalog-4 package on 2026-10-22 from the OpenAPI file and llms.txt (higgsfield-delta-4.md §2.3 / G15 names this route; part 4 had not recorded its schema). Text to a textured GLB with the same quality switches as tripo3d/h3.1/image-to-3d (texture, pbr, texture_quality, geometry_quality, face_limit, quad). Returns model_mesh, model_urls {glb, fbx, base_model, pbr_model} and rendered_image. $0.10 / $0.20 / $0.30 (+$0.20 detailed geometry, +$0.05 quad). Catalog date 2026-04-07.",
+   "notes": "Added by the catalog-4 package on 2026-10-22 from the OpenAPI file and llms.txt (parity-delta-4.md §2.3 / G15 names this route; part 4 had not recorded its schema). Text to a textured GLB with the same quality switches as tripo3d/h3.1/image-to-3d (texture, pbr, texture_quality, geometry_quality, face_limit, quad). Returns model_mesh, model_urls {glb, fbx, base_model, pbr_model} and rendered_image. $0.10 / $0.20 / $0.30 (+$0.20 detailed geometry, +$0.05 quad). Catalog date 2026-04-07.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/tripo3d/h3.1/text-to-3d/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/h3.1/text-to-3d",
@@ -22179,7 +22143,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Added by the catalog-4 package on 2026-10-22 from the OpenAPI file and llms.txt (higgsfield-delta-4.md §2.3 / G15 names this route; part 4 had not recorded its schema). 1-4 photos of the same object from different angles (image_urls; more than 4 are cut to the first 4) -> a textured GLB with the image-to-3d record's options (topology, target_polycount, symmetry_mode, should_texture, enable_pbr, texture_prompt, optional rigging and animation). geometry_resolution standard|2k (no 4k for multi-image). Same price as single-image Meshy 7.1. Catalog date 2026-09-19.",
+   "notes": "Added by the catalog-4 package on 2026-10-22 from the OpenAPI file and llms.txt (parity-delta-4.md §2.3 / G15 names this route; part 4 had not recorded its schema). 1-4 photos of the same object from different angles (image_urls; more than 4 are cut to the first 4) -> a textured GLB with the image-to-3d record's options (topology, target_polycount, symmetry_mode, should_texture, enable_pbr, texture_prompt, optional rigging and animation). geometry_resolution standard|2k (no 4k for multi-image). Same price as single-image Meshy 7.1. Catalog date 2026-09-19.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/meshy/v7.1/multi-image-to-3d/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=meshy/v7.1/multi-image-to-3d",

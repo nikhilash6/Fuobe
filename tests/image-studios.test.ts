@@ -94,7 +94,7 @@ const said = (s: { request: GenerationRequest }) => withSignatureWords(s.request
 /** A look described in words after the user's prompt (how a model without Fuobe Soul's looks gets one). */
 const lookPrompt = (look: { name: string; description?: string }, prompt: string) => `${prompt}. ${styleWords(look)}`;
 /** Soul's 139 presets as the research recorded them (their ids are the old style ids). */
-const SOUL_RESEARCH = (JSON.parse(fs.readFileSync("docs/research/higgsfield-image-studios.json", "utf8")) as { soulPresets: { id: string; name: string; model: string; description: string }[] }).soulPresets.filter(
+const SOUL_RESEARCH = (JSON.parse(fs.readFileSync("docs/research/parity-image-studios.json", "utf8")) as { soulPresets: { id: string; name: string; model: string; description: string }[] }).soulPresets.filter(
   (p) => p.model === "soul-v1" || p.model === "soul-v2",
 );
 
@@ -333,7 +333,7 @@ describe("moodboards: routing per model", () => {
     expect(said(turbo)).toBe(lookPrompt(sunset, "a rooftop party"));
   });
 
-  it("curated sets are Fuobe's own looks: Fuobe ids and words, no Higgsfield description or preview", () => {
+  it("curated sets are Fuobe's own looks: Fuobe ids and words, no description or preview copied from the parity research", () => {
     const base = CURATED_SETS["soul-v2"];
     expect(base).toHaveLength(33);
     expect(base.every((c) => c.id.startsWith("v2-") && !c.preview)).toBe(true);
@@ -372,7 +372,7 @@ describe("moodboards: routing per model", () => {
     expect(r.notes.join()).toMatch(/Your image is used as style references too/);
   });
 
-  it("a board that isn't ready blocks with Higgsfield's copy; palette + moodboard combine", () => {
+  it("a board that isn't ready blocks with the researched copy; palette + moodboard combine", () => {
     expect(applySignature(req("nano-banana-pro"), { moodboard: { ...board, status: "running" } }, ctx).blocker).toBe("This moodboard is still training. Try again once it is ready.");
     const both = applySignature(req("oss-z-image-turbo"), { moodboard: board, palette: PAL }, ctx);
     // The moodboard moves it to the style model, which then gets the palette in words (not the palette model).
@@ -452,7 +452,7 @@ describe("Photodump packs and planning", () => {
   const maya: PhotoSubject = { kind: "element", handle: "Maya", name: "Maya", references: ["/api/files/uploads/m1.png", "/api/files/uploads/m2.png"], loras: [] };
   const selfie: PhotoSubject = { kind: "selfie", url: "/api/files/uploads/me.jpg" };
 
-  it("has exactly as many photo prompts as Higgsfield's packs have photos", () => {
+  it("has exactly as many photo prompts as the parity studio's packs have photos", () => {
     expect(PACKS).toHaveLength(14);
     for (const p of PACKS) {
       expect(p.shots, p.name).toHaveLength(p.count);
@@ -487,7 +487,7 @@ describe("Photodump packs and planning", () => {
     expect(cloud.requests[2].step).toEqual({ label: "Photo 3 of 9", index: 2, of: 9 });
     expect(cloud.requests.every((r) => r.params?.numOutputs === 1 && r.params.aspectRatio === "3:4" && r.feature === "photodump")).toBe(true);
 
-    // A trained Soul ID (build plan O3): Fuobe Soul with the character's LoRA on either engine; Higgsfield's is gone.
+    // A trained Soul ID (build plan O3): Fuobe Soul with the character's LoRA on either engine; the retired provider's is gone.
     const soulMaya: PhotoSubject = { ...maya, loras: [{ engine: "cloud", modelId: "fuobe-soul", family: "z-image-turbo", file: "fuobe/maya-a1.safetensors", url: "https://v3.fal.media/maya.safetensors", own: true, trigger: "mayfz" }] };
     for (const engine of ["cloud", "open"] as const) {
       const run = planPhotodump({ pack, subject: soulMaya, engine }, {});
@@ -661,7 +661,7 @@ describe("Fashion Factory", () => {
     expect(fashionOutfitRequest(t, "b", "g", "open", "oss-krea2-identity-edit").modelId).toBe("fuobe-tryon");
   });
 
-  it("walks the wizard with Higgsfield's validation messages", () => {
+  it("walks the wizard with the researched validation messages", () => {
     let s: FashionState = FASHION_START;
     expect(fashionBlocker(s)).toBe("Template required");
     expect(fashionReducer(s, { type: "next" })).toBe(s);
@@ -774,7 +774,7 @@ describe("drawn covers", () => {
 });
 
 describe("moodboard logic", () => {
-  it("uses Higgsfield's limits and copy", () => {
+  it("uses the researched limits and copy", () => {
     const five = Array.from({ length: 5 }, (_, i) => `i${i}`);
     expect(moodboardError({ name: "x", images: five.slice(0, 4) })).toBe("Upload at least 5 photos to continue.");
     expect(moodboardError({ name: "x", images: Array(81).fill("i") })).toBe("Maximum images per moodboard is 80");

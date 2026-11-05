@@ -1,10 +1,12 @@
-# Higgsfield image studios: Layers, Photodump, Fashion Factory, Moodboards, Soul HEX, Soul presets, Character Sheet, Soul Location
+# The studio's image studios: Layers, Photodump, Fashion Factory, Moodboards, Soul HEX, Soul presets, Character Sheet, Soul Location
 
-_As of 2026-10-17. Machine-readable twin: [`higgsfield-image-studios.json`](higgsfield-image-studios.json). Builds on [`higgsfield-inventory.md`](higgsfield-inventory.md) §2.1, §2.3, §6.1 and replaces the rows there marked "unknown"/"low"._
+_In this file, "the studio" means the closed AI image and video studio that this research measures Fuobe against._
 
-> **Method.** Same approach as the inventory, pushed further. (1) Crawled the **whole production bundle graph** of the TanStack SPA (8,020 chunks from `assets.higgsfield.ai/tanstack/assets/`), so the lazily loaded editor screens (Layers, HEX panel, Photodump and Fashion Factory flows, Character Sheet) are covered, not just the SSR'd ones. (2) Pulled the **complete English UI catalog** `/_i18n/en.dd219392ea.json` (36,878 strings; the per-route catalogs miss strings that live in lazy chunks) plus all 266 route catalogs listed in `/_i18n/routes/index.en.json`, and resolved every message id a screen uses. (3) Called the **public, unauthenticated JSON endpoints the app itself uses** (`fnf-api-gw.higgsfield.ai/fnf/*`, `cms.higgsfield.ai/*`), which return the real preset, pack, template and palette lists with ids and exact hex values. (4) SSR of the 100 `/soul/<id>` preset pages, the Help Center, blog posts, and third-party searches. (5) For Fuobe's routes: Hugging Face, the official ComfyUI `workflow_templates` repo and fal OpenAPI.
+_As of 2026-10-17. Machine-readable twin: [`parity-image-studios.json`](parity-image-studios.json). Builds on [`parity-inventory.md`](parity-inventory.md) §2.1, §2.3, §6.1 and replaces the rows there marked "unknown"/"low"._
+
+> **Method.** Same approach as the inventory, pushed further. (1) Crawled the **whole production bundle graph** of the TanStack SPA (8,020 chunks from `{studio-assets}/tanstack/assets/`), so the lazily loaded editor screens (Layers, HEX panel, Photodump and Fashion Factory flows, Character Sheet) are covered, not just the SSR'd ones. (2) Pulled the **complete English UI catalog** `/_i18n/en.dd219392ea.json` (36,878 strings; the per-route catalogs miss strings that live in lazy chunks) plus all 266 route catalogs listed in `/_i18n/routes/index.en.json`, and resolved every message id a screen uses. (3) Called the **public, unauthenticated JSON endpoints the app itself uses** (`{studio-api}/fnf/*`, `{studio-cms}/*`), which return the real preset, pack, template and palette lists with ids and exact hex values. (4) SSR of the 100 `/soul/<id>` preset pages, the Help Center, blog posts, and third-party searches. (5) For Fuobe's routes: Hugging Face, the official ComfyUI `workflow_templates` repo and fal OpenAPI.
 >
-> **Confidence.** Copy, option lists, limits, defaults, step order, request fields and credit formulas below are **exact** (read from code or API responses). Spatial layout (left/right/top) is **(inferred)** from component structure. One-line descriptions that Higgsfield does not publish are written by us and flagged `inferred` in the JSON (`descriptionSource`). Logged-in screens were not observed directly.
+> **Confidence.** Copy, option lists, limits, defaults, step order, request fields and credit formulas below are **exact** (read from code or API responses). Spatial layout (left/right/top) is **(inferred)** from component structure. One-line descriptions that studio does not publish are written by us and flagged `inferred` in the JSON (`descriptionSource`). Logged-in screens were not observed directly.
 
 **What changed vs. the inventory (headline findings)**
 
@@ -22,7 +24,7 @@ _As of 2026-10-17. Machine-readable twin: [`higgsfield-image-studios.json`](higg
 ## 1. Layers (`/layers`, `/layers/$projectId[/$versionId]`)
 
 ### 1.1 What it is
-"Turn flat images into editable layers. Separate, edit, and rebuild any image. Every element, now yours to edit." A project = one source image + a layer document (nodes with `type: image`, `layerIndex`, `name`, `geometry {x, y, width, height, rotation}`, a `source`, optional mask) + versions. Landing (`/higgsfield-layers`): "Turn any flat image into editable layers - move, retype, relight, upscale", feature cards Layer Separation, Edit text, Regional edit; toolkit Draw to Edit, Remove Background, Upscale, Relight, Skin enhancer; FAQ "Layer Separation and AI region edits are available on paid plans and use credits", JPG/PNG/WebP up to 4K.
+"Turn flat images into editable layers. Separate, edit, and rebuild any image. Every element, now yours to edit." A project = one source image + a layer document (nodes with `type: image`, `layerIndex`, `name`, `geometry {x, y, width, height, rotation}`, a `source`, optional mask) + versions. Landing (`/{studio}-layers`): "Turn any flat image into editable layers - move, retype, relight, upscale", feature cards Layer Separation, Edit text, Regional edit; toolkit Draw to Edit, Remove Background, Upscale, Relight, Skin enhancer; FAQ "Layer Separation and AI region edits are available on paid plans and use credits", JPG/PNG/WebP up to 4K.
 
 ### 1.2 Projects screen (`/layers`)
 | region | content |
@@ -161,8 +163,8 @@ Steps: (hidden first-run **Preview**, remembered) → **Select preset** (pack gr
 | Photodump Studio (legacy, Soul v1) | 26 | legacy | One fixed 26-shot set of trend styles for a trained Soul v1 character (Sep 2025) |
 
 ### 2.5 Routes for Fuobe
-* **Cloud:** Higgsfield Soul 2.0 (`soul/v2/standard`, `custom_reference_id` = the element's Soul ID) running one job per pack style; or Nano Banana Pro / Seedream 5 with the character reference (no training, Instadump-style).
-* **Open:** the element's AI-Toolkit **Z-Image Turbo LoRA** (exists) or zero-shot identity with **Qwen-Image-Edit-2511** multi-reference (`qwen-image-edit-2511-multi`, exists); a pack = N style prompts run as a batch (chained jobs already exist). Pack prompts are ours to write (Higgsfield's styles are opaque ids).
+* **Cloud:** Soul 2.0 (`soul/v2/standard`, `custom_reference_id` = the element's Soul ID) running one job per pack style; or Nano Banana Pro / Seedream 5 with the character reference (no training, Instadump-style).
+* **Open:** the element's AI-Toolkit **Z-Image Turbo LoRA** (exists) or zero-shot identity with **Qwen-Image-Edit-2511** multi-reference (`qwen-image-edit-2511-multi`, exists); a pack = N style prompts run as a batch (chained jobs already exist). Pack prompts are ours to write (the studio's styles are opaque ids).
 
 ---
 
@@ -251,7 +253,7 @@ Manage: share link ("Shared by {author}", recipients get "Moodboard added"; "Thi
 | uncategorised (newer) | Warm contrast film | Warm, high-contrast film |
 | uncategorised (newer) | Warm vivid film | Saturated warm film stock |
 
-**Routes for Fuobe.** Cloud: Higgsfield Soul 2.0 `style_id` (curated ids above work as-is; personal moodboards need Higgsfield's training endpoint, which is not in the public API, so: fall back to multi-reference style prompting on Nano Banana Pro / Seedream 5, or **fal LoRA training** on Z-Image / FLUX). Open: **AI-Toolkit style LoRA** on Z-Image Turbo from the 5–80 images (training pipeline exists for characters; reuse it with a "style" preset and no face crop), or zero-shot style reference (USO / FLUX Redux are non-commercial FLUX.1-dev derivatives; Qwen-Image-Edit-2511 with the board images as refs is Apache). Moodboard = a Fuobe **style element** with images + optional trained LoRA.
+**Routes for Fuobe.** Cloud: Soul 2.0 `style_id` (curated ids above work as-is; personal moodboards need the studio's training endpoint, which is not in the public API, so: fall back to multi-reference style prompting on Nano Banana Pro / Seedream 5, or **fal LoRA training** on Z-Image / FLUX). Open: **AI-Toolkit style LoRA** on Z-Image Turbo from the 5–80 images (training pipeline exists for characters; reuse it with a "style" preset and no face crop), or zero-shot style reference (USO / FLUX Redux are non-commercial FLUX.1-dev derivatives; Qwen-Image-Edit-2511 with the board images as refs is Apache). Moodboard = a Fuobe **style element** with images + optional trained LoRA.
 
 ---
 
@@ -259,7 +261,7 @@ Manage: share link ("Shared by {author}", recipients get "Moodboard added"; "Thi
 
 "Soul Hex extracts colors from any image and turns them into your signature style." Available on Soul 2.0 and Soul Cinema. A saved palette is a **color signature**; the library (`/color-presets`) is shared with Cinema Studio 4.0's colour palettes.
 
-**Entry.** Generation-bar chip (tooltip "Color signature"; shows the selected signature's 16 px thumbnail + name, × to clear) opens the **Higgsfield Hex** panel (popover on desktop, drawer on mobile).
+**Entry.** Generation-bar chip (tooltip "Color signature"; shows the selected signature's 16 px thumbnail + name, × to clear) opens the **Hex** panel (popover on desktop, drawer on mobile).
 
 **Panel.** Banner "Control Your Colors with Soul Hex — Upload a reference image and let Soul HEX bring its colors in your own style" + **Upload & Create** (collapses on scroll to "Upload a reference image to create your color signature."). Empty state "Ready to Create Your Hex? — Saved hex cards will appear here. No hex yet — upload an image to begin." Grid of 16:9 cards: thumbnail with a 5 px colour strip along the bottom (pure stripes if no thumbnail), name, selected = brand ring + check, extracting = spinner with "Extracting colors from your images. You can use this palette once it's ready."; "…" Palette options → Delete (user palettes).
 
@@ -333,7 +335,7 @@ The palettes named in the Help Center and blog (Film colors, Lime Jam, Candy pin
 
 ## 6. Soul photo presets
 
-**Soul (v1)** — 106 presets, 100 with a public page (`/soul/<id>`). Categories from `/soul/preset-categories` (a preset can be in several; 41 are categorised, the rest only appear under "All presets"): **New, TikTok Core, Instagram Aesthetics, Camera Presets, Beauty, Mood, Surreal, Graphic Art**. The picker also shows **All** and, behind a feature flag (`access-image-style-category-dump`), **Dump**. The Help Center's older list ("General, TikTok Core, Instagram Aesthetics, Beauty, Mood, Camera Photo, Graphic Art") is out of date. Default preset `General` = `464ea177-8d40-4940-8d9d-b438bab269c7` (the same id the public API uses as `style_id`). Descriptions are Higgsfield's except the 35 marked _inferred_ (Higgsfield publishes none for them; most are the Sep 2025 "dump" batch).
+**Soul (v1)** — 106 presets, 100 with a public page (`/soul/<id>`). Categories from `/soul/preset-categories` (a preset can be in several; 41 are categorised, the rest only appear under "All presets"): **New, TikTok Core, Instagram Aesthetics, Camera Presets, Beauty, Mood, Surreal, Graphic Art**. The picker also shows **All** and, behind a feature flag (`access-image-style-category-dump`), **Dump**. The Help Center's older list ("General, TikTok Core, Instagram Aesthetics, Beauty, Mood, Camera Photo, Graphic Art") is out of date. Default preset `General` = `464ea177-8d40-4940-8d9d-b438bab269c7` (the same id the public API uses as `style_id`). Descriptions are the studio's except the 35 marked _inferred_ (the studio publishes none for them; most are the Sep 2025 "dump" batch).
 
 Category membership (from `/soul/preset-categories`):
 
@@ -463,7 +465,7 @@ All 106 presets in picker order (categories in brackets):
 
 **Composer settings (Soul 2.0).** Aspect 9:16, 3:4, 2:3, 1:1, 4:3, 16:9, 3:2 · Quality **1.5k** ("1.5k quality, fastest and cheapest", API value 720p) / **2K** ("2k quality, best visual fidelity", 1080p) · batch 1–4 · Enhance prompt · preset or moodboard · Soul ID · Soul HEX · reference image (disables the prompt). **0.125 credits per image** at either quality.
 
-**What Fuobe has / should add.** Fuobe fetches the Soul style lists live from Higgsfield (`src/server/providers/higgsfield.ts`, `soul-v1` / `soul-v2` sources), so the pickers are empty without a key, and it has no categories. Add the JSON list as a static fallback with categories, previews and descriptions; on the open engine use each preset's description as a prompt template on Z-Image Turbo / FLUX.1 Krea (prompt-only parity).
+**What Fuobe has / should add.** Fuobe fetches the Soul style lists live from the studio (`src/server/providers/{studio}.ts`, `soul-v1` / `soul-v2` sources), so the pickers are empty without a key, and it has no categories. Add the JSON list as a static fallback with categories, previews and descriptions; on the open engine use each preset's description as a prompt template on Z-Image Turbo / FLUX.1 Krea (prompt-only parity).
 
 ---
 
@@ -496,9 +498,9 @@ All 106 presets in picker order (categories in brackets):
 | `archetype` | Innocent, Everyman, Hero, Caregiver, Explorer, Rebel, Lover, Creator, Jester, Sage, Magician, Ruler |
 | `budget_millions` | 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200, 250, 300, 350, 400, 450, 500 |
 
-Public API equivalent already in Fuobe: `higgsfield/ai-influencer` character sheet ($0.05) as the AI Influencer app.
+Public API equivalent already in Fuobe: `{studio}/ai-influencer` character sheet ($0.05) as the AI Influencer app.
 
-**Routes for Fuobe.** Cloud: Higgsfield `ai-influencer` (exists) or Nano Banana Pro with a "character sheet: front, 3/4, profile, full body on white" prompt from the references. Open: Qwen-Image-Edit-2511 multi-reference with the same sheet prompt, or Z-Image Turbo from a Soul Cast-style structured prompt; result saved as an @element (the "Save as character" path exists).
+**Routes for Fuobe.** Cloud: the studio `ai-influencer` (exists) or Nano Banana Pro with a "character sheet: front, 3/4, profile, full body on white" prompt from the references. Open: Qwen-Image-Edit-2511 multi-reference with the same sheet prompt, or Z-Image Turbo from a Soul Cast-style structured prompt; result saved as an @element (the "Save as character" path exists).
 
 ---
 
@@ -516,7 +518,7 @@ Flow: **Create Location / New Location** → "Describe your location" (≤2,500 
 
 Order chosen by value per effort. Everything below is a recommendation only (no code was changed in this round of research). File names follow Fuobe's existing conventions.
 
-**0. Shared data (S).** Add a generator `scripts/gen-higgsfield-presets.py` that reads `higgsfield-image-studios.json` and writes `src/lib/catalog/higgsfield-presets.generated.ts`: Soul v1/v2 presets (id, name, category list, description, preview), the 50 palettes (name, slug, 12 colours, background), Fashion Factory templates and Photodump packs. Use it as the **fallback** in `higgsfieldPresets()` when there is no Higgsfield key, and give the style picker category tabs (All · New · TikTok Core · Instagram Aesthetics · Camera Presets · Beauty · Mood · Surreal · Graphic Art for Soul; All · Mood · Styles · Camera for Soul 2.0). The ids are Higgsfield's real `style_id`s, so the same list drives the cloud call and the open-engine prompt template (the description).
+**0. Shared data (S).** Add a generator `scripts/gen-studio-presets.py` that reads `parity-image-studios.json` and writes `src/lib/catalog/{studio}-presets.generated.ts`: Soul v1/v2 presets (id, name, category list, description, preview), the 50 palettes (name, slug, 12 colours, background), Fashion Factory templates and Photodump packs. Use it as the **fallback** in `parityPresets()` when there is no studio key, and give the style picker category tabs (All · New · TikTok Core · Instagram Aesthetics · Camera Presets · Beauty · Mood · Surreal · Graphic Art for Soul; All · Mood · Styles · Camera for Soul 2.0). The ids are the studio's real `style_id`s, so the same list drives the cloud call and the open-engine prompt template (the description).
 
 **1. Layers studio `/layers` (L–XL, highest value).**
 * Data: `layer_projects` (id, source asset, name, created) + `layer_versions` (doc JSON). Doc = `{width, height, nodes: [{id, name, layerIndex, geometry {x, y, width, height, rotation}, assetId, maskAssetId?, hidden}]}`; the composite and every layer stay ordinary assets in the library.
@@ -529,7 +531,7 @@ Order chosen by value per effort. Everything below is a recommendation only (no 
 
 **3. Moodboards (M).** A new element type `style` (5–80 images, ≥256 px, name ≤100) with the build flow in §4 (Recommended / Avoid guidance, statuses, share link later). Cloud: curated ids → Soul 2.0 `style_id`; personal → images as style references on Nano Banana Pro / Seedream 5, or fal LoRA training. Open: reuse the AI-Toolkit training path with a style preset (no face crop) to make a Z-Image Turbo LoRA, falling back to Qwen-Image-Edit-2511 multi-reference.
 
-**4. Photodump (M).** `/photodump`: Choose a Pack → pick a character element **or** upload one selfie (Instadump mode) → aspect ratio → Generate (a job per style, run as one batch; the chained-jobs runner exists) → results grid with Download All (zip), Animate, Edit. Packs are Fuobe prompt packs named and sized like Higgsfield's (§2.4), plus Create pack from ≤15 reference photos. Cloud: Soul 2.0 + Soul ID or Nano Banana Pro with the selfie; open: character LoRA on Z-Image Turbo or Qwen-Image-Edit-2511 with the selfie.
+**4. Photodump (M).** `/photodump`: Choose a Pack → pick a character element **or** upload one selfie (Instadump mode) → aspect ratio → Generate (a job per style, run as one batch; the chained-jobs runner exists) → results grid with Download All (zip), Animate, Edit. Packs are Fuobe prompt packs named and sized like the studio's (§2.4), plus Create pack from ≤15 reference photos. Cloud: Soul 2.0 + Soul ID or Nano Banana Pro with the selfie; open: character LoRA on Z-Image Turbo or Qwen-Image-Edit-2511 with the selfie.
 
 **5. Fashion Factory (M).** A five-step wizard (template → character → choose 1 of 4 base shots at 3:4 → upload outfit, Generate outfit, pick → photoset) with the six templates as prompt packs. Cloud: Soul 2.0 / Nano Banana Pro, then Nano Banana Pro edit (person + garment) or fal FASHN try-on, then a Nano Banana Pro batch. Open: Z-Image Turbo + character LoRA, Qwen-Image-Edit-2511 multi-image for the outfit and each shot.
 
@@ -540,62 +542,62 @@ Order chosen by value per effort. Everything below is a recommendation only (no 
 **Open questions for a GPU run:** Qwen-Image-Layered quality and VRAM at 1024 px with the fp8 weights (20.5 GB diffusion model + 7B text encoder); how Seedream's per-layer metadata (Replicate: "Each returned layer includes its stacking order, bounding box, name, and description") is shaped in the actual output, which Fuobe should map straight onto `layerIndex`, `geometry` and `name`; OCR quality on stylised poster text.
 
 ## Sources
-- https://higgsfield.ai/_i18n/en.dd219392ea.json — full English UI catalog (36,878 strings)
-- https://higgsfield.ai/_i18n/routes/index.en.json — route -> catalog index (308 routes)
-- https://higgsfield.ai/_i18n/routes/en/delta.3dcce34304.json — Layers editor route catalog (/_private/layers/$projectId)
-- https://higgsfield.ai/_i18n/routes/en/delta.87ff01a9a5.json — Layers projects list (/layers)
-- https://higgsfield.ai/_i18n/routes/en/delta.097ba0205f.json — Image route (/ai/image): Soul, HEX, Moodboard, Photodump, Fashion Factory modals
-- https://higgsfield.ai/_i18n/routes/en/delta.64b150fe20.json — Moodboard route (/moodboard)
-- https://higgsfield.ai/_i18n/routes/en/delta.8593b18fb1.json — Character sheet route (/character-sheet)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-ERgtR3BC6GQvWcKM.js — Layer Decomposition screen (settings, states, cost table)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-1KQA7feBk63lHN1Y.js — Edit text tool (detect -> replace -> generate)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-ILbXyNfOaxQwkfc7.js — Remove background tool
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-sqR16Ho_oz6tgoem.js — downloadLayerProjectZip (cropped/positioned zip)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-Oq-fTRNofPVKXPEJ.js — layer export bounds + file naming
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-ZXR16OLz11e1PB_2.js — Layers download menu (Cropped / Positioned / PNG, Copy JSON)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-eLK-oT8F2VNN_bGV.js — editor tool registry (image + video tools)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-rEkEuZWqVaPh1lXr.js — Layers panel (layer actions)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-0UrhtHZxNaHqx4P6.js — per-layer generate / revisions
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-SJty_4AtM6RZTyiT.js — Regional Editing (rectangle + merge)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-5dDDu8syfVfvelzc.js — Expand & Crop
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-XW6u_AGSsuJMbXNX.js — Layers landing + projects grid
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-RKOpfURlZ9ONJsxV.js — Soul HEX / color signature panel
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-8ozerfD9HHP8wqg_.js — palette helpers (random palettes, validation)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-zr_t1hwukVT3H0Zz.js — color-presets API client
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-LtqpfG6k0jv3xJ_C.js — Moodboard builder (MIN 5 / MAX 80)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-xvkSw2TO5vFeQXSp.js — Moodboard modal / sharing
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-4h419T1mmCQ022es.js — Image page modals: Photodump v2 steps, Fashion Factory
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-8IkO6Gt6P12Hjb4y.js — Fashion Factory flow (template -> character -> generation -> clothing -> photoset)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-8HyjZqw80lR39N6c.js — Fashion Factory outfit step
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-Br8cTodmLMFsJREW.js — Fashion Factory template grid
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js — Instadump (single-photo photodump) flow
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-eXmPENdTeOHFROId.js — legacy Photodump Studio (Soul v1, 26 shots)
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-cv-yEBKsDZ_tKbHw.js — Soul style picker + category tabs
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-fOdtGn0S5DhEKNKf.js — Soul 2.0 job + credit table
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-eyOFyQbqr0JSXe5k.js — Character Sheet ('Build Your AI Avatar')
-- https://assets.higgsfield.ai/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js — Soul Cast option lists
-- https://fnf-api-gw.higgsfield.ai/fnf/soul/presets — Soul v1 presets (106)
-- https://fnf-api-gw.higgsfield.ai/fnf/soul/preset-categories — Soul v1 categories (8)
-- https://fnf-api-gw.higgsfield.ai/fnf/soul-v2/presets — Soul 2.0 presets / curated moodboards (33)
-- https://fnf-api-gw.higgsfield.ai/fnf/soul-v2/preset-categories — Soul 2.0 categories Mood / Styles / Camera
-- https://cms.higgsfield.ai/soul-styles?lang=en&size=200 — Soul v1 presets with descriptions + publish dates
-- https://fnf-api-gw.higgsfield.ai/fnf/color-presets/with-presets?size=50 — 50 built-in palettes with exact hex (shared by Soul HEX and Cinema Studio 4.0)
-- https://fnf-api-gw.higgsfield.ai/fnf/photo-dump/packs?version=v2&size=20 — Soul 2.0 Photodump packs (9)
-- https://fnf-api-gw.higgsfield.ai/fnf/photo-dump/packs?size=20 — Instadump community packs (5)
-- https://cms.higgsfield.ai/fashion-factories?lang=en&size=50 — Fashion Factory templates (6)
-- https://higgsfield.ai/higgsfield-layers — Layers landing ('Powered by Seedream 5.0')
-- https://higgsfield.ai/soul — Soul preset pages index (100 /soul/<id> pages)
-- https://higgsfield.ai/character-sheet — Build Your AI Avatar
-- https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-soul-to-generate-images — Soul family, Moodboards, HEX, settings
-- https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-create-and-use-a-soul-id-character — Soul ID rules (20-80 photos)
-- https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-soul-cinema — Soul Cinema (HEX + Soul ID, no presets)
-- https://higgsfield.ai/blog/how-to-create-ai-photodump-higgsfield-soul — Soul 2.0 Photodump (Male Archive / Cool Girl Dump, 15 photos)
-- https://higgsfield.ai/blog/Higgsfield-Photodump-Studio-Your-Viral-Photoshoot — legacy Photodump Studio (26 shots, 25+ photos)
-- https://higgsfield.ai/blog/Create-Ai-Photoshoots-With-Instadump — Instadump (one photo, 20+ presets or own references)
-- https://higgsfield.ai/blog/create-custom-ai-moodboard-soul-2 — Moodboards (up to 80 refs, 20-30 recommended)
-- https://higgsfield.ai/blog/hex-codes-ai-image-generation-color-control-soul — Soul HEX (up to 20 photos)
-- https://higgsfield.ai/blog/ai-fashion-photo-generator — 21 curated Soul 2.0 presets, four brand anchors
-- https://higgsfield.ai/blog/consistent-characters-locations — characters + locations workflow
+- {studio-site}/_i18n/en.dd219392ea.json — full English UI catalog (36,878 strings)
+- {studio-site}/_i18n/routes/index.en.json — route -> catalog index (308 routes)
+- {studio-site}/_i18n/routes/en/delta.3dcce34304.json — Layers editor route catalog (/_private/layers/$projectId)
+- {studio-site}/_i18n/routes/en/delta.87ff01a9a5.json — Layers projects list (/layers)
+- {studio-site}/_i18n/routes/en/delta.097ba0205f.json — Image route (/ai/image): Soul, HEX, Moodboard, Photodump, Fashion Factory modals
+- {studio-site}/_i18n/routes/en/delta.64b150fe20.json — Moodboard route (/moodboard)
+- {studio-site}/_i18n/routes/en/delta.8593b18fb1.json — Character sheet route (/character-sheet)
+- {studio-assets}/tanstack/assets/868a8dba-ERgtR3BC6GQvWcKM.js — Layer Decomposition screen (settings, states, cost table)
+- {studio-assets}/tanstack/assets/868a8dba-1KQA7feBk63lHN1Y.js — Edit text tool (detect -> replace -> generate)
+- {studio-assets}/tanstack/assets/868a8dba-ILbXyNfOaxQwkfc7.js — Remove background tool
+- {studio-assets}/tanstack/assets/868a8dba-sqR16Ho_oz6tgoem.js — downloadLayerProjectZip (cropped/positioned zip)
+- {studio-assets}/tanstack/assets/868a8dba-Oq-fTRNofPVKXPEJ.js — layer export bounds + file naming
+- {studio-assets}/tanstack/assets/868a8dba-ZXR16OLz11e1PB_2.js — Layers download menu (Cropped / Positioned / PNG, Copy JSON)
+- {studio-assets}/tanstack/assets/868a8dba-eLK-oT8F2VNN_bGV.js — editor tool registry (image + video tools)
+- {studio-assets}/tanstack/assets/868a8dba-rEkEuZWqVaPh1lXr.js — Layers panel (layer actions)
+- {studio-assets}/tanstack/assets/868a8dba-0UrhtHZxNaHqx4P6.js — per-layer generate / revisions
+- {studio-assets}/tanstack/assets/868a8dba-SJty_4AtM6RZTyiT.js — Regional Editing (rectangle + merge)
+- {studio-assets}/tanstack/assets/868a8dba-5dDDu8syfVfvelzc.js — Expand & Crop
+- {studio-assets}/tanstack/assets/868a8dba-XW6u_AGSsuJMbXNX.js — Layers landing + projects grid
+- {studio-assets}/tanstack/assets/868a8dba-RKOpfURlZ9ONJsxV.js — Soul HEX / color signature panel
+- {studio-assets}/tanstack/assets/868a8dba-8ozerfD9HHP8wqg_.js — palette helpers (random palettes, validation)
+- {studio-assets}/tanstack/assets/868a8dba-zr_t1hwukVT3H0Zz.js — color-presets API client
+- {studio-assets}/tanstack/assets/868a8dba-LtqpfG6k0jv3xJ_C.js — Moodboard builder (MIN 5 / MAX 80)
+- {studio-assets}/tanstack/assets/868a8dba-xvkSw2TO5vFeQXSp.js — Moodboard modal / sharing
+- {studio-assets}/tanstack/assets/868a8dba-4h419T1mmCQ022es.js — Image page modals: Photodump v2 steps, Fashion Factory
+- {studio-assets}/tanstack/assets/868a8dba-8IkO6Gt6P12Hjb4y.js — Fashion Factory flow (template -> character -> generation -> clothing -> photoset)
+- {studio-assets}/tanstack/assets/868a8dba-8HyjZqw80lR39N6c.js — Fashion Factory outfit step
+- {studio-assets}/tanstack/assets/868a8dba-Br8cTodmLMFsJREW.js — Fashion Factory template grid
+- {studio-assets}/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js — Instadump (single-photo photodump) flow
+- {studio-assets}/tanstack/assets/868a8dba-eXmPENdTeOHFROId.js — legacy Photodump Studio (Soul v1, 26 shots)
+- {studio-assets}/tanstack/assets/868a8dba-cv-yEBKsDZ_tKbHw.js — Soul style picker + category tabs
+- {studio-assets}/tanstack/assets/868a8dba-fOdtGn0S5DhEKNKf.js — Soul 2.0 job + credit table
+- {studio-assets}/tanstack/assets/868a8dba-eyOFyQbqr0JSXe5k.js — Character Sheet ('Build Your AI Avatar')
+- {studio-assets}/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js — Soul Cast option lists
+- {studio-api}/fnf/soul/presets — Soul v1 presets (106)
+- {studio-api}/fnf/soul/preset-categories — Soul v1 categories (8)
+- {studio-api}/fnf/soul-v2/presets — Soul 2.0 presets / curated moodboards (33)
+- {studio-api}/fnf/soul-v2/preset-categories — Soul 2.0 categories Mood / Styles / Camera
+- {studio-cms}/soul-styles?lang=en&size=200 — Soul v1 presets with descriptions + publish dates
+- {studio-api}/fnf/color-presets/with-presets?size=50 — 50 built-in palettes with exact hex (shared by Soul HEX and Cinema Studio 4.0)
+- {studio-api}/fnf/photo-dump/packs?version=v2&size=20 — Soul 2.0 Photodump packs (9)
+- {studio-api}/fnf/photo-dump/packs?size=20 — Instadump community packs (5)
+- {studio-cms}/fashion-factories?lang=en&size=50 — Fashion Factory templates (6)
+- {studio-site}/{studio}-layers — Layers landing ('Powered by Seedream 5.0')
+- {studio-site}/soul — Soul preset pages index (100 /soul/<id> pages)
+- {studio-site}/character-sheet — Build Your AI Avatar
+- {studio-site}/creator-hub/help-center/ai-models/how-do-i-use-soul-to-generate-images — Soul family, Moodboards, HEX, settings
+- {studio-site}/creator-hub/help-center/ai-models/how-do-i-create-and-use-a-soul-id-character — Soul ID rules (20-80 photos)
+- {studio-site}/creator-hub/help-center/ai-models/how-do-i-use-soul-cinema — Soul Cinema (HEX + Soul ID, no presets)
+- {studio-site}/blog/how-to-create-ai-photodump-studio-soul — Soul 2.0 Photodump (Male Archive / Cool Girl Dump, 15 photos)
+- {studio-site}/blog/{studio}-Photodump-Studio-Your-Viral-Photoshoot — legacy Photodump Studio (26 shots, 25+ photos)
+- {studio-site}/blog/Create-Ai-Photoshoots-With-Instadump — Instadump (one photo, 20+ presets or own references)
+- {studio-site}/blog/create-custom-ai-moodboard-soul-2 — Moodboards (up to 80 refs, 20-30 recommended)
+- {studio-site}/blog/hex-codes-ai-image-generation-color-control-soul — Soul HEX (up to 20 photos)
+- {studio-site}/blog/ai-fashion-photo-generator — 21 curated Soul 2.0 presets, four brand anchors
+- {studio-site}/blog/consistent-characters-locations — characters + locations workflow
 - https://huggingface.co/Qwen/Qwen-Image-Layered — open layer decomposition model (Apache-2.0)
 - https://huggingface.co/Comfy-Org/Qwen-Image-Layered_ComfyUI — ComfyUI repack (bf16 40.9 GB / fp8mixed 20.5 GB + VAE)
 - https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_layered.json — official ComfyUI template

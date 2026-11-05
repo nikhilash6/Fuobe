@@ -1,12 +1,14 @@
-# Higgsfield studios: Cinema Studio 4.0, Shorts Studio, Mixed Media, Instadump
+# The studio's studios: Cinema Studio 4.0, Shorts Studio, Mixed Media, Instadump
 
-_As of 2026-10-17. Machine-readable twin: [`higgsfield-studios.json`](higgsfield-studios.json). This deepens §6.3 and §2.2 of [`higgsfield-inventory.md`](higgsfield-inventory.md)._
+_In this file, "the studio" means the closed AI image and video studio that this research measures Fuobe against._
+
+_As of 2026-10-17. Machine-readable twin: [`parity-studios.json`](parity-studios.json). This deepens §6.3 and §2.2 of [`parity-inventory.md`](parity-inventory.md)._
 
 **How this was researched.** Logged-in screens were not observed. The findings come from:
 
-1. Higgsfield's production JS (build `3c4a1afe`, 8,020 chunks crawled from `/generate`). The job schemas, validators, defaults and enums are read straight from code.
+1. The studio's production JS (build `3c4a1afe`, 8,020 chunks crawled from `/generate`). The job schemas, validators, defaults and enums are read straight from code.
 2. The i18n catalogs. Message ids were mapped to the chunks that use them, which gives the UI copy for each screen.
-3. Five preset and cost endpoints on `fnf.higgsfield.ai` that answer without a login: palettes, lighting, Shorts presets, Instadump packs, and credit costs per job type.
+3. Five preset and cost endpoints on `{studio-service}` that answer without a login: palettes, lighting, Shorts presets, Instadump packs, and credit costs per job type.
 4. The public API docs.
 5. The official blog, help center and changelog.
 
@@ -31,7 +33,7 @@ Statements reasoned from code or copy rather than seen in the app are marked *(i
 | Default version | 4.0. A selector at the top switches 2.0 → 2.5 → 3.0 → 3.5 → 4.0 (old versions kept on user request) |
 | Engine | Seedance 2.5 (help center). Other video models run inside the studio through a second "gen-panel" form ("Multi-Model Support … pick the engine per shot") |
 | Internal ids | video `cinematic-v4` → job `cinematic_studio_video_4_0` (route `v2/cinematic_studio_video_4_0`). Image: `cinematic-v1` (camera image + grid), `soul-cinematic` (Soul Cinema), `cinematic-studio-soul-cast`, `cinematic-studio-soul-location`, `cinematic-3-0-edit`. Image modes: generate / `character-creation` / `location-creation` / `edit` |
-| Public API equivalent | `POST /higgsfield/cinema-studio/4.0`. It uses slugs instead of CMS ids and caps resolution at 720p (already in Fuobe as `cinema-studio-4`) |
+| Public API equivalent | `POST /{studio}/cinema-studio/4.0`. It uses slugs instead of CMS ids and caps resolution at 720p (already in Fuobe as `cinema-studio-4`) |
 
 ### 1.2 Workspace (projects, folders, feed)
 
@@ -64,7 +66,7 @@ Statements reasoned from code or copy rather than seen in the app are marked *(i
 - Permissions: a per-role matrix with per-member overrides (*"An override always wins over the role default"*).
 - Access: Private ("Just you"), Shared with team, Anyone with the link.
 - Invites: by email (up to 10 at a time) or by invite link. Access requests are approved or declined.
-- Publishing to Community has four steps: **Details** (title, description, `higgsfield.ai/@user/projects/name`, co-authors, tags) → **Assets** (Feature / Series / Carousel) → **Cover** → **Access** (With prompts / Prompts hidden). A content check runs before publishing ("Project is in review").
+- Publishing to Community has four steps: **Details** (title, description, `{studio-site}/@user/projects/name`, co-authors, tags) → **Assets** (Feature / Series / Carousel) → **Cover** → **Access** (With prompts / Prompts hidden). A content check runs before publishing ("Project is in review").
 
 **Folders = scenes.**
 - Folders nest: *"Scenes, versions, deliverables. Keep a two-hundred-shot production navigable."*
@@ -188,7 +190,7 @@ Older presets, for reference. 3.5 had 9 "Camera MoveSet Styles": Classic Static,
 - Saving: "Enter palette name → Save palette". The server auto-suggests names (`/color-presets/name`). Logged-out users keep palettes locally.
 - Request field: `color_palette {type: preset|user, id}`.
 
-**The 50 Cinema Studio 4.0 palettes**, from `GET https://fnf.higgsfield.ai/color-presets/with-presets` (public). Each has 12 colours plus a background colour, which equals the 12th colour. The preview image URLs are in the JSON.
+**The 50 Cinema Studio 4.0 palettes**, from `GET {studio-service}/color-presets/with-presets` (public). Each has 12 colours plus a background colour, which equals the 12th colour. The preview image URLs are in the JSON.
 
 | # | Palette | API slug | 12 hex colours (dark → light, last = accent) | Background |
 |---|---|---|---|---|
@@ -247,13 +249,13 @@ Older presets, for reference. 3.5 had 9 "Camera MoveSet Styles": Classic Static,
 
 | Preset | API slug | Effect | Preview |
 |---|---|---|---|
-| Silhouette | `silhouette` | Backlights the subject into a dark outline against a bright background | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/436a4b98-59e2-42ef-bbfd-6afa9b2d086a.mp4) |
-| Practicals | `practicals` | Lights the scene only from visible in-frame sources (lamps, candles, signage) | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/430248d6-d196-4644-9acd-5bd971df502a.mp4) |
-| Window | `window` | Single directional daylight source through a window; architecture decides light and shadow | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/ae22f7b5-e044-4f96-bcd9-b87cc677a569.mp4) |
-| Overhead fall | `overhead-fall` | Soft source from above and behind: light on crown and shoulders, eyes in shadow | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/c8c80362-5f11-4bbc-88f9-61e4277c575a.mp4) |
-| Contre jour | `contre-jour` | Shooting into the light, like Silhouette but with more spill and flare | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/f55691e6-714c-4c83-b51f-f3b1eb920b27.mp4) |
-| Soft cross | `soft-cross` | Two soft sources crossing at an angle; half the face in light, smooth transition | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/9f754037-bd34-4ce2-8c4f-4489bc280c46.mp4) |
-| Auto | — (omit field) | Lets the model choose the lighting from scene context | [mp4](https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/72232455-c7bf-4613-ab29-b77e8ab47c56.mp4) |
+| Silhouette | `silhouette` | Backlights the subject into a dark outline against a bright background | mp4 |
+| Practicals | `practicals` | Lights the scene only from visible in-frame sources (lamps, candles, signage) | mp4 |
+| Window | `window` | Single directional daylight source through a window; architecture decides light and shadow | mp4 |
+| Overhead fall | `overhead-fall` | Soft source from above and behind: light on crown and shoulders, eyes in shadow | mp4 |
+| Contre jour | `contre-jour` | Shooting into the light, like Silhouette but with more spill and flare | mp4 |
+| Soft cross | `soft-cross` | Two soft sources crossing at an angle; half the face in light, smooth transition | mp4 |
+| Auto | — (omit field) | Lets the model choose the lighting from scene context | mp4 |
 
 **Custom rig.**
 - At most 2 lights ("Light 1", "Light 2").
@@ -349,10 +351,10 @@ Older presets, for reference. 3.5 had 9 "Camera MoveSet Styles": Classic Static,
 - Flow: generate variants → pick one → Save as a Location element → `@mention` it in shots.
 - The 2.x image generator refused to run without one: *"Location required — Add character and location for more consistent results"*.
 
-### 1.9 AI Director ("Mr. Higgs") and Project Brief
+### 1.9 AI Director ("{assistant-name}") and Project Brief
 
 **AI Director.**
-- The landing calls it the **Personal Assistant**: *"Ask Mr. Higgs to pick the camera, light the scene, write the prompt, or break a script into shots."* Introduced in 3.5 as "Claude Chat AI Director", it later became Supercomputer and kept the same agent stack.
+- The landing calls it the **Personal Assistant**: *"Ask {assistant-name} to pick the camera, light the scene, write the prompt, or break a script into shots."* Introduced in 3.5 as "Claude Chat AI Director", it later became Supercomputer and kept the same agent stack.
 - It lives in the Chat tab of the split view, with a "Project chats" list.
 - Input: *"Ask AI Director anything. Type / for skills, @ for elements"*. Attachments: "Add references", "Attach file", and "Get from prompt box".
 - Empty-state chips: *"Write a script"*, *"Generate an 8-shot storyboard for a sci-fi chase scene"*, *"Create a 15-second cinematic perfume commercial"*. Footer: *"LLMs can make mistakes and calls cost credits"*. Usage is shown as Text / Image / Video / Audio credits.
@@ -408,54 +410,54 @@ Examples: 5 s at 1080p = 80 credits, and 30 s at 1080p = 480 credits. Through th
 
 API: `POST /reels/generate {params:{resolution, aspect_ratio, lang?, preset_id, preset_source: cms|user, medias:[{role:'video', data:{id, type:'video_input'}}]}}`, plus `/reels/sessions/{id}` (`/stitch`, `/segments/{i}/primary`) and `POST /jobs/v2/reels_studio_clip`. The same engine is exposed as the Supercomputer "Shorts Maker" employee.
 
-**The 44 presets**, in the order `GET https://fnf.higgsfield.ai/reels/presets` returns them (public, names and preview videos only). Higgsfield publishes descriptions for 5 of them; the rest are visual-only.
+**The 44 presets**, in the order `GET {studio-service}/reels/presets` returns them (public, names and preview videos only). The studio publishes descriptions for 5 of them; the rest are visual-only.
 
 | # | Preset | Description | Preview |
 |---|---|---|---|
-| 1 | Bold Urban | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/4b4f39a7-042a-46a3-9e7c-acf9ea8cc70b.mp4) |
-| 2 | Green Contrast | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/c12a7632-017b-46a0-8b68-89fd818b5d66.mp4) |
-| 3 | Urban Serenity | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/13d9ab98-997e-4ed2-a92e-065f92efa434.mp4) |
-| 4 | Warm Glow | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/fe1700c9-e56f-46f5-bc94-ac4d08975cb1.mp4) |
-| 5 | Yellow Frame | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/ab167ed9-6a10-4514-8745-dcf52db87284.mp4) |
-| 6 | Monochrome Vibes | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/2d303c75-e17b-4210-b6af-6d3847c133ce.mp4) |
-| 7 | Claymation | Stop-motion clay animation with a handmade, tactile feel | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/b7af3fa7-167c-4ea7-b3da-69449062a43b.mp4) |
-| 8 | Marker Scribble | Hand-drawn marker doodles and loose scribbled overlays | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/4468670e-1bce-434a-bc71-8a74a6310f12.mp4) |
-| 9 | Sticker Type | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/110e4fe4-5739-412e-875f-463972862e47.mp4) |
-| 10 | Blue Comic | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/6fb6d834-ebbb-42c7-b792-3569dd3334d9.mp4) |
-| 11 | Red Graffiti | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/0c7cb036-ec9e-4ca4-9bd1-492e06892c9b.mp4) |
-| 12 | Watercolor | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/50ff8c85-97cd-449a-856e-2a03e2f7f563.mp4) |
-| 13 | Pencil Sketch | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/cda31448-32aa-4792-92dc-3ee603037f80.mp4) |
-| 14 | Desktop | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/fcf00b8f-0fd5-467f-9f57-24bc083f191b.mp4) |
-| 15 | Acid Green | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/fa382c69-dabf-4495-951d-92de7bf43dba.mp4) |
-| 16 | Balloon Type | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/89e02a08-af30-4753-9241-e2c35e3ad46e.mp4) |
-| 17 | Blueprint | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/7e863439-96e3-4eb5-83f1-58b6e86bfb53.mp4) |
-| 18 | Bold Caption | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/cf4f9927-0cd1-49bb-bfed-d13ef3825a11.mp4) |
-| 19 | Bounding Box | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/c4265d8e-a2cf-4e3b-8984-b35cec8166af.mp4) |
-| 20 | Circuit | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/2281f89a-066e-45ed-ac18-5d95fe08e44a.mp4) |
-| 21 | Comic Burst | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/a2826d45-5b27-487b-86df-7bad6a161061.mp4) |
-| 22 | Comic Pop | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/d6714a54-d1a4-45fe-964f-ea012e851bfd.mp4) |
-| 23 | Pink Wash | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/9d2dca52-9349-465a-b9db-ba41c3c0cff6.mp4) |
-| 24 | Gold Stars | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/7b115462-c29b-4e35-aa94-4c1343940cd0.mp4) |
-| 25 | Graffiti | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/57801423-33a0-4888-a3e0-c345ccc8806d.mp4) |
-| 26 | Green Doodle | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/89a98819-aa67-4ec8-9354-b4ebb0e5a37d.mp4) |
-| 27 | Green Pop | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/b1fc85fb-c98a-4339-913a-6648d7aa5a87.mp4) |
-| 28 | Heart Pop | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/6f709a9d-470c-4fe5-9a9e-205047c968ee.mp4) |
-| 29 | Kinetic Type | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/8949596a-6762-4599-ada9-0a841aba410b.mp4) |
-| 30 | Liquid Chrome | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/f944bfdd-96a0-4337-83cd-1a7cd19d6de5.mp4) |
-| 31 | Mascot | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/10b94098-f029-4a9d-903c-bcb6488bf024.mp4) |
-| 32 | Neon Pop | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/41455531-bb3a-4a60-8033-7bc1d1d6193c.mp4) |
-| 33 | Neon Type | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/0f4113e4-0e5f-4ace-b658-d2038ab2e567.mp4) |
-| 34 | Patterned | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/514b645e-f17d-4b3d-bec0-852483df7fbc.mp4) |
-| 35 | Pink Pop | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/1948e7d2-d764-4ed2-a41c-9371ef40b0d7.mp4) |
-| 36 | Pink Scribble | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/d111b325-182a-48db-ae9b-d85b44c3f2d1.mp4) |
-| 37 | Polka Pop | Playful polka dots and pop-art color blocking | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/8c0af29c-5234-42b2-9c3a-ebf6442fcc69.mp4) |
-| 38 | Retro Collage | Vintage cut-paper textures and grainy print colors | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/03e7d1b5-e02e-47be-b97d-bea1bfa65d07.mp4) |
-| 39 | Stacked Type | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/f1417caa-9014-4f81-9b71-ca5d2102f1f3.mp4) |
-| 40 | Star Comic | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/75336ae2-e934-4ef9-b532-9e91df3a5f5b.mp4) |
-| 41 | Street Art | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/6eaa3447-4df5-4c11-bacd-a3374df9fb50.mp4) |
-| 42 | Vintage Paper | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/c74a0ef1-3b2b-4ba0-8788-68a2ee3fbde8.mp4) |
-| 43 | Yellow Burst | Bold graphic bursts on a punchy yellow backdrop | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/8c41b28e-8763-4cb9-a025-68690bd714f8.mp4) |
-| 44 | Yellow Doodle | — | [mp4](https://cdn.higgsfield.ai/reels_preset_thumbnail/8d581399-4454-4c64-a1e7-63c547e2d1cd.mp4) |
+| 1 | Bold Urban | — | mp4 |
+| 2 | Green Contrast | — | mp4 |
+| 3 | Urban Serenity | — | mp4 |
+| 4 | Warm Glow | — | mp4 |
+| 5 | Yellow Frame | — | mp4 |
+| 6 | Monochrome Vibes | — | mp4 |
+| 7 | Claymation | Stop-motion clay animation with a handmade, tactile feel | mp4 |
+| 8 | Marker Scribble | Hand-drawn marker doodles and loose scribbled overlays | mp4 |
+| 9 | Sticker Type | — | mp4 |
+| 10 | Blue Comic | — | mp4 |
+| 11 | Red Graffiti | — | mp4 |
+| 12 | Watercolor | — | mp4 |
+| 13 | Pencil Sketch | — | mp4 |
+| 14 | Desktop | — | mp4 |
+| 15 | Acid Green | — | mp4 |
+| 16 | Balloon Type | — | mp4 |
+| 17 | Blueprint | — | mp4 |
+| 18 | Bold Caption | — | mp4 |
+| 19 | Bounding Box | — | mp4 |
+| 20 | Circuit | — | mp4 |
+| 21 | Comic Burst | — | mp4 |
+| 22 | Comic Pop | — | mp4 |
+| 23 | Pink Wash | — | mp4 |
+| 24 | Gold Stars | — | mp4 |
+| 25 | Graffiti | — | mp4 |
+| 26 | Green Doodle | — | mp4 |
+| 27 | Green Pop | — | mp4 |
+| 28 | Heart Pop | — | mp4 |
+| 29 | Kinetic Type | — | mp4 |
+| 30 | Liquid Chrome | — | mp4 |
+| 31 | Mascot | — | mp4 |
+| 32 | Neon Pop | — | mp4 |
+| 33 | Neon Type | — | mp4 |
+| 34 | Patterned | — | mp4 |
+| 35 | Pink Pop | — | mp4 |
+| 36 | Pink Scribble | — | mp4 |
+| 37 | Polka Pop | Playful polka dots and pop-art color blocking | mp4 |
+| 38 | Retro Collage | Vintage cut-paper textures and grainy print colors | mp4 |
+| 39 | Stacked Type | — | mp4 |
+| 40 | Star Comic | — | mp4 |
+| 41 | Street Art | — | mp4 |
+| 42 | Vintage Paper | — | mp4 |
+| 43 | Yellow Burst | Bold graphic bursts on a punchy yellow backdrop | mp4 |
+| 44 | Yellow Doodle | — | mp4 |
 
 ---
 
@@ -484,41 +486,41 @@ API: `POST /chains/mixed-media` (and `/chains/mixed-media-preview`) `{params:{pr
 
 **The 33 presets** (sitemap plus each page's SSR description; the app's i18n name map lists the same 33). Marketing says "40+".
 
-| # | Preset | Description (Higgsfield copy) | Page |
+| # | Preset | Description (the studio's copy) | Page |
 |---|---|---|---|
-| 1 | Layer mixed media | Stacked mixed-media composition | [link](https://higgsfield.ai/mixed-media-presets/preset/6ff15c8c-de78-459e-af32-e7a1266dc075) |
-| 2 | Sketch | Hand-drawn textured linework | [link](https://higgsfield.ai/mixed-media-presets/preset/6377b231-5cea-4259-8a6b-0314728c1982) |
-| 3 | Canvas | Hand-drawn canvas-style artwork | [link](https://higgsfield.ai/mixed-media-presets/preset/1a722581-6ba0-48b2-b990-a177a3f26cc8) |
-| 4 | Flash comic | High-energy comic visuals | [link](https://higgsfield.ai/mixed-media-presets/preset/3fbd5057-50e1-4d1d-9a6f-8655836711b8) |
-| 5 | Overexposed | Extreme light exposure effect | [link](https://higgsfield.ai/mixed-media-presets/preset/1c79bffd-0839-42c3-90ab-2cd7e6ff4619) |
-| 6 | Paper | Handcrafted paper texture | [link](https://higgsfield.ai/mixed-media-presets/preset/f63bf420-f98a-44e6-ba54-3f7eaa599d40) |
-| 7 | Noir | Cinematic noir lighting | [link](https://higgsfield.ai/mixed-media-presets/preset/c92d1f34-8bc3-410a-99c4-4b8f387140ec) |
-| 8 | Particles | Luminous particles in motion | [link](https://higgsfield.ai/mixed-media-presets/preset/386ebb9d-643f-4108-a12f-3f867f18fb36) |
-| 9 | Hand paint | Freeform hand-painted brushwork | [link](https://higgsfield.ai/mixed-media-presets/preset/ad8401a0-39a2-4c95-b65e-1634d41378ab) |
-| 10 | Toxic | Radioactive neon color blast | [link](https://higgsfield.ai/mixed-media-presets/preset/fd3ca94d-6c3d-443f-970b-a4e8dd7338da) |
-| 11 | Tracking | Dynamic object tracking lines | [link](https://higgsfield.ai/mixed-media-presets/preset/9fa35d36-e5f4-4488-9068-8813bd232a22) |
-| 12 | Ultraviolet | Neon ultraviolet glow effect | [link](https://higgsfield.ai/mixed-media-presets/preset/c9682e42-9891-4118-86bb-f8cf79c84055) |
-| 13 | Windows | Overlapping digital interface windows | [link](https://higgsfield.ai/mixed-media-presets/preset/4f7a1589-c604-44e5-b0ec-bc87d3929906) |
-| 14 | Acid | Psychedelic neon color distortion | [link](https://higgsfield.ai/mixed-media-presets/preset/b501a54d-7c2a-42f8-a47d-484cbdace0a6) |
-| 15 | Palette | Hand-painted color composition | [link](https://higgsfield.ai/mixed-media-presets/preset/15b97a49-9912-4a58-8424-b4ef1c302a05) |
-| 16 | Comic | Graphic illustrated comic look | [link](https://higgsfield.ai/mixed-media-presets/preset/94cd1315-c820-4314-806d-f1b0936e8a46) |
-| 17 | Akrill | Layered acrylic color blocks | [link](https://higgsfield.ai/mixed-media-presets/preset/73f9e01d-eb92-41d6-9119-53cc2686ecfa) |
-| 18 | Two color | High-contrast two-tone style | [link](https://higgsfield.ai/mixed-media-presets/preset/ac3612ce-b1c9-4034-a04b-b46732c2d7a3) |
-| 19 | Multiverse | Layered reality collision effect | [link](https://higgsfield.ai/mixed-media-presets/preset/c38c2630-3986-4e28-858f-596fd254e5e9) |
-| 20 | Fragments | Layered abstract visual fragments | [link](https://higgsfield.ai/mixed-media-presets/preset/525fc0d7-abf1-49e5-a3e6-2f97eb50973c) |
-| 21 | Origami | Crisp origami-style geometr | [link](https://higgsfield.ai/mixed-media-presets/preset/8c88dac7-0314-40b4-b611-5dcd3fda004d) |
-| 22 | Random Glow | random glow | [link](https://higgsfield.ai/mixed-media-presets/preset/f1706661-007e-424b-8734-b755d602d580) |
-| 23 | Vintage | Hand-inked illustrated style | [link](https://higgsfield.ai/mixed-media-presets/preset/ee12f76c-ed17-4471-bf2e-52bda1bcae64) |
-| 24 | Cannabis | Smoky psychedelic poster look | [link](https://higgsfield.ai/mixed-media-presets/preset/c90cd302-d409-48fd-8643-36c34d7798e4) |
-| 25 | Bubbles | Dreamy soap bubble texture | [link](https://higgsfield.ai/mixed-media-presets/preset/dacdca94-27b2-417a-bc8c-6d4168e6109a) |
-| 26 | Magazine | Printed magazine visual look | [link](https://higgsfield.ai/mixed-media-presets/preset/963c3300-8967-4880-b078-c956de4c1e12) |
-| 27 | Cold vision | Cold neon shadow lighting | [link](https://higgsfield.ai/mixed-media-presets/preset/d6ebc1b1-55b0-4379-8276-b46d47d8b056) |
-| 28 | Modern | Clean geometric minimalism | [link](https://higgsfield.ai/mixed-media-presets/preset/9196d356-1406-43ef-bc68-cb26e7eaf507) |
-| 29 | LSD | Hallucinogenic color waves | [link](https://higgsfield.ai/mixed-media-presets/preset/c2b241c5-5239-4465-869f-fef60a06822e) |
-| 30 | Broken mirror | Broken glass reflection effect | [link](https://higgsfield.ai/mixed-media-presets/preset/5d89951e-ac83-4c7f-ac47-4d8db50c835e) |
-| 31 | Lava | Liquid lava color motion | [link](https://higgsfield.ai/mixed-media-presets/preset/bb33da96-918c-4754-ba55-6d0dcbaf5173) |
-| 32 | Marble | Sculpted marble visual style | [link](https://higgsfield.ai/mixed-media-presets/preset/ff617894-b1bc-4931-85b3-1e5b159d2106) |
-| 33 | Ocean | Liquid sea color overlay | [link](https://higgsfield.ai/mixed-media-presets/preset/19115d24-276e-4222-a23f-39cc23d9a326) |
+| 1 | Layer mixed media | Stacked mixed-media composition | [link]({studio-site}/mixed-media-presets/preset/6ff15c8c-de78-459e-af32-e7a1266dc075) |
+| 2 | Sketch | Hand-drawn textured linework | [link]({studio-site}/mixed-media-presets/preset/6377b231-5cea-4259-8a6b-0314728c1982) |
+| 3 | Canvas | Hand-drawn canvas-style artwork | [link]({studio-site}/mixed-media-presets/preset/1a722581-6ba0-48b2-b990-a177a3f26cc8) |
+| 4 | Flash comic | High-energy comic visuals | [link]({studio-site}/mixed-media-presets/preset/3fbd5057-50e1-4d1d-9a6f-8655836711b8) |
+| 5 | Overexposed | Extreme light exposure effect | [link]({studio-site}/mixed-media-presets/preset/1c79bffd-0839-42c3-90ab-2cd7e6ff4619) |
+| 6 | Paper | Handcrafted paper texture | [link]({studio-site}/mixed-media-presets/preset/f63bf420-f98a-44e6-ba54-3f7eaa599d40) |
+| 7 | Noir | Cinematic noir lighting | [link]({studio-site}/mixed-media-presets/preset/c92d1f34-8bc3-410a-99c4-4b8f387140ec) |
+| 8 | Particles | Luminous particles in motion | [link]({studio-site}/mixed-media-presets/preset/386ebb9d-643f-4108-a12f-3f867f18fb36) |
+| 9 | Hand paint | Freeform hand-painted brushwork | [link]({studio-site}/mixed-media-presets/preset/ad8401a0-39a2-4c95-b65e-1634d41378ab) |
+| 10 | Toxic | Radioactive neon color blast | [link]({studio-site}/mixed-media-presets/preset/fd3ca94d-6c3d-443f-970b-a4e8dd7338da) |
+| 11 | Tracking | Dynamic object tracking lines | [link]({studio-site}/mixed-media-presets/preset/9fa35d36-e5f4-4488-9068-8813bd232a22) |
+| 12 | Ultraviolet | Neon ultraviolet glow effect | [link]({studio-site}/mixed-media-presets/preset/c9682e42-9891-4118-86bb-f8cf79c84055) |
+| 13 | Windows | Overlapping digital interface windows | [link]({studio-site}/mixed-media-presets/preset/4f7a1589-c604-44e5-b0ec-bc87d3929906) |
+| 14 | Acid | Psychedelic neon color distortion | [link]({studio-site}/mixed-media-presets/preset/b501a54d-7c2a-42f8-a47d-484cbdace0a6) |
+| 15 | Palette | Hand-painted color composition | [link]({studio-site}/mixed-media-presets/preset/15b97a49-9912-4a58-8424-b4ef1c302a05) |
+| 16 | Comic | Graphic illustrated comic look | [link]({studio-site}/mixed-media-presets/preset/94cd1315-c820-4314-806d-f1b0936e8a46) |
+| 17 | Akrill | Layered acrylic color blocks | [link]({studio-site}/mixed-media-presets/preset/73f9e01d-eb92-41d6-9119-53cc2686ecfa) |
+| 18 | Two color | High-contrast two-tone style | [link]({studio-site}/mixed-media-presets/preset/ac3612ce-b1c9-4034-a04b-b46732c2d7a3) |
+| 19 | Multiverse | Layered reality collision effect | [link]({studio-site}/mixed-media-presets/preset/c38c2630-3986-4e28-858f-596fd254e5e9) |
+| 20 | Fragments | Layered abstract visual fragments | [link]({studio-site}/mixed-media-presets/preset/525fc0d7-abf1-49e5-a3e6-2f97eb50973c) |
+| 21 | Origami | Crisp origami-style geometr | [link]({studio-site}/mixed-media-presets/preset/8c88dac7-0314-40b4-b611-5dcd3fda004d) |
+| 22 | Random Glow | random glow | [link]({studio-site}/mixed-media-presets/preset/f1706661-007e-424b-8734-b755d602d580) |
+| 23 | Vintage | Hand-inked illustrated style | [link]({studio-site}/mixed-media-presets/preset/ee12f76c-ed17-4471-bf2e-52bda1bcae64) |
+| 24 | Cannabis | Smoky psychedelic poster look | [link]({studio-site}/mixed-media-presets/preset/c90cd302-d409-48fd-8643-36c34d7798e4) |
+| 25 | Bubbles | Dreamy soap bubble texture | [link]({studio-site}/mixed-media-presets/preset/dacdca94-27b2-417a-bc8c-6d4168e6109a) |
+| 26 | Magazine | Printed magazine visual look | [link]({studio-site}/mixed-media-presets/preset/963c3300-8967-4880-b078-c956de4c1e12) |
+| 27 | Cold vision | Cold neon shadow lighting | [link]({studio-site}/mixed-media-presets/preset/d6ebc1b1-55b0-4379-8276-b46d47d8b056) |
+| 28 | Modern | Clean geometric minimalism | [link]({studio-site}/mixed-media-presets/preset/9196d356-1406-43ef-bc68-cb26e7eaf507) |
+| 29 | LSD | Hallucinogenic color waves | [link]({studio-site}/mixed-media-presets/preset/c2b241c5-5239-4465-869f-fef60a06822e) |
+| 30 | Broken mirror | Broken glass reflection effect | [link]({studio-site}/mixed-media-presets/preset/5d89951e-ac83-4c7f-ac47-4d8db50c835e) |
+| 31 | Lava | Liquid lava color motion | [link]({studio-site}/mixed-media-presets/preset/bb33da96-918c-4754-ba55-6d0dcbaf5173) |
+| 32 | Marble | Sculpted marble visual style | [link]({studio-site}/mixed-media-presets/preset/ff617894-b1bc-4931-85b3-1e5b159d2106) |
+| 33 | Ocean | Liquid sea color overlay | [link]({studio-site}/mixed-media-presets/preset/19115d24-276e-4222-a23f-39cc23d9a326) |
 
 ---
 
@@ -535,13 +537,13 @@ API: `POST /chains/mixed-media` (and `/chains/mixed-media-preview`) `{params:{pr
 
 - API: `POST /keyframes/v3/photo-dump-pack {params:{preset_id:'bc8c784e-…', aspect_ratio:'portrait', quality:'1600p', sample_solver:'unipc', checkpoint:'260000', character_input_image, pack_id, photodump_transform:false, seed}}`. It is the Popcorn model.
 - Output is portrait at 1600p, one image per pack reference *(inferred)*.
-- Tips from Higgsfield: match the subject type (woman → woman), use a clear high-resolution face, and avoid stylized inputs.
+- Tips from the studio: match the subject type (woman → woman), use a clear high-resolution face, and avoid stylized inputs.
 
-**Public packs** (`GET https://fnf.higgsfield.ai/photo-dump/packs`):
+**Public packs** (`GET {studio-service}/photo-dump/packs`):
 
 | Pack | Author | Reference photos |
 |---|---|---|
-| Winter special | Higgsfield | 9 |
+| Winter special | The studio | 9 |
 | Aura farming | neonfluke | 14 |
 | Looksmaxing | wispomatic | 15 |
 | 2000s nostalgia | trunxel | 15 |
@@ -557,12 +559,12 @@ API: `POST /chains/mixed-media` (and `/chains/mixed-media-preview`) `{params:{pr
 
 ## 5. Build plan for Fuobe
 
-| Higgsfield | Cloud route (paid, existing Fuobe models) | Open route (ComfyUI) | Effort |
+| The studio | Cloud route (paid, existing Fuobe models) | Open route (ComfyUI) | Effort |
 |---|---|---|---|
 | CS 4.0 workspace: projects, nested folders as scenes, roles, trash, feed controls | n/a (app feature) | n/a | L |
-| Director's Panel → one generation | `cinema-studio-4` (Higgsfield; slugs from the tables above). Seedance 2.5 / Kling 3.0 / Veo 3.1 with the panel compiled into the prompt (genre/era/tempo/camera/lens/aperture/lighting/palette text) | Wan 2.2 14B (+ Lightning), camera via Wan Fun Camera or camera LoRAs; palette by `palette-transfer-video` after generation; lighting by Bernini-R relight or prompt; MMAudio for audio | M |
+| Director's Panel → one generation | `cinema-studio-4` (the studio; slugs from the tables above). Seedance 2.5 / Kling 3.0 / Veo 3.1 with the panel compiled into the prompt (genre/era/tempo/camera/lens/aperture/lighting/palette text) | Wan 2.2 14B (+ Lightning), camera via Wan Fun Camera or camera LoRAs; palette by `palette-transfer-video` after generation; lighting by Bernini-R relight or prompt; MMAudio for audio | M |
 | # camera moves (33) | `camera_movement` on cinema-studio-4, otherwise text | 11 via Wan Fun Camera, the rest prompt-only or camera LoRAs | S |
-| Emotion Wheel | Insert the step's fragment after the @character (exact Higgsfield text) | same | S |
+| Emotion Wheel | Insert the step's fragment after the @character (the studio's exact text) | same | S |
 | Colour palettes (50, hex) | `color_palette` slug on cinema-studio-4; hex list as prompt + grade | `palette-transfer-image/video` with the 12 hex colours as target | S |
 | Lighting presets + 2-light rig | `light` slug; custom rig → prompt ("key light from front-top-left, warm #FFB070, soft") | Bernini-R / Qwen relight with the same text | S |
 | Extend forward/backward | Seedance 2.5 extension (`extension_mode`), Veo 3.1 / MiniMax H3 Max | `video-extend-wan22-fun-vace` (forward); backward = reverse the clip → extend → reverse | M |
@@ -570,7 +572,7 @@ API: `POST /chains/mixed-media` (and `/chains/mixed-media-preview`) `{params:{pr
 | References (≤ 50) | Seedance 2.5 / cinema-studio-4 ref2v (≤ 30 img, 10 vid, 10 aud) | `wan21-vace-14b-ref2v` (few refs) | S |
 | Grid 2×2/3×3/4×4 + types | Nano Banana Pro / Nano Banana 2: one "N×N contact sheet" image, then crop into tiles | Qwen-Image 2512 / Z-Image grid prompt + crop; next/prev shots via `storyboard-qwen-edit-2509-next-scene` | M |
 | 3D scene + recomposition | Qwen camera control ("Angles") / Nano Banana re-render from the chosen view | Depth Anything 3 → three.js point cloud for the view → Qwen-Image-Edit-2511 + fal Multiple-Angles LoRA (96 camera poses, `QwenMultiangleCameraNode`) to re-render | L |
-| Soul Cast builder | Soul 2.0 / Soul Cinema (Higgsfield) or Nano Banana Pro; compile the 17 fields into a casting prompt, batch up to 10 | Z-Image Turbo with the same casting prompt, then Save as Element (LoRA training optional) | M |
+| Soul Cast builder | Soul 2.0 / Soul Cinema (the studio) or Nano Banana Pro; compile the 17 fields into a casting prompt, batch up to 10 | Z-Image Turbo with the same casting prompt, then Save as Element (LoRA training optional) | M |
 | Soul Location | Soul Cinema / Seedream 5 at 16:9 | Z-Image Turbo / Qwen-Image 16:9 | S |
 | AI Director chat + Project Brief | Existing Assist agent (Claude) with tools: read/write brief, set panel fields, write prompts, split a script into shots, propose → approve → generate | Assist on Ollama | M |
 | Shorts Studio | `gemini-omni-flash` (video edit, ≤ 10 s segments) + style refs; Kling O3 edit as an alternative; stitch with fal FFmpeg | Segment into ≤ 5 s clips → restyle the first frame with Qwen-Image-Edit-2511 (preset text + style refs) → Wan 2.2 Fun Control (depth/pose) or VACE v2v → `video-concat` | L |
@@ -579,37 +581,37 @@ API: `POST /chains/mixed-media` (and `/chains/mixed-media-preview`) `{params:{pr
 
 ## Sources
 
-- [i18n-cinema](https://higgsfield.ai/_i18n/routes/en/delta.844d2f759c.json) — Logged-in UI copy for the /generate (Cinema Studio) route, 3,035 strings
-- [i18n-all](https://higgsfield.ai/_i18n/en.dd219392ea.json) — Full English catalog, 36,878 strings (mapped to JS chunks by message id)
-- [i18n-root](https://higgsfield.ai/_i18n/routes/en/root.bc60caf0b1.json) — Shared shell strings
-- [bundles](https://assets.higgsfield.ai/tanstack/assets/) — Production JS (build 3c4a1afe, 8,020 chunks crawled from /generate): job schemas, validators, defaults, enums, API paths
-- [bundle-cs4-video](https://assets.higgsfield.ai/tanstack/assets/868a8dba-1pB6N7_Z46K3CZVe.js) — cinematic_studio_video_4_0 and seedance_2_5 job schemas (limits, defaults, validation messages)
-- [bundle-cs-image](https://assets.higgsfield.ai/tanstack/assets/868a8dba-sJ73_ufwWlhS3dP4.js) — cinematic_studio_image, _image_grid, soul_cast, soul_location, soul_cinema_studio schemas and credit formulas
-- [bundle-cs4-form](https://assets.higgsfield.ai/tanstack/assets/868a8dba-5sNAcX_DA99zsqQM.js) — Cinema Studio form + Director's Panel UI (palette editor, lighting rig, film setup)
-- [bundle-cs4-store](https://assets.higgsfield.ai/tanstack/assets/868a8dba-sL8TiMfKKCdPPjmu.js) — CS 4.0 form store hf:video-cinematic-studio-4-0-store:v1
-- [bundle-emotion](https://assets.higgsfield.ai/tanstack/assets/868a8dba-zdCIKyDu_IHnJPfy.js) — Emotion Wheel data: 8 families x 3 intensities with prompt fragments and colours
-- [bundle-moves](https://assets.higgsfield.ai/tanstack/assets/868a8dba-N0VQtH1jhD7jdAst.js) — # camera-move token format <<<movement:{id}>>>
-- [bundle-cast](https://assets.higgsfield.ai/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js) — Soul Cast builder option lists and defaults
-- [bundle-shorts](https://assets.higgsfield.ai/tanstack/assets/868a8dba-pqMVxHi15Zj2ouyx.js) — Shorts Studio (reels_studio) upload validator, /reels/generate payload, cost estimate
-- [bundle-shorts-store](https://assets.higgsfield.ai/tanstack/assets/868a8dba-59aolFqmKz3cUs8F.js) — Shorts Studio form store, languages, sessions/stitch API
-- [bundle-mixed](https://assets.higgsfield.ai/tanstack/assets/868a8dba-D1SuLrWXFHF4GStX.js) — Mixed Media form: fps presets, resolution, credits per frame, preset param_configs, /chains/mixed-media payload
-- [bundle-popcorn](https://assets.higgsfield.ai/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js) — Popcorn + Instadump flow and /keyframes/v3/photo-dump-pack payload
-- [api-palettes](https://fnf.higgsfield.ai/color-presets/with-presets?size=100) — 50 CS 4.0 colour palettes with 12 hex colours each (public, no login)
-- [api-lighting](https://fnf.higgsfield.ai/lighting-presets/with-presets?size=100) — 7 lighting presets with preview videos (public)
-- [api-reels](https://fnf.higgsfield.ai/reels/presets?size=50) — 44 Shorts Studio presets (public)
-- [api-packs](https://fnf.higgsfield.ai/photo-dump/packs) — Instadump packs (public)
-- [api-costs](https://fnf.higgsfield.ai/job-sets/costs) — Per-second credit costs per job type (public)
-- [mm-sitemap](https://higgsfield.ai/mixed-media-presets/sitemap.xml) — 33 Mixed Media preset pages (SSR name + description)
-- [docs-cs4](https://dash.higgsfield.ai/models/higgsfield/cinema-studio/4.0/llms.txt) — Public API schema of Cinema Studio 4.0 (enums incl. 33 camera moves, 50 palettes) and token pricing
-- [blog-cs4](https://higgsfield.ai/blog/cinema-studio-4-0) — Official CS 4.0 guide: every Genre/Era/Tempo/Camera/Lens/Aperture/Lighting option explained, Emotion Wheel, team features
-- [blog-built](https://higgsfield.ai/blog/how-we-built-cinema-studio) — History 1.0 to 3.5; AI Director became Supercomputer
-- [blog-cs35](https://higgsfield.ai/blog/cinema-studio-3.5-full-tutorial) — CS 3.5 settings reference (palettes, MoveSet styles, cameras, lenses, focal lengths)
-- [blog-cs20](https://higgsfield.ai/blog/cinema-studio-guide) — CS 2.0 image mode: 3D Scene, 2x2/3x3/4x4 grid, multi-shot up to 6 shots
-- [blog-soulcast](https://higgsfield.ai/blog/soul-cast-ai-filmmaking) — Soul Cast fields
-- [blog-instadump](https://higgsfield.ai/blog/Create-Ai-Photoshoots-With-Instadump) — Instadump flow (2025 version)
-- [landing-cs](https://higgsfield.ai/cinematic-video-generator) — CS 4.0 landing: Mr. Higgs personal assistant, # tags, 50 references, era scrub, FAQ
-- [landing-mm](https://higgsfield.ai/mixed-media-intro) — Mixed Media landing (4-step flow, 40+ looks claim, 10-second scenes)
-- [help-cs](https://higgsfield.ai/creator-hub/help-center/tools/how-do-i-use-cinema-studio) — Help: all CS versions, Director's Panel, video modes, upload limits
-- [help-popcorn](https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-popcorn) — Help: Popcorn modes, Instadump 3-step flow, aspect ratios
-- [help-projects](https://higgsfield.ai/creator-hub/help-center/community/how-do-projects-work) — Help: Open Projects, project brief, publishing steps
-- [changelog](https://higgsfield.ai/creator-hub/changelog) — Release notes: CS workspace (Jun 7), Shorts Studio (Jun 30), CS 4.0 (Aug 12), Relight/Color Palette standalone (Aug 21)
+- [i18n-cinema]({studio-site}/_i18n/routes/en/delta.844d2f759c.json) — Logged-in UI copy for the /generate (Cinema Studio) route, 3,035 strings
+- [i18n-all]({studio-site}/_i18n/en.dd219392ea.json) — Full English catalog, 36,878 strings (mapped to JS chunks by message id)
+- [i18n-root]({studio-site}/_i18n/routes/en/root.bc60caf0b1.json) — Shared shell strings
+- [bundles]({studio-assets}/tanstack/assets/) — Production JS (build 3c4a1afe, 8,020 chunks crawled from /generate): job schemas, validators, defaults, enums, API paths
+- [bundle-cs4-video]({studio-assets}/tanstack/assets/868a8dba-1pB6N7_Z46K3CZVe.js) — cinematic_studio_video_4_0 and seedance_2_5 job schemas (limits, defaults, validation messages)
+- [bundle-cs-image]({studio-assets}/tanstack/assets/868a8dba-sJ73_ufwWlhS3dP4.js) — cinematic_studio_image, _image_grid, soul_cast, soul_location, soul_cinema_studio schemas and credit formulas
+- [bundle-cs4-form]({studio-assets}/tanstack/assets/868a8dba-5sNAcX_DA99zsqQM.js) — Cinema Studio form + Director's Panel UI (palette editor, lighting rig, film setup)
+- [bundle-cs4-store]({studio-assets}/tanstack/assets/868a8dba-sL8TiMfKKCdPPjmu.js) — CS 4.0 form store hf:video-cinematic-studio-4-0-store:v1
+- [bundle-emotion]({studio-assets}/tanstack/assets/868a8dba-zdCIKyDu_IHnJPfy.js) — Emotion Wheel data: 8 families x 3 intensities with prompt fragments and colours
+- [bundle-moves]({studio-assets}/tanstack/assets/868a8dba-N0VQtH1jhD7jdAst.js) — # camera-move token format <<<movement:{id}>>>
+- [bundle-cast]({studio-assets}/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js) — Soul Cast builder option lists and defaults
+- [bundle-shorts]({studio-assets}/tanstack/assets/868a8dba-pqMVxHi15Zj2ouyx.js) — Shorts Studio (reels_studio) upload validator, /reels/generate payload, cost estimate
+- [bundle-shorts-store]({studio-assets}/tanstack/assets/868a8dba-59aolFqmKz3cUs8F.js) — Shorts Studio form store, languages, sessions/stitch API
+- [bundle-mixed]({studio-assets}/tanstack/assets/868a8dba-D1SuLrWXFHF4GStX.js) — Mixed Media form: fps presets, resolution, credits per frame, preset param_configs, /chains/mixed-media payload
+- [bundle-popcorn]({studio-assets}/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js) — Popcorn + Instadump flow and /keyframes/v3/photo-dump-pack payload
+- [api-palettes]({studio-service}/color-presets/with-presets?size=100) — 50 CS 4.0 colour palettes with 12 hex colours each (public, no login)
+- [api-lighting]({studio-service}/lighting-presets/with-presets?size=100) — 7 lighting presets with preview videos (public)
+- [api-reels]({studio-service}/reels/presets?size=50) — 44 Shorts Studio presets (public)
+- [api-packs]({studio-service}/photo-dump/packs) — Instadump packs (public)
+- [api-costs]({studio-service}/job-sets/costs) — Per-second credit costs per job type (public)
+- [mm-sitemap]({studio-site}/mixed-media-presets/sitemap.xml) — 33 Mixed Media preset pages (SSR name + description)
+- [docs-cs4]({studio-dashboard}/models/{studio}/cinema-studio/4.0/llms.txt) — Public API schema of Cinema Studio 4.0 (enums incl. 33 camera moves, 50 palettes) and token pricing
+- [blog-cs4]({studio-site}/blog/cinema-studio-4-0) — Official CS 4.0 guide: every Genre/Era/Tempo/Camera/Lens/Aperture/Lighting option explained, Emotion Wheel, team features
+- [blog-built]({studio-site}/blog/how-we-built-cinema-studio) — History 1.0 to 3.5; AI Director became Supercomputer
+- [blog-cs35]({studio-site}/blog/cinema-studio-3.5-full-tutorial) — CS 3.5 settings reference (palettes, MoveSet styles, cameras, lenses, focal lengths)
+- [blog-cs20]({studio-site}/blog/cinema-studio-guide) — CS 2.0 image mode: 3D Scene, 2x2/3x3/4x4 grid, multi-shot up to 6 shots
+- [blog-soulcast]({studio-site}/blog/soul-cast-ai-filmmaking) — Soul Cast fields
+- [blog-instadump]({studio-site}/blog/Create-Ai-Photoshoots-With-Instadump) — Instadump flow (2025 version)
+- [landing-cs]({studio-site}/cinematic-video-generator) — CS 4.0 landing: {assistant-name} personal assistant, # tags, 50 references, era scrub, FAQ
+- [landing-mm]({studio-site}/mixed-media-intro) — Mixed Media landing (4-step flow, 40+ looks claim, 10-second scenes)
+- [help-cs]({studio-site}/creator-hub/help-center/tools/how-do-i-use-cinema-studio) — Help: all CS versions, Director's Panel, video modes, upload limits
+- [help-popcorn]({studio-site}/creator-hub/help-center/ai-models/how-do-i-use-popcorn) — Help: Popcorn modes, Instadump 3-step flow, aspect ratios
+- [help-projects]({studio-site}/creator-hub/help-center/community/how-do-projects-work) — Help: Open Projects, project brief, publishing steps
+- [changelog]({studio-site}/creator-hub/changelog) — Release notes: CS workspace (Jun 7), Shorts Studio (Jun 30), CS 4.0 (Aug 12), Relight/Color Palette standalone (Aug 21)

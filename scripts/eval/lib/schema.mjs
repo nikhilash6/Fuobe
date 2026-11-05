@@ -175,7 +175,7 @@ export const CaseSchema = z
   .object({
     id: CaseId,
     title: z.string().min(1).max(200),
-    /** A Soul look id (docs/research/higgsfield-image-studios.json soulPresets[].id): the recipe comes from the research. */
+    /** A Soul look id (docs/research/parity-image-studios.json soulPresets[].id): the recipe comes from the research. */
     look: z.string().optional(),
     /** A motion or effect name in the research's motionsEffects map (fuobe-originals-recipes-5.json). */
     motion: z.string().optional(),

@@ -1,340 +1,340 @@
 {
  "asOf": "2026-10-22",
- "baseline": "docs/research/higgsfield-inventory.json (asOf 2026-10-16) and docs/STATUS.md §2 (round 3)",
+ "baseline": "docs/research/parity-inventory.json (asOf 2026-10-16) and docs/STATUS.md §2 (round 3)",
  "bundleBuild": "1a2c0e3d (8,521 chunks); round 3 read 868a8dba",
  "sources": [
   {
-   "url": "https://higgsfield.ai/creator-hub/changelog/rss.xml",
+   "url": "{studio-site}/creator-hub/changelog/rss.xml",
    "accessed": "2026-10-22",
    "usedFor": "changelog entries 2026-10-01..2026-10-21 (131 items, last build 2026-10-21 23:14 UTC)"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/changelog",
+   "url": "{studio-site}/creator-hub/changelog",
    "accessed": "2026-10-22",
    "usedFor": "changelog"
   },
   {
-   "url": "https://higgsfield.ai/sitemap.xml",
+   "url": "{studio-site}/sitemap.xml",
    "accessed": "2026-10-22",
    "usedFor": "sitemap index; marketing, blog, creator-hub, apps (100 urls), motion (229), mixed-media-presets (33)"
   },
   {
-   "url": "https://higgsfield.ai/kling-4-0-intro",
+   "url": "{studio-site}/kling-4-0-intro",
    "accessed": "2026-10-22",
    "usedFor": "Kling 4.0 landing: 30 s, 10 keyframes, 15 references, Kling 4.0 Flash, FAQ"
   },
   {
-   "url": "https://higgsfield.ai/content-factory",
+   "url": "{studio-site}/content-factory",
    "accessed": "2026-10-22",
    "usedFor": "Content Factory page and nav (nav id 'What If')"
   },
   {
-   "url": "https://higgsfield.ai/3d-jutsu",
+   "url": "{studio-site}/3d-jutsu",
    "accessed": "2026-10-22",
    "usedFor": "3D Jutsu web studio"
   },
   {
-   "url": "https://higgsfield.ai/tube",
+   "url": "{studio-site}/tube",
    "accessed": "2026-10-22",
    "usedFor": "Tube / Reels Studio route"
   },
   {
-   "url": "https://higgsfield.ai/ai-host",
+   "url": "{studio-site}/ai-host",
    "accessed": "2026-10-22",
    "usedFor": "AI Host route (HTTP 404, unreleased)"
   },
   {
-   "url": "https://higgsfield.ai/video-editor",
+   "url": "{studio-site}/video-editor",
    "accessed": "2026-10-22",
    "usedFor": "Video Editor route (HTTP 404, unreleased)"
   },
   {
-   "url": "https://higgsfield.ai/genjutsu",
+   "url": "{studio-site}/genjutsu",
    "accessed": "2026-10-22",
    "usedFor": "Genjutsu landing incl. Genjutsu Lite banner"
   },
   {
-   "url": "https://higgsfield.ai/remove-object-from-video",
+   "url": "{studio-site}/remove-object-from-video",
    "accessed": "2026-10-22",
    "usedFor": "Remove Object from Video landing -> /ai/video/edit with Kling 3.0 Omni Edit"
   },
   {
-   "url": "https://higgsfield.ai/community",
+   "url": "{studio-site}/community",
    "accessed": "2026-10-22",
    "usedFor": "public Community page"
   },
   {
-   "url": "https://higgsfield.ai/grants",
+   "url": "{studio-site}/grants",
    "accessed": "2026-10-22",
-   "usedFor": "Higgsfield Grants"
+   "usedFor": "Grants"
   },
   {
-   "url": "https://higgsfield.ai/mcp",
+   "url": "{studio-site}/mcp",
    "accessed": "2026-10-22",
    "usedFor": "MCP page: agent tabs, skills"
   },
   {
-   "url": "https://higgsfield.ai/higgsfield-telegram-intro",
+   "url": "{studio-site}/{studio}-telegram-intro",
    "accessed": "2026-10-22",
    "usedFor": "Telegram bot"
   },
   {
-   "url": "https://higgsfield.ai/pricing",
+   "url": "{studio-site}/pricing",
    "accessed": "2026-10-22",
    "usedFor": "pricing route (client-rendered)"
   },
   {
-   "url": "https://higgsfield.ai/blog/higgsfield-cli",
+   "url": "{studio-site}/blog/{studio}-cli",
    "accessed": "2026-10-22",
-   "usedFor": "Higgsfield CLI guide (2026-10-19)"
+   "usedFor": "The studio's CLI guide (2026-10-19)"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/community/what-is-higgsfield-community",
+   "url": "{studio-site}/creator-hub/help-center/community/what-is-studio-community",
    "accessed": "2026-10-22",
    "usedFor": "Community overview"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/community/how-do-projects-work",
+   "url": "{studio-site}/creator-hub/help-center/community/how-do-projects-work",
    "accessed": "2026-10-22",
    "usedFor": "Open Projects, publish wizard, verification"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/community/how-do-i-set-up-my-profile",
+   "url": "{studio-site}/creator-hub/help-center/community/how-do-i-set-up-my-profile",
    "accessed": "2026-10-22",
    "usedFor": "creator profile"
   },
   {
-   "url": "https://higgsfield.ai/creator-hub/help-center/community/how-do-achievements-work",
+   "url": "{studio-site}/creator-hub/help-center/community/how-do-achievements-work",
    "accessed": "2026-10-22",
    "usedFor": "rating points, achievements, credit rewards"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/root.b95621da89.json",
+   "url": "{studio-site}/_i18n/routes/en/root.b95621da89.json",
    "accessed": "2026-10-22",
    "usedFor": "root UI strings (round 3: root.bc60caf0b1.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.1a03ac397b.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.1a03ac397b.json",
    "accessed": "2026-10-22",
    "usedFor": "Content Factory strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.5ff33475c7.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.5ff33475c7.json",
    "accessed": "2026-10-22",
    "usedFor": "video screen strings (round 3: delta.8ad0aabf5d.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.848ff74f21.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.848ff74f21.json",
    "accessed": "2026-10-22",
    "usedFor": "Cinema Studio strings (round 3: delta.844d2f759c.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.7768a306c3.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.7768a306c3.json",
    "accessed": "2026-10-22",
    "usedFor": "AI Influencer strings (round 3: delta.b0a00c06e4.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.cb85bd0b24.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.cb85bd0b24.json",
    "accessed": "2026-10-22",
    "usedFor": "image screen strings (round 3: delta.c616e10bb4.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.019333be97.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.019333be97.json",
    "accessed": "2026-10-22",
    "usedFor": "Supercomputer strings (round 3: delta.69dd988e26.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.b649a46681.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.b649a46681.json",
    "accessed": "2026-10-22",
    "usedFor": "Supercomputer strings (round 3: delta.af18bbbe09.json)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.a66a632268.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.a66a632268.json",
    "accessed": "2026-10-22",
    "usedFor": "Upscale (desktop) strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.9da790fc59.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.9da790fc59.json",
    "accessed": "2026-10-22",
    "usedFor": "Canvas board strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.deac944ca9.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.deac944ca9.json",
    "accessed": "2026-10-22",
    "usedFor": "Canvas list strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.d3149d6b9e.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.d3149d6b9e.json",
    "accessed": "2026-10-22",
    "usedFor": "Assets strings (project link access)"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.8ca1955d6f.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.8ca1955d6f.json",
    "accessed": "2026-10-22",
    "usedFor": "public share page strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.c7f59d0eb6.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.c7f59d0eb6.json",
    "accessed": "2026-10-22",
    "usedFor": "Community Discovery strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.a2a1b4a69d.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.a2a1b4a69d.json",
    "accessed": "2026-10-22",
    "usedFor": "Community Projects strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.c9f6265210.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.c9f6265210.json",
    "accessed": "2026-10-22",
    "usedFor": "creator profile strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.be14edcb07.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.be14edcb07.json",
    "accessed": "2026-10-22",
    "usedFor": "Tube strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.7dcfabc5a5.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.7dcfabc5a5.json",
    "accessed": "2026-10-22",
    "usedFor": "3D Jutsu strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.f60d5e91ef.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.f60d5e91ef.json",
    "accessed": "2026-10-22",
    "usedFor": "AI Host strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.ce33b42258.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.ce33b42258.json",
    "accessed": "2026-10-22",
    "usedFor": "Video Editor strings"
   },
   {
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.bc98432178.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.bc98432178.json",
    "accessed": "2026-10-22",
    "usedFor": "pricing strings (round 3: delta.555e66bb72.json)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-u4o7Rr346PKw3TXg.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-u4o7Rr346PKw3TXg.js",
    "accessed": "2026-10-22",
    "usedFor": "AI Influencer builder: 19 categories, options, tiers, creatures, rules, Shuffle"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-Bh59qW_F0DwHRugi.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-Bh59qW_F0DwHRugi.js",
    "accessed": "2026-10-22",
    "usedFor": "3D scene modal: splat viewer, Scene Settings, capture -> recomposition payload"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-s7Pc_VTly7scVxim.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-s7Pc_VTly7scVxim.js",
    "accessed": "2026-10-22",
    "usedFor": "cinematic_studio_image_3d_recomposition job (2 credits, validation)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-GGFDdVa-GgAotcya.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-GGFDdVa-GgAotcya.js",
    "accessed": "2026-10-22",
    "usedFor": "cinematic_studio_image_3d job (3 credits) and confirm dialog"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-EvLnfWQS4p8iriJV.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-EvLnfWQS4p8iriJV.js",
    "accessed": "2026-10-22",
    "usedFor": "image overlay actions incl. 'three-d'"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
    "accessed": "2026-10-22",
    "usedFor": "video tools menu, upscaler models, SDR to HDR, FPS Boost, Depth Map, Remove Background, Reframe"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-T-Hnf94InL7NwIEp.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-T-Hnf94InL7NwIEp.js",
    "accessed": "2026-10-22",
    "usedFor": "Genjutsu motion control / replace object jobs"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-Np-SNe-7mCPEWBa9.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-Np-SNe-7mCPEWBa9.js",
    "accessed": "2026-10-22",
-   "usedFor": "Higgsfield Evolution payload"
+   "usedFor": "Evolution payload"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-kyySz4K-SM_G0oa_.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-kyySz4K-SM_G0oa_.js",
    "accessed": "2026-10-22",
-   "usedFor": "Higgsfield Evolution validation (4-30 s)"
+   "usedFor": "Evolution validation (4-30 s)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-NBuk9-F63Vyq6c55.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-NBuk9-F63Vyq6c55.js",
    "accessed": "2026-10-22",
    "usedFor": "Kling 4.0 limits"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-x-gpkaootj6Z-tim.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-x-gpkaootj6Z-tim.js",
    "accessed": "2026-10-22",
    "usedFor": "Content Factory: POST /what-if/compose, Claude handoff"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-HrFy7mSg0hjd3iiN.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-HrFy7mSg0hjd3iiN.js",
    "accessed": "2026-10-22",
    "usedFor": "Canvas Video Concatenator node definition"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-jIYobq3OomjhNFdy.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-jIYobq3OomjhNFdy.js",
    "accessed": "2026-10-22",
    "usedFor": "Canvas board (canvas-worker config, table flag canvas_table_v1)"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-ji1GMNpGvOMH68Oh.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-ji1GMNpGvOMH68Oh.js",
    "accessed": "2026-10-22",
    "usedFor": "Canvas groups, folder node, comments"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-vUcYzaGvDsE7doZR.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-vUcYzaGvDsE7doZR.js",
    "accessed": "2026-10-22",
    "usedFor": "browser notification permission helper"
   },
   {
-   "url": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-jXL767d7v2eIimh8.js",
+   "url": "{studio-assets}/tanstack/assets/1a2c0e3d-jXL767d7v2eIimh8.js",
    "accessed": "2026-10-22",
    "usedFor": "image job map (openai_hazel_job)"
   },
   {
-   "url": "https://fnf.higgsfield.ai/job-sets/costs",
+   "url": "{studio-service}/job-sets/costs",
    "accessed": "2026-10-22",
    "usedFor": "credit costs, 61 job types (version 183a390ed769...)"
   },
   {
-   "url": "https://fnf.higgsfield.ai/subscriptions/plans",
+   "url": "{studio-service}/subscriptions/plans",
    "accessed": "2026-10-22",
    "usedFor": "subscription plans, 41 rows"
   },
   {
-   "url": "https://canvas-worker.higgsfield.ai/api/templates",
+   "url": "{studio-service}/api/templates",
    "accessed": "2026-10-22",
    "usedFor": "Canvas templates (unchanged, 5)"
   },
   {
-   "url": "https://open.higgsfield.ai/pricing",
+   "url": "{studio-service}/pricing",
    "accessed": "2026-10-22",
    "usedFor": "API price list: Genjutsu Light endpoints"
   },
   {
-   "url": "https://docs.higgsfield.ai/docs/llms.txt",
+   "url": "{studio-docs}/docs/llms.txt",
    "accessed": "2026-10-22",
    "usedFor": "API docs index (model pages moved to the console)"
   },
   {
-   "url": "https://docs.higgsfield.ai/docs/openapi.json",
+   "url": "{studio-docs}/docs/openapi.json",
    "accessed": "2026-10-22",
    "usedFor": "supplementary OpenAPI (8 paths)"
   },
   {
-   "url": "https://github.com/higgsfield-ai/cli/tree/fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2",
+   "url": "{studio-github}/cli/tree/fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2",
    "accessed": "2026-10-22",
    "usedFor": "CLI README, MODELS.md, MIT licence (commit 2026-10-17)"
   },
   {
-   "url": "https://github.com/higgsfield-ai/skills/tree/f83af0bc1d937c8119099a11f8ebbf5e6fb99819",
+   "url": "{studio-github}/skills/tree/f83af0bc1d937c8119099a11f8ebbf5e6fb99819",
    "accessed": "2026-10-22",
    "usedFor": "skills repo v0.13.0, 8 skills, install methods"
   },
   {
-   "url": "https://www.prnewswire.com/news-releases/higgsfield-turns-any-product-page-into-a-finished-ad-campaign-302911758.html",
+   "url": "https://www.prnewswire.com/news-releases/{studio}-turns-any-product-page-into-a-finished-ad-campaign-302911758.html",
    "accessed": "2026-10-22",
    "usedFor": "press release 2026-10-19: Scheduled Tasks, AI Employees, ad cost examples"
   },
@@ -439,73 +439,73 @@
    "date": "2026-10-21",
    "name": "Kling 4.0",
    "kind": "model",
-   "url": "https://higgsfield.ai/creator-hub/changelog#kling-4"
+   "url": "{studio-site}/creator-hub/changelog#kling-4"
   },
   {
    "date": "2026-10-20",
    "name": "Chinese language support",
    "kind": "ui",
-   "url": "https://higgsfield.ai/creator-hub/changelog#chinese-language-support"
+   "url": "{studio-site}/creator-hub/changelog#chinese-language-support"
   },
   {
    "date": "2026-10-19",
    "name": "Genjutsu Lite",
    "kind": "model",
-   "url": "https://higgsfield.ai/creator-hub/changelog#genjutsu-lite"
+   "url": "{studio-site}/creator-hub/changelog#genjutsu-lite"
   },
   {
    "date": "2026-10-19",
    "name": "3D Angles (ChatGPT plugin)",
    "kind": "agent feature",
-   "url": "https://higgsfield.ai/creator-hub/changelog#3d-angles"
+   "url": "{studio-site}/creator-hub/changelog#3d-angles"
   },
   {
    "date": "2026-10-19",
-   "name": "Higgsfield CLI guide (CLI v1.1.26 checked 2026-10-16)",
+   "name": "The studio's CLI guide (CLI v1.1.26 checked 2026-10-16)",
    "kind": "developer",
-   "url": "https://higgsfield.ai/blog/higgsfield-cli"
+   "url": "{studio-site}/blog/{studio}-cli"
   },
   {
    "date": "2026-10-19",
    "name": "Press: Marketing Studio + Supercomputer (Scheduled Tasks)",
    "kind": "press",
-   "url": "https://www.prnewswire.com/news-releases/higgsfield-turns-any-product-page-into-a-finished-ad-campaign-302911758.html"
+   "url": "https://www.prnewswire.com/news-releases/{studio}-turns-any-product-page-into-a-finished-ad-campaign-302911758.html"
   },
   {
    "date": "2026-10-16",
    "name": "Iman Gadzhi Discord contest; Academy 'AI Creation: First Steps'",
    "kind": "community",
-   "url": "https://higgsfield.ai/creator-hub/changelog#iman-gadzhi-contest"
+   "url": "{studio-site}/creator-hub/changelog#iman-gadzhi-contest"
   },
   {
    "date": "2026-10-15",
    "name": "FLUX 3 Video Upscaler update",
    "kind": "model",
-   "url": "https://higgsfield.ai/creator-hub/changelog#flux-3-video-upscaler-update"
+   "url": "{studio-site}/creator-hub/changelog#flux-3-video-upscaler-update"
   },
   {
    "date": "2026-10-15",
-   "name": "Higgsfield Community (public page, Grants)",
+   "name": "The studio's Community (public page, Grants)",
    "kind": "platform",
-   "url": "https://higgsfield.ai/creator-hub/changelog#community"
+   "url": "{studio-site}/creator-hub/changelog#community"
   },
   {
    "date": "undated (live 2026-10-22)",
    "name": "Content Factory (/content-factory)",
    "kind": "studio",
-   "url": "https://higgsfield.ai/content-factory"
+   "url": "{studio-site}/content-factory"
   },
   {
    "date": "undated (live 2026-10-22)",
    "name": "3D Jutsu web studio (/3d-jutsu)",
    "kind": "studio",
-   "url": "https://higgsfield.ai/3d-jutsu"
+   "url": "{studio-site}/3d-jutsu"
   },
   {
    "date": "unreleased",
-   "name": "Higgsfield Evolution (gated), Tube / Reels Studio, AI Host, Video Editor",
+   "name": "Evolution (gated), Tube / Reels Studio, AI Host, Video Editor",
    "kind": "studio",
-   "url": "https://higgsfield.ai/tube"
+   "url": "{studio-site}/tube"
   }
  ],
  "gaps": [
@@ -513,16 +513,16 @@
    "id": "G01",
    "area": "Video tools",
    "title": "Remove object / erase from video",
-   "higgsfield": "Landing /remove-object-from-video ('Remove Object from Video - Erase People & Clutter with AI') opens https://higgsfield.ai/ai/video/edit with Kling 3.0 Omni Edit and a removal prompt (mock composer: Prompt · Kling 3.0 Omni Edit · 1:1 · Remove Object). Copy: 'Describe what to erase ... fills the gap frame by frame'; 'For best results, keep the object clearly visible and the clip short. Need more detail? Run Kling 3.0 Omni Edit in 4K mode.' Example prompts: 'Remove the coffee cup from her hands and fix her fingers so they're just resting naturally, keep everything else the same.' Backend jobs remove_object / swap_object cost 3 / 4.5 / 12 credits/s (480p/720p/1080p) plus frame_credits 3.5 (same shape as draw_to_video: first-frame edit then propagation, inferred); not used by the web client (agents only, inferred). Edit Video copy: 'Edit videos with text prompts', 'Upload an MP4 video to edit', 'This video uses an unsupported codec, such as ProRes. Convert it to H.264 and try again.'",
+   "parity": "Landing /remove-object-from-video ('Remove Object from Video - Erase People & Clutter with AI') opens {studio-site}/ai/video/edit with Kling 3.0 Omni Edit and a removal prompt (mock composer: Prompt · Kling 3.0 Omni Edit · 1:1 · Remove Object). Copy: 'Describe what to erase ... fills the gap frame by frame'; 'For best results, keep the object clearly visible and the clip short. Need more detail? Run Kling 3.0 Omni Edit in 4K mode.' Example prompts: 'Remove the coffee cup from her hands and fix her fingers so they're just resting naturally, keep everything else the same.' Backend jobs remove_object / swap_object cost 3 / 4.5 / 12 credits/s (480p/720p/1080p) plus frame_credits 3.5 (same shape as draw_to_video: first-frame edit then propagation, inferred); not used by the web client (agents only, inferred). Edit Video copy: 'Edit videos with text prompts', 'Upload an MP4 video to edit', 'This video uses an unsupported codec, such as ProRes. Convert it to H.264 and try again.'",
    "fuobeNow": "STATUS 'Video tools: remove background, relight, depth' row: 'Remove object ⬜ (Edit video with a prompt is the closest)'. bria/video/erase and clean-plate are in paid-model-apis-2 but no studio uses them.",
    "priority": "P0",
    "effort": "M",
-   "cloudRoute": "Default: Kling O3 edit (fal-ai/kling-video/o3/pro/video-to-video/edit, Higgsfield's own route, already in Fuobe's catalog) with 'Remove {X} ... keep everything else the same' (video 3-15 s, 720-3840 px, <=200 MB, keep_audio default true, $0.168/s); Kling O3 4K edit for 4K. Clicks or a painted mask: bria/video/erase/keypoints or /mask (clips under 5 s; auto_trim default true cuts to 5 s; segment -> erase -> join for longer clips; mask white = erase, inferred). bria/video/erase/prompt names the object. fal-ai/void-video-inpainting for shadows and reflections (<=197 frames). fal-ai/ltx-2.3-quality/clean-plate removes all people only. Kling 4.0 edit is playground-only on fal (2026-10-22).",
+   "cloudRoute": "Default: Kling O3 edit (fal-ai/kling-video/o3/pro/video-to-video/edit, the studio's own route, already in Fuobe's catalog) with 'Remove {X} ... keep everything else the same' (video 3-15 s, 720-3840 px, <=200 MB, keep_audio default true, $0.168/s); Kling O3 4K edit for 4K. Clicks or a painted mask: bria/video/erase/keypoints or /mask (clips under 5 s; auto_trim default true cuts to 5 s; segment -> erase -> join for longer clips; mask white = erase, inferred). bria/video/erase/prompt names the object. fal-ai/void-video-inpainting for shadows and reflections (<=197 frames). fal-ai/ltx-2.3-quality/clean-plate removes all people only. Kling 4.0 edit is playground-only on fal (2026-10-22).",
    "openRoute": "video-inpaint-wan-vace / -painted (SAM 3.1 track -> Wan 2.1 VACE 14B + the Apache lightx2v 4-step LoRA instead of the template's CC-BY-NC CausVid; pasted back at source resolution) or video-erase-void (VOID, CogVideoX licence caveat); all validated in comfyui-oss-4. Not DiffuEraser: its default pipeline uses ProPainter weights (S-Lab License 1.0, non-commercial) as the prior. Avoid MiniMax-Remover (CC BY-NC 4.0) and the MiniMax-H3 person-remover LoRA.",
    "sources": [
-    "https://higgsfield.ai/remove-object-from-video",
-    "https://fnf.higgsfield.ai/job-sets/costs",
-    "https://higgsfield.ai/_i18n/routes/en/delta.5ff33475c7.json",
+    "{studio-site}/remove-object-from-video",
+    "{studio-service}/job-sets/costs",
+    "{studio-site}/_i18n/routes/en/delta.5ff33475c7.json",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=bria/video/erase/prompt",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/ltx-2.3-quality/clean-plate",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kling-video/o3/pro/video-to-video/edit",
@@ -533,17 +533,17 @@
    "id": "G02",
    "area": "Models",
    "title": "Kling 4.0 (references, up to 10 keyframes, edit, 3-30 s)",
-   "higgsfield": "Launched 2026-10-21. Video -> Kling 4.0 -> References, Frames, or Edit video (code modes: references, keyframes (default), video). Limits from code: KLING_4_0_MIN_DURATION 3, MAX_DURATION 30, MAX_IMAGES 10, MAX_VIDEOS 5, MAX_ELEMENTS 7, MAX_MEDIA_AND_ELEMENTS 15. Copy: 'Up to 10 frames. The first is the start frame.', 'Middle Frame', 'Text to video needs a fixed aspect ratio', 'Image to video takes no videos or elements', 'This mode takes no video to edit'. 720p/1080p, ARs 21:9 to 9:16, stereo audio, voiceover in 9 languages (EN, ES, PT, DE, FR, HI, JA, KO, ZH). Extend an uploaded clip up to 2 minutes (landing FAQ). Credits/s (launch promo): 720p 1.5 (list 2.75 without video, 3.25 with video), 1080p 2 without video / 2.5 with video (list 4 / 5). Landing also names Kling 4.0 Flash (720p, <=20 s drafts) and 4K 10-bit HDR; neither exists in code (unverified). Also inside Cinema Studio.",
+   "parity": "Launched 2026-10-21. Video -> Kling 4.0 -> References, Frames, or Edit video (code modes: references, keyframes (default), video). Limits from code: KLING_4_0_MIN_DURATION 3, MAX_DURATION 30, MAX_IMAGES 10, MAX_VIDEOS 5, MAX_ELEMENTS 7, MAX_MEDIA_AND_ELEMENTS 15. Copy: 'Up to 10 frames. The first is the start frame.', 'Middle Frame', 'Text to video needs a fixed aspect ratio', 'Image to video takes no videos or elements', 'This mode takes no video to edit'. 720p/1080p, ARs 21:9 to 9:16, stereo audio, voiceover in 9 languages (EN, ES, PT, DE, FR, HI, JA, KO, ZH). Extend an uploaded clip up to 2 minutes (landing FAQ). Credits/s (launch promo): 720p 1.5 (list 2.75 without video, 3.25 with video), 1080p 2 without video / 2.5 with video (list 4 / 5). Landing also names Kling 4.0 Flash (720p, <=20 s drafts) and 4K 10-bit HDR; neither exists in code (unverified). Also inside Cinema Studio.",
    "fuobeNow": "Not in the catalog (no kling4/kling/v4 ids in src/lib/catalog). STATUS 'Create Video' lists Kling 3.0 / O3 / O1 / 2.6 / 2.5.",
    "priority": "P0",
    "effort": "S",
-   "cloudRoute": "BLOCKED: fal kling/v4/{text-to-video,image-to-video,reference-to-video,video-to-video/edit} are listed (2026-10-16) but playground-only: 'Kling 4.0 is available in the playground and fal Agent. API access is coming soon.' (llms.txt and catalog, 2026-10-22). Not on Replicate or the Higgsfield API. Schemas when it opens: t2v prompt (<=26,000 chars) or multi_prompt, duration 3-30 (default 5), aspect 16:9/9:16/1:1/21:9, resolution 720p/1080p (default 1080p), $0.157/s 720p, $0.235/s 1080p; i2v start_image_url + end_image_url only (no 3-10 keyframes); ref2v image_urls <=10, elements <=7, video_urls <=5 (3-30 s each, 30 s combined), aspect auto/16:9/9:16/1:1/21:9; edit video_url 3-30 s, <=300 MB, 700-4553 px each side, image_urls <=10, elements <=7, $0.094/s 720p input+output. Callable now for the keyframes mode: blackforestlabs/flux-3-max/keyframes-to-video (1-10 keyframes as {image_url, frame_index} at 24 fps, 5-20 s, 720p/1080p, audio).",
+   "cloudRoute": "BLOCKED: fal kling/v4/{text-to-video,image-to-video,reference-to-video,video-to-video/edit} are listed (2026-10-16) but playground-only: 'Kling 4.0 is available in the playground and fal Agent. API access is coming soon.' (llms.txt and catalog, 2026-10-22). Not on Replicate or the studio's API. Schemas when it opens: t2v prompt (<=26,000 chars) or multi_prompt, duration 3-30 (default 5), aspect 16:9/9:16/1:1/21:9, resolution 720p/1080p (default 1080p), $0.157/s 720p, $0.235/s 1080p; i2v start_image_url + end_image_url only (no 3-10 keyframes); ref2v image_urls <=10, elements <=7, video_urls <=5 (3-30 s each, 30 s combined), aspect auto/16:9/9:16/1:1/21:9; edit video_url 3-30 s, <=300 MB, 700-4553 px each side, image_urls <=10, elements <=7, $0.094/s 720p input+output. Callable now for the keyframes mode: blackforestlabs/flux-3-max/keyframes-to-video (1-10 keyframes as {image_url, frame_index} at 24 fps, 5-20 s, 720p/1080p, audio).",
    "openRoute": "LTX-2.5 with one core LTXVAddGuide per keyframe (frame_idx) or KJNodes LTXVAddGuidesFromBatch (not built); or Wan 2.2 FLF chained per keyframe pair (already built for storyboards; Comfy template templates-6-key-frames).",
    "sources": [
-    "https://higgsfield.ai/creator-hub/changelog#kling-4",
-    "https://higgsfield.ai/kling-4-0-intro",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-NBuk9-F63Vyq6c55.js",
-    "https://fnf.higgsfield.ai/job-sets/costs",
+    "{studio-site}/creator-hub/changelog#kling-4",
+    "{studio-site}/kling-4-0-intro",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-NBuk9-F63Vyq6c55.js",
+    "{studio-service}/job-sets/costs",
     "https://fal.ai/api/models?keywords=kling%204",
     "https://fal.ai/models/kling/v4/text-to-video/llms.txt",
     "https://fal.ai/models/kling/v4/video-to-video/edit/llms.txt",
@@ -554,17 +554,17 @@
    "id": "G03",
    "area": "Upscale",
    "title": "Video upscale option sets, FPS Boost, SDR to HDR, pro codecs",
-   "higgsfield": "Video tools menu (8): Edit Video, Extend, Reframe, Upscale, Remove Background, SDR to HDR (New), FPS Boost (New), Depth Map (New). Upscale models: FLUX.3 Upscale (output 720p/1080p/2K default/4K limited to source; Creativity Precise default / Creative; prompt 'Describe details to preserve or enhance'; <=20 s, <=50 MB MP4; cost by source->target, e.g. 720p->4K 8 credits/s precise); Topaz Starlight Precise (1080p / 4K default; frame rate Original default/24/30/60/120); ByteDance Upscale (Standard/Pro; 1080p default/2K/4K/8K; 30/60 fps; presets Common default, AIGC, Short Series, UGC, Old Film; <=600 s, <=50 MB); Topaz Video (Original/1k default/2k/4K; presets Starlight Precise 2.5, Proteus default, Artemis, Iris, Rhea, Gaia, Theia; fps Original/24/30/60/120; <=50 MB). SDR to HDR: Topaz Hyperion 2.5, output H.265 10-bit (default) / ProRes 10-bit / EXR 16-bit, <=60 s, <=100 MB, dimensions multiple of 4, 2.6 credits/s (<=1080p) / 5.2 (2K/4K). FPS Boost: Topaz, 24/30/60 default/90/120 FPS, <=100 MB; 3.3 credits/s from 24 fps (5.5 at 2K/4K), 4.1/6.9 from 30, 8.1/13.7 from 60, 12/20.5 from 90. Output capped at 13.75 MP per frame. 'EXR archives are too large to bundle. Download them one at a time.' FLUX 3 Video Upscaler got a new build on 2026-10-15 ('sharper detail ... fewer credits').",
+   "parity": "Video tools menu (8): Edit Video, Extend, Reframe, Upscale, Remove Background, SDR to HDR (New), FPS Boost (New), Depth Map (New). Upscale models: FLUX.3 Upscale (output 720p/1080p/2K default/4K limited to source; Creativity Precise default / Creative; prompt 'Describe details to preserve or enhance'; <=20 s, <=50 MB MP4; cost by source->target, e.g. 720p->4K 8 credits/s precise); Topaz Starlight Precise (1080p / 4K default; frame rate Original default/24/30/60/120); ByteDance Upscale (Standard/Pro; 1080p default/2K/4K/8K; 30/60 fps; presets Common default, AIGC, Short Series, UGC, Old Film; <=600 s, <=50 MB); Topaz Video (Original/1k default/2k/4K; presets Starlight Precise 2.5, Proteus default, Artemis, Iris, Rhea, Gaia, Theia; fps Original/24/30/60/120; <=50 MB). SDR to HDR: Topaz Hyperion 2.5, output H.265 10-bit (default) / ProRes 10-bit / EXR 16-bit, <=60 s, <=100 MB, dimensions multiple of 4, 2.6 credits/s (<=1080p) / 5.2 (2K/4K). FPS Boost: Topaz, 24/30/60 default/90/120 FPS, <=100 MB; 3.3 credits/s from 24 fps (5.5 at 2K/4K), 4.1/6.9 from 30, 8.1/13.7 from 60, 12/20.5 from 90. Output capped at 13.75 MP per frame. 'EXR archives are too large to bundle. Download them one at a time.' FLUX 3 Video Upscaler got a new build on 2026-10-15 ('sharper detail ... fewer credits').",
    "fuobeNow": "STATUS 'Upscale video (+ FPS boost, SDR→HDR, pro codecs)' 🟡: 'Upscaling only. FPS boost, SDR→HDR and ProRes / EXR output ⬜ (the open RIFE interpolation model runs only from a Canvas model node)'. Cloud: Topaz Video, SeedVR2 Video.",
    "priority": "P1",
    "effort": "M",
    "cloudRoute": "FPS: topaz/interpolate/video (target_fps 16-120 default 60, slowdown_factor 1-8, model Apollo/Chronos/Aion, H264_output false -> H.265); fallbacks fal-ai/rife/video, fal-ai/film/video. HDR: topaz/sdr-to-hdr/video (output_format mp4 = 10-bit H.265 HDR10, prores = 10-bit ProRes 422). Upscale: blackforestlabs/flux-video-upscale; topaz/upscale/video/{precision,generative,creative}. Codecs: fal FFmpeg compose/transcode (EXR via frame export, unverified). EXR and plain (SDR) ProRes have no hosted transcode: EXR frames only from fal-ai/ltx-2.3-quality/hdr (exr_frames_url) or Luma Ray 3.2 exr_export; ProRes only as an output option of topaz/sdr-to-hdr/video (422 HQ) and Bria video endpoints (mov_proresks). The Fuobe server runs no ffmpeg today, so a cloud-only install needs a new ffmpeg dependency or the open engine's video-export-pro.",
-   "openRoute": "interpolate-rife (native RIFE 4.26, ran on CPU) offered in the studio; exact Higgsfield targets by FrameInterpolate multiplier m then VHS_SelectEveryNthImage n with src*m/n = target (24->60: m 5, n 2; 24->30: m 5, n 4; 30->60: m 2; 30->90: m 3; 30->120: m 4; 60->90: m 3, n 2); video-export-pro (VHS ProRes lt..4444xq, H.265 10-bit, FFV1), video-export-exr (core SaveImageAdvanced exr, 16-bit float), video-sdr-to-hdr (core ImageSDRToHDR, algorithmic, 10-bit HLG) - all ran on CPU in comfyui-oss-4; learned SDR->HDR: Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR (2026-09-28, LTX-2.x community licence; not built).",
+   "openRoute": "interpolate-rife (native RIFE 4.26, ran on CPU) offered in the studio; the studio's exact targets by FrameInterpolate multiplier m then VHS_SelectEveryNthImage n with src*m/n = target (24->60: m 5, n 2; 24->30: m 5, n 4; 30->60: m 2; 30->90: m 3; 30->120: m 4; 60->90: m 3, n 2); video-export-pro (VHS ProRes lt..4444xq, H.265 10-bit, FFV1), video-export-exr (core SaveImageAdvanced exr, 16-bit float), video-sdr-to-hdr (core ImageSDRToHDR, algorithmic, 10-bit HLG) - all ran on CPU in comfyui-oss-4; learned SDR->HDR: Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR (2026-09-28, LTX-2.x community licence; not built).",
    "sources": [
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
-    "https://higgsfield.ai/_i18n/routes/en/delta.a66a632268.json",
-    "https://fnf.higgsfield.ai/job-sets/costs",
-    "https://higgsfield.ai/creator-hub/changelog#flux-3-video-upscaler-update",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
+    "{studio-site}/_i18n/routes/en/delta.a66a632268.json",
+    "{studio-service}/job-sets/costs",
+    "{studio-site}/creator-hub/changelog#flux-3-video-upscaler-update",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=topaz/interpolate/video",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=topaz/sdr-to-hdr/video",
     "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR"
@@ -574,38 +574,38 @@
    "id": "G04",
    "area": "Genjutsu",
    "title": "Genjutsu as a full user flow on both engines, plus Genjutsu Lite",
-   "higgsfield": "Modes Motion transfer / Objects swap / Restyle. Copy: 'The movement and camera stay exactly as filmed. Swap in your character.'; 'Object swap accepts image references only'; Restyle 'Pick a style or bring your own image. Every frame takes the look — motion, camera, and framing stay as filmed.' Source 4-30 s ('trimmed to 30 seconds', '<4 s extended to 4 seconds'); up to 10 reference images; custom Restyle look from up to 8 images (RESTYLE_CUSTOM_PRESET_IMAGE_LIMIT); 480/720/1080p; batch ('Batch of {n} with no extra cost' on promos). Credits/s 3 / 7 / 20. Genjutsu Lite (2026-10-19; jobs hf_mult_motion_control_flash / hf_mult_replace_object_flash): Motion transfer + Objects swap only, up to 10 images, 720p/1080p, 1 / 2 / 4 credits/s now (list 3 / 6 / 12); web code allows 4-30 s, the changelog and API say 4-15 s. Free generations run in a shared queue. Recreate examples; Community trending/new presets (login-gated list); setups shareable by code (/genjutsu/shared/$code). API: genjutsu/{motion-transfer,object-swap}/v1.0 from $0.318/s, genjutsu-light/{motion-transfer,object-swap}/v1.0 from $0.050/s.",
+   "parity": "Modes Motion transfer / Objects swap / Restyle. Copy: 'The movement and camera stay exactly as filmed. Swap in your character.'; 'Object swap accepts image references only'; Restyle 'Pick a style or bring your own image. Every frame takes the look — motion, camera, and framing stay as filmed.' Source 4-30 s ('trimmed to 30 seconds', '<4 s extended to 4 seconds'); up to 10 reference images; custom Restyle look from up to 8 images (RESTYLE_CUSTOM_PRESET_IMAGE_LIMIT); 480/720/1080p; batch ('Batch of {n} with no extra cost' on promos). Credits/s 3 / 7 / 20. Genjutsu Lite (2026-10-19; jobs hf_mult_motion_control_flash / hf_mult_replace_object_flash): Motion transfer + Objects swap only, up to 10 images, 720p/1080p, 1 / 2 / 4 credits/s now (list 3 / 6 / 12); web code allows 4-30 s, the changelog and API say 4-15 s. Free generations run in a shared queue. Recreate examples; Community trending/new presets (login-gated list); setups shareable by code (/genjutsu/shared/$code). API: genjutsu/{motion-transfer,object-swap}/v1.0 from $0.318/s, genjutsu-light/{motion-transfer,object-swap}/v1.0 from $0.050/s.",
    "fuobeNow": "STATUS 'Genjutsu (motion transfer, object swap, restyle)' 🟢 cloud · ⬜ open ('Motion control and Shorts restyle on Wan are the closest'). No Genjutsu Lite.",
    "priority": "P1",
    "effort": "M",
-   "cloudRoute": "Higgsfield API genjutsu/* and genjutsu-light/* (with a key); without a key: Kling 4.0 video-to-video/edit (swap character/product/background), Kling 3.0 Motion Control (motion transfer), the Shorts restyle models (restyle).",
+   "cloudRoute": "The studio's API genjutsu/* and genjutsu-light/* (with a key); without a key: Kling 4.0 video-to-video/edit (swap character/product/background), Kling 3.0 Motion Control (motion transfer), the Shorts restyle models (restyle).",
    "openRoute": "Motion transfer: Wan Animate 2 (already in Motion Control). Object swap: SAM 3.1 mask of the named object -> Wan 2.2 Fun VACE inpaint with the reference image. Restyle: first-frame restyle with Qwen-Image-Edit 2511 -> Wan 2.2 Fun VACE restyle (the Shorts chain).",
    "sources": [
-    "https://higgsfield.ai/creator-hub/changelog#genjutsu-lite",
-    "https://higgsfield.ai/genjutsu",
-    "https://higgsfield.ai/_i18n/routes/en/delta.5ff33475c7.json",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-T-Hnf94InL7NwIEp.js",
-    "https://fnf.higgsfield.ai/job-sets/costs",
-    "https://open.higgsfield.ai/pricing"
+    "{studio-site}/creator-hub/changelog#genjutsu-lite",
+    "{studio-site}/genjutsu",
+    "{studio-site}/_i18n/routes/en/delta.5ff33475c7.json",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-T-Hnf94InL7NwIEp.js",
+    "{studio-service}/job-sets/costs",
+    "{studio-service}/pricing"
    ]
   },
   {
    "id": "G05",
    "area": "Cinema Studio",
    "title": "3D scene + recomposition (and 3D Angles camera reshoot)",
-   "higgsfield": "Overlay action 'Create 3D scene' on images; confirm 'Generate 3D scene? This will render a 3D scene from your current image. Generation uses credits from your balance.' + 'Don't show this again'. Job cinematic_studio_image_3d = 3 credits -> result type image_3d shown in a Gaussian-splat viewer (ThreeDSceneModal; Spark-style renderer, inferred). Controls W A S D Q E fly, Shift faster; lil-gui 'Scene Settings': focal length default 24 mm, focal-lens mode, aperture, aspect ratio default 16:9, OpenCV coords, transparent background; labels '3D Scene', 'Lens', 'Speed', 'Tutorial'. Capture renders capture.png -> upload -> cinematic_studio_image_3d_recomposition {source_job_id, width, height, medias:[{role:image}], folder_id, aspect_ratio}, 2 credits, rerun supported. 3D Angles (ChatGPT plugin, 2026-10-19): photo, video or text -> 3D scene; lenses 24-300 mm, f/1.4-f/16, 8 frame formats 1:1..21:9; WASD, drag rotate, scroll zoom; output still or video <=30 s with draft videos; cost row 3d_jutsu_angles 1.25 credits (1K/1.5K) / 2.5 (2K).",
+   "parity": "Overlay action 'Create 3D scene' on images; confirm 'Generate 3D scene? This will render a 3D scene from your current image. Generation uses credits from your balance.' + 'Don't show this again'. Job cinematic_studio_image_3d = 3 credits -> result type image_3d shown in a Gaussian-splat viewer (ThreeDSceneModal; Spark-style renderer, inferred). Controls W A S D Q E fly, Shift faster; lil-gui 'Scene Settings': focal length default 24 mm, focal-lens mode, aperture, aspect ratio default 16:9, OpenCV coords, transparent background; labels '3D Scene', 'Lens', 'Speed', 'Tutorial'. Capture renders capture.png -> upload -> cinematic_studio_image_3d_recomposition {source_job_id, width, height, medias:[{role:image}], folder_id, aspect_ratio}, 2 credits, rerun supported. 3D Angles (ChatGPT plugin, 2026-10-19): photo, video or text -> 3D scene; lenses 24-300 mm, f/1.4-f/16, 8 frame formats 1:1..21:9; WASD, drag rotate, scroll zoom; output still or video <=30 s with draft videos; cost row 3d_jutsu_angles 1.25 credits (1K/1.5K) / 2.5 (2K).",
    "fuobeNow": "STATUS 'Cinema Studio 3D scene / recomposition' ⬜.",
    "priority": "P1",
    "effort": "L",
    "cloudRoute": "Whole scene: fal-ai/marigold-v2 depth ($0.03) -> browser point cloud with WASD -> capture -> fal-ai/qwen-image-edit-2511-multiple-angles or Nano Banana Pro edit with the original + the rough view; a real explorable world: World Labs Marble (marble/v1/worlds:generate, $0.184 draft / $1.264 marble-1.1, separate key, needs a new provider). Subject only: tripo3d/triposplat (removes the background first, per its output schema) or fal-ai/sam-3/3d-objects (objects with camera pose, no background). Video: capture 2-10 camera keyframes -> blackforestlabs/flux-3-max/keyframes-to-video or Seedance 2.5 start/end, draft at 480p first.",
    "openRoute": "Whole scene: scene-mesh-moge (core LoadMoGeModel -> MoGeInference -> MoGePointMapToMesh -> SaveGLB, MoGe 2 ViT-L 0.66 GB, MIT; ran on CPU: 768x768 room photo -> textured GLB in 42 s, 556k vertices) -> browser viewer (Fuobe already loads GLB) -> capture -> Qwen-Image-Edit 2511 (+ Multiple-Angles LoRA) re-render. Subject: image-to-splat-triposplat (core TripoSplat nodes + RenderSplat orbit; 3.78 GB; validated). apple/Sharp is research-only.",
    "sources": [
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-Bh59qW_F0DwHRugi.js",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-s7Pc_VTly7scVxim.js",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-GGFDdVa-GgAotcya.js",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-EvLnfWQS4p8iriJV.js",
-    "https://higgsfield.ai/creator-hub/changelog#3d-angles",
-    "https://fnf.higgsfield.ai/job-sets/costs",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-Bh59qW_F0DwHRugi.js",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-s7Pc_VTly7scVxim.js",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-GGFDdVa-GgAotcya.js",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-EvLnfWQS4p8iriJV.js",
+    "{studio-site}/creator-hub/changelog#3d-angles",
+    "{studio-service}/job-sets/costs",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/triposplat",
     "https://huggingface.co/VAST-AI/TripoSplat",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/marigold-v2",
@@ -617,67 +617,67 @@
    "id": "G06",
    "area": "Characters",
    "title": "AI Influencer game-style builder (19 categories, 3 tiers, 6 creature types)",
-   "higgsfield": "See aiInfluencerBuilder in this file for every category and option. Start from scratch, from a reference, or 'Add your face'; Character Builder with Shuffle and Reset all; up to 3 clothing references; style reference; Direction <=4,000 chars; batch, versions, character history; Turn to motion / Add motion with Genjutsu; Extract start/last frame; Create 3D scene; upscaling; 5 free generations; 'Seedream 5 is Rolling out'. Rules: max per category, one option per Features slot, 'None' accessory exclusive; conflicts 'Heavy build cannot be combined with Tall or Very tall.' and 'This build cannot be combined with Short legs or Long limbs in this mode.' Shuffle: male 67%, Suits 40% / Retro 20% / other, Bob 20% when visible, never Curvy, no Ultra Muscular in Average, facial hair only for male/trans man. Cost quoted by the server (job ai_influencer_sheet); motion 3/7/20 credits/s, Lite 1/2/4.",
-   "fuobeNow": "STATUS 'AI Influencer Studio' 🟡: 'Higgsfield's game-style builder (19 categories, blendable creature types) is not reproduced'; an app plus Character Sheet's 'From a description'.",
+   "parity": "See aiInfluencerBuilder in this file for every category and option. Start from scratch, from a reference, or 'Add your face'; Character Builder with Shuffle and Reset all; up to 3 clothing references; style reference; Direction <=4,000 chars; batch, versions, character history; Turn to motion / Add motion with Genjutsu; Extract start/last frame; Create 3D scene; upscaling; 5 free generations; 'Seedream 5 is Rolling out'. Rules: max per category, one option per Features slot, 'None' accessory exclusive; conflicts 'Heavy build cannot be combined with Tall or Very tall.' and 'This build cannot be combined with Short legs or Long limbs in this mode.' Shuffle: male 67%, Suits 40% / Retro 20% / other, Bob 20% when visible, never Curvy, no Ultra Muscular in Average, facial hair only for male/trans man. Cost quoted by the server (job ai_influencer_sheet); motion 3/7/20 credits/s, Lite 1/2/4.",
+   "fuobeNow": "STATUS 'AI Influencer Studio' 🟡: 'the studio's game-style builder (19 categories, blendable creature types) is not reproduced'; an app plus Character Sheet's 'From a description'.",
    "priority": "P1",
    "effort": "M",
-   "cloudRoute": "Higgsfield AI Influencer sheet (key) else Nano Banana Pro or Seedream 5.0 with a compiled prompt (each option -> a phrase; tier -> 'realistic' / 'bold caricature' / 'extreme caricature' / 'anthropomorphic {species}'); white-background portrait + full body.",
+   "cloudRoute": "The studio Influencer sheet (key) else Nano Banana Pro or Seedream 5.0 with a compiled prompt (each option -> a phrase; tier -> 'realistic' / 'bold caricature' / 'extreme caricature' / 'anthropomorphic {species}'); white-background portrait + full body.",
    "openRoute": "Soul Cast sheet workflow (Z-Image Turbo) with the compiled prompt; 'Add your face' via Qwen-Image-Edit 2511 with the user's photo.",
    "sources": [
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-u4o7Rr346PKw3TXg.js",
-    "https://higgsfield.ai/_i18n/routes/en/delta.7768a306c3.json",
-    "https://higgsfield.ai/creator-hub/changelog#ai-influencer-2"
+    "{studio-assets}/tanstack/assets/1a2c0e3d-u4o7Rr346PKw3TXg.js",
+    "{studio-site}/_i18n/routes/en/delta.7768a306c3.json",
+    "{studio-site}/creator-hub/changelog#ai-influencer-2"
    ]
   },
   {
    "id": "G07",
    "area": "Studios",
    "title": "Content Factory: faceless short-video series from a trending reference",
-   "higgsfield": "New top-nav item 'Content Factory · New' (/content-factory, nav id 'What If'). 'Generate viral faceless short videos'. Generate with: 'Generate in Claude' (needs Higgsfield MCP; POST /what-if/compose builds the message, inputs <=64 KB, opens Claude with ?q= or offers copy) or 'Generate here'. Add reference: images/videos or 'Add TikTok or Instagram link'; 'Select from presets'. Prompt 'Make a video about…' with examples 'What if cars could fly', 'What if cats ruled the world', 'What if the Moon had a city', 'What if dinosaurs never went extinct', 'What if gravity switched off for a day'. Length default 30 sec (strings for 1-5 min). Episodes default 1. 'Pick a trending style to start from' grid of real Instagram/TikTok videos with views and likes ('Use as reference'). Styles: Fully animated, Frame by Frame, Scene by scene video, Seamless motion video. Genres: Storytelling, Education, Kids ('Bright, simple, and safe'), history ('Retell what actually happened'). Series: 'Next episode topic', 'Previous episode'. Pricing: 'Final cost depends on video complexity and is settled once your video is generated.' Faceless job youtube_faceless_video costs 41 credits per 10 s fully animated, 16 per 10 s scene-based.",
+   "parity": "New top-nav item 'Content Factory · New' (/content-factory, nav id 'What If'). 'Generate viral faceless short videos'. Generate with: 'Generate in Claude' (needs the studio's MCP; POST /what-if/compose builds the message, inputs <=64 KB, opens Claude with ?q= or offers copy) or 'Generate here'. Add reference: images/videos or 'Add TikTok or Instagram link'; 'Select from presets'. Prompt 'Make a video about…' with examples 'What if cars could fly', 'What if cats ruled the world', 'What if the Moon had a city', 'What if dinosaurs never went extinct', 'What if gravity switched off for a day'. Length default 30 sec (strings for 1-5 min). Episodes default 1. 'Pick a trending style to start from' grid of real Instagram/TikTok videos with views and likes ('Use as reference'). Styles: Fully animated, Frame by Frame, Scene by scene video, Seamless motion video. Genres: Storytelling, Education, Kids ('Bright, simple, and safe'), history ('Retell what actually happened'). Series: 'Next episode topic', 'Previous episode'. Pricing: 'Final cost depends on video complexity and is settled once your video is generated.' Faceless job youtube_faceless_video costs 41 credits per 10 s fully animated, 16 per 10 s scene-based.",
    "fuobeNow": "Faceless Studio 🟢 and Explainer 🟡 exist; no trend reference grid, no link import, no multi-episode series, no 'run in Claude' handoff.",
    "priority": "P1",
    "effort": "M",
    "cloudRoute": "Fuobe Faceless pipeline (Nano Banana Pro stills, Gemini Omni Flash, ElevenLabs, Sonilo) with an episode planner on Claude; reference analysis = frames + transcript (Scribe v2) -> Claude style brief.",
    "openRoute": "Same open Faceless pipeline (Z-Image / Qwen-Image-Edit, Wan 2.2 Lightning, Chatterbox, ACE-Step + audio-loop-crossfade for long beds, kenburns-still for Frame by frame); reference analysis with reference-brief-gemma4 (core TextGenerate with Gemma 4 E4B reading the frames at 1 fps and the soundtrack in one call; validated) or Qwen3-VL on Ollama. ComfyUI v0.41's Qwen3.5 encoder ignores a video input.",
    "sources": [
-    "https://higgsfield.ai/content-factory",
-    "https://higgsfield.ai/_i18n/routes/en/delta.1a03ac397b.json",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-x-gpkaootj6Z-tim.js",
-    "https://fnf.higgsfield.ai/job-sets/costs"
+    "{studio-site}/content-factory",
+    "{studio-site}/_i18n/routes/en/delta.1a03ac397b.json",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-x-gpkaootj6Z-tim.js",
+    "{studio-service}/job-sets/costs"
    ]
   },
   {
    "id": "G08",
    "area": "Canvas",
    "title": "Canvas extras: pages, tables, comments, drawing/shapes, groups, folder node, voice/translate nodes, Video Concatenator editor",
-   "higgsfield": "Toolbar (round 3): Select V, Pan H, Draw D, Eraser E, Sticky Note N, Shapes R, Text T, Reaction Shift+S, Comment C, Table Shift+T, Page, Search Cmd+F, Add node. New from code: Table behind feature flag canvas_table_v1; groups re-parent dropped nodes; Folder node puts a library folder on the board; comments with reactions / resolve / vote; Video Concatenator (video_assemble): up to 50 input videos, ARs 1:1, 4:3, 3:4, 16:9 default, 9:16, 2:3, 3:2, 21:9, per-clip trim and mute, 30 fps, default 1280x720, clips >512 MB refused. Voice nodes: Clone Voice (MP3/WAV <=11 MB, audio <=3 min, voice limit, one-time activation), Change Voice = voice_change_merge 0.1 credits/s, Translate = dubbing_lipsync 3 / 3.6 / 6 credits/s at 25 / 30 / 60 fps. Real-time multiplayer and Share (Viewer/Collaborator). Templates unchanged (5).",
-   "fuobeNow": "STATUS 'Canvas (node workflows)' 🟡: 13 node types; 'Higgsfield's pages (nested canvases), tables, comments, drawing and shapes, Change Voice / Translate nodes and multiplayer aren't built'.",
+   "parity": "Toolbar (round 3): Select V, Pan H, Draw D, Eraser E, Sticky Note N, Shapes R, Text T, Reaction Shift+S, Comment C, Table Shift+T, Page, Search Cmd+F, Add node. New from code: Table behind feature flag canvas_table_v1; groups re-parent dropped nodes; Folder node puts a library folder on the board; comments with reactions / resolve / vote; Video Concatenator (video_assemble): up to 50 input videos, ARs 1:1, 4:3, 3:4, 16:9 default, 9:16, 2:3, 3:2, 21:9, per-clip trim and mute, 30 fps, default 1280x720, clips >512 MB refused. Voice nodes: Clone Voice (MP3/WAV <=11 MB, audio <=3 min, voice limit, one-time activation), Change Voice = voice_change_merge 0.1 credits/s, Translate = dubbing_lipsync 3 / 3.6 / 6 credits/s at 25 / 30 / 60 fps. Real-time multiplayer and Share (Viewer/Collaborator). Templates unchanged (5).",
+   "fuobeNow": "STATUS 'Canvas (node workflows)' 🟡: 13 node types; 'the studio's pages (nested canvases), tables, comments, drawing and shapes, Change Voice / Translate nodes and multiplayer aren't built'.",
    "priority": "P1",
    "effort": "L",
    "cloudRoute": "Change Voice -> ElevenLabs Voice Changer; Translate -> the step-by-step dub chain or HeyGen/ElevenLabs one-shot; Clone Voice -> Chatterbox / IndexTTS-2 hosted; Concatenator -> fal-ai/ffmpeg-api/compose with per-clip trims. fal compose keyframes have only url, timestamp and duration (no source in-point), so per-clip trims need fal-ai/workflow-utilities/trim-video first.",
    "openRoute": "Chatterbox VC; the open dub chain; ComfyUI concat joins (the sound-keeping variants) with per-clip trim.",
    "sources": [
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-jIYobq3OomjhNFdy.js",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-ji1GMNpGvOMH68Oh.js",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-HrFy7mSg0hjd3iiN.js",
-    "https://higgsfield.ai/_i18n/routes/en/delta.9da790fc59.json",
-    "https://fnf.higgsfield.ai/job-sets/costs",
-    "https://canvas-worker.higgsfield.ai/api/templates"
+    "{studio-assets}/tanstack/assets/1a2c0e3d-jIYobq3OomjhNFdy.js",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-ji1GMNpGvOMH68Oh.js",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-HrFy7mSg0hjd3iiN.js",
+    "{studio-site}/_i18n/routes/en/delta.9da790fc59.json",
+    "{studio-service}/job-sets/costs",
+    "{studio-service}/api/templates"
    ]
   },
   {
    "id": "G09",
    "area": "Mixed Media",
    "title": "Per-frame cloud pipeline",
-   "higgsfield": "Unchanged since round 3: 2 credits per output frame (x4 at 4K), 4/8/10/12/24 fps (default 8) or manual, 1K/2K/4K, preview frame, API POST /chains/mixed-media and /chains/mixed-media-preview. 33 presets.",
-   "fuobeNow": "STATUS 'Mixed Media' 🟡 cloud · 🟢 open: 'The cloud route is a video-to-video restyle, not Higgsfield's per-frame stylization'; §3 says it needs 'a per-index chain slot, an images-to-video tool and splitting renders above 200 frames'.",
+   "parity": "Unchanged since round 3: 2 credits per output frame (x4 at 4K), 4/8/10/12/24 fps (default 8) or manual, 1K/2K/4K, preview frame, API POST /chains/mixed-media and /chains/mixed-media-preview. 33 presets.",
+   "fuobeNow": "STATUS 'Mixed Media' 🟡 cloud · 🟢 open: 'The cloud route is a video-to-video restyle, not the studio's per-frame stylization'; §3 says it needs 'a per-index chain slot, an images-to-video tool and splitting renders above 200 frames'.",
    "priority": "P2",
    "effort": "M",
    "cloudRoute": "Trim -> extract frames at target fps (fal-ai/workflow-utilities/extract-nth-frame or fal-ai/ffmpeg-api/extract-frame per index) -> per-frame Nano Banana 2 or Seedream 5.0 Flash edit with the preset prompt, fixed seed, previous styled frame as a 2nd reference -> fal-ai/ffmpeg-api/images-to-video (in paid-model-apis-3) at the same fps -> mux original audio; batch above 200 frames.",
    "openRoute": "Existing Z-Image Turbo img2img + Fun Union ControlNet per-frame VHS meta-batch route (🟢).",
    "sources": [
-    "https://higgsfield.ai/mixed-media",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
+    "{studio-site}/mixed-media",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
     "https://fal.ai/api/models?keywords=ffmpeg"
    ]
   },
@@ -685,95 +685,95 @@
    "id": "G10",
    "area": "Library",
    "title": "Assets library: nested folders, pins, review status, projects, share access",
-   "higgsfield": "Round 3 (higgsfield-marketing-agents.md §10): nested folders with colours (Lime #D1FE17 default), pins, manual order, credit limits; review statuses In progress #029dfe, Needs review #fe7802, Approved #d1fe17, Rejected #ef4444; projects with members, transfer, hide; filters by type/activity/scope/status/author/date. New: project link access 'Anyone with a Higgsfield account can comment on assets in this project' / '... can reuse and duplicate this project' / 'Sign in or sign up to reuse'; public share page /share/$id 'Shared Asset' with 'Generated with {model}', Recreate, Modify, Share.",
+   "parity": "Round 3 (parity-marketing-agents.md §10): nested folders with colours (Lime #D1FE17 default), pins, manual order, credit limits; review statuses In progress #029dfe, Needs review #fe7802, Approved #d1fe17, Rejected #ef4444; projects with members, transfer, hide; filters by type/activity/scope/status/author/date. New: project link access 'Anyone with a studio account can comment on assets in this project' / '... can reuse and duplicate this project' / 'Sign in or sign up to reuse'; public share page /share/$id 'Shared Asset' with 'Generated with {model}', Recreate, Modify, Share.",
    "fuobeNow": "STATUS 'Assets library' ✅: 'Missing: nested folders, pins, review status, projects in the library'; §3 'Folders are flat'.",
    "priority": "P2",
    "effort": "M",
    "cloudRoute": "n/a (app feature)",
    "openRoute": "n/a (app feature)",
    "sources": [
-    "https://higgsfield.ai/_i18n/routes/en/delta.d3149d6b9e.json",
-    "https://higgsfield.ai/_i18n/routes/en/delta.8ca1955d6f.json",
-    "docs/research/higgsfield-marketing-agents.md"
+    "{studio-site}/_i18n/routes/en/delta.d3149d6b9e.json",
+    "{studio-site}/_i18n/routes/en/delta.8ca1955d6f.json",
+    "docs/research/parity-marketing-agents.md"
    ]
   },
   {
    "id": "G11",
    "area": "Platform",
    "title": "Share links and Community feed (Shots, Open Projects, profiles, Recreate)",
-   "higgsfield": "Public Community (2026-10-15): tabs Discovery, Projects, Shots, Creators (+ Contests, Originals); viewable without an account. Content: Shots, Open Projects (result, brief, folders/assets, models, optional prompts), Blog posts. Publish wizard: Details (title, description, link higgsfield.ai/@username/projects/project-name, co-authors, tags) -> Assets (Feature / Series / Carousel) -> Cover (optional) -> Access (With prompts / Prompts hidden; Recreate unavailable when hidden) -> Open preview -> Publish; Unpublish anytime. Projects feed sort Default/Newest/Oldest/Most liked/Most viewed, filter All/Contest/Non-contest/My Favorites. Shots: hearts; projects: thumbs up/down, comments, share. Profile: photo, username, name (hidden until Show publicly), headline, bio, location, socials (Instagram, YouTube, TikTok, X, Discord), tabs All works/Projects/Shots/Blog/Ranking/Achievements, counters, Member since, optional spent-credits counter, <=3 badges. Rating: verified project +30 (>=30 likes and >=30 generations, automatic review), remix +1 (<=15/month), approved blog +20, featured +50. Achievements First Spark, Open Source, Verified Project, Ripple Effect, Knowledge Keeper, Spotlight, Rising Star (100), Creator Momentum (500), Creative Force (1,000) with credit rewards. Grants up to 200,000 credits for an Open Project with a video >= 1 min.",
+   "parity": "Public Community (2026-10-15): tabs Discovery, Projects, Shots, Creators (+ Contests, Originals); viewable without an account. Content: Shots, Open Projects (result, brief, folders/assets, models, optional prompts), Blog posts. Publish wizard: Details (title, description, link {studio-site}/@username/projects/project-name, co-authors, tags) -> Assets (Feature / Series / Carousel) -> Cover (optional) -> Access (With prompts / Prompts hidden; Recreate unavailable when hidden) -> Open preview -> Publish; Unpublish anytime. Projects feed sort Default/Newest/Oldest/Most liked/Most viewed, filter All/Contest/Non-contest/My Favorites. Shots: hearts; projects: thumbs up/down, comments, share. Profile: photo, username, name (hidden until Show publicly), headline, bio, location, socials (Instagram, YouTube, TikTok, X, Discord), tabs All works/Projects/Shots/Blog/Ranking/Achievements, counters, Member since, optional spent-credits counter, <=3 badges. Rating: verified project +30 (>=30 likes and >=30 generations, automatic review), remix +1 (<=15/month), approved blog +20, featured +50. Achievements First Spark, Open Source, Verified Project, Ripple Effect, Knowledge Keeper, Spotlight, Rising Star (100), Creator Momentum (500), Creative Force (1,000) with credit rewards. Grants up to 200,000 credits for an Open Project with a video >= 1 min.",
    "fuobeNow": "STATUS 'Accounts, teams, sharing, community feed, contests, Academy' ⬜ ('Single-user and self-hosted today').",
    "priority": "P2",
    "effort": "L",
    "cloudRoute": "n/a (app feature)",
    "openRoute": "n/a (app feature)",
    "sources": [
-    "https://higgsfield.ai/community",
-    "https://higgsfield.ai/creator-hub/help-center/community/how-do-projects-work",
-    "https://higgsfield.ai/creator-hub/help-center/community/how-do-i-set-up-my-profile",
-    "https://higgsfield.ai/creator-hub/help-center/community/how-do-achievements-work",
-    "https://higgsfield.ai/_i18n/routes/en/delta.a2a1b4a69d.json"
+    "{studio-site}/community",
+    "{studio-site}/creator-hub/help-center/community/how-do-projects-work",
+    "{studio-site}/creator-hub/help-center/community/how-do-i-set-up-my-profile",
+    "{studio-site}/creator-hub/help-center/community/how-do-achievements-work",
+    "{studio-site}/_i18n/routes/en/delta.a2a1b4a69d.json"
    ]
   },
   {
    "id": "G12",
    "area": "Platform",
    "title": "Browser notifications when a job finishes",
-   "higgsfield": "Browser Notification permission plus a service worker; unsupported without Notification or serviceWorker; on iOS only when the site is installed to the home screen ('ios-requires-standalone'). Copy: 'Your task is ready', 'Notifications blocked', 'Fail to enable notifications. Please allow notifications in your browser settings, then refresh the page.' Email on completion not found (email only for Originals: 'We'll email {email} when the next episode drops').",
+   "parity": "Browser Notification permission plus a service worker; unsupported without Notification or serviceWorker; on iOS only when the site is installed to the home screen ('ios-requires-standalone'). Copy: 'Your task is ready', 'Notifications blocked', 'Fail to enable notifications. Please allow notifications in your browser settings, then refresh the page.' Email on completion not found (email only for Originals: 'We'll email {email} when the next episode drops').",
    "fuobeNow": "STATUS 'Content checks (IP / face eligibility), browser notifications' ⬜; no Notification usage in src/.",
    "priority": "P2",
    "effort": "S",
    "cloudRoute": "n/a",
    "openRoute": "n/a",
    "sources": [
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-vUcYzaGvDsE7doZR.js",
-    "https://higgsfield.ai/_i18n/routes/en/delta.b649a46681.json"
+    "{studio-assets}/tanstack/assets/1a2c0e3d-vUcYzaGvDsE7doZR.js",
+    "{studio-site}/_i18n/routes/en/delta.b649a46681.json"
    ]
   },
   {
    "id": "G13",
    "area": "Platform",
    "title": "CLI + skills repo + agent plugin manifests",
-   "higgsfield": "Higgsfield CLI (MIT; github.com/higgsfield-ai/cli; v1.1.26 on 2026-10-16): install via curl install.sh, brew higgsfield-ai/tap/higgsfield, npm @higgsfield/cli; command higgsfield (alias higgs); browser device sign-in (no API key), paid plan, plan credits (no Unlimited). Commands: auth, account, workspace, model list|get, generate create|cost|wait|get|list|workflow, workflow list|get, preset list|resolve, voices, upload, soul-id (<=20 photos), marketing-studio, product-photoshoot, website (create/deploy/publish/contest/db/secrets), game, version. Flags --wait, --wait-timeout (10m), --wait-interval (3s), --json, --no-color; media flags take ids or local paths. model list returned 107 entries. Skills repo v0.13.0 (MIT): higgsfield-generate, -soul-id, -product-photoshoot (10 modes), -brandkit, -marketplace-cards, -websites, -video-explainer, -youtube-thumbnail; installs npx skills add higgsfield-ai/skills, gh skill install, Claude Code /plugin marketplace add, ./setup; manifests .claude-plugin, .cursor-plugin, .codex-plugin. MCP page tabs: ChatGPT, Claude, Claude Code, Telegram, CLI, Other (OpenClaw, Hermes Agent, NemoClaw).",
+   "parity": "The studio's CLI (MIT; {studio-github}/cli; v1.1.26 on 2026-10-16): install via curl install.sh, brew {studio}/tap/{studio}, npm {studio-npm}/cli; command {studio} (alias {short-name}); browser device sign-in (no API key), paid plan, plan credits (no Unlimited). Commands: auth, account, workspace, model list|get, generate create|cost|wait|get|list|workflow, workflow list|get, preset list|resolve, voices, upload, soul-id (<=20 photos), marketing-studio, product-photoshoot, website (create/deploy/publish/contest/db/secrets), game, version. Flags --wait, --wait-timeout (10m), --wait-interval (3s), --json, --no-color; media flags take ids or local paths. model list returned 107 entries. Skills repo v0.13.0 (MIT): studio-generate, -soul-id, -product-photoshoot (10 modes), -brandkit, -marketplace-cards, -websites, -video-explainer, -youtube-thumbnail; installs npx skills add {studio}/skills, gh skill install, Claude Code /plugin marketplace add, ./setup; manifests .claude-plugin, .cursor-plugin, .codex-plugin. MCP page tabs: ChatGPT, Claude, Claude Code, Telegram, CLI, Other (OpenClaw, Hermes Agent, NemoClaw).",
    "fuobeNow": "STATUS 'CLI + skills (npx skills add …), ChatGPT plugin' ⬜ ('Skills are SKILL.md files that MCP clients receive as prompts; there is no Fuobe CLI or ChatGPT app'); MCP 1.1.0 ✅; 'Plugins (Photoshop, Figma, Blender, After Effects, DaVinci)' ⬜.",
    "priority": "P2",
    "effort": "M",
    "cloudRoute": "n/a (client of Fuobe's REST API)",
    "openRoute": "n/a",
    "sources": [
-    "https://github.com/higgsfield-ai/cli/tree/fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2",
-    "https://github.com/higgsfield-ai/skills/tree/f83af0bc1d937c8119099a11f8ebbf5e6fb99819",
-    "https://higgsfield.ai/blog/higgsfield-cli",
-    "https://higgsfield.ai/mcp"
+    "{studio-github}/cli/tree/fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2",
+    "{studio-github}/skills/tree/f83af0bc1d937c8119099a11f8ebbf5e6fb99819",
+    "{studio-site}/blog/{studio}-cli",
+    "{studio-site}/mcp"
    ]
   },
   {
    "id": "G14",
    "area": "Video tools",
    "title": "Depth Map and Remove Background option parity",
-   "higgsfield": "Depth Map: Color map Grayscale (default) / Turbo / Inferno / Magma / Viridis; Resolution Auto (default) / 360p / 480p / 720p / 1080p; Max frames slider 1-1800 (default 1800); Side by side toggle ('Put the original video next to the depth map'); Video Depth Anything VDA-Large; 1.5 credits/s. Remove Background: required prompt 'Describe which elements should be removed or saved'; Output format Cutout video (default) / Alpha mask; SAM 3 video; <=200 MB MP4/MOV; 0.225 credits/s.",
+   "parity": "Depth Map: Color map Grayscale (default) / Turbo / Inferno / Magma / Viridis; Resolution Auto (default) / 360p / 480p / 720p / 1080p; Max frames slider 1-1800 (default 1800); Side by side toggle ('Put the original video next to the depth map'); Video Depth Anything VDA-Large; 1.5 credits/s. Remove Background: required prompt 'Describe which elements should be removed or saved'; Output format Cutout video (default) / Alpha mask; SAM 3 video; <=200 MB MP4/MOV; 0.225 credits/s.",
    "fuobeNow": "STATUS 'Video tools: remove background, relight, depth' 🟢 (BiRefNet video, Bria video, Video Depth Anything); the depth colour map is a fixed default (grayscale) in the generated catalog, no side-by-side or prompt-guided matte (inferred from src grep).",
    "priority": "P2",
    "effort": "S",
    "cloudRoute": "Video Depth Anything (colormap, max_frames, side-by-side via fal FFmpeg compose); SAM 3 video with a text prompt for the matte, BiRefNet video for promptless.",
    "openRoute": "Depth Anything 3 / VDA; the installed VideoDepthAnythingOutput offers only 'gray' and 'inferno' colormaps (Turbo / Magma / Viridis need a LUT step, unverified); side by side with an hstack join; SAM 3.1 text prompt -> mask -> cutout or alpha.",
    "sources": [
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
-    "https://fnf.higgsfield.ai/job-sets/costs"
+    "{studio-assets}/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
+    "{studio-service}/job-sets/costs"
    ]
   },
   {
    "id": "G15",
    "area": "3D",
    "title": "Text-to-3D, multi-image-to-3D, rigging + animation presets, SAM 3D objects",
-   "higgsfield": "CLI catalog 3D (5): multi_image_to_3d and image_to_3d (enable_rigging, enable_animation + animation_action_id, pose_mode a-pose/t-pose, should_texture, enable_pbr, texture_prompt / texture_image_url, should_remesh, target_polycount, topology quad/triangle, symmetry_mode off/auto/on, rigging_height_meters), tripo_3d text-to-3D (geometry_quality / texture_quality standard/detailed, pbr, texture, face_limit, auto_size, negative_prompt), sam_3_3d '3D Objects' (detection_threshold, export_textured_glb default true, prompt), 3d_rigging (model_url, height_meters, enable_animation, animation_action_id). 'higgsfield preset list animation-action --group Fighting --category Punching'. Also used by 3D Jutsu.",
+   "parity": "CLI catalog 3D (5): multi_image_to_3d and image_to_3d (enable_rigging, enable_animation + animation_action_id, pose_mode a-pose/t-pose, should_texture, enable_pbr, texture_prompt / texture_image_url, should_remesh, target_polycount, topology quad/triangle, symmetry_mode off/auto/on, rigging_height_meters), tripo_3d text-to-3D (geometry_quality / texture_quality standard/detailed, pbr, texture, face_limit, auto_size, negative_prompt), sam_3_3d '3D Objects' (detection_threshold, export_textured_glb default true, prompt), 3d_rigging (model_url, height_meters, enable_animation, animation_action_id). '{studio} preset list animation-action --group Fighting --category Punching'. Also used by 3D Jutsu.",
    "fuobeNow": "STATUS 'Image to 3D / product spin' 🟢: Hunyuan3D 3.1, TRELLIS.2, Tripo H3.1, Meshy 7.1 (image to 3D only).",
    "priority": "P2",
    "effort": "M",
    "cloudRoute": "tripo3d/h3.1/text-to-3d; meshy/v7.1/multi-image-to-3d; fal-ai/meshy/rigging (model_url GLB, height_meters default 1.7, enable_animation, animation_action_id default 92; outputs rigged_character_glb/fbx, animation_glb/fbx, basic_animations) and fal-ai/meshy/rigging/multi-animation; fal-ai/sam-3/3d-objects (prompt / boxes / points / masks; outputs model_glb, gaussian_splat, individual_glbs).",
    "openRoute": "VAST-AI/UniRig (MIT) for auto-rigging (ComfyUI-UniRig pack, unverified); TRELLIS.2 multi-view; text-to-3D as Z-Image still -> TRELLIS.2.",
    "sources": [
-    "https://github.com/higgsfield-ai/cli/blob/fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2/MODELS.md",
+    "{studio-github}/cli/blob/fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2/MODELS.md",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/meshy/rigging",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/sam-3/3d-objects",
     "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/h3.1/text-to-3d",
@@ -784,109 +784,109 @@
    "id": "G16",
    "area": "Studios",
    "title": "3D Jutsu web studio (agent-built 3D set -> cameras, lights, motion -> Export to Seedance)",
-   "higgsfield": "/3d-jutsu ('3D Jutsu • Higgsfield'), desktop only ('Building a 3D scene needs a bigger canvas than a phone can give'). My scenes, Shared with you, Create blank scene, 'Prompt your 3D scene' / 'Describe the scene you want to block out...', 'Scene brief for the AI agent', attachments. Steps: Build the set ('Props, layout and light arrive as objects you can grab, not a picture'), Place characters, Frame cameras ('Add people and cameras, then move everything by hand until the frame reads'), Light the set, Add motion, Export to Seedance ('Press Export. Seedance 2.5 renders your 3D take into the finished shot').",
+   "parity": "/3d-jutsu ('3D Jutsu • the studio'), desktop only ('Building a 3D scene needs a bigger canvas than a phone can give'). My scenes, Shared with you, Create blank scene, 'Prompt your 3D scene' / 'Describe the scene you want to block out...', 'Scene brief for the AI agent', attachments. Steps: Build the set ('Props, layout and light arrive as objects you can grab, not a picture'), Place characters, Frame cameras ('Add people and cameras, then move everything by hand until the frame reads'), Light the set, Add motion, Export to Seedance ('Press Export. Seedance 2.5 renders your 3D take into the finished shot').",
    "fuobeNow": "STATUS 'AI Employees, Apps builder, Websites, Games, 3D Jutsu, connectors' ⬜.",
    "priority": "P2",
    "effort": "XL",
    "cloudRoute": "Claude writes a scene JSON (props from the 3D tools as GLB, mannequins, cameras, lights, keyframes) -> three.js editor -> render depth + flat-shaded guide video and a first frame -> Seedance 2.5 or Kling 4.0 reference-to-video.",
    "openRoute": "Ollama scene JSON -> same editor -> Wan 2.2 Fun Control (depth) or Wan VACE with the guide video.",
    "sources": [
-    "https://higgsfield.ai/3d-jutsu",
-    "https://higgsfield.ai/_i18n/routes/en/delta.7dcfabc5a5.json"
+    "{studio-site}/3d-jutsu",
+    "{studio-site}/_i18n/routes/en/delta.7dcfabc5a5.json"
    ]
   },
   {
    "id": "G17",
    "area": "Agents",
    "title": "Scheduled tasks in the agent",
-   "higgsfield": "Press release 2026-10-19: 'Scheduled Tasks: automated runs, such as daily ad variations, weekly competitor scans, and recurring content calendars'; also 'up to 100 UGC and ad variants per product in minutes' and AI Employees Product Photographer, Motion Designer, Cartoon Animator, Podcast Producer. UI strings not found in the web bundle (unverified). Supercomputer strings add 'Custom MCP connector (HTTP header)'.",
+   "parity": "Press release 2026-10-19: 'Scheduled Tasks: automated runs, such as daily ad variations, weekly competitor scans, and recurring content calendars'; also 'up to 100 UGC and ad variants per product in minutes' and AI Employees Product Photographer, Motion Designer, Cartoon Animator, Podcast Producer. UI strings not found in the web bundle (unverified). Supercomputer strings add 'Custom MCP connector (HTTP header)'.",
    "fuobeNow": "Assist 🟢 with skills, projects and memory; no scheduler, no custom MCP connectors.",
    "priority": "P2",
    "effort": "M",
    "cloudRoute": "Assist on Claude + a server-side scheduler (cron rows per project, approval or auto-run, results into the Library).",
    "openRoute": "Assist on Ollama or the offline planner + the same scheduler.",
    "sources": [
-    "https://www.prnewswire.com/news-releases/higgsfield-turns-any-product-page-into-a-finished-ad-campaign-302911758.html",
-    "https://higgsfield.ai/_i18n/routes/en/delta.b649a46681.json"
+    "https://www.prnewswire.com/news-releases/{studio}-turns-any-product-page-into-a-finished-ad-campaign-302911758.html",
+    "{studio-site}/_i18n/routes/en/delta.b649a46681.json"
    ]
   },
   {
    "id": "G18",
    "area": "Platform",
    "title": "Content checks: face/IP eligibility, NSFW, rights confirmation, biometric consent",
-   "higgsfield": "Copy: 'Checking eligibility', 'This image contains faces or IP and cannot be used', 'A face or protected content was detected, so this asset cannot be used. Try another.', 'This element must pass IP check before it can be used', 'You've reached the eligibility check limit. Please try again later.', 'Restricted content detected. Credits refunded.', 'Remove NSFW images to continue', 'NSFW rejected by provider', rights dialog 'Confirm rights · {n}', 'Certify rights', 'I own rights to this content', 'People in my images have given consent', 'Request clearance'; biometric consent 'By clicking Upload, I consent to this biometric data processing and confirm these photos are of me or of a person at least 18 years old who gave written permission.'; tool tagline 'Detect copyright risks in images, videos, and audio before you publish.'",
+   "parity": "Copy: 'Checking eligibility', 'This image contains faces or IP and cannot be used', 'A face or protected content was detected, so this asset cannot be used. Try another.', 'This element must pass IP check before it can be used', 'You've reached the eligibility check limit. Please try again later.', 'Restricted content detected. Credits refunded.', 'Remove NSFW images to continue', 'NSFW rejected by provider', rights dialog 'Confirm rights · {n}', 'Certify rights', 'I own rights to this content', 'People in my images have given consent', 'Request clearance'; biometric consent 'By clicking Upload, I consent to this biometric data processing and confirm these photos are of me or of a person at least 18 years old who gave written permission.'; tool tagline 'Detect copyright risks in images, videos, and audio before you publish.'",
    "fuobeNow": "STATUS 'Content checks (IP / face eligibility), browser notifications' ⬜.",
    "priority": "P3",
    "effort": "M",
    "cloudRoute": "Surface provider NSFW/refusal results with 'not charged' wording; optional cloud moderation.",
    "openRoute": "Browser face detector warning on models whose providers refuse faces; an open NSFW image classifier; consent checkbox on Soul ID / LoRA training and face swap.",
    "sources": [
-    "https://higgsfield.ai/_i18n/routes/en/root.b95621da89.json",
-    "https://higgsfield.ai/_i18n/routes/en/delta.5ff33475c7.json"
+    "{studio-site}/_i18n/routes/en/root.b95621da89.json",
+    "{studio-site}/_i18n/routes/en/delta.5ff33475c7.json"
    ]
   },
   {
    "id": "G19",
    "area": "Video",
-   "title": "Higgsfield Evolution (gated test model)",
-   "higgsfield": "'Upload a video and let Higgsfield Evolution take it further. A new setting, a new atmosphere, a whole new level of production — imagined for you.' Payload {model:'hf_evolution', resolution, change_intensity, creative_direction (with @elements), reference_element_ids, medias:[video, ...images]}; source 4-30 s; intensity Low / Mid / High ('Changes effort'); 7 credits/s at 720p. Marked 'TEST MODEL; VISIBLE ONLY FOR USERS WITH HIGGSFIELD AI/COM EMAIL'.",
+   "title": "Evolution (gated test model)",
+   "parity": "'Upload a video and let Evolution take it further. A new setting, a new atmosphere, a whole new level of production — imagined for you.' Payload {model:'hf_evolution', resolution, change_intensity, creative_direction (with @elements), reference_element_ids, medias:[video, ...images]}; source 4-30 s; intensity Low / Mid / High ('Changes effort'); 7 credits/s at 720p. Marked 'TEST MODEL; VISIBLE ONLY FOR USERS WITH STUDIO AI/COM EMAIL'.",
    "fuobeNow": "⬜ (Edit Video and Shorts restyle exist).",
    "priority": "P3",
    "effort": "S",
    "cloudRoute": "Kling 4.0 edit or Gemini Omni Flash edit with an 'evolve' prompt scaled by intensity.",
    "openRoute": "Wan 2.2 Fun VACE restyle with denoise 0.45 / 0.65 / 0.85 for Low / Mid / High (Fuobe proposal, untuned).",
    "sources": [
-    "https://higgsfield.ai/_i18n/routes/en/delta.5ff33475c7.json",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-Np-SNe-7mCPEWBa9.js",
-    "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-kyySz4K-SM_G0oa_.js",
-    "https://fnf.higgsfield.ai/job-sets/costs"
+    "{studio-site}/_i18n/routes/en/delta.5ff33475c7.json",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-Np-SNe-7mCPEWBa9.js",
+    "{studio-assets}/tanstack/assets/1a2c0e3d-kyySz4K-SM_G0oa_.js",
+    "{studio-service}/job-sets/costs"
    ]
   },
   {
    "id": "G20",
    "area": "Agents",
    "title": "Telegram bot and other agent surfaces",
-   "higgsfield": "/higgsfield-telegram-intro: 'Your AI team for research, creative production, and recurring tasks - right inside Telegram'; send a task, a reference image or a product link; results come back in the chat. MCP page tabs ChatGPT, Claude, Claude Code, Telegram, CLI, Other; names OpenClaw, Hermes Agent, NemoClaw.",
+   "parity": "/{studio}-telegram-intro: 'Your AI team for research, creative production, and recurring tasks - right inside Telegram'; send a task, a reference image or a product link; results come back in the chat. MCP page tabs ChatGPT, Claude, Claude Code, Telegram, CLI, Other; names OpenClaw, Hermes Agent, NemoClaw.",
    "fuobeNow": "MCP ✅ (/api/mcp 1.1.0); no Telegram bot.",
    "priority": "P3",
    "effort": "M",
    "cloudRoute": "Telegram webhook -> Assist on Claude -> results posted back.",
    "openRoute": "Same webhook -> Assist on Ollama.",
    "sources": [
-    "https://higgsfield.ai/higgsfield-telegram-intro",
-    "https://higgsfield.ai/mcp"
+    "{studio-site}/{studio}-telegram-intro",
+    "{studio-site}/mcp"
    ]
   },
   {
    "id": "G21",
    "area": "Platform",
    "title": "Localized UI (Chinese added; es, ja, ko, de already)",
-   "higgsfield": "2026-10-20: Chinese for all users; switch from the profile menu or Supercomputer; footer selector when signed out. Locales en, es, ja, ko, de, zh.",
+   "parity": "2026-10-20: Chinese for all users; switch from the profile menu or Supercomputer; footer selector when signed out. Locales en, es, ja, ko, de, zh.",
    "fuobeNow": "English only (no i18n layer found in src/, inferred).",
    "priority": "P3",
    "effort": "L",
    "cloudRoute": "n/a",
    "openRoute": "n/a",
    "sources": [
-    "https://higgsfield.ai/creator-hub/changelog#chinese-language-support"
+    "{studio-site}/creator-hub/changelog#chinese-language-support"
    ]
   },
   {
    "id": "G22",
    "area": "Studios",
    "title": "Tube / Reels Studio, AI Host, standalone Video Editor (unreleased; track only)",
-   "higgsfield": "Tube (/tube): 'Create reels starring your avatar', 'Write what the presenter says', 'Use an uploaded audio as the voice', source video 10-120 s, job constant TUBE_FACELESS_VIDEO = youtube_faceless_video; not in nav. AI Host (/ai-host, 404): 'Create your video host', 'Set up avatar, voice & location', 'Connect to YouTube', 'Up to 20 minutes', topic genres (Tech reviews, Sports, True crime, Home lifestyle, recipes, gaming...), 'Adjust in built-in editor & publish'; cost ai_host_video 3.3 / 7.7 / 17.6 credits/s. Video Editor (/video-editor, 404): 'Use a remote project as this editor's storage?' (agent-attached editor).",
+   "parity": "Tube (/tube): 'Create reels starring your avatar', 'Write what the presenter says', 'Use an uploaded audio as the voice', source video 10-120 s, job constant TUBE_FACELESS_VIDEO = youtube_faceless_video; not in nav. AI Host (/ai-host, 404): 'Create your video host', 'Set up avatar, voice & location', 'Connect to YouTube', 'Up to 20 minutes', topic genres (Tech reviews, Sports, True crime, Home lifestyle, recipes, gaming...), 'Adjust in built-in editor & publish'; cost ai_host_video 3.3 / 7.7 / 17.6 credits/s. Video Editor (/video-editor, 404): 'Use a remote project as this editor's storage?' (agent-attached editor).",
    "fuobeNow": "⬜ (Faceless Studio and Lipsync cover parts).",
    "priority": "P3",
    "effort": "L",
    "cloudRoute": "track only",
    "openRoute": "track only",
    "sources": [
-    "https://higgsfield.ai/tube",
-    "https://higgsfield.ai/_i18n/routes/en/delta.be14edcb07.json",
-    "https://higgsfield.ai/_i18n/routes/en/delta.f60d5e91ef.json",
-    "https://higgsfield.ai/_i18n/routes/en/delta.ce33b42258.json",
-    "https://fnf.higgsfield.ai/job-sets/costs"
+    "{studio-site}/tube",
+    "{studio-site}/_i18n/routes/en/delta.be14edcb07.json",
+    "{studio-site}/_i18n/routes/en/delta.f60d5e91ef.json",
+    "{studio-site}/_i18n/routes/en/delta.ce33b42258.json",
+    "{studio-service}/job-sets/costs"
    ]
   }
  ],
@@ -895,7 +895,7 @@
    "name": "Kling 4.0",
    "vendor": "Kuaishou",
    "kind": "video (text, image/keyframes, references, edit)",
-   "higgsfieldPage": "https://higgsfield.ai/ai/video?model=kling4_0",
+   "parityPage": "{studio-site}/ai/video?model=kling4_0",
    "onFal": [
     "kling/v4/text-to-video",
     "kling/v4/image-to-video",
@@ -903,31 +903,31 @@
     "kling/v4/video-to-video/edit"
    ],
    "onReplicate": false,
-   "notes": "Launched on Higgsfield 2026-10-21; fal listings dated 2026-10-16; 3-30 s, 720p/1080p; not on the Higgsfield API price list. fal status 2026-10-22: playground-only ('API access is coming soon'); not callable through the API yet."
+   "notes": "Launched on the studio's 2026-10-21; fal listings dated 2026-10-16; 3-30 s, 720p/1080p; not on the studio's API price list. fal status 2026-10-22: playground-only ('API access is coming soon'); not callable through the API yet."
   },
   {
    "name": "Kling 4.0 Flash",
    "vendor": "Kuaishou",
    "kind": "video drafts (720p, <=20 s)",
-   "higgsfieldPage": "https://higgsfield.ai/kling-4-0-intro",
+   "parityPage": "{studio-site}/kling-4-0-intro",
    "onFal": null,
    "onReplicate": false,
    "notes": "Landing page only; no job id in the web bundle (unverified availability)."
   },
   {
-   "name": "Higgsfield Genjutsu Lite",
-   "vendor": "Higgsfield",
+   "name": "Genjutsu Lite",
+   "vendor": "The studio",
    "kind": "video-to-video (motion transfer, object swap)",
-   "higgsfieldPage": "https://higgsfield.ai/ai/video?model=genjutsu-lite",
+   "parityPage": "{studio-site}/ai/video?model=genjutsu-lite",
    "onFal": null,
    "onReplicate": false,
-   "notes": "Jobs hf_mult_motion_control_flash / hf_mult_replace_object_flash; Higgsfield API genjutsu-light/{motion-transfer,object-swap}/v1.0 from $0.050/s."
+   "notes": "Jobs hf_mult_motion_control_flash / hf_mult_replace_object_flash; the studio's API genjutsu-light/{motion-transfer,object-swap}/v1.0 from $0.050/s."
   },
   {
-   "name": "Higgsfield Evolution",
-   "vendor": "Higgsfield",
+   "name": "Evolution",
+   "vendor": "The studio",
    "kind": "video-to-video (new setting and atmosphere)",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": null,
    "onReplicate": false,
    "notes": "Gated test model (hf_evolution), 7 credits/s at 720p."
@@ -936,18 +936,18 @@
    "name": "FLUX 3 Video Upscaler (2026-10-15 build)",
    "vendor": "Black Forest Labs",
    "kind": "video upscale",
-   "higgsfieldPage": "https://higgsfield.ai/upscale",
+   "parityPage": "{studio-site}/upscale",
    "onFal": [
     "blackforestlabs/flux-video-upscale"
    ],
    "onReplicate": false,
-   "notes": "Higgsfield says the new build is 'currently available only on Higgsfield'; whether fal serves it is unverified."
+   "notes": "The studio says the new build is 'currently available only on the studio'; whether fal serves it is unverified."
   },
   {
    "name": "OpenAI Hazel (openai_hazel / openai_hazel_mini)",
    "vendor": "OpenAI",
    "kind": "image",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": null,
    "onReplicate": null,
    "notes": "Internal job family behind GPT Image 2 / 2.5 / imagegen_2_0; listed separately in the CLI (AR 1:1, 3:2, 2:3, auto; quality low/medium/high; <=16 refs). Probably not a separate public model."
@@ -956,7 +956,7 @@
    "name": "Text to 3D (tripo_3d)",
    "vendor": "Tripo (inferred)",
    "kind": "3D",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": [
     "tripo3d/h3.1/text-to-3d"
    ],
@@ -967,7 +967,7 @@
    "name": "Image / Multi-Image to 3D with rigging and animation (image_to_3d, multi_image_to_3d)",
    "vendor": "unverified (params match Meshy)",
    "kind": "3D",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": [
     "meshy/v7.1/multi-image-to-3d",
     "fal-ai/meshy/rigging"
@@ -979,7 +979,7 @@
    "name": "3D Objects (sam_3_3d)",
    "vendor": "Meta",
    "kind": "3D from image (GLB + Gaussian splat)",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": [
     "fal-ai/sam-3/3d-objects"
    ],
@@ -990,7 +990,7 @@
    "name": "3D Rigging (3d_rigging)",
    "vendor": "unverified (Meshy-like)",
    "kind": "3D rigging",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": [
     "fal-ai/meshy/rigging",
     "fal-ai/meshy/rigging/multi-animation"
@@ -1000,9 +1000,9 @@
   },
   {
    "name": "Cinema Studio 3D scene (cinematic_studio_image_3d) + recomposition",
-   "vendor": "Higgsfield",
+   "vendor": "The studio",
    "kind": "image -> Gaussian splat; view re-render",
-   "higgsfieldPage": "https://higgsfield.ai/generate",
+   "parityPage": "{studio-site}/generate",
    "onFal": [
     "tripo3d/triposplat (equivalent)"
    ],
@@ -1013,7 +1013,7 @@
    "name": "ElevenLabs Video to Music (music_v1, music_v2, music_v2_5)",
    "vendor": "ElevenLabs",
    "kind": "audio (music for a video)",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": [
     "elevenlabs/music/v2",
     "elevenlabs/music/v2.5 (video input unverified)"
@@ -1025,7 +1025,7 @@
    "name": "CosyVoice engine in Text to Speech (text2speech_v2 --variant cozy_voice)",
    "vendor": "Alibaba FunAudioLLM (inferred)",
    "kind": "TTS",
-   "higgsfieldPage": "https://higgsfield.ai/audio",
+   "parityPage": "{studio-site}/audio",
    "onFal": null,
    "onReplicate": null,
    "notes": "CLI variants elevenlabs, minimax, seed_speech, vibe_voice, cozy_voice; prompt limit 5,000 chars for cozy_voice."
@@ -1034,14 +1034,14 @@
    "name": "p_image_ideogram",
    "vendor": "Ideogram (inferred)",
    "kind": "image ('thinking' very-low..high, 1K/2K)",
-   "higgsfieldPage": null,
+   "parityPage": null,
    "onFal": null,
    "onReplicate": null,
    "notes": "Cost table only (0.1-1.0 credits); no screen found (unverified)."
   }
  ],
  "aiInfluencerBuilder": {
-  "source": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-u4o7Rr346PKw3TXg.js",
+  "source": "{studio-assets}/tanstack/assets/1a2c0e3d-u4o7Rr346PKw3TXg.js",
   "tiers": {
    "normal": "Average",
    "freak": "Bold",
@@ -2906,7 +2906,7 @@
   ]
  },
  "videoTools": {
-  "source": "https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
+  "source": "{studio-assets}/tanstack/assets/1a2c0e3d-9V5-hD4mNN4X33gE.js",
   "menu": [
    "Edit Video",
    "Extend",
@@ -3105,7 +3105,7 @@
   "defaultsMarkedWith": "*"
  },
  "costs": {
-  "source": "https://fnf.higgsfield.ai/job-sets/costs",
+  "source": "{studio-service}/job-sets/costs",
   "unit": "credits (about US$0.05 each)",
   "rows": {
    "kling4_0": [
@@ -4187,7 +4187,7 @@
   }
  },
  "plans": {
-  "source": "https://fnf.higgsfield.ai/subscriptions/plans",
+  "source": "{studio-service}/subscriptions/plans",
   "note": "amount in USD per billing period; original/final/renew prices in US cents per month",
   "rows": [
    {
@@ -4603,14 +4603,14 @@
   ]
  },
  "cli": {
-  "repo": "https://github.com/higgsfield-ai/cli",
+  "repo": "{studio-github}/cli",
   "commit": "fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2",
   "license": "MIT",
   "version": "1.1.26 (2026-10-16)",
   "install": [
-   "curl -fsSL https://raw.githubusercontent.com/higgsfield-ai/cli/main/install.sh | sh",
-   "brew install higgsfield-ai/tap/higgsfield",
-   "npm install -g @higgsfield/cli"
+   "curl -fsSL https://raw.githubusercontent.com/{studio}/cli/main/install.sh | sh",
+   "brew install {studio}/tap/{studio}",
+   "npm install -g {studio-npm}/cli"
   ],
   "commands": [
    "auth login|logout|token",
@@ -4638,24 +4638,24 @@
   }
  },
  "skillsRepo": {
-  "repo": "https://github.com/higgsfield-ai/skills",
+  "repo": "{studio-github}/skills",
   "commit": "f83af0bc1d937c8119099a11f8ebbf5e6fb99819",
   "version": "0.13.0",
   "license": "MIT",
   "skills": [
-   "higgsfield-generate",
-   "higgsfield-soul-id",
-   "higgsfield-product-photoshoot",
-   "higgsfield-brandkit",
-   "higgsfield-marketplace-cards",
-   "higgsfield-websites",
-   "higgsfield-video-explainer",
-   "higgsfield-youtube-thumbnail"
+   "studio-generate",
+   "studio-soul-id",
+   "studio-product-photoshoot",
+   "studio-brandkit",
+   "studio-marketplace-cards",
+   "studio-websites",
+   "studio-video-explainer",
+   "studio-youtube-thumbnail"
   ],
   "install": [
-   "npx skills add higgsfield-ai/skills",
-   "gh skill install higgsfield-ai/skills",
-   "/plugin marketplace add higgsfield-ai/skills then /plugin install higgsfield@higgsfield",
+   "npx skills add {studio}/skills",
+   "gh skill install {studio}/skills",
+   "/plugin marketplace add {studio}/skills then /plugin install {studio}@{studio}",
    "./setup"
   ],
   "manifests": [
@@ -4719,6 +4719,6 @@
  "criticCheck": {
   "date": "2026-10-22",
   "by": "round-4 completeness critic",
-  "summary": "Kling 4.0 fal route corrected to playground-only; TripoSplat scope corrected to subject-only; native ComfyUI TripoSplat and MoGe core nodes found (MoGe whole-scene mesh ran on CPU); DiffuEraser licence corrected; EXR export moved to core SaveImageAdvanced; Content Factory open analysis moved to Gemma 4 TextGenerate. See higgsfield-delta-4.md section 8."
+  "summary": "Kling 4.0 fal route corrected to playground-only; TripoSplat scope corrected to subject-only; native ComfyUI TripoSplat and MoGe core nodes found (MoGe whole-scene mesh ran on CPU); DiffuEraser licence corrected; EXR export moved to core SaveImageAdvanced; Content Factory open analysis moved to Gemma 4 TextGenerate. See parity-delta-4.md section 8."
  }
 }

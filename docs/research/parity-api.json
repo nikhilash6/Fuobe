@@ -3,79 +3,79 @@
  "sources": {
   "primary": [
    {
-    "url": "https://docs.higgsfield.ai/llms-full.txt",
+    "url": "{studio-docs}/llms-full.txt",
     "what": "Full docs dump (Mintlify): concepts + all 84 catalog model pages with complete JSON schemas. Canonical source for this file.",
     "fetched": "2026-10-16",
     "http": 200
    },
    {
-    "url": "https://docs.higgsfield.ai/docs/openapi.json",
+    "url": "{studio-docs}/docs/openapi.json",
     "what": "OpenAPI 3.1, info.version 2.0.0 - only 9 operations (soul/standard, status, cancel, 4x kling 2.5, 2x hailuo). Partially stale: its soul/standard schema conflicts with the model page.",
     "fetched": "2026-10-16",
     "http": 200
    },
    {
-    "url": "https://dash.higgsfield.ai/api/v2/pricing/models/?page=1..4",
-    "what": "Public pricing API (backs open.higgsfield.ai/pricing): 31 model families / 83 modes with per-config list + discounted USD",
+    "url": "{studio-dashboard}/api/v2/pricing/models/?page=1..4",
+    "what": "Public pricing API (backs {studio-service}/pricing): 31 model families / 83 modes with per-config list + discounted USD",
     "fetched": "2026-10-16",
     "http": 200
    },
    {
-    "url": "https://dash.higgsfield.ai/models/{endpoint_id}/llms.txt",
-    "what": "Per-model docs incl. pricing formulas and output schema; also covers higgsfield-ai/soul/v2/image-to-image and higgsfield/ai-influencer (absent from docs catalog)",
+    "url": "{studio-dashboard}/models/{endpoint_id}/llms.txt",
+    "what": "Per-model docs incl. pricing formulas and output schema; also covers {studio}/soul/v2/image-to-image and {studio}/ai-influencer (absent from docs catalog)",
     "fetched": "2026-10-16",
     "http": 200
    },
    {
-    "url": "https://open.higgsfield.ai/pricing",
+    "url": "{studio-service}/pricing",
     "what": "Pricing page HTML (concurrency tiers)"
    }
   ],
   "secondary": [
    {
-    "url": "https://pypi.org/project/higgsfield-client/ (0.2.0)",
+    "url": "https://pypi.org/project/{studio}-client/ (0.2.0)",
     "what": "Python SDK: submit/subscribe/status/result/cancel/upload; builds status_url/cancel_url as /requests/{id}/status|cancel"
    },
    {
-    "url": "https://www.npmjs.com/package/@higgsfield/client (0.2.6)",
+    "url": "{studio-npm}/client (0.2.6)",
     "what": "TS SDK: v2 client (flat body, hf_webhook query param, Authorization: Key) + legacy v1 client (hf-api-key/hf-secret headers, {params} body, DoP/Speak/Soul v1 types, /v1/motions, /v1/custom-references/list)"
    },
    {
-    "url": "https://github.com/higgsfield-ai/higgsfield-client",
+    "url": "{studio-github}/{studio}-client",
     "what": "SDK repo (not cloned; package tarballs inspected instead)"
    },
    {
-    "url": "https://github.com/higgsfield-ai/higgsfield-js"
+    "url": "{studio-github}/{studio}-js"
    }
   ],
   "notReachable": [
    {
-    "url": "https://docs.higgsfield.ai/openapi.json",
+    "url": "{studio-docs}/openapi.json",
     "http": 404
    },
    {
-    "url": "https://api.higgsfield.ai/docs/openapi.json",
+    "url": "{studio-api}/docs/openapi.json",
     "http": 405
    },
    {
-    "url": "https://api.higgsfield.ai/openapi.json",
+    "url": "{studio-api}/openapi.json",
     "http": 405
    },
    {
-    "url": "https://open.higgsfield.ai/docs/openapi.json",
+    "url": "{studio-service}/docs/openapi.json",
     "http": 404
    },
    {
-    "url": "https://docs.higgsfield.ai/llms.txt",
+    "url": "{studio-docs}/llms.txt",
     "http": 404
    },
    {
-    "url": "https://docs.higgsfield.ai/sitemap.xml",
+    "url": "{studio-docs}/sitemap.xml",
     "http": 404
    }
   ]
  },
- "baseUrl": "https://api.higgsfield.ai",
+ "baseUrl": "{studio-api}",
  "auth": {
   "header": "Authorization: Key {API_KEY_ID}:{API_KEY_SECRET}",
   "legacyHeaders": {
@@ -89,7 +89,7 @@
    "curlExamples": "HF_API_KEY_ID, HF_API_KEY_SECRET"
   },
   "serverSideOnly": true,
-  "console": "https://console.higgsfield.ai",
+  "console": "{studio-console}",
   "errors": {
    "401": "{\"detail\":\"Invalid credentials\"}",
    "modelUnavailable": "404 | 423 | 503 depending on model state"
@@ -113,8 +113,8 @@
     "body": {
      "status": "queued",
      "request_id": "uuid",
-     "status_url": "https://api.higgsfield.ai/requests/{id}/status",
-     "cancel_url": "https://api.higgsfield.ai/requests/{id}/cancel"
+     "status_url": "{studio-api}/requests/{id}/status",
+     "cancel_url": "{studio-api}/requests/{id}/cancel"
     },
     "note": "Use the returned URLs rather than constructing them."
    },
@@ -198,7 +198,7 @@
    "step2": {
     "method": "PUT",
     "url": "{upload_url}",
-    "headers": "every key in upload_headers; NO Higgsfield credentials",
+    "headers": "every key in upload_headers; NO studio credentials",
     "body": "raw file bytes"
    },
    "step3": "pass public_url as image_url / image_urls[] / video_url / audio_url(s). There are no file ids - every model takes URLs.",
@@ -265,7 +265,7 @@
   "items": [
    "DoP image-to-video presets (only legacy /v1/image2video/dop + GET /v1/motions via SDK, verified:false)",
    "Popcorn",
-   "Speak / Lipsync / talking avatar (only legacy /v1/speak/higgsfield via SDK, verified:false)",
+   "Speak / Lipsync / talking avatar (only legacy /v1/speak/{studio} via SDK, verified:false)",
    "Seedance 2.5 draft mode / draft params (not in schema; additionalProperties:false would reject them)",
    "Soul ID delete/update",
    "Kling element creation (elements[] takes Kling element IDs owned by the account but no create endpoint is documented)",
@@ -274,8 +274,8 @@
  },
  "endpoints": [
   {
-   "id": "higgsfield/ads-studio/v1.0",
-   "path": "/higgsfield/ads-studio/v1.0",
+   "id": "{studio}/ads-studio/v1.0",
+   "path": "/{studio}/ads-studio/v1.0",
    "method": "POST",
    "operation": "t2i",
    "title": "Ads Studio — Generate ads",
@@ -370,7 +370,7 @@
       "currentUsd": 0.084
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Per 1M tokens: text input $5, cached text input $1.25, text output $10; image input $8, cached image input $2, image output $30. Quality defaults to high. Final cost uses actual token usage and standard credit rounding. The initial charge is an estimate reconciled on completion."
    },
@@ -381,12 +381,12 @@
     "All outputs in a batch use the requested aspect_ratio. Omitting it selects 1:1. The value auto is not supported.",
     "Per-model dash llms.txt aspect_ratio enum lacks 3:1 and 1:3 (docs page includes them)."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/ads-studio/generate",
+   "source": "{studio-docs}/docs/models/ads-studio/generate",
    "verified": true
   },
   {
-   "id": "higgsfield/cinema-studio/4.0",
-   "path": "/higgsfield/cinema-studio/4.0",
+   "id": "{studio}/cinema-studio/4.0",
+   "path": "/{studio}/cinema-studio/4.0",
    "method": "POST",
    "operation": "t2v",
    "alsoSupports": [
@@ -663,7 +663,7 @@
       "currentUsd": 0.4623
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Token-metered pricing. Billable video tokens = ceil((input video seconds + generated video seconds) × output width × output height × 24 fps / 1024). Image and audio references do not count as video input. At 480p or 720p, each 1,000 video tokens cost $0.0214 without video input or $0.01284 with video input (0.6× the standard rate). With video references, both input and generated video durations are billable. Rates shown are before any applicable customer discount."
    },
@@ -674,12 +674,12 @@
     "This endpoint produces a new video. Editing and extension use the separate Seedance 2.5 endpoints.",
     "Reference media are limited to 30 images, 10 videos and 10 audio files, with at most 50 items total. Video and audio may be normalized to separate 30-second total budgets."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/cinema-studio-4/generate",
+   "source": "{studio-docs}/docs/models/cinema-studio-4/generate",
    "verified": true
   },
   {
-   "id": "higgsfield/genjutsu/motion-transfer/v1.0",
-   "path": "/higgsfield/genjutsu/motion-transfer/v1.0",
+   "id": "{studio}/genjutsu/motion-transfer/v1.0",
+   "path": "/{studio}/genjutsu/motion-transfer/v1.0",
    "method": "POST",
    "operation": "motion-transfer",
    "title": "Genjutsu — Motion transfer",
@@ -756,21 +756,21 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Per-second pricing. Each second of input video costs $0.318 at 480p, $0.681 at 720p, $1.632 at 1080p. Input duration is rounded up to the nearest whole second. Rates shown are before any applicable customer discount."
    },
    "notes": [
-    "Use higgsfield/genjutsu/motion-transfer/v1.0 for new integrations. The legacy endpoint higgsfiled/genjutsu/motion-transfer/v1.0 remains callable for existing clients but is hidden from model discovery.",
+    "Use {studio}/genjutsu/motion-transfer/v1.0 for new integrations. The legacy endpoint {studio-misspelled}/genjutsu/motion-transfer/v1.0 remains callable for existing clients but is hidden from model discovery.",
     "The source video must be at least 4 seconds. Videos longer than 30 seconds are trimmed to 30 seconds; output duration follows the prepared source video.",
     "Provide 1–8 image references. The prompt is optional and defaults to an empty string."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/genjutsu/motion-transfer",
+   "source": "{studio-docs}/docs/models/genjutsu/motion-transfer",
    "verified": true
   },
   {
-   "id": "higgsfield/genjutsu/object-swap/v1.0",
-   "path": "/higgsfield/genjutsu/object-swap/v1.0",
+   "id": "{studio}/genjutsu/object-swap/v1.0",
+   "path": "/{studio}/genjutsu/object-swap/v1.0",
    "method": "POST",
    "operation": "v2v",
    "title": "Genjutsu — Object swap",
@@ -847,22 +847,22 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Per-second pricing. Each second of input video costs $0.318 at 480p, $0.681 at 720p, $1.632 at 1080p. Input duration is rounded up to the nearest whole second. Rates shown are before any applicable customer discount."
    },
    "notes": [
-    "Use higgsfield/genjutsu/object-swap/v1.0 for new integrations. The legacy endpoint higgsfiled/genjutsu/object-swap/v1.0 remains callable for existing clients but is hidden from model discovery.",
+    "Use {studio}/genjutsu/object-swap/v1.0 for new integrations. The legacy endpoint {studio-misspelled}/genjutsu/object-swap/v1.0 remains callable for existing clients but is hidden from model discovery.",
     "The source video must be at least 4 seconds. Videos longer than 30 seconds are trimmed to 30 seconds; output duration follows the prepared source video.",
     "Provide 1–8 image references. The prompt is optional and defaults to an empty string.",
     "The source video must contain at least 409,600 pixels per frame (width × height)."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/genjutsu/object-swap",
+   "source": "{studio-docs}/docs/models/genjutsu/object-swap",
    "verified": true
   },
   {
-   "id": "higgsfield/genjutsu/restyle/v1.0",
-   "path": "/higgsfield/genjutsu/restyle/v1.0",
+   "id": "{studio}/genjutsu/restyle/v1.0",
+   "path": "/{studio}/genjutsu/restyle/v1.0",
    "method": "POST",
    "operation": "v2v",
    "title": "Genjutsu — Restyle",
@@ -920,23 +920,23 @@
    },
    "priceUsd": {
     "formula": "Roughly costs $0.318 per second at 480p, $0.681 per second at 720p, or $1.632 per second at 1080p.",
-    "source": "https://dash.higgsfield.ai/models/higgsfield/genjutsu/restyle/v1.0/llms.txt",
+    "source": "{studio-dashboard}/models/{studio}/genjutsu/restyle/v1.0/llms.txt",
     "verified": true
    },
    "notes": [
     "Restyle changes the visual style of a source video while retaining its motion, shot composition, and source audio. Each request produces one video.",
-    "Select a current style from GET /models/higgsfield/genjutsu/restyle/v1.0/presets and send its UUID as preset_id. The example UUID below is illustrative of a published preset; fetch the current catalog before submitting.",
+    "Select a current style from GET /models/{studio}/genjutsu/restyle/v1.0/presets and send its UUID as preset_id. The example UUID below is illustrative of a published preset; fetch the current catalog before submitting.",
     "The source must be at least 4 seconds and no larger than 200 MiB. Videos longer than 30 seconds are trimmed to their first 30 seconds, including audio.",
     "Character references are optional: omit image_urls or send [] to restyle the existing source subjects. Supply up to 5 character images to guide their appearance.",
     "Defaults apply to omitted optional fields. Use [] or an empty string where appropriate; null is not accepted.",
     "Output framing is derived from the source and animation cadence can depend on the selected style. Exact output duration and FPS may differ from the source."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/genjutsu/restyle",
+   "source": "{studio-docs}/docs/models/genjutsu/restyle",
    "verified": true
   },
   {
-   "id": "higgsfield/genjutsu-light/motion-transfer/v1.0",
-   "path": "/higgsfield/genjutsu-light/motion-transfer/v1.0",
+   "id": "{studio}/genjutsu-light/motion-transfer/v1.0",
+   "path": "/{studio}/genjutsu-light/motion-transfer/v1.0",
    "method": "POST",
    "operation": "motion-transfer",
    "title": "Genjutsu Light — Motion transfer",
@@ -1014,22 +1014,22 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Priced per total second by resolution: 480p $0.05, 720p $0.10, or 1080p $0.20. Rates shown are before any applicable customer discount. Billable seconds = output duration + the sum of input reference video durations. Genjutsu Light trims the source to 15 seconds; output duration is rounded up to whole seconds before billing."
    },
    "notes": [
-    "Copied by the catalog-4 package from docs/research/paid-model-apis-4.json (round-4 research, verified 2026-10-22 against https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/motion-transfer/v1.0/llms.txt). Released on the public API 2026-10-20; the web app calls it Genjutsu Lite.",
-    "Same inputs as Genjutsu (higgsfield/genjutsu/motion-transfer/v1.0) but only the first 15 s of the source are used; 1-8 image references; the prompt is optional.",
+    "Copied by the catalog-4 package from docs/research/paid-model-apis-4.json (round-4 research, verified 2026-10-22 against {studio-dashboard}/models/{studio}/genjutsu-light/motion-transfer/v1.0/llms.txt). Released on the public API 2026-10-20; the web app calls it Genjutsu Lite.",
+    "Same inputs as Genjutsu ({studio}/genjutsu/motion-transfer/v1.0) but only the first 15 s of the source are used; 1-8 image references; the prompt is optional.",
     "duration is read-only: computed from the source video, rounded up to whole seconds and capped at 15 s.",
     "The pricing API showed 50% off on 2026-10-22 (currentUsd)."
    ],
-   "source": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/motion-transfer/v1.0/llms.txt",
+   "source": "{studio-dashboard}/models/{studio}/genjutsu-light/motion-transfer/v1.0/llms.txt",
    "verified": true
   },
   {
-   "id": "higgsfield/genjutsu-light/object-swap/v1.0",
-   "path": "/higgsfield/genjutsu-light/object-swap/v1.0",
+   "id": "{studio}/genjutsu-light/object-swap/v1.0",
+   "path": "/{studio}/genjutsu-light/object-swap/v1.0",
    "method": "POST",
    "operation": "video-swap",
    "title": "Genjutsu Light — Object swap",
@@ -1107,17 +1107,17 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Priced per total second by resolution: 480p $0.05, 720p $0.10, or 1080p $0.20. Rates shown are before any applicable customer discount. Billable seconds = output duration + the sum of input reference video durations. Genjutsu Light trims the source to 15 seconds; output duration is rounded up to whole seconds before billing."
    },
    "notes": [
-    "Copied by the catalog-4 package from docs/research/paid-model-apis-4.json (round-4 research, verified 2026-10-22 against https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/object-swap/v1.0/llms.txt). Released on the public API 2026-10-20; the web app calls it Genjutsu Lite.",
-    "Same inputs as Genjutsu (higgsfield/genjutsu/object-swap/v1.0) but only the first 15 s of the source are used; 1-8 image references; the prompt is optional.",
+    "Copied by the catalog-4 package from docs/research/paid-model-apis-4.json (round-4 research, verified 2026-10-22 against {studio-dashboard}/models/{studio}/genjutsu-light/object-swap/v1.0/llms.txt). Released on the public API 2026-10-20; the web app calls it Genjutsu Lite.",
+    "Same inputs as Genjutsu ({studio}/genjutsu/object-swap/v1.0) but only the first 15 s of the source are used; 1-8 image references; the prompt is optional.",
     "duration is read-only: computed from the source video, rounded up to whole seconds and capped at 15 s.",
     "The pricing API showed 50% off on 2026-10-22 (currentUsd)."
    ],
-   "source": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/object-swap/v1.0/llms.txt",
+   "source": "{studio-dashboard}/models/{studio}/genjutsu-light/object-swap/v1.0/llms.txt",
    "verified": true
   },
   {
@@ -1203,7 +1203,7 @@
       "currentUsd": 0.08
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -1211,7 +1211,7 @@
     "quality accepts low or medium only; resolution accepts 1k or 2k. aspect_ratio defaults to auto.",
     "Reference images may be resized during preprocessing before submission. The request produces one image; no batch count is declared."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/grok-image-2/generate-and-edit",
+   "source": "{studio-docs}/docs/models/grok-image-2/generate-and-edit",
    "verified": true
   },
   {
@@ -1311,7 +1311,7 @@
       "currentUsd": 0.25
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -1319,7 +1319,7 @@
     "When image_urls or audio_url is provided, resolution must be 480p or 720p. The shared schema also lists 1080p, which is rejected in reference mode.",
     "Input images must decode as JPEG, PNG, WebP or GIF; SVG and XML are unsupported."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/grok-video-1-5/reference-to-video",
+   "source": "{studio-docs}/docs/models/grok-video-1-5/reference-to-video",
    "verified": true
   },
   {
@@ -1378,13 +1378,13 @@
       "discountPct": 75.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "This Standard endpoint uses a fixed 768P output resolution; resolution is not a configurable field in the production schema."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/hailuo-2-3/standard-image-to-video",
+   "source": "{studio-docs}/docs/models/hailuo-2-3/standard-image-to-video",
    "verified": true
   },
   {
@@ -1439,13 +1439,13 @@
       "discountPct": 75.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "This Standard endpoint uses a fixed 768P output resolution; resolution is not a configurable field in the production schema."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/hailuo-2-3/standard-text-to-video",
+   "source": "{studio-docs}/docs/models/hailuo-2-3/standard-text-to-video",
    "verified": true
   },
   {
@@ -1516,13 +1516,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "The prompt is optional. This endpoint accepts one first-frame image; it does not support a last-frame image."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/happy-horse-1-1/image-to-video",
+   "source": "{studio-docs}/docs/models/happy-horse-1-1/image-to-video",
    "verified": true
   },
   {
@@ -1596,13 +1596,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Provide 1–9 reference images. This limit is enforced at submission even though the stored JSON Schema does not set minItems or maxItems. Reference videos are unsupported."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/happy-horse-1-1/reference-to-video",
+   "source": "{studio-docs}/docs/models/happy-horse-1-1/reference-to-video",
    "verified": true
   },
   {
@@ -1680,13 +1680,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "The prompt must contain text; an empty string is rejected during submission."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/happy-horse-1-1/text-to-video",
+   "source": "{studio-docs}/docs/models/happy-horse-1-1/text-to-video",
    "verified": true
   },
   {
@@ -1757,13 +1757,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "The prompt is optional. This endpoint accepts one first-frame image; it does not support a last-frame image."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/happy-horse-1/image-to-video",
+   "source": "{studio-docs}/docs/models/happy-horse-1/image-to-video",
    "verified": true
   },
   {
@@ -1837,13 +1837,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Provide 1–9 reference images. This limit is enforced at submission even though the stored JSON Schema does not set minItems or maxItems. Reference videos are unsupported."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/happy-horse-1/reference-to-video",
+   "source": "{studio-docs}/docs/models/happy-horse-1/reference-to-video",
    "verified": true
   },
   {
@@ -1921,13 +1921,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "The prompt must contain text; an empty string is rejected during submission."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/happy-horse-1/text-to-video",
+   "source": "{studio-docs}/docs/models/happy-horse-1/text-to-video",
    "verified": true
   },
   {
@@ -2016,7 +2016,7 @@
       "currentUsd": 0.03
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2025,7 +2025,7 @@
     "The square 1:1 aspect ratio is applied by default, including when an input image is supplied.",
     "rendering_speed values are case-sensitive: TURBO, DEFAULT, QUALITY. prompt must contain 2–2048 characters."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/ideogram-4/generate",
+   "source": "{studio-docs}/docs/models/ideogram-4/generate",
    "verified": true
   },
   {
@@ -2088,14 +2088,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration accepts 5 or 10 seconds; 5 is the default.",
     "This endpoint does not expose a sound or aspect_ratio field."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-5-turbo/pro-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-2-5-turbo/pro-image-to-video",
    "verified": true
   },
   {
@@ -2152,14 +2152,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration accepts 5 or 10 seconds; 5 is the default.",
     "This endpoint does not expose a sound or aspect_ratio field."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-5-turbo/pro-text-to-video",
+   "source": "{studio-docs}/docs/models/kling-2-5-turbo/pro-text-to-video",
    "verified": true
   },
   {
@@ -2222,14 +2222,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration accepts 5 or 10 seconds; 5 is the default.",
     "This endpoint does not expose a sound or aspect_ratio field."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-5-turbo/standard-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-2-5-turbo/standard-image-to-video",
    "verified": true
   },
   {
@@ -2293,7 +2293,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2302,7 +2302,7 @@
     "Videos larger than 100 MB are compressed before generation.",
     "Set character_orientation to image or video. keep_original_sound uses the strings yes and no, with yes as the default."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-6-motion-control/pro",
+   "source": "{studio-docs}/docs/models/kling-2-6-motion-control/pro",
    "verified": true
   },
   {
@@ -2366,7 +2366,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2375,7 +2375,7 @@
     "Videos larger than 100 MB are compressed before generation.",
     "Set character_orientation to image or video. keep_original_sound uses the strings yes and no, with yes as the default."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-6-motion-control/std",
+   "source": "{studio-docs}/docs/models/kling-2-6-motion-control/std",
    "verified": true
   },
   {
@@ -2463,14 +2463,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration accepts 5 or 10 seconds; 5 is the default.",
     "Native audio uses sound: on or off and defaults to on."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-6/pro-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-2-6/pro-image-to-video",
    "verified": true
   },
   {
@@ -2553,14 +2553,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration accepts 5 or 10 seconds; 5 is the default.",
     "Native audio uses sound: on or off and defaults to on."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-2-6/pro-text-to-video",
+   "source": "{studio-docs}/docs/models/kling-2-6/pro-text-to-video",
    "verified": true
   },
   {
@@ -2624,7 +2624,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2633,7 +2633,7 @@
     "Videos larger than 100 MB are compressed before generation.",
     "Set character_orientation to image or video. keep_original_sound uses the strings yes and no, with yes as the default."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3-motion-control/pro",
+   "source": "{studio-docs}/docs/models/kling-3-motion-control/pro",
    "verified": true
   },
   {
@@ -2697,7 +2697,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2706,7 +2706,7 @@
     "Videos larger than 100 MB are compressed before generation.",
     "Set character_orientation to image or video. keep_original_sound uses the strings yes and no, with yes as the default."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3-motion-control/std",
+   "source": "{studio-docs}/docs/models/kling-3-motion-control/std",
    "verified": true
   },
   {
@@ -2812,7 +2812,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2823,7 +2823,7 @@
     "Native audio uses sound: on or off and defaults to on.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/4k-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/4k-image-to-video",
    "verified": true
   },
   {
@@ -2926,7 +2926,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -2936,7 +2936,7 @@
     "Native audio uses sound: on or off and defaults to on.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/4k-text-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/4k-text-to-video",
    "verified": true
   },
   {
@@ -3048,7 +3048,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3059,7 +3059,7 @@
     "Native audio uses sound: on or off and defaults to on.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/pro-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/pro-image-to-video",
    "verified": true
   },
   {
@@ -3168,7 +3168,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3178,7 +3178,7 @@
     "Native audio uses sound: on or off and defaults to on.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/pro-text-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/pro-text-to-video",
    "verified": true
   },
   {
@@ -3290,7 +3290,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3301,7 +3301,7 @@
     "Native audio uses sound: on or off and defaults to on.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/standard-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/standard-image-to-video",
    "verified": true
   },
   {
@@ -3404,7 +3404,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3414,7 +3414,7 @@
     "Native audio uses sound: on or off and defaults to on.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/standard-text-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/standard-text-to-video",
    "verified": true
   },
   {
@@ -3478,7 +3478,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3486,7 +3486,7 @@
     "This endpoint has no sound, multi_shots, elements, or last-frame field.",
     "Keep prompt within 2,500 characters; longer prompts are truncated."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/turbo-image-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/turbo-image-to-video",
    "verified": true
   },
   {
@@ -3555,7 +3555,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3564,7 +3564,7 @@
     "aspect_ratio accepts 16:9, 9:16, or 1:1 and defaults to 16:9.",
     "Keep prompt within 3,072 characters; longer prompts are truncated."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-3/turbo-text-to-video",
+   "source": "{studio-docs}/docs/models/kling-3/turbo-text-to-video",
    "verified": true
   },
   {
@@ -3677,7 +3677,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3688,7 +3688,7 @@
     "Native audio uses sound: on or off and defaults to off.",
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-o3/first-last-frame",
+   "source": "{studio-docs}/docs/models/kling-o3/first-last-frame",
    "verified": true
   },
   {
@@ -3826,7 +3826,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3840,7 +3840,7 @@
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-o3/image-reference",
+   "source": "{studio-docs}/docs/models/kling-o3/image-reference",
    "verified": true
   },
   {
@@ -3913,7 +3913,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -3922,7 +3922,7 @@
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-o3/video-edit",
+   "source": "{studio-docs}/docs/models/kling-o3/video-edit",
    "verified": true
   },
   {
@@ -4018,7 +4018,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -4027,7 +4027,7 @@
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-o3/video-reference",
+   "source": "{studio-docs}/docs/models/kling-o3/video-reference",
    "verified": true
   },
   {
@@ -4111,14 +4111,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "first_frame_url supplies the starting frame; last_frame_url is optional. These names differ from the image_url and last_image_url fields on Kling 3.0 image-to-video.",
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-omni/first-last-frame",
+   "source": "{studio-docs}/docs/models/kling-omni/first-last-frame",
    "verified": true
   },
   {
@@ -4200,7 +4200,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -4208,7 +4208,7 @@
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-omni/image-reference",
+   "source": "{studio-docs}/docs/models/kling-omni/image-reference",
    "verified": true
   },
   {
@@ -4280,7 +4280,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -4289,7 +4289,7 @@
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-omni/video-edit",
+   "source": "{studio-docs}/docs/models/kling-omni/video-edit",
    "verified": true
   },
   {
@@ -4386,7 +4386,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -4395,7 +4395,7 @@
     "Keep the top-level prompt within 2,500 characters; longer prompts are truncated.",
     "elements contains Kling element IDs as decimal strings. Each ID must belong to the account making the request; arbitrary provider IDs are rejected."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/kling-omni/video-reference",
+   "source": "{studio-docs}/docs/models/kling-omni/video-reference",
    "verified": true
   },
   {
@@ -4526,7 +4526,7 @@
       "currentUsd": 0.3
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -4534,7 +4534,7 @@
     "Fast supports 720p, 1080p, 2k or 4k and 24, 25, 48 or 50 fps.",
     "image_url is the required first frame; end_image_url is an optional last frame. aspect_ratio explicitly controls output dimensions."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/ltx-2-5/image-to-video-fast",
+   "source": "{studio-docs}/docs/models/ltx-2-5/image-to-video-fast",
    "verified": true
   },
   {
@@ -4650,7 +4650,7 @@
       "currentUsd": 0.17
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -4658,7 +4658,7 @@
     "Pro supports 720p or 1080p and 24, 25 or 50 fps. Use the Fast endpoint for 2k, 4k or 48 fps.",
     "image_url is the required first frame; end_image_url is an optional last frame. aspect_ratio explicitly controls output dimensions."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/ltx-2-5/image-to-video-pro",
+   "source": "{studio-docs}/docs/models/ltx-2-5/image-to-video-pro",
    "verified": true
   },
   {
@@ -4775,14 +4775,14 @@
       "currentUsd": 0.3
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration is marked required in the schema and has default 6; the API applies this top-level default before validation. The example includes it explicitly.",
     "Fast supports 720p, 1080p, 2k or 4k and 24, 25, 48 or 50 fps."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/ltx-2-5/text-to-video-fast",
+   "source": "{studio-docs}/docs/models/ltx-2-5/text-to-video-fast",
    "verified": true
   },
   {
@@ -4884,14 +4884,14 @@
       "currentUsd": 0.17
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration is marked required in the schema and has default 6; the API applies this top-level default before validation. The example includes it explicitly.",
     "Pro supports 720p or 1080p and 24, 25 or 50 fps. Use the Fast endpoint for 2k, 4k or 48 fps."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/ltx-2-5/text-to-video-pro",
+   "source": "{studio-docs}/docs/models/ltx-2-5/text-to-video-pro",
    "verified": true
   },
   {
@@ -5006,7 +5006,7 @@
       "discountPct": 15.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Per 1M tokens: text input $5, cached text input $1.25, text output $10; image input $8, cached image input $2, image output $30. Quality defaults to high. Final cost uses actual token usage and standard credit rounding. The initial charge is an estimate reconciled on completion."
    },
@@ -5018,7 +5018,7 @@
     "The 1k/2k/4k values are resolution tiers; exact pixel dimensions depend on the aspect ratio.",
     "quality accepts low, medium, high, xhigh, max and remains selectable with enhancement enabled."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/marketing-studio-image/flare",
+   "source": "{studio-docs}/docs/models/marketing-studio-image/flare",
    "verified": true
   },
   {
@@ -5131,7 +5131,7 @@
       "discountPct": 15.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -5142,7 +5142,7 @@
     "The 1k/2k/4k values are resolution tiers; exact pixel dimensions depend on the aspect ratio.",
     "With enhance_prompt=true, quality must be high. This endpoint accepts low, medium, or high for unenhanced requests."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/marketing-studio-image/generate-and-edit",
+   "source": "{studio-docs}/docs/models/marketing-studio-image/generate-and-edit",
    "verified": true
   },
   {
@@ -5257,7 +5257,7 @@
       "discountPct": 15.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Per 1M tokens: text input $5, cached text input $1.25, text output $10; image input $8, cached image input $2, image output $30. Quality defaults to high. Final cost uses actual token usage and standard credit rounding. The initial charge is an estimate reconciled on completion."
    },
@@ -5269,7 +5269,7 @@
     "The 1k/2k/4k values are resolution tiers; exact pixel dimensions depend on the aspect ratio.",
     "quality accepts low, medium, high, xhigh, max and remains selectable with enhancement enabled."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/marketing-studio-image/sunburst",
+   "source": "{studio-docs}/docs/models/marketing-studio-image/sunburst",
    "verified": true
   },
   {
@@ -5356,14 +5356,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Resolution is fixed to the case-sensitive schema value \"2K\". The prompt must contain non-whitespace text; the current provider serializer uses only its first 7,000 characters.",
     "The output aspect ratio follows the input keyframe even when aspect_ratio is supplied. end_image_url is an optional last frame."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/minimax-h3/image-to-video",
+   "source": "{studio-docs}/docs/models/minimax-h3/image-to-video",
    "verified": true
   },
   {
@@ -5483,7 +5483,7 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "2K output costs $0.13 per generated second. The first five reference images are included; each additional reference image costs $0.08. Rates shown are before any applicable customer discount."
    },
@@ -5492,7 +5492,7 @@
     "Provide at least one image or video reference. Audio references require an image or video reference and cannot be used alone.",
     "Reference media may be cropped, resized, transcoded and trimmed. Video duration and audio duration are each normalized to fit within the provider's 15-second total budget."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/minimax-h3/reference-to-video",
+   "source": "{studio-docs}/docs/models/minimax-h3/reference-to-video",
    "verified": true
   },
   {
@@ -5565,14 +5565,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Resolution is fixed to the case-sensitive schema value \"2K\". The prompt must contain non-whitespace text; the current provider serializer uses only its first 7,000 characters.",
     "For text-only requests, aspect_ratio=\"auto\" or \"adaptive\" resolves to 16:9."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/minimax-h3/text-to-video",
+   "source": "{studio-docs}/docs/models/minimax-h3/text-to-video",
    "verified": true
   },
   {
@@ -5662,14 +5662,14 @@
       "discountPct": 15.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration is a number from 1 to 15, so the schema allows fractional values. If negative_prompt is supplied, it must contain 1–2,048 characters.",
     "Use image_url for the first frame and optional end_image_url for the last frame. This endpoint has no aspect_ratio parameter; framing comes from the input image."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/pixverse-v6/image-to-video",
+   "source": "{studio-docs}/docs/models/pixverse-v6/image-to-video",
    "verified": true
   },
   {
@@ -5758,13 +5758,13 @@
       "discountPct": 15.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "duration is a number from 1 to 15, so the schema allows fractional values. If negative_prompt is supplied, it must contain 1–2,048 characters."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/pixverse-v6/text-to-video",
+   "source": "{studio-docs}/docs/models/pixverse-v6/text-to-video",
    "verified": true
   },
   {
@@ -5873,7 +5873,7 @@
       "currentUsd": 0.075
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -5882,7 +5882,7 @@
     "prompt_extend_mode accepts only direct; agent enhancement is unavailable on editing requests.",
     "prompt must contain non-whitespace text. The 2k square output tier maps to 1536 by 1536 pixels."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/qwen-image-3/edit",
+   "source": "{studio-docs}/docs/models/qwen-image-3/edit",
    "verified": true
   },
   {
@@ -5981,7 +5981,7 @@
       "currentUsd": 0.075
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -5990,7 +5990,7 @@
     "prompt_extend_mode supports direct or agent. No reference images are accepted by this endpoint.",
     "resolution is a tier; 2k square maps to 1536 by 1536 pixels, not 2048 by 2048."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/qwen-image-3/text-to-image",
+   "source": "{studio-docs}/docs/models/qwen-image-3/text-to-image",
    "verified": true
   },
   {
@@ -6105,7 +6105,7 @@
       "currentUsd": 0.21
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -6114,7 +6114,7 @@
     "output_format is jpg, png, or webp; default is jpg. No reference-image input is declared.",
     "prompt must contain 1–10000 characters. Fourteen aspect-ratio values are listed in the schema, including 6:10, 14:10, and 10:14."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/recraft-v4-1-pro/generate",
+   "source": "{studio-docs}/docs/models/recraft-v4-1-pro/generate",
    "verified": true
   },
   {
@@ -6229,7 +6229,7 @@
       "currentUsd": 0.21
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -6238,7 +6238,7 @@
     "output_format is jpg, png, or webp; default is jpg. No reference-image input is declared.",
     "prompt must contain 1–10000 characters. Fourteen aspect-ratio values are listed in the schema, including 6:10, 14:10, and 10:14."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/recraft-v4-1-utility-pro/text-to-image",
+   "source": "{studio-docs}/docs/models/recraft-v4-1-utility-pro/text-to-image",
    "verified": true
   },
   {
@@ -6353,7 +6353,7 @@
       "currentUsd": 0.035
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -6362,7 +6362,7 @@
     "output_format is jpg, png, or webp; default is jpg. No reference-image input is declared.",
     "prompt must contain 1–10000 characters. Fourteen aspect-ratio values are listed in the schema, including 6:10, 14:10, and 10:14."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/recraft-v4-1-utility/text-to-image",
+   "source": "{studio-docs}/docs/models/recraft-v4-1-utility/text-to-image",
    "verified": true
   },
   {
@@ -6477,7 +6477,7 @@
       "currentUsd": 0.035
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -6486,7 +6486,7 @@
     "output_format is jpg, png, or webp; default is jpg. No reference-image input is declared.",
     "prompt must contain 1–10000 characters. Fourteen aspect-ratio values are listed in the schema, including 6:10, 14:10, and 10:14."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/recraft-v4-1/text-to-image",
+   "source": "{studio-docs}/docs/models/recraft-v4-1/text-to-image",
    "verified": true
   },
   {
@@ -6576,7 +6576,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "For 16:9 video without video input, your request costs roughly $0.2056 per second of generated video at 480p, $0.4622 at 720p, and $1.1372 at 1080p. Each 1,000 video tokens costs $0.0214 at 480p or 720p and $0.0234 at 1080p. Billable video tokens = ceil(output height × output width × (input video duration + generated video duration) × 24 / 1024). Image and audio references do not count as video input. Actual pricing depends on output dimensions and billable duration. Rates shown are before any applicable customer discount."
    },
@@ -6584,7 +6584,7 @@
     "Use publicly accessible media URLs; asset:// references are rejected for these endpoints.",
     "The prompt is optional. Output framing follows image_url; end_image_url is the optional last frame."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2-5/image-to-video",
+   "source": "{studio-docs}/docs/models/seedance-2-5/image-to-video",
    "verified": true
   },
   {
@@ -6707,7 +6707,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "For 16:9 video without video input, your request costs roughly $0.2056 per second of generated video at 480p, $0.4622 at 720p, and $1.1372 at 1080p. Each 1,000 video tokens costs $0.0214 at 480p or 720p and $0.0234 at 1080p. If video inputs are provided, the token rate is multiplied by 0.6: $0.01284 per 1,000 tokens at 480p or 720p and $0.01404 at 1080p. Both input and generated video durations are billable. Billable video tokens = ceil(output height × output width × (input video duration + generated video duration) × 24 / 1024). Image and audio references do not count as video input. Actual pricing depends on output dimensions and billable duration. Rates shown are before any applicable customer discount."
    },
@@ -6716,7 +6716,7 @@
     "Provide at least one nonempty reference array: image_urls, video_urls or audio_urls. Audio-only references are supported by this schema and preprocessing path.",
     "Reference media are limited to 30 images, 10 videos and 10 audio files, with at most 50 items total. Video duration and audio duration are normalized separately to at most 30 seconds total per media type."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2-5/reference-to-video",
+   "source": "{studio-docs}/docs/models/seedance-2-5/reference-to-video",
    "verified": true
   },
   {
@@ -6816,7 +6816,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "For 16:9 video without video input, your request costs roughly $0.2056 per second of generated video at 480p, $0.4622 at 720p, and $1.1372 at 1080p. Each 1,000 video tokens costs $0.0214 at 480p or 720p and $0.0234 at 1080p. Billable video tokens = ceil(output height × output width × (input video duration + generated video duration) × 24 / 1024). Image and audio references do not count as video input. Actual pricing depends on output dimensions and billable duration. Rates shown are before any applicable customer discount."
    },
@@ -6824,7 +6824,7 @@
     "Use publicly accessible media URLs; asset:// references are rejected for these endpoints.",
     "Provide a nonblank prompt. This endpoint does not use media inputs; use the image-to-video or reference-to-video endpoint instead."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2-5/text-to-video",
+   "source": "{studio-docs}/docs/models/seedance-2-5/text-to-video",
    "verified": true
   },
   {
@@ -6931,7 +6931,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Video input is required. Each 1,000 video tokens costs $0.01284 at 480p or 720p and $0.01404 at 1080p (0.6× the no-video-input rate). For 16:9 output, this is roughly $0.1234 at 480p, $0.2773 at 720p, and $0.6823 at 1080p per second of combined input and generated video duration. Both input and generated video durations are billable. Billable video tokens = ceil(output height × output width × (input video duration + generated video duration) × 24 / 1024). Image and audio references do not count as video input. Actual pricing depends on output dimensions and billable duration. Rates shown are before any applicable customer discount."
    },
@@ -6941,7 +6941,7 @@
     "Videos and audio may be trimmed or padded during preprocessing to fit their respective 30-second total budgets. Output framing follows the source video.",
     "Do not send duration: this endpoint derives output duration from the processed source video. The main video is normalized to at least 4 seconds."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2-5/video-edit",
+   "source": "{studio-docs}/docs/models/seedance-2-5/video-edit",
    "verified": true
   },
   {
@@ -7056,7 +7056,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Video input is required. Each 1,000 video tokens costs $0.01284 at 480p or 720p and $0.01404 at 1080p (0.6× the no-video-input rate). For 16:9 output, this is roughly $0.1234 at 480p, $0.2773 at 720p, and $0.6823 at 1080p per second of combined input and generated video duration. Both input and generated video durations are billable. Billable video tokens = ceil(output height × output width × (input video duration + generated video duration) × 24 / 1024). Image and audio references do not count as video input. Actual pricing depends on output dimensions and billable duration. Rates shown are before any applicable customer discount."
    },
@@ -7066,7 +7066,7 @@
     "Videos and audio may be trimmed or padded during preprocessing to fit their respective 30-second total budgets. Output framing follows the source video.",
     "duration is an integer from 4 to 30 seconds, with default 5."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2-5/video-extend",
+   "source": "{studio-docs}/docs/models/seedance-2-5/video-extend",
    "verified": true
   },
   {
@@ -7148,7 +7148,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Token-metered pricing. Billable video tokens = ceil(generated video seconds × output width × output height × 24 fps / 1024). Image and audio references do not count as video input. Per 1,000 video tokens: 480p/720p/1080p $0.014, 4K $0.008. Rates shown are before any applicable customer discount."
    },
@@ -7156,7 +7156,7 @@
     "Use publicly accessible media URLs; asset:// references are rejected for these endpoints.",
     "The prompt is optional. Output framing follows image_url; end_image_url is the optional last frame."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2/image-to-video",
+   "source": "{studio-docs}/docs/models/seedance-2/image-to-video",
    "verified": true
   },
   {
@@ -7271,7 +7271,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Token-metered pricing. Billable video tokens = ceil((input video seconds + generated video seconds) × output width × output height × 24 fps / 1024). Image and audio references do not count as video input. Per 1,000 video tokens: without video input — 480p/720p/1080p $0.014, 4K $0.008; with video input — 480p/720p/1080p $0.0084, 4K $0.0048 (0.6× the standard rate). With video references, both input and generated video durations are billable. Rates shown are before any applicable customer discount."
    },
@@ -7280,7 +7280,7 @@
     "Provide a nonempty image_urls or video_urls array. Audio alone does not satisfy the reference requirement. Do not mix reference arrays with image_url, end_image_url or video_url.",
     "Reference videos may be resized, transcoded and trimmed to 15 seconds each. Reference audio is normalized to 2–15 seconds per file and at most 15 seconds total."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2/reference-to-video",
+   "source": "{studio-docs}/docs/models/seedance-2/reference-to-video",
    "verified": true
   },
   {
@@ -7362,7 +7362,7 @@
       "discountPct": 30.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Token-metered pricing. Billable video tokens = ceil(generated video seconds × output width × output height × 24 fps / 1024). Image and audio references do not count as video input. Per 1,000 video tokens: 480p/720p/1080p $0.014, 4K $0.008. Rates shown are before any applicable customer discount."
    },
@@ -7370,12 +7370,12 @@
     "Use publicly accessible media URLs; asset:// references are rejected for these endpoints.",
     "Provide a nonblank prompt. This endpoint does not use media inputs; use the image-to-video or reference-to-video endpoint instead."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/seedance-2/text-to-video",
+   "source": "{studio-docs}/docs/models/seedance-2/text-to-video",
    "verified": true
   },
   {
-   "id": "higgsfield-ai/soul/v2/standard",
-   "path": "/higgsfield-ai/soul/v2/standard",
+   "id": "{studio}/soul/v2/standard",
+   "path": "/{studio}/soul/v2/standard",
    "method": "POST",
    "operation": "t2i",
    "title": "SOUL V2 — Text to image",
@@ -7486,7 +7486,7 @@
       "currentUsd": 0.0057
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -7497,12 +7497,12 @@
     "When using custom_reference_id, set custom_reference_strength to a value greater than 0 and no greater than 1. The schema accepts 0, but the current runtime fails to process it for a character reference.",
     "Per-model dash llms.txt omits style_strength (docs say it is accepted but has no effect)."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/soul-2/generate",
+   "source": "{studio-docs}/docs/models/soul-2/generate",
    "verified": true
   },
   {
-   "id": "higgsfield-ai/soul/cinema",
-   "path": "/higgsfield-ai/soul/cinema",
+   "id": "{studio}/soul/cinema",
+   "path": "/{studio}/soul/cinema",
    "method": "POST",
    "operation": "t2i",
    "title": "SOUL Cinema — Text to image",
@@ -7590,7 +7590,7 @@
     "Cinema uses a fixed style; client-supplied style_id is ignored.",
     "This model may be absent from model discovery; authorized requests can use the endpoint ID directly."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/soul-cinema/generate",
+   "source": "{studio-docs}/docs/models/soul-cinema/generate",
    "verified": true
   },
   {
@@ -7672,16 +7672,16 @@
     "The creation response returns id and status. Poll GET /v1/custom-references/{id}; statuses are not_ready, queued, in_progress, completed, and failed.",
     "After completion, pass the returned id as custom_reference_id to the matching Soul generation endpoint. References are scoped to the account that created them."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/soul-id/create-character",
+   "source": "{studio-docs}/docs/models/soul-id/create-character",
    "verified": true
   },
   {
-   "id": "higgsfield-ai/soul/standard",
-   "path": "/higgsfield-ai/soul/standard",
+   "id": "{studio}/soul/standard",
+   "path": "/{studio}/soul/standard",
    "method": "POST",
    "operation": "t2i",
    "title": "SOUL — Text to image",
-   "uiFeature": "Image > Higgsfield Soul (v1, styles + Soul ID)",
+   "uiFeature": "Image > Soul (v1, styles + Soul ID)",
    "inputs": {
     "prompt": {
      "type": "string",
@@ -7799,7 +7799,7 @@
       "currentUsd": 0.1875
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -7811,7 +7811,7 @@
     "custom_reference_strength=0 uses the selected style's default character strength; it does not disable the character reference.",
     "Discrepancy: /docs/openapi.json (v2.0.0, only 9 ops) lists num_images(1-4), resolution 2K|4K, aspect_ratio incl. 5:4/4:5/21:9 - this conflicts with the model page (batch_size 1|4, resolution 720p|1080p). The per-model dash llms.txt omits custom_reference_id/custom_reference_strength/image_reference_url. Treat llms-full page as canonical and validate with /estimate before relying on Soul ID here."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/soul-standard/generate",
+   "source": "{studio-docs}/docs/models/soul-standard/generate",
    "verified": true
   },
   {
@@ -7916,14 +7916,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Setting multi_shots=true also enables prompt_extend, even if prompt_extend was false.",
     "Input images may be resized to fit a 1,440-pixel maximum dimension before generation. A last-frame input is unsupported."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-2-6/image-to-video",
+   "source": "{studio-docs}/docs/models/wan-2-6/image-to-video",
    "verified": true
   },
   {
@@ -8007,13 +8007,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Supply 1–3 reference videos. This endpoint supports only 5 or 10 seconds, unlike the text and image endpoints that also support 15 seconds."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-2-6/reference-to-video",
+   "source": "{studio-docs}/docs/models/wan-2-6/reference-to-video",
    "verified": true
   },
   {
@@ -8098,13 +8098,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Setting multi_shots=true also enables prompt_extend, even if prompt_extend was false."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-2-6/text-to-video",
+   "source": "{studio-docs}/docs/models/wan-2-6/text-to-video",
    "verified": true
   },
   {
@@ -8201,13 +8201,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "The prompt is optional. end_image_url supplies a last frame, and audio_url can supply driving audio."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-2-7/image-to-video",
+   "source": "{studio-docs}/docs/models/wan-2-7/image-to-video",
    "verified": true
   },
   {
@@ -8312,14 +8312,14 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Provide a nonempty image_urls or video_urls array. The combined number of image and video references must not exceed 5; this submission limit is not expressed in the stored JSON Schema.",
     "Reference generation is limited to 2–10 seconds and aspect ratios 16:9 or 9:16."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-2-7/reference-to-video",
+   "source": "{studio-docs}/docs/models/wan-2-7/reference-to-video",
    "verified": true
   },
   {
@@ -8415,13 +8415,13 @@
       "discountPct": 50.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "The prompt must contain text. audio_url can supply driving audio."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-2-7/text-to-video",
+   "source": "{studio-docs}/docs/models/wan-2-7/text-to-video",
    "verified": true
   },
   {
@@ -8534,14 +8534,14 @@
       "discountPct": 60.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "Use image_url for the first frame and optional end_image_url for the last frame. Reference arrays belong to the reference-to-video endpoint.",
     "The schema accepts seed=0, but the current implementation only forwards a nonzero seed."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-3-prime/image-to-video",
+   "source": "{studio-docs}/docs/models/wan-3-prime/image-to-video",
    "verified": true
   },
   {
@@ -8682,7 +8682,7 @@
       "discountPct": 60.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Priced per total video second: 480p $0.068/s, 720p $0.14/s, 1080p $0.28/s. Total billable duration = output video duration + the sum of all input reference video durations. Without input videos, only output duration is billed. Rates shown are before any applicable customer discount."
    },
@@ -8693,7 +8693,7 @@
     "The schema accepts seed=0, but the current implementation only forwards a nonzero seed.",
     "Per-model dash llms.txt omits prompt_extend."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-3-prime/reference-to-video",
+   "source": "{studio-docs}/docs/models/wan-3-prime/reference-to-video",
    "verified": true
   },
   {
@@ -8792,14 +8792,14 @@
       "discountPct": 60.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
     "This endpoint generates from text; use the separate image or reference endpoint for media inputs.",
     "The schema accepts seed=0, but the current implementation only forwards a nonzero seed."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-3-prime/text-to-video",
+   "source": "{studio-docs}/docs/models/wan-3-prime/text-to-video",
    "verified": true
   },
   {
@@ -8912,7 +8912,7 @@
       "discountPct": 60.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Priced per generated second by resolution: 480p $0.05, 720p $0.10, or 1080p $0.20. Rates shown are before any applicable customer discount."
    },
@@ -8920,7 +8920,7 @@
     "Use image_url for the first frame and optional end_image_url for the last frame. Reference arrays belong to the reference-to-video endpoint.",
     "The schema accepts seed=0, but the current implementation only forwards a nonzero seed."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-3/image-to-video",
+   "source": "{studio-docs}/docs/models/wan-3/image-to-video",
    "verified": true
   },
   {
@@ -9061,7 +9061,7 @@
       "discountPct": 60.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Priced per total video second: 480p $0.05/s, 720p $0.10/s, 1080p $0.20/s. Total billable duration = output video duration + the sum of all input reference video durations. Without input videos, only output duration is billed. Rates shown are before any applicable customer discount."
    },
@@ -9072,7 +9072,7 @@
     "The schema accepts seed=0, but the current implementation only forwards a nonzero seed.",
     "Per-model dash llms.txt omits prompt_extend."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-3/reference-to-video",
+   "source": "{studio-docs}/docs/models/wan-3/reference-to-video",
    "verified": true
   },
   {
@@ -9171,7 +9171,7 @@
       "discountPct": 60.0
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true,
     "formula": "Priced per generated second by resolution: 480p $0.05, 720p $0.10, or 1080p $0.20. Rates shown are before any applicable customer discount."
    },
@@ -9179,7 +9179,7 @@
     "This endpoint generates from text; use the separate image or reference endpoint for media inputs.",
     "The schema accepts seed=0, but the current implementation only forwards a nonzero seed."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/wan-3/text-to-video",
+   "source": "{studio-docs}/docs/models/wan-3/text-to-video",
    "verified": true
   },
   {
@@ -9258,7 +9258,7 @@
       "currentUsd": 0.015
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
@@ -9266,12 +9266,12 @@
     "prompt_extend defaults to false; enabling it uses the enhanced pricing tier.",
     "The schema accepts 1k and 2k tiers, ten aspect ratios, and an optional integer seed from 0 to 2147483647."
    ],
-   "source": "https://docs.higgsfield.ai/docs/models/z-image-turbo/generate",
+   "source": "{studio-docs}/docs/models/z-image-turbo/generate",
    "verified": true
   },
   {
-   "id": "higgsfield-ai/soul/v2/image-to-image",
-   "path": "/higgsfield-ai/soul/v2/image-to-image",
+   "id": "{studio}/soul/v2/image-to-image",
+   "path": "/{studio}/soul/v2/image-to-image",
    "method": "POST",
    "operation": "edit",
    "title": "SOUL V2 — Image to image",
@@ -9374,18 +9374,18 @@
       "currentUsd": 0.0057
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
-    "Not listed in the docs.higgsfield.ai catalog (84 entries); documented only by the console per-model llms.txt and priced in the public pricing API. Schema is primary-source but availability may be account-gated."
+    "Not listed in the {studio-docs} catalog (84 entries); documented only by the console per-model llms.txt and priced in the public pricing API. Schema is primary-source but availability may be account-gated."
    ],
-   "source": "https://dash.higgsfield.ai/models/higgsfield-ai/soul/v2/image-to-image/llms.txt",
+   "source": "{studio-dashboard}/models/{studio}/soul/v2/image-to-image/llms.txt",
    "verified": true
   },
   {
-   "id": "higgsfield/ai-influencer",
-   "path": "/higgsfield/ai-influencer",
+   "id": "{studio}/ai-influencer",
+   "path": "/{studio}/ai-influencer",
    "method": "POST",
    "operation": "avatar",
    "alsoSupports": [
@@ -9548,14 +9548,14 @@
       "currentUsd": 0.05
      }
     ],
-    "source": "https://dash.higgsfield.ai/api/v2/pricing/models/",
+    "source": "{studio-dashboard}/api/v2/pricing/models/",
     "verified": true
    },
    "notes": [
-    "Not listed in the docs.higgsfield.ai catalog (84 entries); documented only by the console per-model llms.txt and priced in the public pricing API. Schema is primary-source but availability may be account-gated.",
+    "Not listed in the {studio-docs} catalog (84 entries); documented only by the console per-model llms.txt and priced in the public pricing API. Schema is primary-source but availability may be account-gated.",
     "Full schema has $defs.TraitVariants and allOf if/then rules (tier=insects etc.). Copy the full JSON from the source before implementing; tagline: \"Create one AI influencer character sheet. Human and animal modes. $0.05 per sheet.\""
    ],
-   "source": "https://dash.higgsfield.ai/models/higgsfield/ai-influencer/llms.txt",
+   "source": "{studio-dashboard}/models/{studio}/ai-influencer/llms.txt",
    "verified": true
   },
   {
@@ -9588,7 +9588,7 @@
     }
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/openapi.json",
+   "source": "{studio-docs}/docs/openapi.json",
    "verified": true,
    "uiFeature": null
   },
@@ -9611,7 +9611,7 @@
     "http": "202 no body; 400 if already started; 404 unknown/other account"
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/openapi.json",
+   "source": "{studio-docs}/docs/openapi.json",
    "verified": true,
    "uiFeature": null
   },
@@ -9647,7 +9647,7 @@
     }
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/concepts/file-uploads",
+   "source": "{studio-docs}/docs/concepts/file-uploads",
    "verified": true,
    "uiFeature": null
   },
@@ -9662,7 +9662,7 @@
      "type": "string",
      "required": true,
      "in": "path",
-     "desc": "e.g. higgsfield-ai/soul/v2/standard"
+     "desc": "e.g. {studio}/soul/v2/standard"
     },
     "<body>": {
      "type": "object",
@@ -9678,7 +9678,7 @@
     }
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/concepts/billing-and-retention",
+   "source": "{studio-docs}/docs/concepts/billing-and-retention",
    "verified": true,
    "uiFeature": null
   },
@@ -9717,7 +9717,7 @@
     ]
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/models/soul-id/create-character",
+   "source": "{studio-docs}/docs/models/soul-id/create-character",
    "verified": true,
    "uiFeature": null
   },
@@ -9752,7 +9752,7 @@
     }
    },
    "priceUsd": null,
-   "source": "npm @higgsfield/client@0.2.6 dist/client.js listSoulIds(); route existence confirmed (GET returns 401 not 405 unauthenticated)",
+   "source": "npm {studio-npm}/client@0.2.6 dist/client.js listSoulIds(); route existence confirmed (GET returns 401 not 405 unauthenticated)",
    "verified": false,
    "notes": [
     "Not in docs. GET /v1/custom-references (no /list) returns 405."
@@ -9768,10 +9768,10 @@
    "inputs": {},
    "output": {
     "kind": "list",
-    "fields": "[{id, name, description, preview_url}] -> use id as style_id on /higgsfield-ai/soul/standard"
+    "fields": "[{id, name, description, preview_url}] -> use id as style_id on /{studio}/soul/standard"
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/models/soul-standard/generate",
+   "source": "{studio-docs}/docs/models/soul-standard/generate",
    "verified": true,
    "uiFeature": null
   },
@@ -9784,16 +9784,16 @@
    "inputs": {},
    "output": {
     "kind": "list",
-    "fields": "[{id, name, description, preview_url}] -> style_id on /higgsfield-ai/soul/v2/standard (and v2/image-to-image)"
+    "fields": "[{id, name, description, preview_url}] -> style_id on /{studio}/soul/v2/standard (and v2/image-to-image)"
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/models/soul-2/generate",
+   "source": "{studio-docs}/docs/models/soul-2/generate",
    "verified": true,
    "uiFeature": null
   },
   {
    "id": "genjutsu/restyle/presets",
-   "path": "/models/higgsfield/genjutsu/restyle/v1.0/presets",
+   "path": "/models/{studio}/genjutsu/restyle/v1.0/presets",
    "method": "GET",
    "operation": "v2v",
    "title": "List Genjutsu Restyle presets",
@@ -9803,7 +9803,7 @@
     "fields": "{model, items:[{id(uuid)->preset_id, name, preview_url}]} ordered by name; no pagination"
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/models/genjutsu/restyle",
+   "source": "{studio-docs}/docs/models/genjutsu/restyle",
    "verified": true,
    "notes": [
     "Path has a /models/ prefix (the inventory summary omitted it)."
@@ -9846,7 +9846,7 @@
     "fields": "{total, cursor (next offset or null), items:[{id(uuid)->preset_id, type e.g. \"ads\", name, cover_image, metadata:{aspect_ratio, group_name}, format_slugs[]}]}"
    },
    "priceUsd": null,
-   "source": "https://docs.higgsfield.ai/docs/models/marketing-studio-image/generate",
+   "source": "{studio-docs}/docs/models/marketing-studio-image/generate",
    "verified": true,
    "uiFeature": null
   },
@@ -9871,7 +9871,7 @@
    "method": "POST",
    "operation": "i2v",
    "title": "DoP image-to-video (legacy v1 API)",
-   "uiFeature": "Video > DoP (Higgsfield DoP, camera-motion presets)",
+   "uiFeature": "Video > DoP (DoP, camera-motion presets)",
    "inputs": {
     "params.model": {
      "type": "string",
@@ -9942,7 +9942,7 @@
     "Legacy body shape: {\"params\": {...}, \"webhook\"?: {...}} - NOT the flat v2 body. Auth headers hf-api-key / hf-secret (still accepted).",
     "Not in the v2 docs catalog or pricing API; POST probing is inconclusive (every POST path returns 401 unauthenticated). Treat as possibly retired."
    ],
-   "source": "npm @higgsfield/client@0.2.6 dist/v2/types.d.ts + README",
+   "source": "npm {studio-npm}/client@0.2.6 dist/v2/types.d.ts + README",
    "verified": false
   },
   {
@@ -9957,13 +9957,13 @@
     "fields": "[{id, name, description?, preview_url?, start_end_frame?}]"
    },
    "priceUsd": null,
-   "source": "npm @higgsfield/client@0.2.6 getMotions(); route exists (GET 401 not 405)",
+   "source": "npm {studio-npm}/client@0.2.6 getMotions(); route exists (GET 401 not 405)",
    "verified": false,
    "uiFeature": null
   },
   {
    "id": "legacy/speak",
-   "path": "/v1/speak/higgsfield",
+   "path": "/v1/speak/{studio}",
    "method": "POST",
    "operation": "lipsync",
    "title": "Speak v2 talking avatar (legacy v1 API)",
@@ -10013,7 +10013,7 @@
    "notes": [
     "Legacy {\"params\":{...}} body. Not in v2 catalog/pricing."
    ],
-   "source": "npm @higgsfield/client@0.2.6 dist/v2/types.d.ts + README",
+   "source": "npm {studio-npm}/client@0.2.6 dist/v2/types.d.ts + README",
    "verified": false
   },
   {
@@ -10083,9 +10083,9 @@
    },
    "priceUsd": null,
    "notes": [
-    "Superseded by POST /higgsfield-ai/soul/standard. Use only as a fallback."
+    "Superseded by POST /{studio}/soul/standard. Use only as a fallback."
    ],
-   "source": "npm @higgsfield/client@0.2.6 dist/v2/types.d.ts",
+   "source": "npm {studio-npm}/client@0.2.6 dist/v2/types.d.ts",
    "verified": false,
    "uiFeature": null
   }

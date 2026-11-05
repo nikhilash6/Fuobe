@@ -136,13 +136,13 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `splat` | Image to 3D → Splat on your GPU: Idol 3D against TripoSplat ([the rule](#the-splat-suite-splat-modes-defaults)) | 11 single objects from one picture each (product renders, product photos, a figurine, a stylised character, a person, thin parts, glass and chrome), 3 seeds | `idol-best` (the candidate), `idol-quick`, `triposplat-today`, `idol-photo-crop` (the photo cases only), `triposplat-cloud` (cloud: fal's TripoSplat, a reference for the haze and the price) | style (DINOv2, the orbit against the input picture), temporal, aesthetic, splat |
 
 `soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json`, `dop-mixed-media.json` and `separation.json` are **generated** from the research. They come from
-`docs/research/higgsfield-image-studios.json` (the look ids),
+`docs/research/parity-image-studios.json` (the look ids),
 `docs/research/fuobe-originals-recipes-5.json` (recipes, LoRAs, Soul Cinema's recipe, the motion map) and
 `docs/research/dbs-separation-7.json` (the DBS models' licences in the separation suite).
 `soul-hex`'s palettes are Fuobe's own. Run
 `node scripts/eval/gen-cases.mjs` after the research changes, and don't edit the generated files by
 hand. `pnpm eval:validate` fails when they are out of date. The subject prompts are Fuobe's own. No
-Higgsfield prompt or preview is used anywhere.
+prompt or preview copied from the parity studio is used anywhere.
 
 Soul variants, all on the same subjects and seeds:
 
@@ -151,7 +151,7 @@ Soul variants, all on the same subjects and seeds:
 - **half-strength**: every LoRA at half strength. This is the over-cooking check.
 - **plain**: the base model with the subject alone.
 - **original**: the shipped `fuobe-soul` Original (O2), which applies the look on the server. The look
-  goes as its Fuobe id in `presetId` (`v1-general`, the slug `--looks` takes); a Higgsfield look id never
+  goes as its Fuobe id in `presetId` (`v1-general`, the slug `--looks` takes); a legacy look id never
   leaves the harness. A lettering look (Graffiti) runs on `fuobe-soul-hd`. Every request names the engine
   the run is on (`engine`), so an Original that runs on both takes that one. Its grade and overlay are
   applied in the browser after generation, so the scores are of the raw picture.
@@ -204,7 +204,7 @@ small synthetic files in `fixtures/` instead.
 
 ```
 scripts/eval/local/
-  references/soul/<look-slug>/*.jpg   # style references per look (your own or licensed images; never Higgsfield previews)
+  references/soul/<look-slug>/*.jpg   # style references per look (your own or licensed images; never copied previews)
   references/mixed-media/<look>/*     # what each Mixed Media look should look like
   references/shorts/claymation/*      # what the Shorts session's look should look like
   characters/default/*.jpg            # 20+ photos (80 at most) of ONE consenting person (soul-id)
@@ -220,7 +220,7 @@ scripts/eval/local/
   angles/subject.png                  # a person or a product in a scene
   idol-views/figurine.png, character.png, person.png, product.png, mug.png, glass.png  # one object each; person.png a consenting person, full body; mug.png its handle on its own left
   evolution/walk.mp4                  # 4–30 s of someone walking, your own footage
-  evolution/ref-1.png … ref-3.png     # characters, places or a style you own (never Higgsfield previews)
+  evolution/ref-1.png … ref-3.png     # characters, places or a style you own (never copied previews)
   turnaround/front.png, right.png     # one consenting person or a made-up character, full body on a plain background;
   turnaround/back.png, left.png       #   right and left are their own (facing them, their right side is on your left)
   turnaround/sheet.png                # a turnaround sheet of the same character
@@ -571,7 +571,7 @@ poster and clip and writes nothing when one doesn't match. Run it again when a r
 - `--dry-run` lists what it would pick.
 - Only Fuobe's own renders become covers: a demo run never does. A render whose LoRAs aren't commercial
   becomes one with its licence noted (`licence` in the result); `--commercial-only` leaves it out. No
-  Higgsfield preview is used anywhere.
+  preview copied from the parity studio is used anywhere.
 - It needs ffmpeg. Look at the media and the generated file's diff before committing them.
 
 ### Covers from rendered masters
