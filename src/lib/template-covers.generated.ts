@@ -52,7 +52,7 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "marketing/mh-spotlight-spin": ["034a4f00","bea1d4b6"],
   "marketing/mk-clean-listing": "875102cc",
   "marketing/mk-dimensions": "11a0d6f5",
-  "marketing/mk-feature-callouts": "137a960a",
+  "marketing/mk-feature-callouts": "128a72a0",
   "marketing/mk-whats-inside": "5ae1250c",
   "marketing/mm-clay-diorama": ["9df49342","2dd2569a"],
   "marketing/mm-halftone-collage": "d172d094",

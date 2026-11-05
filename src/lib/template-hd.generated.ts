@@ -25,7 +25,7 @@ export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: numbe
   "marketing/mh-slow-splash": { "w":[640,1024], "v":"75cccdde", "still":576 },
   "marketing/mh-spotlight-spin": { "w":[640], "v":"1ba3ca7a", "still":384 },
   "marketing/mk-dimensions": { "w":[640,1024], "v":"44d1a64c", "still":576 },
-  "marketing/mk-feature-callouts": { "w":[640,1024], "v":"07a7fe0a", "still":576 },
+  "marketing/mk-feature-callouts": { "w":[640,1024], "v":"e68e7dd5", "still":576 },
   "marketing/mk-whats-inside": { "w":[640,1024], "v":"7c65a549", "still":576 },
   "marketing/mm-clay-diorama": { "w":[640], "v":"f7c9d3eb", "still":384 },
   "marketing/mm-halftone-collage": { "w":[640,1024], "v":"cec1b187", "still":576 },
