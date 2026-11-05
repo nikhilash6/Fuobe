@@ -375,6 +375,19 @@ describe("reports", () => {
     expect((await report({ event: "sent", promptId: c.promptId })).status).toBe(409);
   });
 
+  it("a tab's progress report stays a few KB: a picture with it is refused and nothing is kept", async () => {
+    waitingTask(`acct:${a}`);
+    const c = await claimed("a");
+    const report = (body: Record<string, unknown>) => call("a", "POST", `/api/gpu/computer/tasks/${c.id}/report`, { headers: { "x-fuobe-lease": c.lease }, body: { ...body } });
+    expect((await report({ event: "sent", promptId: c.promptId })).status).toBe(200);
+    const jpeg = Buffer.alloc(30 * 1024, 7);
+    jpeg.set([0xff, 0xd8, 0xff]);
+    expect((await report({ event: "running", value: 1, max: 4, preview: jpeg.toString("base64") })).status).toBe(413);
+    expect(tasks.taskPreview(c.id)).toBeNull();
+    expect((await report({ event: "running", value: 2, max: 4 })).status).toBe(200);
+    expect(tasks.taskProgress(c.id)).toMatchObject({ value: 2, max: 4 });
+  });
+
   it("a finished entry over 8 MB is refused", async () => {
     waitingTask(`acct:${a}`);
     const c = await claimed("a");

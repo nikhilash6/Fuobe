@@ -11,8 +11,10 @@ const EVENTS = new Set(["sent", "refused", "queued", "running", "finished", "pas
 
 /** Reports read at once: one person's, and across the server (each holds its body in memory while it is read). */
 const AT_ONCE = { person: 2, all: 16 };
-/** A report over this size counts against a lower limit a minute (a progress report with a preview stays under it). */
-const LARGE_BYTES = 128 * 1024;
+/** A report over this size counts against a lower limit a minute. */
+const LARGE_BYTES = 64 * 1024;
+/** A worker's: its progress report with a live preview stays under it. */
+const LARGE_BYTES_WORKER = 128 * 1024;
 /** The most a progress report with a worker's live preview may weigh (its preview is kept only up to 64 KB). */
 const RUNNING_BYTES = 256 * 1024;
 
@@ -83,14 +85,19 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
   const { id } = await ctx.params;
   const lease = request.headers.get("x-fuobe-lease");
   let cap: number;
+  let largeAt = LARGE_BYTES;
+  let worker = false;
   try {
-    cap = capFor(leased(principal, id, lease));
+    const held = leased(principal, id, lease);
+    cap = capFor(held);
+    worker = !!held.pools;
+    if (worker) largeAt = LARGE_BYTES_WORKER;
   } catch (e) {
     return relayAnswer(e);
   }
   const declared = Number(request.headers.get("content-length") ?? NaN);
   if (Number.isFinite(declared) && declared > cap) return no(413, "That report is too large");
-  if (cap > LARGE_BYTES && !(declared <= LARGE_BYTES)) {
+  if (cap > largeAt && !(declared <= largeAt)) {
     const big = rateOf(callerKey(request, principal), "report-large", 30);
     if (big) return big;
   }
@@ -111,7 +118,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
     const event = body && typeof body === "object" ? eventOf(body) : null;
     if (!event) return no(400, "Not a report");
     // A progress report is a few KB, unless it carries a worker's live preview.
-    const withPreview = event.event === "running" && typeof body?.preview === "string";
+    const withPreview = worker && event.event === "running" && typeof body?.preview === "string";
     if (!LARGE_EVENTS.has(event.event) && raw!.length > (withPreview ? RUNNING_BYTES : RELAY_LIMITS.smallReportBytes)) return no(413, "That report is too large");
     // Where the job is now (it may have moved while the body arrived).
     const t = leased(principal, id, lease);
