@@ -24,6 +24,9 @@ export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: numbe
   "marketing/mh-orbit-hero": { "w":[640,1024], "v":"8349bc6d", "still":576 },
   "marketing/mh-slow-splash": { "w":[640,1024], "v":"75cccdde", "still":576 },
   "marketing/mh-spotlight-spin": { "w":[640], "v":"1ba3ca7a", "still":384 },
+  "marketing/mk-dimensions": { "w":[640,1024], "v":"44d1a64c", "still":576 },
+  "marketing/mk-feature-callouts": { "w":[640,1024], "v":"07a7fe0a", "still":576 },
+  "marketing/mk-whats-inside": { "w":[640,1024], "v":"7c65a549", "still":576 },
   "marketing/mm-clay-diorama": { "w":[640], "v":"f7c9d3eb", "still":384 },
   "marketing/mm-halftone-collage": { "w":[640,1024], "v":"cec1b187", "still":576 },
   "marketing/mm-riso-loop": { "w":[640,1024], "v":"9b629ca2", "still":576 },
@@ -34,5 +37,9 @@ export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: numbe
   "marketing/ps-citrus-burst": { "w":[640,1024], "v":"7618fe58", "still":576 },
   "marketing/ps-floating-trio": { "w":[640,1024], "v":"96c73ccf", "still":576 },
   "marketing/ps-linen-flatlay": { "w":[640,1024], "v":"c9487a62", "still":576 },
-  "marketing/tt-mess-to-fresh": { "w":[640], "v":"e503604b", "still":576 }
+  "marketing/tt-gadget-saved": { "w":[640], "v":"8fa41c15", "still":384 },
+  "marketing/tt-mess-to-fresh": { "w":[640], "v":"e503604b", "still":576 },
+  "marketing/tt-pov-camera": { "w":[640], "v":"60d8bc96", "still":384 },
+  "marketing/tt-secret-hack": { "w":[640], "v":"5a61a45f", "still":384 },
+  "marketing/ugc-morning-routine": { "w":[640], "v":"2e9ab31b", "still":384 }
 };
