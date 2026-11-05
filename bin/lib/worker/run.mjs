@@ -12,6 +12,11 @@
 // Studio jobs first (turns.mjs, local-work.mjs): with a turns folder set, local ComfyUI work on the PC is told apart
 // from other programs. Another program still pauses the worker as before. Local ComfyUI work instead gets a request for
 // a turn, and the worker waits for the answer with its jobs kept in their place.
+//
+// The CPU slot (worker.json `cpuSlot: true`): beside its GPU's job it runs one CPU task at a time, claimed for itself:
+// light CPU work (joins, trims, adding sound, loops, Ken Burns, filters) on a second ComfyUI of its own that runs on the
+// CPU only, and finishing jobs (finish.mjs: the 3D finish, camera paths) with its own code. Every picture of an account's
+// job is made again from its pixels before anything reads it (picture.mjs).
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -25,7 +30,10 @@ import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
 import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
+import { finishers } from "./finish.mjs";
 import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
+import { canCleanPictures, cleanPicture, isPicture } from "./picture.mjs";
+import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
 import { retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
@@ -352,8 +360,15 @@ async function work(saved, deps, owner) {
     log(`${missing.length === 1 ? "A model folder isn't" : `${missing.length} model folders aren't`} there yet (${missing.join(", ")}): it takes no new job until ${missing.length === 1 ? "it is" : "they are"}, and looks again every minute.`);
   if (modelsMissing.length) sayMissing(modelsMissing);
 
-  /** An input for its ComfyUI: read from the studio once, kept by its SHA-256, and a clip or sound made again. */
-  async function takeInput(t, input, read) {
+  // Pictures of an account's job are made again here: without the tool for it (pnpm install in its checkout), such a
+  // job goes back to the line for another worker.
+  const pictureTool = deps.canCleanPictures ?? canCleanPictures();
+  if (!pictureTool) log("It can't make pictures again here (run pnpm install in its checkout): an account's job with a picture goes back to the line.");
+  /**
+   * An input for its ComfyUI: read from the studio once, kept by its SHA-256 (in the slot's own `cacheDir`), a clip or
+   * sound made again by ffmpeg, and a picture of an account's job ticket or of a finishing job made again from its pixels.
+   */
+  const takeInputIn = (cacheDir) => async (t, input, read) => {
     if (!/^[0-9a-f]{64}$/.test(String(input.sha256))) return "input-changed";
     fs.mkdirSync(cacheDir, { recursive: true });
     const kept = path.join(cacheDir, input.sha256);
@@ -369,7 +384,22 @@ async function work(saved, deps, owner) {
       fs.writeFileSync(kept, data, { mode: 0o600 });
     }
     const kind = mediaKind(input, t.graph);
-    if (!kind) return arrayBuffer(data);
+    if (!kind) {
+      // The studio sends an account's pictures as they came: no EXIF, GPS or other metadata of them reaches its ComfyUI.
+      if (!(t.ticket || t.finish) || !isPicture(input)) return arrayBuffer(data);
+      if (!pictureTool) return "give-back";
+      const clean = path.join(cacheDir, `${input.sha256}.png`);
+      if (!fs.existsSync(clean)) {
+        const part = `${clean}.part`;
+        if (!(await (deps.cleanPicture ?? cleanPicture)({ src: kept, dst: part }))) {
+          fs.rmSync(part, { force: true });
+          log(`Job ${t.id}: one of its pictures couldn't be read.`);
+          return "input-unreadable";
+        }
+        fs.renameSync(part, clean);
+      }
+      return arrayBuffer(fs.readFileSync(clean));
+    }
     // Without ffmpeg it takes no clip or sound: another worker that can make them again runs the job.
     if (!ffmpeg) return "give-back";
     const made = path.join(cacheDir, `${input.sha256}.${kind}`);
@@ -389,21 +419,80 @@ async function work(saved, deps, owner) {
       return "input-unreadable";
     }
     return arrayBuffer(fs.readFileSync(made));
-  }
+  };
+  const takeInput = takeInputIn(cacheDir);
 
-  /** A job ticket's graph, composed here (or why it is refused). */
-  async function composeJob(t) {
+  /** A job ticket's graph, composed here (or why it is refused), from the facts of the ComfyUI that runs it. */
+  async function composeJob(t, ownFetch = own, base = comfy.base) {
     if (!catalogVersion) return { refused: "update-worker" };
     composer ??= await import("./dist/compose/lib/ticket-compose.mjs");
     // Each workflow's lane, when its ceiling names lanes.
     if (ceiling?.lanes && !laneOf) laneOf = laneMap(index, deps.allLanes ?? (await import("./dist/lanes.mjs")).allLanes);
-    const facts = composer.workerFactsFrom(await readPcAnswers(own, comfy.base));
+    const facts = composer.workerFactsFrom(await readPcAnswers(ownFetch, base));
     const r = await composer.composeTicket({ ticket: t.ticket, generationId: t.generationId, inputs: t.inputs }, { catalog: workerCatalog(catalogDir), catalogVersion, ceiling, laneOf, facts });
     if (r.ok) return { graph: r.graph, made: r.made };
     // Why, for the PC's owner (never a setting's value: those are someone's prompt).
     log(`Refused job ${t.id}: ${r.reason === "update-worker" ? "its ticket is for another catalog (update the worker)" : r.reason === "outside-ceiling" ? "it is more than this PC runs (its ceiling in worker.json)" : "its ticket isn't one it can use"}.`);
     return { refused: r.reason };
   }
+
+  /** The worker's own checks of a job's graph before its ComfyUI sees it (checks.mjs): the reason it refuses it, or null. */
+  async function vetJob(t) {
+    const check = () => graphCheck(t.graph, allowed, inv.files, { rules, staged: (t.inputs ?? []).map((i) => i.name) });
+    let problem = check();
+    // A model file it doesn't have yet (a drive that came back after a restart): look again once before refusing.
+    if (problem?.reason === "model-unverified") {
+      log(`Job ${t.id} needs a model file it hasn't found: looking at its model folders again.`);
+      await rescan();
+      problem = check();
+    }
+    // Which node and input, for the PC's owner (never a value: those are someone's prompt or file).
+    if (problem) log(`Refused job ${t.id}: ${problem.reason} at node ${problem.node}${problem.cls ? ` (${problem.cls}${problem.input ? `.${problem.input}` : ""})` : ""}.`);
+    return problem?.reason ?? null;
+  }
+
+  // The CPU slot (worker.json `cpuSlot: true`): its own ComfyUI on the CPU only (its own folders, port, key and kept
+  // inputs), its own kept results, and the finishing jobs this PC can run.
+  const cpuOn = cfg.cpuSlot === true;
+  const cpuDir = path.join(cfg.workDir, "cpu");
+  const fc = folders(cpuDir);
+  const cpuCacheDir = path.join(cpuDir, "cache");
+  // Its kept inputs, and anything a finishing job left behind (a stop mid-job), go after each job, at start and at exit.
+  const emptyCpuCache = () => {
+    fs.rmSync(cpuCacheDir, { recursive: true, force: true });
+    fs.rmSync(path.join(cpuDir, "finish"), { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+  };
+  const cpuComfy = cpuOn
+    ? new OwnComfy(
+        { ...cfg, workDir: cpuDir, port: null, cpuOnly: true, ...(cfg.cpuComfyCommand && { comfyCommand: cfg.cpuComfyCommand }) },
+        { now, fetch: fetchFn, folderNames: index.folders ?? [], log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy },
+      )
+    : null;
+  const cpuHold = cpuOn ? new Hold(path.join(cfg.workDir, "hold-cpu")) : null;
+  const cpuOwnFetch = withPlainResults((url, init) => cpuComfy.fetch(url, init));
+  const cpuOwn = (url, init) => (cpuComfy?.alive() && cpuComfy.ready ? cpuOwnFetch(url, init) : Promise.reject(new Error("Its CPU slot's ComfyUI isn't running")));
+  const finish = cpuOn ? (deps.finishers ?? finishers({ workDir: cpuDir, ffmpeg: ffmpeg ? ffmpegBin : null })) : null;
+  if (cpuOn) {
+    fs.mkdirSync(cpuDir, { recursive: true });
+    emptyFolders(fc);
+    emptyCpuCache();
+    await cpuComfy.stopLeftover();
+    cpuComfy.onCrash = (code, task) => {
+      log(`Its CPU slot's ComfyUI stopped (exit ${code}).`);
+      if (!task) return;
+      crashes[task] = (crashes[task] ?? 0) + 1;
+      saveCrashes();
+    };
+    log(`It has a CPU slot: light CPU work${finish.kinds.length ? ` and finishing jobs (${finish.kinds.join(", ")})` : ""} run beside its GPU's job.`);
+  }
+  let cpuRunner = null;
+  let busyCpu = false;
+  let cpuJob = Promise.resolve();
+  let cpuStarting = null;
+  let lastCpuTask = null;
+  /** What a slot's runner says it works on, for the beat. */
+  const runningOf = (r) =>
+    r.view.jobs.filter((j) => j.phase !== "done" && j.phase !== "failed").map((j) => ({ task: j.taskId, ...(j.position !== undefined && { position: j.position }), ...(j.phase === "running" && { value: j.value, max: j.max }) }));
 
   const runner = new ComputerRunner(
     {
@@ -416,19 +505,7 @@ async function work(saved, deps, owner) {
       socket: typeof WebSocket === "function" ? (url) => (comfy.ready ? new WebSocket(comfy.rebase(url), { headers: comfy.headers() }) : null) : undefined,
       now,
       sleep,
-      vet: async (t) => {
-        const check = () => graphCheck(t.graph, allowed, inv.files, { rules, staged: (t.inputs ?? []).map((i) => i.name) });
-        let problem = check();
-        // A model file it doesn't have yet (a drive that came back after a restart): look again once before refusing.
-        if (problem?.reason === "model-unverified") {
-          log(`Job ${t.id} needs a model file it hasn't found: looking at its model folders again.`);
-          await rescan();
-          problem = check();
-        }
-        // Which node and input, for the PC's owner (never a value: those are someone's prompt or file).
-        if (problem) log(`Refused job ${t.id}: ${problem.reason} at node ${problem.node}${problem.cls ? ` (${problem.cls}${problem.input ? `.${problem.input}` : ""})` : ""}.`);
-        return problem?.reason ?? null;
-      },
+      vet: vetJob,
       ended: async (t, phase) => {
         log(`Job ${t.id} ${phase}.`);
         // Done: the studio has every result. Otherwise its kept results wait for the next claim to say whose job it is,
@@ -455,9 +532,11 @@ async function work(saved, deps, owner) {
           catalogVersion,
           ...(ceiling && { ceiling }),
           // The jobs whose results it keeps: a pause doesn't send them back in line, so they go up instead of running again.
-          held: hold.ids().slice(0, 16),
+          held: [...hold.ids(), ...(cpuHold?.ids() ?? [])].slice(0, 16),
           // The PC slept: a job taken back from it meanwhile goes on with no blame.
           ...(slept > 0 && { slept }),
+          // Its CPU slot: the finishing jobs it runs, and the task it works on.
+          ...(cpuOn && { cpuSlot: { finishes: finish.kinds }, cpuRunning: cpuRunner ? runningOf(cpuRunner) : [] }),
         };
       },
       onBeat: (a) => {
@@ -492,6 +571,8 @@ async function work(saved, deps, owner) {
         stallMs: 10 * 60_000,
         stallLocalMs: Number(cfg.stallMin) > 0 ? Number(cfg.stallMin) * 60_000 : null,
         free: () => comfy.free(),
+        // A live preview that isn't a small JPEG is made again by ffmpeg (none without it).
+        shrinkPreview: deps.shrinkPreview ?? previewShrinker({ ffmpeg: ffmpeg ? ffmpegBin : null, dir: path.join(cfg.workDir, "preview") }),
         crashes: (t) => crashes[t.id] ?? 0,
         stuck: async () => {
           log("Its ComfyUI didn't let go of a job: starting it again.");
@@ -521,6 +602,68 @@ async function work(saved, deps, owner) {
     },
     { device: "worker", port: cfg.port || 8190, clientId: crypto.randomBytes(8).toString("hex") },
   );
+
+  // The CPU slot's runner: the same runner, on its CPU-only ComfyUI, claiming for its CPU slot. It never beats (the
+  // worker's beat says what it works on), and its jobs never wait for the GPU's.
+  if (cpuOn) {
+    cpuRunner = new ComputerRunner(
+      {
+        api: call,
+        local: cpuOwn,
+        compose: (t) => composeJob(t, cpuOwn, cpuComfy.base),
+        sha256: async (data) => sha256(Buffer.from(data)),
+        origin: site,
+        socket: typeof WebSocket === "function" ? (url) => (cpuComfy.ready ? new WebSocket(cpuComfy.rebase(url), { headers: cpuComfy.headers() }) : null) : undefined,
+        now,
+        sleep,
+        vet: vetJob,
+        finish: (t, inputs, o) => finish.finish(t, inputs, o),
+        ended: async (t, phase) => {
+          log(`CPU slot job ${t.id} ${phase}.`);
+          if (phase === "done") cpuHold.drop(t.id);
+          delete crashes[t.id];
+          saveCrashes();
+          await cleanJob(fc, cpuComfy.base, cpuOwn);
+          emptyCpuCache();
+        },
+        worker: {
+          hold: cpuHold,
+          input: takeInputIn(cpuCacheDir),
+          graphs: cfg.acceptGraphs !== false,
+          inside: (t) => graphInside(ceiling, t),
+          stallMs: 10 * 60_000,
+          stallLocalMs: Number(cfg.stallMin) > 0 ? Number(cfg.stallMin) * 60_000 : null,
+          free: () => cpuComfy.free(),
+          crashes: (t) => crashes[t.id] ?? 0,
+          stuck: async () => {
+            log("Its CPU slot's ComfyUI didn't let go of a job: starting it again.");
+            await cpuComfy.stop();
+          },
+          claimed: async (t) => {
+            if (!t) return void emptyCpuCache();
+            cpuHold.dropAllBut(t.id);
+            cpuComfy.task = t.id;
+            if (t.id !== lastCpuTask) {
+              await cleanJob(fc, cpuComfy.base, cpuOwn);
+              emptyCpuCache();
+              lastCpuTask = t.id;
+            }
+          },
+        },
+      },
+      { device: "worker-cpu", port: 8191, clientId: crypto.randomBytes(8).toString("hex"), slot: "cpu" },
+    );
+  }
+  const takeCpu = () => {
+    busyCpu = true;
+    cpuJob = cpuRunner
+      .claimAndRun()
+      .catch((e) => log(`A CPU slot job stopped: ${e.message}`))
+      .finally(() => {
+        busyCpu = false;
+        cpuComfy.task = null;
+      });
+  };
 
   const mayWork = () => !pause.paused && answer?.worker && !answer.worker.paused && answer.worker.insideHours && !answer.worker.drain;
   const state = () =>
@@ -749,6 +892,26 @@ async function work(saved, deps, owner) {
         log("Stopping its own ComfyUI (paused).");
         await comfy.stop();
       }
+      // The CPU slot: its ComfyUI runs only while the worker may work, and it takes its own work beside the GPU's job (it
+      // needs no turn and no free GPU). Another program on the GPU lets its task finish; a stop-now stops it too.
+      if (cpuOn) {
+        if (mayWork()) {
+          if (!cpuComfy.alive() && !cpuStarting && t >= cpuComfy.restartAt && !cpuComfy.crashedTooOften(t)) {
+            cpuStarting = cpuComfy
+              .start(
+                packs.map((p) => p.folder),
+                { signal: stopStarts.signal },
+              )
+              .catch((e) => {
+                if (!stopStarts.signal.aborted && mayWork()) log(`Its CPU slot's ComfyUI didn't start: ${e.message}`);
+              })
+              .finally(() => (cpuStarting = null));
+          }
+          if (cpuComfy.ready && answer?.runner && !busyCpu) takeCpu();
+        } else if (cpuComfy.alive() && (!busyCpu || pause.why === "here-now" || answer?.worker?.pauseNow)) {
+          await cpuComfy.stop();
+        }
+      }
       // Kept results the studio never took are deleted after a day.
       if (t - holdCheckedAt >= 60_000) {
         holdCheckedAt = t;
@@ -757,7 +920,7 @@ async function work(saved, deps, owner) {
       // Kept results go up first, and even while it may not work (or waits for its turn): they need no GPU and no ComfyUI.
       if (!busyJob && answer && heldFirst) take({ onlyHeld: true });
       // Awake while it holds a job, has results to send, or waits for work.
-      awake.set(!!answer?.worker && (busyJob || hold.ids().length > 0 || !!mayWork()));
+      awake.set(!!answer?.worker && (busyJob || busyCpu || hold.ids().length > 0 || !!mayWork()));
       // A taken port is tried again (a bind test, never a connection) once a minute.
       if (comfyTrouble === "port-busy" && t - troubleAt >= 60_000) comfyTrouble = null;
       const s = state();
@@ -779,7 +942,8 @@ async function work(saved, deps, owner) {
     // Every way out: the job in hand stops (its kept results stay for the next start), its ComfyUI stops, the PC may
     // sleep again, and no input, result or cached file stays in its folders.
     runner.stop();
-    await Promise.race([job, new Promise((r) => setTimeout(r, 10_000).unref?.())]);
+    cpuRunner?.stop();
+    await Promise.race([Promise.all([job, cpuJob]), new Promise((r) => setTimeout(r, 10_000).unref?.())]);
     awake.set(false);
     // No turn any more: local ComfyUI work may go on at once.
     if (turns?.folderOk()) writeTurn(now(), { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null });
@@ -790,6 +954,13 @@ async function work(saved, deps, owner) {
     await comfy.stop();
     emptyFolders(f);
     emptyCache();
+    if (cpuOn) {
+      await cpuComfy.stop();
+      await cpuStarting;
+      await cpuComfy.stop();
+      emptyFolders(fc);
+      emptyCpuCache();
+    }
   }
   return deps.signal?.aborted ? "aborted" : (runner.view.stopped ?? "disconnected");
 }

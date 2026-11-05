@@ -12,7 +12,8 @@
  * Runs under plain Node too: only erasable TypeScript.
  */
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import http from "node:http";
 import type { Duplex } from "node:stream";
 import { pathToFileURL } from "node:url";
@@ -82,6 +83,8 @@ export interface LocalComfyOptions {
   countFile?: string;
   /** Each prompt posted adds its graph to this file, as one line of JSON (what a test in another process sent). */
   graphFile?: string;
+  /** A folder that keeps a copy of every upload, under its name (a test reads what reached ComfyUI). */
+  uploadDir?: string;
 }
 
 /** One live render the stand-in made (for the bookkeeping checks). */
@@ -521,6 +524,10 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
         if (!image || !name || /[\\/]|\.\./.test(name)) return reply(400, { error: "bad name" });
         inputs.set(name, Buffer.from(image.data));
         entry.upload = { name, bytes: Buffer.from(image.data) };
+        if (opts.uploadDir) {
+          mkdirSync(opts.uploadDir, { recursive: true });
+          writeFileSync(join(opts.uploadDir, name), Buffer.from(image.data));
+        }
         void pictureSize(Buffer.from(image.data)).then((sz) => sz && sizes.set(name, sz));
         return reply(200, { name, subfolder: "", type: parts.get("type")?.data.toString() ?? "input" });
       }
@@ -761,7 +768,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
 // [--connect <origin>]: Fuobe Connect is installed, trusting that origin. [--worker-guard 1]: a worker's guard, with the
 // key in FUOBE_WORKER_GUARD_KEY (as a worker starts its ComfyUI). [--count-file <path>]: a line for each prompt posted.
 // [--graph-file <path>]: each prompt's graph, a line of JSON each. [--fail-next oom|never]: what the first prompt does.
-// [--outputs video,audio]: what a job saves.
+// [--outputs video,audio]: what a job saves. [--upload-dir <path>]: a copy of every upload, under its name.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const arg = (name: string) => {
     const i = process.argv.indexOf(`--${name}`);
@@ -782,6 +789,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       ...(workerGuard && { workerGuard }),
       ...(arg("count-file") && { countFile: arg("count-file") }),
       ...(arg("graph-file") && { graphFile: arg("graph-file") }),
+      ...(arg("upload-dir") && { uploadDir: arg("upload-dir") }),
       ...(arg("fail-next") && { failNext: arg("fail-next") as LocalComfyOptions["failNext"] }),
       ...(arg("outputs") && { outputs: arg("outputs")!.split(",") as LocalComfyOptions["outputs"] }),
       has,

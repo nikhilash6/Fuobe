@@ -232,6 +232,8 @@ async function setup(home, io, say) {
   }
   // The owner's own jobs come as full graphs; answering no takes job tickets only.
   const acceptGraphs = !/^n/i.test(await ask("Also run the studio owner's own jobs, which come as whole graphs? (Y/n)", old.acceptGraphs === false ? "n" : "y"));
+  // The CPU slot: light CPU work and finishing jobs beside the GPU's job (a second ComfyUI that runs on the CPU only).
+  const cpuSlot = /^y/i.test(await ask("Also run light CPU work (joins, trims, filters) and finishing jobs (3D models, camera paths) beside the GPU's job? (y/N)", old.cpuSlot === true ? "y" : "n"));
   fs.mkdirSync(workDir, { recursive: true });
   if (process.platform === "win32") {
     // Not content indexed: jobs' files stay out of Windows Search.
@@ -245,7 +247,7 @@ async function setup(home, io, say) {
   // A token given in FUOBE_WORKER_TOKEN stays out of the file.
   const { ceiling: _was, ...rest } = saved;
   void _was;
-  saveConfig(home, { ...rest, port, site: site.replace(/\/+$/, ""), token: token || saved.token, comfyDir, modelDirs, workDir, ffmpeg, autoResume, ...(limits.ceiling && { ceiling: limits.ceiling }), acceptGraphs });
+  saveConfig(home, { ...rest, port, site: site.replace(/\/+$/, ""), token: token || saved.token, comfyDir, modelDirs, workDir, ffmpeg, autoResume, ...(limits.ceiling && { ceiling: limits.ceiling }), acceptGraphs, cpuSlot });
   writeControl(home, { paused: true, now: false, until: null });
   say(`Saved in ${path.join(home, "worker.json")} (readable by you only). The worker starts paused here.`);
   say(`This PC runs ${ceilingWords(limits.ceiling)}. Run fuobe worker setup again to change it.`);

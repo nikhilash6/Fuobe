@@ -4,8 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-/** 2: it says which inputs it takes, makes every clip and sound again, and keeps its ComfyUI behind the guard. */
-export const PROTOCOL = 2;
+/**
+ * 2: it says which inputs it takes, makes every clip and sound again, and keeps its ComfyUI behind the guard. 3: it makes
+ * every picture of a job ticket again from its pixels too, and may have a CPU slot.
+ */
+export const PROTOCOL = 3;
 
 /** Where the worker keeps its settings: %LOCALAPPDATA%\FuobeWorker on Windows, ~/.config/fuobe-worker elsewhere. */
 export function workerHome(env = process.env, home = os.homedir()) {
