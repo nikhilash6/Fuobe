@@ -26,7 +26,7 @@ import { platformOf } from "@/lib/comfy-install";
 import { FUOBE_CONNECT_PUBLISHED } from "@/lib/fuobe-connect";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { cn } from "@/lib/utils";
-import { OTHER_BROWSERS, useComputerSupport } from "../open-connect";
+import { useComputerSupport } from "../open-connect";
 import { AllowNote, blockedSteps, GuardFix, OtherPort } from "../this-computer";
 import { FinishCard, useFirstPicture } from "./first-picture";
 import { SetupChecklist } from "./setup-checklist";
@@ -391,11 +391,6 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
             </div>
           )}
           {(changing || off.length > 0) && <p className="text-[12px] text-muted-foreground">{wayLine(way, support)}</p>}
-          {support === "safari" && (
-            <p className="text-[12px] text-muted-foreground">
-              {OTHER_BROWSERS} There, Fuobe uses ComfyUI right from the tab, with nothing public.
-            </p>
-          )}
         </div>
       )}
 
@@ -484,7 +479,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
 
 /** One line about the way picked. */
 function wayLine(way: Way, support: string): string {
-  if (support === "safari") return "Safari can't reach ComfyUI from a website. Chrome, Edge and Firefox can.";
+  if (support === "safari") return "Safari can't reach ComfyUI from a website. In Chrome, Edge or Firefox, Fuobe uses ComfyUI right from the tab, with nothing public.";
   if (support === "http") return "Your browser marks this page as not secure, so it can't reach ComfyUI from here. A web address works.";
   if (way === "address") return "ComfyUI gets a web address. It works from Safari and phones, and runs go on with this tab closed.";
   if (way === "connect") return "Install Fuobe Connect once. It works in every browser and with this tab closed.";
