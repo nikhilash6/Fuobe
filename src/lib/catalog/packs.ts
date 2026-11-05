@@ -416,7 +416,10 @@ export function photodumpModel(subject: PhotoSubject, engine: Engine, _caps: Pla
   const note =
     pick === PHOTODUMP_SOUL && custom
       ? `Your own packs recreate each reference photo — ${name} runs them`
-      : pick === PHOTODUMP_SOUL && subject.kind === "selfie"
+      : pick === PHOTODUMP_SOUL && subject.kind === "selfie" && subject.name
+        ? // An account's own character (its photos, no Soul ID): the edit model keeps its face from its photo.
+          `${name} makes ${subject.name}'s photos from their saved photo, keeping their face`
+        : pick === PHOTODUMP_SOUL && subject.kind === "selfie"
         ? `Fuobe Soul needs a character with a trained Soul ID — ${name} works from your photo`
         : pick === PHOTODUMP_SOUL || (engine === "open" && subject.kind === "element" && !trained && !custom)
           ? `No Soul ID yet — ${name} works from the character's photos (train them for Fuobe Soul on the Elements page)`

@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
+import { useAskFirst } from "@/components/photodump/ask-first";
 import { usePhotoCharacters, useRun, useRunPreview, useSaveCharacter } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
@@ -195,6 +196,9 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
   // A guest is asked to sign up before choosing photos, and an account with neither its own GPU nor its own key to
   // connect one.
   const askFirst = useAskBeforeUpload();
+  // The sheet itself: a guest gets the sign-up card and an account with nothing to run on "Connect your GPU" before it is
+  // sent (a press before the page knows who is looking waits for that).
+  const askRun = useAskFirst();
   const [mode, setMode] = useState<Mode>("reference");
   const [photos, setPhotos] = useState<SlotValue[]>([]);
   const [details, setDetails] = useState("");
@@ -232,15 +236,16 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
     setMode("reference");
     setPhotos((xs) => (xs.some((x) => x.ref === url) ? xs : [{ ref: url, preview: url, kind: "image" as const, id: nanoid(8) }, ...xs].slice(0, SHEET_MAX_REFS)));
   }, []);
-  const create = () => {
-    if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
-    if (!body) return toast(mode === "describe" ? "Describe your character first" : "Wait for the uploads to finish");
-    run.mutate(body, {
-      // The run line already says which model runs and why (its notes), so no toast here.
-      onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
-      onError: (e) => toastError(e, "Failed to create character sheet"),
-    });
-  };
+  const create = () =>
+    askRun(() => {
+      if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
+      if (!body) return toast(mode === "describe" ? "Describe your character first" : "Wait for the uploads to finish");
+      run.mutate(body, {
+        // The run line already says which model runs and why (its notes), so no toast here.
+        onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
+        onError: (e) => toastError(e, "Failed to create character sheet"),
+      });
+    }, "run");
 
   return (
     <PageShell wide>

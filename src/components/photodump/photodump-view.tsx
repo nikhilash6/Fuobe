@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
-import { useAskBeforeUpload, useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { customPack, DEFAULT_ASPECT, MAX_PACK_REFS, MAX_SELFIE_MB, PACKS, PHOTODUMP_ASPECTS, PHOTODUMP_MODELS, PHOTODUMP_SOUL, soulIdOf, type Pack } from "@/lib/catalog/packs";
 import type { Generation } from "@/lib/catalog/types";
@@ -20,8 +20,9 @@ import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 import { toastError } from "@/lib/refusals";
+import { useAskFirst } from "./ask-first";
 import { PackCover } from "./covers";
-import { usePhotoCharacters, useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
+import { useOwnsElements, usePhotoCharacters, useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
 import { DownloadAll, ResultsGrid, runState } from "./results";
 import { RunLine, Steps } from "./steps";
 import { CharacterPicker } from "./subject";
@@ -157,7 +158,7 @@ export function PhotodumpView() {
   const [engine, setEngine] = useEngine();
   // A pack of your own is made of photos you upload: a guest is asked to sign up first, and an account with neither its
   // own GPU nor its own key to connect one (as before any upload). An account's packs and runs are its own.
-  const askFirst = useAskBeforeUpload();
+  const askFirst = useAskFirst();
   const [step, setStep] = useState(0);
   const [reached, setReached] = useState(0);
   const [tab, setTab] = useState<PackTab>("all");
@@ -200,9 +201,14 @@ export function PhotodumpView() {
   // Models switched off in Settings → Models & licences leave the choices (Auto picks among the ones on).
   const access = useModelAccess();
   const choices: (string | undefined)[] = [undefined, ...keepOffered(PHOTODUMP_MODELS[engine], (m) => offered(access, m, engine))];
+  // The owner trains a character's Soul ID (Elements) for Fuobe Soul. A visitor's characters are its own photos: Fuobe
+  // Soul stays a choice, its press opens "My character" (pick one, or make one there), and the run line says which model
+  // makes the set from that character's photo.
+  const owner = useOwnsElements();
   const unavailable = (m?: string): string | null => {
     if (m !== PHOTODUMP_SOUL) return null;
     if (pack?.custom) return "Your own packs recreate each reference photo with an edit model";
+    if (!owner) return null;
     if (!character) return "Pick a trained character";
     return soulIdOf({ kind: "element", handle: character.handle, name: character.name, references: character.references, loras: character.loras }, engine) ? null : `${character.name} isn't trained yet`;
   };
@@ -267,7 +273,7 @@ export function PhotodumpView() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <button
               type="button"
-              onClick={() => askFirst() || setCreatingPack(true)}
+              onClick={() => askFirst(() => setCreatingPack(true))}
               className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <Plus className="size-6" />
@@ -412,7 +418,11 @@ export function PhotodumpView() {
                       disabled={!!why}
                       title={why ?? undefined}
                       aria-label={why ? `${m ? MODEL_NAMES[m] : "Auto"} — ${why}` : undefined}
-                      onClick={() => setModelPick(m)}
+                      onClick={() => {
+                        setModelPick(m);
+                        // A visitor's Fuobe Soul starts from a character of its own: "My character" picks one or makes one.
+                        if (m === PHOTODUMP_SOUL && !owner && !pack.custom) setSubjectMode("character");
+                      }}
                       className={cn(
                         "h-8 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
                         pick === m ? "border-primary bg-brand-faint text-brand-text" : "text-muted-foreground hover:bg-accent",
