@@ -5,12 +5,13 @@
 // per engine; partners' resolutions; the model list badges each model's source; a run is made in demo mode and
 // finishes; the open engine allows clicking the person, shows the GPU line, SAM's detection numbers, the History list
 // under the window and the mask switch on the Original's graph only; Motion and Restyle list the
-// Originals first and Restyle has Soul looks; no Higgsfield anywhere; nothing scrolls sideways.
+// Originals first and Restyle has Soul looks; no retired provider anywhere; nothing scrolls sideways.
 // Usage: node tests/e2e/genjutsu-original.mjs [appUrl] [--shots <dir>]   (app running in demo mode, ComfyUI unreachable).
 // Exits 1 on a failed check.
 import fs from "node:fs";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { mentionsRetiredName } from "../helpers/retired-name.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
@@ -82,7 +83,7 @@ try {
       await page.getByText(/Placeholder · free|≈ \$|Price unknown/).first().waitFor({ timeout: 60_000 });
       const body = await text();
       check(`${tag}: the limits are shown`, /One continuous shot: a hard cut breaks the swap/.test(body) && /The person must be visible in the part's first frame/.test(body));
-      check(`${tag}: no Higgsfield anywhere`, !/higgsfield/i.test(body));
+      check(`${tag}: the parity studio is named nowhere`, !mentionsRetiredName(body));
       check(`${tag}: no sideways scroll (Character swap)`, (await sideways()) <= 1, `${await sideways()} px`);
       // Describe my character (no text model in demo mode: said in words); the clip's words fill "What's said".
       const describe = page.getByRole("button", { name: "Describe my character" });
@@ -163,7 +164,7 @@ try {
       check(`${tag}: no sideways scroll (open)`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("genjutsu-character-open");
 
-      // Motion transfer: the Original first; Restyle: Soul looks, no Higgsfield.
+      // Motion transfer: the Original first; Restyle: Soul looks, no retired provider's.
       await page.getByRole("radiogroup", { name: "Engine" }).getByRole("radio", { name: "Cloud" }).click();
       await page.getByRole("tab", { name: "Motion transfer" }).click();
       await page.waitForTimeout(500);
@@ -173,7 +174,7 @@ try {
       await page.waitForTimeout(500);
       check(`${tag}: restyle: Soul looks are a tab`, (await page.getByRole("tab", { name: "Soul looks" }).count()) === 1);
       await page.getByRole("tab", { name: "Soul looks" }).click();
-      check(`${tag}: restyle: no Higgsfield anywhere`, !/higgsfield/i.test(await text()));
+      check(`${tag}: restyle: the parity studio is named nowhere`, !mentionsRetiredName(await text()));
       check(`${tag}: no sideways scroll (Restyle)`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("genjutsu-restyle-soul");
       await context.close();

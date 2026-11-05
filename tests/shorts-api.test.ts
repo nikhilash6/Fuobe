@@ -64,7 +64,7 @@ const dependsOn = (id: string) => {
   return !v ? [] : v.startsWith("[") ? (JSON.parse(v) as string[]) : [v];
 };
 
-// Gemini Omni Flash (Higgsfield's Shorts engine, a partner choice) unless a test names another model; Fuobe Shorts, the
+// Gemini Omni Flash (the parity studio's Shorts engine, a partner choice) unless a test names another model; Fuobe Shorts, the
 // default since build plan O9, has tests of its own below.
 const body = (over: Record<string, unknown> = {}) => ({
   engine: "cloud",

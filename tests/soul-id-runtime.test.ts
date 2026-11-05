@@ -87,7 +87,7 @@ describe("starting a Soul ID training", () => {
     expect(startTraining(style.id, "fal-z-image-style").status).toBe("running");
   });
 
-  it("refuses too few photos, the wrong kind of training and a Higgsfield target", () => {
+  it("refuses too few photos, the wrong kind of training and a retired training target", () => {
     const few = character(3);
     expect(() => startTraining(few.id, "fal-z-image", { consent: true })).toThrow(/at least 5 photos/);
     // FLUX's portrait trainer crops to a face: a place doesn't train on it.

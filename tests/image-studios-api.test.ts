@@ -135,7 +135,7 @@ describe("style signature on the server", () => {
 });
 
 describe("moodboards", () => {
-  it("refuses boards outside Higgsfield's limits, in its words", async () => {
+  it("refuses boards outside the researched limits, in its words", async () => {
     const few = await moodboardsRoute.POST(json("POST", { name: "x", images: [upload(), upload()] }));
     expect(few.status).toBe(400);
     expect((await few.json()).error).toBe("Upload at least 5 photos to continue.");

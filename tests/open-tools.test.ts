@@ -6,8 +6,8 @@ import type { ComfyWorkflow } from "@/lib/comfy";
 import { tempDir } from "./helpers/temp-dir";
 
 // Build plan O11 (rebranded open tools, Speak and finishing): Fuobe Angles (Qwen-Image-Edit 2509 + dx8152's
-// Multiple-angles LoRA on both engines, the Angles app's Higgsfield-like controls), Fuobe Speak (InfiniteTalk with
-// Higgsfield's Infinite Talk settings on the GPU, fal's InfiniteTalk) and Fuobe Speak · Motion (Wan 2.2 S2V), Depth
+// Multiple-angles LoRA on both engines, the Angles app's controls from the parity research), Fuobe Speak (InfiniteTalk with
+// The parity studio's Infinite Talk settings on the GPU, fal's InfiniteTalk) and Fuobe Speak · Motion (Wan 2.2 S2V), Depth
 // Map's Large model as a labelled alternative, the HDR route's LoRA endpoint, and Soul's face mosaic (SAM 3.1 + a
 // mosaic on the GPU, fal's SAM 3.1 masks pixelated in the browser).
 const dir = tempDir("fuobe-o11-");
@@ -101,7 +101,7 @@ describe("Fuobe Angles", () => {
     const cloud = view("fuobe-angles", "cloud");
     expect(open.routes.map((r) => r.endpoint)).toEqual(["qwen-image-edit-2509-angles"]);
     expect(cloud.routes.map((r) => r.endpoint)).toEqual(["fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles"]);
-    // Higgsfield's controls on both engines: rotate −90…90°, tilt −1…1, move forward 0–10 (the research's fields).
+    // The parity studio's controls on both engines: rotate −90…90°, tilt −1…1, move forward 0–10 (the research's fields).
     expect(m.options.sliders?.map((s) => [s.param, s.min, s.max])).toEqual([["rotate_right_left", -90, 90], ["vertical_angle", -1, 1], ["move_forward", 0, 10]]);
     // The LoRA is the recipe's on the GPU (downloaded before a run, switchable); fal has it built in at 1.25, 6 steps.
     expect(open.options.loras?.map((l) => [l.file, l.strength])).toEqual([["qwen-edit-2509-multiple-angles-dx8152.safetensors", 1.25]]);
@@ -307,7 +307,7 @@ describe("Fuobe Speak", () => {
     await expect(run({ sourceDuration: 45 })).rejects.toThrow(/A talking avatar on the open engine takes up to 40 s of speech per job \(this voice is 45 s\)/);
   });
 
-  it("sends Higgsfield's Infinite Talk settings on your GPU: FusioniX in the wrapper's LoRA slot, 15 motion frames, 25 steps, shift 10, guidance 5 / 5", async () => {
+  it("sends the parity studio's Infinite Talk settings on your GPU: FusioniX in the wrapper's LoRA slot, 15 motion frames, 25 steps, shift 10, guidance 5 / 5", async () => {
     const m = view("fuobe-speak", "open");
     expect(m.options.loras?.map((l) => l.file)).toEqual(["Wan2.1_I2V_14B_FusionX_LoRA.safetensors"]);
     const route = m.routes[0];
