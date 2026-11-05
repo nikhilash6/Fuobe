@@ -291,3 +291,21 @@ export function toolPoolPrice(check: unknown): ToolPoolPrice | null {
     headers: shown ? { [RUN_SHOWN_HEADER]: shownHeader(shown) } : {},
   };
 }
+
+/**
+ * A tool page's price check (`?preview=1`) as its Run reads it: when this studio's GPUs wouldn't take the run now, their
+ * words become the check's error, marked `poolRefused`. Every other answer stays as it is: an error there (no GPU or key
+ * connected yet, say) is the server's to answer when Run is pressed, and its refusal opens the card that helps.
+ */
+export function withPoolRefusal<T extends { error?: string; poolRefused?: boolean }>(check: T): T {
+  const pool = toolPoolPrice(check);
+  return pool?.refused ? { ...check, error: pool.text, poolRefused: true } : check;
+}
+
+/**
+ * What Run says instead of sending the run: only a refusal by this studio's GPUs (withPoolRefusal), and only from the
+ * check of the settings shown now (`stale`: a previous check, kept on screen while the new one runs). Null: send it.
+ */
+export function refusedBeforeRun(check: { error?: string; poolRefused?: boolean } | null | undefined, stale = false): string | null {
+  return check?.poolRefused && check.error && !stale ? check.error : null;
+}

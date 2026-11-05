@@ -6,7 +6,7 @@ import { COMPUTER_KICK_EVENT, useElements, useSaveElement, useViewer } from "@/l
 import type { StudioElement } from "@/lib/catalog/elements";
 import type { Generation } from "@/lib/catalog/types";
 import { responseError } from "@/lib/refusals";
-import { toolPoolPrice } from "@/lib/run-place";
+import { withPoolRefusal } from "@/lib/run-place";
 
 /**
  * A run started: the tab that runs this person's jobs on the ComfyUI on this computer (an account's "Your GPU") asks for
@@ -32,6 +32,8 @@ export interface RunPreview {
   fixedAspect?: boolean;
   notes: string[];
   error?: string;
+  /** The error is this studio's GPUs not taking the run now (run-place.ts withPoolRefusal): Run sends nothing. */
+  poolRefused?: boolean;
 }
 
 export interface UserPack {
@@ -48,9 +50,8 @@ export function useRunPreview(url: string, body: unknown | null) {
     queryFn: async () => {
       const p = await post<RunPreview>(`${url}?preview=1`, body);
       // A run on this studio's GPUs that isn't taken now (or runs on the person's own setup): said as the reason it
-      // can't run, so Run is off with the service's words.
-      const pool = toolPoolPrice(p);
-      return pool?.refused ? { ...p, error: pool.text } : p;
+      // can't run, so Run is off with the service's words (marked poolRefused: no other error stops Run).
+      return withPoolRefusal(p);
     },
     enabled: body !== null,
     placeholderData: keepPreviousData,

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAskBeforeUpload, useEngine, useGenerations, useModelAccess } from "@/lib/api";
-import { toolPoolPrice } from "@/lib/run-place";
+import { refusedBeforeRun, toolPoolPrice } from "@/lib/run-place";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   categoriesFor,
@@ -202,8 +202,10 @@ export function InfluencerBuilder() {
     askRun(() => {
       if (blocker) return toast(blocker);
       if (!body) return toast("Wait for the uploads to finish");
-      // Not taken now (the price check said why): nothing is sent.
-      if (preview.data?.error) return toast(preview.data.error);
+      // Not taken now by this studio's GPUs (the check of these settings said why): nothing is sent. Any other answer of
+      // the check goes to the server, whose refusal opens the card that helps (connect a GPU, add a key).
+      const refused = refusedBeforeRun(preview.data, preview.isPlaceholderData);
+      if (refused) return toast(refused);
       run.mutate(body, {
         onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
         onError: (e) => toastError(e, "Couldn't start the sheet"),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { quoteBody } from "@/lib/hosted";
-import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, runPlace, toolPoolPrice, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, refusedBeforeRun, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
 import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
 import { lineWords } from "@/lib/pool-line";
 
@@ -287,5 +287,41 @@ describe("a tool page's own price check, for a run on this studio's GPUs", () =>
     expect(toolPoolPrice({ place: "own" })).toBeNull();
     expect(toolPoolPrice(undefined)).toBeNull();
     expect(toolPoolPrice(null)).toBeNull();
+  });
+});
+
+describe("Run on a tool page (Character Sheet, AI Influencer) after its price check", () => {
+  const busy = { costUsd: 0, demo: false, notes: [], place: "pool", quote: { allowed: false, amount: 0, priceVersion: "", text: "Busy right now. Try again in a little while." } };
+
+  it("sends nothing only when this studio's GPUs refused the run, in their words", () => {
+    const check = withPoolRefusal(busy as { notes: string[]; error?: string; poolRefused?: boolean });
+    expect(check).toMatchObject({ error: "Busy right now. Try again in a little while.", poolRefused: true });
+    expect(refusedBeforeRun(check)).toBe("Busy right now. Try again in a little while.");
+  });
+
+  it("sends the run for any other error of the check, so the server's refusal opens the connect or add-key card", () => {
+    // The check of an owner on the cloud engine with no key, or an account without its GPU or key: an error, no pool quote.
+    for (const error of ["Connect fal.ai or Replicate in Settings to run this model", "Add your fal.ai key in Settings to run this.", "Connect your GPU in Settings to run this."]) {
+      const check = withPoolRefusal({ costUsd: null, demo: false, notes: [], error } as { notes: string[]; error?: string; poolRefused?: boolean });
+      expect(check.poolRefused).toBeUndefined();
+      expect(refusedBeforeRun(check)).toBeNull();
+    }
+    expect(refusedBeforeRun(withPoolRefusal({ ...busy, quote: { ...busy.quote, allowed: true, text: "Free" } } as { notes: string[]; error?: string }))).toBeNull();
+    expect(refusedBeforeRun(undefined)).toBeNull();
+  });
+
+  it("never stops Run on a refusal from the check of earlier settings, kept on screen while the new one runs", () => {
+    const check = withPoolRefusal(busy as { notes: string[]; error?: string; poolRefused?: boolean });
+    expect(refusedBeforeRun(check, true)).toBeNull();
+  });
+
+  it("is how both pages read their check: no other error stops Run there", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    for (const page of ["src/components/fashion/character-sheet.tsx", "src/components/influencer/influencer-builder.tsx"]) {
+      const src = fs.readFileSync(path.join(__dirname, "..", page), "utf8");
+      expect(src, page).toContain("refusedBeforeRun(preview.data, preview.isPlaceholderData)");
+      expect(src, page).not.toMatch(/if (preview.data?.error) return/);
+    }
   });
 });

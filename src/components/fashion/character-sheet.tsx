@@ -27,6 +27,7 @@ import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
+import { refusedBeforeRun } from "@/lib/run-place";
 import { SheetExample } from "@/components/empty-examples";
 import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 
@@ -240,8 +241,10 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
     askRun(() => {
       if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
       if (!body) return toast(mode === "describe" ? "Describe your character first" : "Wait for the uploads to finish");
-      // Not taken now (the price check said why): nothing is sent.
-      if (preview.data?.error) return toast(preview.data.error);
+      // Not taken now by this studio's GPUs (the check of these settings said why): nothing is sent. Any other answer of
+      // the check goes to the server, whose refusal opens the card that helps (connect a GPU, add a key).
+      const refused = refusedBeforeRun(preview.data, preview.isPlaceholderData);
+      if (refused) return toast(refused);
       run.mutate(body, {
         // The run line already says which model runs and why (its notes), so no toast here.
         onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
