@@ -221,12 +221,15 @@ its own results, once. The server never calls the person's computer. Runs wait w
   on this device, it looks only after a click, and explains that question first. A tab never
   reaches the computer's apps by itself before that.
 - **Fuobe Connect.** A page can read a ComfyUI on the computer only when ComfyUI lets that site in.
-  Fuobe Connect (`integrations/fuobe-connect`, from ComfyUI-Manager or a git clone) lets in only the
-  studios that the person trusts (`https://fuobe.com` unless they name others), and only for what a
-  run needs. Every other website still meets ComfyUI's own check. The card offers it only while
-  `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, which it is once its repository
-  is published. Then it is the one step, and the setting and the guard below are under "Advanced".
-  Until then the setting with the guard is the one step. See [gpu-workers.md](gpu-workers.md).
+  Fuobe Connect (`integrations/fuobe-connect`, published as
+  [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect); a git clone,
+  ComfyUI-Manager's Install via Git URL, or the Manager's search once the Comfy Registry lists it)
+  lets in only the studios that the person trusts (`https://fuobe.com` unless they name others), and
+  only for what a run needs. Every other website still meets ComfyUI's own check. It is optional.
+  The card offers it while `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, as it is
+  now that its repository is published: it is the one step, and the setting and the guard below are
+  under "Advanced". With the switch off, the setting with the guard is the one step. See
+  [gpu-workers.md](gpu-workers.md).
 - **Pairing** (Safari, phones, a blocked browser, a PC with no screen), offered with Fuobe Connect:
   Fuobe Connect shows a code, and the person types it and approves it while signed in
   (`/connect?pair=1`; the page never fills in a code from its link). That ComfyUI then runs this
@@ -480,10 +483,21 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
 An account can let its own AI (ChatGPT, Claude, or a coding agent such as Claude Code, Codex or
 Gemini CLI) do the setup: **Set it up with my AI** on the Connect your GPU card, in Settings → Your
 GPU and at `/connect?setup=ai`. A guest signs up first and comes back there. The panel picks the
-way for the browser (this browser, or a web address on Safari, on a phone and on a page on plain
-http), gives the AI a short message with two links (the steps and the status), and ticks off each
-step as the account's open tab sees it. It ends with a first picture made on the account's GPU.
-`/connect?setup=ai&way=address` opens the panel on the web address, with the box for it in focus.
+way for the browser (Fuobe Connect first while it is published, then this browser, or a web address
+on Safari, on a phone and on a page on plain http), gives the AI a short message with two links (the
+steps and the status), and ticks off each step as the account's open tab sees it. It ends with a
+first picture made on the account's GPU. `/connect?setup=ai&way=address` opens the panel on the web
+address, with the box for it in focus.
+
+- **Fuobe Connect.** The steps install it from its repository: a `git clone` into `custom_nodes`,
+  or its `.zip` or `.tar.gz` download where git is missing, then a restart of ComfyUI (ComfyUI
+  Desktop, the portable build, Stability Matrix, a terminal, or a service on Linux). They say that
+  ComfyUI-Manager's search may not list it yet, and they make sure that ComfyUI answers
+  `GET /fuobe/connect`. In Chrome, Edge or Firefox on that computer, the tab connects by itself once
+  Fuobe Connect answers. On a phone, in Safari, on a page on plain http or in a browser that blocks
+  the computer, the panel shows the box for the code that ComfyUI's **Connect to Fuobe** shows, and
+  the setup is done once the paired ComfyUI is heard from (in the last minute). On a self-hosted
+  studio, the steps add its address to Fuobe Connect's list.
 
 - **From a phone.** The commands run on the computer, so the tunnel's address lands on the
   computer's clipboard. The status, the steps and the phone's panel send the person to
@@ -520,7 +534,8 @@ step as the account's open tab sees it. It ends with a first picture made on the
   network), `GET /api/setup/files/fuobe_guard.py` and `GET /api/setup/files/start/<port>` (the
   Windows start file) are open to everyone. The steps tell the AI to show each command and wait for
   a yes, to use exactly `--enable-cors-header <the studio's address>`, never `--listen`, and to
-  check Fuobe's files by their SHA-256. For a web address, they run the tunnel in a window the
+  check Fuobe's files by their SHA-256. For Fuobe Connect, they add no start setting and install only
+  Fuobe Connect, from its repository. For a web address, they run the tunnel in a window the
   person sees, keep its log where only that user can read it (`~/.fuobe` on a Mac or Linux,
   `~\.fuobe` in the user's own folder on Windows), warn when ComfyUI-Manager is
   installed (anyone with the address can use it), and stop the tunnel when the person is done. When
