@@ -236,8 +236,10 @@ describe("prices follow fal's and Replicate's pages", () => {
 
   it("H3 looks, Lite, HighSpeed and Vidu Q4 per second", () => {
     expect(cost("minimax-h3-max-look-vhs", { duration: 15 }, "t2v")).toBe(1.2);
-    expect(cost("minimax-h3-lite", { duration: 5, resolution: "480P" }, "t2v")).toBe(0.125);
-    expect(cost("minimax-h3-highspeed", { duration: 10 }, "t2v")).toBe(0.6);
+    // Replicate's pages (2026-11-06): Lite $0.0125/s at 480P and $0.02/s at 768P, HighSpeed $0.03/s.
+    expect(cost("minimax-h3-lite", { duration: 4, resolution: "480P" }, "t2v")).toBe(0.05);
+    expect(cost("minimax-h3-lite", { duration: 5, resolution: "768P" }, "t2v")).toBe(0.1);
+    expect(cost("minimax-h3-highspeed", { duration: 10 }, "t2v")).toBe(0.3);
     expect(cost("vidu-q4", { duration: 5 }, "i2v")).toBe(0.333);
     expect(cost("vidu-q4", { duration: 5, resolution: "540p" }, "i2v")).toBe(0.158);
   });

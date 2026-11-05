@@ -25,10 +25,10 @@ import {
 } from "@/lib/catalog/turnaround";
 import type { Generation, GenInput } from "@/lib/catalog/types";
 
-// Prices at list rates: after FLUX 3 Max's launch price (2026-11-07) and H3 Max camera controls' (2026-10-31).
+// Prices at list rates: after FLUX 3 Max's launch price (2026-11-07) and H3 Max camera controls' 30% off (2026-11-15).
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date("2026-11-15T12:00:00Z"));
+  vi.setSystemTime(new Date("2026-11-16T12:00:00Z"));
 });
 afterAll(() => vi.useRealTimers());
 

@@ -7202,19 +7202,19 @@ export const CLOUD_MODELS: ModelDef[] = [
     "pricing": {
       "unit": "second",
       "usd": 0.08,
-      "note": "768P; 480P $0.05, 1080P $0.16 \u2014 launch price $0.052 (480P $0.0325, 1080P $0.104) until 2026-10-31",
+      "note": "768P; 480P $0.05, 1080P $0.16 \u2014 30% off, $0.056 (480P $0.035, 1080P $0.112), until 2026-11-15",
       "byResolution": {
         "480P": 0.05,
         "768P": 0.08,
         "1080P": 0.16
       },
       "promo": {
-        "until": "2026-10-31",
-        "usd": 0.052,
+        "until": "2026-11-15",
+        "usd": 0.056,
         "byResolution": {
-          "480P": 0.0325,
-          "768P": 0.052,
-          "1080P": 0.104
+          "480P": 0.035,
+          "768P": 0.056,
+          "1080P": 0.112
         }
       }
     },
@@ -8276,11 +8276,11 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.04,
-      "note": "768P; 480P $0.025",
+      "usd": 0.02,
+      "note": "768P; 480P $0.0125",
       "byResolution": {
-        "480P": 0.025,
-        "768P": 0.04
+        "480P": 0.0125,
+        "768P": 0.02
       }
     }
   },
@@ -8406,7 +8406,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.06
+      "usd": 0.03
     }
   },
   {
