@@ -65,7 +65,7 @@ describe("Run before it is pressed (the price check's answer)", () => {
     expect(ok).toEqual({ text: "Free", wait: "Next in line · about 40 s" });
     const on = runPlace({ audience: "account", engine: "open", hosted: true, models: ["Qwen Image"], pool: ok, format: String });
     expect(on.refused).toBeUndefined();
-    expect(on.tip).toBe("Runs on this studio's GPUs with Qwen Image. Next in line · about 40 s.");
+    expect(on.tip).toBe("Runs on our GPUs with Qwen Image. Next in line · about 40 s.");
   });
   it("the line under the toolbar: the wait before Run, or the refusal's words with its link and offer", () => {
     const wait = render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "Next in line · about 40 s" } }));

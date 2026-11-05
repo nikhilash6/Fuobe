@@ -84,12 +84,20 @@ describe("an account's own GPU that didn't answer", () => {
     await window.fetch("/api/turnaround", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     await settle();
     const offer = toasts.shown.at(-1)!;
-    expect(offer.action?.label).toBe("Run on this studio's GPUs");
+    expect(offer.action?.label).toBe("Run on Our GPUs");
     offer.action!.onClick();
     await settle();
     await settle();
     expect(sent.at(-1)!.url).toBe("/api/turnaround");
     expect(new Headers(sent.at(-1)!.init?.headers).get(RUN_PLACE_HEADER)).toBe("pool");
+  });
+
+  it("the offer says the place by the name the server gave", async () => {
+    page();
+    server = () => answer(409, { error: "Your GPU isn't answering right now.", placeName: "Ana's render box" }, { [PLACE_ASK_HEADER]: "1" });
+    await window.fetch("/api/turnaround", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    await settle();
+    expect(toasts.shown.at(-1)!.action?.label).toBe("Run on Ana's render box");
   });
 
   it("sendRunAgain says when the run still didn't start", async () => {

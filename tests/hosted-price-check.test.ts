@@ -34,7 +34,8 @@ const { POOL_WORDS } = await import("@/lib/relay");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
-const { HOSTED_WORDS } = await import("@/server/hosted");
+const { hostedWords } = await import("@/server/hosted");
+const HOSTED_WORDS = hostedWords((await import("@/lib/place-name")).placeOf(null));
 const { POOL_LIMIT_WORDS } = await import("@/server/pool-limits");
 
 let fake: FakeBilling;

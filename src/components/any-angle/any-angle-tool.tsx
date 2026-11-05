@@ -13,7 +13,7 @@ import { ACCEPT, LibraryGrid } from "@/components/studio/media-slot";
 import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
 import { getModel } from "@/lib/catalog";
 import { loadModelViewer } from "@/components/model3d/model-viewer";
-import { askToSignUp, uploadFile, useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useIsGuest, useIsOwner, useStatus } from "@/lib/api";
+import { askToSignUp, uploadFile, useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useIsGuest, useIsOwner, usePlaceName, useStatus } from "@/lib/api";
 import { ACTIVE_RUNS_CODE } from "@/lib/guest-access";
 import {
   ANY_ANGLE,
@@ -317,6 +317,7 @@ function DragView({ view, onUse }: { view: AnyAngleView; onUse: (a: CustomAngle)
 function ShotCard({ g, original, onAgain }: { g: Generation; original: string; onAgain: (g: Generation) => void }) {
   const [before, setBefore] = useState(false);
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  const sitePlace = usePlaceName();
   const out = g.status === "succeeded" ? g.outputs.find((o) => o.kind === "image") : undefined;
   const label = g.prompt || "New angle";
   return (
@@ -350,7 +351,7 @@ function ShotCard({ g, original, onAgain }: { g: Generation; original: string; o
           {(out || g.status === "failed") && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAgain(g)}>
               <RefreshCw className="size-3.5" /> {out ? "Make another" : "Try again"}
-              {againWhere(g, { placeholders }, againPrice([g]))}
+              {againWhere(g, { placeholders, place: sitePlace }, againPrice([g]))}
             </Button>
           )}
           {out && (

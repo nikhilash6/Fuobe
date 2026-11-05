@@ -1,5 +1,6 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { PLACE_NAME_MAX } from "@/lib/place-name";
 import { db } from "./db";
 
 /**
@@ -80,6 +81,11 @@ export const SETTINGS = {
    * through the owner's own Fuobe tab (a studio on a server, a ComfyUI at home: src/server/computer).
    */
   comfyWhere: { key: "comfyui.where", env: "COMFYUI_WHERE", default: "server", options: ["server", "computer", "workers"] },
+  /**
+   * The name visitors read for this install's GPUs while hosted runs are on ("Runs on Ana's render box"): Settings →
+   * Workers. A billing service's own name for them wins (src/server/place-name.ts); empty: "Our GPUs".
+   */
+  hostedPlaceName: { key: "hosted.placeName", env: "FUOBE_PLACE_NAME" },
   /**
    * ComfyUI's models/loras folder, when it's on this machine: trained LoRAs are copied there, and a recipe's
    * LoRAs (looks, motions) are downloaded there before a run needs them (src/server/loras.ts).
@@ -220,6 +226,10 @@ export function validateSetting(name: SettingName, value: string, from: "api" | 
   // It becomes part of a host name: letters, digits and hyphens only.
   if (name === "qwenWorkspace" && value !== "" && !/^[a-z0-9-]{1,64}$/.test(value)) {
     throw new Error("qwenWorkspace must be the workspace id from Model Studio (lowercase letters, digits and hyphens)");
+  }
+  // A name visitors read in sentences: one line of at most PLACE_NAME_MAX characters.
+  if (name === "hostedPlaceName" && value !== "" && (Array.from(value.trim()).length > PLACE_NAME_MAX || /[\u0000-\u001f\u007f-\u009f]/.test(value))) {
+    throw new Error(`hostedPlaceName must be one line of at most ${PLACE_NAME_MAX} characters`);
   }
   if (name === "smartPlan" && value !== "" && value !== "auto" && !/^[a-z0-9-]{2,32}\|[\w.:/@+-]{1,200}$/.test(value)) {
     throw new Error("smartPlan must be auto, or a provider and model as provider|model");

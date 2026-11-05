@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { placeOf } from "@/lib/place-name";
 
 /*
  * What this install's GPUs don't run for a visitor with no GPU of its own shows in the pickers and galleries with its
@@ -169,7 +170,7 @@ describe("the reason never appears in a visitor's words", () => {
 
   it("in the labels, the price check's words and the tools' place", () => {
     for (const o of setups) {
-      const words = [ownSetupLabel(o), ownSetupShort(o), ownSetupDetail(o), gateText({ ok: false, reason: "ownSetup", setup: o }, true), gateText({ ok: false, reason: "ownSetup", setup: o }, false)];
+      const words = [ownSetupLabel(o), ownSetupShort(o), ownSetupDetail(o), gateText({ ok: false, reason: "ownSetup", setup: o }, true, placeOf(null)), gateText({ ok: false, reason: "ownSetup", setup: o }, false, placeOf(null))];
       for (const audience of ["account", "guest"] as const) {
         const place = runPlace({ audience, engine: "open", hosted: true, pool: checkedPool(refusedCheck(o)), format: String });
         words.push(place.label, place.title, place.tip, place.send);

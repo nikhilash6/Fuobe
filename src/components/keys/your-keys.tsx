@@ -276,7 +276,10 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
   const account = useViewer().data?.account;
   const q = useYourKeys(!!account);
   // A studio with paid models off takes no keys: the section isn't shown.
-  const paidOff = useStatus().data?.viewer?.paidAllowed === false || q.data?.paidAllowed === false;
+  const viewer = useStatus().data?.viewer;
+  const paidOff = viewer?.paidAllowed === false || q.data?.paidAllowed === false;
+  // Hosted runs: the limits below are a key's own (runs on this studio's GPUs have theirs).
+  const hosted = !!viewer?.hosted;
   if (!hydrated || !account || paidOff) return null;
   return (
     <section id="your-keys" aria-labelledby="your-keys-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
@@ -296,7 +299,7 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
               final word.
             </li>
           )}
-          <li>Up to 4 runs at once and 60 an hour.</li>
+          <li>{hosted ? "On your key: up to 4 runs at once and 60 an hour." : "Up to 4 runs at once and 60 an hour."}</li>
         </ul>
         {q.isError ? (
           <p className="text-[13px] text-muted-foreground">{q.error.message}</p>
@@ -325,8 +328,18 @@ export function KeyInstead({ onOpen, className }: { onOpen?: () => void; classNa
     <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed px-3 py-2.5 text-[13px]", className)}>
       <KeyRound aria-hidden className="mt-0.5 size-4 shrink-0 self-start text-brand-text" />
       <p className="min-w-0 flex-1 basis-56 text-muted-foreground">
-        <span className="font-medium text-foreground">No GPU?</span> Add your own fal.ai or Replicate key to use paid models like Nano Banana, Kling and Veo, billed to your
-        account with them.
+        {v.hosted ? (
+          // Hosted runs: open models already run without a GPU of one's own, so a key is for the paid ones.
+          <>
+            <span className="font-medium text-foreground">Paid models:</span> add your own fal.ai or Replicate key to use Nano Banana, Kling and Veo, billed to your
+            account with them.
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-foreground">No GPU?</span> Add your own fal.ai or Replicate key to use paid models like Nano Banana, Kling and Veo, billed to
+            your account with them.
+          </>
+        )}
       </p>
       <Button
         size="sm"

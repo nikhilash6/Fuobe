@@ -125,7 +125,7 @@ import { engineMode, getSetting, withCandidates, withoutCandidates } from "./set
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
-import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
+import { FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { catalogVersion } from "./computer/catalog-version";
@@ -222,7 +222,7 @@ export function toGeneration(r: Row): Generation {
     prompt: r.prompt,
     request,
     // Held for the moderation service's check: nothing of it is shown until it passes.
-    outputs: checking ? [] : (JSON.parse(r.outputs_json) as OutputFile[]),
+    outputs: checking ? [] : shownOutputs(JSON.parse(r.outputs_json) as OutputFile[], pool),
     error: pool ? poolError(r.id, r.error, charged) : r.error,
     costUsd: r.cost_usd,
     favorite: !!r.favorite,
@@ -272,6 +272,33 @@ function livePreview(id: string): { preview: string } | Record<string, never> {
   return at ? { preview: `/api/generations/${encodeURIComponent(id)}/preview?at=${at}` } : {};
 }
 
+/**
+ * A row's outputs as its viewer reads them. On this install's GPUs, a finish step's own trouble (the server's words about
+ * the web copy of a 3D model) stays on the server: the owner reads it in the log, the account gets the model as it is.
+ */
+function shownOutputs(outputs: OutputFile[], pool: boolean): OutputFile[] {
+  if (!pool) return outputs;
+  return outputs.map((o) => {
+    const finish = o.meta?.finish;
+    if (!finish || typeof finish !== "object" || !("error" in finish)) return o;
+    const { error: _error, ...rest } = finish as Record<string, unknown>;
+    void _error;
+    return { ...o, meta: { ...o.meta, finish: rest } };
+  });
+}
+
+/**
+ * A row's failure as its viewer reads it, by its id: a run on this install's GPUs in the words its tile says (poolError:
+ * one plain sentence for anything technical), any other as it was stored. For pages that read a step's failure from the
+ * table itself (a Mixed Media render's frames).
+ */
+export function shownError(id: string, raw: string | null): string | null {
+  const r = db().prepare("SELECT request_json FROM generations WHERE id = ?").get(id) as { request_json: string } | undefined;
+  if (!r) return raw;
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  return stored.place === "pool" ? poolError(id, raw, !!stored.hold && !!stored.charged) : raw;
+}
+
 /** A pool row's words while it goes: in line, or working on it. */
 function poolMessage(r: Pick<Row, "status" | "message">): string | null {
   if (r.status === "queued") return POOL_WORDS.inLine;
@@ -313,6 +340,9 @@ const PLAIN_POOL_ERRORS = (() => {
       m.filesFull,
       RELAY_WORDS.stopped,
       POOL_WORDS.failed,
+      // About the person's own files: what to change, so kept (the GPU couldn't read or finish with them).
+      FILE_TROUBLE_WORDS.crashed,
+      FILE_TROUBLE_WORDS.unreadable,
       BLOCKED_CARD_MESSAGE,
       NO_SUBJECT_MESSAGE,
       WATERMARK_COPY.rejected,
@@ -1842,7 +1872,7 @@ export const OWN_GPU_ONLY = "Pick an open-source model to run it on your GPU.";
 export const OPEN_ONLY_RUN = "Pick an open-source model to run this on your GPU.";
 export const SWITCHED_OFF_RUN = "This account is closed, so its runs stopped.";
 /** A run on this install's GPUs that waited past its limit (hosted runs). */
-export const POOL_WAITED = "The studio's GPUs were busy, so it didn't run. Not charged.";
+export const POOL_WAITED = "The GPUs were busy, so it didn't run. Not charged.";
 
 /**
  * Everything an account's work runs inside: as the account (tenant.ts: only its own files and runs), on its own ComfyUI

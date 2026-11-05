@@ -3,6 +3,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { placeOf } from "@/lib/place-name";
 import { NextRequest } from "next/server";
 import { listenOnFreePort, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
@@ -229,7 +230,7 @@ describe("Cinema Studio for an account with no GPU of its own", () => {
     fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), outputsPerRun: 1 } };
     const id = await project("none");
     const four = { ...STILL, batch: 4 };
-    const words = hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false);
+    const words = hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false, placeOf(null));
     const check = await generateRoute.POST(json(`/api/cinema/projects/${id}/generate?preview=1`, "POST", { input: four }, "none"), params({ id }));
     expect(check.status, await check.clone().text()).toBe(200);
     expect(((await check.json()) as { quote?: { allowed: boolean; text: string } }).quote).toMatchObject({ allowed: false, text: words });

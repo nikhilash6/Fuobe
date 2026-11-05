@@ -105,6 +105,18 @@ export interface ComposeCatalog {
   get(id: string): { manifest: ManifestWorkflow; workflow: ComfyWorkflow };
 }
 
+/**
+ * A refusal's words where they are read: an account's run on this install's GPUs (`site`, ctx.accountOnInstall) gets
+ * plain words that name no engine, no ComfyUI and no "your GPU" (it isn't theirs); anywhere else, the words it always had.
+ */
+const onPlace = (site: boolean | undefined, own: string, onSite: string): string => (site ? onSite : own);
+
+/** Where open models run, inside a refusal: "on the open engine", or (an account's run on this install's GPUs) "with open models". */
+const openEngine = (site: boolean | undefined): string => onPlace(site, "on the open engine", "with open models");
+
+/** The one sentence for a run that can't be made (POOL_WORDS.failed in src/lib/relay.ts, kept equal by its test). */
+export const SITE_FAILED_WORDS = "Sorry, this one couldn't be made.";
+
 /** A request the composer refuses, in words (status: the HTTP status the server answers with). */
 export class ComposeError extends Error {
   constructor(
@@ -351,7 +363,7 @@ const clipFacts = (clip: MediaInfo | undefined) => ({ width: clip?.width, height
  * selection n and slow motion (src/lib/av/fps.ts), the chunked upscalers' short side and pass size.
  * `holds` = frame-sized copies of the whole clip the graph keeps in memory (for the RAM check).
  */
-function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: MediaInfo | undefined, extra: Record<string, unknown>) {
+function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: MediaInfo | undefined, extra: Record<string, unknown>, site?: boolean) {
   const b = manifest.bindings;
   const d = manifest.defaults;
   const facts = clipFacts(clip);
@@ -386,7 +398,7 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
       const sourceFps = clip?.fps && clip.fps > 0 ? clip.fps : input.sourceFps && input.sourceFps > 0 ? input.sourceFps : undefined;
       if (!sourceFps) {
         throw new ComposeError(
-          `FPS Boost on the open engine works out its frames from the clip's frame rate, and this file doesn't say what it is, so ${target} fps can't be hit. Re-save it as MP4 (H.264) or WebM and try again`,
+          `FPS Boost ${openEngine(site)} works out its frames from the clip's frame rate, and this file doesn't say what it is, so ${target} fps can't be hit. Re-save it as MP4 (H.264) or WebM and try again`,
         );
       }
       const plan = fpsPlan(sourceFps, target, slowdown, Number(manifest.limits?.maxMultiplier ?? 16));
@@ -425,10 +437,13 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
 }
 
 /** Per-job length limits a graph enforces (manifest limits.maxDurationSec), in words. */
-const OVER_LIMIT: Record<string, (s: number) => string> = {
-  "still-motion": (s) => `Ken Burns on the open engine makes up to ${s} s per clip — split a longer move into pieces`,
-  "audio-loop": (s) => `Loops on the open engine run up to ${s / 60} minutes (${s} s)`,
-  music: (s) => `This model writes songs up to ${s % 60 ? `${s} s` : `${s / 60} minutes`} on your GPU: pick a shorter length`,
+const OVER_LIMIT: Record<string, (s: number, site?: boolean) => string> = {
+  "still-motion": (s, site) => `Ken Burns ${openEngine(site)} makes up to ${s} s per clip — split a longer move into pieces`,
+  "audio-loop": (s, site) => `Loops ${openEngine(site)} run up to ${s / 60} minutes (${s} s)`,
+  music: (s, site) => {
+    const most = s % 60 ? `${s} s` : `${s / 60} minutes`;
+    return onPlace(site, `This model writes songs up to ${most} on your GPU: pick a shorter length`, `This model writes songs up to ${most}. Pick a shorter length.`);
+  },
 };
 
 /** Songs longer than this decode in tiles on your GPU (MiniMax Music 3's switch). */
@@ -444,7 +459,7 @@ export const TILED_SONG_SECONDS = 120;
 export async function composeWorkflow(endpointTemplate: string, input: GenInput, ctx: ComposeContext): Promise<ComposedPrompt> {
   // "video-concat-{n}": one workflow per clip count.
   const clips = input.videos ?? [];
-  if (endpointTemplate.includes("{n}") && clips.length > 4) throw new ComposeError("ComfyUI joins up to 4 clips at a time");
+  if (endpointTemplate.includes("{n}") && clips.length > 4) throw new ComposeError(onPlace(ctx.accountOnInstall, "ComfyUI joins up to 4 clips at a time", "Up to 4 clips can be joined at a time."));
   const extra: Record<string, unknown> = { ...(input.extra ?? {}) };
   // The second audio track (mux background): the canonical input when the runtime sends it, else params.extra.audio2.
   const given2 = (input as GenInput & { audio2?: unknown }).audio2;
@@ -629,7 +644,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     const frames = Math.max(1, Math.floor((clipLength - start) * fps));
     const cap = Number(manifest.limits?.maxFrames ?? Infinity);
     if (frames > cap) {
-      throw new ComposeError(`This model redraws up to ${cap} frames per job on the open engine (${seconds(cap / fps)} s at ${fps} fps; this clip is ${seconds(clipLength - start)} s) — trim the clip, or pick a range and a frame rate in the Mixed Media studio`);
+      throw new ComposeError(`This model redraws up to ${cap} frames per job ${openEngine(ctx.accountOnInstall)} (${seconds(cap / fps)} s at ${fps} fps; this clip is ${seconds(clipLength - start)} s) — trim the clip, or pick a range and a frame rate in the Mixed Media studio`);
     }
     values.frames = frames;
   }
@@ -648,7 +663,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     const cap = Number(manifest.limits?.maxFrames ?? 0);
     if (cap && frames > cap) {
       const what = ctx.op === "avatar" ? "A talking avatar" : "Lip re-sync";
-      throw new ComposeError(`${what} on the open engine takes up to ${seconds(cap / fps)} s of speech per job (this voice is ${seconds(voiceLength)} s) — split it into shorter parts`);
+      throw new ComposeError(`${what} ${openEngine(ctx.accountOnInstall)} takes up to ${seconds(cap / fps)} s of speech per job (this voice is ${seconds(voiceLength)} s) — split it into shorter parts`);
     }
     values.frames = frames;
   }
@@ -661,7 +676,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     values.upscalerScale = k === 4 ? "4x" : "2x";
   }
   // Video finishing (Upscale hub): export formats, HDR curves, FPS Boost's m / n, chunked upscaling.
-  const finish = videoFinishValues(manifest, input, clip, extra);
+  const finish = videoFinishValues(manifest, input, clip, extra, ctx.accountOnInstall);
   Object.assign(values, finish.values);
   // Open-H3 Regenerate (video-regenerate-h3): the output size and the draft preset as the pack's strings, and the frames
   // this pass reads (its seconds at 24 fps, at most 15 s); the words are what it redraws from (regenerate.ts).
@@ -711,7 +726,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
   if (b.easeInOut && input.easing) values.easeInOut = input.easing === "linear" ? 0 : 1;
   const maxSeconds = Number(manifest.limits?.maxDurationSec ?? 0);
   if (maxSeconds && b.duration && Number(values.duration ?? d.duration ?? 0) > maxSeconds + 0.001) {
-    throw new ComposeError(OVER_LIMIT[manifest.capability]?.(maxSeconds) ?? `This workflow makes up to ${maxSeconds} s per job`);
+    throw new ComposeError(OVER_LIMIT[manifest.capability]?.(maxSeconds, ctx.accountOnInstall) ?? `This workflow makes up to ${maxSeconds} s per job`);
   }
   // Edit speech (speech-edit-auk): the edit windows the planner made, crossfaded back on a linear fade-in with a flat tail
   // (src/lib/av/speech-edit-graph.ts says why; both sides of a seam are the same voice, so equal power would bump the level).
@@ -948,7 +963,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
   if (ctx.op === "depth-video" && input.colormap) {
     const want = input.colormap.toLowerCase() === "grayscale" ? "gray" : input.colormap.toLowerCase();
     if (b.colormap && (want === "gray" || want === "inferno")) values.colormap = want;
-    else if (want !== "gray") throw new ComposeError(b.colormap ? "The open engine's depth maps come in grayscale or inferno — turbo, magma and viridis are on the cloud" : "This depth model makes grayscale maps only — pick Video Depth Anything for inferno");
+    else if (want !== "gray") throw new ComposeError(b.colormap ? onPlace(ctx.accountOnInstall, "The open engine's depth maps come in grayscale or inferno — turbo, magma and viridis are on the cloud", "Open models make depth maps in grayscale or inferno — turbo, magma and viridis are on the cloud") : "This depth model makes grayscale maps only — pick Video Depth Anything for inferno");
   }
   if (b.sideBySide && input.sideBySide !== undefined) values.sideBySide = input.sideBySide;
   // A wrapper graph that loads its LoRA itself (kijai's InfiniteTalk: WanVideoLoraSelect, no core model loader to attach
@@ -1151,7 +1166,15 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
       const [maxW, maxH] = [Number(manifest.limits?.maxWidth ?? Infinity), Number(manifest.limits?.maxHeight ?? Infinity)];
       const room = Math.min(maxW / src.width, maxH / src.height);
       const asked = Number(values.scale ?? d.scale ?? 1);
-      if (room < 1) throw new ComposeError(`SeedVR2 makes pictures up to ${maxW} × ${maxH} px on your GPU, and this one is already ${src.width} × ${src.height}: pick 4x ESRGAN for it`, 400);
+      if (room < 1)
+        throw new ComposeError(
+          onPlace(
+            ctx.accountOnInstall,
+            `SeedVR2 makes pictures up to ${maxW} × ${maxH} px on your GPU, and this one is already ${src.width} × ${src.height}: pick 4x ESRGAN for it`,
+            `SeedVR2 makes pictures up to ${maxW} × ${maxH} px, and this one is already bigger. Pick 4x ESRGAN for it.`,
+          ),
+          400,
+        );
       if (asked > room) values.scale = Math.floor(room * 100) / 100;
     }
   }
@@ -1219,9 +1242,15 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     const need = clip.width * clip.height * 12 * (clip.frames ?? clipLength * (clip.fps ?? 30)) * 2.5;
     const budget = ((await ctx.serverRam?.()) ?? 16 * GB) / 2;
     if (need > budget) {
+      // On this install's GPUs: how long a clip fits, in plain words.
+      const fits = Math.floor((clipLength * budget) / need);
       throw new ComposeError(
-        `Whisper captions hold the whole clip in memory: this one needs about ${Math.ceil(need / GB)} GB of RAM and this ComfyUI can spare ${Math.floor(budget / GB)} GB. ` +
-          "Use Qwen3-ASR + Caption burn-in for long clips, or trim it first",
+        onPlace(
+          ctx.accountOnInstall,
+          `Whisper captions hold the whole clip in memory: this one needs about ${Math.ceil(need / GB)} GB of RAM and this ComfyUI can spare ${Math.floor(budget / GB)} GB. ` +
+            "Use Qwen3-ASR + Caption burn-in for long clips, or trim it first",
+          `This clip is too long to caption in one go. Trim it to under ${fits >= 60 ? `${Math.floor(fits / 60)} min` : `${Math.max(1, fits)} s`}.`,
+        ),
       );
     }
   }
@@ -1235,7 +1264,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
   const bound = applyBindings(graph, b, Object.fromEntries(Object.entries(values).filter(([k]) => !left.includes(k))));
   // maxDimension targets for removed reference branches are expected: their scale nodes go with the loader.
   const realMissing = bound.missing.filter((m) => !/^maxDimension\b/.test(m));
-  if (realMissing.length) throw new ComposeError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
+  if (realMissing.length) throw new ComposeError(onPlace(ctx.accountOnInstall, `Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`, SITE_FAILED_WORDS));
   // A saved 3D view read without the browser (Any Angle): Load3D's picture entries point at the run's photo.
   let wf = withLoad3dImages(bound.workflow, typeof values.image === "string" ? values.image : undefined);
   // Qwen3-TTS's clone needs the sample's words unless it clones from the voice's timbre alone (x_vector_only):

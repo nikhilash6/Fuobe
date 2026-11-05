@@ -3,14 +3,16 @@ import { againKeys, katanaSteps, type KatanaJobView } from "@/lib/av/katana";
 import type { Generation } from "@/lib/catalog/types";
 import { againPrice, againWhere, paidSuffix } from "@/lib/demo-mode";
 import { draftRenderPaid } from "@/lib/output-actions";
+import { placeOf } from "@/lib/place-name";
 
 describe("a one-tap Run again says what it spends", () => {
   const off = { placeholders: false };
   const on = { placeholders: true };
 
-  it("on your GPU, on the studio's GPUs, paid in the cloud", () => {
+  it("on your GPU, on this studio's GPUs by their place name, paid in the cloud", () => {
     expect(againWhere({ engine: "open" }, off)).toBe(" on your GPU");
-    expect(againWhere({ engine: "open", place: "pool" }, off)).toBe(" on the studio's GPUs");
+    expect(againWhere({ engine: "open", place: "pool" }, off)).toBe(" on our GPUs");
+    expect(againWhere({ engine: "open", place: "pool" }, { ...off, place: placeOf("Ana's render box") })).toBe(" on Ana's render box");
     expect(againWhere({ engine: "cloud" }, off)).toBe(" · paid");
   });
 
@@ -23,7 +25,7 @@ describe("a one-tap Run again says what it spends", () => {
     expect(againWhere({ engine: "cloud" }, off, 0)).toBe(" · paid");
     // A price never shows on your GPU, on a studio's GPUs, or while placeholders are on.
     expect(againWhere({ engine: "open" }, off, 0.42)).toBe(" on your GPU");
-    expect(againWhere({ engine: "cloud", place: "pool" }, off, 0.42)).toBe(" on the studio's GPUs");
+    expect(againWhere({ engine: "cloud", place: "pool" }, off, 0.42)).toBe(" on our GPUs");
     expect(againWhere({ engine: "cloud" }, on, 0.42)).toBe("");
     expect(paidSuffix(undefined)).toBe(" · paid");
     expect(paidSuffix(0.04)).toBe(" · ≈ $0.04");

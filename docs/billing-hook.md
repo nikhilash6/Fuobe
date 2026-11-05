@@ -65,6 +65,7 @@ type Policy = {
   prefer?: "pool" | "own";                                         // the default place (absent: "own")
   kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };  // absent: all
   cardText?: string;                                               // preset cards' words for a run there (absent: none)
+  placeName?: string;                                              // what visitors call these GPUs (absent: the install's name)
   links?: Action[]; notice?: { id: string; text: string; url?: string }; ttlS: number;
 };
 ```
@@ -72,6 +73,10 @@ type Policy = {
 `cardText` is what a preset card says when its run would go to this install's GPUs for the viewer, such as "Try free"
 (at most 40 characters). With a service set, the cards say only these words, and nothing when the policy has none.
 With no service, runs there are free (`FUOBE_HOSTED_FREE=1`), and the cards say "Try free".
+
+`placeName` is the name visitors read for this install's GPUs ("Runs on Studio North GPUs", "Made on: Studio North
+GPUs"), at most 40 characters. Absent: the install's own name for them (Settings → Workers → Name for your GPUs, else
+`FUOBE_PLACE_NAME`), else "Our GPUs". Fuobe writes every sentence so that no verb has to agree with the name.
 
 `megapixels` is the size of each picture or frame the run makes, about, as its workflow makes it: the canvas the
 workflow binds (a canvas the request names counts only there; else the aspect ratio and resolution, the model's

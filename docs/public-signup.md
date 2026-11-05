@@ -649,8 +649,11 @@ With it on:
   one price. The run goes to this install's GPUs: its workers, when Settings says ComfyUI runs on workers
   ([gpu-workers.md](gpu-workers.md)), or else its own ComfyUI server, only when that is on this machine. An install
   whose ComfyUI runs on the owner's computer doesn't offer hosted runs.
-- An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU" or "This
-  studio's GPUs"), and the person can pick either.
+- An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU", or the
+  place name of this install's GPUs), and the person can pick either.
+- Visitors read this install's GPUs by one place name: "Runs on our GPUs", "Made on: Our GPUs", "Run on Our GPUs".
+  The billing service's policy sets it (`placeName`); without one, Settings → Workers → Name for your GPUs, else
+  `FUOBE_PLACE_NAME`, else "Our GPUs". It is never sent while hosted runs are off.
 - A model, mode or option that runs only on a person's own GPU or key keeps its label there ("Runs on your own GPU ·
   48 GB", `src/lib/own-setup.ts`), and Run opens that setup. So does a run that no worker can take (none holds its
   files or may run its lane). Extra LoRAs added to a request stay on the account's own GPU.

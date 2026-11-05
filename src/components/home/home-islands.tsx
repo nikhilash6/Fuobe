@@ -7,6 +7,7 @@ import { useFadeEdges } from "@/components/use-fade-edges";
 import { useRailStills } from "@/components/use-rail-stills";
 import { PresetPreview, setPreviewsPaused, usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useIsOwner, useStatus } from "@/lib/api";
+import { placeOf } from "@/lib/place-name";
 import { copyWithToast } from "@/lib/clipboard";
 import type { PresetCardData } from "@/lib/preset-cards";
 import type { AutoPlay } from "@/lib/preview-playback";
@@ -238,6 +239,8 @@ export function StartSteps() {
   const status = hydrated ? data : undefined;
   const viewer = status?.viewer;
   const owner = !!status && !viewer;
+  // Hosted runs: runs need nothing set up, so the third step is to make something (a GPU of one's own is optional).
+  const place = viewer?.hosted ? placeOf(viewer.placeName) : null;
   const link = "inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline underline-offset-2";
   const done = (text: string) => (
     <span className="inline-flex items-center gap-1 text-[13px] font-medium text-foreground">
@@ -256,7 +259,7 @@ export function StartSteps() {
     },
     {
       title: "Sign up free.",
-      text: viewer?.hosted ? "Runs on this studio's GPUs, or on your own." : "A free account runs every open model on your own GPU.",
+      text: place ? `Runs on ${place.text}, or on your own GPU.` : "A free account runs every open model on your own GPU.",
       action:
         viewer?.kind === "account" ? (
           done("You’re signed in")
@@ -270,21 +273,31 @@ export function StartSteps() {
           </a>
         ),
     },
-    {
-      title: "Connect your ComfyUI.",
-      text: "Use the ComfyUI on your computer, or one you reach by link. Fuobe shows you everything it can run.",
-      action: viewer?.gpu.connected ? (
-        done("Your GPU is connected")
-      ) : viewer?.kind === "account" ? (
-        <button type="button" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))} className={link}>
-          Connect your GPU <ArrowRight className="size-3.5" />
-        </button>
-      ) : (
-        <IntentLink href="/connect" className={link}>
-          Connect your GPU <ArrowRight className="size-3.5" />
-        </IntentLink>
-      ),
-    },
+    place
+      ? {
+          title: "Make something.",
+          text: "Pick a studio and press Generate. Your own GPU or key is optional.",
+          action: (
+            <IntentLink href="/video" className={link}>
+              Open the Video studio <ArrowRight className="size-3.5" />
+            </IntentLink>
+          ),
+        }
+      : {
+          title: "Connect your ComfyUI.",
+          text: "Use the ComfyUI on your computer, or one you reach by link. Fuobe shows you everything it can run.",
+          action: viewer?.gpu.connected ? (
+            done("Your GPU is connected")
+          ) : viewer?.kind === "account" ? (
+            <button type="button" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))} className={link}>
+              Connect your GPU <ArrowRight className="size-3.5" />
+            </button>
+          ) : (
+            <IntentLink href="/connect" className={link}>
+              Connect your GPU <ArrowRight className="size-3.5" />
+            </IntentLink>
+          ),
+        },
   ];
   return (
     <ol className="space-y-5">

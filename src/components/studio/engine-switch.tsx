@@ -6,6 +6,7 @@ import { openAddKey } from "@/components/keys/your-keys";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Engine } from "@/lib/catalog/types";
 import { useEngineMode, useHydrated, useStatus, useViewer } from "@/lib/api";
+import { placeOf, type Place } from "@/lib/place-name";
 import { accountEngine } from "@/lib/your-keys";
 import { cn } from "@/lib/utils";
 import { radioKeys, radioTab } from "./radio-keys";
@@ -14,6 +15,16 @@ const OPTIONS: { value: Engine; label: string; icon: typeof Cloud; tip: string }
   { value: "cloud", label: "Cloud", icon: Cloud, tip: "Frontier paid models via your fal.ai / Replicate key" },
   { value: "open", label: "Open source", icon: Cpu, tip: "Open-weight models running on your ComfyUI server" },
 ];
+
+/**
+ * A side's tooltip words: an account's own (who pays, where it runs), else the side's own; with hosted runs on (`place`:
+ * their place name), open models run free there.
+ */
+export function engineTip(value: Engine, account: ReturnType<typeof accountEngine>, place: Place | null): string {
+  if (account && "tips" in account) return account.tips[value];
+  if (value === "open" && place) return `Open models, free on ${place.text}`;
+  return OPTIONS.find((o) => o.value === value)!.tip;
+}
 
 /**
  * Segmented control with a sliding white thumb (Liner-style). `md` (page headers) turns
@@ -48,6 +59,8 @@ export function EngineSwitch({
   // An account (public sign-up): locked on open source until it adds its own key, and why; with one, who pays.
   const account = accountEngine(hydrated ? status : undefined);
   const locked = account && "locked" in account ? account.locked : null;
+  // Hosted runs: open models run free on this studio's GPUs, said with their place name (a guest's tip too).
+  const place = hydrated && status?.viewer?.hosted ? placeOf(status.viewer.placeName) : null;
   const idx = OPTIONS.findIndex((o) => o.value === value);
   if (mode !== "both" || locked) {
     // One engine and nothing to change: only the owner (Settings) or an account that can add a key gets a badge.
@@ -138,7 +151,7 @@ export function EngineSwitch({
           <TooltipContent>
             {/* One span: the tooltip lays its children out in a row. */}
             <span>
-              <span className="font-medium">{o.label}</span> · {account && "tips" in account ? account.tips[o.value] : o.tip}
+              <span className="font-medium">{o.label}</span> · {engineTip(o.value, account, place)}
             </span>
           </TooltipContent>
         </Tooltip>

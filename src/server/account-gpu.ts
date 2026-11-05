@@ -14,6 +14,7 @@ import { blockedForAccounts, fetchPublic, isLoopbackGpu, peekText } from "./remo
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolReady } from "./hosted";
+import { placeName } from "./place-name";
 import { poolOwnModels } from "./pool-own-setup";
 import { poolRulesOf, type PoolRules, type PresetModel } from "@/lib/pool-rules";
 import { diagnoseAddress, diagnoseGpu, gpuHostOf, type Diagnosis, type GpuFailure, type GpuPlace, type GpuStage } from "@/lib/diagnose";
@@ -327,6 +328,8 @@ export interface VisitorView {
    * policy says so). Absent: its own GPU first, as before. Either can always be picked.
    */
   prefer?: "pool";
+  /** The name visitors read for this install's GPUs ("Runs on Our GPUs"; src/server/place-name.ts). Only with `hosted`. */
+  placeName?: string;
   /**
    * The words a preset card shows when its run would go to this install's GPUs (the billing service's policy, such as
    * "Try free"; with no service, "Try free": those runs are free). Absent: the cards show none.
@@ -392,6 +395,8 @@ export async function visitorStatus(account: Account | null) {
     const p = await billingPolicy(account?.id ?? null);
     if (p?.hosted) viewer.hosted = true;
     if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
+    // What the visitor reads for this install's GPUs ("Runs on {name}"): the policy's name, else the install's.
+    if (p?.hosted) viewer.placeName = placeName(p);
     const card = p?.hosted && typeof p.cardText === "string" ? p.cardText.trim().slice(0, 40) : "";
     if (card) viewer.cardText = card;
     // What this studio's GPUs keep off, the open models they can't run right now among it: shown in the pickers with

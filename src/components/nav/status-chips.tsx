@@ -175,12 +175,18 @@ function BalanceItems({ viewer }: { viewer: Viewer }) {
       })}
       <NavMenuItem asChild className={MENU_ROW_1}>
         <IntentLink href="/connect">
-          <Cpu /> Use your own GPU or keys (free)
+          <Cpu /> Use your own GPU or key
         </IntentLink>
       </NavMenuItem>
     </>
   );
 }
+
+/**
+ * The balance chip's dot is green while runs go: there is something to spend, or runs here are free (nothing counted:
+ * no renewal to wait for and nothing to ask for). Grey only when runs wait for more.
+ */
+export const balanceGoes = (b: Pick<NonNullable<Viewer["balance"]>, "amount" | "refillAt" | "offer" | "action">): boolean => b.amount > 0 || (!b.refillAt && !b.offer && !b.action);
 
 function balanceLabel(viewer: Viewer): { chip: string; refill: string | null } {
   const b = viewer.balance!;
@@ -208,7 +214,7 @@ export function BalanceChip({ viewer, pill, className }: { viewer: Viewer; pill?
           )}
         >
           <span className={cn("flex min-w-0 items-center", pill ? "gap-2" : "gap-3")}>
-            {pill ? <StatusDot ok={b.amount > 0} /> : <DotSlot ok={b.amount > 0} />} <span className="truncate font-medium text-foreground">{chip}</span>
+            {pill ? <StatusDot ok={balanceGoes(b)} /> : <DotSlot ok={balanceGoes(b)} />} <span className="truncate font-medium text-foreground">{chip}</span>
             {refill && <span className={cn("ml-auto shrink-0", pill && "hidden xl:inline")}>{refill}</span>}
           </span>
           {!pill && b.sub && <span className="truncate pl-7 text-[11px]">{b.sub}</span>}
@@ -229,7 +235,7 @@ export function BalanceSection({ viewer }: { viewer: Viewer }) {
     <>
       <DropdownMenuLabel className="flex flex-col gap-0.5 px-2.5 font-normal">
         <span className="flex items-center gap-3 text-[12.5px]">
-          <DotSlot ok={b.amount > 0} /> <span className="font-medium text-foreground">{chip}</span>
+          <DotSlot ok={balanceGoes(b)} /> <span className="font-medium text-foreground">{chip}</span>
           {refill && <span className="ml-auto text-[12px] text-muted-foreground">{refill}</span>}
         </span>
         {b.sub && <span className="pl-7 text-[11px] text-muted-foreground">{b.sub}</span>}

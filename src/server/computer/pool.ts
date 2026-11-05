@@ -619,7 +619,26 @@ export function lineOrder(rows: TaskRow[], fairShare: boolean): TaskRow[] {
  * Only the task as `t` read it: one that has moved on since (another app process put it back in line, or a worker took
  * it again with a new lease) stays as it is now, and no attempt is counted. Returns whether it changed.
  */
-export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?: boolean; lostAt?: number }): boolean {
+/**
+ * Why a task was stopped for good after its tries, in the owner's words. With hosted runs on, the line retries by itself
+ * until then, so the words say how many tries it had instead of asking for Retry (the account reads one plain sentence
+ * either way); otherwise the words the owner's own jobs always had.
+ */
+export function stoppedWords(kind: "silent" | "down" | "stuck" | "other", tries: number): string {
+  if (!hostedRunsOn()) return OWNER_STOP_WORDS[kind];
+  const why = { silent: "the GPU stopped answering", down: "ComfyUI kept stopping on the GPUs", stuck: "the GPUs couldn't start it", other: "the GPUs couldn't finish it" }[kind];
+  return `Stopped after ${tries} ${tries === 1 ? "try" : "tries"}: ${why}.`;
+}
+
+/** The owner's words for a task stopped for good, with hosted runs off. */
+const OWNER_STOP_WORDS = {
+  silent: "The GPU running this stopped answering, three times. Press Retry.",
+  down: "ComfyUI kept stopping on the GPUs. Press Retry.",
+  stuck: "The GPUs couldn't start this run. Press Retry.",
+  other: "The GPUs couldn't finish this run. Press Retry.",
+};
+
+export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; whyKind?: "silent" | "down" | "stuck"; last?: boolean; lostAt?: number }): boolean {
   const d = db();
   return d.transaction((): boolean => {
     const now = taskById(t.id);
@@ -627,7 +646,7 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
     const tried = json<string[]>(t.tried_json, []);
     const requeues = t.requeues + (o.blame ? 1 : 0);
     if (o.blame && (requeues >= MAX_ATTEMPTS || o.last)) {
-      endTask(t.id, "failed", { error: o.why ?? "The GPUs couldn't finish this run. Press Retry.", requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
+      endTask(t.id, "failed", { error: o.why ?? stoppedWords(o.whyKind ?? "other", requeues), requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
       return true;
     }
     if (t.worker_id) logWorkerJob("requeued", t, t.worker_id);
@@ -684,7 +703,7 @@ function sweepLine(d: ReturnType<typeof db>, now: number): void {
     const sendingSince = t.sending_since ?? t.claimed_at;
     const stuck = t.state === "sending" && !!sendingSince && now - sendingSince > SENDING_MS;
     if (silent || down || stuck) {
-      backInLine(t, { blame: true, why: silent ? "The GPU running this stopped answering, three times. Press Retry." : down ? "ComfyUI kept stopping on the GPUs. Press Retry." : "The GPUs couldn't start this run. Press Retry.", ...(silent && !t.w_revoked && { lostAt: now }) });
+      backInLine(t, { blame: true, whyKind: silent ? "silent" : down ? "down" : "stuck", ...(silent && !t.w_revoked && { lostAt: now }) });
     }
   }
   const late = d.prepare("SELECT id FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND claimed_at IS NULL AND not_after IS NOT NULL AND not_after < ?").all(now) as { id: string }[];

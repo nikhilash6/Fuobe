@@ -13,7 +13,8 @@ import { formatCost, timeAgo } from "@/lib/format";
 import { PRESETS as GRADE_PRESETS } from "@/lib/grade";
 import { trashDaysLeft, userTitle } from "@/lib/library";
 import { editOnlyFormat, isLayered, layerInfo, outputActions, type OutputAction } from "@/lib/output-actions";
-import { useEngineMode, useIsAccount, useLikelyVisitor, useStatus } from "@/lib/api";
+import { useEngineMode, useIsAccount, useLikelyVisitor, usePlaceName, useStatus } from "@/lib/api";
+import { knownPlace } from "@/lib/place-name";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
@@ -62,6 +63,8 @@ function Details({ g, index }: { g: Generation; index: number }) {
   const p = g.request.params ?? {};
   const title = userTitle(g);
   const aiTag = useAiTag();
+  // A run on this studio's GPUs says their place name ("Made on: Our GPUs").
+  const site = (usePlaceName() ?? knownPlace()).label;
   if (g.feature === "upload") {
     return (
       <div className="space-y-4">
@@ -91,7 +94,7 @@ function Details({ g, index }: { g: Generation; index: number }) {
       </div>
       <div className="divide-y rounded-lg border px-3">
         <Row label="Model" value={g.modelName ?? g.modelId} />
-        <Row label="Made on" value={g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "In your browser" : g.place === "pool" ? "This studio" : g.engine === "open" ? "Your GPU" : "Cloud"} />
+        <Row label="Made on" value={g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "In your browser" : g.place === "pool" ? site : g.engine === "open" ? "Your GPU" : "Cloud"} />
         <Row label="Mode" value={OPERATION_LABELS[g.op]} />
         <Row label={g.modelId.startsWith("fuobe-soul") ? "Look" : "Preset"} value={g.presetName} />
         <Row label="Finish" value={finishText(g.outputs[index])} />

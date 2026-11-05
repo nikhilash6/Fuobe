@@ -40,7 +40,8 @@ const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
 const { clearAccountLoras } = await import("@/server/account-loras");
-const { HOSTED_WORDS } = await import("@/server/hosted");
+const { hostedWords } = await import("@/server/hosted");
+const HOSTED_WORDS = hostedWords((await import("@/lib/place-name")).placeOf(null));
 const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
 
 let fake: FakeBilling;

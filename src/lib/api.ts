@@ -37,6 +37,7 @@ import type { AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
 import type { Diagnosis } from "./diagnose";
 import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
+import { knownPlace, notePlaceName, placeOf, type Place } from "./place-name";
 
 /** What the status strip says of a GPU that didn't answer (src/server/account-gpu.ts VisitorTrouble). */
 export type GpuTroubleView = Pick<Diagnosis, "cause" | "words" | "actions" | "retryable" | "details">;
@@ -963,6 +964,8 @@ export interface StatusInfo {
     hosted?: boolean;
     /** "pool": runs go to this studio's GPUs first, even with its own GPU online (either can still be picked). */
     prefer?: "pool";
+    /** The name visitors read for this install's GPUs ("Runs on Our GPUs", src/lib/place-name.ts). Only with `hosted`. */
+    placeName?: string;
     /** The words a preset card shows when its run would go to this studio's GPUs ("Try free"), from the server. None: no words. */
     cardText?: string;
     /** What this studio's GPUs keep off, for a viewer with no GPU of its own: its pickers leave it out (src/lib/pool-rules.ts). */
@@ -1013,10 +1016,25 @@ export async function saveSettings(patch: Record<string, string>): Promise<void>
 export function useStatus() {
   return useQuery({
     queryKey: ["status"],
-    queryFn: async () => json<StatusInfo>(await fetchWithin("/api/status", READ_LIMIT_MS.status)),
+    queryFn: async () => {
+      const s = await json<StatusInfo>(await fetchWithin("/api/status", READ_LIMIT_MS.status));
+      // Kept for words made outside React (the toast that offers a run on this install's GPUs).
+      notePlaceName(s.viewer?.hosted ? s.viewer.placeName : null);
+      return s;
+    },
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
+}
+
+/**
+ * The name this viewer reads for this install's GPUs (src/lib/place-name.ts): `label` as set ("Our GPUs"), `text` inside
+ * a sentence ("our GPUs"). Null while hosted runs are off for this viewer (the owner; any viewer of an install with them
+ * off): its pages keep their own words.
+ */
+export function usePlaceName(): Place | null {
+  const v = useStatus().data?.viewer;
+  return v?.hosted ? placeOf(v.placeName) : null;
 }
 
 /** What an uploaded clip's header says: length, size, frame rate and sound (empty for formats the server can't read). */
@@ -1585,7 +1603,9 @@ export function watchGuestRefusals(): void {
       res
         .clone()
         .json()
-        .then((b: { error?: string }) => toast(b.error ?? "Your GPU isn't answering right now.", { action: { label: "Run on this studio's GPUs", onClick: again } }))
+        .then((b: { error?: string; placeName?: string }) =>
+          toast(b.error ?? "Your GPU isn't answering right now.", { action: { label: `Run on ${(b.placeName ? placeOf(b.placeName) : knownPlace()).label}`, onClick: again } }),
+        )
         .catch(() => {});
     }
     // A run the GPU pre-flight stopped (something missing on the viewer's ComfyUI): the guided fix opens with its plan.

@@ -4,6 +4,7 @@ import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
 import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
+import { placeOf, type Place } from "@/lib/place-name";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
 import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun } from "./computer/pool";
 import { db } from "./db";
@@ -141,36 +142,45 @@ export function runOnPool<T>(accountId: string | null, fn: () => T): T {
   return accountId ? runAsTenant({ kind: "account", id: accountId }, inside) : runAsTenant({ kind: "guest" }, inside);
 }
 
-/** Words for runs on this install's GPUs (generic: they fit any install). */
-export const HOSTED_WORDS = {
-  notOffered: "This one runs on your own GPU. Connect one in Settings, or pick another model.",
-  loras: "Extra LoRAs run on your own GPU. Connect one in Settings, or run without them.",
-  inputs: "This kind of file runs on your own GPU. Connect one in Settings, or use a picture.",
-  rtxCard: "This one needs an NVIDIA RTX card, and this studio's GPUs can't run it right now. Connect your own GPU in Settings, or pick another choice.",
-  notHosted: "Runs on this studio's GPUs aren't open to this account. Connect your own GPU in Settings.",
-  waitedTooLong: "This studio's GPUs were busy, so it didn't run. Not charged.",
-  busy: "Busy right now. Try again in a little while.",
-  /** Every GPU that could run it is off for now: Run opens again by itself once one is back. */
-  startingSoon: "Starting soon",
-};
+/**
+ * Words for runs on this install's GPUs, with the name visitors read for them (`place`, src/server/place-name.ts). Every
+ * sentence fits any name: no verb agrees with it.
+ */
+export function hostedWords(place: Place) {
+  return {
+    notOffered: "This one runs on your own GPU. Connect one in Settings, or pick another model.",
+    loras: "Extra LoRAs run on your own GPU. Connect one in Settings, or run without them.",
+    inputs: "This kind of file runs on your own GPU. Connect one in Settings, or use a picture.",
+    rtxCard: "This one needs an NVIDIA RTX card. Connect your own RTX GPU in Settings, or pick another choice.",
+    notHosted: `Your account can't run on ${place.text} right now. Your own GPU or key still works.`,
+    busy: "Busy right now. Try again in a little while.",
+    /** Every GPU that could run it is off for now: Run opens again by itself once one is back. */
+    startingSoon: "Starting soon",
+  };
+}
 
-/** The same refusals for a guest, who has no Settings to connect a GPU in yet. */
-export const HOSTED_GUEST_WORDS = {
-  busy: HOSTED_WORDS.busy,
-  notOffered: "This one isn't offered here. Pick another model.",
-  rtxCard: "This one isn't offered here right now. Pick another choice.",
-  loras: "Extra LoRAs aren't offered here. Run without them.",
-  inputs: "This kind of file can't be used here. Use a picture instead.",
-};
+/** The reasons a run on this install's GPUs is refused, by name (the same for every place name). */
+export type HostedReason = keyof ReturnType<typeof hostedWords>;
+
+/** The same refusals for a guest, who has no Settings to connect a GPU in yet (no place name in them). */
+export function hostedGuestWords() {
+  return {
+    busy: hostedWords(placeOf(null)).busy,
+    notOffered: "This one isn't offered here. Pick another model.",
+    rtxCard: "This one isn't offered here right now. Pick another choice.",
+    loras: "Extra LoRAs aren't offered here. Run without them.",
+    inputs: "This kind of file can't be used here. Use a picture instead.",
+  };
+}
 
 /**
  * A tool's run that asks for more pictures or clips at once than a run on this install's GPUs makes (the policy's cap per
  * run): pick fewer. An account may also connect its own GPU, which has no such cap.
  */
-export function outputsWords(cap: number, guest: boolean): string {
+export function outputsWords(cap: number, guest: boolean, place: Place): string {
   const most = cap === 1 ? "one at a time" : `up to ${cap} at a time`;
   const pick = cap === 1 ? "Pick one" : `Pick ${cap} or fewer`;
-  return guest ? `Runs here make ${most}. ${pick}.` : `This studio's GPUs make ${most}. ${pick}, or connect your own GPU in Settings.`;
+  return guest ? `Makes ${most}. ${pick}.` : `Makes ${most} on ${place.text}. ${pick}, or connect your own GPU in Settings.`;
 }
 
 /** May this model (and app) run on this install's GPUs under this policy? */

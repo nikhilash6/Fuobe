@@ -116,6 +116,11 @@ export interface Policy {
    * show none). Fuobe has no price words of its own: with a service, only the service says a run there is free.
    */
   cardText?: string;
+  /**
+   * The name visitors read for this install's GPUs ("Runs on {name}", at most 40 characters; src/server/place-name.ts).
+   * Absent: the install's own name for them (Settings → Workers, FUOBE_PLACE_NAME), else "Our GPUs".
+   */
+  placeName?: string;
   links?: Action[];
   notice?: { id: string; text: string; url?: string };
   ttlS: number;

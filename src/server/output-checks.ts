@@ -18,6 +18,8 @@ import { absolutePath, deleteAsset, getAsset } from "./storage";
  */
 
 export const HIDDEN_WORDS = "This result was removed by the studio's checks. Not charged.";
+/** The same on a run on this install's GPUs ("Not charged." stays only where something was set aside: poolError). */
+export const SITE_HIDDEN_WORDS = "This result didn't pass the safety check, so it was removed. Not charged.";
 export const UNCHECKED_WORDS = "This result couldn't be checked in time, so it was removed. Not charged.";
 export const CHECKING_WORDS = "Checking";
 
@@ -65,12 +67,12 @@ function settleRuns(now: number): void {
   const d = db();
   const runs = d
     .prepare(
-      `SELECT g.id, g.outputs_json, g.status FROM generations g
+      `SELECT g.id, g.outputs_json, g.status, json_extract(g.request_json, '$.place') AS place FROM generations g
        WHERE g.stage = 'checking' AND (
          NOT EXISTS (SELECT 1 FROM output_checks c WHERE c.generation_id = g.id AND c.state = 'waiting')
          OR EXISTS (SELECT 1 FROM output_checks c WHERE c.generation_id = g.id AND c.state = 'hidden'))`,
     )
-    .all() as { id: string; outputs_json: string; status: string }[];
+    .all() as { id: string; outputs_json: string; status: string; place: string | null }[];
   for (const r of runs) {
     const states = d.prepare("SELECT asset_id, state, text FROM output_checks WHERE generation_id = ?").all(r.id) as { asset_id: string; state: string; text: string | null }[];
     const hidden = states.filter((s) => s.state === "hidden");
@@ -83,7 +85,7 @@ function settleRuns(now: number): void {
     if (hidden.length || unchecked) {
       // Hidden or never checked: every held file of the run goes, and the row fails.
       for (const s of states) if (s.state !== "hidden") removeHeld(s.asset_id);
-      const words = hidden.length ? hidden.find((h) => h.text)?.text || HIDDEN_WORDS : UNCHECKED_WORDS;
+      const words = hidden.length ? hidden.find((h) => h.text)?.text || (r.place === "pool" ? SITE_HIDDEN_WORDS : HIDDEN_WORDS) : UNCHECKED_WORDS;
       d.prepare("UPDATE output_checks SET state = CASE WHEN state = 'waiting' THEN 'unchecked' ELSE state END, decided_at = COALESCE(decided_at, ?) WHERE generation_id = ?").run(now, r.id);
       d.prepare("UPDATE generations SET status = 'failed', stage = NULL, error = ?, message = NULL, outputs_json = '[]', completed_at = ?, updated_at = ? WHERE id = ?").run(words, now, now, r.id);
       continue;

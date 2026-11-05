@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { placeOf } from "@/lib/place-name";
 import { quoteBody } from "@/lib/hosted";
 import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, refusedBeforeRun, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
 import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
@@ -97,13 +98,18 @@ describe("a guest", () => {
 describe("hosted runs (this studio's GPUs)", () => {
   it("an account with no GPU runs open models there, at the quoted price", () => {
     const p = at({ audience: "account", engine: "open", hosted: true, gpu: false, models: ["Tap to Recolor"], pool: { text: "$0.02" } });
-    expect(p).toMatchObject({ where: "pool", label: "This studio's GPUs", price: "$0.02", title: "Runs on this studio's GPUs", send: "$0.02 · this studio's GPUs" });
-    expect(p.tip).toBe("Runs on this studio's GPUs with Tap to Recolor.");
+    expect(p).toMatchObject({ where: "pool", label: "Our GPUs", price: "$0.02", title: "Runs on our GPUs", send: "$0.02" });
+    expect(p.tip).toBe("Runs on our GPUs with Tap to Recolor.");
     expect(p.needs).toBeUndefined();
+  });
+  it("says the place by the name it is given, with no verb that has to agree with it", () => {
+    const p = at({ audience: "account", engine: "open", hosted: true, models: ["Z-Image Turbo"], pool: { text: "" }, place: placeOf("Ana's render box") });
+    expect(p).toMatchObject({ label: "Ana's render box", title: "Runs on Ana's render box", price: "Free", send: "Free" });
+    expect(p.tip).toBe("Runs on Ana's render box with Z-Image Turbo.");
   });
   it("says the service's own words, free when it quotes no price, and nothing while pricing", () => {
     expect(at({ audience: "account", engine: "open", hosted: true, pool: { text: "", sub: "Included in your plan" } })).toMatchObject({ price: "Free", tip: "Included in your plan" });
-    expect(at({ audience: "account", engine: "open", hosted: true })).toMatchObject({ where: "pool", price: "", send: "this studio's GPUs" });
+    expect(at({ audience: "account", engine: "open", hosted: true })).toMatchObject({ where: "pool", price: "", send: "" });
   });
   it("an account with its own GPU still runs there, free; the owner always on its own", () => {
     expect(at({ audience: "account", engine: "open", hosted: true, gpu: true }).where).toBe("gpu");
@@ -115,8 +121,9 @@ describe("hosted runs (this studio's GPUs)", () => {
   });
   it("a guest signs up first", () => {
     const p = at({ audience: "guest", engine: "open", hosted: true });
-    expect(p).toMatchObject({ where: "pool", needs: "signup", send: "this studio's GPUs, after sign-up" });
-    expect(p.tip).toMatch(/Create a free account to run it.$/);
+    expect(p).toMatchObject({ where: "pool", needs: "signup", send: "sign up to run" });
+    expect(p.tip).toMatch(/ Free with an account\.$/);
+    expect(at({ audience: "guest", engine: "open", hosted: true, pool: { text: "" } }).send).toBe("Free · sign up to run");
   });
   it("leaves the cloud and the owner's tools as they are", () => {
     expect(at({ audience: "account", engine: "cloud", hosted: true, payer: "fal", costUsd: 0.1 }).where).toBe("cloud");

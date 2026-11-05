@@ -73,7 +73,8 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { POOL_WORDS } = await import("@/lib/relay");
-const { HOSTED_WORDS } = await import("@/server/hosted");
+const { hostedWords } = await import("@/server/hosted");
+const HOSTED_WORDS = hostedWords((await import("@/lib/place-name")).placeOf(null));
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 type TaskRow = import("@/server/computer/tasks").TaskRow;

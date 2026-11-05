@@ -9,6 +9,8 @@ import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
 import { elapsed, timeAgo } from "@/lib/format";
 import { coverOf, trashDaysLeft, userTitle, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
+import { lineWords } from "@/lib/pool-line";
+import { POOL_WORDS } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
@@ -43,14 +45,24 @@ const LIST_MENU ="grid size-8 shrink-0 place-items-center rounded-lg text-muted-
 
 const idsOf = (e: LibraryEntry) => (e.type === "single" ? [e.g.id] : e.items.map((g) => g.id));
 
+/** A run's state in a Library list row: on this install's GPUs, the words its tile says. */
+export function listStatus(g: Pick<Generation, "status" | "place">): string {
+  if (g.status === "canceled") return "Canceled";
+  if (g.place === "pool") return g.status === "failed" ? "Couldn't be made" : g.status === "queued" ? POOL_WORDS.inLine : POOL_WORDS.working;
+  return g.status === "failed" ? "Failed" : g.status === "queued" ? "Queued" : "Rendering";
+}
+
 export function StatusCover({ g }: { g: Generation }) {
+  // On this install's GPUs (hosted runs): the words of its tile, in line with its place and wait, then working.
+  const pool = g.place === "pool";
   if (g.status === "queued" || g.status === "running") {
     const pct = g.progress != null ? Math.round(g.progress * 100) : null;
+    const label = pool ? (g.status === "queued" ? (g.queue ? lineWords(g.queue) : POOL_WORDS.inLine) : (g.message ?? POOL_WORDS.working)) : (g.message ?? (g.status === "queued" ? "Queued" : "Generating…"));
     return (
       <div className="relative size-full bg-muted">
         <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
         <div className="absolute inset-x-0 bottom-0 p-3">
-          <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{g.message ?? (g.status === "queued" ? "Queued" : "Generating…")}</p>
+          <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{label}</p>
           <p className="font-mono text-[11px] text-muted-foreground">
             {pct != null ? `${pct}% · ` : ""}
             {elapsed(g.createdAt)}
@@ -62,8 +74,15 @@ export function StatusCover({ g }: { g: Generation }) {
   return (
     <div className="flex size-full flex-col justify-between border border-dashed bg-background p-3">
       <div className="min-h-0 space-y-1 overflow-hidden">
-        <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
-        {g.error && <p className="line-clamp-4 text-[12px] leading-snug break-words text-muted-foreground">{g.error}</p>}
+        {pool && g.status === "failed" ? (
+          // One plain sentence, as its tile says it.
+          <p className="line-clamp-5 text-[13px] leading-snug font-medium break-words">{g.error || POOL_WORDS.failed}</p>
+        ) : (
+          <>
+            <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
+            {g.error && <p className="line-clamp-4 text-[12px] leading-snug break-words text-muted-foreground">{g.error}</p>}
+          </>
+        )}
         {/* An account's own GPU or key: what came back (small), and the way out (Start your pod, Check my GPU, Replace key…). */}
         {g.status === "failed" && g.trouble && (
           <>
@@ -251,7 +270,7 @@ export const AssetCard = memo(function AssetCard({
             {stack ? `${stack.label} · ` : `${g.modelName ?? g.modelId} · ${OPERATION_LABELS[g.op]} · `}
             {trashed ? `${trashDaysLeft(g.deletedAt!)} days left in Trash` : timeAgo(g.createdAt)}
             {/* "Rendering", as the Status filter calls it: "In progress" is a review status. */}
-            {!stack && g.status !== "succeeded" && ` · ${g.status === "failed" ? "Failed" : g.status === "canceled" ? "Canceled" : g.status === "queued" ? "Queued" : "Rendering"}`}
+            {!stack && g.status !== "succeeded" && ` · ${listStatus(g)}`}
           </p>
         </div>
         {g.favorite && !stack && <Heart className="size-4 shrink-0 fill-highlight text-highlight" />}

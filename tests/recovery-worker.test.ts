@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runnerByHand, tick } from "./helpers/app-process";
 import { apiAs, loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
+import { FILE_TROUBLE_WORDS } from "@/lib/relay";
 import { FAKE_PNG } from "./helpers/fake-local-comfy";
 import { plainFailure, RunWatch, type RunLike } from "./helpers/run-watch";
 import { FREE_RUNS_POLICY, startStandInBilling, type StandInBilling } from "./helpers/standin-billing";
@@ -457,7 +458,8 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
     }, 50);
     try {
       await until(() => done(studio.getGeneration(bad.id)), 120_000);
-      expect(plainFailure(studio.getGeneration(bad.id)!, { charged: false })).toEqual([]);
+      // Its words say it is these files or settings (the person can change them), never the machines.
+      expect(plainFailure(studio.getGeneration(bad.id)!, { charged: false, words: FILE_TROUBLE_WORDS.crashed })).toEqual([]);
       await expectOnce(next.id, watch, { place: 2 });
       expect(svc.reportsFor(bad.id).map((r) => r.kind)).toEqual(["refund"]);
     } finally {

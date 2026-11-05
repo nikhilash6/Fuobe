@@ -469,7 +469,16 @@ export const RELAY_WORDS = {
 export const POOL_WORDS = {
   inLine: "In line",
   working: "Working",
-  failed: "This one couldn't be made.",
+  failed: "Sorry, this one couldn't be made.",
+} as const;
+
+/**
+ * What a run says about the person's own files when a GPU couldn't use them (tabFailureWords): kept as they are on a run
+ * on this install's GPUs too, since they say what to change.
+ */
+export const FILE_TROUBLE_WORDS = {
+  crashed: "This run couldn't finish with these files or settings.",
+  unreadable: "A clip or sound in this run couldn't be read.",
 } as const;
 
 /** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */
@@ -495,9 +504,9 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
     case "model-unverified":
       return "The GPU that took this run refused it: it needs a model file that GPU couldn't verify.";
     case "input-crashed":
-      return "This run couldn't finish with these files or settings.";
+      return FILE_TROUBLE_WORDS.crashed;
     case "input-unreadable":
-      return "A clip or sound in this run couldn't be read.";
+      return FILE_TROUBLE_WORDS.unreadable;
     case "bad-ticket":
       return "This run couldn't be made with these settings.";
     case "unsafe-model":

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { placeOf } from "@/lib/place-name";
 import { startFakeBilling, FAKE_POLICY, type FakeBilling } from "./helpers/fake-billing";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -808,7 +809,7 @@ describe("a run's price facts", () => {
     // way through. (A text step runs on the install's AI helper: hosted-tool-runs.test.ts.)
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, steps([["oss-z-image-turbo", "comfyui"], ["fal-flux", "fal"]]))).not.toBeNull();
     for (const provider of ["local", "mock"]) {
-      expect(hostedRun.stepsProblem({ ...billing.OPEN_POLICY, pool: { allow: ["oss-z-image-turbo"] } }, steps([["oss-z-image-turbo", "comfyui"], ["some-step", provider]])), provider).toBe(hosted.HOSTED_WORDS.notOffered);
+      expect(hostedRun.stepsProblem({ ...billing.OPEN_POLICY, pool: { allow: ["oss-z-image-turbo"] } }, steps([["oss-z-image-turbo", "comfyui"], ["some-step", provider]])), provider).toBe(hosted.hostedWords(placeOf(null)).notOffered);
     }
     expect(hostedRun.pricedSteps(steps([["oss-z-image-turbo", "comfyui"], ["oss-z-image-turbo", "comfyui"]]))).toEqual([expect.objectContaining({ model: "oss-z-image-turbo", jobs: 2 })]);
   });
@@ -816,7 +817,9 @@ describe("a run's price facts", () => {
 
 describe("the price check before Run and the run itself", async () => {
   const { PLACEHOLDER } = await import("@/lib/composer");
-  const { HOSTED_GUEST_WORDS, HOSTED_WORDS } = await import("@/server/hosted");
+  const { hostedGuestWords, hostedWords } = await import("@/server/hosted");
+  const HOSTED_GUEST_WORDS = hostedGuestWords();
+  const HOSTED_WORDS = hostedWords(placeOf(null));
   const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
   /** A Fuobe DoP effect: its start frame is made first on another model, then animated. */
   const EFFECT = { feature: "video", presetId: "effect-acid", modelId: "fuobe-dop", op: "i2v", prompt: "a dancer", inputs: { images: [PLACEHOLDER.image] } };
@@ -975,9 +978,9 @@ describe("the price check before Run and the run itself", async () => {
     setSetting("comfyWhere", "workers");
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, chain)).not.toBe(HOSTED_WORDS.rtxCard);
     // A guest is told it isn't offered, with nowhere to connect a GPU named.
-    expect(hostedRun.gateWords("rtxCard", true)).toBe(HOSTED_GUEST_WORDS.rtxCard);
-    expect(hostedRun.gateWords("rtxCard", true)).not.toMatch(/Settings|your own GPU|NVIDIA/);
-    expect(hostedRun.gateWords("rtxCard", false)).toBe(HOSTED_WORDS.rtxCard);
+    expect(hostedRun.gateWords("rtxCard", true, placeOf(null))).toBe(HOSTED_GUEST_WORDS.rtxCard);
+    expect(hostedRun.gateWords("rtxCard", true, placeOf(null))).not.toMatch(/Settings|your own GPU|NVIDIA/);
+    expect(hostedRun.gateWords("rtxCard", false, placeOf(null))).toBe(HOSTED_WORDS.rtxCard);
   });
 
   it("asks for the client's address only when the policy counts runs per address, and keeps its salt without writing again", async () => {
@@ -1023,10 +1026,10 @@ describe("the price check before Run and the run itself", async () => {
 describe("a run on this install's GPUs that can't finish", async () => {
   const { getGeneration } = await import("@/server/generations");
   const { POOL_WORDS } = await import("@/lib/relay");
-  const { HIDDEN_WORDS } = await import("@/server/output-checks");
+  const { SITE_HIDDEN_WORDS } = await import("@/server/output-checks");
   const fail = (id: string, error: string) => db().prepare("UPDATE generations SET status = 'failed', error = ?, completed_at = ? WHERE id = ?").run(error, Date.now(), id);
   const hide = (id: string) => {
-    fail(id, HIDDEN_WORDS);
+    fail(id, SITE_HIDDEN_WORDS);
     db().prepare("INSERT INTO output_checks (asset_id, generation_id, state, asked_at, tries, next_at) VALUES (?, ?, 'hidden', ?, 0, ?)").run(`asset-${id}`, id, Date.now(), Date.now());
   };
   const FREE = { shown: { amount: 0, priceVersion: "v0" } };
@@ -1047,7 +1050,7 @@ describe("a run on this install's GPUs that can't finish", async () => {
     const hidden = await post({ ...IMAGE, ...FREE }, a.cookie);
     const hiddenId = hidden.body.items![0].id;
     hide(hiddenId);
-    expect(getGeneration(hiddenId)!.error).toBe("This result was removed by the studio's checks.");
+    expect(getGeneration(hiddenId)!.error).toBe("This result didn't pass the safety check, so it was removed.");
     expect(getGeneration(hiddenId)!.notCharged).toBeUndefined();
     // Something set aside: it says so.
     fake.price = { amount: 7, version: "v7" };
@@ -1055,7 +1058,7 @@ describe("a run on this install's GPUs that can't finish", async () => {
     expect(paid.status, JSON.stringify(paid.body)).toBe(201);
     const paidId = paid.body.items![0].id;
     hide(paidId);
-    expect(getGeneration(paidId)).toMatchObject({ notCharged: true, error: HIDDEN_WORDS });
+    expect(getGeneration(paidId)).toMatchObject({ notCharged: true, error: SITE_HIDDEN_WORDS });
     // That the hold set something aside stays the server's: never sent with the request.
     expect("charged" in getGeneration(paidId)!.request).toBe(false);
     expect((JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(paidId) as { request_json: string }).request_json) as { charged?: boolean }).charged).toBe(true);

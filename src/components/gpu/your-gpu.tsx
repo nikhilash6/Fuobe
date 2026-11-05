@@ -73,7 +73,10 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   const qc = useQueryClient();
   const id = useId();
   const q = useQuery({ queryKey: ["account-gpu"], queryFn: () => call<GpuState>("GET") });
-  const live = useStatus().data?.viewer?.gpu;
+  const viewer = useStatus().data?.viewer;
+  const live = viewer?.gpu;
+  // Hosted runs: runs go to this studio's GPUs too, so these words say what goes to Your GPU, not "your runs".
+  const hosted = !!viewer?.hosted;
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState<"test" | "save" | "anyway" | "remove" | null>(null);
@@ -103,8 +106,8 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
       if (mode !== "test") {
         qc.setQueryData(["account-gpu"], { gpu: r.gpu });
         linked();
-        if (r.offline) toast("Your address is saved. Your runs start as soon as your GPU answers.");
-        else toast.success("Your GPU is connected. Runs go to your ComfyUI now.");
+        if (r.offline) toast(hosted ? "Your address is saved. Runs on Your GPU start as soon as it answers." : "Your address is saved. Your runs start as soon as your GPU answers.");
+        else toast.success(hosted ? "Your GPU is connected." : "Your GPU is connected. Runs go to your ComfyUI now.");
         setUrl("");
         setToken("");
         onLinked?.();
@@ -172,7 +175,11 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   return (
     <div className={cn("w-full min-w-0 space-y-4 sm:max-w-[36rem]", className)}>
       <p className="text-[13px] text-muted-foreground">
-        {gpu ? "Your runs go to your ComfyUI through this web address." : "Your runs reach your ComfyUI through a web address. Here's how to give it one:"}
+        {gpu
+          ? hosted
+            ? "Runs on Your GPU reach your ComfyUI through this web address."
+            : "Your runs go to your ComfyUI through this web address."
+          : "Your runs reach your ComfyUI through a web address. Here's how to give it one:"}
       </p>
       {gpu ? (
         <div className={cn("space-y-2 rounded-xl px-3 py-2.5 text-[13px]", offline ? "border border-dashed" : "bg-brand-faint")}>

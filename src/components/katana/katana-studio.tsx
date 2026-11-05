@@ -19,7 +19,7 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { ExampleRow } from "@/components/studio/example-row";
-import { useAskBeforeUpload, useEngine, useIsGuest, useModelAccess, useStatus } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useIsGuest, useModelAccess, usePlaceName, useStatus } from "@/lib/api";
 import { againPrice, againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { formatCueTime } from "@/lib/av/cue-edit";
 import { againKeys, detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
@@ -367,10 +367,11 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
   const { remove, retry } = useKatanaActions();
   // A run again is a new run: where it runs (or that it's paid) is said on the button before the tap.
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  const sitePlace = usePlaceName();
   // On the cloud it says the price: the estimates of the steps it makes again (all of them, or the failed ones and after).
   const where = (j: KatanaJobView, all: boolean) => {
     const keys = j.engine === "open" || placeholders ? null : againKeys(j, all);
-    return againWhere(j, { placeholders }, keys && againPrice(keys.map((k) => j.generations[j.steps[k]])));
+    return againWhere(j, { placeholders, place: sitePlace }, keys && againPrice(keys.map((k) => j.generations[j.steps[k]])));
   };
   const again = (id: string, all: boolean) =>
     retry.mutate(

@@ -1,5 +1,6 @@
 import http from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { placeOf } from "@/lib/place-name";
 import { NextRequest } from "next/server";
 import { listenOnFreePort, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
@@ -259,7 +260,7 @@ describe("hosted runs on", () => {
       start: () => createGenerations({ ...plan[0].request, params: { numOutputs: 2 } }),
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(((await r.response.json()) as { error: string }).error).toBe(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false));
+    if (!r.ok) expect(((await r.response.json()) as { error: string }).error).toBe(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false, placeOf(null)));
     expect(stored("none").length).toBe(rows);
     await drainOutbox();
     expect([...fake.holds.values()].at(-1)?.released).toBe(true);
@@ -288,7 +289,7 @@ describe("hosted runs on", () => {
     useBilling();
     fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), outputsPerRun: 1 } };
     const steps = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", params: { numOutputs: 4 } } }];
-    const words = hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false);
+    const words = hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false, placeOf(null));
     const quotes = fake.calls_of("/v1/quote").length;
     const check = await toolRun.toolPriceCheck(json("/api/x?preview=1", "POST", {}, "none"), () => steps);
     expect(check?.quote).toMatchObject({ allowed: false, code: "not-offered", text: words });
@@ -297,7 +298,7 @@ describe("hosted runs on", () => {
     expect(place.kind).toBe("refuse");
     if (place.kind === "refuse") expect(place.refusal.body).toMatchObject({ error: words, code: "not-offered" });
     // A guest's words name nothing it can't do yet; an account whose own GPU answers runs it there.
-    expect(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, true)).not.toMatch(/Settings/);
+    expect(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, true, placeOf(null))).not.toMatch(/Settings/);
     expect(await toolRun.placeOf(auth.accountById(ids.gpu)!, steps)).toEqual({ kind: "own" });
   });
 

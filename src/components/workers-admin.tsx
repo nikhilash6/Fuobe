@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useHydrated, useViewer } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { deviceLabel } from "@/lib/gpu/readiness";
+import { PLACE_NAME_DEFAULT, PLACE_NAME_MAX } from "@/lib/place-name";
 import { cn } from "@/lib/utils";
 
 /**
@@ -294,6 +295,7 @@ export function WorkersAdmin() {
           Run this studio&apos;s ComfyUI jobs on the workers
         </label>
       </div>
+      <PlaceNameField saved={where.data?.find((s) => s.name === "hostedPlaceName")} />
       {token && <TokenOnce token={token} onDone={() => setToken(null)} />}
       <form
         className="flex flex-wrap items-center gap-2"
@@ -318,6 +320,48 @@ export function WorkersAdmin() {
         q.data && <p className="text-[13px] text-muted-foreground">No workers yet.</p>
       )}
     </div>
+  );
+}
+
+/**
+ * The name visitors read for this studio's GPUs while hosted runs are on ("Runs on Our GPUs", src/lib/place-name.ts).
+ * Empty: FUOBE_PLACE_NAME, else "Our GPUs". A billing service's own name for them wins over both.
+ */
+function PlaceNameField({ saved }: { saved?: { value: string; fromEnv: boolean } }) {
+  const qc = useQueryClient();
+  const [typed, setTyped] = useState<string | null>(null);
+  const value = typed ?? (saved && !saved.fromEnv ? saved.value : "");
+  const save = useMutation({
+    mutationFn: () => call("PUT", "/api/settings", { hostedPlaceName: value.trim() }),
+    onSuccess: () => {
+      setTyped(null);
+      toast.success("Saved");
+      void qc.invalidateQueries({ queryKey: ["settings"] });
+      void qc.invalidateQueries({ queryKey: ["status"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  return (
+    <form
+      className="max-w-2xl space-y-1.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <label htmlFor="place-name" className="text-[14px] font-medium">
+        Name for your GPUs
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input id="place-name" maxLength={PLACE_NAME_MAX} placeholder={saved?.fromEnv ? saved.value : PLACE_NAME_DEFAULT} value={value} onChange={(e) => setTyped(e.target.value)} className="h-9 w-64" />
+        <Button size="sm" variant="secondary" className="h-9" disabled={typed === null || save.isPending}>
+          Save
+        </Button>
+      </div>
+      <p className="text-[13px] text-muted-foreground">
+        Visitors read it where their runs go, as in &ldquo;Runs on {value.trim() || (saved?.fromEnv ? saved.value : PLACE_NAME_DEFAULT)}&rdquo;. Shown while runs on your GPUs are open to accounts.
+      </p>
+    </form>
   );
 }
 

@@ -33,7 +33,7 @@ import type { Engine, Generation, GenerationRequest, ProviderId } from "@/lib/ca
 import { generationAccount } from "./account-library";
 import { createPipeline } from "./chains";
 import { db } from "./db";
-import { ConnectComfyError, DROPPED_UNUSED, getGeneration, previewChained, unfilledRequest, waitedOnFailure } from "./generations";
+import { ConnectComfyError, DROPPED_UNUSED, getGeneration, previewChained, shownError, unfilledRequest, waitedOnFailure } from "./generations";
 import { withoutMissingOnComfy, withoutUnreachableCivitai } from "./loras";
 import { comfyLoraFiles, probeComfy } from "./providers/comfyui";
 import { engineMode, getSetting } from "./settings";
@@ -426,7 +426,8 @@ export function framesProgress(finalId: string): FramesProgress | null {
   };
   const first = (list: StepRow[]) => list.map((r) => ({ r, step: at(r) })).sort((a, b) => (a.step?.index ?? 0) - (b.step?.index ?? 0))[0];
   const bad = first(own) ?? first(stopped);
-  if (bad) out.failed = { label: bad.step?.label ?? "A frame", error: bad.r.status === "canceled" ? "Canceled" : (bad.r.error ?? "Something went wrong") };
+  // A frame's failure in the words its tile would say (on this install's GPUs: one plain sentence, never the GPU's own).
+  if (bad) out.failed = { label: bad.step?.label ?? "A frame", error: bad.r.status === "canceled" ? "Canceled" : (shownError(bad.r.id, bad.r.error) ?? "Something went wrong") };
   return out;
 }
 

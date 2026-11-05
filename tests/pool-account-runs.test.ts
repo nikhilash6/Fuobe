@@ -47,7 +47,7 @@ const generationsRoute = await import("@/app/api/generations/route");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
-const { getGeneration, toGeneration } = await import("@/server/generations");
+const { getGeneration, shownError, toGeneration } = await import("@/server/generations");
 const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
 const hosted = await import("@/server/hosted");
@@ -59,7 +59,7 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { ComputerRunner } = await import("@/lib/computer-runner");
-const { POOL_WORDS } = await import("@/lib/relay");
+const { FILE_TROUBLE_WORDS, POOL_WORDS } = await import("@/lib/relay");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 const { catalogVersion } = await import("@/server/computer/catalog-version");
 
@@ -546,6 +546,56 @@ describe("what an account reads about its run", () => {
   });
 });
 
+describe("nothing raw reaches an account from a run on this install's GPUs", () => {
+  const put = (id: string, status: string, request: Record<string, unknown>, o: { error?: string; outputs?: unknown[] } = {}) => {
+    const now = Date.now();
+    db()
+      .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, error, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', ?, ?, ?, ?, ?, ?)")
+      .run(id, status, JSON.stringify({ account: accountId, ...request }), JSON.stringify(o.outputs ?? []), o.error ?? null, now, now);
+  };
+
+  it("a page that reads a step's failure from the table says the tile's sentence (a Mixed Media frame)", () => {
+    const raw = "ComfyUI kept stopping on the GPUs. Press Retry.";
+    put("shown-pool", "failed", { place: "pool" }, { error: raw });
+    put("shown-own", "failed", {}, { error: raw });
+    expect(shownError("shown-pool", raw)).toBe(POOL_WORDS.failed);
+    expect(shownError("shown-own", raw)).toBe(raw);
+    expect(shownError("shown-gone", raw)).toBe(raw);
+  });
+
+  it("words about the person's own files stay, so they know what to change", () => {
+    for (const words of Object.values(FILE_TROUBLE_WORDS)) {
+      const id = `files-${words.length}`;
+      put(id, "failed", { place: "pool" }, { error: words });
+      expect(getGeneration(id)!.error).toBe(words);
+    }
+  });
+
+  it("a 3D finish's own trouble stays on the server; the account's own GPU runs keep theirs", () => {
+    const model = { url: "/api/files/m1", kind: "model3d", meta: { finish: { turntable: "queued", error: "web GLB: exit 1" }, web: "/api/files/w1" } };
+    put("finish-pool", "succeeded", { place: "pool" }, { outputs: [model] });
+    put("finish-own", "succeeded", {}, { outputs: [model] });
+    const pooled = getGeneration("finish-pool")!.outputs[0].meta as { finish: Record<string, unknown>; web: string };
+    expect(pooled.finish).toEqual({ turntable: "queued" });
+    expect(pooled.web).toBe("/api/files/w1");
+    expect((getGeneration("finish-own")!.outputs[0].meta as { finish: Record<string, unknown> }).finish.error).toBe("web GLB: exit 1");
+  });
+
+  it("the owner's words for a task stopped after its tries: how many tries while hosted runs are on, as before otherwise", () => {
+    delete process.env.FUOBE_HOSTED_RUNS;
+    expect(pool.stoppedWords("silent", 3)).toBe("The GPU running this stopped answering, three times. Press Retry.");
+    expect(pool.stoppedWords("other", 3)).toBe("The GPUs couldn't finish this run. Press Retry.");
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    try {
+      expect(pool.stoppedWords("silent", 3)).toBe("Stopped after 3 tries: the GPU stopped answering.");
+      expect(pool.stoppedWords("down", 1)).toBe("Stopped after 1 try: ComfyUI kept stopping on the GPUs.");
+      for (const kind of ["silent", "down", "stuck", "other"] as const) expect(pool.stoppedWords(kind, 3)).not.toMatch(/Press Retry/);
+    } finally {
+      delete process.env.FUOBE_HOSTED_RUNS;
+    }
+  });
+});
+
 describe("an account's run that a worker can't finish", () => {
   /** Words that must never reach an account's run on this install's GPUs. */
   const JARGON = /ComfyUI|GPU|worker|lane|Press Retry|refused|stopped answering|busy|restart/i;
@@ -576,7 +626,8 @@ describe("an account's run that a worker can't finish", () => {
       return g && g.status !== "queued" && g.status !== "running" ? g : null;
     }, 400))!;
 
-  const cases: [string, (w: ReturnType<typeof workerApi>, taskId: string) => Promise<void>][] = [
+  /** Each case, how it ends, and its words for the account (the failure sentence unless it is about the person's files). */
+  const cases: [string, (w: ReturnType<typeof workerApi>, taskId: string) => Promise<void>, string?][] = [
     [
       "given back three times (it stalled)",
       async (w) => {
@@ -604,6 +655,8 @@ describe("an account's run that a worker can't finish", () => {
         await w.report(t, { event: "sent", promptId: t.promptId });
         await w.report(t, { event: "failed", reason: "input-crashed" });
       },
+      // Its files or settings stopped it: said so, since the person can change them.
+      FILE_TROUBLE_WORDS.crashed,
     ],
     [
       "a file the worker refused",
@@ -627,7 +680,7 @@ describe("an account's run that a worker can't finish", () => {
     ],
   ];
 
-  for (const [name, end] of cases) {
+  for (const [name, end, words] of cases) {
     it(`${name}: one plain sentence for the account, the reason for the owner`, async () => {
       const w = standInWorker();
       beatAs(w);
@@ -636,11 +689,16 @@ describe("an account's run that a worker can't finish", () => {
       expect(rowOf(taskId).state).toBe("failed");
       const g = await ended(id);
       expect(g.status).toBe("failed");
-      expect(g.error).toBe(POOL_WORDS.failed);
+      expect(g.error).toBe(words ?? POOL_WORDS.failed);
       expect(g.message ?? "").not.toMatch(JARGON);
       expect(g.fix).toBeUndefined();
-      // The owner reads what happened.
+      // The owner reads what happened (words about the person's files: the same words, nothing more behind them).
       const owner = listAccountRuns({ account: accountId }).items.find((x) => x.id === id);
+      if (words) {
+        expect(owner?.error).toBe(words);
+        expect(owner?.detail).toBeUndefined();
+        return;
+      }
       expect(owner?.detail).toBeTruthy();
       expect(owner?.detail).not.toBe(POOL_WORDS.failed);
     });

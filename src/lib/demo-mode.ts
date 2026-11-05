@@ -9,6 +9,7 @@
  */
 
 import { formatCost } from "@/lib/format";
+import { knownPlace, type Place } from "@/lib/place-name";
 
 /** Settings' switch. */
 export const PLACEHOLDER_SETTING = "Show placeholder results (for a tour)";
@@ -31,8 +32,8 @@ export const PLACEHOLDER_ACTION_LABELS: Record<PlaceholderAction, string> = {
 export const isPlaceholder = (g: { provider?: string | null } | null | undefined): boolean => g?.provider === "mock";
 
 /**
- * What a one-tap "Run again" adds to its label, so a new run never starts unannounced: " on your GPU", " on the
- * studio's GPUs" (a hosted run) or, for a cloud run (billed), its price (" · ≈ $0.42") when `price` says it, else
+ * What a one-tap "Run again" adds to its label, so a new run never starts unannounced: " on your GPU", " on our GPUs"
+ * (a hosted run, said with the place name `now.place`) or, for a cloud run (billed), its price (" · ≈ $0.42") when `price` says it, else
  * " · paid"; nothing before the run is known. The new run follows the placeholder switch as it is now
  * (`now.placeholders`, from the status), not the old result: nothing while placeholders are on, even after a real
  * result, and a real run's words after an old placeholder once they're off.
@@ -40,9 +41,9 @@ export const isPlaceholder = (g: { provider?: string | null } | null | undefined
  * `price`: what the new run costs in US dollars, from the estimate the original run was priced at (againPrice or the
  * studio's own estimate), or null when that isn't known.
  */
-export function againWhere(g: { engine: string; place?: "pool" } | null | undefined, now: { placeholders: boolean }, price?: number | null): string {
+export function againWhere(g: { engine: string; place?: "pool" } | null | undefined, now: { placeholders: boolean; place?: Place | null }, price?: number | null): string {
   if (!g || now.placeholders) return "";
-  if (g.place === "pool") return " on the studio's GPUs";
+  if (g.place === "pool") return ` on ${(now.place ?? knownPlace()).text}`;
   if (g.engine === "open") return " on your GPU";
   return paidSuffix(price);
 }

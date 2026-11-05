@@ -32,6 +32,7 @@ import { useGuestDraft } from "./guest-draft";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
+import { placeOf } from "@/lib/place-name";
 import { askToSignUp, CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
@@ -664,6 +665,8 @@ export function Composer({ docked }: { docked: boolean }) {
   // (The place the run names: none when the default is the studio's GPUs only because the studio puts them first.)
   const { runOn, place: runPlace } = composerPlace(runOnPick, ownOnline, viewerInfo?.prefer === "pool");
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
+  // The name visitors read for this studio's GPUs ("Our GPUs"): said only while hosted runs are on.
+  const sitePlace = placeOf(viewerInfo?.placeName);
   // The price check is asked with the place the run itself names: none while the studio puts its GPUs first and the
   // account's own GPU is online, so it answers for where the server would really send the run.
   const askPool = hostedHere && runOn === "pool";
@@ -1760,10 +1763,10 @@ export function Composer({ docked }: { docked: boolean }) {
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setRunOn(shownOn === "own" ? "pool" : "own")}
-            aria-label={`Runs on ${shownOn === "own" ? "your GPU" : "this studio's GPUs"}. Switch`}
+            aria-label={`Runs on ${shownOn === "own" ? "your GPU" : sitePlace.text}. Change where it runs`}
             className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground underline decoration-border-strong underline-offset-2 hover:text-foreground"
           >
-            {shownOn === "own" ? "Your GPU" : "This studio's GPUs"}
+            {shownOn === "own" ? "Your GPU" : sitePlace.label}
           </button>
         )}
         {costText && (
@@ -1781,7 +1784,7 @@ export function Composer({ docked }: { docked: boolean }) {
               {poolPrice
                 ? poolState?.refused
                   ? (poolState.sub ?? poolState.text)
-                  : [hostedQuote?.sub ?? "Runs on this studio's GPUs", poolState?.wait].filter(Boolean).join(" · ")
+                  : [hostedQuote?.sub ?? `Runs on ${sitePlace.text}`, poolState?.wait].filter(Boolean).join(" · ")
                 : demo
                 ? "Placeholder results are on (Settings), so outputs are free stand-ins"
                 : keyOnly && cost == null

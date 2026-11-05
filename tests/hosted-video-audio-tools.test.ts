@@ -56,7 +56,8 @@ const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
 const { clearAccountLoras } = await import("@/server/account-loras");
-const { HOSTED_WORDS } = await import("@/server/hosted");
+const { hostedWords } = await import("@/server/hosted");
+const HOSTED_WORDS = hostedWords((await import("@/lib/place-name")).placeOf(null));
 
 const CLIP = fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4"));
 const src = { duration: 12, fps: 16, width: 72, height: 128, hasAudio: true };

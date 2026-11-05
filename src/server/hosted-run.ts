@@ -31,7 +31,7 @@ import { loadIndex } from "./gpu/index-file";
 import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
 import { poolFinishes3d } from "./computer/finish";
 import { holdTiming } from "./queue-settings";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, outputsWords, poolAllows, poolAllowsRun, poolAway, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { hostedGuestWords, hostedWords, inputCounts, outputsWords, poolAllows, poolAllowsRun, poolAway, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -44,6 +44,8 @@ import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
 import { needsGpu, ownSetupHere, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
+import { placeOf, type Place } from "@/lib/place-name";
+import { placeFor, placeOfAccount } from "./place-name";
 
 export { poolCardRefuses };
 
@@ -122,7 +124,7 @@ export type PlaceDecision =
 const OWN = { kind: "own" } as const;
 
 /** What an account whose own GPU didn't answer is asked, when its run named no place (never moved and charged unasked). */
-export const OWN_GPU_QUIET = "Your GPU isn't answering right now. Run this on this studio's GPUs instead, or try again when your GPU is back.";
+export const ownGpuQuiet = (place: Place): string => `Your GPU isn't answering right now. Run this on ${place.text} instead, or wait for your GPU.`;
 
 /**
  * Run pressed while every GPU here that could run it is away (it was there when the price check before Run asked): no
@@ -148,9 +150,9 @@ const ownSetupRefusal = (setup: OwnSetup): { kind: "refuse"; refusal: Refusal } 
 });
 
 /** A gate's refusal as the run's answer: its words, with the own setup that would run it. */
-function gateRefusal(gate: GateRefusal): { kind: "refuse"; refusal: Refusal } {
+function gateRefusal(gate: GateRefusal, place: Place): { kind: "refuse"; refusal: Refusal } {
   if (gate.reason === "ownSetup") return ownSetupRefusal(gate.setup ?? needsGpu());
-  const error = gateText(gate, false);
+  const error = gateText(gate, false, place);
   // Not right now (the GPUs that could run it are being updated): refused as a busy moment, with Run off until then.
   if (gate.reason === "busy") return { kind: "refuse", refusal: billingRefusal("busy", error) };
   if (gate.reason === "model3d") return { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } };
@@ -159,7 +161,8 @@ function gateRefusal(gate: GateRefusal): { kind: "refuse"; refusal: Refusal } {
   return r;
 }
 
-const askPlace = (): Refusal => ({ status: 409, body: { error: OWN_GPU_QUIET, code: "own-gpu-offline" }, headers: { [PLACE_ASK_HEADER]: "1" } });
+/** The question for a run whose own GPU didn't answer, with the place name its "Run on …" button says. */
+const askPlace = (place: Place): Refusal => ({ status: 409, body: { error: ownGpuQuiet(place), code: "own-gpu-offline", placeName: place.label }, headers: { [PLACE_ASK_HEADER]: "1" } });
 
 /** Does the policy put runs on this install's GPUs first, before the account's own GPU? */
 const prefersPool = (p: Policy | null | undefined): boolean => !!p?.hosted && p.prefer === "pool";
@@ -215,18 +218,19 @@ export function poolSteps(accountId: string, req: GenerationRequest): PlannedSte
  * other steps would finish and their join would wait for nothing.
  */
 export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
+  const words = hostedWords(placeFor(p));
   for (const s of steps) {
     const own = s.provider === "comfyui" ? ownSetupHere(s.modelId, "open") : null;
     if (own) return ownSetupLabel(own);
-    if (!poolRunsProvider(s.provider)) return HOSTED_WORDS.notOffered;
-    if (s.provider === "comfyui" && poolCardRefuses(s.modelId)) return HOSTED_WORDS.rtxCard;
+    if (!poolRunsProvider(s.provider)) return words.notOffered;
+    if (s.provider === "comfyui" && poolCardRefuses(s.modelId)) return words.rtxCard;
     if (freeStep(s)) {
-      if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return HOSTED_WORDS.notOffered;
+      if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return words.notOffered;
       continue;
     }
-    if (s.provider !== "comfyui" || (s.kind === "model3d" && !poolFinishes3d(s))) return HOSTED_WORDS.notOffered;
-    if (!poolAllows(p, s.modelId, s.presetId) || !kindAllowed(p, s.kind as RunFacts["kind"])) return HOSTED_WORDS.notOffered;
-    if (!poolTakes(stepEndpoint(s))) return HOSTED_WORDS.notOffered;
+    if (s.provider !== "comfyui" || (s.kind === "model3d" && !poolFinishes3d(s))) return words.notOffered;
+    if (!poolAllows(p, s.modelId, s.presetId) || !kindAllowed(p, s.kind as RunFacts["kind"])) return words.notOffered;
+    if (!poolTakes(stepEndpoint(s))) return words.notOffered;
   }
   return null;
 }
@@ -256,11 +260,13 @@ export function madeRunProblem(run: { policy: Policy; steps: RunFacts["steps"]; 
   const made = stepsOf(ids);
   const problem = stepsProblem(run.policy, made);
   if (problem) return problem;
-  if (run.light) return lightRun(made) ? null : HOSTED_WORDS.notOffered;
+  const place = placeFor(run.policy);
+  const words = hostedWords(place);
+  if (run.light) return lightRun(made) ? null : words.notOffered;
   const cap = poolOutputsCap(run.policy);
-  if (rowOutputs(ids).some((n) => n > cap)) return outputsWords(cap, false);
+  if (rowOutputs(ids).some((n) => n > cap)) return outputsWords(cap, false, place);
   const held = new Map((run.steps ?? []).map((s) => [`${s.model} ${s.op ?? ""}`, s.jobs]));
-  for (const s of pricedSteps(made)) if (s.jobs > (held.get(`${s.model} ${s.op ?? ""}`) ?? 0)) return HOSTED_WORDS.notOffered;
+  for (const s of pricedSteps(made)) if (s.jobs > (held.get(`${s.model} ${s.op ?? ""}`) ?? 0)) return words.notOffered;
   return null;
 }
 
@@ -316,14 +322,14 @@ export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "input
 export type GateRefusal = { ok: false; reason: GateReason; setup?: OwnSetup; cap?: number };
 
 /** The words for a gate's reason: an account may connect its own GPU in Settings, a guest has nowhere to do that yet. */
-export function gateWords(reason: Exclude<GateReason, "ownSetup" | "outputs">, guest: boolean): string {
+export function gateWords(reason: Exclude<GateReason, "ownSetup" | "outputs">, guest: boolean, place: Place): string {
   if (reason === "model3d") return OWN_GPU_TOOL_MESSAGE;
-  return (guest ? HOSTED_GUEST_WORDS : HOSTED_WORDS)[reason];
+  return (guest ? hostedGuestWords() : hostedWords(place))[reason];
 }
 
 /** A gate's refusal in words: the own setup's label (the same for a guest and an account), or the reason's words. */
-export const gateText = (gate: GateRefusal, guest: boolean): string =>
-  gate.reason === "ownSetup" ? ownSetupLabel(gate.setup ?? needsGpu()) : gate.reason === "outputs" ? outputsWords(gate.cap ?? 1, guest) : gateWords(gate.reason, guest);
+export const gateText = (gate: GateRefusal, guest: boolean, place: Place): string =>
+  gate.reason === "ownSetup" ? ownSetupLabel(gate.setup ?? needsGpu()) : gate.reason === "outputs" ? outputsWords(gate.cap ?? 1, guest, place) : gateWords(gate.reason, guest, place);
 
 /**
  * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
@@ -367,7 +373,7 @@ export function poolGate(
     if (later) return { ok: false, reason: "ownSetup", setup: later };
   }
   const problem = steps && p ? stepsProblem(p, steps) : null;
-  if (problem) return { ok: false, reason: problem === HOSTED_WORDS.rtxCard ? "rtxCard" : "notOffered", setup: gpu };
+  if (problem) return { ok: false, reason: problem === hostedWords(placeFor(p)).rtxCard ? "rtxCard" : "notOffered", setup: gpu };
   // A run its GPUs could take, but none of them can right now (every one that could is built from the catalog before
   // this studio's update): Run is off until one is updated, never a run that waits in line for nothing.
   const endpoints = [planned.route.endpoint, ...(steps ?? []).filter((s) => s.provider === "comfyui").map(stepEndpoint)];
@@ -428,7 +434,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   } catch (e) {
     // A mode that runs on the visitor's own setup only: its own GPU when it has one, else refused in its label's words.
     const own = refusedForOwnSetup(e, asked);
-    if (own && !accountGpu(account.id)) return gateRefusal({ ok: false, reason: "ownSetup", setup: own });
+    if (own && !accountGpu(account.id)) return gateRefusal({ ok: false, reason: "ownSetup", setup: own }, placeOfAccount(account.id));
     // A paid model, a model switched off, a request with something wrong: today's path says what.
     return OWN;
   }
@@ -450,7 +456,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   if (p === undefined) p = await billingPolicy(account.id);
   if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
   // Closed to this account: its own GPU (or today's "Connect your GPU"); asked for by name, said so.
-  if (!p.hosted) return wish === "pool" ? notOffered(HOSTED_WORDS.notHosted) : OWN;
+  if (!p.hosted) return wish === "pool" ? notOffered(hostedWords(placeFor(p)).notHosted) : OWN;
   // Planned, checked and priced for the outputs it would make there (the policy's cap per run).
   const { req, capped } = poolRequest(asked, p);
   if (capped) {
@@ -465,14 +471,14 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (ownFallback) return OWN;
-    return gateRefusal(gate);
+    return gateRefusal(gate, placeFor(p));
   }
   // Every GPU here that could run it is off for now (paused, silent, outside its hours): a run made now would only wait
   // until its wait limit ended it. It goes to the account's own GPU as any run these GPUs can't take now, else it isn't
   // made (awayRefusal).
   if (runAway(planned, gate.steps)) return ownFallback ? OWN : { kind: "refuse", refusal: awayRefusal() };
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
-  if (ownOffline) return { kind: "refuse", refusal: askPlace() };
+  if (ownOffline) return { kind: "refuse", refusal: askPlace(placeFor(p)) };
   return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };
 }
 
@@ -608,7 +614,7 @@ export interface PoolLine {
 }
 
 /** A price check's answer while every GPU that could run it is off for now: Run is off, and the wait is said. */
-const startingSoonQuote = (): Quote => ({ allowed: false, amount: 0, priceVersion: "", text: HOSTED_WORDS.startingSoon, code: "busy", etaS: null });
+const startingSoonQuote = (): Quote => ({ allowed: false, amount: 0, priceVersion: "", text: hostedWords(placeOf(null)).startingSoon, code: "busy", etaS: null });
 
 /** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
 /**
@@ -621,8 +627,8 @@ const notOfferedQuote = (text: string, setup?: OwnSetup): Quote & { ownSetup?: O
  * A gate's refusal as the price check's quote (gateText: the label's words for an own setup). Busy (the GPUs that could
  * run it are being updated) is quoted as code "busy", shown like the other busy moments with Run off.
  */
-const gateQuote = (gate: GateRefusal, guest: boolean): Quote & { ownSetup?: OwnSetup } =>
-  gate.reason === "busy" ? { ...notOfferedQuote(gateText(gate, guest)), code: "busy" } : notOfferedQuote(gateText(gate, guest), gate.reason === "model3d" ? undefined : gate.setup);
+const gateQuote = (gate: GateRefusal, guest: boolean, place: Place): Quote & { ownSetup?: OwnSetup } =>
+  gate.reason === "busy" ? { ...notOfferedQuote(gateText(gate, guest, place)), code: "busy" } : notOfferedQuote(gateText(gate, guest, place), gate.reason === "model3d" ? undefined : gate.setup);
 
 /**
  * A price check on this install's GPUs (hosted runs on): the plan there, the billing service's quote (no service: free,
@@ -654,7 +660,7 @@ export async function poolQuote(
     // A mode that runs on the visitor's own setup only, for a viewer with no GPU of its own: Run says its label and opens
     // that setup (no plan to show: it never runs here).
     const own = refusedForOwnSetup(e, req);
-    if (own && !(account && accountGpu(account.id)) && !(p && !p.hosted)) return { planned: null, quote: gateQuote({ ok: false, reason: "ownSetup", setup: own }, !account), line: { place: 1, etaSeconds: null } };
+    if (own && !(account && accountGpu(account.id)) && !(p && !p.hosted)) return { planned: null, quote: gateQuote({ ok: false, reason: "ownSetup", setup: own }, !account, placeFor(p)), line: { place: 1, etaSeconds: null } };
     return null;
   }
   if (planned.route.provider !== "comfyui") return null;
@@ -667,7 +673,7 @@ export async function poolQuote(
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { planned, quote: gateQuote(gate, !account), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+    return { planned, quote: gateQuote(gate, !account, placeFor(p)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
   // Every GPU here that could run it is off for now: Run is off and says it starts soon (the price check asks again by
   // itself, and Run comes back on once one is back), never a run that would wait for nothing.
@@ -791,14 +797,14 @@ export async function decideToolPlace(account: Account, steps: ToolRunStep[], wi
   }
   if (p === undefined) p = await billingPolicy(account.id);
   if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
-  if (!p.hosted) return wish === "pool" ? notOffered(HOSTED_WORDS.notHosted) : OWN;
+  if (!p.hosted) return wish === "pool" ? notOffered(hostedWords(placeFor(p)).notHosted) : OWN;
   const gate = toolGate(p, account.id, steps);
   if (gate === "unplanned") return OWN;
   if (!gate.ok) {
     if (ownFallback) return OWN;
-    return gateRefusal(gate);
+    return gateRefusal(gate, placeFor(p));
   }
-  if (ownOffline) return { kind: "refuse", refusal: askPlace() };
+  if (ownOffline) return { kind: "refuse", refusal: askPlace(placeFor(p)) };
   return { kind: "pool", policy: p, main: gate.main, steps: pricedSteps(gate.rows), light: lightRun(gate.rows) };
 }
 
@@ -826,7 +832,7 @@ export async function toolPoolQuote(
   };
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { quote: gateQuote(gate, !account), line: lineOf(undefined) };
+    return { quote: gateQuote(gate, !account, placeFor(p)), line: lineOf(undefined) };
   }
   const endpoint = gate.main.planned.route.endpoint;
   if (lightRun(gate.rows)) return { quote: FREE_QUOTE, line: lineOf(endpoint) };

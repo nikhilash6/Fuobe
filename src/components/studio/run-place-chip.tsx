@@ -11,6 +11,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { Engine, GenerationRequest } from "@/lib/catalog/types";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { formatCost } from "@/lib/format";
+import { placeOf, type Place } from "@/lib/place-name";
 import { quoteBody, useHostedQuote, useSettled } from "@/lib/hosted";
 import { checkedPool, openCheckPlace, runPlace, type RunAudience, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,7 @@ const ICONS: Record<RunPlace["where"], typeof Cloud> = { cloud: Cloud, gpu: Cpu,
  * before, so a chip never says "Not available here" to the owner and then takes it back. With it, the account's own GPU
  * and its first key (who its paid runs are billed to).
  */
-export function useRunViewer(): { audience: RunAudience; gpu: boolean; hosted: boolean; preferPool: boolean; payer: RunPlaceInput["payer"] } | null {
+export function useRunViewer(): { audience: RunAudience; gpu: boolean; hosted: boolean; preferPool: boolean; payer: RunPlaceInput["payer"]; place: Place } | null {
   const hydrated = useHydrated();
   const viewer = useViewer().data;
   const status = useStatus().data;
@@ -38,11 +39,12 @@ export function useRunViewer(): { audience: RunAudience; gpu: boolean; hosted: b
     hosted: !!status?.viewer?.hosted,
     preferPool: !!status?.viewer?.hosted && status.viewer.prefer === "pool",
     payer: keys.includes("fal") ? "fal" : (keys[0] ?? null),
+    place: placeOf(status?.viewer?.hosted ? status.viewer.placeName : null),
   };
 }
 
 /** The place and price for this viewer (null until the viewer is known). */
-export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "gpu" | "hosted" | "preferPool" | "payer">): RunPlace | null {
+export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "gpu" | "hosted" | "preferPool" | "payer" | "place">): RunPlace | null {
   const who = useRunViewer();
   return who ? runPlace({ ...input, ...who, format: formatCost }) : null;
 }

@@ -24,6 +24,7 @@ import {
   type RefusalAction,
   type RefusalCard,
 } from "@/lib/api";
+import { placeOf } from "@/lib/place-name";
 import { ConnectField, useSettings } from "@/components/connect-field";
 import { FAL_KEYS_URL } from "@/lib/connections";
 import { CLOUD_KEY } from "@/lib/your-keys";
@@ -76,6 +77,9 @@ export function GuestPrompt() {
   // The owner's own refused run (never an account's: theirs has "Add your key" of its own).
   const ownerRun = !!who?.owner && action === "run" && !reason;
   const keyOnly = ownerRun && needs === "key";
+  // Hosted runs: opened from an item that runs on one's own GPU only (its label's requirement), while everything else
+  // runs on this studio's GPUs (said with their place name).
+  const ownOnly = viewer?.hosted && !!requirement && needs !== "key" && !keyOnly ? placeOf(viewer.placeName) : null;
   const start = () => {
     const r = retry;
     close();
@@ -155,7 +159,7 @@ export function GuestPrompt() {
                   {keyOnly ? <KeyRound className="size-5" /> : <Cpu className="size-5" />}
                 </div>
                 <DialogTitle>
-                  {reason ? TITLES[reason] : keyOnly ? "Add an API key to run this" : action === "upload" && !keysAllowed ? "Connect your GPU to add your own files" : TITLES[action]}
+                  {reason ? TITLES[reason] : keyOnly ? "Add an API key to run this" : ownOnly ? "This one runs on your own GPU" : action === "upload" && !keysAllowed ? "Connect your GPU to add your own files" : TITLES[action]}
                 </DialogTitle>
                 <DialogDescription>
                   {keyOnly ? (
@@ -166,6 +170,8 @@ export function GuestPrompt() {
                     ) : (
                       "Your files are kept for your own runs on your own ComfyUI."
                     )
+                  ) : ownOnly && !reason ? (
+                    `Connect yours, and this runs there. Everything else runs on ${ownOnly.text}.`
                   ) : (
                     <>{action === "connect" && !reason ? "Your runs go to the ComfyUI on your computer. It's free and private." : "Fuobe runs this on the ComfyUI on your computer. It's free and private."}</>
                   )}

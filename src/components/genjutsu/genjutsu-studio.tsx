@@ -28,7 +28,7 @@ import { openInStudio } from "@/components/swap-studio/hooks";
 import { limitMb, useClipLimit } from "@/lib/clip-limit";
 import { ExampleRow } from "@/components/studio/example-row";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
-import { useEngine, useGenerations, useIsOwner, useModelAccess, useSoundLive, useStatus } from "@/lib/api";
+import { useEngine, useGenerations, useIsOwner, useModelAccess, usePlaceName, useSoundLive, useStatus } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
@@ -1505,6 +1505,7 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
   const byId = useMemo(() => new Map((list ?? []).map((g) => [g.id, g])), [list]);
   const final = byId.get(run.final);
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  const sitePlace = usePlaceName();
   // Run again sends the run's own request again (a new seed): on the cloud it says that request's price, from the same
   // estimate the Generate button showed ("· paid" until it's known, or when it can't be priced).
   const priced = !!final && final.engine !== "open" && final.place !== "pool" && !placeholders;
@@ -1541,7 +1542,7 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
             {(out || state.status === "failed") && (
               <Button size="sm" variant="outline" className="rounded-full" onClick={onAgain}>
                 <RotateCcw className="size-3.5" /> {state.status === "failed" ? "Try again" : "Run again"}
-                {againWhere(final, { placeholders }, againCost)}
+                {againWhere(final, { placeholders, place: sitePlace }, againCost)}
               </Button>
             )}
           </div>

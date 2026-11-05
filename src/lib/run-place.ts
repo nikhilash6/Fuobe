@@ -1,5 +1,6 @@
 import { RUN_SHOWN_HEADER, shownHeader } from "./guest-access";
 import { ownSetupDetail, ownSetupLabel, type OwnSetup } from "./own-setup";
+import { placeOf, type Place } from "./place-name";
 import { lineWords } from "./pool-line";
 import { billedTo, CLOUD_KEY, type CloudProvider } from "./your-keys";
 
@@ -35,6 +36,8 @@ export interface RunPlaceInput {
   hosted?: boolean;
   /** Runs go to this studio's GPUs first, even when the viewer has a GPU of its own (the studio's policy). */
   preferPool?: boolean;
+  /** The name visitors read for this studio's GPUs (usePlaceName; absent: "Our GPUs"). */
+  place?: Place;
   /**
    * The price of a run on this studio's GPUs (the billing service's words; empty text: free), undefined while pricing.
    * `refused`: the price check refused the run (its words are `text`), so it can't start now. `wait`: where it would
@@ -51,7 +54,7 @@ export interface RunPlaceInput {
 export interface RunPlace {
   /** What the chip's icon shows. */
   where: "cloud" | "gpu" | "pool" | "browser" | "unavailable";
-  /** The chip's words: "Your GPU", "This studio's GPUs", the cloud model's name, "Your browser", "Not available here". */
+  /** The chip's words: "Your GPU", the place name of this studio's GPUs ("Our GPUs"), the cloud model's name, "Your browser", "Not available here". */
   label: string;
   /** "Free", "≈ $0.04", "Placeholder · free", "Price unknown", or "" (not priced yet, or nothing to price). */
   price: string;
@@ -113,7 +116,7 @@ export function runPlace(input: RunPlaceInput): RunPlace {
   const price = placePrice({ demo: input.demo, costUsd: input.costUsd, open }, input.format);
   const withModels = models.length ? ` with ${list(models)}` : "";
   // Hosted runs: an account (or a guest, once signed up) with no GPU of its own runs open models on this studio's GPUs,
-  // at the billing service's price (the studio composer's "This studio's GPUs" chip).
+  // at the billing service's price, said with their place name ("Runs on our GPUs").
   if (open && input.hosted && audience !== "owner" && (!input.gpu || input.preferPool)) {
     const signup = audience === "guest";
     // Runs on the visitor's own GPU or key only: said in the setup's own words, and the send button opens that setup.
@@ -131,20 +134,21 @@ export function runPlace(input: RunPlaceInput): RunPlace {
         setup,
       };
     }
+    const place = input.place ?? placeOf(null);
     const refused = !input.demo && input.pool?.refused ? input.pool.text : undefined;
     const poolPrice = input.demo ? price : input.pool ? input.pool.text || "Free" : "";
     const tip = input.demo
       ? "Placeholder results are on (Settings), so outputs are free stand-ins."
       : refused
         ? (input.pool?.sub ?? refused)
-        : `${input.pool?.sub ?? `Runs on this studio's GPUs${withModels}.`}${input.pool?.wait ? ` ${input.pool.wait}.` : ""}${signup ? " Create a free account to run it." : ""}`;
+        : `${input.pool?.sub ?? `Runs on ${place.text}${withModels}.`}${input.pool?.wait ? ` ${input.pool.wait}.` : ""}${signup ? " Free with an account." : ""}`;
     return {
       where: "pool",
-      label: "This studio's GPUs",
+      label: place.label,
       price: poolPrice,
-      title: "Runs on this studio's GPUs",
+      title: `Runs on ${place.text}`,
       tip,
-      send: input.demo ? price : refused ?? [poolPrice, signup ? "this studio's GPUs, after sign-up" : "this studio's GPUs"].filter(Boolean).join(" · "),
+      send: input.demo ? price : refused ?? [poolPrice, signup && "sign up to run"].filter(Boolean).join(" · "),
       ...(signup && !refused && { needs: "signup" as const }),
       ...(refused && { refused }),
     };

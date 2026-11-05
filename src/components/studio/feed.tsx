@@ -20,7 +20,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
 import { onCloudKey } from "@/lib/before-run";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
-import { useCreateGeneration, useGenerationActions, useMakingPoolRuns, useStatus } from "@/lib/api";
+import { useCreateGeneration, useGenerationActions, useMakingPoolRuns, usePlaceName, useStatus } from "@/lib/api";
+import { knownPlace } from "@/lib/place-name";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
@@ -342,6 +343,8 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
 export const GenerationGroup = memo(function GenerationGroup({ g, newest, first }: { g: Generation; newest?: boolean; /** The feed's top request (newest first). */ first?: boolean }) {
   const feed = useFeed();
   const { favorite, trash } = useGenerationActions();
+  // A run on this studio's GPUs is headed with their place name ("Our GPUs").
+  const site = (usePlaceName() ?? knownPlace()).label;
   const ratio = tileRatio(g);
   const active = g.status === "queued" || g.status === "running";
   const placeholders = Math.max(1, g.request.params?.numOutputs ?? 1);
@@ -376,7 +379,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest, first 
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               {g.engine === "open" ? <Cpu className="size-3" /> : <Cloud className="size-3" />}
-              {g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "Browser" : g.engine === "open" ? "Open source" : "Cloud"}
+              {g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "Browser" : g.place === "pool" ? site : g.engine === "open" ? "Open source" : "Cloud"}
             </span>
             {meta.map((m, i) => (
               <span key={i} className="before:mr-1.5 before:content-['·']">

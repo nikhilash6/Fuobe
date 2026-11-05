@@ -15,7 +15,7 @@ import { usePoolRules, useTryFree } from "@/hooks/use-pool-rules";
 import { presetOwnSetup } from "@/lib/pool-rules";
 import { OwnSetupChip } from "@/components/own-setup";
 import type { OwnSetup } from "@/lib/own-setup";
-import { useEngineMode, useViewer } from "@/lib/api";
+import { useEngineMode, useStatus, useViewer } from "@/lib/api";
 import { categoryFrom, skippedInAll } from "@/lib/gallery-category";
 import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
 import { cn } from "@/lib/utils";
@@ -306,6 +306,8 @@ export function PresetGallery({
   const badges = useGpuBadges().data;
   const viewer = useViewer().data;
   const visitor = !!viewer && viewer.publicSignup && !viewer.owner;
+  // Hosted runs: everything here runs without a GPU of one's own, so there is no "Connect your GPU to see" line.
+  const hosted = !!useStatus().data?.viewer?.hosted;
 
   return (
     <div className="space-y-4">
@@ -340,7 +342,7 @@ export function PresetGallery({
           </div>
         </div>
         {/* Its line is kept (unseen) until the viewer and its chips are known, so the strip and grid don't move when it comes. */}
-        {(!viewer || (visitor && (!badges || (!badges.connected && !badges.off)))) && (
+        {!hosted && (!viewer || (visitor && (!badges || (!badges.connected && !badges.off)))) && (
           <p className={cn("text-[13px] text-muted-foreground", !(visitor && badges) && "invisible", !viewer && "[html[data-viewer='owner']_&]:hidden")} aria-hidden={!(visitor && badges) || undefined}>
             <Link href="/connect" tabIndex={visitor && badges ? undefined : -1} className="font-medium text-brand-text underline-offset-2 hover:underline">
               Connect your GPU

@@ -114,13 +114,14 @@ export class RunWatch {
 }
 
 /**
- * A run that truly can't finish: one plain sentence, nothing about the machines, and "Not charged" only when its hold
- * set something aside (`charged`). A free run says nothing about a charge.
+ * A run that truly can't finish: one plain sentence (`words`: the failure sentence, or one about the person's own files),
+ * nothing about the machines, and "Not charged" only when its hold set something aside (`charged`). A free run says
+ * nothing about a charge.
  */
-export function plainFailure(g: RunLike, o: { charged: boolean }): string[] {
+export function plainFailure(g: RunLike, o: { charged: boolean; words?: string }): string[] {
   const out: string[] = [];
   if (g.status !== "failed") out.push(`it is ${g.status}, not failed`);
-  if (g.error !== POOL_WORDS.failed) out.push(`its words are ${JSON.stringify(g.error)}`);
+  if (g.error !== (o.words ?? POOL_WORDS.failed)) out.push(`its words are ${JSON.stringify(g.error)}`);
   if (g.fix) out.push("it offers a fix");
   if (o.charged && !g.notCharged) out.push("it doesn't say Not charged");
   if (!o.charged && g.notCharged) out.push("it says Not charged, but nothing was set aside");
