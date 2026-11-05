@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import { authEnabled, hasAdminBearer, isOwnerRequest, LoginGuard, sessionCookieOf, validSession } from "./auth";
+import { READ_ONLY_SCOPES as PRESET_READ_ONLY } from "@/lib/admin-scopes";
 import { db } from "./db";
 import { hit } from "./rate";
 
@@ -52,12 +53,12 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   "workers:write": "Pause, resume, change and revoke workers",
   "workers:tokens": "Add workers and give them new tokens (a worker runs accounts' queued jobs, with their files)",
   "queue:read": "See the queue and its settings",
-  "queue:write": "Change the queue's settings: the run ceiling, the owner's wait limit, fair share and the pick allowance",
+  "queue:write": "Change the queue's settings: the run ceiling, the owner's wait limit, fair share, the pick allowance and the paused budget",
   "audit:read": "See the admin log",
 };
 
 /** The Settings preset that only reads: no emails, no prompts and no results (those need their own scopes). */
-export const READ_ONLY_SCOPES: Scope[] = ["runs:read", "reports:read", "workers:read", "queue:read", "audit:read"];
+export const READ_ONLY_SCOPES: readonly Scope[] = PRESET_READ_ONLY;
 
 export const ADMIN_TOKEN_PREFIX = "fuobe_adm_";
 const SHAPE = /^fuobe_adm_[A-Za-z0-9_-]{43}$/;

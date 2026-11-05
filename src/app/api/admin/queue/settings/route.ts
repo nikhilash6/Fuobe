@@ -6,7 +6,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * The line's settings (owner only, or an admin token with queue:read): the run ceiling (a default and per lane, in
- * seconds), the owner's wait limit, fair share and the pick allowance (src/server/queue-settings.ts).
+ * seconds), the owner's wait limit, fair share, the pick allowance and the paused budget (src/server/queue-settings.ts).
  */
 export async function GET(request: Request) {
   await connection();

@@ -47,7 +47,7 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
 | `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings` |
-| `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share and the pick allowance |
+| `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share, the pick allowance and the paused budget (`pausedBudgetS`: how long a run that has started may spend back in line) |
 | `audit:read` | `GET /api/admin/audit` |
 
 The read-only preset in Settings ticks `runs:read`, `reports:read`, `workers:read`, `queue:read` and `audit:read`:

@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { READ_ONLY_SCOPES } from "@/lib/admin-scopes";
 import { copyWithToast } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
 import { responseError, toastError } from "@/lib/refusals";
@@ -48,7 +49,8 @@ interface AuditRow {
   status: number;
 }
 
-const READ_ONLY = ["accounts:read", "runs:read", "reports:read", "workers:read", "queue:read", "audit:read"];
+/** The preset that only reads: no emails, no prompts and no results. */
+const READ_ONLY: readonly string[] = READ_ONLY_SCOPES;
 
 const EXPIRY = [
   { value: "never", label: "Never expires" },

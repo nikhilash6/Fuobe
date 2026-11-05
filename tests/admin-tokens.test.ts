@@ -664,4 +664,16 @@ describe("admin tokens: accounts' content needs its own scopes", () => {
     expect(admin.READ_ONLY_SCOPES).not.toContain("accounts:read");
     expect(admin.READ_ONLY_SCOPES).not.toContain("outputs:view");
   });
+
+  it("the token form's Read only button and its first ticks are that same preset: no accounts:read, no outputs:view", async () => {
+    const { READ_ONLY_SCOPES } = await import("@/lib/admin-scopes");
+    expect(admin.READ_ONLY_SCOPES).toBe(READ_ONLY_SCOPES);
+    expect([...READ_ONLY_SCOPES].sort()).toEqual(["audit:read", "queue:read", "reports:read", "runs:read", "workers:read"]);
+    for (const s of READ_ONLY_SCOPES) expect(admin.SCOPES).toContain(s);
+    // The page builds its preset from the shared list, and names no scope of its own for it.
+    const page = fs.readFileSync(path.join(__dirname, "..", "src/components/admin-tokens.tsx"), "utf8");
+    expect(page).toMatch(/import \{ READ_ONLY_SCOPES \} from "@\/lib\/admin-scopes"/);
+    expect(page).toMatch(/const READ_ONLY: readonly string\[\] = READ_ONLY_SCOPES;/);
+    expect(page).not.toMatch(/"accounts:read"/);
+  });
 });
