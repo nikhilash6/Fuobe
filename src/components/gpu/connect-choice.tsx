@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { ConnectField, useAllowPrivate, useSettings, type PublicSetting } from "@/components/connect-field";
 import { gib } from "@/components/gpu/comfy-finder";
 import { YourGpu } from "@/components/gpu/your-gpu";
+import { AiSetupPanel } from "@/components/gpu/ai-setup/ai-setup-panel";
+import { AI_SETUP_HREF, AiSetupRow } from "@/components/gpu/ai-setup/ai-setup-row";
 import { Button } from "@/components/ui/button";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { useStatus, useViewer } from "@/lib/api";
@@ -434,6 +436,8 @@ export interface ConnectChoiceProps {
   look?: boolean;
   /** Settings: the owner's server way has the second ComfyUI (the isolated worker) too. */
   advanced?: boolean;
+  /** Start with "Set it up with my AI" open (an account's; /connect?setup=ai). */
+  ai?: boolean;
 }
 
 export function ConnectChoice(props: ConnectChoiceProps) {
@@ -442,16 +446,23 @@ export function ConnectChoice(props: ConnectChoiceProps) {
   return viewer.owner ? <OwnerChoice {...props} /> : <AccountChoice {...props} />;
 }
 
-function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, look }: ConnectChoiceProps) {
+function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, look, ai: startAi }: ConnectChoiceProps) {
   const qc = useQueryClient();
   const support = useComputerSupport();
   const q = useAccountGpu();
   const gpu = q.data?.gpu ?? null;
+  const live = useStatus().data?.viewer?.gpu;
   // Once the person starts finding their ComfyUI, the flow stays on screen through to "connected".
   const [flow, setFlow] = useState(!!reason);
   const [link, setLink] = useState(false);
+  // "Set it up with my AI": in place for a refused run (the run starts once connected), else its own page.
+  const [ai, setAi] = useState(!!startAi);
   if (q.isError) return <p className="text-[13px] text-muted-foreground">{q.error.message}</p>;
   if (!q.data) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
+  if (ai) return <AiSetupPanel onBack={() => setAi(false)} fromRun={fromRun} kind={kind} onStart={onStart} onNotNow={onNotNow} />;
+  // Shown while nothing answers: "Fix it" when a GPU is saved but offline or needs the setting.
+  const online = !!gpu && !!live?.connected && !!live.online;
+  const aiRow = !online && !reason && <AiSetupRow fix={!!gpu} {...(fromRun ? { onOpen: () => setAi(true) } : { href: AI_SETUP_HREF })} className={cn("sm:max-w-[36rem]", className)} />;
   const disconnect = async () => {
     qc.setQueryData(["account-gpu"], await gpuCall("DELETE"));
     void qc.invalidateQueries({ queryKey: ["viewer"] });
@@ -464,6 +475,7 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, lo
     if (gpu?.mode === "computer")
       return (
         <div className="space-y-4">
+          {aiRow}
           <ComputerStatus gpu={gpu} look={false} onDisconnect={disconnect} other={{ label: link ? "Keep using your computer" : "Use a web address instead", onClick: () => setLink((v) => !v) }} />
           {link && (
             <>
@@ -476,41 +488,51 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, lo
     // Why not this computer, then the web address form (once connected, the form alone says so).
     return (
       <div className="space-y-4">
+        {aiRow}
         {!gpu && <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>}
         <YourGpu className={className} onLinked={onStart} />
       </div>
     );
   }
-  if (gpu?.mode === "computer" && !flow && !link) return <ComputerStatus gpu={gpu} onDisconnect={disconnect} other={{ label: "Use a link instead", onClick: () => setLink(true) }} />;
+  if (gpu?.mode === "computer" && !flow && !link)
+    return (
+      <div className="space-y-4">
+        {aiRow}
+        <ComputerStatus gpu={gpu} onDisconnect={disconnect} other={{ label: "Use a link instead", onClick: () => setLink(true) }} />
+      </div>
+    );
   const linked = gpu?.mode === "link";
   return (
-    <ChoiceCards
-      className={className}
-      instead={linked}
-      title="Keep it running with this tab closed"
-      sub="Give your ComfyUI a web address. Takes about two minutes."
-      open={link || linked}
-      onToggle={() => setLink((v) => !v)}
-      computer={
-        <div onClickCapture={() => setFlow(true)}>
-          <ThisComputer
-            connect={async () => {
-              setFlow(true);
-              await connectThisComputer();
-            }}
-            fromRun={fromRun}
-            kind={kind}
-            onStart={onStart}
-            onNotNow={onNotNow}
-            autoLook={reason === "setting" || reason === "find" || look}
-            again={reason === "setting"}
-            waitForTap={!fromRun && !reason && !look}
-          />
-        </div>
-      }
-    >
-      <YourGpu className={className} onLinked={onStart} />
-    </ChoiceCards>
+    <div className="space-y-3">
+      {aiRow}
+      <ChoiceCards
+        className={className}
+        instead={linked}
+        title="Keep it running with this tab closed"
+        sub="Give your ComfyUI a web address. Takes about two minutes."
+        open={link || linked}
+        onToggle={() => setLink((v) => !v)}
+        computer={
+          <div onClickCapture={() => setFlow(true)}>
+            <ThisComputer
+              connect={async () => {
+                setFlow(true);
+                await connectThisComputer();
+              }}
+              fromRun={fromRun}
+              kind={kind}
+              onStart={onStart}
+              onNotNow={onNotNow}
+              autoLook={reason === "setting" || reason === "find" || look}
+              again={reason === "setting"}
+              waitForTap={!fromRun && !reason && !look}
+            />
+          </div>
+        }
+      >
+        <YourGpu className={className} onLinked={onStart} />
+      </ChoiceCards>
+    </div>
   );
 }
 

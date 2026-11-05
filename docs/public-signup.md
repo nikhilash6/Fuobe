@@ -220,17 +220,18 @@ its own results, once. The server never calls the person's computer. Runs wait w
   and 7821, or one the person types. While the browser would still ask to let the site reach apps
   on this device, it looks only after a click, and explains that question first. A tab never
   reaches the computer's apps by itself before that.
-- **Fuobe Connect (the one step).** A page can read a ComfyUI on the computer only when ComfyUI lets
-  that site in. Fuobe Connect (`integrations/fuobe-connect`, from ComfyUI-Manager or a git clone)
-  lets in only the studios that the person trusts (`https://fuobe.com` unless they name others), and
-  only for what a run needs. Every other website still meets ComfyUI's own check. The card asks for
-  this one install and connects by itself when ComfyUI is back with it. The setting and the guard
-  below are under "Advanced". See [gpu-workers.md](gpu-workers.md).
-- **Pairing** (Safari, phones, a blocked browser, a PC with no screen): Fuobe Connect shows a code,
-  and the person types it and approves it while signed in (`/connect?pair=1`; the page never fills
-  in a code from its link). That ComfyUI then runs this person's jobs, and only theirs, with no tab
-  open. Settings → Your GPU lists it, with Disconnect.
-- **Fuobe's setting (Advanced).** Without Fuobe Connect, ComfyUI must run with
+- **Fuobe Connect.** A page can read a ComfyUI on the computer only when ComfyUI lets that site in.
+  Fuobe Connect (`integrations/fuobe-connect`, from ComfyUI-Manager or a git clone) lets in only the
+  studios that the person trusts (`https://fuobe.com` unless they name others), and only for what a
+  run needs. Every other website still meets ComfyUI's own check. The card offers it only while
+  `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, which it is once its repository
+  is published. Then it is the one step, and the setting and the guard below are under "Advanced".
+  Until then the setting with the guard is the one step. See [gpu-workers.md](gpu-workers.md).
+- **Pairing** (Safari, phones, a blocked browser, a PC with no screen), offered with Fuobe Connect:
+  Fuobe Connect shows a code, and the person types it and approves it while signed in
+  (`/connect?pair=1`; the page never fills in a code from its link). That ComfyUI then runs this
+  person's jobs, and only theirs, with no tab open. Settings → Your GPU lists it, with Disconnect.
+- **Fuobe's setting.** Without Fuobe Connect, ComfyUI must run with
   `--enable-cors-header <the site's address>`. The card gives the fix for the install it finds: a
   start file for Windows portable or Easy-Install (it restarts ComfyUI with the setting and leaves a
   start file with it for next time; it never changes the person's own start files), the place in
@@ -241,7 +242,8 @@ its own results, once. The server never calls the person's computer. Runs wait w
   `custom_nodes` and that the other installs download from the card, puts the check back: a request
   from a web page gets in only from ComfyUI's own page or the site the setting names, the live
   socket included. It answers `GET /fuobe/guard`, and the card warns while it's missing.
-- **Phones and Safari** can't reach a ComfyUI on the device: they get pairing and the link instead, with why.
+- **Phones and Safari** can't reach a ComfyUI on the device: they get the link instead (and pairing, with Fuobe
+  Connect), with why.
 
 The owner can do the same on a deployed studio: **Settings → Where ComfyUI runs → On the computer
 you're using**. A studio with ComfyUI on its own machine keeps calling it from the server.
@@ -486,6 +488,44 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the source on GitHub are in Settings → About, for guests and accounts too.
   `GET /api/models` lists the open-source models for a visitor, and the studios price a visitor's
   run as it would go on its own GPU. The studio's own settings page isn't shown to visitors.
+
+### Set it up with my AI
+
+An account can let its own AI (ChatGPT, Claude, or a coding agent such as Claude Code, Codex or
+Gemini CLI) do the setup: **Set it up with my AI** on the Connect your GPU card, in Settings → Your
+GPU and at `/connect?setup=ai`. A guest signs up first and comes back there. The panel picks the
+way for the browser (this browser, or a web address on Safari, on a phone and on a page on plain
+http), gives the AI a short message with two links (the steps and the status), and ticks off each
+step as the account's open tab sees it. It ends with a first picture made on the account's GPU.
+
+- **The code.** `POST /api/setup/session` (`{ way, os, phone?, fresh?, resume? }`) gives the
+  account one setup code of 12 letters and digits, like `ABCD-EFGH-JKMN`. The same call again
+  answers the same code. The code ends 30 minutes after the account's tab was last heard from (2
+  hours at most), 10 minutes after the setup is done, when the account makes a new one (`fresh`),
+  or at once with **End this code** (`DELETE /api/setup/session/<code>`). It also ends when the
+  account is deleted or switched off. The codes live in the server's memory. After a restart, the
+  account's tab brings its own code back with a resume token sealed for that account.
+- **The tab.** The account's open tab reports what it sees
+  (`POST /api/setup/session/<code>/report`, fixed values and whole numbers only, unknown keys answer
+  400) and waits for its AI's reads (`GET /api/setup/session/<code>/wait`, 25 seconds at most). One
+  tab leads a setup at a time. Another account's code answers 404.
+- **The status.** Anyone with the code can read `GET /api/setup/<code>` without signing in: the
+  steps, the port and the kind of install, and the next step, in fixed words (plain text, or JSON
+  with `?format=json`). It never holds the email, a run, a key, an address, a token, a file name or
+  the GPU's name. Reading it reaches only the server's memory: at most it asks the open tab to look
+  at its own ComfyUI sooner, once every 3 seconds. Every code that is not active gets the same 404.
+- **The steps.** `GET /api/setup/guide/<way>/<computer>` (the steps for the AI, with the studio's
+  own address from a fixed list: fuobe.com, `FUOBE_ALLOWED_ORIGINS`, or an address on the local
+  network), `GET /api/setup/files/fuobe_guard.py` and `GET /api/setup/files/start/<port>` (the
+  Windows start file) are open to everyone. The steps tell the AI to show each command and wait for
+  a yes, to use exactly `--enable-cors-header <the studio's address>`, never `--listen`, and to
+  check Fuobe's files by their SHA-256.
+- **Limits.** 6 new codes a minute and 20 an hour per account. 30 status reads a minute per code.
+  Unknown codes: 10 per 10 minutes per visitor (behind a trusted proxy, `FUOBE_TRUST_PROXY=1`) and
+  600 per 10 minutes for everyone together. All answer 429 with `Retry-After`.
+
+The code is `src/server/ai-setup.ts`, `src/lib/ai-setup/`, `src/components/gpu/ai-setup/` and
+`src/app/api/setup/`.
 
 ## Your keys
 

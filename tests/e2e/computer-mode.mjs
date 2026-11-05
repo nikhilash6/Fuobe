@@ -164,11 +164,14 @@ try {
     await linkToggle.click();
     await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
     await dialog.getByText(`Something is running on port ${FAKE_PORT}, where your ComfyUI was before.`).waitFor({ timeout: 20_000 });
-    check("ComfyUI that this page can't use yet: one step, Fuobe Connect from ComfyUI-Manager", await dialog.getByText("Install Fuobe Connect in ComfyUI-Manager").isVisible());
-    check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command", { exact: true }).textContent()) ?? ""));
-    check("the start setting and the guard are not shown until Advanced is opened", !(await dialog.getByRole("button", { name: "Download start file" }).isVisible()) && !(await dialog.getByText("--enable-cors-header").first().isVisible()));
+    // Fuobe Connect is the one step once it is published (FUOBE_CONNECT_PUBLISHED); until then the setting with the guard is.
+    const connectOffered = await dialog.getByText("Install Fuobe Connect in ComfyUI-Manager").isVisible();
+    if (connectOffered) {
+      check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command", { exact: true }).textContent()) ?? ""));
+      check("the start setting and the guard are not shown until Advanced is opened", !(await dialog.getByRole("button", { name: "Download start file" }).isVisible()) && !(await dialog.getByText("--enable-cors-header").first().isVisible()));
+    } else check("ComfyUI that this page can't use yet: one step, Fuobe's setting with the guard", (await dialog.getByRole("button", { name: /Advanced: a start setting instead/ }).count()) === 0);
     await page.screenshot({ path: path.join(shots, "2-needs-setting.png") });
-    await dialog.getByRole("button", { name: /Advanced: a start setting instead/ }).click();
+    if (connectOffered) await dialog.getByRole("button", { name: /Advanced: a start setting instead/ }).click();
     check("Advanced: what the setting does to other websites, and that Fuobe's guard turns them away, before the download", await dialog.getByText(/other websites send work to your ComfyUI\. The start file adds Fuobe's guard/).isVisible());
     const startButton = dialog.getByRole("button", { name: "Download start file" });
     if (await startButton.isVisible()) {

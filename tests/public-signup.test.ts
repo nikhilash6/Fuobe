@@ -542,3 +542,40 @@ describe("an account changes its password (Settings → Account)", () => {
     expect((await (await me()).DELETE(remove(auth.createSession().value, { password: "install password" }))).status).toBe(403);
   });
 });
+
+describe("Set it up with my AI", () => {
+  it("opens a setup's status, the steps for an AI and Fuobe's files to everyone", () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    for (const p of ["/api/setup/ABCD-EFGH-JKMN", "/api/setup/abcdefghjkmn", "/api/setup/guide/direct/windows", "/api/setup/guide/address/other", "/api/setup/files/fuobe_guard.py", "/api/setup/files/start/8188"]) {
+      expect(access.guestRead(p), p).toEqual({ kind: "pass" });
+      expect(passed(proxy(req(p))), p).toBe(true);
+    }
+    for (const p of ["/api/setup/ABCD-EFGH", "/api/setup/guide/direct/android", "/api/setup/files/other.py", "/api/setup/session", "/api/setup/session/ABCD-EFGH-JKMN/wait"]) {
+      expect(access.guestRead(p), p).toEqual({ kind: "closed" });
+    }
+  });
+
+  it("lets an account make, report on, wait on and end its own code, and a guest gets the sign-up card", () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    expect(access.accountMayChange("POST", "/api/setup/session", "")).toBe(true);
+    expect(access.accountMayChange("POST", "/api/setup/session/ABCD-EFGH-JKMN/report", "")).toBe(true);
+    expect(access.accountMayChange("DELETE", "/api/setup/session/ABCD-EFGH-JKMN", "")).toBe(true);
+    expect(access.accountMayChange("DELETE", "/api/setup/session", "")).toBe(false);
+    expect(access.accountOwnRead("/api/setup/session/ABCD-EFGH-JKMN/wait")).toBe(true);
+    const cookie = auth.createSession(auth.createAccount("ai-setup@example.com", "long enough").id).value;
+    expect(passed(proxy(req("/api/setup/session", { method: "POST", cookie })))).toBe(true);
+    expect(passed(proxy(req("/api/setup/session/ABCD-EFGH-JKMN/report", { method: "POST", cookie })))).toBe(true);
+    expect(passed(proxy(req("/api/setup/session/ABCD-EFGH-JKMN/wait", { cookie })))).toBe(true);
+    expect(passed(proxy(req("/api/setup/session/ABCD-EFGH-JKMN", { method: "DELETE", cookie })))).toBe(true);
+    for (const [method, p] of [
+      ["POST", "/api/setup/session"],
+      ["POST", "/api/setup/session/ABCD-EFGH-JKMN/report"],
+      ["DELETE", "/api/setup/session/ABCD-EFGH-JKMN"],
+      ["GET", "/api/setup/session/ABCD-EFGH-JKMN/wait"],
+    ]) {
+      const r = proxy(req(p, { method }));
+      expect(r.status, p).toBe(401);
+      expect(r.headers.get(access.GUEST_HEADER), p).toBe("1");
+    }
+  });
+});

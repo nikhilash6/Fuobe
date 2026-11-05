@@ -11,6 +11,8 @@
  *   tokens (owner only).
  */
 
+import { SETUP_CODE_PATH } from "./ai-setup/code";
+
 /** Set by the proxy on a guest's request to a route that answers guests itself (GUEST_FILTERED), and on its 401s. */
 export const GUEST_HEADER = "x-fuobe-guest";
 
@@ -86,10 +88,23 @@ export type GuestRead =
   /** The owner's data: 401. */
   | { kind: "closed" };
 
+/**
+ * "Set it up with my AI" (src/app/api/setup): a setup's status by its code, the steps for an AI, and Fuobe's files those
+ * steps download. Open to everyone, with no session: the person's AI reads them. They hold nothing of an account.
+ */
+export const SETUP_PUBLIC_READ = new RegExp(
+  `^/api/setup/(?:${SETUP_CODE_PATH}|guide/(?:direct|address|connect)/(?:windows|mac|linux|other)|files/(?:fuobe_guard\\.py|start/\\d{1,5}))$`,
+  "i",
+);
+/** An account's own setup code: End this code, its tab's report, and its tab's wait. The routes take its own code only. */
+const SETUP_OWN = new RegExp(`^/api/setup/session/${SETUP_CODE_PATH}$`, "i");
+const SETUP_REPORT = new RegExp(`^/api/setup/session/${SETUP_CODE_PATH}/report$`, "i");
+const SETUP_WAIT = new RegExp(`^/api/setup/session/${SETUP_CODE_PATH}/wait$`, "i");
+
 /** What a guest's GET or HEAD gets. Anything not named here under /api stays closed. */
 export function guestRead(pathname: string): GuestRead {
   if (pathname !== "/api" && !pathname.startsWith("/api/")) return { kind: "pass" };
-  if (GUEST_READS.has(pathname)) return { kind: "pass" };
+  if (GUEST_READS.has(pathname) || SETUP_PUBLIC_READ.test(pathname)) return { kind: "pass" };
   if (GUEST_FILTERED.has(pathname) || GUEST_SKILL.test(pathname)) return { kind: "filtered" };
   if (Object.hasOwn(EMPTY, pathname)) return { kind: "empty", body: EMPTY[pathname] };
   if (pathname === "/api/generations/stream") return { kind: "none" };
@@ -183,7 +198,16 @@ export function accountGeneration(method: string, pathname: string): string | un
  */
 export function accountOwnRead(pathname: string): boolean {
   if (ACCOUNT_LISTS.has(pathname)) return true;
-  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || ACCOUNT_CANVASES.test(pathname) || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname) || PAIRING_READS.has(pathname);
+  return (
+    pathname === "/api/generations" ||
+    pathname === "/api/account/gpu" ||
+    pathname === "/api/account/keys" ||
+    ACCOUNT_CANVASES.test(pathname) ||
+    GPU_READS.has(pathname) ||
+    COMPUTER_READ.test(pathname) ||
+    PAIRING_READS.has(pathname) ||
+    SETUP_WAIT.test(pathname)
+  );
 }
 
 /** An account's own canvases (src/app/api/account/canvases): the routes read and change its own boards only. */
@@ -235,6 +259,10 @@ export function accountMayChange(method: string, pathname: string, search: strin
   // Running its own jobs on its own computer, and pairing (or unpairing) its own ComfyUI.
   if (COMPUTER_CHANGES.some(([m, p]) => m === method && p.test(pathname))) return true;
   if ((method === "POST" && pathname === "/api/gpu/pair") || (method === "DELETE" && /^\/api\/gpu\/paired\/[^/]+$/.test(pathname))) return true;
+  // "Set it up with my AI": its own setup code (make or update it, its tab's report, End this code). The routes take the
+  // account's own setup only.
+  if (method === "POST" && (pathname === "/api/setup/session" || SETUP_REPORT.test(pathname))) return true;
+  if (method === "DELETE" && SETUP_OWN.test(pathname)) return true;
   if (method === "POST" && (pathname === "/api/uploads" || pathname === "/api/media/probe")) return true;
   // Its own canvases: save a board, rename it, save its pages, delete it (the routes take its own boards only).
   if ((method === "POST" && pathname === "/api/account/canvases") || ((method === "PATCH" || method === "DELETE") && /^\/api\/account\/canvases\/[^/]+$/.test(pathname))) return true;
