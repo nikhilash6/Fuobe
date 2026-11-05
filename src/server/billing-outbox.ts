@@ -240,7 +240,8 @@ export function sweepBilling(now = Date.now()): Promise<void> {
   if (globalThis.__fuobeBillingSweep) return globalThis.__fuobeBillingSweep;
   // Reports wait for a service: with none set, nothing is written (a hold can only exist while one was set).
   if (!billingConfigured()) return Promise.resolve();
-  const sweep: Promise<void> = (async () => {
+  let sweep: Promise<void> | undefined = undefined;
+  sweep = (async () => {
     // (Set as this process's sweep before any of it runs.)
     await null;
     try {

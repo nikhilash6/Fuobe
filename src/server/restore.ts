@@ -42,6 +42,9 @@ import { tenant } from "./tenant";
 
 export { ShortsError as RestoreError };
 
+/** An account's answer to a cloud run: it restores on its own GPU (its page runs there already). */
+export const RESTORE_ON_YOUR_GPU = "Restore this clip on your own GPU: switch to open source.";
+
 const fileUrl = z.string().startsWith("/api/files/").max(500);
 
 const source = z.object({
@@ -284,6 +287,10 @@ export interface RestoreRun {
 export async function planRestoreRun(body: z.infer<typeof RestoreBodySchema>): Promise<RestoreRun> {
   mustMatchMode(body.engine);
   mustBeOffered(body.engine);
+  // An account restores on its own GPU only (own-setup.ts "video-tools:restore"): the cloud carries the gated Restore
+  // IC-LoRA, which never goes with an account's own key (src/server/loras.ts prepareCloudLoras), so its cloud run would
+  // only fail at submit, whatever copy or token the install holds.
+  if (body.engine === "cloud" && tenant()) throw new ShortsError(RESTORE_ON_YOUR_GPU, 422);
   const info = await probeSource(body.source.url);
   let prompt = body.prompt?.trim() ?? "";
   let negative = body.negative?.trim() ?? "";
@@ -302,7 +309,6 @@ export async function planRestoreRun(body: z.infer<typeof RestoreBodySchema>): P
   // a copy to send (a live one on fal, or the file on this machine), every piece would fail at submit, so the run is
   // refused before anything starts (a placeholder run needs no file).
   if (body.engine === "cloud" && !gatedReady("cloud") && !price(plan.steps).demo) {
-    if (tenant()) throw new ShortsError("Restore this clip on your own GPU: switch to open source.", 422);
     throw new ShortsError(`${gatedHint("Lightricks' Restore IC-LoRA", RESTORE.loras.restore.page)}. A cloud run gets Fuobe's copy of the file, never your token`, 422);
   }
   return { steps: plan.steps, final: plan.final, prompt, negative: input.negative, by };

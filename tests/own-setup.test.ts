@@ -180,4 +180,18 @@ describe("own setup: a press", () => {
       expect(ownSetupStep(o, undefined)).toEqual({ kind: "run" });
     }
   });
+
+  it("says Restore & colourise runs on the visitor's own GPU only: a key alone opens Connect your GPU, not a run", () => {
+    // Its cloud engine carries the gated Restore IC-LoRA, which never goes with a visitor's key (an account's cloud run
+    // answers 422): the label promises no key, and a key-only account's press leads to its GPU.
+    const restore = ownSetupOnly("video-tools:restore")!;
+    expect(restore).toEqual({ need: "gpu", vramGb: 24, files: true });
+    expect(ownSetupLabel(restore)).toBe("Runs on your own GPU · 24 GB");
+    expect(ownSetupShort(restore)).toBe("Your GPU · 24 GB");
+    for (const text of [ownSetupLabel(restore), ownSetupShort(restore), ownSetupDetail(restore)]) expect(text).not.toMatch(/key|fal/i);
+    expect(ownSetupStep(restore, keyed)).toEqual({ kind: "connect-gpu", gpuOnly: true });
+    expect(ownSetupStep(restore, bare)).toEqual({ kind: "connect-gpu", gpuOnly: true });
+    expect(ownSetupStep(restore, gpu)).toEqual({ kind: "run" });
+    expect(ownSetupStep(restore, guest)).toEqual({ kind: "sign-up" });
+  });
 });

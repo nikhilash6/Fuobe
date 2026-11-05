@@ -15,7 +15,9 @@ export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: numbe
   "marketing/cta-luxury": { "w":[640,1024], "v":"ebc068f9", "still":576 },
   "marketing/cta-product-story": { "w":[640,1024], "v":"3d445148", "still":576 },
   "marketing/cta-red-carpet": { "w":[640], "v":"58fdb432", "still":384 },
+  "marketing/cta-simple-ugc": { "w":[640], "v":"a6d32c34", "still":384 },
   "marketing/cta-unboxing": { "w":[640,1024], "v":"f057df6e", "still":576 },
+  "marketing/cta-viral-chaos": { "w":[640,1024], "v":"5b642975", "still":576 },
   "marketing/mh-drop-bounce": { "w":[640], "v":"04ab7f31", "still":384 },
   "marketing/mh-liquid-wrap": { "w":[640], "v":"f2f2bbed", "still":384 },
   "marketing/mh-neon-sweep": { "w":[640,1024], "v":"7357f7a2", "still":576 },
@@ -27,5 +29,10 @@ export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: numbe
   "marketing/mm-riso-loop": { "w":[640,1024], "v":"9b629ca2", "still":576 },
   "marketing/mm-scrapbook-flip": { "w":[640], "v":"2c9b8d17", "still":384 },
   "marketing/mm-y2k-desktop": { "w":[640,1024], "v":"f2529a49", "still":576 },
-  "marketing/ms-device-float": { "w":[640], "v":"e3edca76", "still":384 }
+  "marketing/ms-device-float": { "w":[640], "v":"e3edca76", "still":384 },
+  "marketing/po-giant-type": { "w":[640,1024], "v":"ef1bef38", "still":576 },
+  "marketing/ps-citrus-burst": { "w":[640,1024], "v":"7618fe58", "still":576 },
+  "marketing/ps-floating-trio": { "w":[640,1024], "v":"96c73ccf", "still":576 },
+  "marketing/ps-linen-flatlay": { "w":[640,1024], "v":"c9487a62", "still":576 },
+  "marketing/tt-mess-to-fresh": { "w":[640], "v":"e503604b", "still":576 }
 };

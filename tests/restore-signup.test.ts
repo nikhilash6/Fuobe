@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { tempDir } from "./helpers/temp-dir";
@@ -5,7 +7,7 @@ import { tempDir } from "./helpers/temp-dir";
 /**
  * Restore & colourise under the owner's public sign-up rules (docs/public-signup.md): its price
  * check is open to guests and accounts and priced for their own GPU, never a demo; an account's run goes to its own GPU
- * or fal.ai key (a guest signs up first, an account with neither connects one), while the prompt writer, which asks the
+ * (a guest signs up first, an account without one connects one), while the prompt writer, which asks the
  * studio's own AI helpers, stays the owner's (own-gpu-tool); the owner's are unchanged. The GPU pre-flight board has its row, on graphs the requirement index knows.
  */
 
@@ -172,5 +174,18 @@ describe("the GPU pre-flight board", () => {
     // The graph's node pack is pinned, so the board can say what to install.
     expect(Object.keys(idx.workflows["video-restore-ltx25-tiled"].packs)).toContain("ComfyUI-LTXVideo");
     expect(idx.packs["ComfyUI-LTXVideo"]).toMatchObject({ commit: "220e1d45aa0469f518e982102fca4dca92a61862" });
+  });
+});
+
+describe("the page a visitor sees", () => {
+  const page = (f: string) => fs.readFileSync(path.join(__dirname, "..", f), "utf8").replace(/\s+/g, " ");
+
+  it("is the GPU's: the open engine for a visitor, its upload asking for a GPU (no key runs it), and its price never 'Not available here'", () => {
+    const tool = page("src/components/restore/restore-tool.tsx");
+    expect(tool).toContain('const engine: Engine = visitor ? "open" : chosen;');
+    expect(tool).toMatch(/<ClipDrop accept=\{RESTORE\.accept\} limits=\{LIMITS\} gpuOnly /);
+    expect(tool).toContain("{costText(est, engine)}");
+    expect(page("src/components/shorts/ui.tsx")).toContain("useAskBeforeUpload({ gpuOnly })");
+    expect(page("src/components/shorts/ui.tsx")).not.toContain("Not available here");
   });
 });

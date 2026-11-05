@@ -51,12 +51,24 @@ describe("own setup: the marks follow the GPU checks", () => {
 
   it("drops an item's label once gpu-tested.json records its pass", async () => {
     const before = await import("@/lib/own-setup");
-    const ids = ["genjutsu:picture", "genjutsu:finish-faces", "genjutsu:object-change", "oss-h3-motion", "sound:clean-voice-first"];
+    const ids = ["genjutsu:picture", "genjutsu:finish-faces", "genjutsu:object-change", "oss-h3-motion", "sound:clean-voice-first", "video-tools:remove-person", "video-tools:remove-object-void"];
     // Each has a setup of its own; it is the visitor's label until its pass is recorded.
     for (const id of ids) expect(before.ownSetupItem(id), id).not.toBeNull();
+    // Removing a person with H3 and VOID haven't rendered on this studio's GPU yet: labelled today.
+    for (const id of ["video-tools:remove-person", "video-tools:remove-object-void"]) expect(before.ownSetupOnly(id), id).not.toBeNull();
     vi.resetModules();
     vi.doMock("../workflows/comfyui/gpu-tested.json", () => ({
-      default: { features: { picture: { passed: true }, "finish-faces": { passed: true }, "object-change": { passed: true }, "motion-h3": { passed: true }, "clean-voice-first": { passed: true } } },
+      default: {
+        features: {
+          picture: { passed: true },
+          "finish-faces": { passed: true },
+          "object-change": { passed: true },
+          "motion-h3": { passed: true },
+          "clean-voice-first": { passed: true },
+          "remove-person": { passed: true },
+          "remove-object-void": { passed: true },
+        },
+      },
     }));
     const after = await import("@/lib/own-setup");
     for (const id of ids) expect(after.ownSetupOnly(id), id).toBeNull();

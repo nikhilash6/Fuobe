@@ -12,18 +12,33 @@ the studio over HTTPS, and neither opens a port. With no worker added and nothin
 
 ## Fuobe Connect (a person's own ComfyUI)
 
-Fuobe Connect is a ComfyUI custom node pack. Its code is in `integrations/fuobe-connect`, and its own README tells you
-how to install it. It adds no nodes.
+Fuobe Connect is a ComfyUI custom node pack. Its source is in `integrations/fuobe-connect`, and people install it
+from `https://github.com/workingprototype/ComfyUI-Fuobe-Connect` or from ComfyUI-Manager (`Fuobe Connect`). Its own
+README says how to install it and exactly what a trusted studio can do. It adds no nodes.
 
 **Direct mode.** ComfyUI turns away every other website. Fuobe Connect lets in only the studios that you trust. Each
-studio is an exact origin, and the default is `https://fuobe.com`. You can add your own studio in ComfyUI's settings,
-or with `FUOBE_CONNECT_ORIGINS`. A trusted studio can use only what a run needs: ComfyUI's facts, model lists, queue
-and history, the run's results, uploads of its inputs, and its prompt. It cannot reach the Manager's install calls,
-your user files or your settings. Fuobe Connect answers the CORS and Private Network Access preflights for the trusted
-origins only. Every other website still meets ComfyUI's own check.
+studio is an exact https origin, and the default is `https://fuobe.com` with `https://www.fuobe.com`. You can name your
+own studios, or `none`, in ComfyUI's settings or with `FUOBE_CONNECT_ORIGINS`. A trusted studio reaches the ComfyUI
+only at `127.0.0.1`, `::1` or `localhost`. Fuobe Connect checks each of its requests in Python, whatever the studio's
+page checked:
+
+- a workflow runs only when every node type is on the list the pack ships (`fuobe_connect/allowed_nodes.json`, written
+  by `node scripts/connect-nodes.mjs` from the same sources as the worker's list) or on the person's own list, no text
+  input names a path or an address, and every loader reads a Fuobe input (`fuobe_<id>.<ext>`);
+- an upload goes only into the input folder, under a Fuobe input name;
+- the studio sees, cancels, stops and downloads only its own prompts and their results; the queue shows other prompts
+  only as places in the line, and the node list hides the names of the person's input files.
+
+It cannot reach the Manager's install calls, the person's user files, settings, input files or own results. Fuobe
+Connect answers the CORS and Private Network Access preflights for the trusted origins only. Every other website still
+meets ComfyUI's own check.
 
 You do not need a start flag or a guard file. In the studio, **Connect your GPU** finds ComfyUI after one browser
 "Allow" prompt, and then connects.
+
+When a workflow or graph builder starts using a new node type, run `node scripts/connect-nodes.mjs` and ship the list
+with the next Fuobe Connect release (`tests/fuobe-connect-nodes.test.ts` fails until then). People with an older Fuobe
+Connect get a refusal that asks them to update it.
 
 **Pairing mode.** Use pairing with Safari, phones, a blocked browser or a PC with no screen:
 
@@ -35,10 +50,13 @@ You do not need a start flag or a guard file. In the studio, **Connect your GPU*
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 
 The token acts only as that person's own computer. The ComfyUI gets that person's jobs, and nobody else's. The jobs
-run with no Fuobe tab open. When the owner pairs a ComfyUI, the studio's ComfyUI jobs move to the owner's computer, as
-before, unless they run on workers or hosted runs are on (`FUOBE_HOSTED_RUNS=1`). Then the pairing changes nothing of
-where they run: the paired ComfyUI takes the owner's jobs once the owner chooses the computer in Settings → ComfyUI.
-Every change of that setting is in the admin log (`settings.comfy_where`, with the value before and after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
+run with no Fuobe tab open. Fuobe Connect pairs only with a studio the person trusts (or `https://fuobe.com`), and
+checks every job as in direct mode before ComfyUI sees it. If the poll answer names the approving account, ComfyUI
+shows it. The person can pause jobs in ComfyUI. When the owner pairs a ComfyUI, the studio's ComfyUI jobs move to the
+owner's computer, as before, unless they run on workers or hosted runs are on (`FUOBE_HOSTED_RUNS=1`). Then the pairing
+changes nothing of where they run: the paired ComfyUI takes the owner's jobs once the owner chooses the computer in
+Settings → ComfyUI. Every change of that setting is in the admin log (`settings.comfy_where`, with the value before and
+after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
 or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected token gets 401 at its next call.
 
 ## Workers (the owner's shared GPUs)
@@ -790,7 +808,7 @@ routes.
   `tests/worker-input-rules.test.ts`, `tests/worker-environment.test.ts`, `tests/worker-guard.test.ts`,
   `tests/worker-runner.test.ts`, `tests/worker-recovery.test.ts`, `tests/worker-parts.test.ts`,
   `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`, `tests/cpu-slot.test.ts`,
-  `tests/worker-cpu-slot.test.ts`). The CPU slot tests run a CPU task while a GPU job runs, refuse a GLB that names
+  `tests/worker-cpu-slot.test.ts`, `tests/fuobe-connect-nodes.test.ts`). The CPU slot tests run a CPU task while a GPU job runs, refuse a GLB that names
   an outside file on the worker, bring a turntable back with its GLB, check that an account's picture reaches its
   ComfyUI with no EXIF, and drop a preview over 64 KB. The turn tests use a fake port table, fake GPU
   counters and a fake lock file. With only local ComfyUI work on the GPU, the worker writes `siteWaiting` and claims

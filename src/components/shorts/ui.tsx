@@ -100,17 +100,20 @@ export function ClipDrop({
   onFile,
   onLibrary,
   disabled,
+  gpuOnly,
 }: {
   accept: string;
   limits: string;
   onFile: (f: File) => void;
   onLibrary: (url: string, name?: string) => void;
   disabled?: boolean;
+  /** A tool no key runs (Restore & colourise): an account without a GPU is asked for one, even when it has a key. */
+  gpuOnly?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [lib, setLib] = useState(false);
-  const askFirst = useAskBeforeUpload();
+  const askFirst = useAskBeforeUpload({ gpuOnly });
   return (
     <div
       aria-disabled={disabled || undefined}
@@ -239,15 +242,13 @@ export function Steps({ steps, current, className }: { steps: string[]; current:
 }
 
 /**
- * "≈ $0.42", "Placeholder · free", "Free · your GPU". visitor: a guest or an account, whose GPU these tools don't run on yet
- * (the page says why): "Not available here", a demo's price too, since its button is off. A run on this studio's GPUs
- * (the estimate says so): the service's price and the place in line.
+ * "≈ $0.42", "Placeholder · free", "Free · your GPU". A visitor's price is never a demo (src/server/visitor.ts
+ * priceAs). A run on this studio's GPUs (the estimate says so): the service's price and the place in line.
  */
-export function costText(e: { costUsd: number | null; demo: boolean } | undefined, engine: "cloud" | "open", visitor?: boolean): string {
+export function costText(e: { costUsd: number | null; demo: boolean } | undefined, engine: "cloud" | "open"): string {
   if (!e) return "…";
   const pool = toolPoolPrice(e);
   if (pool) return pool.text;
-  if (visitor && (e.demo || engine === "open")) return "Not available here";
   if (e.demo) return "Placeholder · free";
   if (engine === "open") return "Free · your GPU";
   if (e.costUsd === null) return "Price unknown";

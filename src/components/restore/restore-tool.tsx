@@ -20,6 +20,7 @@ import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import type { OwnSetup } from "@/lib/own-setup";
 import { useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
 import { CLOUD_NOTE, GPU_NOTE, offlineRestorePrompt, RESTORE, RESTORE_UPSCALE, restoreNegative } from "@/lib/catalog/restore";
+import type { Engine } from "@/lib/catalog/types";
 import { THEN_UPSCALE } from "@/lib/catalog/upscale-first";
 import { chainState } from "@/lib/catalog/shorts";
 import { downloadHref, downloadName } from "@/lib/library";
@@ -48,11 +49,13 @@ interface Run {
 export function RestoreTool({ setup }: { setup?: OwnSetup | null } = {}) {
   // What the page read for "video-tools:restore" (ownSetupsNow): null once its graph is validated, when the label leaves.
   const item = setup === undefined ? "video-tools:restore" : setup;
-  const [engine] = useEngine();
-  // Guests and accounts: it runs on the visitor's own GPU or fal.ai key (own-setup.ts "video-tools:restore"). A guest
-  // signs up first, an account without either connects one; the words come from Fuobe's template (the studio's AI
-  // helper is the owner's).
+  // Guests and accounts: it runs on the visitor's own GPU (own-setup.ts "video-tools:restore"), so their page is the
+  // GPU's whatever the engine switch says: the cloud engine carries the gated Restore IC-LoRA, which never goes with a
+  // visitor's own key. A guest signs up first, an account without a GPU connects one; the words come from Fuobe's
+  // template (the studio's AI helper is the owner's).
   const visitor = useLikelyVisitor();
+  const [chosen] = useEngine();
+  const engine: Engine = visitor ? "open" : chosen;
   const press = useOwnSetupPress();
   const source = useSourceClip(RESTORE.maxBytes);
   const clip = source.clip;
@@ -174,6 +177,7 @@ export function RestoreTool({ setup }: { setup?: OwnSetup | null } = {}) {
           <ClipDrop
             accept={RESTORE.accept}
             limits={LIMITS}
+            gpuOnly
             onFile={(f) => {
               // A visitor without its own GPU or key sets one up first (its files are kept for runs there).
               if (!press(item)) return;
@@ -312,7 +316,7 @@ export function RestoreTool({ setup }: { setup?: OwnSetup | null } = {}) {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine, visitor)}
+                          {costText(est, engine)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (
