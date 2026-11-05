@@ -164,8 +164,9 @@ try {
       return t && /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(t) ? t : null;
     }, 15_000);
     check(`${tag}: …with a setup code`, !!code, code ?? "");
-    const chat = page.getByRole("button", { name: /Open in ChatGPT/ });
-    check(`${tag}: the hand-offs wait for the browser's question first`, await chat.isDisabled().catch(() => false));
+    const chatNow = page.getByRole("link", { name: /Open in ChatGPT/ });
+    check(`${tag}: the hand-offs are ready before Fuobe looks (no browser question first)`, !!(await until(() => chatNow.isVisible(), 10_000)));
+    const checklistTop = await page.getByRole("list", { name: "Setup steps" }).boundingBox();
     await page.screenshot({ path: path.join(shots, `${tag}-1-open.png`), fullPage: true });
     // Nothing changes while nobody acts: the tab reports a change once, then only its heartbeat (every 25 s at most).
     await sleep(2000);
@@ -177,9 +178,10 @@ try {
     ctx.map = { 8188: CLOSED };
     await page.getByRole("button", { name: "Let Fuobe look" }).click();
     const steps = page.getByRole("list", { name: "Setup steps" });
-    check(`${tag}: ComfyUI is running ticks, on port 8188`, !!(await until(() => steps.getByText("Port 8188").first().isVisible(), 20_000)));
+    check(`${tag}: ComfyUI is running ticks, on port 8188`, !!(await until(() => steps.getByText("port 8188").first().isVisible(), 20_000)));
     const open = page.getByRole("link", { name: /Open in ChatGPT/ });
-    check(`${tag}: the hand-offs unlock after the look`, !!(await until(() => open.isVisible(), 10_000)));
+    const checklistAfter = await page.getByRole("list", { name: "Setup steps" }).boundingBox();
+    check(`${tag}: the checklist stays put after the look`, !!checklistTop && !!checklistAfter && Math.abs(checklistTop.y - checklistAfter.y) < 4, `${checklistTop?.y} -> ${checklistAfter?.y}`);
     const href = (await open.getAttribute("href")) ?? "";
     const q = new URL(href).searchParams.get("q") ?? "";
     check(`${tag}: Open in ChatGPT carries the steps, the status and the code`, href.startsWith("https://chatgpt.com/?q=") && q.includes(`${SITE}/api/setup/guide/direct/`) && q.includes(`${SITE}/api/setup/${code}`) && href.length <= 2000);
@@ -187,7 +189,7 @@ try {
     check(`${tag}: Open in Claude too`, claudeHref.startsWith("https://claude.ai/new?q="));
     let st = await until(async () => {
       const s = await status(code);
-      return s.body.includes("[done] ComfyUI is running: Port 8188") ? s : null;
+      return /\[done\] ComfyUI is running: .*port 8188/.test(s.body) ? s : null;
     }, 20_000);
     check(`${tag}: the AI's status follows, as text`, !!st && st.status === 200 && st.body.includes("Next step: ComfyUI is running on port 8188, but it doesn't let Fuobe in yet"), st?.body.split("\n").slice(0, 6).join(" | "));
     check(`${tag}: …ASCII only, with the address to read next`, !!st && /^[\x0a\x20-\x7e]*$/.test(st.body) && st.body.includes("?r="));
@@ -195,7 +197,7 @@ try {
 
     // ComfyUI restarted with the setting, but no guard yet.
     ctx.map = { 8188: OPEN };
-    check(`${tag}: Fuobe is allowed in ticks`, !!(await until(() => steps.getByText("127.0.0.1:3651 only").isVisible(), 30_000)));
+    check(`${tag}: ComfyUI lets Fuobe in ticks`, !!(await until(() => steps.getByText("127.0.0.1:3651 only").isVisible(), 30_000)));
     st = await until(async () => {
       const s = await status(code, true);
       return s.body.next?.id === "add-guard" ? s : null;
@@ -206,7 +208,7 @@ try {
 
     // With the guard (and every model): connects by itself, then the first picture.
     ctx.map = { 8188: GUARDED };
-    check(`${tag}: the guard ticks, and it connects by itself`, !!(await until(() => steps.getByText("Other websites stay out").isVisible(), 30_000)));
+    check(`${tag}: the guard ticks, and it connects by itself`, !!(await until(() => steps.getByText("Fuobe's guard is on").isVisible(), 30_000)));
     const make = page.getByRole("button", { name: "Make your first picture" });
     check(`${tag}: a picture model is ready, and Make your first picture shows`, !!(await until(() => make.isVisible(), 60_000)));
     await page.screenshot({ path: path.join(shots, `${tag}-4-connected.png`), fullPage: true });
@@ -246,6 +248,36 @@ try {
     const gone = await status(code, true);
     check(`${tag}: End this code ends it`, gone.status === 404 && gone.body.state === "not_active");
     check(`${tag}: no setup request of the tab failed`, ctx.failed.length === 0, ctx.failed.slice(0, 5).join(", "));
+    await ctx.close();
+  }
+
+  // A ComfyUI on a port Fuobe doesn't wait for (8288) restarts with Fuobe's setting: it is found again by itself, and
+  // the status says it is restarting meanwhile, never to install ComfyUI.
+  {
+    const ctx = await context(browser, { viewport: { width: 1440, height: 1100 } });
+    const page = await ctx.newPage();
+    await page.goto(`${SITE}/connect`, { waitUntil: "load" });
+    await signUp(page);
+    await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
+    await page.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
+    const codeEl = page.locator("span[aria-label^='Setup code']");
+    const code = await until(async () => {
+      const t = (await codeEl.textContent())?.trim();
+      return t && /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(t) ? t : null;
+    }, 15_000);
+    ctx.map = { 8288: CLOSED };
+    await page.getByRole("button", { name: "Let Fuobe look" }).click();
+    const steps = page.getByRole("list", { name: "Setup steps" });
+    check("restart on 8288: found there first", !!(await until(() => steps.getByText("port 8288").first().isVisible(), 30_000)));
+    ctx.map = {};
+    const quiet = await until(async () => {
+      const s = await status(code, true);
+      return s.body.next?.id === "restarting" ? s : null;
+    }, 30_000);
+    check("restart on 8288: the status says it is restarting, not to install it", !!quiet, quiet ? "" : JSON.stringify((await status(code, true)).body.next));
+    ctx.map = { 8288: OPEN };
+    check("restart on 8288: found again by itself with Fuobe's setting", !!(await until(() => steps.getByText("127.0.0.1:3651 only").isVisible(), 40_000)));
+    await page.screenshot({ path: path.join(shots, "restart-8288.png"), fullPage: true });
     await ctx.close();
   }
 

@@ -7,7 +7,7 @@ import { COMFY_PORTS } from "@/lib/local-comfy";
 import { FIRST_MODEL_NAME } from "./first-picture";
 import type { AddressCause, InstallKind, SetupView } from "./facts";
 import { isConnected, isDone } from "./steps";
-import type { BrowserName, Way } from "./ways";
+import type { BrowserName, Os, Way } from "./ways";
 
 export interface NextStep {
   id: string;
@@ -57,10 +57,27 @@ const ADDRESS_SAY: Record<AddressCause, string> = {
   "no-answer":
     "Nothing answered at that address. Make sure that ComfyUI and cloudflared are both running, and that the port in the cloudflared command is ComfyUI's port. A new address can take up to a minute to work.",
   "not-comfy": "That address isn't a ComfyUI. Make sure that the port in the cloudflared command is ComfyUI's port.",
-  password: "Something in front of ComfyUI asks for a password. This way needs none. Start the tunnel straight to ComfyUI's port.",
+  password:
+    "Something in front of ComfyUI asks for a password or a token. Keep that protection. Ask the person to type the token in Access token, under the address in Fuobe, then press Connect again. Fuobe sends it as a Bearer token. If it is a sign-in page, Fuobe can't pass it: ask the person what they want to do. Don't ask for the token in this chat.",
   format: "Fuobe couldn't use that address. Ask the person what Fuobe says under the box.",
   unknown: "Fuobe couldn't use that address. Ask the person what Fuobe says under the box.",
 };
+
+/** ComfyUI runs on the processor: how to let it use the graphics card, by computer. */
+const CPU_HOW: Record<Os, string[]> = {
+  windows: [
+    "If nvidia-smi (guide Step 0) shows an NVIDIA card, ComfyUI's PyTorch can't use it. Portable or Easy-Install: start ComfyUI with run_nvidia_gpu.bat, not run_cpu.bat. Other installs: install the CUDA build of PyTorch, as ComfyUI's own page shows (https://github.com/comfyanonymous/ComfyUI, the part named Manual Install).",
+  ],
+  linux: [
+    "If nvidia-smi (guide Step 0) shows an NVIDIA card, ComfyUI's PyTorch can't use it. Install the CUDA build of PyTorch in ComfyUI's Python, as ComfyUI's own page shows (https://github.com/comfyanonymous/ComfyUI, the part named Manual Install).",
+  ],
+  mac: [
+    "On Apple silicon, ComfyUI uses the GPU through PyTorch's mps. Install a PyTorch with mps, as ComfyUI's own page shows (https://github.com/comfyanonymous/ComfyUI, the part named Apple Mac silicon). On an Intel Mac, ComfyUI can only use the processor.",
+  ],
+  other: ["If the computer has a graphics card, ComfyUI's PyTorch can't use it. Install the PyTorch build for that card, as ComfyUI's own page shows (https://github.com/comfyanonymous/ComfyUI)."],
+};
+
+const OWN_KEY = "With no usable graphics card, Fuobe also runs with the person's own fal.ai or Replicate key: {site}/settings, then Your keys.";
 
 const gb = (tenths: number) => `${(tenths / 10).toFixed(tenths >= 100 ? 0 : 1)} GB`;
 
@@ -90,7 +107,7 @@ export function nextOf(v: SetupView, now: number): NextStep {
       way === "address"
         ? [
             "Keep cloudflared running while runs go. Each time cloudflared starts again, it makes a new address: paste the new one in Fuobe.",
-            `When the person is done for the day, stop cloudflared (guide Step ${STOP_STEP}).`,
+            `Tell the person that closing the cloudflared window stops the address, and that anyone with the address can use ComfyUI while it runs. When they are done for the day, stop cloudflared (guide Step ${STOP_STEP}).`,
           ]
         : ["Keep a Fuobe tab open on this computer while runs go."];
     return say("done", "Done. Fuobe uses this GPU now. Nothing else to do.", keep);
@@ -107,7 +124,9 @@ export function nextOf(v: SetupView, now: number): NextStep {
       if (linked) return say("checking-link", "Fuobe is checking the saved address. Wait a few seconds, then check again.");
       return say(
         "start-tunnel",
-        "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3), then ask the person to paste the address into Fuobe and press Connect. Don't paste the address into this chat.",
+        v.phone
+          ? "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3). The address is then on the computer's clipboard, not the phone's: ask the person to open {site}/connect?setup=ai on that computer, sign in, paste the address under Your ComfyUI's web address and press Connect. Don't paste the address into this chat."
+          : "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3), then ask the person to paste the address into Fuobe and press Connect. Don't paste the address into this chat.",
         [],
         2,
       );
@@ -115,7 +134,12 @@ export function nextOf(v: SetupView, now: number): NextStep {
 
     if (t.browser === "unsupported") return say("use-address", "This browser can't reach ComfyUI from a website. Ask the person to choose A web address in Fuobe.");
     if (t.browser === "ask")
-      return say("allow-browser", "Fuobe needs the person's OK to look for ComfyUI on this computer. Ask them to press Let Fuobe look in Fuobe, then Allow when the browser asks.", [], 5);
+      return say(
+        "allow-browser",
+        "Fuobe hasn't looked for ComfyUI on this computer yet. If ComfyUI runs now, ask the person to press Let Fuobe look in Fuobe, and Allow if the browser asks. If ComfyUI isn't installed yet, start with guide Step 0, and ask for the press once it runs.",
+        [],
+        5,
+      );
     if (t.browser === "blocked")
       return say("unblock-browser", "The browser blocks Fuobe from reaching apps on this computer.", [BLOCKED_HOW[t.browserName ?? "other"], "Or the person switches to A web address in Fuobe."], 5);
     if (!t.comfy || t.comfy === "none")
@@ -126,7 +150,11 @@ export function nextOf(v: SetupView, now: number): NextStep {
         0,
       );
     if (t.comfy === "other") return say("wrong-app", `Another app answers on port ${t.port ?? 8188}, not ComfyUI. Find ComfyUI's port in its window or its settings.`, [], 1);
-    if (t.comfy === "waiting") return say("restarting", "ComfyUI is restarting. Wait a few seconds, then check again.");
+    if (t.comfy === "waiting")
+      return say(
+        "restarting",
+        `ComfyUI stopped answering on port ${t.port ?? 8188} a moment ago: it is restarting, or it was closed. Wait a few seconds, then check again. If it isn't back in a minute, ask the person to start it again.`,
+      );
     if (way === "connect") {
       if (t.guard !== "connect") return say("install-connect", "Fuobe Connect isn't in ComfyUI yet. Install it (guide Step 2), then restart ComfyUI.", [], 2);
       return say("connecting", "Fuobe sees ComfyUI and is connecting. Wait a few seconds, then check again.");
@@ -180,7 +208,21 @@ export function nextOf(v: SetupView, now: number): NextStep {
       ["The person can also press Copy download commands in Fuobe and run them."],
       MODEL_STEP[way],
     );
-  if (t.model === "none") return say("no-model-fits", "This GPU can't run the small picture models Fuobe starts with. Ask the person to open {site}/connect to see what runs on it.");
+  if (t.model === "none") {
+    if (t.cpu)
+      return say(
+        "cpu-only",
+        "ComfyUI runs on the processor, not on a graphics card, so no picture model fits. Make ComfyUI use the graphics card, restart it (ask the person first), then check again.",
+        [...(t.cpuFlag ? ["ComfyUI was started with --cpu. Start it again without --cpu."] : CPU_HOW[os]), OWN_KEY],
+        0,
+      );
+    if (t.modelWhy === "setup")
+      return say(
+        "model-setup",
+        "None of the small picture models Fuobe starts with is ready, and each needs more than one download on this ComfyUI, most often a newer ComfyUI. Update ComfyUI (ask the person first: it restarts), then check again.",
+      );
+    return say("no-model-fits", "This GPU has too little memory for the small picture models Fuobe starts with (the smallest, SDXL, needs 8 GB). Tell the person plainly.", [OWN_KEY], 0);
+  }
   if (t.model !== "ready") return say("checking-models", "ComfyUI is connected. Fuobe is checking which models it has. Wait a few seconds, then check again.");
   return say("make-picture", `ComfyUI is connected and has a picture model. Ask the person to press Make your first picture in Fuobe.${cpu}`);
 }

@@ -52,8 +52,8 @@ export type FirstModelState =
   | { state: "ready"; model: FirstModel }
   /** One download makes it ready: `gbTenths` its size in tenths of a GB. */
   | { state: "download"; model: FirstModel; gbTenths: number }
-  /** None of them can run on this GPU. */
-  | { state: "none" };
+  /** None of them can run here yet. `why`: the GPU is too small for each, or one needs more than a download (an update). */
+  | { state: "none"; why: "small" | "setup" };
 
 export function firstModelOf(badges: { connected: boolean; models: Record<string, Badge>; vramGb?: number } | undefined): FirstModelState {
   if (!badges?.connected || !Object.keys(badges.models).length) return { state: "checking" };
@@ -63,7 +63,7 @@ export function firstModelOf(badges: { connected: boolean; models: Record<string
   const order = modelOrder(badges.vramGb);
   const near = order.find((m) => badge(m)?.[0] === "a");
   if (near) return { state: "download", model: near, gbTenths: badge(near)![2] };
-  return { state: "none" };
+  return { state: "none", why: FIRST_PICTURE_MODELS.some((m) => badge(m)?.[0] === "s") ? "setup" : "small" };
 }
 
 /** The finish's frame: a portrait, when the model makes one. */

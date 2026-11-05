@@ -5,7 +5,7 @@ import { FUOBE_CONNECT_PUBLISHED } from "@/lib/fuobe-connect";
 import { siteOf } from "@/server/ai-setup";
 import { guideModels } from "@/server/ai-setup-guide";
 import { inMinutes, SETUP_HEADERS } from "@/server/ai-setup-http";
-import { visitorBudget } from "@/server/ai-setup-http";
+import { ownBudget } from "@/server/ai-setup-http";
 
 /**
  * The steps for the person's AI, for one way and one computer (docs/public-signup.md "Set it up with my AI"): plain
@@ -20,7 +20,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/setup/guide/
   if (!isWay(way) || !isOs(os) || (way === "connect" && !FUOBE_CONNECT_PUBLISHED)) return NOT_HERE();
   const site = siteOf(request.headers, request.url);
   if (!site) return NOT_HERE();
-  const r = visitorBudget("setup:guide", request.headers, 60, 600, 60_000);
+  const r = ownBudget("setup:guide", request.headers, 60, 60_000);
   if (!r.ok)
     return new Response(`Too many reads. Try again in ${inMinutes(r.retryAfterS)}.\n`, {
       status: 429,

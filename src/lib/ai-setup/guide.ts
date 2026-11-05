@@ -91,7 +91,7 @@ function rules(i: GuideInput): string {
       "2. This way needs no new ComfyUI setting. Do not add --enable-cors-header. Never use --listen.",
       "3. Do not open ports in a firewall or a router. Do not turn off antivirus, the firewall, SmartScreen or Gatekeeper.",
       "4. Do not run cloudflared login, and do not make a named tunnel. The quick tunnel below needs no account.",
-      "5. The web address works like a key. Anyone who has it can use this ComfyUI while the tunnel runs. Do not print it, keep it or post it anywhere. It goes only into Fuobe.",
+      "5. The web address works like a key. Anyone who has it can use all of this ComfyUI while the tunnel runs, including the installs of ComfyUI-Manager if it is there. Do not print it, keep it or post it anywhere. It goes only into Fuobe. Run the tunnel in a window the person can see, and only while they use Fuobe: they stop it when they are done (the last step).",
       "6. Do not install custom nodes. Do not change models or other settings, except the picture model the status asks for.",
       "7. Use the setup code only with the status address.",
       ...(shell ? ["", shell] : []),
@@ -114,6 +114,8 @@ function rules(i: GuideInput): string {
 }
 
 const curl = (os: Os) => (os === "windows" ? "curl.exe" : "curl");
+/** The quick tunnel on a Mac or Linux, with its log in the folder only this user reads. */
+const TUNNEL = "cloudflared tunnel --url http://127.0.0.1:8188 --logfile ~/.fuobe/tunnel.log";
 const sep = (os: Os) => (os === "windows" ? "\\" : "/");
 
 function stepZero(i: GuideInput): string {
@@ -148,7 +150,7 @@ function stepZero(i: GuideInput): string {
   );
 }
 
-function findComfy(i: GuideInput, portOnly: boolean): string {
+function findComfy(i: GuideInput): string {
   const c = curl(i.os);
   const ask = lines(
     "1. Ask ComfyUI for its facts:",
@@ -157,7 +159,6 @@ function findComfy(i: GuideInput, portOnly: boolean): string {
       ? ["2. If nothing answers, ask the person to start ComfyUI and to read its port in its window."]
       : ["2. If nothing answers, try the port of ComfyUI Desktop:", `   ${c} -s http://127.0.0.1:8000/system_stats`, '3. If neither answers, ask the person to start ComfyUI and to read the port in its window ("To see the GUI go to: http://127.0.0.1:PORT").']),
   );
-  if (portOnly) return lines(`## Step 1: Find ComfyUI's port`, "", ask, "Below, put that port in place of 8188.");
   const where =
     i.os === "windows"
       ? lines(
@@ -195,13 +196,21 @@ function findComfy(i: GuideInput, portOnly: boolean): string {
             "   tr '\\0' ' ' < /proc/PID/cmdline; echo",
             "   readlink /proc/PID/cwd",
             "   If the command has --base-directory <folder>, that folder holds custom_nodes and models. If not, custom_nodes and models are next to main.py.",
-            "4. If ComfyUI runs as a service or in Docker, the setting goes into the start command of that service or container. Ask the person before you change a service or a container.",
+            i.way !== "address" &&
+              "4. If ComfyUI runs as a service or in Docker, the setting goes into the start command of that service or container. Ask the person before you change a service or a container.",
             "",
             "Common places for custom_nodes:",
             "- A git install: ~/ComfyUI/custom_nodes",
             "- Stability Matrix: ComfyUI's three-dot menu, then Open folder, then custom_nodes",
           );
-  return lines("## Step 1: Find ComfyUI", "", ask, where);
+  const manager =
+    i.way === "address" &&
+    lines(
+      "",
+      "Below, put that port in place of 8188. The models folder is next to custom_nodes (Step 5 needs it).",
+      "If custom_nodes holds a folder named ComfyUI-Manager (or comfyui-manager), tell the person before Step 3: anyone who has the web address can install add-ons with ComfyUI-Manager while the tunnel runs. In Chrome, Edge or Firefox on this computer, Fuobe needs no web address (the way This browser in Fuobe).",
+    );
+  return lines("## Step 1: Find ComfyUI", "", ask, where, manager);
 }
 
 function guardStep(i: GuideInput): string {
@@ -392,39 +401,47 @@ function addressSteps(i: GuideInput): string {
       : lines(
           "## Step 3: Start the web address",
           "",
-          "1. Remove an old log, so that the address you read is the new one:",
-          "   rm -f /tmp/fuobe-tunnel.log",
-          "2. Start the tunnel in the background, with its log in a file:",
-          "   nohup cloudflared tunnel --url http://127.0.0.1:8188 --logfile /tmp/fuobe-tunnel.log >/dev/null 2>&1 &",
+          "1. Make a folder that only this user can read, for the tunnel's log, and remove an old log, so that the address you read is the new one:",
+          "   mkdir -p -m 700 ~/.fuobe && rm -f ~/.fuobe/tunnel.log",
+          ...(os === "mac"
+            ? [
+                "2. Start the tunnel in a Terminal window of its own, so the person sees it run. macOS can ask the person to let your app control Terminal: they press OK.",
+                `   osascript -e 'tell application "Terminal" to do script "${TUNNEL}"'`,
+                `   If that doesn't work, ask the person to open a new Terminal window and to run this in it: ${TUNNEL}`,
+              ]
+            : [
+                "2. Ask the person to open a new terminal window and to run this in it, so they see the tunnel run. On GNOME, gnome-terminal -- <the command> opens that window for them:",
+                `   ${TUNNEL}`,
+              ]),
           "3. Wait about 10 seconds. Then put the address on the clipboard without showing it:",
           os === "mac"
-            ? "   grep -o 'https://[-a-z0-9]*\\.trycloudflare\\.com' /tmp/fuobe-tunnel.log | tail -1 | pbcopy"
-            : "   grep -o 'https://[-a-z0-9]*\\.trycloudflare\\.com' /tmp/fuobe-tunnel.log | tail -1 | xclip -selection clipboard",
-          os === "linux" ? "   On Wayland, use wl-copy in place of xclip -selection clipboard. If neither is there, ask the person to open /tmp/fuobe-tunnel.log and copy the address that ends in trycloudflare.com." : false,
+            ? "   grep -o 'https://[-a-z0-9]*\\.trycloudflare\\.com' ~/.fuobe/tunnel.log | tail -1 | pbcopy"
+            : "   grep -o 'https://[-a-z0-9]*\\.trycloudflare\\.com' ~/.fuobe/tunnel.log | tail -1 | xclip -selection clipboard",
+          os === "linux" ? "   On Wayland, use wl-copy in place of xclip -selection clipboard. If neither is there, ask the person to copy the address that ends in trycloudflare.com from the tunnel's window." : false,
           "   If the clipboard stays empty, wait 10 seconds more and run it again.",
-          "4. Do not print, read out or keep the address. cloudflared runs until the computer restarts or you stop it (the last step).",
+          "4. Do not print, read out or keep the address. Tell the person to keep the tunnel's window open while Fuobe runs. Closing it stops the address.",
         );
   const give = lines(
     "## Step 4: Give the address to Fuobe",
     "",
-    "1. Ask the person to paste the address (it is on the clipboard) into Your ComfyUI's web address in Fuobe, then press Connect. Fuobe tests it. In a chat, do not ask the person to paste it into the chat.",
+    `1. Ask the person to paste the address (it is on this computer's clipboard) into Your ComfyUI's web address in Fuobe, then press Connect. Fuobe tests it. If Fuobe is open only on a phone, the person opens ${i.site}/connect?setup=ai on this computer, signs in, and pastes it there. In a chat, do not ask the person to paste it into the chat.`,
     "2. Read the status. When the web address works and Fuobe is connected, go on.",
   );
   const stop = lines(
     `## Step ${STOP_STEP}: When the person is done`,
     "",
-    "Runs reach ComfyUI only while cloudflared runs. To stop this tunnel (and no other cloudflared the person runs), in the same folder as Step 3:",
-    os === "windows" ? "   Stop-Process -Id (Get-Content fuobe-tunnel.pid)" : "   pkill -f fuobe-tunnel.log",
+    "Runs reach ComfyUI only while cloudflared runs, and so does anyone else who has the address. When the person is done, they close the tunnel's window. Or stop this tunnel (and no other cloudflared the person runs)" + (os === "windows" ? ", in the same folder as Step 3:" : ":"),
+    os === "windows" ? "   Stop-Process -Id (Get-Content fuobe-tunnel.pid)" : "   pkill -f .fuobe/tunnel.log",
     "The next time cloudflared starts, it makes a new address. The person pastes the new one in Fuobe.",
   );
-  return lines(stepZero(i), "", findComfy(i, true), "", install, "", start, "", give, "", modelStep(i), "", stop);
+  return lines(stepZero(i), "", findComfy(i), "", install, "", start, "", give, "", modelStep(i), "", stop);
 }
 
 function connectSteps(i: GuideInput): string {
   return lines(
     stepZero(i),
     "",
-    findComfy(i, false),
+    findComfy(i),
     "",
     "## Step 2: Install Fuobe Connect",
     "",
@@ -463,7 +480,7 @@ export function guideText(i: GuideInput, code?: string): string {
       ? addressSteps(i)
       : i.way === "connect"
         ? connectSteps(i)
-        : lines(stepZero(i), "", findComfy(i, false), "", guardStep(i), "", settingStep(i), "", checkStep(i), "", finishDirect(i), "", modelStep(i));
+        : lines(stepZero(i), "", findComfy(i), "", guardStep(i), "", settingStep(i), "", checkStep(i), "", finishDirect(i), "", modelStep(i));
   return lines(top, "", body, "", "If you are stuck, read the next step in the status and do it.") + "\n";
 }
 

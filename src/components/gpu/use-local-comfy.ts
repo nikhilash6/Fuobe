@@ -12,9 +12,10 @@ import { useComputerSupport } from "./open-connect";
  * other ports ComfyUI uses. It tells a ComfyUI it can read from one that answers without letting this page in. While
  * the card is open and the tab is in view, it looks again quietly: every 2 s at the port shown while it waits for
  * ComfyUI to let Fuobe in (a ping that leaves no line in the console, and a full look every 10 s or when the port comes
- * back), every 3 s at that port and 8188 while ComfyUI restarts (every port every 30 s), and every 5 s at 8188 and the
- * remembered port while nothing answers. Each look pings first, so a port where nothing answers costs one line in the
- * console. It never looks on its own while the browser would still ask (Chrome's advice): the person's click does the
+ * back), every 3 s at that port and 8188 while ComfyUI restarts (every port every 30 s), and every 5 s at 8188, the
+ * remembered port and any port where ComfyUI answered in the last few minutes while nothing answers (every port every
+ * 30 s: a ComfyUI that restarted on a port Fuobe doesn't wait for, or one just installed, is found again). Each look
+ * pings first, so a port where nothing answers costs one line in the console. It never looks on its own while the browser would still ask (Chrome's advice): the person's click does the
  * first look. `auto: false`: not even when the browser lets Fuobe in already (a card that only shows the choice must
  * never connect by itself).
  */
@@ -30,6 +31,8 @@ const REREAD_MS = 10_000;
 const RESCAN_MS = 30_000;
 /** A note about a port the person picked ("Nothing answers on port 8189 right now") stays this long. */
 const NOTE_MS = 30_000;
+/** A port where ComfyUI answered this recently is looked at again with the usual ones while nothing answers. */
+const RECENT_MS = 5 * 60_000;
 
 async function timed(url: string, init: RequestInit, ms: number): Promise<Response> {
   const ctrl = new AbortController();
@@ -111,7 +114,7 @@ export function useLocalComfy(active: boolean, o: { auto?: boolean } = {}) {
   /** Bumped by every look the person asks for: a look that ends after a newer one started never overrides it. */
   const gen = useRef(0);
   /** Each port's last answer, and when it was last read in full (quiet looks ping in between). */
-  const seen = useRef(new Map<number, { state: PortLook["state"]; read: number }>());
+  const seen = useRef(new Map<number, { state: PortLook["state"]; read: number; answered?: number }>());
   /** When every port was last looked at (or the wait for a restarting ComfyUI began). */
   const lastFull = useRef(0);
 
@@ -132,10 +135,11 @@ export function useLocalComfy(active: boolean, o: { auto?: boolean } = {}) {
   /**
    * Look, then say what was found: every port in order (stopping early at a readable ComfyUI), or the ones given.
    * `quiet`: keep the screen as it is meanwhile, and look only where it matters now. `chosen`: the person picked that
-   * port from the others.
+   * port from the others. `wide`: a quiet look at every port while nothing answers or ComfyUI restarts (something
+   * changed on this computer: the person's AI asked).
    */
   const look = useCallback(
-    async (o: { ports?: { port: number; host?: string }[]; quiet?: boolean; chosen?: number } = {}) => {
+    async (o: { ports?: { port: number; host?: string }[]; quiet?: boolean; chosen?: number; wide?: boolean } = {}) => {
       if (support !== "ok" || (o.quiet && running.current)) return;
       const g = o.quiet ? gen.current : ++gen.current;
       running.current++;
@@ -146,16 +150,18 @@ export function useLocalComfy(active: boolean, o: { auto?: boolean } = {}) {
         const remembered = rememberedComfy();
         const hostOf = (port: number) => (port === remembered?.port ? remembered.host : "127.0.0.1");
         const was = cur.current;
-        // Quietly: the port shown (and ComfyUI's usual one while only a weak port is shown); 8188 and the remembered
-        // port while nothing answers; the port waited for and 8188 while ComfyUI restarts, and every port now and then
-        // (it may come back elsewhere).
+        // Quietly: the port shown (and ComfyUI's usual one while only a weak port is shown); 8188, the remembered port
+        // and the ports where ComfyUI answered lately while nothing answers; the port waited for and those while ComfyUI
+        // restarts. Every port now and then, or when asked (it may come back elsewhere, or be new).
+        const recent = [...seen.current].filter(([, v]) => v.answered && Date.now() - v.answered < RECENT_MS).map(([port]) => port);
+        const rescan = !!o.wide || Date.now() - lastFull.current >= RESCAN_MS;
         const quietPorts =
           was.s === "needs-setting"
             ? [...new Set([was.port, ...(was.weak && !was.chosen ? firstPorts(remembered?.port) : [])])]
-            : was.s === "none"
-              ? firstPorts(remembered?.port)
-              : was.s === "waiting" && Date.now() - lastFull.current < RESCAN_MS
-                ? [...new Set([was.port, ...firstPorts(remembered?.port)])]
+            : was.s === "none" && !rescan
+              ? [...new Set([...firstPorts(remembered?.port), ...recent])]
+              : was.s === "waiting" && !rescan
+                ? [...new Set([was.port, ...firstPorts(remembered?.port), ...recent])]
                 : null;
         if (!o.ports && !(o.quiet && quietPorts)) lastFull.current = Date.now();
         const ports = o.ports ?? (o.quiet && quietPorts ? quietPorts.map((port) => ({ port, host: hostOf(port) })) : null);
@@ -171,7 +177,8 @@ export function useLocalComfy(active: boolean, o: { auto?: boolean } = {}) {
         for (const l of looks) {
           const last = seen.current.get(l.port);
           const pinged = !!o.quiet && last?.state === "unreadable" && l.state === "unreadable" && now - last.read < REREAD_MS;
-          seen.current.set(l.port, { state: l.state, read: pinged ? last.read : now });
+          const answered = l.state === "found" || l.state === "unreadable" ? now : last?.answered;
+          seen.current.set(l.port, { state: l.state, read: pinged ? last.read : now, ...(answered && { answered }) });
         }
         // The person asked for a newer look meanwhile: that one decides.
         if (g !== gen.current) return;

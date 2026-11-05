@@ -494,7 +494,8 @@ step as the account's open tab sees it. It ends with a first picture made on the
 - **The tab.** The account's open tab reports what it sees
   (`POST /api/setup/session/<code>/report`, fixed values and whole numbers only, unknown keys answer
   400) and waits for its AI's reads (`GET /api/setup/session/<code>/wait`, 25 seconds at most). One
-  tab leads a setup at a time. Another account's code answers 404.
+  tab leads a setup at a time: the tab opened last, or a tab in view once the leading one closes, hides
+  or goes quiet. Another account's code answers 404.
 - **The status.** Anyone with the code can read `GET /api/setup/<code>` without signing in: the
   steps, the port and the kind of install, and the next step, in fixed words (plain text, or JSON
   with `?format=json`). It never holds the email, a run, a key, an address, a token, a file name or
@@ -505,10 +506,15 @@ step as the account's open tab sees it. It ends with a first picture made on the
   network), `GET /api/setup/files/fuobe_guard.py` and `GET /api/setup/files/start/<port>` (the
   Windows start file) are open to everyone. The steps tell the AI to show each command and wait for
   a yes, to use exactly `--enable-cors-header <the studio's address>`, never `--listen`, and to
-  check Fuobe's files by their SHA-256.
+  check Fuobe's files by their SHA-256. For a web address, they run the tunnel in a window the
+  person sees, keep its log where only that user can read it, warn when ComfyUI-Manager is
+  installed (anyone with the address can use it), and stop the tunnel when the person is done. When
+  the address asks for a password or a token, they keep it and put it in Fuobe's Access token.
 - **Limits.** 6 new codes a minute and 20 an hour per account. 30 status reads a minute per code.
   Unknown codes: 10 per 10 minutes per visitor (behind a trusted proxy, `FUOBE_TRUST_PROXY=1`) and
-  600 per 10 minutes for everyone together. All answer 429 with `Retry-After`.
+  600 per 10 minutes for everyone together. The steps and Fuobe's files: 60 a minute per visitor
+  (behind a trusted proxy), and no budget shared by everyone, so no visitor can use up another
+  person's. All answer 429 with `Retry-After`.
 
 The code is `src/server/ai-setup.ts`, `src/lib/ai-setup/`, `src/components/gpu/ai-setup/` and
 `src/app/api/setup/`.

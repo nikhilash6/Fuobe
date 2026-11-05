@@ -62,12 +62,32 @@ describe("the guide", () => {
       // The address is never printed or tested from the agent: it goes to the clipboard.
       expect(g.text).toMatch(/Set-Clipboard|pbcopy|xclip/);
       expect(g.text).not.toMatch(/<address>\/system_stats/);
-      expect(g.text).toMatch(/Stop-Process -Id \(Get-Content fuobe-tunnel\.pid\)|pkill -f fuobe-tunnel\.log/);
+      expect(g.text).toMatch(/Stop-Process -Id \(Get-Content fuobe-tunnel\.pid\)|pkill -f \.fuobe\/tunnel\.log/);
       // Only this tunnel: never every cloudflared the person runs.
       expect(g.text).not.toMatch(/Stop-Process -Name cloudflared|pkill -f "cloudflared tunnel --url"/);
       // An old log can't give a dead address.
-      expect(g.text).toMatch(/Remove-Item fuobe-tunnel\.log|rm -f \/tmp\/fuobe-tunnel\.log/);
+      expect(g.text).toMatch(/Remove-Item fuobe-tunnel\.log|rm -f ~\/\.fuobe\/tunnel\.log/);
     }
+  });
+
+  it("keeps a web address visible, private and short-lived, and warns about ComfyUI-Manager", () => {
+    for (const g of guides.filter((g) => g.way === "address" && g.os !== "other")) {
+      // Never a tunnel hidden in the background, nor a log other users of the computer can read.
+      expect(g.text).not.toMatch(/nohup|\/tmp\//);
+      expect(g.text).toContain("ComfyUI-Manager");
+      expect(g.text).toContain("Closing it stops the address.");
+      expect(g.text).toMatch(/they close the tunnel's window/);
+      if (g.os !== "windows") expect(g.text).toContain("mkdir -p -m 700 ~/.fuobe");
+      // The models folder the model step names is found first.
+      expect(g.text).toContain("Common places for custom_nodes:");
+      expect(g.text).toContain("The models folder is next to custom_nodes");
+      // The address goes into Fuobe on the computer, even when Fuobe was opened on a phone.
+      expect(g.text).toContain(`${SITE}/connect?setup=ai on this computer`);
+    }
+    const mac = guides.find((x) => x.way === "address" && x.os === "mac")!.text;
+    expect(mac).toContain(`osascript -e 'tell application "Terminal" to do script "cloudflared tunnel --url http://127.0.0.1:8188 --logfile ~/.fuobe/tunnel.log"'`);
+    const win = guides.find((x) => x.way === "address" && x.os === "windows")!.text;
+    expect(win).toContain("Get-NetTCPConnection -LocalPort 8188 -State Listen");
   });
 
   it("Windows commands have no $ and no braces, so they also run through powershell.exe -Command", () => {

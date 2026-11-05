@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BotMessageSquare, Check, ChevronDown, ChevronLeft, ClipboardPaste, Copy, Ellipsis, Loader2, RefreshCw, Search, Send, Terminal } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { isLocalAddress } from "@/components/gpu/comfy-finder";
@@ -18,6 +19,7 @@ import { addressCauseOf, type AddressCause, type TabFacts } from "@/lib/ai-setup
 import { FIRST_MODEL_NAME, firstModelOf, type FirstModel } from "@/lib/ai-setup/first-picture";
 import { agentLine, AGENTS, AI_TARGETS, chatLink, fullInstructions, isAgent, prefillText, type Agent, type AiTarget } from "@/lib/ai-setup/handoff";
 import { nextOf } from "@/lib/ai-setup/next-step";
+import { personWords } from "@/lib/ai-setup/person-words";
 import { isConnected, isDone, stepsOf } from "@/lib/ai-setup/steps";
 import { BROWSER_LABEL, browserOf, OS_NAME, pickWay, WAY_LABEL, waysFor, type Os, type Way } from "@/lib/ai-setup/ways";
 import { useStatus } from "@/lib/api";
@@ -56,6 +58,8 @@ type GpuView = { gpu: { mode: "computer" } | { mode?: "link"; url: string } | nu
 const AGENT_KEY = "fuobe.ai-setup.agent";
 const STUCK_MS = 240_000;
 const GUARD_WAIT_MS = 60_000;
+/** ComfyUI stopped answering this recently: it is restarting (or was closed), not missing. */
+const GONE_MS = 90_000;
 
 function readAgent(): Agent {
   try {
@@ -149,9 +153,28 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
   const model = firstModelOf(badges ? { ...badges, vramGb: badges.vramGb ?? probe.vramGb } : undefined);
   const picture = useFirstPicture();
 
+  const now = useNow(5000);
   const browserState: TabFacts["browser"] =
     way !== "direct" ? "unknown" : support !== "ok" ? "unsupported" : probe.state.s === "blocked" ? "blocked" : probe.perm === "granted" ? "granted" : probe.state.s === "start" ? "ask" : "unknown";
-  const comfy = probe.state.s === "found" ? "found" : probe.state.s === "needs-setting" ? "unreadable" : probe.state.s === "waiting" ? "waiting" : probe.state.s === "none" ? "none" : undefined;
+  // Where ComfyUI last answered, and when it stopped: a ComfyUI that went quiet a moment ago is restarting (Fuobe's
+  // start file, the AI), so the setup says so and doesn't ask to install it.
+  const s0 = probe.state;
+  const answering = s0.s === "found" || s0.s === "needs-setting" || s0.s === "waiting" ? s0.port : s0.s === "looking" ? undefined : null;
+  const [lastComfy, setLastComfy] = useState<{ port: number | null; gone: { port: number; at: number } | null }>({ port: null, gone: null });
+  if (answering !== undefined && answering !== lastComfy.port)
+    setLastComfy({ port: answering, gone: answering === null ? (lastComfy.port !== null ? { port: lastComfy.port, at: now } : lastComfy.gone) : null });
+  const goneAt = s0.s === "none" && lastComfy.gone && now - lastComfy.gone.at < GONE_MS ? lastComfy.gone.port : null;
+  const comfy = goneAt
+    ? "waiting"
+    : probe.state.s === "found"
+      ? "found"
+      : probe.state.s === "needs-setting"
+        ? "unreadable"
+        : probe.state.s === "waiting"
+          ? "waiting"
+          : probe.state.s === "none"
+            ? "none"
+            : undefined;
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     const on = () => setVisible(document.visibilityState === "visible");
@@ -167,7 +190,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
     browserName: browser,
     ...(way !== "address" && {
       ...(comfy && { comfy }),
-      ...(probe.port && { port: probe.port }),
+      ...((goneAt ?? probe.port) && { port: goneAt ?? probe.port }),
       ...(probe.install && { install: probe.install }),
       ...(probe.cors && { cors: probe.cors }),
       ...(found && { listen: probe.listen }),
@@ -176,9 +199,11 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
       ...(skipGuard && { guardSkipped: true }),
       ...((connectedHere || (saved === "computer" && online && found)) && { connected: true }),
       ...(probe.cpu && { cpu: true }),
+      ...(probe.cpu && probe.cpuFlag && { cpuFlag: true }),
     }),
     ...(way === "address" && { address: address.state === "none" && saved === "link" ? "ok" : address.state, ...(address.cause && { addressCause: address.cause }) }),
     model: model.state === "checking" ? "checking" : model.state,
+    ...(model.state === "none" && { modelWhy: model.why }),
     ...(model.state !== "checking" && model.state !== "none" && { modelId: model.model }),
     ...(model.state === "download" && { modelGbTenths: model.gbTenths }),
     picture: picture.state,
@@ -187,23 +212,38 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
     ...(fromRun && { fromRun: true }),
   };
   const server = { gpu: saved, online: saved === "none" ? false : status.data ? online : null } as const;
-  const now = useNow(5000);
   const viewNow = { site: typeof window === "undefined" ? "" : window.location.origin, way, os: os ?? "other", phone, tab: { ...facts, tabId: "this-tab-0" }, tabAt: now, server };
   const steps = stepsOf(viewNow);
   const connected = isConnected(viewNow);
   const done = isDone(viewNow);
 
-  const session = useSetupSession({ way, os: os ?? "other", phone, facts, onPoke: probe.poke });
+  // The AI read the status: a fresh look, and while a model is missing, a fresh check of what ComfyUI has.
+  const afterPoke = useRef<() => void>(() => {});
+  const session = useSetupSession({
+    way,
+    os: os ?? "other",
+    phone,
+    facts,
+    onPoke: () => {
+      probe.poke();
+      afterPoke.current();
+    },
+  });
   const site = session.site ?? (typeof window === "undefined" ? "" : window.location.origin);
 
-  // Connected: what this ComfyUI has (once), and again every 45 s while it needs a model download.
+  // Connected: what this ComfyUI has (once), and again every 45 s while it needs a model download or none fits (its AI
+  // may download one, update ComfyUI, or move it onto the graphics card).
   const checkedFor = useRef<string | null>(null);
   // Only stable values here: a new recheck on every render would start the 45 s timer over each time.
   const startCheck = check.start;
+  const refreshProbe = probe.refresh;
   const recheck = useCallback(async () => {
     if (way === "address") await startCheck();
-    else if (probe.port && probe.host) await checkHere(qc, probe.port, probe.host).catch(() => {});
-  }, [way, startCheck, probe.port, probe.host, qc]);
+    else if (probe.port && probe.host) {
+      await refreshProbe().catch(() => false);
+      await checkHere(qc, probe.port, probe.host).catch(() => {});
+    }
+  }, [way, startCheck, refreshProbe, probe.port, probe.host, qc]);
   useEffect(() => {
     if (!connected) return;
     const key = `${way}:${saved}`;
@@ -212,10 +252,18 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
       const t = setTimeout(() => void recheck(), 2500);
       return () => clearTimeout(t);
     }
-    if (model.state !== "download") return;
+    if (model.state !== "download" && model.state !== "none") return;
     const id = setInterval(() => document.visibilityState === "visible" && void recheck(), 45_000);
     return () => clearInterval(id);
   }, [connected, model.state, way, saved, recheck, check.running]);
+  const pokeCheckAt = useRef(0);
+  useEffect(() => {
+    afterPoke.current = () => {
+      if (!connected || (model.state !== "download" && model.state !== "none") || check.running || Date.now() - pokeCheckAt.current < 15_000) return;
+      pokeCheckAt.current = Date.now();
+      void recheck();
+    };
+  });
 
   // Opened by a refused run: once connected, that run starts (it is the first picture).
   useEffect(() => {
@@ -247,8 +295,6 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
   if (guardWait.on !== waitsForGuard) setGuardWait({ on: waitsForGuard, at: now });
   const allowedAt = guardWait.on ? guardWait.at : null;
 
-  // The browser's one question comes first (Chrome closes it when its tab loses focus): the hand-offs wait for it.
-  const handoffsLocked = way === "direct" && support === "ok" && probe.state.s === "start" && !(saved === "computer" && online);
   const finished = picture.state === "ok";
   const gpuName = probe.stats?.devices?.[0]?.name ? deviceLabel(probe.stats.devices[0].name) : viewerGpu?.device ? deviceLabel(viewerGpu.device) : undefined;
 
@@ -259,11 +305,18 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
     if (s === "start")
       extras.comfyui = (
         <>
+          <p className="text-[12px] text-muted-foreground">Is ComfyUI running? Let Fuobe look for it. If you don&apos;t have ComfyUI yet, your AI installs it first.</p>
           <Button className="h-11 sm:h-9" onClick={() => void probe.look()}>
             <Search /> Let Fuobe look
           </Button>
           {probe.perm !== "granted" && <AllowNote />}
         </>
+      );
+    else if (goneAt)
+      extras.comfyui = (
+        <p className="flex items-center gap-2 text-[12px] text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" /> ComfyUI stopped answering on port {goneAt}. Waiting for it to start again…
+        </p>
       );
     else if (s === "looking") extras.comfyui = <p className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin" /> Looking for ComfyUI on this computer…</p>;
     else if (s === "blocked")
@@ -305,17 +358,32 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
     if (auto.error) extras.guard = <p className="text-[12px] text-destructive">{auto.error}</p>;
   }
   if (way === "address" && !(saved === "link" && online && address.state !== "failed"))
-    extras.address = <AddressForm saved={saved === "link"} state={address} onState={setAddress} onConnected={() => void check.start()} />;
+    extras.address = <AddressForm saved={saved === "link"} state={address} onState={setAddress} onConnected={() => void check.start()} phone={phone} site={site} />;
   if (connected && !fromRun) {
     if (model.state === "download") extras.model = <ModelDownload model={model.model} gbTenths={model.gbTenths} os={os ?? "other"} onCheck={() => void recheck()} checking={check.running} />;
     else if (model.state === "none")
       extras.model = (
-        <p className="text-[12px] text-muted-foreground">
-          None of the small picture models fits this GPU.{" "}
-          <a href="/connect" className="text-brand-text underline-offset-4 hover:underline">
-            See what runs on it
-          </a>
-        </p>
+        <div className="space-y-1.5">
+          <p className="text-[12px] text-muted-foreground">
+            {probe.cpu
+              ? "ComfyUI runs on your computer's processor, not on its graphics card, so no picture model fits. Your AI can make ComfyUI use the graphics card."
+              : model.why === "setup"
+                ? "These picture models need more than a download on your ComfyUI, most often an update. Your AI can update it."
+                : "Your GPU has too little memory for the small picture models (the smallest needs 8 GB)."}
+            {model.why === "small" && (
+              <>
+                {" "}
+                Or use your own fal.ai or Replicate key.{" "}
+                <Link href="/settings#your-keys" className="text-brand-text underline-offset-4 hover:underline">
+                  Your keys
+                </Link>
+              </>
+            )}
+          </p>
+          <Button size="sm" variant="ghost" onClick={() => void recheck()} disabled={check.running}>
+            {check.running ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check again
+          </Button>
+        </div>
       );
     if (model.state === "ready" && picture.state !== "running" && picture.state !== "ok")
       extras.picture = (
@@ -337,7 +405,9 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
   if (fromRun && connected) extras.picture = <p className="text-[12px] text-muted-foreground">Your run starts in a moment.</p>;
 
   const handoff = os && session.code ? { way, os, site, code: session.code, browser, phone } : null;
-  const lead = phone ? "ComfyUI runs on your computer, so the steps run there." : "Your AI does the steps, after you say yes to each one. Fuobe checks every step here.";
+  const lead = phone
+    ? "ComfyUI is the free app that runs AI models on your computer's graphics card. It runs on your computer, so the steps run there."
+    : "ComfyUI is the free app that runs AI models on your own graphics card. Your AI sets it up with you and asks before each step. Fuobe checks each step here.";
 
   return (
     <div className="w-full min-w-0 space-y-4 sm:max-w-[36rem]">
@@ -349,6 +419,13 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
           Set it up with your AI
         </h2>
         <p className="text-[13px] text-muted-foreground">{lead}</p>
+        <p className="text-[12px] text-muted-foreground">
+          You need an NVIDIA graphics card with 8 GB or more, or a Mac with Apple silicon and 16 GB. No such computer? Use your own fal.ai or Replicate key in{" "}
+          <Link href="/settings#your-keys" className="text-brand-text underline-offset-4 hover:underline">
+            Your keys
+          </Link>
+          .
+        </p>
       </div>
 
       {/* What Fuobe picked for this browser, and the way to change it. */}
@@ -400,19 +477,18 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
 
       {!session.mine && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2.5 text-[13px]">
-          <span>This setup goes on in another tab or device.</span>
+          <span className="min-w-0 flex-1">This setup is open in another tab or on another device. Your AI sees the checks from there. To use this tab, press Continue here.</span>
           <Button size="sm" variant="secondary" onClick={session.takeOver}>
             Continue here
           </Button>
         </div>
       )}
 
-      {!finished && !handoffsLocked && (
+      {!finished && (
         <HandOffs
           input={handoff}
           waiting={!session.code && !session.failed && !session.ended}
           needOs={!os}
-          locked={handoffsLocked}
           phone={phone}
           failed={session.failed}
           onRetry={session.retry}
@@ -425,7 +501,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
         />
       )}
 
-      {/* The checklist, or the finish in its place (the box keeps its height). Before the browser's question, the hand-offs come after it. */}
+      {/* The checklist, or the finish in its place (the box keeps its height). */}
       <section aria-label="Fuobe checks as your AI works" className="min-h-[18rem] rounded-2xl bg-brand-faint/50 p-4">
         {finished ? (
           <FinishCard picture={picture} gpu={gpuName} cpu={probe.cpu} onClose={onBack} />
@@ -451,23 +527,6 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
           </>
         )}
       </section>
-      {!finished && handoffsLocked && (
-        <HandOffs
-          input={handoff}
-          waiting={!session.code && !session.failed && !session.ended}
-          needOs={!os}
-          locked
-          phone={phone}
-          failed={session.failed}
-          onRetry={session.retry}
-          guideUrl={way && os ? `/api/setup/guide/${way}/${os}` : null}
-          code={session.code}
-          ended={session.ended}
-          renewed={session.renewed}
-          onEnd={() => void session.end()}
-          onFresh={() => void session.fresh()}
-        />
-      )}
       {fromRun && !connected && onNotNow && (
         <div className="flex justify-end">
           <Button variant="ghost" size="sm" onClick={onNotNow}>
@@ -507,15 +566,14 @@ function NoComfy({ onLook, missed, notComfy }: { onLook: (port: number, host: st
 
 /**
  * The hand-offs: Open in ChatGPT, Open in Claude (each also copies the message, in case the chat opens empty), Copy the
- * steps for any other AI, and one command for a coding agent on this computer. Locked until the browser's one question
- * is answered (this browser's way), so the AI's first look at the status already says whether ComfyUI runs. After a
- * hand-off the box folds to one line, and the checklist is the main view.
+ * steps for any other AI, and one command for a coding agent on this computer. Ready as soon as the code is: the AI's
+ * first status says what to do whether or not Fuobe has looked for ComfyUI yet. After a hand-off the box folds to one
+ * line (with the steps to copy, for a chat that can't open links), and the checklist is the main view.
  */
 function HandOffs({
   input,
   waiting,
   needOs,
-  locked,
   phone,
   failed,
   onRetry,
@@ -529,7 +587,6 @@ function HandOffs({
   input: Parameters<typeof prefillText>[0] | null;
   waiting: boolean;
   needOs: boolean;
-  locked: boolean;
   phone: boolean;
   failed: string | null;
   onRetry: () => void;
@@ -565,15 +622,16 @@ function HandOffs({
     line = input ? agentLine(agent, input) : "";
   } catch {}
   const full = input && guide.data ? fullInstructions(input, guide.data) : null;
-  const ready = !!input && !locked && !ended;
+  const ready = !!input && !ended;
 
   const openChat = (t: AiTarget) => {
     // The message goes on the clipboard too: a chat that opens empty (a sign-in first, an app) takes it with a paste.
     void copyText(text).then((ok) => ok && toast("Message copied too", { description: "If the chat opens empty, paste it.", duration: 4000 }));
     setSent(AI_TARGETS[t].label);
   };
-  const copyFull = async () => {
-    if (full && (await copyWithToast(full, "Steps copied"))) setSent("your AI");
+  /** Copy the steps (`keep`: from the folded box, which stays as it is). */
+  const copyFull = async (keep = false) => {
+    if (full && (await copyWithToast(full, "Steps copied")) && !keep) setSent("your AI");
   };
 
   if (failed && !code)
@@ -589,16 +647,23 @@ function HandOffs({
   return (
     <div className="space-y-3 rounded-2xl border bg-background p-4">
       {sent && ready ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-          <span className="flex items-center gap-1.5 font-medium">
+        <div className="space-y-1.5 text-[13px]">
+          <p className="flex items-center gap-1.5 font-medium">
             <Check className="size-4 text-brand-text" /> Sent to {sent}.
-          </span>
-          <Quiet onClick={() => setSent(null)}>Use another AI</Quiet>
+          </p>
+          {sent !== "your AI" && <p className="text-[12px] text-muted-foreground">If {sent} says it can&apos;t open links, copy the steps and paste them into the chat.</p>}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {sent !== "your AI" && (
+              <Quiet onClick={() => void copyFull(true)} className={cn(!full && "pointer-events-none opacity-50")}>
+                Copy the steps
+              </Quiet>
+            )}
+            <Quiet onClick={() => setSent(null)}>Use another AI</Quiet>
+          </div>
         </div>
       ) : (
         <>
           <p className="text-[13px] font-medium">Give your AI the steps</p>
-          {locked && <p className="text-[12px] text-muted-foreground">These open once Fuobe has looked for ComfyUI above, so your AI&apos;s first check already knows what runs.</p>}
           {needOs && <p className="text-[12px] text-muted-foreground">Pick the computer that runs ComfyUI first.</p>}
           <div className="grid gap-2 sm:grid-cols-2">
             {(Object.keys(AI_TARGETS) as AiTarget[])
@@ -618,9 +683,7 @@ function HandOffs({
                 ),
               )}
           </div>
-          <p className="text-[12px] text-muted-foreground">
-            Chat apps tell you what to paste. Apps on your computer do the steps after you say yes. Claude and ChatGPT may ask you to check the message first.
-          </p>
+          <p className="text-[12px] text-muted-foreground">ChatGPT and Claude tell you each command to run. An AI app on your computer runs them for you, after you say yes.</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Quiet onClick={() => void copyFull()} className={cn((!ready || !full) && "pointer-events-none opacity-50")}>
               Copy the steps for another AI
@@ -633,7 +696,7 @@ function HandOffs({
           </div>
           {apps && !phone && (
             <div className="space-y-2">
-              <p className="text-[12px] text-muted-foreground">Paste this in a terminal. The app asks before each command.</p>
+              <p className="text-[12px] text-muted-foreground">Paste this in a terminal on this computer. The app asks before each command.</p>
               <TabRow role="tablist" aria-label="Coding agent" fade={false} className="w-fit">
                 {(Object.keys(AGENTS) as Agent[]).map((a) => (
                   <button key={a} type="button" role="tab" aria-selected={a === agent} onClick={() => setAgent(a)} className={TAB_PILL} {...onAttr(a === agent)}>
@@ -642,7 +705,7 @@ function HandOffs({
                 ))}
               </TabRow>
               {ready && line ? <CopyLine text={line} label="the command" /> : <div className="h-11 rounded-lg bg-muted" />}
-              <p className="text-[12px] text-muted-foreground">Cursor or another app? Copy the steps works with any AI.</p>
+              <p className="text-[12px] text-muted-foreground">Don&apos;t have this app, or use Cursor? Copy the steps works with any AI.</p>
             </div>
           )}
         </>
@@ -687,6 +750,7 @@ function CodeLine({ code, ended, renewed, onEnd, onFresh }: { code: string | nul
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <p className="text-[12px] text-muted-foreground">Your AI reads Fuobe&apos;s checks with this code. It can only read them, and the code ends by itself.</p>
     </div>
   );
 }
@@ -733,7 +797,7 @@ function Presence({
         <div className="space-y-2 rounded-xl bg-background p-3">
           <p>Tell your AI: Check Fuobe&apos;s status again.</p>
           <p className="text-muted-foreground">
-            What Fuobe sees now: <span className="text-foreground">{next.say}</span>
+            What Fuobe sees now: <span className="text-foreground">{personWords(next)}</span>
           </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Button size="sm" variant="secondary" onClick={() => void copyWithToast(forAi, "Copied for your AI")}>
@@ -748,29 +812,65 @@ function Presence({
   );
 }
 
-/** The web address form: paste the address cloudflared made, and Fuobe tests it (the same check as Your GPU). */
-function AddressForm({ saved, state, onState, onConnected }: { saved: boolean; state: { state: string; words?: string }; onState: (s: { state: "none" | "testing" | "ok" | "failed"; cause?: AddressCause; words?: string }) => void; onConnected: () => void }) {
+/** The address form's own words for each kind of problem (the check's words, for the rest). */
+const ADDRESS_WORDS: Partial<Record<AddressCause, string>> = {
+  local: "That address works only on your own network. Paste the one that ends in trycloudflare.com.",
+  "not-found": "Fuobe can't find this address. Make sure that you pasted all of it, and that the cloudflared window is still open. If it closed, your AI starts it again, and you get a new address.",
+  "no-answer": "Nothing answers at this address. Make sure that ComfyUI and the cloudflared window are both open. A new address can take a minute to work.",
+  "not-comfy": "This address doesn't lead to ComfyUI. Ask your AI to check the port in the cloudflared command.",
+  password: "This address asks for a password or a token. Type it under Access token, then press Connect.",
+};
+
+/** The web address form: paste the address cloudflared made (and its token, if it has one), and Fuobe tests it (the same check as Your GPU). */
+function AddressForm({
+  saved,
+  state,
+  onState,
+  onConnected,
+  phone,
+  site,
+}: {
+  saved: boolean;
+  state: { state: string; cause?: AddressCause; words?: string };
+  onState: (s: { state: "none" | "testing" | "ok" | "failed"; cause?: AddressCause; words?: string }) => void;
+  onConnected: () => void;
+  phone: boolean;
+  site: string;
+}) {
   const qc = useQueryClient();
   const id = useId();
   const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [withToken, setWithToken] = useState(false);
   const canPaste = typeof navigator !== "undefined" && !!navigator.clipboard?.readText;
   const value = url.trim();
   const local = !!value && isLocalAddress(/^[a-z]+:\/\//i.test(value) ? value : `http://${value}`);
+  const showToken = withToken || state.cause === "password" || !!token;
   const connect = async () => {
     if (!value || local) return;
     onState({ state: "testing" });
-    const res = await fetch("/api/account/gpu", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: value }) }).catch(() => null);
+    const res = await fetch("/api/account/gpu", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: value, ...(token.trim() && { token: token.trim() }) }),
+    }).catch(() => null);
     const j = res ? ((await res.json().catch(() => ({}))) as { error?: string; trouble?: { cause?: string; words?: string } }) : {};
     if (res?.ok) {
       onState({ state: "ok" });
       setUrl("");
+      setToken("");
       for (const k of [["account-gpu"], ["status"], ["viewer"]]) void qc.invalidateQueries({ queryKey: k });
       onConnected();
       return;
     }
-    // The check's own words under the box; the AI gets only the kind of problem.
-    onState({ state: "failed", cause: res ? addressCauseOf(j.trouble?.cause) : "unknown", words: j.trouble?.words ?? j.error ?? "Fuobe can't reach its server right now. Try again." });
+    // Plain words under the box; the AI gets only the kind of problem.
+    const cause = res ? addressCauseOf(j.trouble?.cause) : "unknown";
+    onState({ state: "failed", cause, words: ADDRESS_WORDS[cause] ?? j.trouble?.words ?? j.error ?? "Fuobe can't reach its server right now. Try again." });
   };
+  let host = site;
+  try {
+    host = new URL(site).host;
+  } catch {}
   return (
     <div className="space-y-1.5">
       <Label htmlFor={`${id}-url`} className="text-[12px]">
@@ -805,13 +905,37 @@ function AddressForm({ saved, state, onState, onConnected }: { saved: boolean; s
           {state.state === "testing" && <Loader2 className="animate-spin" />} Connect
         </Button>
       </div>
-      {local && <p className="text-[12px] text-destructive">That address only works on your own computer or network. Paste the one that ends in trycloudflare.com.</p>}
+      {showToken ? (
+        <div className="space-y-1">
+          <Label htmlFor={`${id}-token`} className="text-[12px]">
+            Access token <span className="text-muted-foreground">(only if the address asks for one)</span>
+          </Label>
+          <Input
+            id={`${id}-token`}
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void connect()}
+            className="h-11 sm:h-9"
+          />
+        </div>
+      ) : null}
+      {local && <p className="text-[12px] text-destructive">{ADDRESS_WORDS.local}</p>}
       {!local && state.state === "failed" && state.words && (
         <p role="status" className="text-[12px] text-destructive">
           {state.words}
         </p>
       )}
-      <p className="text-[12px] text-muted-foreground">Keep the address to yourself. Paste it here, not in your AI&apos;s chat.</p>
+      <p className="text-[12px] text-muted-foreground">
+        Keep the address to yourself. Paste it here, not in your AI&apos;s chat.{" "}
+        {!showToken && <Quiet onClick={() => setWithToken(true)}>Has a password or token?</Quiet>}
+      </p>
+      {phone && (
+        <p className="text-[12px] text-muted-foreground">
+          The address goes on your computer&apos;s clipboard. Open {host}/connect on that computer, sign in, and paste it there. Or paste it here if your phone shares that clipboard.
+        </p>
+      )}
     </div>
   );
 }
@@ -860,7 +984,9 @@ function PhoneSend({ site, os, onOs }: { site: string; os: Os | null; onOs: (os:
         <Send /> {share ? "Send to my computer" : "Copy link for my computer"}
       </Button>
       <div className="space-y-1.5">
-        <p className="text-[12px] text-muted-foreground">Or use an AI app now. Its chats show on your computer too. Which computer runs ComfyUI?</p>
+        <p className="text-[12px] text-muted-foreground">
+          Or start with an AI app on this phone. The commands run on your computer, and at the end you paste an address into Fuobe there, so sign in to Fuobe on that computer too. Which computer runs ComfyUI?
+        </p>
         <TabRow role="tablist" aria-label="Computer" fade={false} className="w-fit">
           {(["windows", "mac", "linux"] as Os[]).map((o) => (
             <button key={o} type="button" role="tab" aria-selected={o === os} onClick={() => onOs(o)} className={TAB_PILL} {...onAttr(o === os)}>
