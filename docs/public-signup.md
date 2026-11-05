@@ -714,7 +714,33 @@ With it on:
   (0: as long as it takes), else what its reserve answer says, else `FUOBE_POOL_WAIT_MIN` minutes (30 by default).
   Past that it fails with one plain sentence, not charged. A later step of a run (a chain's next step) keeps the run's
   place in line and has no wait limit.
-- The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
+- When the billing service's policy says runs wait instead of being refused (`limits.held`: how many may wait behind
+  an account's runs at once), a press past a limit is taken all the same: the run and its tile exist at once ("In
+  line"), and the run enters the line when its reason clears (`src/server/pool-holds.ts`, released by
+  `src/server/pool-release.ts` in the generations runner's turn, in every app process):
+  - past the account's runs at once (`limits.activeRuns`): "Starts after your other runs" before Run, "In line · after
+    your other runs" on the tile; it enters at the back of the line when one of them ends, so ten fast presses never
+    pass another account, and its presses enter in the order they were made;
+  - the day's GPU time used up (the service's `startAt` at the next UTC day): "Lots of runs today · starts in about
+    7 h" before Run, "In line · starts in about 7 h" on the tile; at the renewal the runs enter at their press-time
+    places, in press order;
+  - the billing service doesn't answer within 5 s of the press (or the moderation service doesn't, at a studio's
+    press), or a run was cut off between its row and its GPU task (a deploy, a crash): its tile shows its place as if
+    in line, it reserves (and is checked) under its press's own request id once the service answers, and enters at its
+    press-time place. While the service says runs
+    here are paused, the line before Run shows its words, and a press waits ("In line · starts when a GPU is free");
+  - an hourly limit or free generations that renew (credits on): it starts at that time, at the back of the line.
+
+  Holds are kept in SQLite (`pool_holds`) with a lease per run, so they survive a deploy, a restart and two app
+  processes at once. Cancel works on a held run like on any other. A deleted account's holds go with it. Only a press
+  past the cap on runs waiting is turned down: "You have 10 runs on the way. Add more when one is done." The owner
+  reads the held runs by why they wait (counts only) in Settings → Workers ("Waiting to enter the line: 3 (oldest 12
+  min)") and in `GET /api/admin/queue` and `/api/admin/workers` (`held`). Runs waiting for the billing service longer
+  than 5 minutes are said in the server log. With a policy that has no `limits.held` (an older service), every limit
+  refuses as before.
+- The account's usual limits apply: outputs per run and its space. Its runs at once (4) and per hour (60) count its
+  runs on its own GPU or key and its light work (a join, a trim) only: its other runs on this install's GPUs meet the
+  billing service's limits instead. (With hosted runs off they count every run, as before.)
 
 Two optional services can go with it:
 

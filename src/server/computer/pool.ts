@@ -8,6 +8,7 @@ import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
 import { hostedRunsOn } from "../hosted-switch";
+import { heldView } from "../pool-holds";
 import { catalogVersion } from "./catalog-version";
 import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteCold, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, taskCold, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
@@ -1024,9 +1025,10 @@ export function poolFacts(lane: string | null): ComputerFacts {
 /**
  * The line for a new run of this workflow, for a quote or a reserve (the billing service's QueueFacts): how many tasks the
  * workers that may run it would serve before it, about how long until it would be done, and how many such workers can
- * take work now. (The account's own runs, QueueFacts.mine, are counted by run in hosted.ts.)
+ * take work now. (The account's own runs, QueueFacts.mine, are counted by run in hosted.ts.) `rankAt`: the place it
+ * would take (a run that waited to enter the line at its press time: pool-holds.ts), now by default.
  */
-export function lineFacts(accountId: string | null, asked: string | null, now = Date.now()) {
+export function lineFacts(accountId: string | null, asked: string | null, now = Date.now(), rankAt = now) {
   // A workflow that picks its graph at run time (`…-{n}`) has no lane yet: the whole line counts.
   const workflowId = asked && !asked.includes("{") ? asked : null;
   const lane = workflowId ? poolLane(workflowId) : null;
@@ -1035,7 +1037,7 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
   // a job ticket for this studio's catalog, which only a worker built for it takes (its place and wait, and the workers
   // online, count those workers only).
   const version = catalogVersion();
-  const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify({ ...needs, ...(version && { catalogVersion: version }) }) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null, slot: workflowId && cpuWorkflow(workflowId) ? "cpu" : null, finish_json: null } as unknown as TaskRow;
+  const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify({ ...needs, ...(version && { catalogVersion: version }) }) : null, rank_at: rankAt, created_at: now, stop: 0, only_worker: null, est_ms: null, slot: workflowId && cpuWorkflow(workflowId) ? "cpu" : null, finish_json: null } as unknown as TaskRow;
   const p: LinePlace = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
   const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fitsSlot({ ...probe, created_at: 0 }, w, now, slotFor(probe, w)))).length;
   // With none of them on now: when the first is due back, when one says.
@@ -1333,12 +1335,17 @@ export function patchWorker(id: string, p: WorkerPatch, now = Date.now()): { vie
   return { view: workerView(fresh, now), ...(token && { token }) };
 }
 
-/** The line for workers by lane: waiting, oldest, the estimate, and which workers have it warm. */
+/**
+ * The line for workers by lane: waiting, oldest, the estimate, and which workers have it warm. `held`: the runs made but
+ * waiting to enter the line (pool-holds.ts), by why they wait, and when the oldest was pressed: counts only (no prompt,
+ * no account).
+ */
 export function queueView(now = Date.now()) {
   const index = loadIndex();
   const rows = db().prepare("SELECT lane, COUNT(*) AS n, MIN(created_at) AS oldest FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' GROUP BY lane").all() as { lane: string | null; n: number; oldest: number }[];
   const workers = db().prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL").all() as WorkerRow[];
   return {
+    held: heldView(),
     lanes: rows.map((r) => {
       const last = db().prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND lane IS ? ORDER BY rank_at DESC LIMIT 1").get(r.lane) as TaskRow | undefined;
       return {

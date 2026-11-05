@@ -3,8 +3,10 @@ import crypto from "node:crypto";
 import { ACTIVE_RUNS_CODE } from "@/lib/guest-access";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES } from "./account-files";
 import { LoginGuard } from "./auth";
-import type { Policy } from "./billing";
+import { heldCap, holdsOn, type Policy } from "./billing";
 import { db } from "./db";
+import { hostedRunsOn } from "./hosted-switch";
+import { heldRuns, NOT_HELD } from "./pool-holds";
 
 /**
  * The limits on an account's runs, counted in SQLite so that requests that arrive together, in one process or in two
@@ -21,6 +23,12 @@ import { db } from "./db";
  *
  * admitRun counts and makes the run's rows in one `BEGIN IMMEDIATE` transaction: SQLite lets one writer in at a time,
  * across processes, so the count it reads is the count it adds to.
+ *
+ * When the policy says runs wait instead (`limits.held` present: billing.ts holdsOn), a press past the runs at once, the
+ * runs in line or an hourly limit is taken all the same and waits to enter the line (pool-holds.ts): poolLimitPlan says
+ * "hold". Only a press past the cap on runs waiting (`limits.held`) is turned down. Runs waiting there don't count as
+ * going. While hosted runs are on, the studio's own limit of runs at once counts runs on the account's own GPU or key
+ * and its light work only (ownActiveRuns): its other runs on this install's GPUs meet the policy's limits instead.
  */
 
 const HOUR = 60 * 60_000;
@@ -33,6 +41,8 @@ export const POOL_LIMIT_WORDS = {
   waiting: (n: number) => `You have ${n} ${n === 1 ? "run" : "runs"} in line. Start this one when one of them starts.`,
   hourly: "That's a lot of runs this hour. Try again later.",
   address: "That's a lot of runs from your network this hour. Try again later.",
+  /** The one press that is turned down while runs wait: past the cap on runs waiting (`n`: the account's runs on the way). */
+  heldCap: (n: number) => `You have ${n} ${n === 1 ? "run" : "runs"} on the way. Add more when one is done.`,
 };
 
 export interface LimitRefusal {
@@ -85,8 +95,26 @@ export function accountActiveRuns(accountId: string): number {
 }
 
 /**
+ * An account's runs going now that the studio's own limit of runs at once counts (ACCOUNT_LIMITS.activeRuns): with
+ * hosted runs off, every run (accountActiveRuns, as always); with them on, its runs on its own GPU or its own key, and
+ * its light work (joins, trims: free, on this install's CPU, and counted by none of the policy's limits), as its other
+ * runs on this install's GPUs meet the policy's limits instead.
+ */
+export function ownActiveRuns(accountId: string): number {
+  if (!hostedRunsOn()) return accountActiveRuns(accountId);
+  const r = db()
+    .prepare(
+      `SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?
+         AND (json_extract(request_json, '$.place') IS NOT 'pool' OR json_extract(request_json, '$.light') IS 1)`,
+    )
+    .get(accountId) as { n: number };
+  return r.n + openCount(accountId, false) - openCount(accountId, true);
+}
+
+/**
  * An account's runs going now on this install's GPUs, and how many of them haven't started yet (no row of theirs has).
- * Runs of light work only (joins, trims) don't count. A run let in whose rows are still being made counts as one in line.
+ * Runs of light work only (joins, trims) don't count, nor do runs waiting to enter the line (pool-holds.ts). A run let in
+ * whose rows are still being made counts as one in line.
  */
 export function poolRunCounts(accountId: string): { active: number; waiting: number } {
   const r = db()
@@ -95,7 +123,7 @@ export function poolRunCounts(accountId: string): { active: number; waiting: num
          SELECT COALESCE(g.batch_id, g.id) AS k, MAX(CASE WHEN r.started_at IS NOT NULL THEN 1 ELSE 0 END) AS started
          FROM generations g LEFT JOIN generation_runs r ON r.id = g.id
          WHERE g.status IN ('queued', 'running') AND json_extract(g.request_json, '$.account') = ? AND json_extract(g.request_json, '$.place') = 'pool'
-           AND json_extract(g.request_json, '$.light') IS NOT 1
+           AND json_extract(g.request_json, '$.light') IS NOT 1 AND ${NOT_HELD("g")}
          GROUP BY k)`,
     )
     .get(accountId) as { active: number; waiting: number };
@@ -164,36 +192,102 @@ const since = (column: "account" | "addr", value: string, from: number) =>
 const retryAfter = (oldest: number | null, now: number) => Math.max(60, Math.ceil(((oldest ?? now) + HOUR - now) / 1000));
 
 /**
- * The first of the policy's limits this run would pass, or null. `addr` may be a function: it is asked only when the
- * policy counts runs per address.
+ * When the next run past an hourly limit may start (epoch ms), counting each run from its start (a run told to wait
+ * counts from then), so runs past the limit start in batches of `max`, an hour apart; null when it fits now.
  */
-export function poolLimitRefusal(accountId: string, policy: Pick<Policy, "limits">, addr: string | null | (() => string | null), now = Date.now()): LimitRefusal | null {
+function hourStart(column: "account" | "addr", value: string, max: number, now: number): number | null {
+  const ats = db().prepare(`SELECT at FROM pool_admissions WHERE ${column} = ? AND at > ? ORDER BY at`).pluck().all(value, now - HOUR) as number[];
+  return ats.length < max ? null : ats[ats.length - max] + HOUR;
+}
+
+/**
+ * What the policy's limits say of a new run on this install's GPUs: it goes into line now (`go`), it is taken and waits
+ * to enter the line (`hold`: "mine" behind the account's runs going, or "hour" until `startAt`), or it is turned down
+ * (`refuse`). Without holds (billing.ts holdsOn: the policy has no `limits.held`), every limit refuses, as before. With
+ * them, only a press past the cap on runs waiting is refused; and a run of an account whose runs already wait behind its
+ * own waits behind them too, so its presses enter in the order they were made. `addr` may be a function: it is asked
+ * only when the policy counts runs per address.
+ */
+export type LimitPlan = { go: true } | { hold: "mine" | "hour"; startAt?: number } | { refuse: LimitRefusal };
+
+export function poolLimitPlan(accountId: string, policy: Pick<Policy, "limits">, addr: string | null | (() => string | null), now = Date.now()): LimitPlan {
   const lim = policy.limits ?? ({} as Policy["limits"]);
-  const positive = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
   const activeMax = positive(lim.activeRuns);
   const waitingMax = positive(lim.waiting);
   const hourMax = positive(lim.runsPerHour);
   const addrMax = positive(lim.addressRunsPerHour);
-  if (activeMax || waitingMax) {
-    const c = poolRunCounts(accountId);
-    if (activeMax && c.active >= activeMax) return { status: 429, error: POOL_LIMIT_WORDS.active(c.active), code: ACTIVE_RUNS_CODE, retryAfterS: 30 };
-    if (waitingMax && c.waiting >= waitingMax) return { status: 429, error: POOL_LIMIT_WORDS.waiting(c.waiting), code: ACTIVE_RUNS_CODE, retryAfterS: 30 };
+  const holds = holdsOn(policy);
+  const c = activeMax || waitingMax || holds ? poolRunCounts(accountId) : { active: 0, waiting: 0 };
+  const overActive = !!activeMax && c.active >= activeMax;
+  const overWaiting = !!waitingMax && c.waiting >= waitingMax;
+  if (!holds) {
+    if (overActive) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.active(c.active), code: ACTIVE_RUNS_CODE, retryAfterS: 30 } };
+    if (overWaiting) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.waiting(c.waiting), code: ACTIVE_RUNS_CODE, retryAfterS: 30 } };
   }
+  let startAt: number | null = null;
   if (hourMax) {
-    const h = since("account", accountId, now - HOUR);
-    if (h.n >= hourMax) return { status: 429, error: POOL_LIMIT_WORDS.hourly, code: "limit", retryAfterS: retryAfter(h.oldest, now) };
+    if (holds) startAt = hourStart("account", accountId, hourMax, now);
+    else {
+      const h = since("account", accountId, now - HOUR);
+      if (h.n >= hourMax) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.hourly, code: "limit", retryAfterS: retryAfter(h.oldest, now) } };
+    }
   }
   const address = addrMax ? (typeof addr === "function" ? addr() : addr) : null;
   if (address) {
-    const h = since("addr", address, now - HOUR);
-    if (h.n >= addrMax) return { status: 429, error: POOL_LIMIT_WORDS.address, code: "limit", retryAfterS: retryAfter(h.oldest, now) };
+    if (holds) {
+      const at = hourStart("addr", address, addrMax, now);
+      if (at !== null) startAt = Math.max(startAt ?? 0, at);
+    } else {
+      const h = since("addr", address, now - HOUR);
+      if (h.n >= addrMax) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.address, code: "limit", retryAfterS: retryAfter(h.oldest, now) } };
+    }
   }
-  return null;
+  if (!holds) return { go: true };
+  // The one press turned down while runs wait: past the cap on the account's runs on the way, whatever this one would
+  // wait for (behind its own runs, the day's GPU time, a quiet service).
+  const refusal = heldCapRefusal(accountId, policy, c);
+  if (refusal) return { refuse: refusal };
+  const behindOwn = heldRuns(accountId, "mine") > 0;
+  if (!overActive && !overWaiting && !behindOwn && startAt === null) return { go: true };
+  return startAt !== null ? { hold: "hour", startAt } : { hold: "mine" };
 }
 
-/** The studio's own limit of runs at once (every account run, wherever it goes), as a refusal. */
+const positive = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+
+/**
+ * How many more of an account's runs may go into line now: the policy's runs at once and runs in line, less its runs
+ * going there (`c`: poolRunCounts; held runs don't count). Infinity when the policy limits neither.
+ */
+export function lineRoom(policy: Pick<Policy, "limits">, c: { active: number; waiting: number }): number {
+  const activeMax = positive(policy.limits?.activeRuns);
+  const waitingMax = positive(policy.limits?.waiting);
+  return Math.max(0, Math.min(activeMax ? activeMax - c.active : Infinity, waitingMax ? waitingMax - c.waiting : Infinity));
+}
+
+/**
+ * A press past the cap on an account's runs on the way (billing.ts heldCap: the policy's `limits.held` waiting behind
+ * its runs at once, 8 behind 2 at launch: 10 in all; 0: no cap), as a refusal; null while there is room. Runs held for
+ * any reason count, so a quiet service or the day's GPU time used up never lets more wait than that. `c`: its runs going
+ * now (poolRunCounts), counted with the waiting ones in the words.
+ */
+export function heldCapRefusal(accountId: string, policy: Pick<Policy, "limits">, c = poolRunCounts(accountId)): LimitRefusal | null {
+  const cap = heldCap(policy);
+  if (!cap) return null;
+  const held = heldRuns(accountId);
+  const room = lineRoom(policy, c);
+  if (held < cap + (Number.isFinite(room) ? room : 0)) return null;
+  return { status: 429, error: POOL_LIMIT_WORDS.heldCap(c.active + held), code: ACTIVE_RUNS_CODE, retryAfterS: 30 };
+}
+
+/** The first of the policy's limits this run would be refused for, or null (poolLimitPlan; a run that waits is no refusal). */
+export function poolLimitRefusal(accountId: string, policy: Pick<Policy, "limits">, addr: string | null | (() => string | null), now = Date.now()): LimitRefusal | null {
+  const plan = poolLimitPlan(accountId, policy, addr, now);
+  return "refuse" in plan ? plan.refuse : null;
+}
+
+/** The studio's own limit of runs at once (ownActiveRuns), as a refusal. */
 function accountLimitRefusal(accountId: string): LimitRefusal | null {
-  return accountActiveRuns(accountId) >= ACCOUNT_LIMITS.activeRuns ? { status: 429, error: ACCOUNT_MESSAGES.activeRuns, code: ACTIVE_RUNS_CODE, retryAfterS: 30 } : null;
+  return ownActiveRuns(accountId) >= ACCOUNT_LIMITS.activeRuns ? { status: 429, error: ACCOUNT_MESSAGES.activeRuns, code: ACTIVE_RUNS_CODE, retryAfterS: 30 } : null;
 }
 
 /** A refusal thrown inside admitRun's transaction, so nothing `make` wrote is kept. */
@@ -206,10 +300,18 @@ export class AdmitRefused extends Error {
 /** What admitRun answers: the run made, the refusal, or (with `prior`) what this same request made already. */
 export type Admitted<T, P = never> = { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | ([P] extends [never] ? never : { ok: false; prior: P });
 
+/** What admitRun decided for a run it lets in on this install's GPUs: none (it goes into line now), or that it waits. */
+export interface AdmitPlan {
+  hold?: { reason: "mine" | "hour"; startAt?: number };
+}
+
 /**
- * Count, and make the run (`make`) only if it fits: the studio's own limit for every account run, and with `pool` the
- * policy's limits on runs on this install's GPUs. All in one BEGIN IMMEDIATE transaction; a run on this install's GPUs is
- * noted for the hourly counts in the same transaction. `make` may throw AdmitRefused (or anything else) to keep nothing.
+ * Count, and make the run (`make`) only if it fits: with `pool`, the policy's limits on runs on this install's GPUs;
+ * without, the studio's own limit of runs at once (ownActiveRuns: a run on the account's own GPU or key, light work, and
+ * every run while hosted runs are off). A run the policy's limits hold is made all the same: `make` is
+ * told so (AdmitPlan), and holds it instead of sending it (pool-holds.ts). All in one BEGIN IMMEDIATE transaction; a run on
+ * this install's GPUs is noted for the hourly counts in the same transaction (one told to wait for an hourly limit, at
+ * the time it may start). `make` may throw AdmitRefused (or anything else) to keep nothing.
  * `prior`, looked at first in the same transaction: what this same request made already (a resend of one press of Run,
  * run-requests.ts); when it says anything, nothing is counted or made, and it is the answer. `refused`, called in the
  * same transaction when the run is not made (a limit, AdmitRefused, or another error from `make`, which is thrown again
@@ -223,7 +325,7 @@ export function admitRun<T, P = never>(
     prior?: () => P | null;
     refused?: (why: AdmitRefused["refusal"] | Error) => void;
   },
-  make: () => T,
+  make: (plan: AdmitPlan) => T,
 ): Admitted<T, P> {
   type Answer = { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | { ok: false; prior: P };
   const now = o.now ?? Date.now();
@@ -236,17 +338,19 @@ export function admitRun<T, P = never>(
       .transaction((): Answer | null => {
         const prior = o.prior?.() ?? null;
         if (prior !== null) return { ok: false, prior };
-        const refusal = accountLimitRefusal(o.accountId) ?? (o.pool ? poolLimitRefusal(o.accountId, o.pool.policy, o.pool.addr, now) : null);
+        const plan: LimitPlan = o.pool ? poolLimitPlan(o.accountId, o.pool.policy, o.pool.addr, now) : { go: true };
+        const refusal = (o.pool ? null : accountLimitRefusal(o.accountId)) ?? ("refuse" in plan ? plan.refuse : null);
         if (refusal) {
           refused?.(refusal);
           return { ok: false, refusal };
         }
+        const admit: AdmitPlan = "hold" in plan ? { hold: { reason: plan.hold, ...(plan.startAt !== undefined && { startAt: plan.startAt }) } } : {};
         let value: T;
-        if (!refused) value = make();
+        if (!refused) value = make(admit);
         else {
           try {
             // In a savepoint: a make that refuses or fails keeps nothing it wrote, and the refusal is still noted.
-            value = d.transaction(make)();
+            value = d.transaction(() => make(admit))();
           } catch (e) {
             refused(e instanceof AdmitRefused ? e.refusal : e instanceof Error ? e : new Error(String(e)));
             if (e instanceof AdmitRefused) return { ok: false, refusal: e.refusal };
@@ -255,7 +359,7 @@ export function admitRun<T, P = never>(
           }
         }
         if (o.pool) {
-          d.prepare("INSERT INTO pool_admissions (account, addr, at) VALUES (?, ?, ?)").run(o.accountId, o.pool.addr, now);
+          d.prepare("INSERT INTO pool_admissions (account, addr, at) VALUES (?, ?, ?)").run(o.accountId, o.pool.addr, admit.hold?.startAt ?? now);
           prunePoolAdmissions(now, true);
         }
         return { ok: true, value };

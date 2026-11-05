@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { adminAccess, audit } from "@/server/admin-tokens";
 import { addWorker, lanesCatalog, listWorkers } from "@/server/computer/pool";
+import { heldView } from "@/server/pool-holds";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const DENIED = "Only the studio's owner manages workers";
@@ -9,13 +10,14 @@ const DENIED = "Only the studio's owner manages workers";
  * Settings → Workers (owner only, or an admin token with workers:read / workers:tokens; docs/gpu-workers.md): the
  * shared GPUs with their state in words, and the lanes this studio's catalog has (to allow per worker). POST
  * `{ name, pool? }` adds one: paused, with no hours and no lanes; its token is in this answer only. A worker's token
- * receives accounts' queued jobs and their files, so making one needs workers:tokens, not just workers:write.
+ * receives accounts' queued jobs and their files, so making one needs workers:tokens, not just workers:write. `held`:
+ * the runs made but waiting to enter the line (hosted runs, pool-holds.ts), by why, and the oldest: counts only.
  */
 export async function GET(request: Request) {
   await connection();
   const access = adminAccess(request, "workers:read", DENIED);
   if (access instanceof Response) return access;
-  return Response.json({ workers: listWorkers(), lanes: lanesCatalog() }, { headers: NO_STORE });
+  return Response.json({ workers: listWorkers(), lanes: lanesCatalog(), held: heldView() }, { headers: NO_STORE });
 }
 
 export async function POST(request: Request) {

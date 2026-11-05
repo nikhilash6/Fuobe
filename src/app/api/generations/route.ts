@@ -15,17 +15,18 @@ import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, disk
 import { accountInputProblem } from "@/server/account-inputs";
 import { findView, requestViewKey } from "@/server/any-angle";
 import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, captureRun, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, stepsOf, type AccountRunRefusal } from "@/server/generations";
-import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, poolLimitRefusal } from "@/server/pool-limits";
+import { AdmitRefused, admitRun, clientAddress, ownActiveRuns, poolLimitPlan, type LimitPlan } from "@/server/pool-limits";
+import { heldGuessMs, holdRun, holdShape, type HoldReason } from "@/server/pool-holds";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
 import { gateGeneration, GPU_SETUP_HEADER } from "@/server/gpu/gate";
 import { gpuTargetFor } from "@/server/gpu/target";
 import { connectNeeds } from "@/server/connect-refusal";
-import { BILLING_HEADER, BILLING_WAIT } from "@/server/billing";
+import { BILLING_HEADER, BILLING_WAIT, holdsOn } from "@/server/billing";
 import { queueRelease } from "@/server/billing-outbox";
 import { runOnPool } from "@/server/hosted";
-import { decidePlace, moderateRun, policyWait, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
+import { decidePlace, moderateRun, policyWait, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal, type ReserveFacts, type ReserveWait } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { endTry, notePressRun, pressPrior, pressRun, pressTries, pressTry, readPressId } from "@/server/run-requests";
@@ -115,16 +116,34 @@ export async function POST(request: Request) {
   // A visitor's price check: priced as it would run, as that visitor (an account: its own GPU and keys; a guest: the open
   // engine, no demo).
   const priced = <T,>(fn: () => T): T => (viewer.kind === "owner" ? fn() : account ? asAccount(account.id, fn) : asVisitor(null, fn));
+  // When the press came: a run that waits to enter the line for the system's reasons keeps this place (pool-holds.ts).
+  const pressedAt = Date.now();
+  // The studio's own limits of runs at once and an hour: with hosted runs off, on every run of an account, checked first,
+  // as always. With them on, on its runs on its own GPU or key and its light work only (its other runs on this
+  // install's GPUs meet the policy's limits instead), checked once its place is known. A refused run gives its count of the hour back (unhitRun).
+  const ownLimitsFirst = !hostedRunsOn();
+  let rated = false;
+  const unhitRun = () => {
+    if (account && rated) unhit(`run:${account.id}`);
+    rated = false;
+  };
+  const ownLimits = (id: string): Response | null => {
+    if (ownActiveRuns(id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+    const rate = hit(`run:${id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
+    if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
+    rated = true;
+    return null;
+  };
   /** An account's run that can't go where it was planned: Connect your GPU, Add your key (the client opens either). */
   const refused = (r: AccountRunRefusal) => {
-    if (account) unhit(`run:${account.id}`);
+    unhitRun();
     const a = accountRunAnswer(r);
     return refuse(a.status, a.body.error, a.body, a.headers);
   };
   // Beside the request (never in it): the place the client prefers, and the price it showed (hosted runs, billing hook).
   const { wish, shown } = readWishes(body, request.headers);
   const refusedBy = (r: Refusal) => {
-    if (account) unhit(`run:${account.id}`);
+    unhitRun();
     return refuse(r.status, r.body.error, r.body, r.headers);
   };
   // With hosted runs on, an account's press of Run whose run goes to this install's GPUs is made once however often the
@@ -140,9 +159,10 @@ export async function POST(request: Request) {
     // Room on the server, room in the account's files, and a fair share of runs.
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total >= accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
-    if (accountActiveRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
-    const rate = hit(`run:${account.id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
-    if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
+    if (ownLimitsFirst) {
+      const no = ownLimits(account.id);
+      if (no) return no;
+    }
     if ((req.params?.numOutputs ?? 1) > ACCOUNT_LIMITS.outputsPerRun) {
       req = { ...req, params: { ...req.params, numOutputs: ACCOUNT_LIMITS.outputsPerRun } };
       notes.push(ACCOUNT_MESSAGES.outputsCapped);
@@ -150,7 +170,7 @@ export async function POST(request: Request) {
     // Only files it uploaded here, or its own results (no links, no data: URIs, nobody else's).
     const problem = accountInputProblem(req, account.id);
     if (problem) {
-      unhit(`run:${account.id}`);
+      unhitRun();
       return refuse(problem.status, problem.error, { code: problem.code });
     }
   }
@@ -162,7 +182,7 @@ export async function POST(request: Request) {
       const built = findView(key, account?.id);
       const g = built ? getGeneration(built) : null;
       if (g) {
-        if (account) unhit(`run:${account.id}`);
+        unhitRun();
         return Response.json({ items: [g] }, { status: 201 });
       }
       // The build takes nothing but the photo (fixed seeds, src/lib/catalog/any-angle.ts): other params are dropped, so
@@ -192,17 +212,27 @@ export async function POST(request: Request) {
       if (decision.kind === "refuse") return refusedBy(decision.refusal);
     }
     const onPool = decision.kind === "pool" ? decision : null;
+    // A run on the account's own GPU or key, or light work (free, on this install's CPU), with hosted runs on: the
+    // studio's own limits, now that its place is known.
+    if (account && !preview && (!onPool || onPool.light) && !ownLimitsFirst) {
+      const no = ownLimits(account.id);
+      if (no) return no;
+    }
     // The try of the press this send is, for a run on this install's GPUs only (run-requests.ts).
     const poolTry = account && onPool && pressId ? pressTries(account.id, pressId) : null;
     // The client's address, kept only as a salted hash for the policy's hourly count per address (null: no trusted proxy).
     const addr = account && onPool ? clientAddress(request) : null;
+    // What the policy's limits say of it: into line now, waiting to enter it (held), or refused.
+    let plan: LimitPlan = { go: true };
     if (account && onPool) {
       // The policy's limits for runs on this install's GPUs, counted on runs there only (never on runs on the account's own
       // GPU or key, nor on a run of light work only, which is free): said now, before anything is checked or set aside, and
-      // counted again as the run is made (admitRun).
-      const over = onPool.light ? null : poolLimitRefusal(account.id, onPool.policy, addr);
-      if (over) {
-        unhit(`run:${account.id}`);
+      // counted again as the run is made (admitRun). Past a limit it can wait out, the run is taken and waits to enter the
+      // line (when the policy says so); only a press past the cap on runs waiting is refused.
+      plan = onPool.light ? { go: true } : poolLimitPlan(account.id, onPool.policy, addr);
+      if ("refuse" in plan) {
+        unhitRun();
+        const over = plan.refuse;
         return refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) });
       }
       // The request as it runs there (no more outputs than the policy's cap per run): planned and priced as it is.
@@ -233,12 +263,12 @@ export async function POST(request: Request) {
         // A workflow for the isolated worker (LatentSync 1.6, ThinkSound) on someone's computer: its tab reaches no second
         // ComfyUI yet. Said now, before anything is staged or queued.
         if (planned.route.provider === "comfyui" && workerFor(planned.route.endpoint) === "isolated" && onOwn(() => computerScope())) {
-          if (account) unhit(`run:${account.id}`);
+          unhitRun();
           return refuse(422, ISOLATED_ON_COMPUTER, { code: "isolated-on-computer" });
         }
         // The same on an account's own GPU at a web address: one ComfyUI, where the second one these graphs need isn't.
         if (account && planned.route.provider === "comfyui" && workerFor(planned.route.endpoint) === "isolated") {
-          unhit(`run:${account.id}`);
+          unhitRun();
           return refuse(422, ISOLATED_ON_GPU, { code: "isolated-on-gpu" });
         }
         // An account's 3D model (Image to 3D, Photo to 3D, Make it 3D) runs on its own GPU or key, and is finished on
@@ -247,7 +277,7 @@ export async function POST(request: Request) {
         const skip = (body as { gpuCheck?: unknown } | null)?.gpuCheck === "skip";
         const gate = await gateGeneration(gpuTargetFor(request, "read"), { request: req, route: planned.route, op: planned.op, modelId: planned.model.id, gpu: planned.gpu, h3: planned.h3, skip, actor: account?.id ?? "owner" });
         if (!gate.ok) {
-          if (account) unhit(`run:${account.id}`);
+          unhitRun();
           return Response.json({ error: gate.message, code: "gpu-setup", ref: gate.ref, plan: gate.plan }, { status: 409, headers: { [GPU_SETUP_HEADER]: "1" } });
         }
         gpuWarning = gate.warning;
@@ -258,34 +288,52 @@ export async function POST(request: Request) {
       // ComfyUI: say which to download before anything is queued.
       const fix = await onOwn(() => accountLoraFix(req));
       if (fix) {
-        unhit(`run:${account.id}`);
+        unhitRun();
         return refuse(409, missingFilesMessage(fix), { code: "comfy_missing_model", fix });
       }
     }
     // The moderation service's check (none set: nothing checked), before anything is set aside: a refusal costs nothing.
     // Then, on this install's GPUs, the billing service sets the run's price aside (none set: the run is free).
     let stamp: RunStamp | null = null;
+    // A run on this install's GPUs that waits for a service (it didn't answer, or said runs are paused, or gave a later
+    // start): why, and what its reserve then sends; `unchecked`: the moderation service didn't answer (it is checked first).
+    let wait: ReserveWait | undefined;
+    let facts: ReserveFacts | undefined;
+    let unchecked = false;
     if (account) {
       const mod = await moderateRun(account, req, onPool?.planned ?? null, onPool ? "pool" : "own");
-      if (!mod.ok) return refusedBy(mod.refusal);
+      if (!mod.ok) {
+        // While runs on this install's GPUs wait for the services (the policy says so), one the moderation service didn't
+        // answer for is taken, and checked before it enters the line.
+        if (onPool && !onPool.light && holdsOn(onPool.policy) && mod.refusal.body.code === "paused") unchecked = true;
+        else return refusedBy(mod.refusal);
+      }
+      const checkOutputs = mod.ok && mod.checkOutputs;
       if (onPool?.light) {
         // Light work only (joins, trims): free, so nothing is set aside, and it counts against none of the policy's limits.
-        stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }), ...policyWait(onPool.policy) };
+        stamp = { place: "pool", light: true, ...(checkOutputs && { checkOutputs: true }), ...policyWait(onPool.policy) };
       } else if (onPool) {
-        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps, poolTry === null ? null : pressTry(account.id, pressId!, poolTry), onPool.policy);
+        const limit = "hold" in plan ? { reason: plan.hold, ...(plan.startAt !== undefined && { startAt: plan.startAt }) } : undefined;
+        const press = poolTry === null ? null : pressTry(account.id, pressId!, poolTry);
+        const held = await reservePool(account, req, onPool.planned, shown, checkOutputs, onPool.steps, press, onPool.policy, { heldMs: heldGuessMs(limit) });
         if (!held.ok) return refusedBy(held.refusal);
         stamp = held.stamp;
-      } else if (mod.checkOutputs) stamp = { checkOutputs: true };
+        wait = held.wait;
+        facts = held.facts;
+      } else if (checkOutputs) stamp = { checkOutputs: true };
     }
     const make = () => createGenerations(req);
     const inScope = <T,>(fn: () => T): T => (account && onPool ? runOnPool(account.id, () => withRunStamp(stamp ?? { place: "pool" }, fn)) : stamp ? onOwn(() => withRunStamp(stamp, fn)) : onOwn(fn));
     let items: ReturnType<typeof createGenerations>;
+    // Why the run waits to enter the line, when it does (its tile says "In line" at once all the same).
+    let heldFor: HoldReason | undefined;
     try {
       if (account) {
         // Counted again as the run is made, in one transaction (admitRun): requests that arrived together all passed the
         // first counts while the checks above waited, and a second server may be making runs too. The run's rows are made
         // and checked step by step (every step of a chain on this install's GPUs is one the policy allows); nothing is
-        // sent until they are kept.
+        // sent until they are kept. A run the limits or a service hold is kept waiting to enter the line instead of being
+        // sent (pool-holds.ts); the release loop sends it when its reason clears.
         const pool = onPool;
         const admitted = inScope(() => {
           const r = admitRun(
@@ -299,19 +347,21 @@ export async function POST(request: Request) {
               // of its own, never a run against this one. Noted in the same transaction, before any send can look.
               ...(poolTry !== null && stamp?.hold && { refused: () => void endTry(account.id, pressId!, poolTry) }),
             },
-            () => {
+            (admit) => {
               const run = captureRun(make);
               const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
               if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+              const shape = pool && !pool.light ? holdShape({ limit: admit.hold, wait, unchecked }) : null;
+              if (shape) holdRun({ accountId: account.id, rows: run.rows, pressedAt, ...shape, ...(facts && { facts }) });
               if (poolTry !== null) notePressRun(account.id, pressId!, poolTry, run.value.map((g) => g.id), stamp?.hold ?? null);
-              return run;
+              return { ...run, held: shape?.reason };
             },
           );
-          if (r.ok) r.value.start();
+          if (r.ok && !r.value.held) r.value.start();
           return r;
         });
         if (!admitted.ok && "prior" in admitted) {
-          unhit(`run:${account.id}`);
+          unhitRun();
           const prior = admitted.prior;
           // The service gives one try of a press one hold; a different one (a service that made a second) goes back, and
           // so does the hold of a try another send ended.
@@ -319,12 +369,15 @@ export async function POST(request: Request) {
           return prior === "ended" ? refuse(503, BILLING_WAIT.run, { code: "paused" }, { [BILLING_HEADER]: "paused" }) : madeAlready(prior.ids);
         }
         if (!admitted.ok) {
-          unhit(`run:${account.id}`);
+          unhitRun();
           if (stamp?.hold) queueRelease(stamp.hold);
           const a = limitAnswer(admitted.refusal);
           return refuse(a.status, a.body.error, a.body, a.headers);
         }
         items = admitted.value.value;
+        heldFor = admitted.value.held;
+        // Its tiles as they read now: "In line", with why it waits (its rows were read before their holds were kept).
+        if (heldFor) items = items.map((g) => ({ ...(getGeneration(g.id) ?? g), ...(g.notes && { notes: g.notes }) }));
       } else items = make();
     } catch (e) {
       // Nothing was made: what was set aside goes back.
@@ -335,12 +388,12 @@ export async function POST(request: Request) {
     if (viewer.kind === "owner" && token && getSetting("comfyWhere") === "computer" && items.some((g) => g.provider === "comfyui")) notes.push(RUNS_ON_COMPUTER_NOTE);
     // What the run leaves out or changes (a model that replaced a retired one, a LoRA that runs only on a GPU, a length the API rounds).
     const all = [...new Set([...notes, ...items.flatMap((g) => g.notes ?? [])])];
-    return Response.json({ items, ...(all.length && { notes: all }), ...(gpuWarning && { gpuWarning }) }, { status: 201 });
+    return Response.json({ items, ...(all.length && { notes: all }), ...(gpuWarning && { gpuWarning }), ...(heldFor && { held: { reason: heldFor } }) }, { status: 201 });
   } catch (e) {
     const refusal = e instanceof AccountRunError ? e.refusal : undefined;
     // A price check of a paid model the account has no key for says so, without opening "Add your key".
     if (refusal && !preview) return refused(refusal);
-    if (account && !preview) unhit(`run:${account.id}`);
+    if (account && !preview) unhitRun();
     // Nothing connected runs this, and ComfyUI or a key could (placeholder results off): the owner's own browser
     // (never a script's token) opens the connect card for it, with the ways that would run it, and the run starts once
     // one is connected (src/server/connect-refusal.ts).

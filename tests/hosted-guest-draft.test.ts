@@ -132,6 +132,15 @@ describe("the run a guest pressed", () => {
     expect(step({ shown: { amount: 0, priceVersion: "", text: "" }, quote: { allowed: true, amount: 0, text: "" } })).toBe("start");
   });
 
+  it("starts for a run the server takes and keeps waiting: behind the account's other runs, until a time, or while the price can't be known", () => {
+    // The line says it waits (the price is the one shown): the run is taken all the same.
+    expect(step({ quote: { allowed: true, amount: 0, text: "Free" } })).toBe("start");
+    // The billing service doesn't answer and no price is known now: allowed with no words, the run waits for it.
+    expect(step({ quote: { allowed: true, amount: 0, text: "" } })).toBe("start");
+    // But never with nothing shown to compare.
+    expect(step({ shown: null, quote: { allowed: true, amount: 0, text: "" } })).toBe("none");
+  });
+
   it("never starts without a kept file that didn't come back, even in a slot the run could do without", () => {
     // When every run costs the same ("Free") and a reference photo or start frame is optional, only the lost file
     // stops it, and the person is asked to add it again.

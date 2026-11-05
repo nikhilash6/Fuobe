@@ -14,17 +14,24 @@ import {
   cachedPolicy,
   forgetBalance,
   FREE_QUOTE,
+  holdsOn,
   lastPrefer,
+  lastQuote,
   policy as billingPolicy,
   policyGiveUpMs,
   policyOfferAfterS,
   quote as billingQuote,
+  quoteDown,
   refusalStatus,
   reserve,
+  RESERVE_INLINE,
+  UNKNOWN_QUOTE,
   type Policy,
   type Quote,
   type QueueFacts,
   type RefuseCode,
+  type ReserveAnswer,
+  type ReserveInput,
   type RunFacts,
 } from "./billing";
 import { getModel } from "@/lib/catalog";
@@ -44,7 +51,8 @@ import { reserveRequestId, type Press } from "./run-requests";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
 import { ACCOUNT_LIMITS } from "./account-files";
-import { poolLimitRefusal } from "./pool-limits";
+import { poolLimitPlan, type LimitPlan } from "./pool-limits";
+import { startReason, type HoldReason } from "./pool-holds";
 import { runAsTenant } from "./tenant";
 import { needsGpu, ownSetupHere, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
@@ -586,6 +594,24 @@ export function policyWait(p: Pick<Policy, "limits"> | null | undefined): Pick<R
 }
 
 /**
+ * Why a run that reservePool let in waits to enter the line (pool-holds.ts): the billing service didn't answer, or said
+ * runs here are paused (`service`: it reserves under `requestId` once it answers); or it answered with a time the run may
+ * start (`today`, `hour`: its hold is made; `credits`: it reserves then).
+ */
+export type ReserveWait =
+  | { reason: "service"; requestId: string; paused?: true }
+  | { reason: "today" | "hour"; startAt: number }
+  | { reason: "credits"; startAt: number; requestId: string };
+
+/** What a reserve made later sends of the run (pool-release.ts): its facts, the price shown, its timing. */
+export interface ReserveFacts {
+  run: RunFacts;
+  shown: { amount: number; priceVersion: string };
+  timing: NonNullable<ReserveInput["timing"]>;
+  workflowId: string | null;
+}
+
+/**
  * Set the run's price aside (no billing service: nothing to set aside; the run is free). Returns the stamp the run's
  * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md). `press`: the press of
  * Run it belongs to and its try (run-requests.ts), so every send of that try reserves under one request id, and a new try
@@ -594,6 +620,11 @@ export function policyWait(p: Pick<Policy, "limits"> | null | undefined): Pick<R
  *
  * How long the run may wait before it first starts: the policy's `limits.giveUpS` when it says (0: as long as it takes),
  * which wins over the reserve answer's `maxWaitMs`; else that answer's; else the install's own (FUOBE_POOL_WAIT_MIN).
+ *
+ * When runs wait instead of being refused (billing.ts holdsOn), the reserve is tried for RESERVE_INLINE at most; a
+ * service that doesn't answer, says runs are paused, or answers with a later start lets the run in all the same, and
+ * `wait` says why it waits (the caller holds it; no hold is given back by request id: the release reserves under the
+ * same one). `heldMs`: how long the run is expected to wait before it enters the line (sent with the reserve's timing).
  */
 export async function reservePool(
   account: Account,
@@ -604,24 +635,33 @@ export async function reservePool(
   steps?: RunFacts["steps"],
   press: Press | null = null,
   policy: Pick<Policy, "limits"> | null = null,
-): Promise<{ ok: true; stamp: RunStamp } | { ok: false; refusal: Refusal }> {
+  o: { heldMs?: number } = {},
+): Promise<{ ok: true; stamp: RunStamp; wait?: ReserveWait; facts?: ReserveFacts } | { ok: false; refusal: Refusal }> {
   const giveUp = policyGiveUpMs(policy);
   const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }), ...(giveUp !== undefined && { waitMs: giveUp }) };
   if (!billingConfigured()) return { ok: true, stamp: base };
   const kind = outputKind(planned.op, planned.model);
   const run: RunFacts = { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) };
   const requestId = press ? reserveRequestId(account.id, press.key, press.tries) : nanoid(16);
-  const a = await reserve({
-    requestId,
-    account: accountFacts(account),
-    run,
-    queue: queueFacts(account.id, planned.route.endpoint),
-    shown: shown ?? { amount: 0, priceVersion: "" },
-    // How long its hold must stay open once a worker first takes it: every attempt at its lanes' run ceilings, and the
-    // time it may spend back in line (the queue's settings).
-    timing: holdTiming(run.steps?.length ? run.steps : [{ lane: run.lane, jobs: run.jobs }], MAX_ATTEMPTS, attemptLimitMs),
-  });
+  const waits = holdsOn(policy);
+  // How long its hold must stay open once a worker first takes it: every attempt at its lanes' run ceilings, and the
+  // time it may spend back in line (the queue's settings); and, for a run that waits to enter the line, about how long.
+  const timing = {
+    ...holdTiming(run.steps?.length ? run.steps : [{ lane: run.lane, jobs: run.jobs }], MAX_ATTEMPTS, attemptLimitMs),
+    ...(o.heldMs && o.heldMs > 0 && { heldMs: Math.round(o.heldMs) }),
+  };
+  const facts: ReserveFacts = { run, shown: shown ?? { amount: 0, priceVersion: "" }, timing, workflowId: planned.route.endpoint ?? null };
+  const queue = queueFacts(account.id, planned.route.endpoint);
+  const a = await reserve({ requestId, account: accountFacts(account), run, queue, shown: facts.shown, timing }, waits ? { forMs: RESERVE_INLINE.ms } : {});
   if (!a) return { ok: true, stamp: base };
+  if (!a.ok && waits) {
+    // No answer, or runs here paused: the run is made and waits; it reserves under this same request id once the service
+    // answers (so a hold an unanswered try made is the one it gets).
+    if (a.code === "paused") return { ok: true, stamp: base, wait: { reason: "service", requestId, ...(!a.down && { paused: true as const }) }, facts };
+    // No free generations left until they renew: it waits, and reserves then.
+    const at = await renewalAt(a, account, run, queue);
+    if (at !== null) return { ok: true, stamp: base, wait: { reason: "credits", startAt: at, requestId }, facts };
+  }
   if (!a.ok) {
     if (a.unsure) {
       // A try may have made a hold the app never heard of: it goes back by its request id, and the press's next send is a
@@ -635,20 +675,39 @@ export async function reservePool(
     return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }) }) };
   }
   forgetBalance(account.id);
-  // Its class and head start in the line come from the answer too (a paid run goes before every free one).
+  // A later start (the day's GPU time used up, an hourly limit): the hold is made, and the run waits until then.
+  const startAt = Number(a.startAt);
+  const later = waits && Number.isFinite(startAt) && startAt > Date.now();
+  return { ok: true, stamp: { ...base, ...heldStamp(a, giveUp) }, ...(later && { wait: { reason: startReason(startAt), startAt }, facts }) };
+}
+
+/**
+ * When free generations that renew would pay for a run its reserve turned down for credit (`top-up`, with credits on):
+ * the service's quote for the run says so, allowed with a later `startAt` (the refusal's own quote when it carries one).
+ * Null for any other refusal, or when nothing renews in time (the refusal stands).
+ */
+export async function renewalAt(a: { code: string; quote?: Quote }, account: Account, run: RunFacts, queue: QueueFacts | null, now = Date.now()): Promise<number | null> {
+  if (a.code !== "top-up") return null;
+  const q = a.quote ?? (await billingQuote(accountFacts(account), run, queue));
+  const at = Number(q.startAt);
+  return q.allowed && Number.isFinite(at) && at > now ? at : null;
+}
+
+/**
+ * The stamp fields a reserve's answer gives a run: its hold, the words for its charge, whether anything was set aside,
+ * its wait limit (the policy's `giveUp` wins), and its class and head start in the line (a paid run goes before every
+ * free one).
+ */
+export function heldStamp(a: Extract<ReserveAnswer, { ok: true }>, giveUp: number | undefined): RunStamp {
   const boost = Number(a.boostMs);
   return {
-    ok: true,
-    stamp: {
-      ...base,
-      hold: a.holdId,
-      ...(a.text && { charge: a.text }),
-      // Something was set aside (a free run's hold sets aside nothing): only then can a run that ends early say so.
-      ...(Number(a.amount) > 0 && { charged: true }),
-      ...(giveUp === undefined && a.maxWaitMs > 0 && { waitMs: a.maxWaitMs }),
-      ...(a.class === "paid" && { class: "paid" as const }),
-      ...(Number.isFinite(boost) && boost > 0 && { boostMs: Math.min(boost, 24 * 60 * 60_000) }),
-    },
+    hold: a.holdId,
+    ...(a.text && { charge: a.text }),
+    // Something was set aside (a free run's hold sets aside nothing): only then can a run that ends early say so.
+    ...(Number(a.amount) > 0 && { charged: true }),
+    ...(giveUp === undefined && a.maxWaitMs > 0 && { waitMs: a.maxWaitMs }),
+    ...(a.class === "paid" && { class: "paid" as const }),
+    ...(Number.isFinite(boost) && boost > 0 && { boostMs: Math.min(boost, 24 * 60 * 60_000) }),
   };
 }
 
@@ -661,6 +720,9 @@ export async function reservePool(
  * - `light`: light work only (joins, trims): ready in seconds, with no GPU.
  * - `long`: the wait passes the policy's `offerAfterS` (or is unknown): an account with its own GPU or key that runs it
  *   may be offered it for this run, once.
+ * - `held`: a run pressed now is taken and waits to enter the line (pool-holds.ts): "mine" after the account's runs going,
+ *   "today" or "hour" until `startAt`; "service" while runs here are paused (`paused`, with the service's words in
+ *   `note`).
  */
 export interface PoolLine {
   place: number;
@@ -669,6 +731,49 @@ export interface PoolLine {
   returnAt?: number;
   light?: true;
   long?: true;
+  held?: HoldReason;
+  startAt?: number;
+  paused?: true;
+  note?: string;
+}
+
+/**
+ * The line a price check says, with why a run pressed now would wait to enter it: the service's later start (the day's
+ * GPU time, an hourly limit: the offer of the account's own GPU or key shows at the daily cap), else the policy's
+ * limits (behind the account's runs going, or an hourly limit).
+ */
+function withHeld(line: PoolLine, plan: LimitPlan | null, q: Quote, now = Date.now()): PoolLine {
+  const at = Number(q.startAt);
+  if (q.allowed && Number.isFinite(at) && at > now) {
+    const reason = startReason(at);
+    return { ...line, held: reason, startAt: at, ...(reason === "today" && { long: true as const }) };
+  }
+  if (plan && "hold" in plan) return { ...line, held: plan.hold, ...(plan.startAt !== undefined && { startAt: plan.startAt }) };
+  return line;
+}
+
+/**
+ * The quote a price check shows when the billing service doesn't answer or says runs here are paused, while runs wait for
+ * it (holdsOn): the last price it gave for this run (else none), allowed, so Run stays on and a press is taken. `paused`:
+ * the service's own words for the pause, shown as the line before Run.
+ */
+function quoteWhileQuiet(q: Quote, p: Policy | null, account: Account | null, facts: RunFacts): { q: Quote; paused?: string } {
+  if (q.allowed || q.code !== "paused" || !holdsOn(p)) return { q };
+  const known = lastQuote(account ? accountFacts(account) : null, facts) ?? UNKNOWN_QUOTE;
+  return quoteDown(q) ? { q: known } : { q: known, paused: q.text };
+}
+
+/** A price check's quote and line, with what the policy's limits say of a run pressed now (refused only past the cap). */
+function limitedCheck(q0: Quote, line: (q: Quote) => PoolLine, p: Policy | null, account: Account | null, facts: RunFacts, addr: (() => string | null) | null): { quote: Quote; line: PoolLine } {
+  const quiet = quoteWhileQuiet(q0, p, account, facts);
+  let q = quiet.q;
+  let plan: LimitPlan | null = null;
+  if (q.allowed && account && p) {
+    plan = poolLimitPlan(account.id, p, addr);
+    if ("refuse" in plan) q = { ...q, allowed: false, code: "limit", text: plan.refuse.error };
+  }
+  const shown = withHeld(line(q), plan, q);
+  return { quote: q, line: quiet.paused !== undefined && q.allowed ? { ...shown, held: "service", paused: true, note: quiet.paused, long: true } : shown };
 }
 
 /** The line a price check says, from the queue's facts (and the service's own estimate, `q.etaS`, when it gave one). */
@@ -750,13 +855,10 @@ export async function poolQuote(
   // Priced once for every step of a chain that uses this install's GPUs. Its facts are read as the viewer (an input's
   // size from its own files only: another's file reads as none, and says nothing of whether it exists).
   const facts = { ...runOnPool(account?.id ?? null, () => runFacts(req, planned, outputKind(planned.op, planned.model))), ...(gate.steps && { steps: pricedSteps(gate.steps) }) };
-  let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
+  const q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
   // The policy's limits on this account's runs here, as the run would meet them (pool-limits.ts): said before Run.
-  if (q.allowed && account && p) {
-    const over = poolLimitRefusal(account.id, p, o.addr ?? null);
-    if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
-  }
-  return { planned, quote: q, line: poolLine(queue, { ...shape, q }) };
+  const checked = limitedCheck(q, (quote) => poolLine(queue, { ...shape, q: quote }), p, account, facts, o.addr ?? null);
+  return { planned, ...checked };
 }
 
 /**
@@ -902,12 +1004,8 @@ export async function toolPoolQuote(
   const shape = { light: lightRun(gate.rows), waits: runWaits(planned, gate.rows), p };
   if (shape.light) return { quote: FREE_QUOTE, line: poolLine(queue, shape) };
   const facts = { ...runOnPool(account?.id ?? null, () => runFacts(req, planned, outputKind(planned.op, planned.model))), steps: pricedSteps(gate.rows) };
-  let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
-  if (q.allowed && account && p) {
-    const over = poolLimitRefusal(account.id, p, o.addr ?? null);
-    if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
-  }
-  return { quote: q, line: poolLine(queue, { ...shape, q }) };
+  const q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
+  return limitedCheck(q, (quote) => poolLine(queue, { ...shape, q: quote }), p, account, facts, o.addr ?? null);
 }
 
 /**

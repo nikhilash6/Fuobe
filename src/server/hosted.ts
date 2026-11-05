@@ -10,6 +10,7 @@ import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun, typ
 import { db } from "./db";
 import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
+import { holdOf, NOT_HELD, type HoldReason } from "./pool-holds";
 import { poolRunCounts } from "./pool-limits";
 import { getWorkflow, installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
@@ -259,7 +260,7 @@ function myRuns(accountId: string | null): QueueFacts["mine"] {
 export function queueFacts(accountId: string | null, workflowId?: string | null): QueueFacts {
   if (poolOnWorkers()) return { ...lineFacts(accountId, workflowId ?? null), mine: myRuns(accountId) };
   const d = db();
-  const ahead = (d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING}`).get() as { n: number }).n;
+  const ahead = (d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING} AND ${NOT_HELD("g")}`).get() as { n: number }).n;
   const typical = typicalRunMs();
   return {
     lane: POOL_LANE,
@@ -271,15 +272,75 @@ export function queueFacts(accountId: string | null, workflowId?: string | null)
   };
 }
 
+/**
+ * A held row's line (pool-holds.ts): why it waits to enter it and, as its tile says it, where it stands. Waiting for the
+ * service: its place and wait as if in line from its press (`paused`: the service said runs here are paused, so it
+ * starts when a GPU is free). Behind the account's runs going: about when it would be ready, when known (when the first
+ * of them is due done, plus a new run's wait now). Until a time: that time. Null when the row isn't held.
+ */
+export function heldLine(generationId: string, now = Date.now()): (LinePlace & { held: HoldReason; startAt?: number; paused?: true }) | null {
+  const h = holdOf(generationId);
+  if (!h) return null;
+  const startAt = h.start_at !== null && h.start_at > now ? h.start_at : undefined;
+  const base = { held: h.reason, ...(startAt !== undefined && { startAt }) };
+  if (startAt !== undefined) return { place: 1, etaSeconds: null, ...base };
+  const workflow = rowWorkflow(generationId);
+  if (h.reason === "service") {
+    if (h.paused) return { place: 1, etaSeconds: null, unknown: true, paused: true, ...base };
+    if (!poolOnWorkers()) return { ...ownServerPlace(h.pressed_at), ...base };
+    const f = lineFacts(h.account_id, workflow, now, h.pressed_at);
+    return { place: f.ahead + 1, etaSeconds: f.etaS, ...(f.etaS === null && f.workersOnline === 0 && { unknown: true as const }), ...(f.nextOpenAt && { returnAt: f.nextOpenAt }), ...base };
+  }
+  if (h.reason === "mine") return { place: 1, etaSeconds: mineEta(h.account_id, workflow), ...base };
+  return { place: 1, etaSeconds: null, ...base };
+}
+
+/** The workflow a row's job runs (its route on ComfyUI), or null. */
+function rowWorkflow(generationId: string): string | null {
+  const r = db().prepare("SELECT model_id, op FROM generations WHERE id = ?").get(generationId) as { model_id: string; op: string } | undefined;
+  const routes = r ? (getModel(r.model_id)?.routes ?? []).filter((x) => x.provider === "comfyui") : [];
+  const endpoint = (routes.find((x) => x.op === r?.op) ?? routes[0])?.endpoint;
+  return endpoint && !endpoint.includes("{") ? endpoint : null;
+}
+
+/** On this install's own server: a run's place from its press among the rows waiting there. */
+function ownServerPlace(pressedAt: number): LinePlace {
+  const before = (db().prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING} AND ${NOT_HELD("g")} AND g.created_at < ?`).get(pressedAt) as { n: number }).n;
+  const typical = typicalRunMs();
+  return { place: before + 1, etaSeconds: typical === null ? null : Math.round(((before + 1) * typical) / 1000) };
+}
+
+/**
+ * About when a run held behind the account's runs going would be ready: when the first of them still in line is due
+ * done, plus a new run's wait now. Null when that isn't known (none of them waits in line with an estimate).
+ */
+function mineEta(accountId: string, workflow: string | null): number | null {
+  const going = db()
+    .prepare(`SELECT g.id FROM generations g WHERE ${POOL_ROWS} AND json_extract(g.request_json, '$.account') = ? AND ${NOT_HELD("g")}`)
+    .all(accountId) as { id: string }[];
+  let first: number | null = null;
+  for (const g of going) {
+    const q = placeInLine(g.id);
+    if (q?.etaSeconds != null) first = first === null ? q.etaSeconds : Math.min(first, q.etaSeconds);
+  }
+  if (first === null) return null;
+  const own = queueFacts(accountId, workflow).etaS;
+  return own === null ? null : first + own;
+}
+
 /** A waiting row's place in line on this install's GPUs (1: next), and the wait, about. Null when it isn't waiting there. */
 export function placeInLine(generationId: string): LinePlace | null {
   // On the workers: its task's place in their line (back in line after an attempt, the same place).
   const task = queueOfGeneration(generationId);
   if (task || poolOnWorkers()) return task;
   const d = db();
-  const row = d.prepare(`SELECT g.created_at FROM generations g WHERE g.id = ? AND ${POOL_ROWS} AND ${WAITING}`).get(generationId) as { created_at: number } | undefined;
+  const row = d.prepare(`SELECT g.created_at FROM generations g WHERE g.id = ? AND ${POOL_ROWS} AND ${WAITING} AND ${NOT_HELD("g")}`).get(generationId) as { created_at: number } | undefined;
   if (!row) return null;
-  const before = (d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING} AND (g.created_at < ? OR (g.created_at = ? AND g.id < ?))`).get(row.created_at, row.created_at, generationId) as { n: number }).n;
+  const before = (
+    d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING} AND ${NOT_HELD("g")} AND (g.created_at < ? OR (g.created_at = ? AND g.id < ?))`).get(row.created_at, row.created_at, generationId) as {
+      n: number;
+    }
+  ).n;
   const typical = typicalRunMs();
   return { place: before + 1, etaSeconds: typical === null ? null : Math.round(((before + 1) * typical) / 1000) };
 }

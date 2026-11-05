@@ -437,11 +437,12 @@ describe("hosted runs on", () => {
     expect(db().prepare("SELECT COUNT(*) AS n FROM open_admissions WHERE account = ?").get(account.id)).toEqual({ n: 0 });
     const third = await go();
     expect(third.ok).toBe(false);
-    // The account's own limit of runs at once counts such a run too, while its rows are being made.
+    // The studio's own limit of runs at once (4) counts runs on the account's own GPU or key only while hosted runs are
+    // on: runs here meet the policy's limits, so with none set every one sent together is taken.
     db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
     fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), activeRuns: 0, waiting: 0 } };
     const many = await Promise.all(Array.from({ length: 6 }, go));
-    expect(many.filter((r) => r.ok)).toHaveLength(4);
+    expect(many.filter((r) => r.ok)).toHaveLength(6);
   });
 
   it("a start that makes no rows gives its hold back, answers as the tool does, and isn't one of the hour's runs", async () => {

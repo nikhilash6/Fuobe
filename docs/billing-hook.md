@@ -56,7 +56,7 @@ type Action = { label: string; url: string };              // Fuobe opens url as
 type Offer = { key: string; text: string; label: string };  // a click sends POST /v1/interest { account, key }
 type RefuseCode = "top-up" | "limit" | "busy" | "not-offered" | "blocked" | "closed" | "paused";
 
-type Quote = { allowed: boolean; amount: number; priceVersion: string; text: string; sub?: string; code?: RefuseCode; etaS?: number | null; action?: Action; offer?: Offer };
+type Quote = { allowed: boolean; amount: number; priceVersion: string; text: string; sub?: string; code?: RefuseCode; etaS?: number | null; startAt?: number; action?: Action; offer?: Offer };
 type Policy = {
   hosted: boolean;                                                // may this account use this install's GPUs at all
   pool: { allow?: string[]; deny?: string[]; apps?: { allow?: string[]; deny?: string[] } };  // models and apps there
@@ -66,6 +66,7 @@ type Policy = {
     keepDays: number; spaceBytes: number; addressRunsPerHour?: number;
     giveUpS?: number;                                              // longest wait before a GPU first takes a run (0: none)
     offerAfterS?: number;                                          // a wait after which an account's own GPU or key is offered (absent: 1200)
+    held?: number;                                                 // runs that may wait behind an account's runs at once (0: no cap; absent: limits refuse)
   };
   prefer?: "pool" | "own";                                         // the default place (absent: "own")
   kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };  // absent: all
@@ -85,6 +86,20 @@ answer says, and with none `FUOBE_POOL_WAIT_MIN`. `limits.offerAfterS` is the wa
 estimates it) after which the line before Run offers an account its own GPU, or a key that runs the item's cloud
 version at its price, for that one run. Absent: 1200. A wait with no end known (every GPU that could run it is away)
 counts as past it.
+
+`limits.held` says runs wait instead of being refused. Present (0 or more), a press past `limits.activeRuns`,
+`limits.waiting` or an hourly limit is taken: the run is made, its tile says "In line", and it enters the line when
+its reason clears (at the back of the line, so an account's fast presses never pass anyone). `limits.held` is how many
+runs may wait like that behind the account's runs at once (`0`: no cap); a press past it is the only one refused,
+"You have 10 runs on the way. Add more when one is done." Absent (an older service), every limit refuses as before.
+
+`startAt` (epoch ms, only with `allowed: true` or `ok: true`) says the run may be made now and waits until then before
+it enters the line: the day's GPU time is used up (a `startAt` at a UTC midnight: the line before Run says "Lots of
+runs today · starts in about 7 h", and at that time the runs enter at their press-time places, in press order), or an
+hourly limit (at the back of the line). With credits on, a reserve refused with `top-up` whose quote is allowed with a
+`startAt` (free generations that renew then) waits too, and reserves at that time. `timing.heldMs` is about how long
+the run is expected to wait before it enters the line at all (behind the account's runs, or until a time it was
+given); a service adds it to the hold's life.
 
 While the service doesn't answer, a run that would go to this install's GPUs because the service's last answer put them
 first (`prefer: "pool"`) waits for the service; it is never moved to the account's own GPU for that.
@@ -198,7 +213,7 @@ answers again.
 | Call | Request | Answer |
 |---|---|---|
 | `POST /v1/quote` | `{ account: AccountFacts \| null, run: RunFacts, queue: QueueFacts \| null }` | `Quote` |
-| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion }, timing?: { runMs, pausedMs } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
+| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion }, timing?: { runMs, pausedMs, heldMs? } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text, startAt? }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
 | `POST /v1/release` | `{ holdId, reason: "not-created" }` or `{ requestId, reason: "not-created" }` | `{ ok: true }` |
 | `POST /v1/settle` | `{ holdId, generationId, rows, status: "succeeded", final: { outputs, megapixels, seconds }, providerUsd, gpuMs, device, reachedProvider }` | `{ ok: true, charged }` |
 | `POST /v1/refund` | `{ holdId, generationId, rows, status: "failed" \| "canceled" \| "hidden" \| "unchecked", reason, reachedProvider, gpuMs, device }` | `{ ok: true, text }` |
@@ -303,6 +318,7 @@ seconds. A stop that comes after the result was saved leaves the run saved, so i
 |---|---|
 | No `FUOBE_BILLING_URL` | No call. Runs on this install's GPUs are closed, or free and allowed with `FUOBE_HOSTED_FREE=1`. |
 | Set, and it answers | As above. |
-| Set, and no answer in time | A press of Run waits while the reserve is tried again for up to 40 seconds (a restart of the service), and the feed shows the run as "In line" meanwhile. Then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
+| Set, no answer in time, and the policy has `limits.held` | The reserve is tried for up to 5 seconds. Then the run is made all the same and its tile shows "In line" at its place, with no card and no toast; it reserves under its press's own request id (so the service makes one hold for it) once the service answers (tried again after 1 s, doubling to 30 s, and at once after the service answers any call), and enters at its press-time place. A refusal then ends the run in one plain sentence. Before Run, the price slot shows the last price the service gave for that run (kept 10 minutes), else nothing, and Run stays on. While the service answers `paused`, its words are the line before Run and a press waits the same way. A moderation service that doesn't answer at a studio's press is handled the same way: the run is checked before it enters the line. Runs waiting longer than 5 minutes are said in the server log. |
+| Set, and no answer in time (no `limits.held`) | A press of Run waits while the reserve is tried again for up to 40 seconds (a restart of the service), and the feed shows the run as "In line" meanwhile. Then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
 
 The service's address and its errors are written to the server's log only. A browser never sees them.

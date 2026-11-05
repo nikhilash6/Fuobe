@@ -266,4 +266,33 @@ describe("a self-hosted install with hosted runs off", () => {
     expect(retryRequest({ request }, false)).toBe(request);
     expect(pickerRules({ gpu: { connected: true }, pool: { deny: ["x"] } })).toBeUndefined();
   });
+
+  it("runs that wait to enter the line: none is ever made, a run cut off before it started fails in today's words, and the limit of 4 counts every run", async () => {
+    const { db } = await import("@/server/db");
+    const { ensureRunner } = await import("@/server/generations");
+    const { accountActiveRuns, ownActiveRuns } = await import("@/server/pool-limits");
+    const a = auth.createAccount("self-host-holds@example.com", "long enough");
+    const row = (id: string, place: "pool" | null, at: number) =>
+      db()
+        .prepare(
+          `INSERT INTO generations (id, batch_id, feature, preset_id, model_id, engine, provider, op, kind, status, progress, message, prompt, request_json, outputs_json, cost_usd, favorite, created_at, updated_at)
+           VALUES (?, NULL, 'image', NULL, 'oss-z-image-turbo', 'open', 'comfyui', 'generate', 'image', 'queued', NULL, 'Submitting', 'a fox', ?, '[]', NULL, 0, ?, ?)`,
+        )
+        .run(id, JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", account: a.id, ...(place && { place }) }), at, at);
+    // The studio's own limit of runs at once counts every run of the account, wherever it goes, as before.
+    row("self-host-own-1", null, Date.now());
+    row("self-host-site-1", "pool", Date.now());
+    expect(ownActiveRuns(a.id)).toBe(accountActiveRuns(a.id));
+    expect(ownActiveRuns(a.id)).toBe(2);
+    // Rows whose GPU task never came (the app stopped in between), three minutes old: both fail as before, nothing waits.
+    const old = Date.now() - 3 * 60_000;
+    db().prepare("UPDATE generations SET created_at = ?, updated_at = ? WHERE id IN ('self-host-own-1', 'self-host-site-1')").run(old, old);
+    ensureRunner();
+    await globalThis.__fuobeRunner?.tick();
+    for (const id of ["self-host-own-1", "self-host-site-1"]) {
+      const g = db().prepare("SELECT status, error FROM generations WHERE id = ?").get(id) as { status: string; error: string };
+      expect(g).toEqual({ status: "failed", error: "This run stopped before it started. Press Retry." });
+    }
+    expect((db().prepare("SELECT COUNT(*) AS n FROM pool_holds").get() as { n: number }).n).toBe(0);
+  });
 });

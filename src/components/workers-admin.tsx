@@ -49,6 +49,26 @@ interface Lane {
   workflows: number;
 }
 
+/** Runs made but waiting to enter the line (hosted runs), by why they wait, and when the oldest was pressed. */
+interface HeldCounts {
+  mine: number;
+  today: number;
+  service: number;
+  hour: number;
+  list: number;
+  credits: number;
+  oldestAt: number | null;
+}
+
+/** "Waiting to enter the line: 3 (oldest 12 min)", or null when none waits. */
+export function heldLine(h: HeldCounts | undefined, now: number): string | null {
+  if (!h) return null;
+  const n = h.mine + h.today + h.service + h.hour + h.list + h.credits;
+  if (!n) return null;
+  const min = h.oldestAt === null ? null : Math.max(0, Math.round((now - h.oldestAt) / 60_000));
+  return `Waiting to enter the line: ${n}${min === null ? "" : ` (oldest ${min} min)`}`;
+}
+
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
@@ -250,7 +270,7 @@ function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onTok
 export function useWorkers(enabled: boolean) {
   return useQuery({
     queryKey: ["admin", "workers"],
-    queryFn: () => call<{ workers: WorkerView[]; lanes: Lane[] }>("GET", "/api/admin/workers"),
+    queryFn: () => call<{ workers: WorkerView[]; lanes: Lane[]; held?: HeldCounts }>("GET", "/api/admin/workers"),
     enabled,
     refetchInterval: 10_000,
   });
@@ -261,6 +281,7 @@ export function WorkersAdmin() {
   const hydrated = useHydrated();
   const owner = useViewer().data?.owner;
   const q = useWorkers(!!owner);
+  const now = useNow(30_000);
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [token, setToken] = useState<string | null>(null);
@@ -283,6 +304,7 @@ export function WorkersAdmin() {
   if (!hydrated) return null;
   if (!owner) return <p className="text-[14px] text-muted-foreground">Only the studio&apos;s owner manages workers.</p>;
   const workers = q.data?.workers ?? [];
+  const held = heldLine(q.data?.held, now);
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -310,6 +332,11 @@ export function WorkersAdmin() {
         </Button>
       </form>
       {q.isError && <p className="text-[13px] text-destructive">{(q.error as Error).message}</p>}
+      {held && (
+        <p data-held-line className="text-[13px] text-muted-foreground tabular-nums">
+          {held}
+        </p>
+      )}
       {workers.length ? (
         <ul className="space-y-3">
           {workers.map((w) => (

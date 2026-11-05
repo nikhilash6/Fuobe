@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { GenerationRequest } from "./catalog/types";
-import { lineWords, waitWords } from "./pool-line";
+import { lineWords, noteWords, waitWords, type HeldReason } from "./pool-line";
 import type { OwnSetup } from "./own-setup";
 
 /**
@@ -98,7 +98,9 @@ export function useSettled<T>(value: T, ms = 300): T {
  * Where a new run would stand in line on this install's GPUs right now (1: next), and the wait, about (null: unknown).
  * The run is taken whatever the line. `unknown`: no GPU that could run it can take it now, so it starts when one is free
  * (`returnAt`: when the first is due back, when one says); `light`: light work, ready in seconds; `long`: a wait long
- * enough that an account with its own GPU or key is offered it for this run, once.
+ * enough that an account with its own GPU or key is offered it for this run, once. `held`: a run pressed now is taken and
+ * waits to enter the line (behind the account's other runs, until `startAt`, or while runs there are paused, with the
+ * service's words in `note`).
  */
 export interface HostedLine {
   place: number;
@@ -107,6 +109,10 @@ export interface HostedLine {
   returnAt?: number;
   light?: true;
   long?: true;
+  held?: HeldReason;
+  startAt?: number;
+  paused?: true;
+  note?: string;
 }
 
 /** The price check's answer for a run on this studio's GPUs: the quote, and where the run would stand in line. */
@@ -169,16 +175,38 @@ export function refreshPriceChecks(qc: QueryClient): void {
  * - otherwise the price (`text`: the service's words, empty when there is none) and, under it, when the run would be
  *   ready (`wait`, inside a sentence: "ready in about 2 min", "starts when a GPU is free", "ready in seconds"; none when
  *   nothing is known), and whether the wait is long (`long`: an account's own GPU or key may be offered for this run).
+ *   `note`: the line under the toolbar as a sentence of its own ("Starts after your other runs", "Lots of runs today ·
+ *   starts in about 7 h"); `held`: a run pressed now waits to enter the line, and why.
  * Null while there is no answer yet.
  */
-export function poolRunState(
-  check: HostedCheck | null | undefined,
-): { refused: boolean; text: string; sub?: string; wait?: string; long?: boolean; action?: BillingAction; offer?: BillingOffer; setup?: OwnSetup } | null {
+export function poolRunState(check: HostedCheck | null | undefined): {
+  refused: boolean;
+  text: string;
+  sub?: string;
+  wait?: string;
+  note?: string;
+  held?: HeldReason;
+  long?: boolean;
+  action?: BillingAction;
+  offer?: BillingOffer;
+  setup?: OwnSetup;
+} | null {
   const q = check?.quote;
   if (!q) return null;
   if (!q.allowed) return { refused: true, text: q.text, ...(q.sub && { sub: q.sub }), ...(q.action && { action: q.action }), ...(q.offer && { offer: q.offer }), ...(q.ownSetup && { setup: q.ownSetup }) };
-  const wait = check?.line ? waitWords(check.line) : null;
-  return { refused: false, text: q.text, ...(q.sub && { sub: q.sub }), ...(wait && { wait }), ...(check?.line?.long && { long: true }) };
+  const line = check?.line;
+  const wait = line ? waitWords(line) : null;
+  // A run pressed now would wait to enter the line: the line under the toolbar says why, as a sentence of its own.
+  const note = line?.held ? noteWords(line) : null;
+  return {
+    refused: false,
+    text: q.text,
+    ...(q.sub && { sub: q.sub }),
+    ...(wait && { wait }),
+    ...(note && { note }),
+    ...(line?.held && { held: line.held }),
+    ...(line?.long && { long: true }),
+  };
 }
 
 /**

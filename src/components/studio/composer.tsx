@@ -893,14 +893,17 @@ export function Composer({ docked }: { docked: boolean }) {
   const onRunOnSite = () => submitRef.current(undefined, undefined, "pool");
   // A long wait on this studio's GPUs (past the policy's offer time, or until a GPU is free): an account with its own GPU,
   // or a key that runs this item's cloud version (at its price, never without one), may run this run there now, once.
-  // Its pick stays as it was, and the run is taken in line all the same when it doesn't.
+  // Its pick stays as it was, and the run is taken in line all the same when it doesn't. While the day's GPU time is used
+  // up, or runs there are paused, an account with nothing of its own gets the quiet way to connect its own GPU.
   const waitOffer =
     viewerInfo?.kind === "account" && poolState && !poolState.refused && poolState.long
       ? viewerInfo.gpu.connected
         ? { label: "Run it now on your GPU", run: () => submitRef.current(undefined, undefined, "own") }
         : keyTwin && keyPrice
           ? { label: `Run it now with your ${CLOUD_KEY[keyTwin.provider].label} key · ${keyPrice}`, run: () => submitRef.current(undefined, withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice)) }
-          : undefined
+          : poolState.held === "today" || poolState.held === "service"
+            ? { label: "Or connect your own GPU", run: () => void pressSetup({ need: "gpu" }) }
+            : undefined
       : undefined;
   // A choice before Run for an item this studio's GPUs can't run, for an account whose key runs its cloud version (and no
   // GPU): run it once on the key, at its price, or connect a GPU. Nothing runs until one is pressed.

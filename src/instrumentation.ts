@@ -26,6 +26,9 @@ export async function register() {
   // Where a deleted account's runs went (its pick of a place, hosted runs) goes with it.
   const { clearRunOn } = await import("./server/run-on");
   onAccountDeleted(clearRunOn);
+  // Its runs waiting to enter the line on this install's GPUs (hosted runs) go with it too.
+  const { clearHolds } = await import("./server/pool-holds");
+  onAccountDeleted(clearHolds);
   // Faceless / Explainer renders whose narration was timed while the server was down continue with their scenes.
   const { ensureFacelessRunner } = await import("./server/faceless");
   ensureFacelessRunner();

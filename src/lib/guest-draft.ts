@@ -198,7 +198,9 @@ export function restoredPrompt(link: string, saved: string, pressed: boolean): s
  *   it, and the person is asked to add it again;
  * - wait: the draft, its files or the price check haven't settled;
  * - ask: the draft was edited after Run was pressed (`same` false): it waits for a click on what is there now;
- * - start: the price is the one the guest saw;
+ * - start: the price is the one the guest saw, also for a run that will wait to enter the line (behind the account's
+ *   other runs, until the day's GPU time renews: the server takes it all the same); or the price can't be known now
+ *   (the billing service doesn't answer: the run waits for it, and is priced against the price the guest saw);
  * - note: a new price, shown, and Run waits for a click;
  * - none: something is missing (the blocker says what), it would run elsewhere, it is refused now, or no price was shown
  *   to compare.
@@ -217,5 +219,7 @@ export function pendingStep(o: {
   if (o.blocked || !o.pool) return "none";
   if (!o.same) return o.quote?.allowed ? "ask" : "none";
   if (priceUnchanged(o.shown, o.quote)) return "start";
+  // Allowed with no price said: the service doesn't answer now (the run is taken and waits for it).
+  if (o.shown && o.quote?.allowed && !o.quote.text) return "start";
   return o.shown && o.quote?.allowed && o.quote.text ? "note" : "none";
 }

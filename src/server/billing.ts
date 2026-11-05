@@ -88,6 +88,11 @@ export interface Quote {
   sub?: string;
   code?: RefuseCode;
   etaS?: number | null;
+  /**
+   * Allowed, but the run waits until then (epoch ms) before it enters the line: the day's GPU time is used up, an hourly
+   * limit, or free generations that renew then. Absent: it may start at once.
+   */
+  startAt?: number;
   action?: Action;
   offer?: Offer;
 }
@@ -106,6 +111,10 @@ export interface Policy {
    * `giveUpS`: how long a run there may wait before it first starts (s; 0: as long as it takes). Present, it wins over
    * the reserve answer's `maxWaitMs`; absent, that answer (else FUOBE_POOL_WAIT_MIN) says. `offerAfterS`: after how
    * long a wait the line before Run offers an account its own GPU or key for that run, once (absent: POOL_OFFER_AFTER_S).
+   *
+   * `held`: how many runs may wait behind an account's runs at once (`activeRuns`) before its next press is turned down
+   * (0: no cap). Present (0 or more), a press past a limit is taken and waits to enter the line (pool-holds.ts), and so
+   * is a press while the billing service doesn't answer; absent, those presses are refused as before.
    */
   limits: {
     activeRuns: number;
@@ -119,6 +128,7 @@ export interface Policy {
     addressRunsPerHour?: number;
     giveUpS?: number;
     offerAfterS?: number;
+    held?: number;
   };
   /**
    * Where a run goes when the account could run it on its own GPU and on this install's: "pool" for this install's, "own"
@@ -155,6 +165,8 @@ export type ReserveAnswer =
       /** The run's class in the line: "paid" goes before "free" (absent: "free"). */
       class?: "paid" | "free";
       text: string;
+      /** The hold is made, and the run waits until then (epoch ms) before it enters the line (absent: at once). */
+      startAt?: number;
     }
   | { ok: false; code: RefuseCode | "price-changed"; text: string; quote?: Quote; action?: Action; offer?: Offer };
 
@@ -220,6 +232,8 @@ declare global {
   var __fuobeBillingBadUrl: boolean | undefined;
   var __fuobeBillingPolicies: Map<string, PolicyEntry> | undefined;
   var __fuobeBillingBalances: Map<string, { at: number; balance: Balance }> | undefined;
+  var __fuobeBillingAnsweredAt: number | undefined;
+  var __fuobeBillingQuotes: Map<string, { at: number; quote: Quote }> | undefined;
 }
 
 /** Is a billing service set? */
@@ -228,8 +242,17 @@ export const billingConfigured = (): boolean => target() !== null;
 function call<T>(method: "GET" | "POST", path: string, body: unknown, timeoutMs: number): Promise<T> {
   const t = target();
   if (!t) return Promise.reject(new HookDown(HOOK, "not configured"));
-  return hookCall<T>({ hook: HOOK, target: t, token: process.env.FUOBE_BILLING_TOKEN || undefined, method, path, body, timeoutMs });
+  return hookCall<T>({ hook: HOOK, target: t, token: process.env.FUOBE_BILLING_TOKEN || undefined, method, path, body, timeoutMs }).then((v) => {
+    globalThis.__fuobeBillingAnsweredAt = Date.now();
+    return v;
+  });
 }
+
+/**
+ * When the billing service last answered a call from this process (epoch ms; 0: not yet). Runs held while it didn't
+ * answer (pool-holds.ts) are tried again at once after it does.
+ */
+export const serviceAnsweredAt = (): number => globalThis.__fuobeBillingAnsweredAt ?? 0;
 
 /** Log a transport problem on the server only. */
 function logDown(what: string, e: unknown): void {
@@ -337,6 +360,20 @@ export function policyGiveUpMs(p: Pick<Policy, "limits"> | null | undefined): nu
   return typeof s === "number" && Number.isFinite(s) && s >= 0 ? Math.round(s * 1000) : undefined;
 }
 
+/**
+ * Does the policy say runs past a limit wait to enter the line instead of being refused (`limits.held` present: the
+ * service of a release that knows it)? Then a press while the billing service doesn't answer waits too (pool-holds.ts).
+ */
+export function holdsOn(p: Pick<Policy, "limits"> | null | undefined): boolean {
+  const n = p?.limits?.held;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0;
+}
+
+/** How many runs may wait behind an account's runs at once before a press is turned down: `limits.held` (0: no cap). */
+export function heldCap(p: Pick<Policy, "limits"> | null | undefined): number {
+  return holdsOn(p) ? Math.floor(p!.limits.held!) : 0;
+}
+
 /** After how long a wait the line before Run offers an account its own GPU or key, as the policy says (s). */
 export function policyOfferAfterS(p: Pick<Policy, "limits"> | null | undefined): number {
   const s = p?.limits?.offerAfterS;
@@ -356,16 +393,49 @@ export function cachedPolicy(accountId: string | null): Policy | null | undefine
 /** A free run's quote (no service set): Run keeps its own words. */
 export const FREE_QUOTE: Quote = { allowed: true, amount: 0, priceVersion: "", text: "" };
 
+/** The quotes the service gave when it didn't answer (quoteDown). */
+const downQuotes = new WeakSet<Quote>();
+
+/** Is this quote the one quote() gives when the billing service didn't answer (not an answer of its own)? */
+export const quoteDown = (q: Quote): boolean => downQuotes.has(q);
+
+/** The key a quote is kept under: the viewer and the run's facts (the same draft asks with the same facts). */
+const quoteKey = (account: AccountFacts | null, run: RunFacts) => `${account?.id ?? ""}\n${JSON.stringify(run)}`;
+
 /** The quote for a run on this install's GPUs. No service: free. The service down: a refusal with `paused`. */
 export async function quote(account: AccountFacts | null, run: RunFacts, queue: QueueFacts | null): Promise<Quote> {
   if (!billingConfigured()) return FREE_QUOTE;
   try {
-    return await call<Quote>("POST", "/v1/quote", { account, run, queue }, BILLING_TIMEOUTS.quote);
+    const q = await call<Quote>("POST", "/v1/quote", { account, run, queue }, BILLING_TIMEOUTS.quote);
+    const kept = (globalThis.__fuobeBillingQuotes ??= new Map());
+    if (q.allowed) {
+      kept.set(quoteKey(account, run), { at: Date.now(), quote: q });
+      if (kept.size > 5000) kept.delete(kept.keys().next().value!);
+    }
+    return q;
   } catch (e) {
     logDown("quote", e);
-    return { allowed: false, amount: 0, priceVersion: "", text: BILLING_WAIT.quote, code: "paused" };
+    const down: Quote = { allowed: false, amount: 0, priceVersion: "", text: BILLING_WAIT.quote, code: "paused" };
+    downQuotes.add(down);
+    return down;
   }
 }
+
+/**
+ * The last price the service gave for this run (allowed), for up to POLICY_KEEP_MS after it gave it: what Run shows
+ * while it doesn't answer, when runs then wait for it (holdsOn). Null: none known.
+ */
+export function lastQuote(account: AccountFacts | null, run: RunFacts, now = Date.now()): Quote | null {
+  const hit = globalThis.__fuobeBillingQuotes?.get(quoteKey(account, run));
+  if (!hit || now - hit.at >= POLICY_KEEP_MS) return null;
+  const { startAt: _startAt, etaS: _etaS, ...q } = hit.quote;
+  void _startAt;
+  void _etaS;
+  return q;
+}
+
+/** What Run shows while the service doesn't answer and no price is known: nothing, and Run stays on (the run waits). */
+export const UNKNOWN_QUOTE: Quote = { allowed: true, amount: 0, priceVersion: "", text: "" };
 
 /**
  * How a reserve the service doesn't answer is tried again (ms): after `firstMs`, then twice as long each time up to
@@ -374,6 +444,12 @@ export async function quote(account: AccountFacts | null, run: RunFacts, queue: 
  * time a front proxy gives a request (often 60 s), so the page always gets an answer.
  */
 export const RESERVE_RETRY = { forMs: 40_000, firstMs: 500, mostMs: 8_000 };
+
+/**
+ * When runs wait for the billing service (holdsOn), how long a press of Run tries its reserve before the run is made and
+ * waits for the service instead (ms): the page gets its answer at once, and the run reserves when the service is back.
+ */
+export const RESERVE_INLINE = { ms: 5_000 };
 
 /**
  * Is a failed reserve worth trying again: no connection, no answer in time, the service's own trouble (5xx) or too many
@@ -397,9 +473,11 @@ export interface ReserveInput {
   /**
    * How long the run's hold must stay open once a worker first takes the run, so its report always comes before the
    * hold's deadline: `runMs`, every attempt of every job at its lane's run ceiling, and `pausedMs`, the time a started
-   * run may spend back in line. The service adds the run's wait limit (`maxWaitMs`) before the first start.
+   * run may spend back in line. The service adds the run's wait limit (`maxWaitMs`) before the first start. `heldMs`:
+   * how long the run is expected to wait before it enters the line at all (behind the account's other runs, or until a
+   * `startAt`; pool-holds.ts).
    */
-  timing?: { runMs: number; pausedMs: number };
+  timing?: { runMs: number; pausedMs: number; heldMs?: number };
 }
 
 /**
@@ -407,11 +485,13 @@ export interface ReserveInput {
  * again with the same request id (RESERVE_RETRY: the service makes one hold for it however often it hears it), then a
  * `paused` refusal in plain words. An answer that would be the same on every try (a 4xx) is that refusal at once.
  * `unsure` on a refusal: a try may have made a hold the app never heard of (the caller releases it by the request id).
- * Never throws.
+ * `down` on a refusal: the service gave no answer at all (not a `paused` of its own). `forMs`: how long to keep trying
+ * (RESERVE_RETRY.forMs; 0: one try). Never throws.
  */
-export async function reserve(input: ReserveInput): Promise<(ReserveAnswer & { unsure?: boolean }) | null> {
+export async function reserve(input: ReserveInput, o: { forMs?: number } = {}): Promise<(ReserveAnswer & { unsure?: boolean; down?: true }) | null> {
   if (!billingConfigured()) return null;
   const start = Date.now();
+  const forMs = o.forMs ?? RESERVE_RETRY.forMs;
   let unsure = false;
   for (let attempt = 0; ; attempt++) {
     try {
@@ -425,10 +505,10 @@ export async function reserve(input: ReserveInput): Promise<(ReserveAnswer & { u
     }
     const wait = Math.min(RESERVE_RETRY.mostMs, RESERVE_RETRY.firstMs * 2 ** Math.min(attempt, 16));
     // The next try must end (its answer or its timeout) inside the whole wait.
-    if (Date.now() - start + wait + BILLING_TIMEOUTS.reserve > RESERVE_RETRY.forMs) break;
+    if (Date.now() - start + wait + BILLING_TIMEOUTS.reserve > forMs) break;
     await new Promise((r) => setTimeout(r, wait));
   }
-  return { ok: false, code: "paused", text: BILLING_WAIT.run, ...(unsure && { unsure: true }) };
+  return { ok: false, code: "paused", text: BILLING_WAIT.run, down: true, ...(unsure && { unsure: true }) };
 }
 
 /** The HTTP status and header for a billing refusal (the generations route; docs/billing-hook.md). */
@@ -499,5 +579,6 @@ export async function sendReport(kind: "settle" | "refund" | "release", payload:
 export function resetBillingCache(): void {
   globalThis.__fuobeBillingPolicies?.clear();
   globalThis.__fuobeBillingBalances?.clear();
+  globalThis.__fuobeBillingQuotes?.clear();
   globalThis.__fuobeBillingBadUrl = undefined;
 }

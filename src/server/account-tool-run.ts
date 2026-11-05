@@ -19,9 +19,10 @@ import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
 import { runOnPool } from "./hosted";
-import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, policyWait, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
+import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, policyWait, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ReserveFacts, type ReserveWait, type ToolPoolRun } from "./hosted-run";
 import { cancelGeneration, captureRun } from "./generations";
-import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, closeAdmission, forgetAdmission, openAdmission, poolLimitRefusal } from "./pool-limits";
+import { AdmitRefused, admitRun, clientAddress, closeAdmission, forgetAdmission, openAdmission, ownActiveRuns, poolLimitPlan, type AdmitPlan } from "./pool-limits";
+import { heldGuessMs, holdRun, holdShape } from "./pool-holds";
 import { hit, unhit } from "./rate";
 import { withRunStamp, type RunStamp } from "./run-stamp";
 import { once } from "./shorts-schemas";
@@ -225,10 +226,11 @@ export const poolPress = (id: string | undefined): PoolPress => ({ poolOnly: id 
 export const pressIdOf = (request: Request): PoolPress => poolPress(requestIdOf({ requestId: request.headers.get(PRESS_HEADER) }));
 
 /**
- * An account's runs going now (queued or running), counted as runs: a run's jobs and steps share a batch, and a run let
- * in whose rows are still being made counts too (pool-limits.ts accountActiveRuns).
+ * An account's runs going now (queued or running) that the studio's own limit of runs at once counts, counted as runs: a
+ * run's jobs and steps share a batch, and a run let in whose rows are still being made counts too. With hosted runs on,
+ * its runs on its own GPU or key, and its light work (pool-limits.ts ownActiveRuns).
  */
-export const activeAccountRuns = (accountId: string): number => accountActiveRuns(accountId);
+export const activeAccountRuns = (accountId: string): number => ownActiveRuns(accountId);
 
 /** A request body over what an account's run may weigh (its files are uploaded first): 413 before it is read. */
 export function bodyTooBig(request: Request): Response | null {
@@ -428,12 +430,30 @@ export async function runAccountTool<T>(request: Request, account: Account, aske
   if (run.poolOnly && !poolMayTake(account, run.place)) return no(ownGpuTool());
   if (!diskHasRoom()) return no(refuse(503, ACCOUNT_MESSAGES.diskLow));
   if (accountUsage(id).total >= accountTotalBytes(id)) return no(refuse(413, filesFullMessage(id)));
-  if (activeAccountRuns(id) >= ACCOUNT_LIMITS.activeRuns) return no(refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" }));
-  const rate = hit(`run:${id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
-  if (!rate.ok) return no(refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) }));
+  // The studio's own limits of runs at once and an hour: with hosted runs off, on every run, checked first, as always;
+  // with them on, on a run on its own GPU or key only (one on this install's GPUs meets the policy's limits instead),
+  // checked once its place is known.
+  const ownFirst = !hostedRunsOn();
+  let rated = false;
+  const ownLimits = (): Response | null => {
+    if (activeAccountRuns(id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+    const rate = hit(`run:${id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
+    if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
+    rated = true;
+    return null;
+  };
+  if (ownFirst) {
+    const over = ownLimits();
+    if (over) return no(over);
+  }
+  /** A refused run gives its count of the hour back. */
+  const unrate = () => {
+    if (rated) unhit(`run:${id}`);
+    rated = false;
+  };
   // From here a refusal gives the run back to the hour.
   const back = (response: Response): AccountToolResult<T> => {
-    unhit(`run:${id}`);
+    unrate();
     return no(response);
   };
   // Only files it uploaded here, or its own results (no links, no data: URIs, nobody else's).
@@ -463,9 +483,14 @@ export async function runAccountTool<T>(request: Request, account: Account, aske
     const there = await placeOf(account, cutSteps, "pool");
     if (there.kind === "refuse") return back(refuse(there.refusal.status, there.refusal.body.error, there.refusal.body, there.refusal.headers));
     if (there.kind !== "pool") return back(ownGpuTool());
-    return startOnPool(request, account, { ...run, ...cut }, cutSteps, files, there, back);
+    return startOnPool(request, account, { ...run, ...cut }, cutSteps, files, there, back, { limits: ownLimits, unrate });
   }
-  if (place.kind === "pool") return startOnPool(request, account, run, steps, files, place, back);
+  if (place.kind === "pool") return startOnPool(request, account, run, steps, files, place, back, { limits: ownLimits, unrate });
+  // On its own GPU or key, with hosted runs on: the studio's own limits, now that its place is known.
+  if (!ownFirst) {
+    const over = ownLimits();
+    if (over) return no(over);
+  }
   let gpuWarning: string | undefined;
   let kind: MediaKind = "video";
   let onKey = false;
@@ -538,11 +563,23 @@ async function startOnPool<T>(
   files: string[],
   pool: Extract<ToolPlace, { kind: "pool" }>,
   back: (response: Response) => AccountToolResult<T>,
+  own: { limits: () => Response | null; unrate: () => void },
 ): Promise<AccountToolResult<T>> {
   const id = account.id;
+  const pressedAt = Date.now();
   const addr = clientAddress(request);
-  const over = pool.light ? null : poolLimitRefusal(id, pool.policy, addr);
-  if (over) return back(refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) }));
+  // Light work only (free, on this install's CPU) keeps the studio's own limits of runs at once and an hour.
+  if (pool.light) {
+    const over = own.limits();
+    if (over) return back(over);
+  }
+  // The policy's limits: past one it can wait out, the run is taken and waits to enter the line (when the policy says so);
+  // only a press past the cap on runs waiting is refused.
+  const plan = pool.light ? null : poolLimitPlan(id, pool.policy, addr);
+  if (plan && "refuse" in plan) {
+    const over = plan.refuse;
+    return back(refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) }));
+  }
   const kind = outputKind(pool.main.planned.op, pool.main.planned.model);
   const mod = await moderateRun(account, checkedRequest(steps, files), null, "pool", { kind, place: "pool" });
   if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
@@ -550,12 +587,18 @@ async function startOnPool<T>(
   const claim = await claimToolPress();
   if (claim && "answer" in claim) return back(fromAnswer(claim.answer));
   let stamp: RunStamp;
+  // Why the run waits for the billing service, when it does, and what its reserve then sends.
+  let wait: ReserveWait | undefined;
+  let facts: ReserveFacts | undefined;
   if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }), ...policyWait(pool.policy) };
   else {
     // One hold per try of a press of Run: every send of the try asks for it by the same request id.
-    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, claim?.press ?? null, pool.policy);
+    const limit = plan && "hold" in plan ? { reason: plan.hold, ...(plan.startAt !== undefined && { startAt: plan.startAt }) } : undefined;
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, claim?.press ?? null, pool.policy, { heldMs: heldGuessMs(limit) });
     if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
     stamp = held.stamp;
+    wait = held.wait;
+    facts = held.facts;
   }
   const release = () => {
     if (stamp.hold) queueRelease(stamp.hold);
@@ -563,22 +606,25 @@ async function startOnPool<T>(
   /** Refused from here on: after its hold was made, when one was (it goes back). */
   const refused = (response: Response): AccountToolResult<T> => ({ ...back(response), ...(stamp.hold && { held: true }) });
   const notOffered = (error: string) => refuse(403, error, { code: "not-offered" }, { [BILLING_HEADER]: "not-offered" });
-  /** What the start made: its value, its rows (they keep coming while an awaiting start runs) and its open admission. */
-  type Made = { value: T | Promise<T>; ids: string[]; start: () => void; open: string | null };
+  /**
+   * What the start made: its capture (its value, and its rows, which keep coming while an awaiting start runs), its open
+   * admission, and what the policy's limits decided (whether it waits to enter the line).
+   */
+  type Made = { cap: ReturnType<typeof captureRun<T | Promise<T>>>; open: string | null; admit: AdmitPlan };
   const now = Date.now();
   let admitted: { ok: true; value: Made } | { ok: false; refusal: { status: number; error: string; code: string; retryAfterS?: number } };
   try {
     admitted = runOnPool(id, () =>
       withRunStamp(stamp, () =>
-        admitRun({ accountId: id, pool: pool.light ? null : { policy: pool.policy, addr }, now }, (): Made => {
-          const made = captureRun(run.start);
+        admitRun({ accountId: id, pool: pool.light ? null : { policy: pool.policy, addr }, now }, (admit): Made => {
+          const cap = captureRun(run.start);
           // A tool that makes its rows as it goes (after an await) is checked once they are all made, below. Until then
           // it counts as a run going (and in line) for every later request, from this same locked step: requests sent
           // together can't all pass the limits while its rows aren't made yet.
-          if (isThenable(made.value)) return { ...made, open: openAdmission(id, !pool.light, now) };
-          const problem = madeRunProblem(pool, made.ids);
+          if (isThenable(cap.value)) return { cap, open: openAdmission(id, !pool.light, now), admit };
+          const problem = madeRunProblem(pool, cap.ids);
           if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
-          return { ...made, open: null };
+          return { cap, open: null, admit };
         }),
       ),
     );
@@ -592,17 +638,18 @@ async function startOnPool<T>(
     return refused(r.code === "not-offered" ? notOffered(r.error) : refuse(r.status, r.error, { code: r.code }, { "Retry-After": String(r.retryAfterS ?? 30) }));
   }
   const made = admitted.value;
+  const ids = made.cap.ids;
   /**
    * Stop what was made (nothing of it was sent). Each stopped row's report closes the hold (billing-outbox.ts), so the
    * hold goes back by itself only when no row was made.
    */
   const undo = () => {
-    for (const g of made.ids) void cancelGeneration(g);
-    if (!made.ids.length) release();
+    for (const g of ids) void cancelGeneration(g);
+    if (!ids.length) release();
   };
   let value: T;
   try {
-    value = await made.value;
+    value = await made.cap.value;
   } catch (e) {
     undo();
     return refused(errorResponse(e));
@@ -610,8 +657,8 @@ async function startOnPool<T>(
     // Its rows exist now and count for themselves (or none will).
     if (made.open) closeAdmission(made.open);
   }
-  if (isThenable(made.value)) {
-    const problem = madeRunProblem(pool, made.ids);
+  if (isThenable(made.cap.value)) {
+    const problem = madeRunProblem(pool, ids);
     if (problem) {
       undo();
       return refused(notOffered(problem));
@@ -619,12 +666,16 @@ async function startOnPool<T>(
   }
   // A start that made nothing (a tool that kept its own error, say): nothing runs, so its hold goes back, and it is not
   // one of the hour's runs.
-  if (!made.ids.length) {
+  if (!ids.length) {
     release();
     if (!pool.light) forgetAdmission(id, now);
-    unhit(`run:${id}`);
+    own.unrate();
     return { ok: true, value };
   }
-  made.start();
+  // Past a limit it can wait out, or while the billing service doesn't answer: its tiles show "In line" now, and it
+  // enters the line when its reason clears (pool-holds.ts), nothing sent until then.
+  const shape = pool.light ? null : holdShape({ limit: made.admit.hold, wait });
+  if (shape) holdRun({ accountId: id, rows: made.cap.rows, pressedAt, ...shape, ...(facts && { facts }) });
+  else made.cap.start();
   return { ok: true, value };
 }

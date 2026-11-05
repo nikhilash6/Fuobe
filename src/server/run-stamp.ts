@@ -34,6 +34,11 @@ export interface RunStamp {
   boostMs?: number;
   /** Light work only (hosted-run.ts lightRun): free, and not counted against the policy's limits. */
   light?: boolean;
+  /**
+   * In scope only, never stored (not a STAMP_FIELDS field): the time a run that waited to enter the line takes its place
+   * at (its press, pool-holds.ts), when its first job is sent. Absent: the time it is sent.
+   */
+  rankAt?: number;
 }
 
 declare global {

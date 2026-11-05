@@ -124,14 +124,15 @@ import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
-import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
-import { FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
-import { placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
+import { stamped, stampOf, withoutStamp, withRunStamp, type RunStamp } from "./run-stamp";
+import { anyHeld, dropHold, holdRun, NOT_HELD } from "./pool-holds";
+import { ACTIVE_STATES, FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
+import { heldLine, placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { catalogVersion } from "./computer/catalog-version";
 import { gettingReady, poolLane, queueOfGeneration, type LinePlace } from "./computer/pool";
 import { noteCatalogProcess, processStart } from "./computer/ticket-refresh";
-import { runPreviewAt } from "./computer/tasks";
+import { endTask, runPreviewAt } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope, outsideDemo } from "./demo-scope";
@@ -355,7 +356,8 @@ const PLAIN_POOL_ERRORS = (() => {
 
 /** A pool row's place in line, as the Generation field (none once it has started). */
 function poolQueue(id: string): { queue: LinePlace } | Record<string, never> {
-  const q = placeInLine(id);
+  // A run made but waiting to enter the line (pool-holds.ts): why, and where it stands as its tile says it.
+  const q = heldLine(id) ?? placeInLine(id);
   return q ? { queue: q } : {};
 }
 
@@ -1309,8 +1311,10 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
     capture?.ids.push(id);
     if (!waits) {
       const start = () => void submit(id, route, providerId, plan, req, i);
-      if (capture) capture.submits.push(start);
-      else start();
+      if (capture) {
+        capture.submits.push(start);
+        capture.jobs.set(id, i);
+      } else start();
     }
   }
   ensureRunner();
@@ -1320,6 +1324,8 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
 interface RunCapture {
   ids: string[];
   submits: (() => void)[];
+  /** The rows whose submit is held, by id: their job index (a later step, which waits for its earlier steps, has none). */
+  jobs: Map<string, number>;
 }
 
 declare global {
@@ -1331,12 +1337,21 @@ const captureStore = () => (globalThis.__fuobeRunCapture ??= new AsyncLocalStora
 /**
  * Run `fn` (createGenerations, and every step its chains queue) with the rows it makes noted and their submits held:
  * `ids` are the rows, in the order they were made, and `start()` sends the held submits. Lets a caller make a run's rows
- * inside a transaction and send nothing until it commits.
+ * inside a transaction and send nothing until it commits. `rows`: each row with its job index when `start()` would send
+ * it (null: a later step, sent once its earlier steps are done), for a run that waits to enter the line instead
+ * (pool-holds.ts): its rows are sent later from what is stored (sendHeld). (An awaiting `fn` adds rows as it goes.)
  */
-export function captureRun<T>(fn: () => T): { value: T; ids: string[]; start: () => void } {
-  const cap: RunCapture = { ids: [], submits: [] };
+export function captureRun<T>(fn: () => T): { value: T; ids: string[]; readonly rows: { id: string; job: number | null }[]; start: () => void } {
+  const cap: RunCapture = { ids: [], submits: [], jobs: new Map() };
   const value = captureStore().run(cap, fn);
-  return { value, ids: cap.ids, start: () => cap.submits.splice(0).forEach((s) => s()) };
+  return {
+    value,
+    ids: cap.ids,
+    get rows() {
+      return cap.ids.map((id) => ({ id, job: cap.jobs.get(id) ?? null }));
+    },
+    start: () => cap.submits.splice(0).forEach((s) => s()),
+  };
 }
 
 /** One row a run would make: its model, operation, provider, kind and app, and the earlier steps it waits for. */
@@ -2025,7 +2040,7 @@ const poolOf = (r: Pick<Row, "request_json">): boolean => {
   }
 };
 
-function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number): Promise<void> {
+function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number, rankAt?: number): Promise<void> {
   if (!req.account) return submitNow(id, route, providerId, plan, req, index);
   // On this install's GPUs (hosted runs): as the account, on this install's ComfyUI server only.
   if (req.place === "pool") {
@@ -2035,7 +2050,9 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
       handOverEnds(id);
       return Promise.resolve();
     }
-    return runOnPool(req.account, () => withRunStamp(stampOf(req), () => submitNow(id, route, providerId, plan, req, index)));
+    // (`rankAt`: a run that waited to enter the line takes its place at its press: pool-holds.ts.)
+    const stamp = { ...stampOf(req), ...(rankAt !== undefined && { rankAt }) };
+    return runOnPool(req.account, () => withRunStamp(stamp, () => submitNow(id, route, providerId, plan, req, index)));
   }
   const own = accountRun(req.account, providerId, "submit");
   if ("error" in own) {
@@ -2785,20 +2802,100 @@ function startRunner(): void {
 
 /**
  * Jobs that never got an external id (the server died mid-submit) can't be recovered. Runs every tick. One another app
- * process that still runs is sending (a deploy's overlap: an account's files waiting their turn to go) is left to it.
+ * process that still runs is sending (a deploy's overlap: an account's files waiting their turn to go) is left to it, and
+ * so is a run made to wait to enter the line (pool-holds.ts). With hosted runs on, a run on this install's GPUs that was
+ * cut off between its row and its GPU task (a deploy, a crash) isn't failed: it waits to enter the line again at its
+ * press-time place, and the release loop makes its GPU task (pool-release.ts). Every other row fails as before.
  */
 function sweepInterrupted(): void {
   const now = Date.now();
   const rows = db()
     .prepare(
-      `SELECT g.id FROM generations g WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before
-         AND NOT ${SENT_ELSEWHERE("g")}`,
+      `SELECT g.id, g.batch_id, g.created_at, g.request_json FROM generations g WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before
+         AND NOT ${SENT_ELSEWHERE("g")} AND ${NOT_HELD("g")}`,
     )
-    .all({ before: now - STALE_SUBMIT_MS, me: runnerToken(), quiet: now - QUIET_MS }) as Pick<Row, "id">[];
+    .all({ before: now - STALE_SUBMIT_MS, me: runnerToken(), quiet: now - QUIET_MS }) as Pick<Row, "id" | "batch_id" | "created_at" | "request_json">[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
+    if (hostedRunsOn() && holdCutOff(r)) continue;
     update(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null });
+  }
+}
+
+/**
+ * A run on this install's GPUs cut off between its row and its GPU task: it waits to enter the line again, at its
+ * press-time place (its row's time), as the job it was in its run (its seed's offset). Its rows counted against the
+ * account's limits already, so it enters as soon as it can. False for any other row.
+ */
+function holdCutOff(r: Pick<Row, "id" | "batch_id" | "created_at" | "request_json">): boolean {
+  let stored: GenerationRequest;
+  try {
+    stored = JSON.parse(r.request_json) as GenerationRequest;
+  } catch {
+    return false;
+  }
+  if (stored.place !== "pool" || !stored.account) return false;
+  // Its job in its run: the rows of its batch made before it (each job's row is made a moment after the one before).
+  const job = r.batch_id
+    ? (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE batch_id = ? AND depends_on IS NULL AND created_at < ?").get(r.batch_id, r.created_at) as { n: number }).n
+    : 0;
+  // A GPU task made for it whose id never reached the row (cut off in between) stops: the row gets a new one.
+  const orphans = db()
+    .prepare(`SELECT id FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state IN (${ACTIVE_STATES.map(() => "?").join(",")})`)
+    .all(r.id, ...ACTIVE_STATES) as { id: string }[];
+  for (const t of orphans) endTask(t.id, "canceled");
+  holdRun({ accountId: stored.account, rows: [{ id: r.id, job }], ...(r.batch_id && { runId: `batch:${r.batch_id}` }), reason: "service", rankRule: "press", pressedAt: r.created_at, reserved: true, counted: true });
+  return true;
+}
+
+/**
+ * Send a row of a run that waited to enter the line (pool-release.ts): planned again from its stored request, as its
+ * run's place and stamp say, as job `job` of its run, taking its place at `rankAt` (its press) or now. False when it
+ * doesn't wait to be sent any more (stopped meanwhile), or its plan can't be made (it fails in its words then).
+ */
+export function sendHeld(id: string, job: number, rankAt?: number): boolean {
+  const r = db().prepare("SELECT * FROM generations WHERE id = ?").get(id) as Row | undefined;
+  if (!r || r.status !== "queued" || r.external_id) return false;
+  let stored: GenerationRequest;
+  try {
+    stored = JSON.parse(r.request_json) as GenerationRequest;
+  } catch {
+    return false;
+  }
+  const account = stored.account;
+  if (!account || stored.place !== "pool") return false;
+  let p: ReturnType<typeof prepare>;
+  try {
+    p = runOnPool(account, () => withRunStamp(stampOf(stored), () => prepare(stored)));
+  } catch (e) {
+    updateLive(id, { status: "failed", error: (e as Error).message, completed_at: Date.now(), message: null });
+    return false;
+  }
+  submitting().add(id);
+  void submit(id, p.route, p.providerId, p.plan, p.req, job, rankAt);
+  return true;
+}
+
+/** End the rows of a run that waited to enter the line, in words (a service refused it once it answered). */
+export function failWaiting(ids: string[], error: string): void {
+  for (const id of ids) {
+    const r = db().prepare("SELECT status, external_id FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id"> | undefined;
+    if (r?.status === "queued" && !r.external_id) updateLive(id, { status: "failed", error, completed_at: Date.now(), message: null });
+  }
+}
+
+/**
+ * Add to the stamp of a run's rows (a run that waited for the billing service: its hold, once made; the moderation
+ * service's ask to see its outputs). The rest of each row's stamp stays.
+ */
+export function restampRows(ids: string[], add: RunStamp): void {
+  for (const id of ids) {
+    const r = db().prepare("SELECT request_json FROM generations WHERE id = ?").get(id) as Pick<Row, "request_json"> | undefined;
+    if (!r) continue;
+    const stored = JSON.parse(r.request_json) as GenerationRequest;
+    const next = withRunStamp({ ...stampOf(stored), ...add }, () => stamped(stored));
+    update(id, { request_json: JSON.stringify(next) });
   }
 }
 
@@ -2847,6 +2944,14 @@ async function tick(): Promise<void> {
   state.busy = true;
   try {
     sweepInterrupted();
+    // Runs made but waiting to enter the line (hosted runs): those whose reason cleared enter it now (pool-release.ts).
+    if (hostedRunsOn() && anyHeld()) {
+      try {
+        await (await import("./pool-release")).releaseHeldRuns();
+      } catch (e) {
+        console.warn(`[generations] runs waiting to enter the line: ${(e as Error).message}`);
+      }
+    }
     // The owner's jobs first, then the accounts' in turn. An account's ComfyUI may be slow to answer: its polls run on
     // their own, so they never hold up the owner's (pollGuarded never polls one row twice at once).
     const active = rowsToPoll();
@@ -3720,6 +3825,8 @@ export async function cancelGeneration(id: string): Promise<void> {
   stopWorkerFinish(id);
   // Saved meanwhile (here, or by another app process while the provider was asked to stop): it stays as it is.
   if (!markCanceled(id)) return;
+  // A run waiting to enter the line leaves it (pool-holds.ts).
+  dropHold(id);
   // Steps waiting only to feed this one are dropped too (nothing was spent on them).
   dropUnused(depIds(r.depends_on));
 }

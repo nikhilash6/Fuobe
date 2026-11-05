@@ -8,19 +8,21 @@ type PoolState = NonNullable<ReturnType<typeof poolRunState>>;
 
 /**
  * The line under a composer's toolbar for a run on this studio's GPUs: when it would be ready, before Run is pressed
- * ("Ready in about 2 min", "Starts when a GPU is free", "Ready in seconds"), with `offer` after a long wait (the account's
- * own GPU or key for this run, once: "Run it now on your GPU"); or, when the price check refused it, the words (the
+ * ("Ready in about 2 min", "Starts when a GPU is free", "Ready in seconds", "Starts after your other runs", "Lots of
+ * runs today · starts in about 7 h"), with `offer` after a long wait (the account's own GPU or key for this run, once:
+ * "Run it now on your GPU"); or, when the price check refused it, the words (the
  * toolbar's price slot has no room for them on a phone), with the link or offer the answer carries.
  */
 export function PoolNote({ state, offer, className }: { state: PoolState; offer?: { label: string; run: () => void }; className?: string }) {
   const interest = useInterest();
   const href = safeLink(state.action?.url);
   if (!state.refused) {
-    if (!state.wait) return null;
+    const words = state.note ?? (state.wait ? capitalFirst(state.wait) : null);
+    if (!words) return null;
     const press = state.long ? offer : undefined;
     return (
       <p data-pool-note="wait" className={cn("flex flex-wrap items-center gap-x-2 px-2 text-[12px] text-muted-foreground tabular-nums", className)}>
-        <span>{capitalFirst(state.wait)}</span>
+        <span>{words}</span>
         {press && (
           <button
             type="button"

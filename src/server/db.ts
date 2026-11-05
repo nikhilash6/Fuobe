@@ -1196,6 +1196,8 @@ function open(): Database.Database {
   db.exec(ACCOUNT_CANVAS_TABLES);
   // Where an account's runs go, as it picked (run-on.ts): read only while hosted runs are on, empty otherwise.
   db.exec(RUN_ON_TABLES);
+  // Runs on this install's GPUs waiting to enter the line (pool-holds.ts): empty unless hosted runs are on.
+  db.exec(POOL_HOLD_TABLES);
   // Its list reads this small summary, never every board's pages (a table made before it had the column gets it).
   if (!(db.prepare("PRAGMA table_info(account_canvases)").all() as { name: string }[]).some((c) => c.name === "summary_json")) {
     addColumn(db, "ALTER TABLE account_canvases ADD COLUMN summary_json TEXT");
@@ -1240,6 +1242,34 @@ const RUN_ON_TABLES = `CREATE TABLE IF NOT EXISTS account_run_on (
     run_key TEXT CHECK (run_key IS NULL OR run_key IN ('fal', 'replicate')),
     updated_at INTEGER NOT NULL
   );`;
+
+/**
+ * Runs on this install's GPUs that are made but wait to enter the line (pool-holds.ts): one row per row of the run, all
+ * sharing `run_id`. Made empty on every install, and written only while hosted runs are on. Not a numbered migration.
+ */
+const POOL_HOLD_TABLES = `CREATE TABLE IF NOT EXISTS pool_holds (
+    generation_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    reason TEXT NOT NULL CHECK (reason IN ('mine', 'today', 'service', 'hour', 'list', 'credits')),
+    pressed_at INTEGER NOT NULL,
+    start_at INTEGER,
+    rank_rule TEXT NOT NULL CHECK (rank_rule IN ('press', 'release')),
+    reserved INTEGER NOT NULL DEFAULT 1,
+    checked INTEGER NOT NULL DEFAULT 1,
+    paused INTEGER NOT NULL DEFAULT 0,
+    counted INTEGER NOT NULL DEFAULT 0,
+    request_id TEXT,
+    facts_json TEXT,
+    job INTEGER,
+    tries INTEGER NOT NULL DEFAULT 0,
+    tried_at INTEGER,
+    next_at INTEGER,
+    holder TEXT,
+    lease_until INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS pool_holds_account ON pool_holds(account_id, pressed_at);
+  CREATE INDEX IF NOT EXISTS pool_holds_run ON pool_holds(run_id);`;
 
 /**
  * The runs let in whose rows are still being made (a tool's start that awaits before it makes them), counted until they

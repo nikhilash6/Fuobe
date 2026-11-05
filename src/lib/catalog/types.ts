@@ -1494,9 +1494,18 @@ export interface Generation {
   /**
    * A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). `unknown`:
    * no GPU that could run it can take it now, so it starts when one is free; `returnAt` (epoch ms): when the first of
-   * them is due back, when one says.
+   * them is due back, when one says. `held`: made, and waiting to enter the line (behind the account's other runs, until
+   * `startAt`, for a service; `paused`: runs there are paused), still "In line" on its tile (src/lib/pool-line.ts).
    */
-  queue?: { place: number; etaSeconds: number | null; unknown?: true; returnAt?: number };
+  queue?: {
+    place: number;
+    etaSeconds: number | null;
+    unknown?: true;
+    returnAt?: number;
+    held?: "mine" | "today" | "service" | "hour" | "list" | "credits";
+    startAt?: number;
+    paused?: true;
+  };
   /**
    * A run working on this install's GPUs: the address of its latest preview picture (a JPEG, for the run's own account
    * only), while there is one.

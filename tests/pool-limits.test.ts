@@ -260,7 +260,7 @@ describe("runs at once on this install's GPUs", () => {
     expect(kept()).toBe(3);
   });
 
-  it("runs on the account's own GPU never count against the policy, and keep the studio's own limit of 4", async () => {
+  it("runs on the account's own GPU never count against the policy, and keep the studio's own limit of 4 (counting runs there only)", async () => {
     withBilling({ limits: { activeRuns: 1, waiting: 0, runsPerHour: 0 } });
     const a = account({ gpu: "online" });
     for (let i = 0; i < 3; i++) {
@@ -273,9 +273,15 @@ describe("runs at once on this install's GPUs", () => {
     const pooled = await post({ ...IMAGE, place: "pool", ...SHOWN }, a.cookie);
     expect(pooled.status, JSON.stringify(pooled.body)).toBe(201);
     expect(poolRuns(a.id)).toBe(1);
-    // The studio's own 4 counts every run, as before.
+    // The studio's own 4 counts the runs on its own GPU or key only while hosted runs are on: a fourth there is made,
+    // a fifth is refused in today's words.
+    const fourth = await post(IMAGE, a.cookie);
+    expect(fourth.status, JSON.stringify(fourth.body)).toBe(201);
+    expect(limits.ownActiveRuns(a.id)).toBe(4);
+    expect(limits.accountActiveRuns(a.id)).toBe(5);
     const fifth = await post(IMAGE, a.cookie);
     expect(fifth.status).toBe(429);
+    expect(fifth.body.error).toBe(ACCOUNT_MESSAGES.activeRuns);
   });
 
   it("a press of Run is kept only for a run on this install's GPUs: on the account's own GPU each send makes its run, as before", async () => {

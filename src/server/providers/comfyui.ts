@@ -289,11 +289,15 @@ export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this mach
 function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string }) {
   const stamp = runStamp();
   const run = generationId ? runPlaceOf(generationId) : null;
+  // A run that waited to enter the line for the system's reasons (the day's GPU time, a quiet service) enters at its
+  // press, with its head start (pool-holds.ts).
+  const pressed = run?.rankAt == null && stamp?.rankAt !== undefined ? stamp.rankAt - Math.max(0, Math.min(stamp.boostMs ?? 0, 24 * 60 * 60_000)) : undefined;
   return poolFields(workflowId, {
     account,
     class: stamp?.class ?? "free",
     boostMs: stamp?.boostMs,
     ...(run?.rankAt != null && { rankAt: run.rankAt }),
+    ...(pressed !== undefined && { rankAt: pressed }),
     waitMs: run?.started || run?.later ? undefined : (stamp?.waitMs ?? poolWaitMs()),
     size: o.size,
     catalogVersion: o.catalogVersion,
