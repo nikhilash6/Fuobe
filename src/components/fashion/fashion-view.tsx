@@ -11,6 +11,7 @@ import type { SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { DownloadAll, ResultsGrid } from "@/components/photodump/results";
 import { useRun, useRunPreview } from "@/components/photodump/hooks";
+import { barPlace, CLEAR_OF_BAR, showPicked } from "@/components/photodump/clear-of-bar";
 import { RunLine, Steps } from "@/components/photodump/steps";
 import { CharacterPicker } from "@/components/photodump/subject";
 import { UploadBox } from "@/components/photodump/upload-box";
@@ -21,7 +22,7 @@ import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useStoredReducer } from "./stored";
-import { TemplatePreview } from "./template-preview";
+import { TemplatePreview, titleCase } from "./template-preview";
 
 const LABELS = ["Select a template", "Character", "Generation", "Clothing", "Photoset"];
 /**
@@ -131,9 +132,9 @@ export function FashionView() {
             {FASHION.map((x) => {
               const sel = x.id === s.templateId;
               return (
-                <div key={x.id} className="min-w-0">
+                <div key={x.id} data-picker-card className={cn("min-w-0", CLEAR_OF_BAR)}>
                   <div
-                    onClick={() => dispatch({ type: "template", id: x.id })}
+                    onClick={(e) => (dispatch({ type: "template", id: x.id }), showPicked(e.currentTarget))}
                     className={cn("relative cursor-pointer overflow-hidden rounded-xl ring-offset-2 ring-offset-background", sel && "ring-3 ring-primary")}
                   >
                     <TemplatePreview t={x} className="aspect-[6/7]" />
@@ -142,10 +143,10 @@ export function FashionView() {
                     type="button"
                     role="radio"
                     aria-checked={sel}
-                    onClick={() => dispatch({ type: "template", id: x.id })}
-                    className="mt-1.5 block w-full rounded px-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    onClick={(e) => (dispatch({ type: "template", id: x.id }), showPicked(e.currentTarget))}
+                    className={cn("mt-1.5 block w-full rounded px-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50", CLEAR_OF_BAR)}
                   >
-                    <span className="block text-[13px] font-semibold">{x.name.replace(/(^|[\s-])(\p{Ll})/gu, (_, a: string, c: string) => a + c.toUpperCase())}</span>
+                    <span className="block text-[13px] font-semibold">{titleCase(x.name)}</span>
                     <span className="block text-[12px] text-muted-foreground">
                       {x.shots} shots · {x.description}
                     </span>
@@ -154,7 +155,7 @@ export function FashionView() {
               );
             })}
           </div>
-          <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+          <div className={cn(barPlace(!!t), "z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur")}>
             <p className="min-w-0 truncate text-[13px]">{t ? <span className="font-medium">{t.name}</span> : <span className="text-muted-foreground">Pick a template</span>}</p>
             <Button aria-disabled={!t} className={cn(!t && "opacity-50")} onClick={() => !block(fashionBlocker(s)) && dispatch({ type: "next" })}>
               Continue <ArrowRight />
