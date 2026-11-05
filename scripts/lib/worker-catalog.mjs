@@ -62,8 +62,18 @@ export function allowedNodeList(root, catalog = readCatalog(root)) {
 const MEDIA_BINDING = /^(image\d*|endImage|mask|prevMask|paletteImage|video\d*|historyVideo|audio\d*|splatFile|fadeCurve)$/;
 const MODEL_BINDING = /^(checkpoint|unet|vae|lora|loraHigh|loraLow|upscaleModel)$/;
 
-/** Inputs held to the catalog's values whatever their name: a format string, and whether a node writes a file. */
-const ALWAYS_PINNED = { StringFormat: ["f_string"], AILab_Qwen3ASRSubtitle: ["output_format"] };
+/**
+ * Inputs held to the catalog's values whatever their name: a format string, and whether a node writes a file and in
+ * which format (a saved text is .txt or .json, never a script); how a text encoder is loaded and on which device; how a
+ * picture is shrunk. Each class then takes only the catalog's inputs.
+ */
+const ALWAYS_PINNED = {
+  StringFormat: ["f_string"],
+  AILab_Qwen3ASRSubtitle: ["output_format"],
+  SaveText: ["format"],
+  CLIPLoader: ["type", "device"],
+  ImageScaleToMaxDimension: ["upscale_method"],
+};
 
 const isLink = (v) => Array.isArray(v);
 /** A path or a download id ("org/name"): no spaces, and a slash. */
