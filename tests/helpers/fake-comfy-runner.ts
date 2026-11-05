@@ -37,6 +37,8 @@ export interface FakeComfyOptions {
   /** /prompt answers "not in list" for a graph with a node of this class (a file that node loads isn't there). */
   refuseClass?: string;
   echo?: boolean;
+  /** The memory its GPU says it has in /system_stats, in GB (24 unless set). */
+  vramGb?: number;
   /** A text result (SaveText, node 5): these words in the history and in the .txt file /view serves. */
   text?: string;
   /** The history lists one video under each of these node ids instead of node 900 (a graph's declared outputs, e.g. a take and its master). */
@@ -209,7 +211,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         res.writeHead(said.status, { "content-type": said.contentType ?? "text/html" });
         return res.end(said.body ?? "");
       }
-      if (p === "/system_stats") return json(200, { system: { comfyui_version: "0.3.fake", ram_total: 64 * 2 ** 30 }, devices: [{ name: "Fake GPU", vram_total: 24 * 2 ** 30 }] });
+      if (p === "/system_stats") return json(200, { system: { comfyui_version: "0.3.fake", ram_total: 64 * 2 ** 30 }, devices: [{ name: "Fake GPU", vram_total: (opts.vramGb ?? 24) * 2 ** 30 }] });
       if (p === "/models/loras") return json(200, opts.loras ?? []);
       if (p === "/object_info") return json(200, {});
       if (p === "/upload/image" && req.method === "POST") {

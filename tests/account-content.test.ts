@@ -110,7 +110,8 @@ let c = "";
 const cookies: Record<string, string> = {};
 const voices: Record<string, string> = {};
 beforeAll(async () => {
-  fake = await startFakeComfy({ loras: [], delayMs: 0, mixed: true });
+  // A 48 GB card, as each account's own GPU says when it is connected: Regenerate to 1080p (a 48 GB item) runs on it.
+  fake = await startFakeComfy({ loras: [], delayMs: 0, mixed: true, vramGb: 48 });
   globalThis.__fuobeTestGpuPort = fake.port;
   auth.setPassword("install password");
   for (const [k, email] of [
