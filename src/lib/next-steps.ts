@@ -139,7 +139,8 @@ export function keepGoing(g: Generation, index: number, ctx: KeepGoingContext = 
       if (view.poster) {
         const P = q(view.poster);
         add({ id: "product-360", verb: "Put it in an ad", where: "Product 360", href: `/apps/app-product-360?image=${P}`, cover: STEP_COVERS.spin });
-        add({ id: "upscale", verb: "Sharpen the still", where: "Upscale", href: `/upscale?image=${P}`, cover: STEP_COVERS.upscale });
+        // Where no still of the model exists (an Idol 3D clean splat) the picture is the photo it was made from: it says so.
+        add({ id: "upscale", verb: view.poster === view.photo ? "Sharpen the photo" : "Sharpen the still", where: "Upscale", href: `/upscale?image=${P}`, cover: STEP_COVERS.upscale });
       }
       break;
     }

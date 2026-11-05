@@ -48,6 +48,7 @@ import { AssistComposer } from "@/components/assist/composer";
 import { chatSkills, NewChatControls, SkillStarters } from "@/components/assist-view";
 import { useElements, useEngine } from "@/lib/api";
 import { MAX_PROJECT_SOURCES, type AssistProject, type ProjectSource, type SourceKind } from "@/lib/assist";
+import { showableOutputs } from "@/lib/av/idol-camera-still";
 import { isPlaceholder, PLACEHOLDER_CHIP } from "@/lib/demo-mode";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -230,7 +231,9 @@ function Assets({ p, active }: { p: AssistProject; active: boolean }) {
   const assets = useProjectAssets(p.id, active);
   const [open, setOpen] = useState<{ at: number; i: number } | null>(null);
   const list = assets.data ?? [];
-  const tiles = list.flatMap((a, at) => a.generation.outputs.map((o, i) => ({ a, at, o, i })));
+  // Every output but a clean Idol splat's camera still (src/lib/av/idol-camera-still.ts).
+  const tiles = list.flatMap((a, at) => showableOutputs(a.generation).map((i) => ({ a, at, o: a.generation.outputs[i], i })));
+  const first = (at: number) => showableOutputs(list[at].generation)[0] ?? 0;
   if (assets.isLoading)
     return (
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -263,8 +266,8 @@ function Assets({ p, active }: { p: AssistProject; active: boolean }) {
           generation={cur.generation}
           index={open.i}
           onClose={() => setOpen(null)}
-          onPrev={open.at > 0 ? () => setOpen({ at: open.at - 1, i: 0 }) : undefined}
-          onNext={open.at < list.length - 1 ? () => setOpen({ at: open.at + 1, i: 0 }) : undefined}
+          onPrev={open.at > 0 ? () => setOpen({ at: open.at - 1, i: first(open.at - 1) }) : undefined}
+          onNext={open.at < list.length - 1 ? () => setOpen({ at: open.at + 1, i: first(open.at + 1) }) : undefined}
         />
       )}
     </>

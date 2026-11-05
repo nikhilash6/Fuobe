@@ -102,10 +102,10 @@ describe("the card's still on the clean graph: the orbit", () => {
     expect(steps.find((s) => s.id === "product-360")?.href).toContain(encodeURIComponent(photoOf(r)));
   });
 
-  it("a clean splat with no orbit keeps the old order", () => {
+  it("a clean splat with no orbit shows the photo, never its camera still", () => {
     const r = runs.stiletto;
     const view = model3dView({ ...r, outputs: r.outputs.filter((o) => o.kind !== "video") });
-    expect(view).toMatchObject({ poster: byRole(r, "preview").url, turntable: undefined });
+    expect(view).toMatchObject({ poster: photoOf(r), turntable: undefined });
     expect(view.stillClip).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@ import { useHydrated } from "@/lib/api";
 import { FALLBACK_TEXT, hazeCutoffFor, splatFallback } from "@/lib/av/splat-view";
 import { TurnChips } from "@/components/model3d/turn-chips";
 import { FORMAT_INFO } from "@/lib/av/formats";
-import { FRONT_YAW, splatFormatOf, turnOrbit, viewerGlb } from "@/lib/av/model3d";
+import { firstFrameSrc, FRONT_YAW, splatFormatOf, turnOrbit, viewerGlb } from "@/lib/av/model3d";
 import type { Generation, OutputFile, VideoFormat } from "@/lib/catalog/types";
 import { extensionOf } from "@/lib/library";
 import { cuesOf, cueTime, editOnlyFormat, isLayered, layerInfo, modelPreview, textOf, videoPoster } from "@/lib/output-actions";
@@ -271,6 +271,9 @@ function SplatPanel({ output, format, poster, video, g }: { output: OutputFile; 
   const [note, setNote] = useState<string | null>(null);
   const fallback = !hydrated ? "reduced-motion" : note ? "too-big" : splatFallback({ webgl2: hasWebgl2(), coarse: false, reducedMotion, asked });
   const name = (g.modelName ?? "splat").replace(/[^\w .-]+/g, "");
+  // The picture while the splat loads, and where nothing plays: its still, else the photo it was made from (the card's
+  // order; a clean Idol splat has no still of its own: modelPreview leaves out its camera still).
+  const picture = poster ?? g.request.inputs?.images?.[0];
   const download = (
     <a href={output.url} download={`${name}.${format}`} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 px-3.5 text-[13px] font-medium text-white hover:bg-white/25">
       <Download className="size-4" aria-hidden /> .{format}
@@ -280,7 +283,7 @@ function SplatPanel({ output, format, poster, video, g }: { output: OutputFile; 
     return (
       <div className="flex size-full flex-col">
         <div className="relative min-h-0 flex-1 overflow-hidden md:rounded-lg">
-          <SplatViewer url={output.url} format={format} poster={poster} name={name} defaultCutoff={hazeCutoffFor(g.modelId)} tone="panel" label={g.request.prompt || "the splat"} autoFocus={asked} onUnavailable={setNote} />
+          <SplatViewer url={output.url} format={format} poster={picture} name={name} defaultCutoff={hazeCutoffFor(g.modelId)} tone="panel" label={g.request.prompt || "the splat"} autoFocus={asked} onUnavailable={setNote} />
         </div>
         <div className="flex shrink-0 justify-center pt-2">{download}</div>
       </div>
@@ -290,11 +293,22 @@ function SplatPanel({ output, format, poster, video, g }: { output: OutputFile; 
   return (
     <div className="flex size-full flex-col items-center justify-center gap-3 p-4 text-center text-white/80">
       {video ? (
-        // Reduced motion: the orbit video waits for play.
-        <video src={video} poster={poster} controls autoPlay={!reducedMotion} loop muted playsInline aria-label="Orbit video of the splat" className="max-h-[70%] max-w-full" />
-      ) : poster ? (
+        // Reduced motion: the orbit video waits for play, on its still or, without one, its own first frame.
+        <video
+          src={poster ? video : firstFrameSrc(video)}
+          poster={poster}
+          preload="metadata"
+          controls
+          autoPlay={!reducedMotion}
+          loop
+          muted
+          playsInline
+          aria-label="Orbit video of the splat"
+          className="max-h-[70%] max-w-full"
+        />
+      ) : picture ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="The subject the splat was made from" className="max-h-[70%] max-w-full object-contain" />
+        <img src={picture} alt="The subject the splat was made from" className="max-h-[70%] max-w-full object-contain" />
       ) : (
         <Box className="size-10" aria-hidden />
       )}

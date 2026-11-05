@@ -293,7 +293,7 @@ export function ModelCard({
       <ClipStill src={view.stillClip} label={`The ${label} splat, from its orbit`} />
     ) : view.poster ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={view.poster} alt="The subject the splat was made from, cut out" loading="lazy" decoding="async" className="size-full object-contain p-4" />
+      <img src={view.poster} alt={view.poster === view.photo ? "The photo the splat was made from" : "The subject the splat was made from, cut out"} loading="lazy" decoding="async" className="size-full object-contain p-4" />
     ) : (
       <div className="grid size-full place-items-center p-6 text-center text-[13px] text-muted-foreground">
         <div>
