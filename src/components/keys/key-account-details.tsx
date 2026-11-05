@@ -1,11 +1,11 @@
 "use client";
 
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useKeyInfo, useRefreshKeyInfo } from "@/components/keys/use-key-info";
 import { useNow } from "@/components/studio/use-now";
 import { BILLING_URL } from "@/lib/diagnose";
-import { accountWords, checkKeyWords, FAL_BALANCE_HOW, money, noKeyYetWords, updatedWords, type ProviderAccount } from "@/lib/key-info";
+import { accountWords, checkKeyWords, FAL_BALANCE_HOW, FAL_BALANCE_PERMISSION, money, noKeyYetWords, updatedWords, type ProviderAccount } from "@/lib/key-info";
 import { CLOUD_KEY, type CloudProvider } from "@/lib/your-keys";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,33 @@ function Footer({ info, onRefresh, disabled, busy, children }: { info: ProviderA
         </button>
       </span>
     </div>
+  );
+}
+
+/**
+ * Under a fal.ai key that may not read its balance: the three steps to a key that may, from fal.ai's keys page, and
+ * what the added permission lets Fuobe do. Folded, with the chevron Settings' other folded rows use.
+ */
+function FalBalanceHow() {
+  const { title, steps, why } = FAL_BALANCE_HOW;
+  return (
+    <details className="group mt-2 text-[12px]">
+      <summary className="flex min-h-6 w-fit cursor-pointer list-none items-center gap-1 font-medium [@media(pointer:coarse)]:min-h-11 text-foreground underline-offset-2 hover:underline [&::-webkit-details-marker]:hidden">
+        {title}
+        <ChevronDown aria-hidden className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <ol className="mt-1.5 max-w-prose list-decimal space-y-1 pl-4 text-muted-foreground marker:text-muted-foreground">
+        <li>
+          {steps.open.before} <Outbound href={CLOUD_KEY.fal.keysUrl}>{steps.open.link}</Outbound> {steps.open.after}
+        </li>
+        <li>
+          {steps.pick.before} <code className="rounded bg-background px-1 font-mono text-[11px] text-foreground">{FAL_BALANCE_PERMISSION}</code>
+          {steps.pick.after}
+        </li>
+        <li>{steps.save}</li>
+      </ol>
+      <p className="mt-1.5 max-w-prose text-muted-foreground">{why}</p>
+    </details>
   );
 }
 
@@ -163,12 +190,7 @@ export function KeyAccountDetails({
         <p>
           {label} shows your balance on its billing page. <Outbound href={BILLING_URL[provider]}>See balance on {label}</Outbound>
         </p>
-        {provider === "fal" && info && (
-          <details className="group mt-2 text-[12px]">
-            <summary className="w-fit cursor-pointer font-medium text-foreground underline-offset-2 hover:underline">Show the balance here</summary>
-            <p className="mt-1 max-w-prose text-muted-foreground">{FAL_BALANCE_HOW}</p>
-          </details>
-        )}
+        {provider === "fal" && info && <FalBalanceHow />}
         {footer()}
       </>
     );

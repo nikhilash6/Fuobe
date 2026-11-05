@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useHashAnchor } from "@/components/use-hash-anchor";
 import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { settingProblem } from "@/lib/connections";
 import { CLOUD_KEY, CLOUD_PROVIDERS, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
@@ -333,7 +334,10 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
   const q = useYourKeys(!!account);
   // A studio with paid models off takes no keys: the section isn't shown.
   const paidOff = useStatus().data?.viewer?.paidAllowed === false || q.data?.paidAllowed === false;
-  if (!hydrated || !account || paidOff) return null;
+  const shown = hydrated && !!account && !paidOff;
+  // A link to /settings#your-keys arrives before this section exists: it is scrolled to once it does.
+  useHashAnchor("your-keys", shown);
+  if (!shown) return null;
   return (
     <section id="your-keys" aria-labelledby="your-keys-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
       <div className="min-w-0">

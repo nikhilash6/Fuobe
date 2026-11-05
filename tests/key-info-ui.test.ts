@@ -100,12 +100,24 @@ describe("Settings: a saved key's account", () => {
     expect(w).not.toMatch(NEVER);
   });
 
-  it("fal.ai without balance access: the billing link, and how to show the balance here", () => {
-    const w = words(details([fal({ state: "link" })]));
+  it("fal.ai without balance access: the billing link, and how to see the balance here, from fal.ai's keys page", () => {
+    const html = details([fal({ state: "link" })]);
+    const w = words(html);
     expect(w).toContain("fal.ai shows your balance on its billing page. See balance on fal.ai");
-    expect(w).toContain("Show the balance here");
-    expect(w).toContain("billing:usage:read");
+    // Folded under a name that says what it holds, with a chevron (not the browser's own marker).
+    expect(html).toMatch(/<details[^>]*><summary[^>]*list-none[^>]*>How to see your balance here<svg/);
+    expect(html).not.toMatch(/<details[^>]* open/);
+    expect(w.replaceAll(" .", ".")).toContain(
+      "Open your fal.ai keys page (opens in a new tab) and make a new key. " +
+        "For its permissions, choose your own list. Pick the ones in the API preset, then add billing:usage:read. " +
+        "Save the new key here in place of this one.",
+    );
+    // The way to fal.ai's keys page, in a new tab.
+    expect(html).toContain('href="https://fal.ai/dashboard/keys" target="_blank" rel="noreferrer"');
+    // Why it is safe to give that permission.
+    expect(w).toContain("That permission only reads your balance and what you spent. Fuobe uses it to show them here, and for nothing else.");
     expect(w).not.toMatch(NEVER);
+    expect(w).not.toMatch(/Show the balance here|custom permission/);
   });
 
   it("an empty balance says to top up", () => {

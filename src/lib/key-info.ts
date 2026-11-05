@@ -117,9 +117,22 @@ export const noKeyYetWords = (p: CloudProvider): string =>
     ? "When you save a key, this card shows your fal.ai balance or a link to it."
     : "When you save a token, this card shows your Replicate account and a link to your balance.";
 
-/** Settings: a fal.ai key that may not read its balance (fal.ai's default API keys). */
-export const FAL_BALANCE_HOW =
-  "On fal.ai, make a key with a custom permission list. Add the permission billing:usage:read to the permissions for running models. Then save the new key here.";
+/** The fal.ai permission that lets a key read its account's balance and usage. */
+export const FAL_BALANCE_PERMISSION = "billing:usage:read";
+
+/**
+ * Settings: how to see the balance here, under a fal.ai key that may not read it (fal.ai's default API keys). Step 1
+ * links to fal.ai's keys page; the permission's name is shown as fal.ai writes it, so it can be found there.
+ */
+export const FAL_BALANCE_HOW = {
+  title: "How to see your balance here",
+  steps: {
+    open: { before: "Open your", link: "fal.ai keys page", after: "and make a new key." },
+    pick: { before: "For its permissions, choose your own list. Pick the ones in the API preset, then add", after: "." },
+    save: "Save the new key here in place of this one.",
+  },
+  why: "That permission only reads your balance and what you spent. Fuobe uses it to show them here, and for nothing else.",
+} as const;
 
 /** Settings: the provider didn't accept the saved key when its account was asked. */
 export const checkKeyWords = (p: CloudProvider, scope: "owner" | "account"): string =>

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useHashAnchor } from "@/components/use-hash-anchor";
 import { announceAuthChange, leaveNotice, rememberViewer, signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
 import { FUOBE_REPO } from "@/lib/connections";
 import { cn } from "@/lib/utils";
@@ -114,6 +115,8 @@ function AccountSection({ email }: { email: string }) {
   const [error, setError] = useState("");
   // The password was wrong (403): only then is its field marked, not for "too many tries" or no answer.
   const [wrong, setWrong] = useState(false);
+  // A link to /settings#account arrives before this section exists: it is scrolled to once it does.
+  useHashAnchor("account", true);
   const remove = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
