@@ -467,6 +467,10 @@ try {
     await s.page.goto(`${SITE}/connect`, { waitUntil: "load" });
     const sa = await until(() => s.page.getByText("Safari doesn't let a website talk to programs on your Mac").first().isVisible(), 30_000);
     check("Safari gets the link option, with why", !!sa);
+    check(
+      "…the other browsers only as a last line, never \"open Fuobe in\"",
+      (await s.page.getByText("Chrome, Edge and Firefox allow this, so switching browser also works.").first().isVisible()) && !(await s.page.getByText(/open (Fuobe|fuobe\.com) in/i).first().isVisible().catch(() => false)),
+    );
     await s.ctx.close();
   }
 } catch (e) {
