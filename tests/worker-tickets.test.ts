@@ -784,3 +784,62 @@ describe("setup saves the PC's ceiling", () => {
     expect(parseGpuGen("300, 45")).toBeNull();
   });
 });
+
+describe("an account's picture is staged for the worker with only its image in it", () => {
+  const GPS = "GPS 48.85837 N 2.29448 E";
+  const u16 = (n: number) => Buffer.from([n >> 8, n & 0xff]);
+  const exifWith = (text: string) => {
+    const body = Buffer.from(`Exif\0\0MM\0*\0\0\0\x08${text}`, "latin1");
+    return Buffer.concat([Buffer.from([0xff, 0xe1]), u16(body.length + 2), body]);
+  };
+  const boxOf = (type: string, body: Buffer) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(8 + body.length);
+    head.write(type, 4, "latin1");
+    return Buffer.concat([head, body]);
+  };
+  /** What a phone puts after its photo (a motion photo): a clip with sound. */
+  const motionClip = Buffer.concat([boxOf("ftyp", Buffer.from("mp42isom")), boxOf("mdat", Buffer.from("MOTION PHOTO VIDEO AND SOUND"))]);
+  const pngChunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlibCrc(Buffer.concat([Buffer.from(type, "latin1"), data])));
+    return Buffer.concat([len, Buffer.from(type, "latin1"), data, crc]);
+  };
+  let zlibCrc: (b: Buffer) => number;
+  const route = { provider: "comfyui", endpoint: "selftest-image", op: "edit" } as never;
+  const staged = async (data: Buffer, contentType: string, name: string) => {
+    const file = await hosted.runOnPool(accountId, async () => (await comfyProvider.prepareFile!(data, contentType, name, route))!);
+    return fs.readFileSync(path.join(dir, "relay", "in", file));
+  };
+  const has = (b: Buffer, s: string) => b.includes(Buffer.from(s, "latin1"));
+
+  beforeAll(async () => {
+    zlibCrc = (await import("node:zlib")).crc32;
+  });
+
+  it("a JPEG followed by a second picture with its own EXIF and GPS, and a motion photo's clip, stages the first picture only", async () => {
+    const sharp = (await import("sharp")).default;
+    const first = await sharp({ create: { width: 24, height: 16, channels: 3, background: "#4a6" } }).jpeg().toBuffer();
+    const second = Buffer.concat([Buffer.from([0xff, 0xd8]), exifWith(GPS), first.subarray(2)]);
+    const got = await staged(Buffer.concat([first, second, motionClip]), "image/jpeg", "phone.jpg");
+    expect(has(got, GPS)).toBe(false);
+    expect(has(got, "ftyp")).toBe(false);
+    expect(has(got, "MOTION PHOTO")).toBe(false);
+    expect(got.equals(first)).toBe(true);
+  });
+
+  it("a PNG with a provenance (caBX) chunk and data after its last chunk stages none of them", async () => {
+    const sharp = (await import("sharp")).default;
+    const src = await sharp({ create: { width: 8, height: 6, channels: 3, background: "#123" } }).png().toBuffer();
+    const iend = src.length - 12;
+    const sent = Buffer.concat([src.subarray(0, iend), pngChunk("caBX", Buffer.from("c2pa manifest: someone private", "latin1")), src.subarray(iend), Buffer.from(`trailing ${GPS}`, "latin1"), motionClip]);
+    const got = await staged(sent, "image/png", "shot.png");
+    expect(has(got, "someone private")).toBe(false);
+    expect(has(got, "caBX")).toBe(false);
+    expect(has(got, GPS)).toBe(false);
+    expect(has(got, "MOTION PHOTO")).toBe(false);
+    expect((await sharp(got).metadata()).width).toBe(8);
+  });
+});

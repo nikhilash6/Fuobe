@@ -3,7 +3,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { metadataPatches, overlay, patchStream, type Patch } from "@/server/media-clean";
+import { metadataPatches, overlay, patchStream, pictureWithoutMetadata, type Patch } from "@/server/media-clean";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
@@ -330,5 +330,121 @@ describe("media metadata", () => {
     for await (const c of Readable.from(parts).pipe(patchStream(patches, 5))) chunks.push(c as Buffer);
     expect(Buffer.concat(chunks).toString()).toBe("Z67......ef");
     expect(data.toString()).toBe("0123456789abcdefghij"); // the stored bytes aren't touched
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pictures sent on to a worker: only the picture itself goes
+
+describe("a picture sent on to a worker keeps only its image", () => {
+  const GPS = "GPS 48.85837 N 2.29448 E";
+  const seg = (m: number, data: Buffer) => Buffer.concat([Buffer.from([0xff, m]), u16be(data.length + 2), data]);
+  const exifWith = (text: string) => seg(0xe1, Buffer.from(`Exif\0\0MM\0*\0\0\0\x08${text}`, "latin1"));
+  /** A clip a phone puts after its photo (a motion photo): its own boxes, with sound. */
+  const motionClip = Buffer.concat([box("ftyp", Buffer.from("mp42isom")), box("mdat", Buffer.from("MOTION PHOTO VIDEO AND SOUND"))]);
+  const has = (b: Buffer, s: string) => b.includes(Buffer.from(s, "latin1"));
+
+  async function jpeg(o: { progressive?: boolean } = {}) {
+    const sharp = (await import("sharp")).default;
+    return sharp({ create: { width: 24, height: 16, channels: 3, background: "#4a6" } })
+      .jpeg({ progressive: !!o.progressive })
+      .toBuffer();
+  }
+  async function decodes(b: Buffer) {
+    const sharp = (await import("sharp")).default;
+    const m = await sharp(b, { failOn: "error" }).metadata();
+    return [m.width, m.height];
+  }
+
+  it("a JPEG followed by a second picture with its own EXIF and GPS, and a motion photo's clip: both are cut off", async () => {
+    const first = await jpeg();
+    const second = Buffer.concat([Buffer.from([0xff, 0xd8]), exifWith(GPS), (await jpeg()).subarray(2)]);
+    const sent = Buffer.concat([first, second, motionClip]);
+    const out = pictureWithoutMetadata(sent)!;
+    expect(out).not.toBeNull();
+    expect(has(out, GPS)).toBe(false);
+    expect(has(out, "ftyp")).toBe(false);
+    expect(has(out, "MOTION PHOTO")).toBe(false);
+    expect(out.equals(first)).toBe(true);
+    expect(await decodes(out)).toEqual([24, 16]);
+  });
+
+  it("a progressive JPEG: EXIF, GPS and comments between its scans are blanked too, and it still decodes", async () => {
+    const src = await jpeg({ progressive: true });
+    // Its second scan: the second start-of-scan marker (coded data never holds 0xFF 0xDA).
+    const scans: number[] = [];
+    for (let at = src.indexOf(Buffer.from([0xff, 0xda])); at >= 0; at = src.indexOf(Buffer.from([0xff, 0xda]), at + 2)) scans.push(at);
+    expect(scans.length).toBeGreaterThan(1);
+    const sent = Buffer.concat([src.subarray(0, scans[1]), exifWith(GPS), seg(0xfe, Buffer.from(SECRET)), seg(0xe2, Buffer.from(`MPF\0${SECRET}`, "latin1")), src.subarray(scans[1])]);
+    const out = pictureWithoutMetadata(sent)!;
+    expect(has(out, GPS)).toBe(false);
+    expect(has(out, "SECRET")).toBe(false);
+    expect(out.length).toBe(sent.length);
+    expect(await decodes(out)).toEqual([24, 16]);
+  });
+
+  it("a JPEG's JFIF thumbnail and other application segments go; JFIF without one, an ICC profile and Adobe's stay", async () => {
+    const thumb = Buffer.concat([Buffer.from("JFIF\0\x01\x02\0\0\x01\0\x01\x01\x01", "latin1"), Buffer.from(SECRET.slice(0, 3), "latin1")]);
+    const src = await jpeg();
+    const sent = Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xe0, thumb), seg(0xe2, Buffer.from("ICC_PROFILE\0\x01\x01profile", "latin1")), seg(0xee, Buffer.from("Adobe\0\x64\0\0\0\0\x01", "latin1")), seg(0xed, Buffer.from(`Photoshop 3.0\0${SECRET}`, "latin1")), src.subarray(2)]);
+    const out = pictureWithoutMetadata(sent)!;
+    expect(has(out, "SECRET")).toBe(false);
+    expect(has(out, SECRET.slice(0, 3))).toBe(false);
+    expect(has(out, "ICC_PROFILE")).toBe(true);
+    expect(has(out, "Adobe")).toBe(true);
+    expect(await decodes(out)).toEqual([24, 16]);
+  });
+
+  it("a PNG keeps only its pixels' and colours' chunks: a provenance (caBX) and a timestamp chunk go, and so does anything after its end", async () => {
+    const sharp = (await import("sharp")).default;
+    const src = await sharp({ create: { width: 8, height: 6, channels: 3, background: "#123" } }).png().toBuffer();
+    const iend = src.length - 12;
+    expect(src.toString("latin1", iend + 4, iend + 8)).toBe("IEND");
+    const sent = Buffer.concat([
+      src.subarray(0, iend),
+      pngChunk("caBX", Buffer.from(`c2pa manifest ${SECRET}`, "latin1")),
+      pngChunk("tIME", Buffer.from([0x07, 0xea, 11, 5, 9, 30, 0])),
+      pngChunk("gAMA", u32be(45455)),
+      src.subarray(iend),
+      Buffer.from(`trailing ${GPS}`, "latin1"),
+      motionClip,
+    ]);
+    const out = pictureWithoutMetadata(sent)!;
+    expect(has(out, "SECRET")).toBe(false);
+    expect(has(out, GPS)).toBe(false);
+    expect(has(out, "MOTION PHOTO")).toBe(false);
+    const chunks = pngChunks(out);
+    expect(chunks.every((c) => c.crcOk)).toBe(true);
+    expect(chunks.map((c) => c.type)).not.toContain("caBX");
+    expect(chunks.map((c) => c.type)).not.toContain("tIME");
+    expect(chunks.map((c) => c.type)).toContain("gAMA");
+    expect(chunks.at(-1)?.type).toBe("IEND");
+    expect(await decodes(out)).toEqual([8, 6]);
+  });
+
+  it("a WebP is cut where its RIFF size ends, and a chunk outside its picture becomes JUNK", async () => {
+    const sharp = (await import("sharp")).default;
+    const src = await sharp({ create: { width: 8, height: 6, channels: 3, background: "#123" } }).webp().withExif({ IFD0: { Artist: SECRET } }).toBuffer();
+    const extra = Buffer.concat([Buffer.from("C2PA", "latin1"), Buffer.from([8, 0, 0, 0]), Buffer.from("SECRET!!")]);
+    const body = Buffer.concat([src.subarray(12), extra]);
+    const riff = Buffer.concat([Buffer.from("RIFF"), Buffer.from([0, 0, 0, 0]), Buffer.from("WEBP"), body]);
+    riff.writeUInt32LE(4 + body.length, 4);
+    const out = pictureWithoutMetadata(Buffer.concat([riff, motionClip]))!;
+    expect(out.length).toBe(riff.length);
+    expect(has(out, "SECRET")).toBe(false);
+    expect(has(out, "MOTION PHOTO")).toBe(false);
+    expect(await decodes(out)).toEqual([8, 6]);
+  });
+
+  it("is made again from its pixels instead (null) when it is another kind, has a chunk no decoder may skip, or has no end", async () => {
+    expect(pictureWithoutMetadata(Buffer.from("GIF89a\x01\0\x01\0\0\0\0;", "latin1"))).toBeNull();
+    expect(pictureWithoutMetadata(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg"><metadata>${SECRET}</metadata></svg>`))).toBeNull();
+    const sharp = (await import("sharp")).default;
+    const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: "#000" } }).png().toBuffer();
+    expect(pictureWithoutMetadata(Buffer.concat([png.subarray(0, 33), pngChunk("CgBI", Buffer.from(SECRET)), png.subarray(33)]))).toBeNull();
+    const cut = await jpeg();
+    expect(pictureWithoutMetadata(cut.subarray(0, cut.length - 2))).toBeNull();
+    const animated = Buffer.concat([Buffer.from("RIFF"), u32le(4 + 8 + 4), Buffer.from("WEBPANIM"), u32le(4), Buffer.alloc(4)]);
+    expect(pictureWithoutMetadata(animated)).toBeNull();
   });
 });

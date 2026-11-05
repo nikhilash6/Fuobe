@@ -98,7 +98,7 @@ export function queueFinish(o: {
   const was = queued();
   if (was) return was;
   const inputs = o.inputs.map((i) => {
-    const data = i.contentType.startsWith("image/") ? pictureWithoutMetadata(i.data, i.contentType) : i.data;
+    const data = i.contentType.startsWith("image/") ? pictureWithoutMetadata(i.data) : i.data;
     if (!data) throw new Error("This run couldn't finish.");
     const name = stageInput(principal, data, i.contentType, i.name);
     return { slot: i.slot, name, sha256: stagedInput(principal, name)!.sha256 };
@@ -424,7 +424,7 @@ export async function pathOnWorker(generationId: string, step: number, input: { 
  * of picture (a GIF, say) made again from its pixels here, upright, as a PNG. Throws when it isn't a picture.
  */
 async function finishPicture<T extends { data: Buffer; contentType: string; name: string }>(f: T): Promise<T> {
-  if (!f.contentType.startsWith("image/") || pictureWithoutMetadata(f.data, f.contentType)) return f;
+  if (!f.contentType.startsWith("image/") || pictureWithoutMetadata(f.data)) return f;
   const sharp = (await import("sharp")).default;
   const png = await sharp(f.data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 }).rotate().png().toBuffer();
   return { ...f, data: png, contentType: "image/png", name: "picture.png" };

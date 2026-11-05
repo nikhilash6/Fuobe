@@ -588,25 +588,143 @@ function tiffOrientation(exif: Buffer): number | null {
   return null;
 }
 
+/** The PNG chunks a picture sent on keeps: its pixels and how its colours show. Every other chunk is blanked. */
+const PNG_PICTURE = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "pHYs", "bKGD"]);
+
+/** A picture sent on: the patches that blank what it carries besides its pixels, and where the picture ends. */
+type Picture = { patches: Patch[]; end: number };
+
 /**
- * A picture with what it carries besides its pixels blanked, as the share files are (the same patches): a JPEG's EXIF,
- * XMP, comments and other application segments, a PNG's text and EXIF chunks, a WebP's EXIF and XMP, an SVG's
- * metadata. Nothing is decoded, and the size and every offset stay. A JPEG keeps its EXIF orientation (alone in its EXIF
- * segment), so it shows the way it did. The same bytes back when there was nothing to blank; null for any other kind of
- * picture (a GIF, say: it is made again from its pixels instead), or one that can't be read where such data lives.
+ * A PNG sent on: every chunk outside PNG_PICTURE becomes a private chunk decoders skip ("fuPd"), zeroed, with a fresh
+ * CRC. It ends after IEND (anything after it is cut off). A critical chunk the list doesn't know can't be skipped by a
+ * decoder, so such a PNG is unreadable here.
  */
-export function pictureWithoutMetadata(data: Buffer, contentType = ""): Buffer | null {
+function pngPicture(b: Buffer): Picture {
+  const out: Patch[] = [];
+  const NAME = Buffer.from("fuPd");
+  let at = 8;
+  for (;;) {
+    need(at + 12 <= b.length);
+    const len = b.readUInt32BE(at);
+    const type = b.toString("latin1", at + 4, at + 8);
+    need(/^[A-Za-z]{4}$/.test(type) && at + 12 + len <= b.length);
+    if (!PNG_PICTURE.has(type)) {
+      need((b[at + 4] & 0x20) !== 0);
+      out.push({ at: at + 4, bytes: NAME }, zeros(at + 8, len), { at: at + 8 + len, bytes: u32be(crc32([NAME, len])) });
+    }
+    at += 12 + len;
+    if (type === "IEND") return { patches: out, end: at };
+  }
+}
+
+/** The JPEG markers of a picture's own structure: its frame, tables, scans and restart interval. */
+const JPEG_STRUCTURE = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf]);
+
+/**
+ * A segment a JPEG sent on keeps besides its structure: JFIF with no thumbnail of its own, an ICC profile, and Adobe's
+ * colour transform. Every other application segment (EXIF, XMP, a multi-picture index, maker notes) and every comment is
+ * blanked.
+ */
+function jpegKeeps(marker: number, body: Buffer): boolean {
+  if (marker === 0xe0) return body.length === 14 && body.toString("latin1", 0, 5) === "JFIF\0" && body[12] === 0 && body[13] === 0;
+  if (marker === 0xe2) return body.toString("latin1", 0, 12) === "ICC_PROFILE\0";
+  if (marker === 0xee) return body.length === 12 && body.toString("latin1", 0, 5) === "Adobe";
+  return false;
+}
+
+/** Where a scan's coded data ends: at the next marker (an 0xFF followed by neither 0x00, a restart marker nor 0xFF). */
+function scanEnd(b: Buffer, from: number): number {
+  let at = from;
+  for (;;) {
+    at = b.indexOf(0xff, at);
+    need(at >= 0 && at + 1 < b.length);
+    const next = b[at + 1];
+    if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) at += 2;
+    else if (next === 0xff) at += 1;
+    else return at;
+  }
+}
+
+/**
+ * A JPEG sent on: every segment outside its structure and jpegKeeps becomes a zeroed comment, before its first scan and
+ * between its scans alike (a progressive JPEG has several), and it ends at its end marker (anything after it, such as a
+ * second picture with its own EXIF or a phone's motion-photo clip, is cut off). A marker it doesn't know, or a picture
+ * with no end, is unreadable here.
+ */
+function jpegPicture(b: Buffer): Picture {
+  const out: Patch[] = [];
+  let at = 2;
+  for (;;) {
+    need(at + 2 <= b.length && b[at] === 0xff);
+    const m = b[at + 1];
+    if (m === 0xff) {
+      at += 1; // fill byte
+      continue;
+    }
+    if (m === 0xd9) return { patches: out, end: at + 2 };
+    if (m === 0x01 || (m >= 0xd0 && m <= 0xd7)) {
+      at += 2;
+      continue;
+    }
+    need(at + 4 <= b.length);
+    const len = b.readUInt16BE(at + 2);
+    need(len >= 2 && at + 2 + len <= b.length);
+    if ((m >= 0xe0 && m <= 0xef) || m === 0xfe) {
+      if (!jpegKeeps(m, b.subarray(at + 4, at + 2 + len))) out.push({ at: at + 1, bytes: Buffer.from([0xfe]) }, zeros(at + 4, len - 2));
+    } else need(JPEG_STRUCTURE.has(m));
+    at += 2 + len;
+    if (m === 0xda) at = scanEnd(b, at);
+  }
+}
+
+/** The WebP chunks a picture sent on keeps: a still's pixels, its alpha, its extended header and its colour profile. */
+const WEBP_PICTURE = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ICCP"]);
+
+/**
+ * A WebP sent on: every chunk outside WEBP_PICTURE becomes JUNK, zeroed, and VP8X stops announcing EXIF and XMP. It ends
+ * where its RIFF size says (anything after it is cut off). An animated WebP is unreadable here (its frames would carry
+ * chunks of their own).
+ */
+function webpPicture(b: Buffer): Picture {
+  const out: Patch[] = [];
+  need(b.length >= 20);
+  const declared = b.readUInt32LE(4);
+  need(declared >= 12);
+  const end = Math.min(b.length, 8 + declared);
+  let at = 12;
+  while (at < end) {
+    need(at + 8 <= end);
+    const id = b.toString("latin1", at, at + 4);
+    const len = b.readUInt32LE(at + 4);
+    need(at + 8 + len <= end && id !== "ANIM" && id !== "ANMF");
+    if (!WEBP_PICTURE.has(id)) out.push({ at, bytes: Buffer.from("JUNK") }, zeros(at + 8, len));
+    if (id === "VP8X" && len >= 1 && b[at + 8] & 0x0c) out.push({ at: at + 8, bytes: Buffer.from([b[at + 8] & ~0x0c]) });
+    at += 8 + len + (len & 1);
+  }
+  return { patches: out, end };
+}
+
+/**
+ * A picture to send on to another machine (a worker), with only its image in it: a PNG, a JPEG or a still WebP, its
+ * pixels' data kept as it is (nothing is decoded) and everything else blanked in place: a JPEG's EXIF and GPS, XMP,
+ * comments, thumbnails and other application segments (between a progressive JPEG's scans too), a PNG's text, EXIF,
+ * timestamp and provenance chunks (any chunk but its pixels' and colours'), a WebP's EXIF and XMP. Anything after the
+ * picture's end (a second picture with its own EXIF, a phone's motion-photo clip and its sound) is cut off. A JPEG keeps
+ * its EXIF orientation (alone in its EXIF segment), so it shows the way it did. The same bytes back when there was
+ * nothing to blank or cut. Null for any other kind of picture (a GIF, an SVG, an animated WebP: it is made again from
+ * its pixels instead), or one that can't be read to its end.
+ */
+export function pictureWithoutMetadata(data: Buffer): Buffer | null {
   try {
-    const r = new Reader(data, data.length);
-    const head = r.read(0, 16);
-    const at = (s: string, i = 0) => head.toString("latin1", i, i + s.length) === s;
-    let patches: Patch[] = [];
-    if (head.length >= 8 && head.readUInt32BE(0) === 0x89504e47) patches = png(r);
-    else if (head[0] === 0xff && head[1] === 0xd8) patches = [...jpeg(r), ...keepOrientation(r)];
-    else if (at("RIFF") && at("WEBP", 8)) patches = riff(r, true);
-    else if (contentType.split(";")[0].trim().toLowerCase() === "image/svg+xml") patches = svg(r);
+    let pic: Picture;
+    if (data.length >= 8 && data.readUInt32BE(0) === 0x89504e47 && data.readUInt32BE(4) === 0x0d0a1a0a) pic = pngPicture(data);
+    else if (data.length >= 4 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
+      pic = jpegPicture(data);
+      pic.patches.push(...keepOrientation(new Reader(data, pic.end)));
+    } else if (data.length >= 12 && data.toString("latin1", 0, 4) === "RIFF" && data.toString("latin1", 8, 12) === "WEBP") pic = webpPicture(data);
     else return null;
-    return patches.length ? overlay(data, 0, patches) : data;
+    const out = pic.patches.length ? overlay(data, 0, pic.patches) : data;
+    return pic.end < data.length ? out.subarray(0, pic.end) : out;
   } catch (e) {
     if (e instanceof Unreadable || e instanceof RangeError) return null;
     throw e;

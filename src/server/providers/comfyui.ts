@@ -215,9 +215,10 @@ export const workersTake = (kind: "image" | "video" | "audio"): boolean => poolM
 /**
  * A file for a job on the workers: refused when they don't take its kind. A picture is made again from its pixels here
  * (no EXIF, no GPS), unless `o.onWorker`: then the worker makes it again itself before its ComfyUI reads it, and this
- * server only checks that it is a picture it can size, and blanks what it carries besides its pixels (EXIF and GPS,
- * XMP, comments, text) without decoding it: none of that ever leaves for a worker. A JPEG keeps its orientation. A
- * kind of picture whose such parts this server can't blank that way (a GIF, say) is made again from its pixels here.
+ * server only checks that it is a picture it can size, blanks what it carries besides its pixels (EXIF and GPS, XMP,
+ * comments, thumbnails, text) without decoding it, and cuts off anything after the picture's end (a second picture, a
+ * motion photo's clip): none of that ever leaves for a worker. A JPEG keeps its orientation. A kind of picture whose
+ * such parts this server can't blank that way (a GIF, an SVG, an animated WebP, say) is made again from its pixels here.
  */
 export async function forWorkers(data: Buffer, contentType: string, name: string, o: { onWorker?: boolean } = {}): Promise<{ data: Buffer; contentType: string; name: string }> {
   const kind = contentType.split("/")[0];
@@ -226,7 +227,7 @@ export async function forWorkers(data: Buffer, contentType: string, name: string
   const refused = () => new ProviderError("The shared GPUs don't take this kind of file.");
   if (o.onWorker) {
     if (!imageSize(data)) throw refused();
-    const clean = pictureWithoutMetadata(data, contentType);
+    const clean = pictureWithoutMetadata(data);
     if (clean) return { data: clean, contentType, name };
   }
   const sharp = (await import("sharp")).default;

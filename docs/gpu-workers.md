@@ -539,10 +539,12 @@ starts a job that its ComfyUI did not have last, it clears its ComfyUI the same 
 
 The owner's pictures for workers are made again from their pixels on the studio (no EXIF, no GPS). An account's
 pictures go to the worker without being decoded, and the worker makes each one again from its pixels before its
-ComfyUI or a finishing job reads it (see "Pictures of an account's run"). Before they leave, the studio blanks what
-they carry besides their pixels, in place: EXIF and GPS, XMP, comments and text chunks. A JPEG keeps only its
-orientation. A kind of picture that the studio can't blank that way (a GIF, say) is made again from its pixels on the
-studio instead. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
+ComfyUI or a finishing job reads it (see "Pictures of an account's run"). Before they leave, the studio sends only the
+picture itself: it blanks what a picture carries besides its pixels, in place (EXIF and GPS, XMP, comments,
+thumbnails, a JPEG's other application segments before and between its scans, every PNG chunk but its pixels' and
+colours', a WebP's EXIF and XMP), and cuts off anything after the picture's end (a second picture, a phone's
+motion-photo clip and its sound). A JPEG keeps only its orientation. A kind of picture that the studio can't clean
+that way (a GIF, an SVG, an animated WebP, say) is made again from its pixels on the studio instead. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
 `image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. The worker
 then makes each one again before its ComfyUI reads it (see "Clips and sound"). Every VideoHelperSuite save node of a
 graph for the workers is sent with `save_metadata` off, so no prompt rides inside a result. An account's run is shaped

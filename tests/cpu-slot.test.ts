@@ -645,7 +645,7 @@ describe("an account's pictures leave for a worker without what they carry besid
       .withMetadata({ orientation: 6 })
       .withExif({ IFD0: { Artist: "someone private", Copyright: "a home address" } })
       .toBuffer();
-    const clean = pictureWithoutMetadata(jpeg, "image/jpeg")!;
+    const clean = pictureWithoutMetadata(jpeg)!;
     expect(clean.length).toBe(jpeg.length);
     expect(clean.includes(Buffer.from("someone private"))).toBe(false);
     expect(clean.includes(Buffer.from("a home address"))).toBe(false);
@@ -656,20 +656,20 @@ describe("an account's pictures leave for a worker without what they carry besid
     expect([meta.width, meta.height]).toEqual([40, 20]);
     // Upright already: nothing of its EXIF stays.
     const upright = await sharp({ create: { width: 40, height: 20, channels: 3, background: "#c33" } }).jpeg().withExif({ IFD0: { Artist: "someone private" } }).toBuffer();
-    const plain = pictureWithoutMetadata(upright, "image/jpeg")!;
+    const plain = pictureWithoutMetadata(upright)!;
     expect(plain.includes(Buffer.from("someone private"))).toBe(false);
     expect((await sharp(plain).metadata()).exif).toBeUndefined();
     const png = await pngWithText("a private note");
     expect((await sharp(png).metadata()).width).toBe(8);
-    const cleanPng = pictureWithoutMetadata(png, "image/png")!;
+    const cleanPng = pictureWithoutMetadata(png)!;
     expect(cleanPng.includes(Buffer.from("a private note"))).toBe(false);
     expect((await sharp(cleanPng).metadata()).width).toBe(8);
     const webp = await sharp({ create: { width: 8, height: 6, channels: 3, background: "#123" } }).webp().withExif({ IFD0: { Artist: "someone private" } }).toBuffer();
-    const cleanWebp = pictureWithoutMetadata(webp, "image/webp")!;
+    const cleanWebp = pictureWithoutMetadata(webp)!;
     expect(cleanWebp.includes(Buffer.from("someone private"))).toBe(false);
     expect((await sharp(cleanWebp).metadata()).width).toBe(8);
     // Not a picture it can read where such things live: refused.
-    expect(pictureWithoutMetadata(Buffer.from([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 0x00]), "image/jpeg")).toBeNull();
+    expect(pictureWithoutMetadata(Buffer.from([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 0x00]))).toBeNull();
   });
 
   it("an account's run on the workers stages its picture that way, sized as it shows; its own GPU gets it as it came, sized by its pixels", async () => {
@@ -708,6 +708,17 @@ describe("an account's pictures leave for a worker without what they carry besid
     expect(staged).toHaveLength(2);
     expect(staged.some((b) => b.includes(Buffer.from("someone private")))).toBe(false);
     expect(staged[0].length).toBe(photo.length);
+  });
+
+  it("a camera path's photo with a second picture and a motion photo's clip after it goes as the first picture only", async () => {
+    const sharp = (await import("sharp")).default;
+    const photo = await sharp({ create: { width: 16, height: 12, channels: 3, background: "#36c" } }).jpeg().toBuffer();
+    const second = await sharp({ create: { width: 4, height: 4, channels: 3, background: "#000" } }).jpeg().withExif({ IFD0: { Artist: "GPS 48.85837 N" } }).toBuffer();
+    const clip = Buffer.from("....ftypmp42 MOTION PHOTO VIDEO AND SOUND", "latin1");
+    const { id } = pathFinish(Buffer.concat([photo, second, clip]));
+    const staged = tasks.inputsOf(id).map((i) => fs.readFileSync(path.join(dir, "relay", "in", i.name)));
+    expect(staged[0].equals(photo)).toBe(true);
+    expect(staged.some((b) => b.includes(Buffer.from("GPS 48.85837")) || b.includes(Buffer.from("MOTION PHOTO")))).toBe(false);
   });
 });
 
@@ -805,7 +816,7 @@ describe("pictures for a worker that this server can't blank in place", () => {
     const sharp = (await import("sharp")).default;
     const gif = await gifWithComment("a private note");
     expect((await sharp(gif).metadata()).width).toBe(8);
-    expect(pictureWithoutMetadata(gif, "image/gif")).toBeNull();
+    expect(pictureWithoutMetadata(gif)).toBeNull();
     const route = { provider: "comfyui", endpoint: "selftest-image", op: "edit" } as never;
     const pooled = await hosted.runOnPool(accountId, async () => {
       const name = (await comfyProvider.prepareFile!(gif, "image/gif", "me.gif", route))!;
