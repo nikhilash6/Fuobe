@@ -34,6 +34,8 @@ import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRu
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
+import { queueRequestRelease } from "./billing-outbox";
+import { notePressGaveUp, reserveRequestId } from "./run-requests";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
 import { readSnapshot } from "./gpu/snapshots";
@@ -412,7 +414,9 @@ export async function moderateRun(
 
 /**
  * Set the run's price aside (no billing service: nothing to set aside; the run is free). Returns the stamp the run's
- * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md).
+ * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md). `pressId`: the page's
+ * id for this press of Run (run-requests.ts), so every resend of it reserves under one request id; none (a script): an
+ * id of this request's own. A reserve given up after a try that may have made a hold releases it by its request id.
  */
 export async function reservePool(
   account: Account,
@@ -421,13 +425,15 @@ export async function reservePool(
   shown: { amount: number; priceVersion: string } | null,
   checkOutputs: boolean,
   steps?: RunFacts["steps"],
+  pressId: string | null = null,
 ): Promise<{ ok: true; stamp: RunStamp } | { ok: false; refusal: Refusal }> {
   const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }) };
   if (!billingConfigured()) return { ok: true, stamp: base };
   const kind = outputKind(planned.op, planned.model);
   const run: RunFacts = { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) };
+  const requestId = pressId ? reserveRequestId(account.id, pressId) : nanoid(16);
   const a = await reserve({
-    requestId: nanoid(16),
+    requestId,
     account: accountFacts(account),
     run,
     queue: queueFacts(account.id, planned.route.endpoint),
@@ -438,6 +444,11 @@ export async function reservePool(
   });
   if (!a) return { ok: true, stamp: base };
   if (!a.ok) {
+    if (a.unsure) {
+      // A try may have made a hold the app never heard of: it goes back, and a resend of this press is refused at once.
+      if (pressId) notePressGaveUp(account.id, pressId);
+      queueRequestRelease(requestId);
+    }
     return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }) }) };
   }
   forgetBalance(account.id);

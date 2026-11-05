@@ -25,11 +25,13 @@ import { GenerationRequestSchema } from "@/server/request-schema";
 import { gateGeneration, GPU_SETUP_HEADER } from "@/server/gpu/gate";
 import { gpuTargetFor } from "@/server/gpu/target";
 import { connectNeeds } from "@/server/connect-refusal";
-import { BILLING_HEADER } from "@/server/billing";
+import { BILLING_HEADER, BILLING_WAIT } from "@/server/billing";
 import { queueRelease } from "@/server/billing-outbox";
 import { runOnPool } from "@/server/hosted";
 import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
+import { hostedRunsOn } from "@/server/hosted-switch";
+import { notePress, pressSeen, readPressId } from "@/server/run-requests";
 
 /**
  * List generations, newest first. Filters: kind / kinds, features (`x*` = prefix), models, statuses,
@@ -115,6 +117,17 @@ export async function POST(request: Request) {
     if (account) unhit(`run:${account.id}`);
     return refuse(r.status, r.body.error, r.body, r.headers);
   };
+  // With hosted runs on, an account's press of Run is made once however often the page sends it (run-requests.ts): a
+  // resend gets the run the first one made, and one that was refused because the billing service didn't answer is
+  // refused again (a new press starts afresh).
+  const pressId = account && !preview && hostedRunsOn() ? readPressId(body) : null;
+  const paused = () => refuse(503, BILLING_WAIT.run, { code: "paused" }, { [BILLING_HEADER]: "paused" });
+  const madeAlready = (ids: string[]) => Response.json({ items: ids.map((id) => getGeneration(id)).filter((g) => !!g) }, { status: 201 });
+  if (account && pressId) {
+    const seen = pressSeen(account.id, pressId);
+    if (seen === "gave-up") return paused();
+    if (seen) return madeAlready(seen.ids);
+  }
   const notes: string[] = [];
   if (account && !preview) {
     // Room on the server, room in the account's files, and a fair share of runs.
@@ -247,7 +260,7 @@ export async function POST(request: Request) {
         // Light work only (joins, trims): free, so nothing is set aside, and it counts against none of the policy's limits.
         stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
       } else if (onPool) {
-        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps);
+        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps, pressId);
         if (!held.ok) return refusedBy(held.refusal);
         stamp = held.stamp;
       } else if (mod.checkOutputs) stamp = { checkOutputs: true };
@@ -263,15 +276,31 @@ export async function POST(request: Request) {
         // sent until they are kept.
         const pool = onPool;
         const admitted = inScope(() => {
-          const r = admitRun({ accountId: account.id, pool: pool && !pool.light ? { policy: pool.policy, addr } : null }, () => {
-            const run = captureRun(make);
-            const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
-            if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
-            return run;
-          });
+          const r = admitRun(
+            {
+              accountId: account.id,
+              pool: pool && !pool.light ? { policy: pool.policy, addr } : null,
+              // A resend of this press that got here first made the run (or gave up): nothing is made twice.
+              ...(pressId && { prior: () => pressSeen(account.id, pressId) }),
+            },
+            () => {
+              const run = captureRun(make);
+              const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
+              if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+              if (pressId) notePress(account.id, pressId, run.value.map((g) => g.id), stamp?.hold ?? null);
+              return run;
+            },
+          );
           if (r.ok) r.value.start();
           return r;
         });
+        if (!admitted.ok && "prior" in admitted) {
+          unhit(`run:${account.id}`);
+          const prior = admitted.prior;
+          // The service gives one press one hold; a different one (a service that made a second) goes back.
+          if (stamp?.hold && (prior === "gave-up" || stamp.hold !== prior.hold)) queueRelease(stamp.hold);
+          return prior === "gave-up" ? paused() : madeAlready(prior.ids);
+        }
         if (!admitted.ok) {
           unhit(`run:${account.id}`);
           if (stamp?.hold) queueRelease(stamp.hold);

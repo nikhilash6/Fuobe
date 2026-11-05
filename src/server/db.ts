@@ -845,10 +845,11 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
 
 /**
  * The optional external services' tables (billing.ts, moderation.ts). billing_outbox: every settle, refund and release
- * the billing service must get, kept until it takes it (billing-outbox.ts). output_checks: each output of a run whose
- * outputs the moderation service sees first, and where its check is. reports_inbox: "Report this result" when no
- * moderation service is set, for the owner. Made here rather than as numbered migrations (other branches add those at
- * the same time). Safe to run on every start; empty and unread while no service is set.
+ * the billing service must get, kept until it takes it (billing-outbox.ts). run_requests: each press of Run an account
+ * made with hosted runs on, by the page's id for it, and the run it made (run-requests.ts). output_checks: each output
+ * of a run whose outputs the moderation service sees first, and where its check is. reports_inbox: "Report this
+ * result" when no moderation service is set, for the owner. Made here rather than as numbered migrations (other
+ * branches add those at the same time). Safe to run on every start; empty and unread while no service is set.
  */
 export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
     key TEXT PRIMARY KEY,
@@ -883,6 +884,16 @@ export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
   );
   CREATE INDEX IF NOT EXISTS pool_admissions_account ON pool_admissions(account, at);
   CREATE INDEX IF NOT EXISTS pool_admissions_addr ON pool_admissions(addr, at);
+  CREATE TABLE IF NOT EXISTS run_requests (
+    account TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    ids_json TEXT,
+    hold_id TEXT,
+    gave_up INTEGER NOT NULL DEFAULT 0,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (account, request_id)
+  );
+  CREATE INDEX IF NOT EXISTS run_requests_at ON run_requests(at);
   CREATE TABLE IF NOT EXISTS reports_inbox (
     id TEXT PRIMARY KEY,
     target_json TEXT NOT NULL,

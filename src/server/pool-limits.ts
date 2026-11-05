@@ -163,13 +163,20 @@ export class AdmitRefused extends Error {
  * Count, and make the run (`make`) only if it fits: the studio's own limit for every account run, and with `pool` the
  * policy's limits on runs on this install's GPUs. All in one BEGIN IMMEDIATE transaction; a run on this install's GPUs is
  * noted for the hourly counts in the same transaction. `make` may throw AdmitRefused (or anything else) to keep nothing.
+ * `prior`, looked at first in the same transaction: what this same request made already (a resend of one press of Run,
+ * run-requests.ts); when it says anything, nothing is counted or made, and it is the answer.
  */
-export function admitRun<T>(o: { accountId: string; pool: { policy: Pick<Policy, "limits">; addr: string | null } | null; now?: number }, make: () => T): { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } {
+export function admitRun<T, P = never>(
+  o: { accountId: string; pool: { policy: Pick<Policy, "limits">; addr: string | null } | null; now?: number; prior?: () => P | null },
+  make: () => T,
+): { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | { ok: false; prior: P } {
   const now = o.now ?? Date.now();
   const d = db();
   try {
     return d
-      .transaction((): { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } => {
+      .transaction((): { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | { ok: false; prior: P } => {
+        const prior = o.prior?.() ?? null;
+        if (prior !== null) return { ok: false, prior };
         const refusal = accountLimitRefusal(o.accountId) ?? (o.pool ? poolLimitRefusal(o.accountId, o.pool.policy, o.pool.addr, now) : null);
         if (refusal) return { ok: false, refusal };
         const value = make();

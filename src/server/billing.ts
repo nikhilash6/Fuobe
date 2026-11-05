@@ -312,10 +312,23 @@ export async function quote(account: AccountFacts | null, run: RunFacts, queue: 
 
 /**
  * How a reserve the service doesn't answer is tried again (ms): after `firstMs`, then twice as long each time up to
- * `mostMs`, for up to `forMs` in all. A press of Run waits through a short outage or a restart of the service, and the
- * run starts with its place once it answers.
+ * `mostMs`, for up to `forMs` in all, the last try's own time included. A press of Run waits through a short outage or
+ * a restart of the service, and the run starts with its place once it answers. The whole wait stays well under the
+ * time a front proxy gives a request (often 60 s), so the page always gets an answer.
  */
-export const RESERVE_RETRY = { forMs: 60_000, firstMs: 500, mostMs: 8_000 };
+export const RESERVE_RETRY = { forMs: 40_000, firstMs: 500, mostMs: 8_000 };
+
+/**
+ * Is a failed reserve worth trying again: no connection, no answer in time, the service's own trouble (5xx) or too many
+ * calls at once (429)? Any other answer (a wrong token, a request it refuses) is the same on every try.
+ */
+const retryable = (e: unknown): boolean => {
+  const status = e instanceof HookDown ? e.why.status : undefined;
+  return status === undefined || status >= 500 || status === 429;
+};
+
+/** Might a failed try have made a hold at the service (it was sent, and no answer said it wasn't)? */
+const mayHaveHeld = (e: unknown): boolean => !(e instanceof HookDown) || !(e.why.refused || (e.why.status !== undefined && e.why.status < 500));
 
 /** What a reserve sends (docs/billing-hook.md). */
 export interface ReserveInput {
@@ -335,11 +348,14 @@ export interface ReserveInput {
 /**
  * Set the run's price aside before it is created. No service: null (no hold; the run is free). The service down: tried
  * again with the same request id (RESERVE_RETRY: the service makes one hold for it however often it hears it), then a
- * `paused` refusal in plain words. Never throws.
+ * `paused` refusal in plain words. An answer that would be the same on every try (a 4xx) is that refusal at once.
+ * `unsure` on a refusal: a try may have made a hold the app never heard of (the caller releases it by the request id).
+ * Never throws.
  */
-export async function reserve(input: ReserveInput): Promise<ReserveAnswer | null> {
+export async function reserve(input: ReserveInput): Promise<(ReserveAnswer & { unsure?: boolean }) | null> {
   if (!billingConfigured()) return null;
   const start = Date.now();
+  let unsure = false;
   for (let attempt = 0; ; attempt++) {
     try {
       const a = await call<ReserveAnswer>("POST", "/v1/reserve", input, BILLING_TIMEOUTS.reserve);
@@ -347,12 +363,15 @@ export async function reserve(input: ReserveInput): Promise<ReserveAnswer | null
       return a;
     } catch (e) {
       logDown(`reserve (try ${attempt + 1})`, e);
+      if (mayHaveHeld(e)) unsure = true;
+      if (!retryable(e)) break;
     }
     const wait = Math.min(RESERVE_RETRY.mostMs, RESERVE_RETRY.firstMs * 2 ** Math.min(attempt, 16));
-    if (Date.now() - start + wait > RESERVE_RETRY.forMs) break;
+    // The next try must end (its answer or its timeout) inside the whole wait.
+    if (Date.now() - start + wait + BILLING_TIMEOUTS.reserve > RESERVE_RETRY.forMs) break;
     await new Promise((r) => setTimeout(r, wait));
   }
-  return { ok: false, code: "paused", text: BILLING_WAIT.run };
+  return { ok: false, code: "paused", text: BILLING_WAIT.run, ...(unsure && { unsure: true }) };
 }
 
 /** The HTTP status and header for a billing refusal (the generations route; docs/billing-hook.md). */

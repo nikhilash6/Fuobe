@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { runnerByHand, startAppProcess, tick, type AppProcess } from "./helpers/app-process";
 import { apiAs, loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
 import { plainFailure, RunWatch, type RunLike } from "./helpers/run-watch";
+import { startFakeModeration } from "./helpers/fake-billing";
 import { FREE_RUNS_POLICY, startStandInBilling, type StandInBilling } from "./helpers/standin-billing";
 import { startStandInComfy, type StandInComfy } from "./helpers/standin-comfy";
 import { tempDir } from "./helpers/temp-dir";
@@ -130,10 +131,10 @@ beforeEach(async () => {
   process.env.FUOBE_BILLING_URL = svc.address;
   process.env.FUOBE_BILLING_TOKEN = svc.token;
   delete process.env.FUOBE_HOSTED_FREE;
-  Object.assign(svc, { priced: false, slowMs: 0, gather: null, maxWaitMs: 20 * MIN, holdLifeMs: 105 * MIN, readTiming: true, policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) });
+  Object.assign(svc, { priced: false, slowMs: 0, slowPath: null, reserveStatus: null, gather: null, maxWaitMs: 20 * MIN, holdLifeMs: 105 * MIN, readTiming: true, policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) });
   await svc.start();
   await comfy.start();
-  comfy.inner.restart({ stall: false, failNext: undefined, loseNext: 0, steps: 4, stepMs: 20 });
+  comfy.inner.restart({ stall: false, failNext: undefined, loseNext: 0, steps: 4, stepMs: 20, previewPicture: undefined });
   settings();
   db().prepare("DELETE FROM relay_workers").run();
   db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE state IN ('waiting','sending','queued','running','collecting')").run();
@@ -572,16 +573,163 @@ describe("a run's preview picture while it works", () => {
     await expectOnce(id, watch, { place: 1 });
   });
 
-  it("a picture that isn't a JPEG, is over 64 KB or comes within 2 s of the last is dropped; a person's own computer keeps none", () => {
-    const now = 1_000_000;
-    const t = { id: "t".repeat(16), pools: "pool", preview_at: null };
+  it("a picture that isn't a JPEG, is over 64 KB or comes within 2 s of the last is dropped; a person's own computer keeps none", async () => {
+    standInWorker();
+    const { id, task } = await pressRun();
+    db().prepare("UPDATE relay_tasks SET state = 'running', lease_hash = 'this-attempt' WHERE id = ?").run(task.id);
+    const now = Date.now();
+    const t = { ...taskOf(id)!, preview_at: null };
     expect(tasks.notePreview(t, Buffer.from("not a picture").toString("base64"), now)).toBe(false);
     expect(tasks.notePreview(t, jpegBase64(1, 70 * 1024), now)).toBe(false);
     expect(tasks.notePreview(t, "%%%", now)).toBe(false);
     expect(tasks.notePreview({ ...t, pools: null }, jpegBase64(1), now)).toBe(false);
+    expect(tasks.notePreview({ ...t, preview: 0 }, jpegBase64(1), now)).toBe(false);
     expect(tasks.notePreview({ ...t, preview_at: now - 1000 }, jpegBase64(1), now)).toBe(false);
     expect(tasks.notePreview({ ...t, preview_at: now - 2000 }, jpegBase64(1), now)).toBe(true);
     tasks.dropProgress(t.id);
+  });
+
+  it("a step or a picture that comes after another app process sent the task back in line, or gave it to another attempt, leaves nothing behind", async () => {
+    standInWorker();
+    const { id, task } = await pressRun();
+    const folder = path.join(tasks.relayDir(), "tasks", task.id);
+    const left = () => (fs.existsSync(folder) ? fs.readdirSync(folder).filter((f) => f.startsWith("preview")) : []);
+    db().prepare("UPDATE relay_tasks SET state = 'running', lease_hash = 'first-attempt' WHERE id = ?").run(task.id);
+    const late = { ...taskOf(id)! };
+    const now = Date.now();
+    // The other process sent it back in line meanwhile.
+    db().prepare("UPDATE relay_tasks SET state = 'waiting', lease_hash = NULL WHERE id = ?").run(task.id);
+    tasks.noteProgress(task.id, { value: 3, max: 4 }, now, late.lease_hash);
+    expect(tasks.notePreview(late, jpegBase64(1), now)).toBe(false);
+    expect(taskOf(id)).toMatchObject({ progress_json: null, preview_at: null });
+    expect(left()).toEqual([]);
+    // Another worker took it again (a new lease): the first attempt's late report still leaves nothing.
+    db().prepare("UPDATE relay_tasks SET state = 'running', lease_hash = 'second-attempt' WHERE id = ?").run(task.id);
+    tasks.noteProgress(task.id, { value: 3, max: 4 }, now, late.lease_hash);
+    expect(tasks.notePreview(late, jpegBase64(1), now)).toBe(false);
+    expect(taskOf(id)).toMatchObject({ progress_json: null, preview_at: null });
+    expect(left()).toEqual([]);
+    // The attempt that holds it now is kept.
+    tasks.noteProgress(task.id, { value: 1, max: 4 }, now, "second-attempt");
+    expect(tasks.notePreview({ ...taskOf(id)! }, jpegBase64(2), now)).toBe(true);
+    expect(tasks.taskProgress(taskOf(id)!)).toMatchObject({ value: 1, max: 4 });
+    expect(left()).toEqual(["preview.jpg"]);
+    // Ended: both go.
+    tasks.endTask(task.id, "canceled");
+    expect(left()).toEqual([]);
+  });
+
+  it("a task a worker claims again shows nothing of the attempt before it until the new one reports", async () => {
+    const w = standInWorker();
+    const { id, task } = await pressRun();
+    const file = path.join(tasks.relayDir(), "tasks", task.id, "preview.jpg");
+    db()
+      .prepare("UPDATE relay_tasks SET state = 'waiting', lease_hash = NULL, worker_id = NULL, progress_json = ?, preview_at = ? WHERE id = ?")
+      .run(JSON.stringify({ value: 3, max: 4, at: Date.now() }), Date.now(), task.id);
+    // Left from an attempt before (a process that stopped part way never dropped it).
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, Buffer.from(jpegBase64(1), "base64"));
+    const d = driver(w);
+    let atClaim: { progress_json: string | null; preview_at: number | null; file: boolean } | null = null;
+    d.onStep((step) => {
+      if (step === "claim" && !atClaim) atClaim = { ...taskOf(id)!, file: fs.existsSync(file) };
+    });
+    await workAll(d);
+    expect(atClaim).toMatchObject({ progress_json: null, preview_at: null, file: false });
+    expect((await ended(id))?.status).toBe("succeeded");
+  });
+
+  it("the worker's own runner sends ComfyUI's preview pictures with its reports: the Working tile shows the latest, at most one every 2 s", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 8;
+    comfy.inner.opts.stepMs = 600;
+    const frame = (step: number) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`step ${step} `), Buffer.alloc(1500, step)]);
+    comfy.inner.opts.previewPicture = (step) => ({ type: "image/jpeg", data: frame(step) });
+    // No help from the driver: the pictures are ComfyUI's, on its socket.
+    const d = driver(w);
+    const sent: number[] = [];
+    const shown: string[] = [];
+    d.onStep(async (step, _path, report) => {
+      await tick();
+      await watch.look();
+      if (step !== "running") return;
+      if (typeof report?.preview === "string") sent.push(Date.now());
+      const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+      if (g.preview) shown.push(Buffer.from(await (await previewGet(a1, g.preview)).arrayBuffer()).subarray(4, 9).toString("latin1"));
+    });
+    await workAll(d);
+    expect(sent.length, "pictures sent").toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < sent.length; i++) expect(sent[i] - sent[i - 1]).toBeGreaterThanOrEqual(1500);
+    expect(shown.length).toBeGreaterThan(0);
+    for (const s of shown) expect(s).toBe("step ");
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("ComfyUI's PNG previews go as JPEGs the worker program makes; with nothing to make them, none is sent and the run goes on", async () => {
+    const w = standInWorker();
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 500;
+    const types: string[] = [];
+    const made = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("made "), Buffer.alloc(500, 7)]);
+    const shownWith = async (d: WorkerDriver, id: string) => {
+      const shown: string[] = [];
+      d.onStep(async (step) => {
+        await tick();
+        if (step !== "running") return;
+        const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+        if (g.preview) shown.push(Buffer.from(await (await previewGet(a1, g.preview)).arrayBuffer()).subarray(4, 9).toString("latin1"));
+      });
+      await workAll(d);
+      expect((await ended(id))?.status).toBe("succeeded");
+      return shown;
+    };
+    const first = await pressRun();
+    const withMaker = workerDriver({ routes, token: w.token, comfy, jpeg: async (_data, type) => (types.push(type), new Uint8Array(made)) });
+    drivers.push(withMaker);
+    const shown = await shownWith(withMaker, first.id);
+    expect(types.length).toBeGreaterThan(0);
+    expect(new Set(types)).toEqual(new Set(["image/png"]));
+    expect(shown.length).toBeGreaterThan(0);
+    for (const s of shown) expect(s).toBe("made ");
+    withMaker.stop();
+    const second = await pressRun();
+    expect(await shownWith(driver(w), second.id)).toEqual([]);
+  });
+
+  it("a run whose outputs the moderation service sees first shows no preview while it works: no address, and the picture's address answers nothing", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    // An answer with no checkOutputs field: its outputs are checked first.
+    mod.run = { allowed: true };
+    try {
+      const w = standInWorker();
+      const { id, task } = await pressRun();
+      expect(taskOf(id)!.preview, "its ComfyUI is asked for no previews").toBe(0);
+      comfy.inner.opts.steps = 6;
+      comfy.inner.opts.stepMs = 300;
+      comfy.inner.opts.previewPicture = (step) => ({ type: "image/jpeg", data: Buffer.from(jpegBase64(step), "base64") });
+      const d = driver(w);
+      // A worker that sends a picture anyway.
+      d.previews(() => jpegBase64(1));
+      const looks: { preview?: string; route: number }[] = [];
+      d.onStep(async (step) => {
+        if (step !== "running") return;
+        const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+        looks.push({ preview: g.preview, route: (await previewGet(a1, `/api/generations/${id}/preview?at=1`)).status });
+      });
+      await workAll(d);
+      expect(looks.length).toBeGreaterThan(0);
+      expect(looks.every((l) => l.preview === undefined && l.route === 404), JSON.stringify(looks)).toBe(true);
+      expect(taskOf(id)!.preview_at).toBeNull();
+      expect(fs.existsSync(path.join(tasks.relayDir(), "tasks", task.id, "preview.jpg"))).toBe(false);
+      // Its result shows once the check passes.
+      await until(async () => (await tick(), getGeneration(id)?.status === "succeeded"));
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
   });
 
   it("a worker's report with a picture over 64 KB is taken without the picture, and the run goes on", async () => {
@@ -624,8 +772,8 @@ describe("the owner's own job on the workers", () => {
 });
 
 describe("a press of Run sent twice (a network drop at submit)", () => {
-  it("makes a second run and a second hold today: the run route reads no request id from the page, so each press reserves under an id of its own", async () => {
-    standInWorker();
+  it("makes one run and one hold: the resend gets the run the first send made", async () => {
+    const w = standInWorker();
     const holds = svc.holds.size;
     const rows = made();
     const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
@@ -634,12 +782,120 @@ describe("a press of Run sent twice (a network drop at submit)", () => {
     const again = await run(press);
     expect(first.status, JSON.stringify(first.body)).toBe(201);
     expect(again.status, JSON.stringify(again.body)).toBe(201);
-    expect(again.body.items![0].id).not.toBe(first.body.items![0].id);
-    expect(made() - rows, "runs made").toBe(2);
-    expect(svc.holds.size - holds, "holds made").toBe(2);
-    const ids = svc.callsOf("/v1/reserve").slice(-2).map((c) => (c.body as { requestId?: string }).requestId);
-    expect(new Set(ids).size).toBe(2);
+    const id = first.body.items![0].id;
+    expect(again.body.items!.map((g) => g.id)).toEqual(first.body.items!.map((g) => g.id));
+    expect(made() - rows, "runs made").toBe(1);
+    expect(svc.holds.size - holds, "holds made").toBe(1);
+    // The reserve names the press, as the account's own (never the page's id as it is).
+    const ids = svc.callsOf("/v1/reserve").slice(-1).map((c) => (c.body as { requestId?: string }).requestId);
+    expect(ids[0]).toMatch(/^r_[0-9a-f]{32}$/);
     expect(ids).not.toContain(press.requestId);
+    // Another account's press under the same page id is its own press.
+    const theirs = await run(press, b1);
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
+    expect(theirs.body.items![0].id).not.toBe(id);
+    expect(svc.holds.size - holds, "holds made").toBe(2);
+    const d = driver(w);
+    const watch = watchOf(id);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a resend that comes while the first send still waits for the billing service makes no second run or hold", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const holds = svc.holds.size;
+    const rows = made();
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    await svc.downFor(3000);
+    const first = run(press);
+    await sleep(1000);
+    // A proxy cut the first request short: the page sends the press again.
+    const again = run(press);
+    const [a, b] = await Promise.all([first, again]);
+    expect(a.status, JSON.stringify(a.body)).toBe(201);
+    expect(b.status, JSON.stringify(b.body)).toBe(201);
+    expect(b.body.items!.map((g) => g.id)).toEqual(a.body.items!.map((g) => g.id));
+    expect(made() - rows, "runs made").toBe(1);
+    expect(svc.holds.size - holds, "holds made").toBe(1);
+  });
+
+  it("with hosted runs off, a press id changes nothing: each request makes its run, as before", async () => {
+    delete process.env.FUOBE_HOSTED_RUNS;
+    delete process.env.FUOBE_BILLING_URL;
+    try {
+      standInWorker();
+      const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+      const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+      const first = await run(press, owner);
+      const again = await run(press, owner);
+      expect(first.status, JSON.stringify(first.body)).toBe(201);
+      expect(again.status, JSON.stringify(again.body)).toBe(201);
+      expect(again.body.items![0].id).not.toBe(first.body.items![0].id);
+      expect((db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE request_id = ?").get(press.requestId) as { n: number }).n).toBe(0);
+    } finally {
+      process.env.FUOBE_HOSTED_RUNS = "1";
+    }
+  });
+});
+
+describe("a reserve the billing service refuses or never answers", () => {
+  it("an answer that would be the same on every try (a refused request) is a refusal in plain words at once, not after the whole wait", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const reserves = svc.callsOf("/v1/reserve").length;
+    svc.reserveStatus = 401;
+    const t = Date.now();
+    const r = await run(IMAGE);
+    expect(r.status, JSON.stringify(r.body)).toBe(503);
+    expect(r.body.error).toBe(billing.BILLING_WAIT.run);
+    expect(Date.now() - t).toBeLessThan(5000);
+    expect(svc.callsOf("/v1/reserve").length - reserves, "tries").toBe(1);
+    expect(made()).toBe(rows);
+    // Nothing was held there, so nothing is released.
+    expect((db().prepare("SELECT COUNT(*) AS n FROM billing_outbox WHERE key LIKE 'release:request:%' AND created_at >= ?").get(t) as { n: number }).n).toBe(0);
+  });
+
+  it("a press whose tries got no answer in time is refused within the whole wait, the hold the service made meanwhile goes back, and a resend of it is refused at once", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const was = { ...billing.RESERVE_RETRY };
+    Object.assign(billing.RESERVE_RETRY, { forMs: 3000, firstMs: 200 });
+    // The service takes each reserve, but answers only after the app stopped waiting.
+    Object.assign(svc, { slowMs: 2500, slowPath: "/v1/reserve" });
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    try {
+      const t = Date.now();
+      const r = await run(press);
+      expect(r.status, JSON.stringify(r.body)).toBe(503);
+      expect(r.body.error).toBe(billing.BILLING_WAIT.run);
+      expect(Date.now() - t, "within the whole wait").toBeLessThanOrEqual(3000 + 500);
+      expect(made()).toBe(rows);
+      await sleep(600);
+      const held = [...svc.holds.values()].filter((h) => h.account === A && !h.released && h.createdAt >= t);
+      expect(held.length, "the service made a hold the app never heard of").toBe(1);
+      // Its release waits a minute (a reserve still on its way is answered first), then goes.
+      await outbox.drainOutbox(Date.now() + 1000);
+      expect(held[0].released).toBe(false);
+      await outbox.drainOutbox(Date.now() + outbox.REQUEST_RELEASE_AFTER_MS + 1000);
+      expect(held[0].released, "released by its request id").toBe(true);
+      expect(svc.callsOf("/v1/release").some((c) => (c.body as { requestId?: string }).requestId === held[0].requestId)).toBe(true);
+      // The page sends the same press again: refused at once, nothing made, no new reserve.
+      Object.assign(svc, { slowMs: 0, slowPath: null });
+      const reserves = svc.callsOf("/v1/reserve").length;
+      const again = await run(press);
+      expect(again.status).toBe(503);
+      expect(again.body.error).toBe(billing.BILLING_WAIT.run);
+      expect(svc.callsOf("/v1/reserve").length).toBe(reserves);
+      expect(made()).toBe(rows);
+      // A new press works.
+      expect((await run({ ...IMAGE, requestId: `press-${crypto.randomUUID()}` })).status).toBe(201);
+    } finally {
+      Object.assign(billing.RESERVE_RETRY, was);
+    }
   });
 });
 
@@ -1254,6 +1510,50 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     // Its turn runs out: this process saves the result.
     db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, id);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a run stopped while its result is saved stays stopped, and the file saved for it goes (none is left filling the account's space)", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const d = driver(w);
+    // The stop lands while the result is saved: as its file is kept, the run is stopped (a cancel from another tab).
+    db().exec(`CREATE TEMP TRIGGER stop_while_saved AFTER INSERT ON assets WHEN NEW.generation_id = '${id}' BEGIN UPDATE generations SET status = 'canceled' WHERE id = '${id}'; END`);
+    try {
+      await workAll(d);
+      await until(() => assetsOf(id) === 0 && getGeneration(id)?.status === "canceled");
+      for (let i = 0; i < 5; i++) await tick();
+    } finally {
+      db().exec("DROP TRIGGER IF EXISTS stop_while_saved");
+    }
+    expect(getGeneration(id)).toMatchObject({ status: "canceled" });
+    expect(assetsOf(id)).toBe(0);
+  });
+
+  it("with the moderation service checking outputs, a run stopped while its result is saved is never brought back to wait for its check", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    mod.run = { allowed: true, checkOutputs: true };
+    try {
+      const w = standInWorker();
+      const { id } = await pressRun();
+      const d = driver(w);
+      db().exec(`CREATE TEMP TRIGGER stop_while_saved AFTER INSERT ON assets WHEN NEW.generation_id = '${id}' BEGIN UPDATE generations SET status = 'canceled' WHERE id = '${id}'; END`);
+      try {
+        await workAll(d);
+        await until(() => assetsOf(id) === 0 && getGeneration(id)?.status === "canceled");
+        for (let i = 0; i < 5; i++) await tick();
+      } finally {
+        db().exec("DROP TRIGGER IF EXISTS stop_while_saved");
+      }
+      expect(getGeneration(id)).toMatchObject({ status: "canceled" });
+      expect((db().prepare("SELECT stage FROM generations WHERE id = ?").get(id) as { stage: string | null }).stage).toBeNull();
+      expect((db().prepare("SELECT COUNT(*) AS n FROM output_checks WHERE generation_id = ?").get(id) as { n: number }).n).toBe(0);
+      expect(assetsOf(id)).toBe(0);
+      expect(mod.calls_of("/v1/check-output")).toEqual([]);
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
   });
 
   it("a look at a run that comes back after another process saved it, or while another process saves it, changes nothing", async () => {

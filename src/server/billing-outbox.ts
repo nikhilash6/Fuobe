@@ -133,6 +133,23 @@ export function queueRelease(holdId: string, now = Date.now()): void {
   void sweepBilling();
 }
 
+/**
+ * How long a release by request id waits before it is sent: a reserve the app stopped waiting for may still be on its
+ * way to the service, and the release must come after it.
+ */
+export const REQUEST_RELEASE_AFTER_MS = 60_000;
+
+/**
+ * A hold the app may not know of: a reserve whose tries got no clear answer (billing.ts reserve `unsure`), so nothing
+ * was made. The service releases whatever it holds for that request id (none: nothing to do). Sent after
+ * REQUEST_RELEASE_AFTER_MS.
+ */
+export function queueRequestRelease(requestId: string, now = Date.now()): void {
+  db()
+    .prepare("INSERT OR IGNORE INTO billing_outbox (key, kind, hold_id, payload_json, tries, next_at, created_at) VALUES (?, 'release', '', ?, 0, ?, ?)")
+    .run(`release:request:${requestId}`, JSON.stringify({ requestId, reason: "not-created" }), now + REQUEST_RELEASE_AFTER_MS, now);
+}
+
 interface OutboxRow {
   key: string;
   kind: "settle" | "refund" | "release";

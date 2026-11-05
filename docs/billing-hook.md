@@ -29,8 +29,8 @@ twice: the service must treat a repeated call (the same `requestId`, or the same
 | `GET /v1/policy?account=<id>` | 1 s | before a run on this install's GPUs, and for the status (cached for the answer's `ttlS`) |
 | `GET /v1/policy` | 1 s | a guest's status and price check: the policy for someone not signed in (cached the same way) |
 | `POST /v1/quote` | 1 s | the price check before Run (`POST /api/generations?preview=1`), asked again 300 ms after each change |
-| `POST /v1/reserve` | 2 s a try; with no answer, tried again with the same `requestId` for up to 60 s (backoff from 0.5 s, doubling, up to 8 s) | just before the run's rows are made |
-| `POST /v1/release` | 5 s, through the outbox | the rows couldn't be made after a reserve |
+| `POST /v1/reserve` | 2 s a try; with no answer, a 5xx or a 429, tried again with the same `requestId` for up to 40 s in all, the last try included (backoff from 0.5 s, doubling, up to 8 s). Any other answer is not tried again. | just before the run's rows are made |
+| `POST /v1/release` | 5 s, through the outbox | the rows couldn't be made after a reserve; or a reserve was given up after a try that may have made a hold (sent a minute later) |
 | `POST /v1/settle` | 5 s, through the outbox | each row that succeeded |
 | `POST /v1/refund` | 5 s, through the outbox | each row that failed, was stopped, or was removed by an output check |
 | `GET /v1/balance?account=<id>` | 1 s | the balance pill and the account menu's balance (cached 10 s) |
@@ -110,14 +110,15 @@ run named no place, Fuobe asks (409, `code: "own-gpu-offline"`, header `x-fuobe-
 to this install's GPUs, but only for a run this install's GPUs would take. Any other run goes to the account's own GPU,
 as before. While the policy is cached, a run on an account's own GPU never waits for the service; when a policy call
 gets no answer, the last answer (or none) stands for 5 seconds (60 for a guest) before the service is asked again. The
-last answer the service gave stands for up to 10 minutes while it doesn't answer; after that, runs on this install's
-GPUs wait until it answers again.
+last answer the service gave stands for up to 10 minutes while it doesn't answer. After that, a run on this install's
+GPUs is refused in plain words (503, "Try again in a moment."), and the price check turns Run off until the service
+answers again.
 
 | Call | Request | Answer |
 |---|---|---|
 | `POST /v1/quote` | `{ account: AccountFacts \| null, run: RunFacts, queue: QueueFacts \| null }` | `Quote` |
 | `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion }, timing?: { runMs, pausedMs } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
-| `POST /v1/release` | `{ holdId, reason: "not-created" }` | `{ ok: true }` |
+| `POST /v1/release` | `{ holdId, reason: "not-created" }` or `{ requestId, reason: "not-created" }` | `{ ok: true }` |
 | `POST /v1/settle` | `{ holdId, generationId, rows, status: "succeeded", final: { outputs, megapixels, seconds }, providerUsd, gpuMs, device, reachedProvider }` | `{ ok: true, charged }` |
 | `POST /v1/refund` | `{ holdId, generationId, rows, status: "failed" \| "canceled" \| "hidden" \| "unchecked", reason, reachedProvider, gpuMs, device }` | `{ ok: true, text }` |
 | `GET /v1/balance` | | `{ amount, chip, text, sub?, refillAt?, detail: { label, text }[], action?, offer? }` |
@@ -131,6 +132,16 @@ estimate. A quote with `allowed: false` turns Run off and puts its `text` in the
 (`code: "limit"`) and for what this install's GPUs don't take (`code: "not-offered"`: a model, a kind, LoRAs, files
 or a chain's later step), so Run never fails on them once pressed. The page asks for a quote again by itself: every
 15 s while it is refused, every 30 s while it is allowed, and at once when a run starts or ends.
+
+`requestId` names one press of Run. The page sends an id with each press, and sends the same press again when its
+answer is lost on the way (the network dropped, or a proxy in between gave up on a slow answer). Fuobe makes the
+reserve's `requestId` from the account and that id, so every send of one press reserves under one id, and no other
+account's press can name it. Fuobe makes the run once: a resend gets the run the first send made. A request with no
+page id (a script) reserves under an id of its own.
+
+A release names the hold, or, when no try of a reserve got an answer that said what happened, the reserve's
+`requestId`. The service releases whatever it holds for that id, and nothing when it holds none. Fuobe sends a release
+by `requestId` a minute after it gave up, so the reserve comes first. A resend of that press is refused at once.
 
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
@@ -204,6 +215,6 @@ process saves a finished run's results.
 |---|---|
 | No `FUOBE_BILLING_URL` | No call. Runs on this install's GPUs are closed, or free and allowed with `FUOBE_HOSTED_FREE=1`. |
 | Set, and it answers | As above. |
-| Set, and no answer in time | A press of Run waits while the reserve is tried again for up to 60 seconds (a restart of the service), and the feed shows the run as "In line" meanwhile. Then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
+| Set, and no answer in time | A press of Run waits while the reserve is tried again for up to 40 seconds (a restart of the service), and the feed shows the run as "In line" meanwhile. Then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
 
 The service's address and its errors are written to the server's log only. A browser never sees them.
