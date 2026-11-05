@@ -232,8 +232,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/restore/prompt",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
-      // Regenerate in Faceless and Shorts segments (n7-10): studio jobs, like their renders.
-      "/api/faceless/episodes/e1/regenerate",
+      // Regenerate in Shorts segments (n7-10): studio jobs, like their renders. (Faceless's Regenerate to 1080p goes to
+      // its route, which runs it on the account's own GPU: tests/account-content.test.ts.)
       "/api/shorts/sessions/s1/segments/0/enhance",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));

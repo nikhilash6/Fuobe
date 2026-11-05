@@ -266,10 +266,8 @@ describe("the proxy opens the three tools to accounts, and keeps the sign-up car
       expect(link.status, who).toBe(403);
       expect((await link.json()).code).toBe("own-gpu-tool");
     }
-    // "Regenerate to 1080p" stays held with Open-H3 Regenerate, for everyone.
-    const regen = viaProxy("/api/faceless/episodes/ep1/regenerate", "POST", "a");
-    expect(regen.status).toBe(403);
-    expect((await regen.json()).code).toBe("own-gpu-tool");
+    // "Regenerate to 1080p" goes to its route, which runs it on the account's own GPU when that GPU fits it.
+    expect(passed(viaProxy("/api/faceless/episodes/ep1/regenerate", "POST", "a"))).toBe(true);
   });
 
   it("the routes refuse a guest themselves", async () => {
@@ -478,6 +476,22 @@ describe("Faceless Studio: an account's channels and episodes are its own", () =
     expect(recordFor({ kind: "episode", ids: [channel, episode] }, h("a"))).toBe(true);
     expect(recordFor({ kind: "channel", ids: [channel] }, h("b"))).toBe(false);
     expect(recordFor({ kind: "channel", ids: [channel] }, h("owner"))).toBe(false);
+  });
+
+  it("offers Regenerate to 1080p, and runs it on its own GPU after the checks a render gets", async () => {
+    const before = (await (await readEpisode(episode, "a")).json()) as { regenerate?: { scenes: number } | null };
+    expect(before.regenerate).toBeTruthy();
+    fake.log.length = 0;
+    fetched.length = 0;
+    const r = await run(() => actionRoute.POST(json(`/api/faceless/episodes/${episode}/regenerate`, "POST", undefined, "a"), params({ id: episode, action: "regenerate" })));
+    expect(r.status, await r.clone().text()).toBe(200);
+    const v = (await r.json()) as { episode: { plan: { regenerated?: { ids: Record<string, string> } } | null } };
+    const made = Object.values(v.episode.plan?.regenerated?.ids ?? {});
+    expect(made.length).toBeGreaterThan(0);
+    for (const g of made) expect(accountOf(g)).toBe(a);
+    expect(reachedOwner()).toEqual([]);
+    // Another account can't run it on this episode.
+    expect((await actionRoute.POST(json(`/api/faceless/episodes/${episode}/regenerate`, "POST", undefined, "b"), params({ id: episode, action: "regenerate" }))).status).toBe(404);
   });
 
   it("another account and the owner never see, change or add to its channel", async () => {

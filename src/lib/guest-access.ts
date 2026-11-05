@@ -346,7 +346,7 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // checked by the route on its own GPU or key (src/server/faceless.ts, content-factory.ts). "Generate in Claude" isn't
   // here (it hands the brief to the studio's own MCP server), nor "Regenerate to 1080p" (held with Open-H3 Regenerate),
   // nor reading a link (the server never fetches a link for an account: it uploads the file or pastes the words).
-  /^\/api\/faceless\/(channels(\/[^/]+(\/avatar)?)?|episodes(\/[^/]+(\/(render|retry|rewrite|undo|upscale|change))?)?|topics|voices\/preview)$/,
+  /^\/api\/faceless\/(channels(\/[^/]+(\/avatar)?)?|episodes(\/[^/]+(\/(render|retry|rewrite|undo|upscale|regenerate|change))?)?|topics|voices\/preview)$/,
   /^\/api\/explainer(\/document)?$/,
   /^\/api\/content-factory\/series(\/[^/]+(\/(episodes|generate|read))?)?$/,
   /^\/api\/starters\/faceless\.[^/]+$/,

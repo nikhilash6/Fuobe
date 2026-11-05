@@ -1377,9 +1377,8 @@ export function upscaleToolSteps(id: string): { request: GenerationRequest; deps
 function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["regenerate"] {
   const modelId = ENGINE_MODELS[ep.settings.engine].regenerate;
   // Open-H3 Regenerate needs a 48 GB card: offered with its label (own-setup.ts "regenerate:faceless"); a run goes to
-  // the owner's GPU only once it is offered (regenerateEpisode). An account's episodes don't have it yet: its route
-  // isn't one of an account's tool runs (src/lib/guest-access.ts).
-  if (!modelId || !getModel(modelId) || tenantAccount()) return null;
+  // the owner's GPU only once it is offered, and to an account's own GPU when that GPU fits it (regenerateEpisode).
+  if (!modelId || !getModel(modelId)) return null;
   let demo = false;
   try {
     demo = runsAsDemo(modelId, "upscale-video");
@@ -1387,6 +1386,24 @@ function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["rege
     // Nothing connected runs it yet: offered, and the click opens the connect card.
   }
   return { scenes, demo };
+}
+
+/**
+ * What "Regenerate to 1080p" would run on this episode (an account's run is checked with it first): none when it can't
+ * run yet, or its film is made or making already (regenerateEpisode then says why, or does nothing).
+ */
+export function regenerateToolSteps(id: string): { request: GenerationRequest; deps: number }[] {
+  const ep = mustEpisode(id);
+  if (!ep.plan || !finalOf(ep) || !ENGINE_MODELS[ep.settings.engine].regenerate) return [];
+  const had = ep.plan.regenerated ? getGeneration(ep.plan.regenerated.final) : null;
+  if (had && had.status !== "failed" && had.status !== "canceled") return [];
+  const models = resolveModels(withOfferedVideo(ep.settings), narrationText(ep.script.blocks).length, getModel);
+  try {
+    const plan = regeneratePlan(currentGraph(ep), { engine: ep.settings.engine, joinMax: models.joinMax, lookup: getModel });
+    return plan.steps.map((s) => ({ request: { ...s.request, ...(s.chain && { chain: s.chain }) }, deps: s.after?.length ?? 0 }));
+  } catch {
+    return [];
+  }
 }
 
 /**

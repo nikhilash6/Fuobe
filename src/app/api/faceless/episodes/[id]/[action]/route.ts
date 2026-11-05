@@ -1,6 +1,6 @@
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { asViewer, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
-import { episodeView, graphFiles, graphToolSteps, handle, regenerateEpisode, renderEpisode, renderGraph, retryEpisode, retryGraph, rewriteEpisode, undoChange, upscaleEpisode, upscaleToolSteps } from "@/server/faceless";
+import { episodeView, graphFiles, graphToolSteps, handle, regenerateEpisode, regenerateToolSteps, renderEpisode, renderGraph, retryEpisode, retryGraph, rewriteEpisode, undoChange, upscaleEpisode, upscaleToolSteps } from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
 
 const ACTIONS = {
@@ -32,11 +32,13 @@ const RUNS: Partial<Record<Action, (id: string) => Work>> = {
     return { steps: graphToolSteps(g), files: graphFiles(g) };
   },
   upscale: (id) => ({ steps: upscaleToolSteps(id), files: [] }),
+  // Its steps read the episode's own results (chained), never a file of their own.
+  regenerate: (id) => ({ steps: regenerateToolSteps(id), files: [] }),
 };
 
 /**
- * An episode's action. A signed-in account's, on its own episode: a render, a retry and an upscale run on its own GPU or
- * key after the checks a studio run gets (src/server/account-tool-run.ts); a guest signs up first.
+ * An episode's action. A signed-in account's, on its own episode: a render, a retry, an upscale and Regenerate to 1080p
+ * run on its own GPU or key after the checks a studio run gets (src/server/account-tool-run.ts); a guest signs up first.
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/faceless/episodes/[id]/[action]">) {
   const viewer = toolViewer(request);
