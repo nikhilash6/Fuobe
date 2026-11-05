@@ -112,7 +112,10 @@ a press whose run goes to this install's GPUs is kept in the database for a day:
 process, or comes after a restart, gets the first answer and makes nothing. The reserve's `requestId` is made from the
 account and the press (a hash, so one account can never name another's hold). A press refused after its hold was made
 gives that hold back; a resend of it is a new try that asks for a new hold under a new `requestId`. A run on the
-account's own GPU or with its own key keeps nothing of its press in the database, as before.
+account's own GPU or with its own key keeps nothing of its press in the database, as before. A tool whose route made a
+run for every send before its page sent an id (Translate & dub, the Audio tools, Cinema's generate and retry, Faceless,
+Explainer, Content Factory, Genjutsu's scene and transcription) still does so on the account's own GPU or key: only its
+run on this install's GPUs is kept once.
 
 The limits on runs at once and in line count a tool run from the moment it is let in. A tool whose start waits for
 something (a channel, a plan) before it makes its rows still counts as one run going, and one in line, until its rows
