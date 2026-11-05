@@ -3,11 +3,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, Cpu, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { PreflightChecklist } from "@/components/gpu/preflight-checklist";
 import { ReadinessBoard } from "@/components/gpu/readiness-board";
 import { ConnectChoice } from "@/components/gpu/connect-choice";
+import { AiSetupPanel } from "@/components/gpu/ai-setup/ai-setup-panel";
+import { AI_SETUP_HREF } from "@/components/gpu/ai-setup/ai-setup-row";
 import { PairWithCode } from "@/components/gpu/fuobe-connect";
 import { useSettings } from "@/components/connect-field";
 import { openFinder, useComputerSupport } from "@/components/gpu/open-connect";
@@ -34,7 +36,10 @@ function Card({ children }: { children: React.ReactNode }) {
 
 export function ConnectGpu() {
   const params = useSearchParams();
+  const router = useRouter();
   const welcome = params.get("welcome") === "1";
+  // "Set it up with my AI" as a page of its own: a reload (or a tab the browser put to sleep) opens it again.
+  const ai = params.get("setup") === "ai";
   // Fuobe Connect's pairing link (/connect?pair=1, or an older /connect?code=…): approve that ComfyUI first. The
   // person types the code their own ComfyUI shows: a code from the link isn't filled in, so a link that someone else
   // sends can't pair their ComfyUI with this account in one click.
@@ -165,15 +170,33 @@ export function ConnectGpu() {
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button asChild className="h-11 sm:h-9">
-                  <Link href={signInHref("signup", "/connect")}>Sign up free</Link>
+                  <Link href={signInHref("signup", ai ? AI_SETUP_HREF : "/connect")}>Sign up free</Link>
                 </Button>
                 <Button asChild variant="secondary" className="h-11 sm:h-9">
-                  <Link href={signInHref("login", "/connect")}>Log in</Link>
+                  <Link href={signInHref("login", ai ? AI_SETUP_HREF : "/connect")}>Log in</Link>
+                </Button>
+                <Button asChild variant="secondary" className="h-11 sm:h-9">
+                  <Link href={signInHref("signup", AI_SETUP_HREF)}>Set it up with my AI</Link>
                 </Button>
               </div>
             </div>
           </div>
         </Card>
+      </div>
+    );
+
+  // An account's "Set it up with my AI": the panel alone (a card from sm up).
+  if (ai && isAccount)
+    return (
+      <div className="mx-auto w-full max-w-[40rem] sm:rounded-2xl sm:border sm:bg-background sm:p-6">
+        <AiSetupPanel
+          onBack={() => {
+            const q = new URLSearchParams(params.toString());
+            q.delete("setup");
+            const s = q.toString();
+            router.replace(s ? `/connect?${s}` : "/connect", { scroll: false });
+          }}
+        />
       </div>
     );
 
