@@ -27,20 +27,31 @@ page checked:
   - no text names a place: an absolute path in any form (`/x`, `\x`, `//host/share`, `\\?\C:\x`, `C:\x`, `D:x`), a
     `..` step, a home folder (`~`, `~user`), an environment variable at the start, a URL, a folder tag, or a JSON key
     that names a file, a folder or an address. Spaces and quotes in front don't hide one;
-  - an input that a listed node reads as a file or a folder holds the one value or form the studio's own graphs use,
-    written in the graph, never a link (`PATH_INPUTS` in `fuobe_connect/graph.py`);
+  - an input that a listed node reads as a file or a folder, or a name that it downloads, holds the one value or form
+    the studio's own graphs use, written in the graph, never a link (`PATH_INPUTS` in `fuobe_connect/graph.py`);
+  - a link from an output that ComfyUI doesn't type-check ("any", match-typed or dropdown-typed, such as
+    `GetItemFromList`, `CreateList`, `VRAM_Debug` or `ComfySwitchNode`), and any link into a dropdown, feeds only what
+    the studio's own graphs feed that way (`loose` and `links` in `allowed_nodes.json`). ComfyUI checks a dropdown's
+    value against its list only when the graph writes it. Inside ComfyUI the pack also reads these kinds from every
+    node class;
+  - `VHS_VideoCombine` takes only a plain format name and plain-word settings (they go into ffmpeg's arguments), and
+    a link only for its pictures, sound, batch, VAE and frame rate;
   - every loader reads a Fuobe input (`fuobe_<id>.<ext>`), and no node gets a JSON object except a 3D view's entries;
-- an upload goes only into the input folder, under a Fuobe input name;
+- an upload goes only into the input folder, under a Fuobe input name, as a picture, clip, sound, 3D scene, array or
+  subtitle file (never `.json`, `.txt`, `.csv` or a file of no known type);
 - the studio sees, cancels, stops and downloads only its own prompts and their results; the queue shows other prompts
   only as places in the line, the node list hides the names of the person's input files, and the model lists leave
   out `custom_nodes` and `configs`.
 
 When a graph builder starts giving one of those inputs a new value, add its form to `PATH_INPUTS` and ship it with the
 next Fuobe Connect release (the pack's `tests/test_graph.py` runs every workflow in `workflows/comfyui` through the
-checks).
+checks). When a graph starts linking from an untyped output into a new input, or into a dropdown, run
+`node scripts/connect-nodes.mjs` too: until the pack ships the new link, people's ComfyUI refuses that graph.
 
 It cannot reach the Manager's install calls, the person's user files or settings, a file of the person's in the input
-folder, or the person's own results, and its workflows cannot open a file of the person's by its path. Fuobe
+folder, or the person's own results. Its workflows cannot name a file of the person's by its path: path-like text is
+refused, a file input takes only Fuobe's own form, and a value that another node works out can't reach a file input, a
+dropdown or ffmpeg's arguments. Fuobe
 Connect answers the CORS and Private Network Access preflights for the trusted origins only. Every other website still
 meets ComfyUI's own check.
 
