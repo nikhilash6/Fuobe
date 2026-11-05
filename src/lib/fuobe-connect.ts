@@ -6,17 +6,21 @@
 
 /**
  * Fuobe Connect's repository is published: the "Connect your GPU" screens offer it (install it, pair with a code), and
- * "Set it up with my AI" offers it first. Until then they offer Fuobe's setting with Fuobe's guard, and a web address.
+ * "Set it up with my AI" offers it first. Turned off, they offer Fuobe's setting with Fuobe's guard, and a web address.
  * Nothing else decides whether Fuobe Connect is offered.
  */
-export const FUOBE_CONNECT_PUBLISHED: boolean = false;
+export const FUOBE_CONNECT_PUBLISHED: boolean = true;
 
 export const FUOBE_CONNECT = {
   name: "Fuobe Connect",
-  /** What to type in ComfyUI-Manager's Custom Nodes Manager. */
+  /** What to type in ComfyUI-Manager's Custom Nodes Manager (it finds it once the Comfy Registry lists it). */
   search: "Fuobe Connect",
-  /** For "Install via Git URL", or a git clone in ComfyUI's custom_nodes folder. */
+  /** Its page, for "Install via Git URL", and for a git clone in ComfyUI's custom_nodes folder. */
   gitUrl: "https://github.com/workingprototype/ComfyUI-Fuobe-Connect",
+  /** Its folder in custom_nodes. */
+  folder: "ComfyUI-Fuobe-Connect",
+  /** The main branch as a download, for a computer with no git (.zip or .tar.gz after it). */
+  archive: "https://github.com/workingprototype/ComfyUI-Fuobe-Connect/archive/refs/heads/main",
   /** The studios it trusts when the person names none. */
   defaultStudios: ["https://fuobe.com", "https://www.fuobe.com"],
 } as const;

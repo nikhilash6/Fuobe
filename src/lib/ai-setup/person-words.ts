@@ -16,6 +16,8 @@ const WORDS: Record<string, string> = {
   restarting: "ComfyUI is starting again, or it was closed. A portable ComfyUI can take up to 5 minutes to start.",
   "not-back": "ComfyUI stopped a few minutes ago and hasn't come back. Look at its window for an error, or start it again.",
   "install-connect": "Fuobe Connect isn't in ComfyUI yet. Your AI installs it next.",
+  "connect-not-loaded": "ComfyUI restarted, but it didn't load Fuobe Connect. Your AI checks the folder and ComfyUI's window.",
+  pair: "Once Fuobe Connect is in ComfyUI, open Extensions, then Connect to Fuobe, in ComfyUI. Type the code it shows here.",
   connecting: "Fuobe sees ComfyUI and is connecting. It takes a few seconds.",
   "setting-not-taken": "ComfyUI restarted, but it still doesn't let Fuobe in. Your AI checks the setting.",
   "add-setting": "ComfyUI runs, but it doesn't let Fuobe in yet. Your AI adds Fuobe's setting next.",

@@ -110,9 +110,21 @@ describe("making a setup code", () => {
     expect((await read(fresh.body.code)).status).toBe(200);
   });
 
-  it("refuses unknown keys, Fuobe Connect while it isn't out, and a site it doesn't know", async () => {
+  it("takes Fuobe Connect as a way, with its own guide", async () => {
+    const r = await create(a, { way: "connect", os: "windows" });
+    expect(r.status).toBe(201);
+    expect(r.body.guideUrl).toBe("https://fuobe.com/api/setup/guide/connect/windows");
+    const again = await create(a, { way: "connect", os: "mac" });
+    expect(again.status).toBe(200);
+    expect(again.body.code).toBe(r.body.code);
+    expect(again.body.guideUrl).toBe("https://fuobe.com/api/setup/guide/connect/mac");
+    expect((await read(r.body.code)).status).toBe(200);
+    expect((await create(a, { way: "plugin", os: "mac" })).status).toBe(400);
+  });
+
+  it("refuses unknown keys, an unknown way, and a site it doesn't know", async () => {
     expect((await create(a, { way: "direct", os: "windows", extra: 1 })).status).toBe(400);
-    expect((await create(a, { way: "connect", os: "windows" })).status).toBe(400);
+    expect((await create(a, { way: "connect", os: "beos" })).status).toBe(400);
     const r = await sessionRoute.POST(new Request("https://evil.example/api/setup/session", { method: "POST", headers: { host: "evil.example", cookie: `${auth.SESSION_COOKIE}=${a}`, "content-type": "application/json" }, body: JSON.stringify({ way: "direct", os: "windows" }) }));
     expect(r.status).toBe(400);
   });
@@ -335,8 +347,25 @@ describe("the guide and Fuobe's files", () => {
     expect(text).toContain("z_image_turbo_bf16.safetensors");
     const evil = await guideRoute.GET(new Request("https://evil.example/api/setup/guide/direct/windows", { headers: { host: "evil.example" } }), ctx({ way: "direct", os: "windows" }));
     expect(evil.status).toBe(404);
-    expect((await guideRoute.GET(req("/api/setup/guide/connect/windows"), ctx({ way: "connect", os: "windows" }))).status).toBe(404);
     expect((await guideRoute.GET(req("/api/setup/guide/direct/beos"), ctx({ way: "direct", os: "beos" }))).status).toBe(404);
+    expect((await guideRoute.GET(req("/api/setup/guide/plugin/windows"), ctx({ way: "plugin", os: "windows" }))).status).toBe(404);
+  });
+
+  it("serve Fuobe Connect's steps: install it from its repository, then connect or pair", async () => {
+    for (const os of ["windows", "mac", "linux"]) {
+      const g = await guideRoute.GET(req(`/api/setup/guide/connect/${os}`), ctx({ way: "connect", os }));
+      expect(g.status, os).toBe(200);
+      const text = await g.text();
+      expect(text).toContain("# Connect ComfyUI to Fuobe with Fuobe Connect");
+      expect(text).toContain("git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect");
+      expect(text).toContain("ComfyUI-Manager's search may not list Fuobe Connect yet.");
+      expect(text).not.toContain("--enable-cors-header https://");
+      expect(text).toContain("z_image_turbo_bf16.safetensors");
+    }
+    const other = await guideRoute.GET(req("/api/setup/guide/connect/other"), ctx({ way: "connect", os: "other" }));
+    expect(await other.text()).toContain("https://fuobe.com/api/setup/guide/connect/windows");
+    const evil = await guideRoute.GET(new Request("https://evil.example/api/setup/guide/connect/windows", { headers: { host: "evil.example" } }), ctx({ way: "connect", os: "windows" }));
+    expect(evil.status).toBe(404);
   });
 
   it("serves the guard Fuobe's guide checks, and the start file for a port", async () => {

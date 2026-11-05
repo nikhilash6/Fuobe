@@ -18,7 +18,7 @@ const MODELS: GuideModel[] = [
   { name: "Z-Image Turbo", fits: "for a GPU with 12 GB or more", files: [{ file: "z_image_turbo_bf16.safetensors", folder: "diffusion_models", url: "https://huggingface.co/x/resolve/main/z.safetensors", sizeGb: 12.31 }] },
   { name: "SDXL", fits: "for a GPU with 8 GB or more", files: [{ file: "sd_xl_base_1.0.safetensors", folder: "checkpoints", url: "https://huggingface.co/y/resolve/main/s.safetensors?download=true", sizeGb: 6.94 }] },
 ];
-const WAYS: Way[] = ["direct", "address"];
+const WAYS: Way[] = ["direct", "address", "connect"];
 const guides = WAYS.flatMap((way) => OSES.map((os) => ({ way, os, text: guideText({ way, os, site: SITE, models: MODELS }) })));
 const commands = (text: string) => text.split("\n").filter((l) => /^ {3}\S/.test(l));
 
@@ -101,7 +101,7 @@ describe("the guide", () => {
   it("Windows commands have no $ and no braces, so they also run through powershell.exe -Command", () => {
     for (const g of guides.filter((g) => g.os === "windows")) {
       for (const line of commands(g.text)) {
-        if (!/^ {3}(curl\.exe|Get-|New-Item|Start-Process|Select-String|Remove-Item|Stop-Process|certutil|winget|cloudflared)/.test(line)) continue;
+        if (!/^ {3}(curl\.exe|Get-|New-Item|Start-Process|Select-String|Remove-Item|Stop-Process|Expand-Archive|Rename-Item|certutil|winget|cloudflared|git )/.test(line)) continue;
         expect(line.replace("%{http_code}", ""), line).not.toMatch(/[$`{}]/);
       }
       expect(g.text).toContain("winget install --id Cloudflare.cloudflared -e --accept-source-agreements --accept-package-agreements".repeat(g.way === "address" ? 1 : 0));
@@ -129,6 +129,71 @@ describe("the guide", () => {
     }
     const other = guides.find((x) => x.way === "direct" && x.os === "other")!.text;
     expect(other).toContain(`${SITE}/api/setup/guide/direct/windows`);
+  });
+
+  it("installs Fuobe Connect from its repository, with every command written out, then restarts ComfyUI", () => {
+    const REPO = "https://github.com/workingprototype/ComfyUI-Fuobe-Connect";
+    const step2 = (t: string) => t.slice(t.indexOf("## Step 2: Install Fuobe Connect"), t.indexOf("## Step 3: Connect"));
+    const expected: Record<"windows" | "mac" | "linux", string[]> = {
+      windows: [
+        "   git --version",
+        `   git clone ${REPO} "<custom_nodes>\\ComfyUI-Fuobe-Connect"`,
+        `   curl.exe -fsSL -o "<custom_nodes>\\ComfyUI-Fuobe-Connect.zip" ${REPO}/archive/refs/heads/main.zip`,
+        '   Expand-Archive "<custom_nodes>\\ComfyUI-Fuobe-Connect.zip" "<custom_nodes>"',
+        '   Rename-Item "<custom_nodes>\\ComfyUI-Fuobe-Connect-main" ComfyUI-Fuobe-Connect',
+        '   Remove-Item "<custom_nodes>\\ComfyUI-Fuobe-Connect.zip"',
+        "   curl.exe -s http://127.0.0.1:8188/fuobe/connect",
+      ],
+      mac: [
+        "   git --version",
+        `   git clone ${REPO} "<custom_nodes>/ComfyUI-Fuobe-Connect"`,
+        '   mkdir -p "<custom_nodes>/ComfyUI-Fuobe-Connect"',
+        `   curl -fsSL ${REPO}/archive/refs/heads/main.tar.gz | tar -xz --strip-components=1 -C "<custom_nodes>/ComfyUI-Fuobe-Connect"`,
+        "   curl -s http://127.0.0.1:8188/fuobe/connect",
+      ],
+      linux: [],
+    };
+    expected.linux = expected.mac;
+    for (const g of guides.filter((g) => g.way === "connect" && g.os !== "other")) {
+      const os = g.os as "windows" | "mac" | "linux";
+      // Every command of the install, and nothing else: a command line starts with a program, never a dash or a sentence.
+      expect(commands(step2(g.text)).filter((l) => !/^ {3}(- |[A-Z][a-z]+ )/.test(l)), os).toEqual(expected[os]);
+      expect(g.text).toContain(`Fuobe Connect is a ComfyUI add-on (a custom node pack) from ${REPO} .`);
+      expect(g.text).toContain("ComfyUI-Manager's search may not list Fuobe Connect yet.");
+      expect(g.text).toContain("Install via Git URL");
+      expect(g.text).toContain(`6. Install only Fuobe Connect, from ${REPO} . Do not install other custom nodes.`);
+      expect(g.text).toContain("2. This way needs no new ComfyUI setting. Do not add --enable-cors-header. Never use --listen.");
+      expect(g.text).toContain("Do not change or delete the person's own start files.");
+      expect(g.text).toContain("Restarting ComfyUI stops what it is making now. Ask before it restarts.");
+      // Nothing runs a downloaded script, and nothing installs Python packages.
+      expect(g.text).not.toMatch(/\|\s*(sh|bash|iex|python)\b|Invoke-Expression|pip install/);
+      // The restart for each install the person can have on this system.
+      expect(g.text).toContain("4. Restart ComfyUI, so that it loads Fuobe Connect.");
+      expect(g.text).toContain("   - Stability Matrix: stop ComfyUI and launch it again.");
+      expect(g.text).toContain("stop ComfyUI with Ctrl+C in its window, then start it again with the same command.");
+      expect(g.text.includes("   - ComfyUI Desktop: in ComfyUI, Manager, then Restart."), os).toBe(os !== "linux");
+      expect(g.text.includes("   - Portable or Easy-Install: close ComfyUI's window"), os).toBe(os === "windows");
+      expect(g.text.includes("   - A service or Docker: restart that service or container."), os).toBe(os === "linux");
+      // Pairing: the code ComfyUI shows, approved in Fuobe; never a code from a link.
+      expect(g.text).toContain("then Connect to Fuobe, and presses the Connect button");
+      expect(g.text).toContain(`${SITE}/connect?pair=1`);
+      expect(g.text).toContain("FUOBE_CONNECT_PAIR=1");
+      // fuobe.com is trusted by Fuobe Connect itself: no studio to add.
+      expect(g.text).not.toMatch(/FUOBE_CONNECT_ORIGINS|FUOBE_CONNECT_SITE|studios that may use this ComfyUI/);
+      expect(g.text).toContain(`## Step ${MODEL_STEP.connect}: Get a first picture model`);
+    }
+  });
+
+  it("adds a self-hosted studio to Fuobe Connect's list, which trusts only fuobe.com by itself", () => {
+    const own = "https://studio.example.com";
+    for (const os of ["windows", "mac", "linux"] as const) {
+      const g = guideText({ way: "connect", os, site: own });
+      expect(g).toContain(`enter ${own} in Fuobe studios that may use this ComfyUI. Or start ComfyUI with the environment variable FUOBE_CONNECT_ORIGINS=${own}.`);
+      expect(g).toContain("except the picture model the status asks for and Fuobe Connect's own list of studios (Step 2).");
+      expect(g).toContain(`FUOBE_CONNECT_SITE=${own}`);
+      expect(g).toContain(`${own}/connect?pair=1`);
+      expect(g).not.toContain("https://fuobe.com/");
+    }
   });
 
   it("fills in the code and keeps only the person's browser for Copy instructions", () => {

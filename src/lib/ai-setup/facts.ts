@@ -100,6 +100,8 @@ export interface ServerFacts {
   gpu: "none" | "link" | "computer";
   /** Answering: a link's last check (null: not checked in the last 30 s), or the computer's tab beating with ComfyUI. */
   online: boolean | null;
+  /** A ComfyUI paired with Fuobe Connect was heard from in the last minute. */
+  paired?: boolean;
 }
 
 /** One setup as the steps and the next step read it. */

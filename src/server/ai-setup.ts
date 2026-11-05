@@ -7,8 +7,10 @@ import type { ServerFacts, SetupView, TabFacts } from "@/lib/ai-setup/facts";
 import { TAB_QUIET_MS } from "@/lib/ai-setup/next-step";
 import { isDone } from "@/lib/ai-setup/steps";
 import { isOs, isWay, type Os, type Way } from "@/lib/ai-setup/ways";
+import { pairedOnline } from "@/lib/fuobe-connect";
 import { cachedGpuState, computerView } from "./account-gpu";
 import { accountById, accountGpu, LoginGuard } from "./auth";
+import { pairedOf } from "./computer/workers";
 import { open, seal } from "./secret-box";
 
 /**
@@ -149,11 +151,18 @@ export function siteOf(headers: Headers, url: string): string | null {
 // ---------------------------------------------------------------------------
 // What the server knows itself
 
-/** The account's saved GPU (a database read) and whether it answers: a link's cached check, or the computer's tab. Never a call to the GPU. */
-export function serverFacts(accountId: string): ServerFacts {
+/**
+ * The account's saved GPU (a database read) and whether it answers: a link's cached check, or the computer (its tab, or
+ * a ComfyUI paired with Fuobe Connect). Never a call to the GPU.
+ */
+export function serverFacts(accountId: string, now = Date.now()): ServerFacts {
   const gpu = accountGpu(accountId);
   if (!gpu) return { gpu: "none", online: false };
-  if (gpu.mode === "computer") return { gpu: "computer", online: computerView(`acct:${accountId}`).online };
+  if (gpu.mode === "computer") {
+    const principal = `acct:${accountId}` as const;
+    const paired = pairedOf(principal).some((p) => pairedOnline(p, now));
+    return { gpu: "computer", online: computerView(principal).online || paired, paired };
+  }
   return { gpu: "link", online: cachedGpuState(accountId, gpu.url)?.online ?? null };
 }
 

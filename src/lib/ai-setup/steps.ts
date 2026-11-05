@@ -7,7 +7,7 @@ import { FIRST_MODEL_NAME } from "./first-picture";
 import type { InstallKind, SetupView } from "./facts";
 import { RESTART_WAIT_MIN } from "./restart";
 
-export type StepId = "comfyui" | "allowed" | "guard" | "connect" | "address" | "connected" | "model" | "picture";
+export type StepId = "comfyui" | "allowed" | "guard" | "connect" | "paired" | "address" | "connected" | "model" | "picture";
 export type StepState = "done" | "todo" | "working" | "warn";
 
 export interface Step {
@@ -29,6 +29,7 @@ export const STEP_LABEL: Record<StepId, string> = {
   allowed: "ComfyUI lets Fuobe in",
   guard: "Other websites are kept out",
   connect: "Fuobe Connect is installed",
+  paired: "ComfyUI is paired with your account",
   address: "Web address works",
   connected: "Fuobe is connected",
   model: "A picture model is ready",
@@ -45,15 +46,33 @@ const hostOf = (site: string) => {
 
 const gb = (tenths: number) => `${(tenths / 10).toFixed(tenths >= 100 ? 0 : 1)} GB`;
 
+/** A ComfyUI paired with Fuobe Connect answers, and the account's runs go to it. */
+const pairedOnline = (v: SetupView): boolean => v.server.gpu === "computer" && v.server.paired === true;
+
+/**
+ * Fuobe Connect by pairing: on a phone, in a browser that can't reach this computer (Safari, a page on plain http) or
+ * blocks it, or when a paired ComfyUI answers while this tab sees no ComfyUI here. The person approves the code that
+ * ComfyUI shows, and the setup ends once that ComfyUI answers (Fuobe reads its models only from a tab on its computer).
+ */
+export function isPairing(v: SetupView): boolean {
+  if (v.way !== "connect") return false;
+  const t = v.tab;
+  return v.phone || t?.browser === "unsupported" || t?.browser === "blocked" || (pairedOnline(v) && t?.comfy !== "found");
+}
+
 /** Runs go to this setup's ComfyUI now. */
 export function isConnected(v: SetupView): boolean {
   const t = v.tab;
   if (v.way === "address") return v.server.gpu === "link" && v.server.online === true;
+  if (isPairing(v)) return pairedOnline(v);
   return !!t?.connected || (v.server.gpu === "computer" && v.server.online === true && t?.comfy === "found");
 }
 
-/** The setup is finished: the first picture is made, or (opened from a run) runs go to the GPU and that run starts. */
-export const isDone = (v: SetupView): boolean => v.tab?.picture === "ok" || (!!v.tab?.fromRun && isConnected(v));
+/**
+ * The setup is finished: the first picture is made, or (opened from a run) runs go to the GPU and that run starts, or a
+ * paired ComfyUI answers.
+ */
+export const isDone = (v: SetupView): boolean => v.tab?.picture === "ok" || ((!!v.tab?.fromRun || isPairing(v)) && isConnected(v));
 
 function step(id: StepId, state: StepState, detail?: string): Step {
   return { id, label: STEP_LABEL[id], state, ...(detail && { detail }) };
@@ -94,6 +113,7 @@ export function stepsOf(v: SetupView): Step[] {
   const t = v.tab;
   const connected = isConnected(v);
   const tail = (): Step[] => (t?.fromRun ? [pictureStep(v, connected)] : [modelStep(v, connected), pictureStep(v, connected)]);
+  if (isPairing(v)) return [step("connect", connected ? "done" : "todo"), step("paired", connected ? "done" : "todo", connected ? "Runs go there with no Fuobe tab open" : undefined)];
   if (v.way === "address") {
     const linked = v.server.gpu === "link";
     const address =
@@ -129,8 +149,15 @@ export function stepsOf(v: SetupView): Step[] {
               : step("comfyui", "todo");
 
   if (v.way === "connect") {
-    const guarded = t?.guard === "connect" ? step("connect", "done", "Other websites stay out") : step("connect", "todo");
-    return [running, guarded, ...tail()];
+    const installed =
+      t?.guard === "connect"
+        ? t.listen
+          ? step("connect", "warn", "ComfyUI is open to the network")
+          : step("connect", "done", "Other websites stay out")
+        : t?.comfy === "unreadable" && t.restarted
+          ? step("connect", "warn", "ComfyUI didn't load it")
+          : step("connect", "todo");
+    return [running, installed, ...tail()];
   }
 
   const found = t?.comfy === "found";
