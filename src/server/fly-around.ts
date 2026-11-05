@@ -4,7 +4,7 @@ import { z } from "zod";
 import { DISTANCE, MAX_KEYS } from "@/lib/camera-path";
 import { EXACT_LIMITS } from "@/lib/exact-orbit";
 import { FLY_VIEWS_MAX, planFlyAround, type FlyAroundInput, type FlyAroundPlan, type FlyStep } from "@/lib/catalog/fly-around";
-import type { Generation } from "@/lib/catalog/types";
+import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { cancelGeneration, createGenerations, previewChained, previewGeneration } from "./generations";
 import { isOffered } from "./model-access";
 import { worldcastDepths } from "./worldcast";
@@ -155,9 +155,28 @@ export interface FlyAroundResult {
 
 /** Plan, check every step, then run them. */
 export function createFlyAround(input: FlyAroundInput): FlyAroundResult {
+  return startFlyAround(planFlyAroundRun(input));
+}
+
+/** A planned fly-around: its steps and its priced preview. Nothing is created yet. */
+export interface FlyAroundRun {
+  steps: FlyStep[];
+  preview: FlyAroundPreview;
+}
+
+/** Plan and check every step (nothing is created); a blocker is a FlyAroundError. */
+export function planFlyAroundRun(input: FlyAroundInput): FlyAroundRun {
   const preview = previewFlyAround(input);
   if (preview.blocker) throw new FlyAroundError(preview.blocker);
+  return { steps: plan(input).steps, preview };
+}
+
+/** A planned fly-around's steps as the requests they make, with how many earlier steps each waits for (account-tool-run.ts). */
+export const flyAroundSteps = (r: FlyAroundRun): { request: GenerationRequest; deps: number }[] => r.steps.map((s) => ({ request: s.request, deps: s.after?.length ?? 0 }));
+
+/** Start a planned fly-around as one batch, the film first. */
+export function startFlyAround(r: FlyAroundRun): FlyAroundResult {
   const batchId = nanoid(10);
-  const items = runFlySteps(plan(input).steps, batchId);
-  return { final: items[0], items, batchId, plan: preview };
+  const items = runFlySteps(r.steps, batchId);
+  return { final: items[0], items, batchId, plan: r.preview };
 }

@@ -187,6 +187,14 @@ describe("the owner's zip", () => {
     await one.arrayBuffer();
     await two.arrayBuffer();
   });
+
+  it("says how big it is first, when asked, as an account's does", async () => {
+    const r = await get(["a-1", "owner-1"], owner, "&check=1");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("application/json");
+    expect(((await r.json()) as { files: number }).files).toBe(2);
+    expect((await get(["no-such-run"], owner, "&check=1")).status).toBe(404);
+  });
 });
 
 describe("a guest", () => {

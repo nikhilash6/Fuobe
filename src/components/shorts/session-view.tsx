@@ -31,6 +31,7 @@ import { formatCost, ratioValue, timeAgo } from "@/lib/format";
 import { downloadHref, downloadName } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { onZipLink } from "@/lib/zip-download";
 import { useShortsActions, useShortsSession, useSubmitGuard, type ShortsSessionView as View } from "./hooks";
 import { Steps } from "./ui";
 
@@ -193,7 +194,13 @@ function Session({ s }: { s: View }) {
               </a>
             )}
             {parts.length > 0 && (
-              <a href={`/api/generations/zip?ids=${parts.join(",")}`} className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-background px-4 text-[13px] font-medium hover:bg-accent">
+              <a
+                href={`/api/generations/zip?ids=${parts.join(",")}`}
+                download
+                // Asks first: a refusal (a zip still going, too big) is a toast, never a page of its own.
+                onClick={onZipLink}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-background px-4 text-[13px] font-medium hover:bg-accent"
+              >
                 <FolderDown className="size-4" /> Download parts{parts.length < s.segments.length ? ` (${parts.length})` : ""}
               </a>
             )}

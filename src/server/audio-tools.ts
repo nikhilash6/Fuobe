@@ -8,6 +8,7 @@ import { CLOUD_ONLY_CLEAN_PROBLEM, missingReuse, NO_REUSE_PACK, planClean, planT
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { CLOUD_ONLY_SPEECH_EDIT_PROBLEM, EMOTIONS, PACES, PITCH_STEPS, planSpeechEdit, SPEECH_EDIT_MAX_SECONDS, VOLUME_STEPS } from "@/lib/speech-edit";
 import { lastGpuDevice } from "./account-gpu";
+import type { ToolStep } from "./account-tool-run";
 import { createPipeline } from "./chains";
 import { ConnectComfyError, previewChained } from "./generations";
 import { comfyDbsModels, comfyDevice, comfyReuseModels, ownGpu } from "./providers/comfyui";
@@ -207,7 +208,16 @@ function factsOf(url: string, gone = "That audio file is gone — add it again")
   return { ...(duration && { duration }), ...(info.channels && { channels: info.channels }), hasAudio: info.hasAudio };
 }
 
-type AudioToolPlan = ToolPlan & { engine: Engine; split?: ClipFacts; headerChannels?: number };
+export type AudioToolPlan = ToolPlan & { engine: Engine; split?: ClipFacts; headerChannels?: number };
+
+/** Every file a request names (its clip, its clips, the mix and the video it goes on): an account's own, checked first. */
+export function audioToolFiles(body: AudioToolRequest): string[] {
+  if (body.tool === "join") return body.clips.map((c) => c.url);
+  if (body.tool === "loop") return [body.audio];
+  if (body.tool === "remux") return [body.video, body.audio];
+  if (body.tool === "remove-dialogue") return [body.video];
+  return [body.media];
+}
 
 async function plan(body: AudioToolRequest): Promise<AudioToolPlan> {
   return planAudioTool(body);
@@ -351,9 +361,23 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
   return out;
 }
 
+/**
+ * A planned run's steps as an account's run checks them (src/server/account-tool-run.ts): each request with its chain,
+ * and how many earlier steps it waits for.
+ */
+export function audioToolSteps(p: AudioToolPlan): ToolStep[] {
+  return p.steps.map((s) => ({ request: s.chain ? { ...s.request, chain: s.chain } : s.request, deps: s.after?.length ?? 0 }));
+}
+
+export type AudioToolRun = { batchId: string; result: Generation; items: Generation[] };
+
 /** Start a run: one batch; the last step's generation is the result. */
-export async function runAudioTool(body: AudioToolRequest): Promise<{ batchId: string; result: Generation; items: Generation[] }> {
-  const p = await plan(body);
+export async function runAudioTool(body: AudioToolRequest): Promise<AudioToolRun> {
+  return startAudioTool(await plan(body));
+}
+
+/** Start a planned run (an account's, after its checks passed: inside asAccount). */
+export function startAudioTool(p: AudioToolPlan): AudioToolRun {
   try {
     const run = createPipeline(p.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) })));
     return { batchId: run.batchId, result: run.byKey[p.steps[p.steps.length - 1].key], items: run.items };

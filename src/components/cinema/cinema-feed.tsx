@@ -57,7 +57,7 @@ import { getModel } from "@/lib/catalog";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
-import { useEngineMode, useIsOwner, useLikelyVisitor } from "@/lib/api";
+import { useEngineMode, useIsOwner } from "@/lib/api";
 import { finishedTakes, finishIn2k, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { cn } from "@/lib/utils";
@@ -205,8 +205,6 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
   const finished = useContext(FinishedIn2k);
   // One paid submit at a time, with a nonce the server answers a repeat with (a double click is one 2K render).
   const guard = useSubmitGuard();
-  // Remove a person runs on a self-hosted Fuobe only: a guest or an account isn't sent there.
-  const visitor = useLikelyVisitor();
   // The Trash is the owner's: anyone else's Delete is for good.
   const owner = useIsOwner();
   const o = u.output;
@@ -274,13 +272,11 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
             <DropdownMenuItem onClick={() => handlers.onReference(o.url, "video")}>
               <ImagePlus /> Use as reference clip
             </DropdownMenuItem>
-            {!visitor && (
-              <DropdownMenuItem asChild>
-                <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
-                  <UserX /> Remove a person
-                </Link>
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem asChild>
+              <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
+                <UserX /> Remove a person
+              </Link>
+            </DropdownMenuItem>
             {finish && (
               <DropdownMenuItem
                 onClick={() =>

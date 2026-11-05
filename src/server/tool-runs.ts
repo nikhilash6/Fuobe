@@ -89,6 +89,16 @@ export async function withPoolPrice(request: Request, answer: object, start: () 
   return pool ? { ...answer, ...pool } : answer;
 }
 
+/**
+ * The same, for a tool that plans its steps itself (turnaroundSteps, flyAroundSteps…): `plan` gives the run's steps as
+ * the viewer's run plans them. The place and price come from the request's headers when the body has no field for them.
+ */
+export async function withPlanPrice(request: Request, answer: unknown, plan: () => ToolStep[] | Promise<ToolStep[]>): Promise<unknown> {
+  if (toolViewer(request).kind === "owner" || !answer || typeof answer !== "object" || "error" in answer) return answer;
+  const pool = await toolPriceCheck(request, plan);
+  return pool ? { ...answer, ...pool } : answer;
+}
+
 /** Every stored file a body names (`/api/files/…`), wherever it sits: the files an account's run must own. */
 export function bodyFiles(value: unknown): string[] {
   const out = new Set<string>();

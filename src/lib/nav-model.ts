@@ -731,10 +731,7 @@ export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
  * Features a guest or an account may open but not run here (their pages say so up front, docs/public-signup.md): the
  * menus and the phone sheet link them for the owner only. Search and /studios still list them.
  */
-export const OWNER_RUNS: ReadonlySet<string> = new Set([
-  "audio-split",
-  "video-tools-remove-dialogue",
-]);
+export const OWNER_RUNS: ReadonlySet<string> = new Set<string>();
 
 /** The studio a feature lives under in the menus (Ads Studio under Marketing Studio). */
 const SUB_PARENT = new Map(Object.entries(STUDIO_SUBS).flatMap(([parent, s]) => s.ids.map((id) => [id, parent] as const)));

@@ -275,18 +275,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
-  plan with the studio's own AI helpers or keep projects of their own. So do the Audio hub's Split
-  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`), though
-  their price checks work, priced for the account's own GPU. AI Influencer, Photodump, Fashion Factory,
-  Character Sheet, Turnaround, Fly around and the Image studio's palette lock (`POST /api/palettes/lock`)
-  run for an account with its own pictures, after the checks every tool run gets
-  (`src/server/account-tool-run.ts`); characters and saved packs stay the owner's library. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
-  soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
-  available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
-  dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
-  (it opens Edit speech). Restore & colourise
-  and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
-  `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
+  plan with the studio's own AI helpers or keep projects of their own. The Audio tools have their own routes (below).
+  Restore & colourise is left out of the Video tools tabs and the result menus for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
@@ -331,8 +321,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   finished on this server (the web GLB the viewer loads) under its limits (`src/server/model3d-finish.ts`): one account's
   finish at a time across the server, at low priority; a model over 300 MB, a server or account short of room, or more
   than 60 finishes in an hour keep the model as it came (still viewable and downloadable). Its turntable is recorded in
-  the browser ("Record turntable"), not on the server. Refine detail, the TRELLIS.2 final, Idol 3D's other sides and
-  Film it photoreal stay the owner's, and Retexture opens once its cloud models pass a live call. On this install's
+  the browser ("Record turntable"), not on the server. Film it photoreal runs as a Fly around (below). Refine detail, the TRELLIS.2 final and Idol 3D's other sides stay
+  the owner's, and Retexture opens once its cloud models pass a live call. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
 - **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
   /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
@@ -373,6 +363,40 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   sheets), and a retried photo replaces the failed one for good (it has no Trash). The price is its run's: free on its
   GPU, its own key's price on the cloud engine. A guest gets the sign-up card on Generate, on Create pack, on New
   character and before choosing a photo.
+- **Video tools, Turnaround video, Fly around and Katana.** An account runs Remove object and Remove a person
+  (`POST /api/remove-object`, its mask preview `.../preview` and "Redo from here" `.../reroll`), Evolution
+  (`POST /api/evolution`), Mixed Media (`POST /api/mixed-media`, a preview frame `.../preview` and "Try again"
+  `.../retry`), Turnaround video (`POST /api/turnaround`), Fly around (`POST /api/fly-around`: Image to 3D's "Film it
+  photoreal" and the exact orbits) and Katana (`POST /api/katana`, `.../<id>/retry`) the same way as Genjutsu's: every
+  step on the account's ComfyUI or its own fal.ai or Replicate key, with only its own files, after the same checks, and
+  a run counts once against its limits. Their price checks are priced for the account's own GPU or key. Their results
+  are its own runs (each tool's history, "Your …" feeds and its runs list), to open and download. "Redo from here" and
+  "Try again" take only its own removal or render, and a Mixed Media render's frame count (`GET
+  /api/mixed-media/progress`) answers for its own renders only (anyone else's reads as 404). Evolution's direction
+  (`POST /api/evolution/direction`, and a run sent without one) is written by Fuobe's offline writer, never the studio's
+  AI helper. Turnaround and Fly around never use the studio's WorldCast worker for an account; a character from the
+  owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
+  /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
+  the sign-up card.
+- **Audio tools.** An account runs Split soundtrack and Clean up dialogue, Video tools → Remove dialogue, Edit speech,
+  Loop / extend, Join and Clean up voice (`POST /api/audio-tools`) the same way as Genjutsu's: every step on its own
+  ComfyUI, or on its own fal.ai or Replicate key where a step is a cloud model, with only its own files, after the same
+  checks, and a run counts once against its limits. Its price check is its own run's. Its stems, clean dialogue,
+  edited speech and mixes are its own runs, to reopen in the mixer, open and download, and Export mix keeps the WAV as
+  one of its runs (above). Edit speech runs on the account's own GPU only (AuK's files and a 24 GB card): its tab and
+  page carry the "own setup" label (`audio:edit-speech`), and its upload and run ask an account without a GPU to
+  connect one. Result menus offer Remove dialogue, Clean up dialogue and Edit speech, and Captions offers "Fix this line".
+  A guest gets the sign-up card.
+- **Palette lock.** An account runs the Image studio's palette lock (`POST /api/palettes/lock`) the same way: its
+  images, then each one recoloured to the palette, on its own ComfyUI or key, after the same checks.
+- **Translate & dub.** An account keeps dubs of its own (`GET`/`POST /api/dub`, `GET`/`PATCH`/`DELETE /api/dub/<id>`,
+  `POST /api/dub/<id>/voice`): up to 50, in the account project store, deleted with the account. Another account's dub,
+  or the owner's, reads as not found (404), and the owner's list never shows an account's. A dub (one shot on its own
+  key, or step by step) and the voice of each language run the same way as Genjutsu's: every step on its own ComfyUI
+  or key, with only its own video. Its translations run on its own GPU (Qwen3.5 4B, `oss-qwen35-translate`), never on
+  the studio's AI helper, on either engine: a cloud step-by-step dub with a key and no GPU is asked to connect one. Its
+  reviewed lines are saved with its dub, and its dubbed videos are its own runs, to open and download. A guest gets the
+  sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
@@ -456,112 +480,41 @@ account with that provider. The studio's own keys are never used for an account'
 ## Hosted runs
 
 By default an account runs only on its own GPU or its own key. An owner who wants accounts to run on the studio's own
-GPUs instead sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
-
-Something must answer for these runs. Either a billing service is set (`FUOBE_BILLING_URL`, below), or
-`FUOBE_HOSTED_FREE=1` says that they are free for every account. With neither, hosted runs stay closed even when the
-switch is on.
-
-Where the runs go:
-
-- **The workers** ([gpu-workers.md](gpu-workers.md)), when Settings sends this studio's ComfyUI jobs to them
-  (`comfyWhere=workers`). Each job of an account's run becomes a task for the workers that belongs to that account.
-  It waits in one line with every other task, and the server never sends it to a ComfyUI address. Hosted runs are open
-  while at least one worker is added and allowed a lane, even when it is paused: a run then waits in line for it. A run
-  that no worker is allowed to run is refused before it is queued.
-- **This install's own ComfyUI server** (the address in Settings), only when that address is on the same machine
-  (`127.0.0.1` or `localhost`). An address on another machine is never used for accounts' runs. Pictures are made
-  again from their pixels first (no EXIF, no GPS).
-- An install whose ComfyUI runs on the owner's computer doesn't offer hosted runs.
+ComfyUI instead sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
 
 With it on:
 
-- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps).
-- An account whose own GPU is online runs there by default, unless the billing service's policy puts the studio's
-  GPUs first (`prefer: "pool"`). The composer shows where a run goes ("Your GPU" or "This studio's GPUs"), and the
-  person can pick either. With the studio's GPUs first and no pick, the price check names no place, as the run does,
-  so it answers for where the server will really send the run: what the studio's GPUs don't take shows and runs as a
-  run on the account's own GPU, with its own GPU's check before Run. When the account's own GPU doesn't answer and the
-  run named no place, the run is not moved
-  to the studio's GPUs: the page asks first, and runs it there if the person says so. A run the studio's GPUs wouldn't
-  take (a model or a kind not offered there, extra LoRAs, a file kind they don't take, Image to 3D, the billing service
-  not answering) goes to the account's own GPU as before, and waits for it there.
-- A guest is told what the billing service's policy for guests says (without one, what any account gets).
+- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps). The run goes
+  to this install's ComfyUI server (the address in Settings). An install whose ComfyUI runs on the owner's computer
+  doesn't offer hosted runs.
+- An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU" or "This
+  studio's GPUs"), and the person can pick either.
 - Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
-  Image to 3D and extra LoRAs added to a request stay on the account's own GPU. So do clips and sound as inputs,
-  unless the policy and the studio's GPUs both take them.
+  Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
 - A choice that needs an NVIDIA RTX card (RTX Video's upscale, frame generation and HDR) doesn't go to the studio's
-  GPUs when their last GPU check says the card can't run it, or that their ComfyUI lacks the RTX Video nodes (on the
-  workers, a worker takes a job only with its node packs). The run goes to the account's own GPU when it has one, or
-  answers 403 `not-offered` ("This one needs an NVIDIA RTX card, and this studio's GPUs can't run it right now…"),
-  and the price check says so before Run.
+  GPUs when their last GPU check says the card can't run it, or that their ComfyUI lacks the RTX Video nodes. The run
+  goes to the account's own GPU when it has one, or answers 403 `not-offered` ("This one needs an NVIDIA RTX card, and
+  this studio's GPUs can't run it right now…").
 - When a billing service names the models that may run on the studio's GPUs, that applies to every model a run uses,
   not only its main one.
-- An account can upload the kinds of file its policy allows for these runs (pictures without a billing service), and
-  only those the studio's GPUs take (`FUOBE_POOL_MEDIA_INPUTS` on the workers). Others still need its own GPU or key.
+- An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
   Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
-- Before Run is pressed, the composer shows the price check's words ("Free", or the billing service's price) and where
-  the run would stand in line, with the wait (`line: { place, etaSeconds }` in the `?preview=1` answer). A check
-  that refuses the run (busy, a limit, not offered here, closed, paused, a top-up) turns Run off and says why in the
-  price slot. The run's own limits and what the studio's GPUs don't take are refused there too, never only after Run.
-  Both use one check (`poolGate` in `src/server/hosted-run.ts`), and a chain's later steps are checked for a guest
-  too. A guest's refusal never sends it to Settings. The check asks again by itself: every 15 s while it refuses the
-  run (so Run comes back once a run finishes), every 30 s while it shows a place in line, and at once when a run starts
-  or one on the studio's GPUs ends.
-- For a visitor with no GPU of its own, `GET /api/status` says what the studio's GPUs keep off (`viewer.pool`: the
-  policy's model and app lists, and its kinds). The app lists also hold every preset whose open model, or the kind it
-  makes, is kept off. The model, camera motion and effect pickers and the preset galleries leave those out. A preset
-  with a cloud route stays in the galleries, and in the pickers while the composer is on the cloud engine (an account's
-  own key runs it there). Preset cards that run on the studio's GPUs for the viewer show the billing service's words
-  for them (`viewer.cardText`, from the policy's `cardText`, such as "Try free"), and none when it sends none. With no
-  billing service those runs are free, and the cards say "Try free".
-- A guest can attach files (pictures, clips and sound) in a studio before signing up: they stay in the browser and
-  are not uploaded. A voice recording, and a drawing or painted area on a kept picture, are uploaded as they are made,
-  so those ask the guest to sign up first. The whole draft (words, model, settings, preset and files) is kept for the
-  tab. When a guest presses Run, the run waits with the price it showed, and the sign-up card opens. Back on the same
-  page as an account, the draft returns, its files are uploaded as the account's own, and the run starts by itself
-  only when the price is unchanged, the draft is the one Run was pressed on, and every file came back. Otherwise a
-  line says why (the new price, the draft changed, or "Add your file again") and Run waits for a click.
-- Kept files are cleared when nobody needs them. As a studio page opens, it drops files kept for more than a day, and
-  files that no saved draft holds: its own tab's at once, another tab's once that tab has no page open. Each
-  studio's draft forgets only the files it held itself.
-- Results show an "AI-generated" tag.
-- A run on the studio's GPUs shows only where it is: "In line" with its place ("In line · 3rd · about 40 s"),
-  "Working" with its progress, then its result. The place counts every run ahead of it that the same GPUs serve
-  first, whatever its model. When a worker pauses, goes quiet or restarts, the run is "In line" again in the same
-  place. A run that can't finish shows one plain sentence; the owner reads the technical reason in the accounts' runs
-  (`detail` in `GET /api/admin/generations`). A failed run on the studio's GPUs never offers "Fix it". It says "Not
-  charged" only when its hold set an amount aside (a reserve answer with `amount` above 0).
-- A run may wait `FUOBE_POOL_WAIT_MIN` minutes (30 by default, or what the billing service says) before a worker
-  first takes it; past that it fails, not charged. Once a worker took it, that limit is over.
-- People's runs go before the owner's own jobs on the same GPUs, in the order they came (a billing service can put
-  paid runs first). One attempt may run as long as its lane's run ceiling, which the owner sets (45 minutes by
-  default; [gpu-workers.md](gpu-workers.md#the-queue)).
-- In a run's `params.extra`, a file input is used only when the run sent that file itself. A name of a file in the
-  GPUs' folders is dropped. The graph is checked before it is queued or sent: it reads only the files this run sent.
-- The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space. The policy's limits
-  for runs on the studio's GPUs (runs at once, runs waiting, runs made in the last hour, runs made from one address in
-  the last hour) count those runs only, never runs on the account's own GPU or key. A run counts toward the hourly
-  limits once it is made (Run pressed and let in), whether or not it has started. A run made only of CPU work (filters,
-  trims, joins, adding sound, Ken Burns) is free and counts toward none of them. Runs are counted in the database as
-  the run is made, so requests sent together never pass the limits together. A chain counts once, and each of its
-  steps must be one the policy allows.
+- A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
+  `FUOBE_POOL_WAIT_MIN` minutes (30 by default); past that it fails.
+- The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
 
 Two optional services can go with it:
 
 - a **billing service** ([billing-hook.md](billing-hook.md)): prices runs on this install's GPUs, sets the price aside
-  before a run starts, and shows the person a balance. Without one, these runs are closed unless `FUOBE_HOSTED_FREE=1`
-  makes them free.
+  before a run starts, and shows the person a balance. Without one, these runs are free.
 - a **moderation service** ([moderation-hook.md](moderation-hook.md)): checks a run before it starts and, when it asks
   to, its outputs before they show. Without one, nothing is checked.
 
 The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side),
 `src/server/run-stamp.ts` (what every row of a run carries) and `src/lib/hosted.ts` (the browser's side). The tests are
-`tests/hosted-runs.test.ts`, `tests/pool-account-runs.test.ts` (runs on the workers), `tests/billing-hook.test.ts`,
-`tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`. The browser's side before and during a run is in
-`tests/hosted-price-check.test.ts`, `tests/hosted-run-button.test.ts`, `tests/hosted-run-tiles.test.ts`,
-`tests/hosted-pickers.test.ts`, `tests/hosted-quote-refresh.test.ts` and `tests/hosted-guest-draft.test.ts`.
+`tests/hosted-runs.test.ts`, `tests/billing-hook.test.ts`, `tests/billing-release.test.ts` and
+`tests/moderation-hook.test.ts`.
 
 ## Uploads
 

@@ -118,7 +118,7 @@ describe("runs (demo mode)", () => {
 
 describe("public sign-up: the studio owner's until it has passed a real run", () => {
   it("is open in this repository once its run passed, and opens only with a validated graph and a passed run", () => {
-    expect(soundLive()).toEqual({ "clean-voice-first": true, "original-sound": false });
+    expect(soundLive()).toEqual({ "clean-voice-first": true, "original-sound": true });
     const d = tempDir("fuobe-sound-live-");
     const files = (validated: boolean, passed: boolean) => {
       fs.writeFileSync(path.join(d, "m.json"), JSON.stringify({ workflows: [{ id: "separate-soundtrack-dbs", validated }] }));

@@ -176,10 +176,11 @@ export function accountOwnRead(pathname: string): boolean {
 const ACCOUNT_CANVASES = /^\/api\/account\/canvases(\/[^/]+)?$/;
 
 /**
- * The Library's counts, its Uploads (its stored files) and a zip of its runs (the Library's Download, a result's
- * Download all, Shorts' Download parts): each route answers an account with its own only.
+ * The Library's counts, its Uploads (its stored files), a zip of its runs (the Library's Download, a result's
+ * Download all, Shorts' Download parts) and its own dubs (src/server/dub.ts): each route answers an account with its own
+ * only.
  */
-const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip"]);
+const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip", "/api/dub"]);
 
 /**
  * A signed-in account's zip of its own runs (/api/generations/zip; src/server/account-files.ts ACCOUNT_LIMITS): at most
@@ -303,6 +304,18 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/palettes\/lock$/,
   // The photo apps: Photodump, Fashion Factory, Character Sheet, AI Influencer, and a retry of its own photo.
   /^\/api\/(photodump(\/(fashion|character|retry))?|influencer)$/,
+  // Video tools: Remove object (a mask preview, and "Redo from here" on its own removal), Evolution (its direction is
+  // Fuobe's offline writer's), Mixed Media (a preview frame, and "Try again" on its own render), Turnaround video and
+  // Fly around (Image to 3D's "Film it photoreal"), and Katana (a retry or Run again of its own run).
+  /^\/api\/remove-object(\/(preview|reroll))?$/,
+  /^\/api\/evolution(\/direction)?$/,
+  /^\/api\/mixed-media(\/(preview|retry))?$/,
+  /^\/api\/(turnaround|fly-around)$/,
+  /^\/api\/katana(\/[^/]+\/retry)?$/,
+  // Audio's tools (Split soundtrack, Clean up dialogue, Remove dialogue, Edit speech, Loop, Join, Clean up voice), and
+  // Translate & dub: a dub, and voicing one language of the account's own dub (src/server/dub.ts).
+  /^\/api\/audio-tools$/,
+  /^\/api\/dub(\/[^/]+\/voice)?$/,
 ];
 
 /**
@@ -324,6 +337,12 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   /^\/api\/starters\/cinema\.[^/]+$/,
   // Photodump and Fashion Factory: its own packs and its own characters (src/server/photodump.ts).
   /^\/api\/photodump\/(packs|characters)(\/[^/]+)?$/,
+  // Katana: its own runs (the list, one run, forgetting one), and how far its own Mixed Media render's frames are.
+  /^\/api\/katana(\/[^/]+)?$/,
+  /^\/api\/mixed-media\/progress$/,
+  // Translate & dub: one of its own dubs (open it, save its reviewed lines, forget it). Its list is ACCOUNT_LISTS', and
+  // starting one is a tool run (ACCOUNT_TOOL_RUNS), so its price check is counted as every other.
+  /^\/api\/dub\/[^/]+$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

@@ -13,7 +13,8 @@
  * that many frames, node 3), `historyError` (/history answers HTTP 500 and then sends nothing), `uploadStatus` (the HTTP
  * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
  * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo),
- * `text` (a SaveText output, node 5: the history carries the words and /view serves them as the .txt file).
+ * `text` (a SaveText output, node 5: the history carries the words and /view serves them as the .txt file), `graph`
+ * (outputs under the sent graph's own save nodes: audio as a WAV, SaveText as `text`, so a chain of steps runs through).
  * This file runs under plain Node too: only erasable TypeScript.
  */
 import http from "node:http";
@@ -39,6 +40,46 @@ export interface FakeComfyOptions {
   text?: string;
   /** The history lists one video under each of these node ids instead of node 900 (a graph's declared outputs, e.g. a take and its master). */
   nodes?: string[];
+  /**
+   * The history answers for the graph that was sent: one file under each of its save nodes, as that node saves it (an
+   * audio save node a WAV, SaveText the `text` words, a video combine an MP4, SaveImage a PNG, PreviewAny the words), so
+   * a chain of steps (a soundtrack split into stems, its words, a mix) runs through.
+   */
+  graph?: boolean;
+}
+
+/** A tiny but real WAV (mono, 16-bit, 8 kHz, 0.1 s of silence). */
+export const TINY_WAV: Buffer = (() => {
+  const samples = 800;
+  const b = Buffer.alloc(44 + samples * 2);
+  b.write("RIFF", 0);
+  b.writeUInt32LE(36 + samples * 2, 4);
+  b.write("WAVEfmt ", 8);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(8000, 24);
+  b.writeUInt32LE(16000, 28);
+  b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34);
+  b.write("data", 36);
+  b.writeUInt32LE(samples * 2, 40);
+  return b;
+})();
+
+/** What a save node of the sent graph answers in the history (`graph`), by its class. */
+function graphOutputs(prompt: Record<string, unknown> | undefined, text: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [id, node] of Object.entries(prompt ?? {})) {
+    const cls = String((node as { class_type?: unknown })?.class_type ?? "");
+    const file = (ext: string, subfolder = "") => [{ filename: `fake_${id}_00001_.${ext}`, subfolder, type: "output" }];
+    if (/^Save.*Audio|Audio.*Save|^SaveAudio/i.test(cls)) out[id] = { audio: file("wav") };
+    else if (cls === "SaveText") out[id] = { text: [text], files: file("txt", "fuobe") };
+    else if (cls === "PreviewAny") out[id] = { text: [text] };
+    else if (/VideoCombine|^SaveVideo|^SaveWEBM|SaveAnimated/i.test(cls)) out[id] = { gifs: file("mp4") };
+    else if (cls === "SaveImage") out[id] = { images: file("png") };
+  }
+  return out;
 }
 
 export interface FakeLogEntry {
@@ -119,6 +160,7 @@ function uploadedBytes(body: Buffer, contentType: string): Buffer | undefined {
 export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<FakeComfy> {
   const log: FakeLogEntry[] = [];
   const jobs = new Map<string, number>();
+  const graphs = new Map<string, Record<string, unknown> | undefined>();
   let lastUpload: Buffer | undefined;
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -161,6 +203,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         }
         const id = opts.promptId ?? randomUUID();
         jobs.set(id, Date.now());
+        graphs.set(id, entry.prompt);
         return json(200, { prompt_id: id, number: jobs.size, node_errors: {} });
       }
       if (p.startsWith("/history/")) {
@@ -180,6 +223,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         if (started === undefined || Date.now() - started < (opts.delayMs ?? 0)) return json(200, {});
         const done = { status: { completed: true, status_str: "success" } };
         const list = (n: number, ext: string) => Array.from({ length: n }, (_, i) => ({ filename: `fake_${String(i + 1).padStart(5, "0")}_.${ext}`, subfolder: "", type: "output" }));
+        if (opts.graph) return json(200, { [id]: { ...done, outputs: graphOutputs(graphs.get(id), opts.text ?? "") } });
         if (opts.layers) return json(200, { [id]: { ...done, outputs: { "60": { images: list(opts.layers, "png") } } } });
         if (opts.text !== undefined) return json(200, { [id]: { ...done, outputs: { "5": { text: [opts.text], files: [{ filename: "fake_00001_.txt", subfolder: "fuobe", type: "output" }] } } } });
         if (opts.frames) return json(200, { [id]: { ...done, outputs: { "5": { gifs: list(1, "mp4") }, "3": { images: list(opts.frames, "exr") } } } });
@@ -214,6 +258,10 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         if (name.endsWith(".txt")) {
           res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
           return res.end(opts.text ?? "");
+        }
+        if (name.endsWith(".wav")) {
+          res.writeHead(200, { "content-type": "audio/wav" });
+          return res.end(TINY_WAV);
         }
         if (name.endsWith(".exr")) {
           res.writeHead(200, { "content-type": "image/x-exr" });
