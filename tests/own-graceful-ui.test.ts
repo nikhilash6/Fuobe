@@ -41,7 +41,8 @@ describe("the check before Run", () => {
 
   it("offers the tool's cloud version on the account's own key, an explicit button", () => {
     const withFal = gpuBeforeRun({ viewer: account(offline, ["fal"]), model: h3, engine: "open", preset: fpv, has, getModel })!;
-    expect(withFal.actions.at(-1)).toEqual(withKeyAction("fal"));
+    // The cloud version itself (its model and operation there), so one click runs it, once.
+    expect(withFal.actions.at(-1)).toEqual(withKeyAction("fal", "minimax-h3", "i2v"));
     expect(withFal.actions.at(-1)?.label).toBe("Run with your fal.ai key");
     // FPV Drone's cloud versions are on fal.ai only: a Replicate token runs none of them.
     expect(gpuBeforeRun({ viewer: account(offline, ["replicate"]), model: h3, engine: "open", preset: fpv, has, getModel })!.actions.map((a) => a.kind)).not.toContain("run-with-key");

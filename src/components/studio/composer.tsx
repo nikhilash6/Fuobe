@@ -33,7 +33,7 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { placeOf } from "@/lib/place-name";
-import { askToSignUp, CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
+import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -100,7 +100,8 @@ import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
-import { gpuBeforeRun } from "@/lib/before-run";
+import { gpuBeforeRun, onCloudKey } from "@/lib/before-run";
+import type { TroubleAction } from "@/lib/diagnose";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { cn } from "@/lib/utils";
 import { h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
@@ -835,8 +836,10 @@ export function Composer({ docked }: { docked: boolean }) {
   // waits for the GPU. One of the account's keys that runs this tool's cloud version is offered too (an explicit click:
   // it spends the person's own credit).
   const gpuDown = gpuBeforeRun({ viewer: status?.viewer, model, engine, onPool: hostedHere && runOn === "pool", preset, has, getModel: catalog.getModel });
+  // "Run with your fal.ai key". While hosted runs are on: this run, once, on the tool's cloud version and that key; the
+  // engine switch stays where it was, so the next run goes where runs go (the person picks Cloud themselves to stay
+  // there). Otherwise (as always): the switch moves to Cloud, and once it has moved the tool to its cloud model, it runs.
   const [cloudRun, setCloudRun] = useState(false);
-  // "Run with your fal.ai key": once the switch to Cloud has moved the tool to its cloud model, it runs (once).
   useEffect(() => {
     if (!cloudRun) return;
     const late = setTimeout(() => setCloudRun(false), 4000);
@@ -846,9 +849,16 @@ export function Composer({ docked }: { docked: boolean }) {
     }
     return () => clearTimeout(late);
   }, [cloudRun, engine, model]);
+  const onRunWithKey = viewerInfo?.hosted
+    ? (a: TroubleAction) => submitRef.current(undefined, a)
+    : () => {
+        setEngine("cloud");
+        setCloudRun(true);
+      };
 
-  // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here).
-  const submit = (skip?: unknown) => {
+  // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here). `withKey`: this run
+  // only, on the cloud version that action names and the account's key (hosted runs on; see onRunWithKey).
+  const submit = (skip?: unknown, withKey?: TroubleAction) => {
     const skipGpu = skip === true;
     if (exact) {
       // An exact orbit: the still filmed along the orbit's numbers (Fly around), priced in its panel.
@@ -856,14 +866,14 @@ export function Composer({ docked }: { docked: boolean }) {
       if (stop) return void toast(stop, { id: "composer-blocker" });
       if (fly.run.isPending) return;
       toast.dismiss("composer-blocker");
-      pressSetup(owner ? null : "fly-around:exact-orbit", () => fly.run.mutate({ engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature }));
+      pressSetup(owner ? null : "fly-around:exact-orbit", () => fly.run.mutate({ engine: withKey ? "cloud" : engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature }));
       return;
     }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
-    if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
+    if (!blocker && gpuSetup && !skipGpu && !withKey && !create.isPending) return openGpuFix();
     // It runs on the visitor's own setup: Run opens it (Connect your GPU, Add your key, a guest's sign-up), and nothing
     // is sent. An account that has it (its own GPU, or the key that runs it) is moved there, to run with the next press.
-    if (!blocker && poolSetup) {
+    if (!blocker && poolSetup && !withKey) {
       if (pressSetup(poolSetup)) {
         setRunOn("own");
         toast(movedToOwnText(!!viewerInfo?.gpu.connected), { id: "composer-blocker" });
@@ -871,7 +881,7 @@ export function Composer({ docked }: { docked: boolean }) {
       return;
     }
     // Refused by the price check (Run is off; Enter in the prompt lands here too): its words, and nothing is sent.
-    if (!blocker && poolRefused && poolState) return void toast(poolState.text, { id: "composer-blocker" });
+    if (!blocker && poolRefused && poolState && !withKey) return void toast(poolState.text, { id: "composer-blocker" });
     if (blocker || create.isPending || signature.lock.isPending) {
       if (blocker) {
         // One blocker toast at a time (pressing Generate again replaces it), gone once a run starts.
@@ -899,18 +909,24 @@ export function Composer({ docked }: { docked: boolean }) {
       buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
     );
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
-    const hosted = viewerInfo?.hosted ? { ...(runPlace && { place: runPlace }), ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
+    // A run on the account's key names neither: the key is where it goes.
+    const hosted = viewerInfo?.hosted && !withKey ? { ...(runPlace && { place: runPlace }), ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
     // Open palette lock: the images are recoloured to the palette by a chained step (POST /api/palettes/lock).
     // (An account's lock runs on this studio's GPUs only: sent there by name.)
-    if (sent.lock) return signature.lock.mutate({ request: sent.request, colors: sent.lock.colors, ...hosted, ...(poolPrice && { place: "pool" as const }) }, { onError: (e) => toastError(e) });
+    if (sent.lock) {
+      const request = withKey ? onCloudKey(sent.request, withKey) : sent.request;
+      return signature.lock.mutate({ request, colors: sent.lock.colors, ...hosted, ...(poolPrice && !withKey && { place: "pool" as const }) }, { onError: (e) => toastError(e) });
+    }
     // If the server's pre-flight stops it (409 gpu-setup), the guided fix that opens can try again, or run it anyway.
-    setGpuRetry(
-      () => submitRef.current(),
-      () => submitRef.current(true),
-      model?.kind,
-    );
+    if (!withKey)
+      setGpuRetry(
+        () => submitRef.current(),
+        () => submitRef.current(true),
+        model?.kind,
+      );
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
-    const body = { ...withVoiceFirst, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
+    const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withVoiceFirst;
+    const body = { ...onKey, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time).
       onSuccess: () => dropGpuRetry(),
@@ -1878,16 +1894,7 @@ export function Composer({ docked }: { docked: boolean }) {
             <span className="font-medium text-foreground">{gpuDown.words}</span> A run you start now waits for it.
           </p>
           <TroubleDetails details={gpuDown.details} />
-          <TroubleActions
-            actions={gpuDown.actions}
-            skip={["retry"]}
-            handlers={{
-              onRunWithKey: () => {
-                setEngine("cloud");
-                setCloudRun(true);
-              },
-            }}
-          />
+          <TroubleActions actions={gpuDown.actions} skip={["retry"]} handlers={{ onRunWithKey }} />
         </div>
       )}
       {outcome && (
@@ -1913,7 +1920,12 @@ export function Composer({ docked }: { docked: boolean }) {
           </p>
           {alternative && alternativeHref && engineMode !== "open" && (
             <p>
-              <Link href={alternativeHref} onClick={() => setEngine("cloud")} className="font-medium text-brand-text underline-offset-2 hover:underline">
+              <Link
+                href={alternativeHref}
+                // While hosted runs are on, it opens there on Cloud for that page only: the switch the studios start on stays.
+                onClick={() => (viewerInfo?.hosted ? engineForNextPage("cloud") : setEngine("cloud"))}
+                className="font-medium text-brand-text underline-offset-2 hover:underline"
+              >
                 {alternative.label}
               </Link>
             </p>

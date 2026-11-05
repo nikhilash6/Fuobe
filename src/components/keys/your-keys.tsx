@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { settingProblem } from "@/lib/connections";
-import { CLOUD_KEY, CLOUD_PROVIDERS, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
+import { CLOUD_KEY, CLOUD_PROVIDERS, keySavedText, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
+import { engineAfterKeySave } from "@/lib/engine-pref";
 import { cn } from "@/lib/utils";
 
 /**
@@ -88,6 +89,7 @@ function KeyForm({ provider, replacing, onSaved, onCancel, autoFocus }: { provid
   const p = CLOUD_KEY[provider];
   const id = useId();
   const changed = useKeysChanged();
+  const hosted = !!useStatus().data?.viewer?.hosted;
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,13 +103,15 @@ function KeyForm({ provider, replacing, onSaved, onCancel, autoFocus }: { provid
       const r = await call<KeyInfo & { detail?: string; note?: string }>(`/api/account/keys/${provider}`, "PUT", { key, ...(stopRuns && { stopRuns: true }) });
       setKey("");
       setGoing(null);
-      // The person just asked for paid models: the studios start on Cloud.
-      preferEngine("cloud");
+      // The person just asked for paid models: the studios start on Cloud (while hosted runs are on, they stay where they
+      // were: open models run free there, and Cloud is one pick away).
+      const engine = engineAfterKeySave(hosted);
+      if (engine) preferEngine(engine);
       changed();
       const who = provider === "replicate" && r.detail?.startsWith("Signed in as ") ? ` (${r.detail.replace("Signed in as ", "signed in as ")})` : "";
       // A key that works on a provider account with nothing on it yet: saved, and the next step said.
       if (r.note) toast.warning(r.note, { duration: 10_000 });
-      else toast.success(`Your ${p.label} key works${who}. Paid models on ${p.label} are ready.`);
+      else toast.success(keySavedText(p.label, who, hosted));
       onSaved(r);
     } catch (e) {
       const k = e as KeyError;

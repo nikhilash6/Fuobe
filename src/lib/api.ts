@@ -38,6 +38,7 @@ import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys
 import type { Diagnosis } from "./diagnose";
 import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 import { knownPlace, notePlaceName, placeOf, type Place } from "./place-name";
+import { ENGINE_KEY, ENGINE_SLOT_KEY, engineSlot, SHARED_SLOT, slotToCache, storedEngine, type EngineSlot, type SlotFacts } from "./engine-pref";
 
 /** What the status strip says of a GPU that didn't answer (src/server/account-gpu.ts VisitorTrouble). */
 export type GpuTroubleView = Pick<Diagnosis, "cause" | "words" | "actions" | "retryable" | "details">;
@@ -966,6 +967,11 @@ export interface StatusInfo {
     prefer?: "pool";
     /** The name visitors read for this install's GPUs ("Runs on Our GPUs", src/lib/place-name.ts). Only with `hosted`. */
     placeName?: string;
+    /**
+     * Where the account's runs go, as it picked (only with `hosted`, only to that account; none: the install's GPUs).
+     * "key" starts its engine switch on Cloud (src/lib/engine-pref.ts).
+     */
+    runOn?: "site" | "gpu" | "key";
     /** The words a preset card shows when its run would go to this studio's GPUs ("Try free"), from the server. None: no words. */
     cardText?: string;
     /** What this studio's GPUs keep off, for a viewer with no GPU of its own: its pickers leave it out (src/lib/pool-rules.ts). */
@@ -1086,17 +1092,64 @@ export async function writeLyrics(idea: string, o: { seconds?: number; max?: num
 // ---------------------------------------------------------------------------
 // Engine preference (Cloud vs Open source), shared across tabs via localStorage.
 // Settings → Engine mode can lock the install to one engine; then the toggle is disabled.
+// While hosted runs are on, each account keeps its own, starting on Open source (src/lib/engine-pref.ts).
 
-const ENGINE_KEY = "fuobe.engine";
 const MODE_KEY = "fuobe.engineMode";
 const listeners = new Set<() => void>();
 
-function readEngine(): Engine {
+function browserStorage(): Storage | null {
   try {
-    return localStorage.getItem(ENGINE_KEY) === "open" ? "open" : "cloud";
+    return typeof localStorage === "undefined" ? null : localStorage;
   } catch {
-    return "cloud";
+    return null;
   }
+}
+
+/**
+ * An engine for one page only, never remembered: while hosted runs are on, a note's "… in the cloud" link opens its tool
+ * on Cloud for that page, and the person's own switch stays where it was. It holds on that page (its path) only, ends
+ * when the studio page is left, and gives way to the person's own pick.
+ */
+let pageEngine: { engine: Engine; path: string } | null = null;
+/** Asked by a link for the page it opens (engineForNextPage), until that page's hand-off takes it. */
+let nextPageEngine: { engine: Engine; until: number } | null = null;
+
+const herePath = (): string => (typeof location === "undefined" ? "" : location.pathname);
+
+/** The next studio page this tab opens takes `e` for that page only, when the model it is handed runs on `e`. */
+export function engineForNextPage(e: Engine): void {
+  nextPageEngine = { engine: e, until: Date.now() + 15_000 };
+}
+
+/** A hand-off's model on engine `e`: true when a link asked for `e` on this page only (and that ask is used up). */
+export function takeNextPageEngine(e: Engine): boolean {
+  const ask = nextPageEngine;
+  if (ask && Date.now() > ask.until) nextPageEngine = null;
+  if (!ask || ask !== nextPageEngine || ask.engine !== e) return false;
+  nextPageEngine = null;
+  return true;
+}
+
+/** The page open now runs on `e`, for this page only. */
+export function setPageEngine(e: Engine): void {
+  pageEngine = { engine: e, path: herePath() };
+  listeners.forEach((l) => l());
+}
+
+/**
+ * A studio page closed: an engine for a page that is no longer open ends. (The next page may already be open when this
+ * runs, with an engine of its own: that one stays.)
+ */
+export function leavePageEngine(): void {
+  if (!pageEngine || pageEngine.path === herePath()) return;
+  pageEngine = null;
+  listeners.forEach((l) => l());
+}
+
+/** The engine a page reads in `slot`: this page's own, else the kept one (the browser's one switch by default). */
+export function readEngine(slot: EngineSlot = SHARED_SLOT): Engine {
+  const here = pageEngine && pageEngine.path === herePath() ? pageEngine.engine : null;
+  return here ?? storedEngine(browserStorage(), slot);
 }
 
 function readCachedMode(): EngineMode {
@@ -1150,8 +1203,47 @@ export function useModelAccess(): AccessSummary | undefined {
   return hydrated ? access : undefined;
 }
 
+/**
+ * Where this viewer's engine switch is kept (src/lib/engine-pref.ts): the browser's one switch, or while hosted runs
+ * are on the account's own (a guest's). Remembers it for the next page, so that page opens on it before the status
+ * answers.
+ */
+function useEngineSlot(): EngineSlot {
+  const status = useStatus();
+  const me = useViewer().data;
+  const v = status.data?.viewer;
+  const known = status.data !== undefined;
+  const hosted = !!v?.hosted;
+  const kind = v?.kind;
+  const runOn = v?.runOn;
+  const email = me?.account?.email;
+  const cached = useSyncExternalStore(noopSubscribe, readCachedSlot, () => null);
+  const facts: SlotFacts = { known, viewer: kind ? { kind, hosted, runOn } : undefined, email, cached };
+  const slot = engineSlot(facts);
+  const remember = slotToCache(facts, slot);
+  useEffect(() => {
+    if (remember === undefined || remember === readCachedSlot()) return;
+    try {
+      if (remember) localStorage.setItem(ENGINE_SLOT_KEY, remember);
+      else localStorage.removeItem(ENGINE_SLOT_KEY);
+    } catch {}
+  }, [remember]);
+  // One object per key and start, so the snapshot reader below changes only when the slot does.
+  return useMemo(() => ({ key: slot.key, start: slot.start }), [slot.key, slot.start]);
+}
+
+function readCachedSlot(): string | null {
+  try {
+    return browserStorage()?.getItem(ENGINE_SLOT_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function useEngine(): [Engine, (e: Engine) => void, EngineMode] {
   const mode = useEngineMode();
+  const slot = useEngineSlot();
+  const read = useCallback(() => readEngine(slot), [slot]);
   const engine = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
@@ -1161,18 +1253,22 @@ export function useEngine(): [Engine, (e: Engine) => void, EngineMode] {
         window.removeEventListener("storage", cb);
       };
     },
-    readEngine,
+    read,
     () => "cloud" as Engine,
   );
   const set = useCallback(
     (e: Engine) => {
       if (mode !== "both") return;
-      try {
-        localStorage.setItem(ENGINE_KEY, e);
-      } catch {}
+      // The person's own pick: remembered in their slot (an engine for this page only gives way to it).
+      pageEngine = null;
+      if (slot.key) {
+        try {
+          localStorage.setItem(slot.key, e);
+        } catch {}
+      } else pageEngine = { engine: e, path: herePath() };
       listeners.forEach((l) => l());
     },
-    [mode],
+    [mode, slot],
   );
   return [mode === "both" ? engine : mode, set, mode];
 }
@@ -1188,7 +1284,10 @@ export function useOpenEngine(): boolean {
   return hydrated && make3dOffered(status);
 }
 
-/** Remember the engine the studios start on, before the mode allows it (an account that just added its own key: Cloud). */
+/**
+ * Remember the engine the studios start on, before the mode allows it (an account that just added its own key: Cloud).
+ * The browser's one switch: never called while hosted runs are on, where each account keeps its own (useEngine).
+ */
 export function preferEngine(e: Engine): void {
   try {
     localStorage.setItem(ENGINE_KEY, e);

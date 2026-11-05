@@ -12,7 +12,7 @@ import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation } from "@/lib/catalog/types";
-import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useHydrated, useIsGuest, useLikelyVisitor } from "@/lib/api";
+import { GUEST_PROMPT_EVENT, leavePageEngine, setPageEngine, takeNextPageEngine, useEngine, useGenerations, useHydrated, useIsGuest, useLikelyVisitor } from "@/lib/api";
 import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, promptShown, relatedHref, START_PARAM, withoutStart, withPreset } from "@/lib/composer";
 import { presetGpuKey } from "@/lib/catalog/preset-recipe-routes";
 import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
@@ -877,12 +877,17 @@ function StudioDraft({ config, header, tabs, initialRefs, initialPrompt, example
     return d;
   };
   // A model named in the URL (?model=, from ⌘K or a hand-off) brings its engine along, as Reuse
-  // does: left on the other engine, the composer would swap it for that engine's default.
+  // does: left on the other engine, the composer would swap it for that engine's default. A link that asked for this
+  // page only (engineForNextPage) leaves the person's own switch where it was.
   const adopt = (key: string) => {
     const id = new URLSearchParams(key).get("model");
     const m = id ? catalog.getModel(id) : undefined;
-    if (m && m.engine !== engine) setEngine(m.engine);
+    if (!m || m.engine === engine) return;
+    if (takeNextPageEngine(m.engine)) setPageEngine(m.engine);
+    else setEngine(m.engine);
   };
+  // An engine for this page only ends when the page is left.
+  useEffect(() => leavePageEngine, []);
   // The composer swaps an untouched default for the engine's own when the engine is read after hydration: a
   // hand-off still applies over that swap.
   const follow = (base: Draft, current: Draft) => followEngineDefault(base, current, config.defaultModels, engine, config.uncaptioned);

@@ -221,4 +221,24 @@ describe("a self-hosted install with hosted runs off", () => {
       expect(JSON.stringify(s.viewer)).not.toMatch(/placeName|runOn|prefer|hosted|"pool"/);
     }
   });
+
+  it("the engine switch: the browser's one switch, Cloud with nothing stored, and a saved key moves it to Cloud", async () => {
+    const { engineSlot, engineAfterKeySave, SHARED_SLOT } = await import("@/lib/engine-pref");
+    const { readEngine } = await import("@/lib/api");
+    const a = auth.createAccount("self-host-engine@example.com", "long enough");
+    for (const s of [await visitorStatus(a), await visitorStatus(null)]) {
+      expect(engineSlot({ known: true, viewer: s.viewer, email: "self-host-engine@example.com" })).toEqual(SHARED_SLOT);
+    }
+    expect(engineSlot({ known: true })).toEqual(SHARED_SLOT);
+    const stored = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => stored.get(k) ?? null, setItem: (k: string, v: string) => void stored.set(k, v), removeItem: (k: string) => void stored.delete(k) });
+    try {
+      expect(readEngine()).toBe("cloud");
+      stored.set("fuobe.engine", "open");
+      expect(readEngine()).toBe("open");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(engineAfterKeySave(false)).toBe("cloud");
+  });
 });

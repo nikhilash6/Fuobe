@@ -6,11 +6,13 @@
 //   node tests/e2e/byo-keys.mjs [screenshots folder]
 //
 // BYO_PORT moves all three (app, fal.ai, Replicate on the next two ports) when 3390–3392 are taken.
+// BYO_HOSTED=1 runs it with hosted runs on (FUOBE_HOSTED_RUNS, free, no billing service).
 //
 // Checks: the owner's runs send the owner's key; an account without a key can't run a paid model; an account adds a
-// bad key (refused) and a good one; its paid run sends only its key; removing the key with a run going asks first and
-// stops the run with that key; no key shows in any answer, page or server log. Screenshots: Settings → Your keys and
-// the model picker, on a phone and a desktop.
+// bad key (refused) and a good one; saving it moves the studios to Cloud (hosted: leaves them on Open source, where
+// open models run free); its paid run sends only its key; removing the key with a run going asks first and stops the
+// run with that key; no key shows in any answer, page or server log. Screenshots: Settings → Your keys and the model
+// picker, on a phone and a desktop.
 import { spawn, execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -20,6 +22,7 @@ import { startFakeFal, startFakeReplicate } from "../helpers/fake-cloud.ts";
 import { tempDir, removeDir } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.BYO_PORT ?? 3390);
+const HOSTED = process.env.BYO_HOSTED === "1";
 const APP = `http://127.0.0.1:${APP_PORT}`;
 const shots = path.resolve(process.argv[2] ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-byo-shots-")));
 fs.mkdirSync(shots, { recursive: true });
@@ -59,6 +62,7 @@ const server = spawn(process.execPath, [path.join(root, "node_modules/next/dist/
     FUOBE_DEV_REPLICATE_URL: rep.url,
     COMFYUI_URL: "http://127.0.0.1:9",
     FUOBE_ACCOUNT_DISK_FREE_GB: "0",
+    ...(HOSTED ? { FUOBE_HOSTED_RUNS: "1", FUOBE_HOSTED_FREE: "1" } : { FUOBE_HOSTED_RUNS: "", FUOBE_HOSTED_FREE: "" }),
   },
   stdio: ["ignore", log, log],
 });
@@ -138,7 +142,7 @@ try {
   // The Image studio: the switch is locked on open source, pointing at Your keys.
   await page.goto("/image", { waitUntil: "load", timeout: 180_000 });
   await page.waitForTimeout(2500);
-  const lockedSwitch = page.getByRole("link", { name: /Open source only/ }).first();
+  const lockedSwitch = page.getByRole("link", { name: /^Open source\b/ }).first();
   check((await lockedSwitch.getAttribute("href").catch(() => null)) === "/settings#your-keys", "the engine switch is locked on open source, linking to Your keys");
 
   // Settings → Your keys: a bad key, then a good one.
@@ -155,6 +159,9 @@ try {
   await page.getByRole("button", { name: "Check and save" }).first().click();
   await page.getByText("Key ending in").waitFor({ timeout: 30_000 });
   check((await page.content()).includes("9f3a"), "a good key is saved and shown by its last 4 characters");
+  const shared = await page.evaluate(() => localStorage.getItem("fuobe.engine"));
+  if (HOSTED) check(shared !== "cloud", `saving a key leaves the studios where they were (${shared})`);
+  else check(shared === "cloud", `saving a key moves the studios to Cloud (${shared})`);
   await shootKeys(page, "your-keys-saved-desktop.png");
   readable.push(await page.content());
 
@@ -163,6 +170,8 @@ try {
   await page.waitForTimeout(2500);
   const radio = page.getByRole("radiogroup", { name: "Engine" }).first();
   check(await radio.isVisible().catch(() => false), "with a key, the engine switch switches");
+  const startsOn = await radio.getByRole("radio", { checked: true }).first().getAttribute("aria-label").catch(() => null);
+  check(HOSTED ? /Open/.test(startsOn ?? "") : /Cloud/.test(startsOn ?? ""), `the studio starts on ${HOSTED ? "Open source" : "Cloud"} (${startsOn})`);
   await page.getByRole("radio", { name: "Cloud" }).first().click().catch(() => {});
   // The price shows once there is something to run.
   await page.locator("textarea").first().fill("a quiet harbour at dawn");

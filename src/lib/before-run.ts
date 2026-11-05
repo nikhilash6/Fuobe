@@ -2,12 +2,13 @@
  * The check before Run (public sign-up): an account whose own GPU at a web address didn't answer its last status check
  * (the status strip's, every 30 s; nothing here asks the GPU) sees what is wrong and its fixes above Generate, instead
  * of starting a run that can only wait. When one of its keys runs the tool's cloud version, "Run with your fal.ai key"
- * is offered too: an explicit click, because it spends the person's own credit. Pure, for the composer and its tests.
+ * is offered too: an explicit click, for that run only (the engine switch stays where it was), because it spends the
+ * person's own credit. Pure, for the composer and its tests.
  */
 import { dualEngine } from "./catalog/engines";
 import type { Engine, GenerationRequest } from "./catalog/types";
 import { withKeyAction, type Diagnosis, type TroubleAction } from "./diagnose";
-import { cloudVersionKey, type CloudProvider } from "./your-keys";
+import { cloudVersion, type CloudProvider } from "./your-keys";
 
 type Routed = { id: string; engine: string; engines?: Engine[]; routes: { provider: string }[] };
 
@@ -39,7 +40,7 @@ export function gpuBeforeRun(o: {
   engine: Engine;
   /** The run goes to this studio's GPUs (hosted runs), not the account's own. */
   onPool?: boolean;
-  preset?: Parameters<typeof cloudVersionKey>[0];
+  preset?: Parameters<typeof cloudVersion>[0];
   has: (id: string) => boolean;
   getModel: (id: string) => Routed | undefined;
 }): BeforeRun | null {
@@ -49,7 +50,8 @@ export function gpuBeforeRun(o: {
   const toOwnGpu = dualEngine(model) ? o.engine === "open" : model.engine === "open";
   const gpu = viewer.gpu;
   if (!toOwnGpu || !gpu.connected || gpu.mode !== "link" || gpu.online !== false) return null;
-  const key = viewer.paidAllowed !== false ? cloudVersionKey(o.preset, model, viewer.keys ?? [], o.has, o.getModel) : null;
+  // The cloud version itself (its model and operation there), so one click runs it, once.
+  const twin = viewer.paidAllowed !== false ? cloudVersion(o.preset, model, viewer.keys ?? [], o.has, o.getModel) : null;
   const base: TroubleAction[] = gpu.trouble?.actions ?? [
     { kind: "check-gpu", label: "Check my GPU" },
     { kind: "gpu-settings", label: "Open Settings → Your GPU", target: "/settings#your-gpu" },
@@ -57,7 +59,7 @@ export function gpuBeforeRun(o: {
   return {
     words: gpu.trouble?.words ?? GPU_OFF_WORDS,
     ...(gpu.trouble?.details && { details: gpu.trouble.details }),
-    actions: [...base.filter((a) => a.kind !== "retry" && a.kind !== "run-with-key"), ...(key ? [withKeyAction(key)] : [])],
+    actions: [...base.filter((a) => a.kind !== "retry" && a.kind !== "run-with-key"), ...(twin ? [withKeyAction(twin.provider, twin.modelId, twin.op)] : [])],
   };
 }
 

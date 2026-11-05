@@ -603,7 +603,8 @@ keep their words as before.
   the reason and its buttons above Generate. It reads the status the strip already has (every 30
   seconds), so the GPU is never asked more often. When one of the account's keys runs the tool's
   cloud version (a preset's cloud route, or a Fuobe Original on the cloud engine), **Run with your
-  fal.ai key** switches to Cloud and runs it there, billed to that key. A run started anyway waits.
+  fal.ai key** switches to Cloud and runs it there, billed to that key (with hosted runs on, it runs
+  that one run there and the switch stays where it was). A run started anyway waits.
   The account menu says why the GPU is offline: "pod stopped", "starting up", "needs a password".
 - **A run that waits.** A run whose GPU is off, starting up or out of reach waits and tries again by
   itself, with a growing wait (up to a minute between tries). Its tile says what it waits for
@@ -654,6 +655,13 @@ With it on:
 - Visitors read this install's GPUs by one place name: "Runs on our GPUs", "Made on: Our GPUs", "Run on Our GPUs".
   The billing service's policy sets it (`placeName`); without one, Settings → Workers → Name for your GPUs, else
   `FUOBE_PLACE_NAME`, else "Our GPUs". It is never sent while hosted runs are off.
+- The studios' engine switch starts on Open source, where open models run free on this install's GPUs. Each account
+  keeps its own switch in the browser (a second account on the same browser keeps its own, under a hash of its email,
+  never the address; a guest keeps one for the browser), and the owner keeps the browser's one switch. Saving a key
+  doesn't move it: Cloud is one pick away, and the note after saving says so. **Run with your fal.ai key** runs that
+  one run on the key, and a note's link to a tool's cloud version opens that page on Cloud for that visit: neither
+  moves the switch. (With hosted runs off, the browser keeps one switch, starting on Cloud, and saving a key moves it
+  there, as before.)
 - A model, mode or option that runs only on a person's own GPU or key keeps its label there ("Runs on your own GPU ·
   48 GB", `src/lib/own-setup.ts`), and Run opens that setup. So does a run that no worker can take (none holds its
   files or may run its lane). Extra LoRAs added to a request stay on the account's own GPU.
