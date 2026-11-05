@@ -14,12 +14,11 @@ import { CoverThumb } from "./cover-thumb";
 const NOUN: Record<string, string> = { image: "picture", video: "clip", audio: "sound", model3d: "model" };
 
 /**
- * Studios that read a handed-over picture with their own small reader (`HandoffImage` below). Image to 3D runs for an
- * account too (on its own GPU or key); Character Sheet on a self-hosted Fuobe only, so a guest or an account is never
- * sent there.
+ * Studios that read a handed-over picture with their own small reader (`HandoffImage` below). Image to 3D and
+ * Character Sheet run for an account too (on its own GPU or key).
  */
 const ADAPTERS = { characterSheet: true, imageTo3d: true } as const;
-const VISITOR_ADAPTERS = { imageTo3d: true } as const;
+const VISITOR_ADAPTERS = ADAPTERS;
 
 /** The heading over the steps: "Keep going with this picture" (clip, sound, model). */
 export function keepGoingTitle(kind: string | undefined): string {

@@ -47,8 +47,9 @@ export function checkClipFile(file: File, maxBytes: number): string | null {
 /** The file as the body (streamed to disk): an account's clip up to its limit, not only a small form. */
 const upload = (file: File, onProgress: (p: number) => void, signal: AbortSignal) => postFileWithProgress(file, onProgress, signal);
 
+/** The clip's header, read on the server (a signed-in account's own files only: src/app/api/media/probe). */
 async function probe(url: string): Promise<SourceInfo> {
-  const res = await fetch("/api/shorts/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+  const res = await fetch("/api/media/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
   return res.ok ? ((await res.json()) as SourceInfo) : {};
 }
 

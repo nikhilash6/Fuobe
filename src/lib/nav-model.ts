@@ -351,7 +351,7 @@ const STUDIO_FEATURES: NavEntry[] = [
       ["insert", "Insert", "Add something to the shot", "insert add object put into clip place"],
     ] as const
   ).map(([id, label, what, kw]) => feature("genjutsu", "WandSparkles", id, `/genjutsu?mode=${id}`, label, what, kw)),
-  feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion", OWNER),
+  feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion"),
   feature("genjutsu", "WandSparkles", "finish", "/genjutsu?mode=finish", "Finish", "Fix faces and colours", "finish fix faces colours colors", FINISH_OPEN ? undefined : OWNER),
   ...(
     [
@@ -370,7 +370,7 @@ const STUDIO_FEATURES: NavEntry[] = [
     ] as const
   ).map(([id, label, what, kw]) => feature("image-to-3d", "Box", id, `/image-to-3d?mode=${id}`, label, what, kw)),
   feature("photodump", "Camera", "instadump", "/photodump?tab=instadump", "From a selfie", "A photo pack from one selfie", "instadump selfie one photo pack instagram"),
-  feature("cinema", "Clapperboard", "blockout", "/cinema?blockout=1", "Blockout", "Block a scene out in 3D", "blockout block out 3d layout previs scene", OWNER),
+  feature("cinema", "Clapperboard", "blockout", "/cinema?blockout=1", "Blockout", "Block a scene out in 3D", "blockout block out 3d layout previs scene"),
   feature("canvas", "Network", "skills", "/canvas?tab=skills", "Skills as canvases", "Assist's skills, drawn as boards", "skills recipes boards assist canvas", OWNER),
   feature("assist", "MessageCircle", "memory", "/assist/memory", "Memory", "What Assist remembers", "memory remember facts notes", OWNER),
   feature("assist", "MessageCircle", "scheduled", "/assist/scheduled", "Scheduled", "Tasks that run on a schedule", "scheduled schedule recurring tasks", OWNER),
@@ -731,12 +731,7 @@ export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
  * Features a guest or an account may open but not run here (their pages say so up front, docs/public-signup.md): the
  * menus and the phone sheet link them for the owner only. Search and /studios still list them.
  */
-export const OWNER_RUNS: ReadonlySet<string> = new Set([
-  "audio-split",
-  "video-tools-remove-dialogue",
-  ...STUDIO_SUBS["character-sheet"].ids,
-  ...STUDIO_SUBS.photodump.ids,
-]);
+export const OWNER_RUNS: ReadonlySet<string> = new Set<string>();
 
 /** The studio a feature lives under in the menus (Ads Studio under Marketing Studio). */
 const SUB_PARENT = new Map(Object.entries(STUDIO_SUBS).flatMap(([parent, s]) => s.ids.map((id) => [id, parent] as const)));

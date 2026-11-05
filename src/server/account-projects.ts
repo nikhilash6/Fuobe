@@ -185,6 +185,39 @@ export function deleteAccountProject(accountId: string, kind: string, id: string
   return store().prepare("DELETE FROM account_projects WHERE id = ? AND account_id = ? AND kind = ?").run(id, accountId, kindOf(kind)).changes > 0;
 }
 
+/**
+ * Every account's projects of a kind whose summary has `field` above 0, for that tool's background work (Character Swap
+ * Studio's takes waiting to start): each one's id and account, never its data. The tool reads each one as its account.
+ */
+export function accountProjectsWith(kind: string, field: string): { id: string; accountId: string }[] {
+  if (!/^[a-zA-Z][a-zA-Z0-9]{0,31}$/.test(field)) throw new Error(`Not a summary field: ${field}`);
+  return store()
+    .prepare(`SELECT id, account_id AS accountId FROM account_projects WHERE kind = ? AND json_extract(summary_json, '$.${field}') > 0`)
+    .all(kindOf(kind)) as { id: string; accountId: string }[];
+}
+
+/**
+ * Which account keeps a project of that kind with this id, or null (nobody's: the owner's row, or none). For a tool whose
+ * rows live in its own tables under the project's id (Faceless channels, Content Factory series…), so a row that is an
+ * account's is never read as the owner's.
+ */
+export function accountProjectOwner(kind: string, id: string): string | null {
+  const r = store().prepare("SELECT account_id FROM account_projects WHERE id = ? AND kind = ?").get(id, kindOf(kind)) as { account_id: string } | undefined;
+  return r?.account_id ?? null;
+}
+
+/**
+ * The ids of one account's projects of a kind (or, with no account, of every account's), as a subquery for
+ * `column IN (…)`: an account's list reads its own rows only, and the owner's leaves every account's out.
+ */
+export function accountProjectIds(kind: string, accountId?: string): { sql: string; args: string[] } {
+  store();
+  const k = kindOf(kind);
+  return accountId
+    ? { sql: "SELECT id FROM account_projects WHERE kind = ? AND account_id = ?", args: [k, accountId] }
+    : { sql: "SELECT id FROM account_projects WHERE kind = ?", args: [k] };
+}
+
 /** Every project of an account, when the account is deleted. */
 export function deleteAccountProjects(accountId: string): number {
   return store().prepare("DELETE FROM account_projects WHERE account_id = ?").run(accountId).changes;

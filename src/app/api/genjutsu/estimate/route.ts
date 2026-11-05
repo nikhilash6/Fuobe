@@ -12,8 +12,8 @@ export async function POST(request: Request) {
   return priceAsRun(request, () =>
     handle(async () => {
       const input = await body(request, GenjutsuEstimateSchema, "Add a clip and pick a mode");
-      // A feature that hasn't opened is refused to everyone but the owner (src/server/genjutsu-live.ts).
-      return Response.json(await estimateGenjutsu(input, { owner: requestViewer(request).kind === "owner" }));
+      // A feature that hasn't opened on this studio's GPU is priced as a visitor's own-setup run (src/lib/own-setup.ts).
+      return Response.json(await estimateGenjutsu(input, { owner: requestViewer(request).kind === "owner", ownSetup: true }));
     }),
   );
 }

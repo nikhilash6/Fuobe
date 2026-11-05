@@ -6,11 +6,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { listenOnFreePort, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 
-// MiniMax H3 at 2K with hosted runs on (review 6 of package n7-10): an account's 2K run on this install's GPUs is planned
-// and priced with each take's Open-H3 Regenerate finish beside its 768p draft, and a policy that keeps the finish's model
-// off those GPUs keeps the whole run off, priced or run.
+// MiniMax H3 at 2K with hosted runs on: an account's 2K run finishes with Open-H3 Regenerate, which needs a 48 GB card,
+// so it never goes on this install's GPUs (src/lib/own-setup.ts): it runs on the account's own GPU. Its 768p draft
+// alone still runs here.
 // Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
-// tests/regenerate-offered.test.ts checks that nothing offers it while it is off.
+// tests/regenerate-offered.test.ts checks where it is offered.
 vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-hosted-"));
 process.env.FUOBE_DATA_DIR = dir;
@@ -59,41 +59,21 @@ beforeEach(() => {
 });
 
 const twoK = (resolution = "2K") => ({ feature: "video", modelId: R.H3_OPEN_MODEL, op: "t2v" as const, prompt: "A lighthouse in a storm", params: { resolution, duration: 5, numOutputs: 2 } });
-const finishes = (n: number) => Array.from({ length: n }, () => ({ model: R.REGEN_MODEL, op: "upscale-video" }));
 
 describe("MiniMax H3 at 2K on this install's GPUs", () => {
-  it("plans and prices each take's finish beside its draft", async () => {
-    const place = await decidePlace(auth.accountById(a)!, twoK(), undefined);
-    expect(place.kind).toBe("pool");
-    if (place.kind !== "pool") return;
-    expect(place.planned.model.id).toBe(R.H3_OPEN_MODEL);
-    expect(place.planned.steps).toEqual(finishes(2));
-    const before = fake.calls_of("/v1/quote").length;
-    const quoted = await poolQuote(auth.accountById(a)!, twoK(), undefined);
-    expect(quoted?.planned.steps).toEqual(finishes(2));
-    // Priced as one run: the drafts first, then every take's finish (each model and operation once, with its count).
-    const priced = [
-      { model: R.H3_OPEN_MODEL, op: "t2v", kind: "video", jobs: 2 },
-      { model: R.REGEN_MODEL, op: "upscale-video", kind: "video", jobs: 2 },
-    ];
-    expect(place.steps).toMatchObject(priced);
-    const sent = fake.calls_of("/v1/quote").slice(before).at(-1)?.body as { run: { model: string; jobs: number; steps?: unknown } };
-    expect(sent.run).toMatchObject({ model: R.H3_OPEN_MODEL, jobs: 2, steps: priced });
-    expect(sent.run.steps).toHaveLength(2);
-    // The plan alone (no row planned yet, as the moderation service's facts are) gives the same steps.
-    const { runFacts } = await import("@/server/hosted");
-    expect(runFacts(twoK(), place.planned, "video").steps).toMatchObject(priced);
-    // 768p is the model alone.
-    expect((await poolQuote(auth.accountById(a)!, twoK("768p"), undefined))?.planned.steps).toBeUndefined();
+  it("never goes on these GPUs: its Open-H3 Regenerate finish needs a 48 GB card, so it runs on the account's own GPU", async () => {
+    expect(await poolQuote(auth.accountById(a)!, twoK(), undefined)).toBeNull();
+    expect((await decidePlace(auth.accountById(a)!, twoK(), undefined)).kind).not.toBe("pool");
+    // 768p is the model alone, and runs here.
+    const draft = await decidePlace(auth.accountById(a)!, twoK("768p"), undefined);
+    expect(draft.kind).toBe("pool");
+    if (draft.kind === "pool") expect(draft.planned.steps).toBeUndefined();
   });
 
-  it("a policy that keeps Open-H3 Regenerate off these GPUs keeps the 2K run off; 768p still runs here", async () => {
+  it("a policy that keeps Open-H3 Regenerate off these GPUs changes nothing for 768p", async () => {
     fake.policy = { ...fake.policy, pool: { deny: [R.REGEN_MODEL] } };
-    // Said before Run (Run is off), in the words the run itself gets, and never priced.
-    const before = fake.calls_of("/v1/quote").length;
-    expect((await poolQuote(auth.accountById(a)!, twoK(), undefined))?.quote).toMatchObject({ allowed: false, code: "not-offered" });
-    expect(fake.calls_of("/v1/quote").length).toBe(before);
-    expect((await decidePlace(auth.accountById(a)!, twoK(), undefined)).kind).toBe("refuse");
+    expect(await poolQuote(auth.accountById(a)!, twoK(), undefined)).toBeNull();
+    expect((await decidePlace(auth.accountById(a)!, twoK(), undefined)).kind).not.toBe("pool");
     expect((await decidePlace(auth.accountById(a)!, twoK("768p"), undefined)).kind).toBe("pool");
   });
 });

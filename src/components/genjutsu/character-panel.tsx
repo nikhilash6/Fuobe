@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, Segmented } from "@/components/shorts/ui";
+import { OwnSetupChip } from "@/components/own-setup";
 import {
   ANCHOR_MODELS,
   anchorModel,
@@ -170,6 +171,8 @@ export function CharacterControls({
             describedBy={offReasons.length ? "character-quality-off" : undefined}
             options={offered.map((q) => ({ value: q, label: q, disabled: !!qualityOff(engine, q), title: qualityOff(engine, q) ?? undefined }))}
           />
+          {/* Your GPU's 1080p / 2K / 4K regenerate with Open-H3 Regenerate: a 48 GB card, and the choice says so. */}
+          {engine === "open" && characterFinish(shown) && <OwnSetupChip setup="regenerate:swap-sharpen" />}
           {characterFinish(shown) && <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{qualityHint(engine, shown)}</p>}
           {offReasons.length > 0 && (
             <p id="character-quality-off" className="text-[12px] leading-snug text-pretty text-muted-foreground">

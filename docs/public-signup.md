@@ -32,7 +32,7 @@ it (files, uploads, projects, settings values, tokens) answer 401 "Sign up to se
 Every change a guest sends (generate, upload, save a setting, create a project…) answers 401. The
 studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Where
 signing up wouldn't help, a guest gets an account's answer instead: 403 `assist-owner` for Assist,
-and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Shorts, Katana,
+and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Katana,
 Marketing…). The pages of those tools say so up front and turn off their upload and Generate.
 What is drawn in the browser itself is open to try: Click to Ad's animated end card and Marketing
 Studio's code-drawn templates (Kinetic Motion) take a guest's words and play live (a code-drawn
@@ -77,7 +77,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   owner's results, files, uploads, folders, shares, projects (Layers, Cinema, Canvas, storyboards,
   elements…) and Assist threads are hidden: the lists come back empty, and other reads answer 403.
   Every change to them (create, rename, move, share, delete) answers 403 with `code: "library"`.
-  Accounts have their own uploads and runs (below), but no projects yet.
+  Accounts have their own uploads and runs (below), their own Cinema Studio projects, and their own Faceless
+  channels, explainers and Content Factory series.
   A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
   (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
   for a guest), and it takes only the owner's own finished Kinetic Motion results.
@@ -99,7 +100,9 @@ An account is signed in, but it sees the owner's studio as a guest does:
   board shows read-only with its steps editable in Nodes. Assist, Cinema Studio,
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
   Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
-  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`. A starter without its
+  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`, except Cinema Studio's
+  ready films and Faceless Studio's ready channels, which an account makes as its own project (a guest gets the sign-up
+  card). Content Factory's and the Explainer's ready ones fill the composer for anyone. A starter without its
   cover yet is the owner's only: its card, its words and its page (404 for anyone else). Storyboard's
   ready stories with a cover also fill its composer for anyone (`/storyboard?starter=<id>`), and the
   Library's "Make your first" row links to pages everyone can open.
@@ -117,6 +120,13 @@ An account is signed in, but it sees the owner's studio as a guest does:
   the sign-up form says so. An account's delete is for good (it has no Trash): a result's ⋯ menu and the
   Library's selection bar say **Delete for good…** and ask first, and its space comes
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
+- **It downloads its own runs as one zip.** The Library's **Download**, a result's **Download all** and Shorts'
+  **Download parts** go to `GET /api/generations/zip`, which zips the account's own runs only: another account's run or
+  the owner's is left out, exactly as one that doesn't exist (none of its own: 404), so the answer never says whether
+  it is there. A file held for its check is left out too. One zip takes up to 200 runs and 1 GB (413 past either), and
+  an account makes one zip at a time (429 while one is going; a download that stops, or stalls for 2 minutes, frees
+  it). The zip is streamed from the files, so it uses no disk or memory. The Library asks first (`?check=1`), so a
+  refusal shows as a message. A guest gets the sign-up card.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
 - **Results made in the browser are its own runs too.** A motion clip rendered in
@@ -259,27 +269,32 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   with the open-source engine: the Image, Video and Audio studios (their input modes too: edit,
   inpaint, extend, lipsync, reframe, upscale, image to video…), every camera motion and effect,
   and the apps that take a picture, a clip or a sound. Their chained steps (multi-shot films,
-  Frames mode, Extend, relit effects) run there too, as the account's own. Polls,
+  Frames mode, Extend, relit effects) run there too, as the account's own. So does a 3D model (the
+  Image to 3D and Photo to 3D apps, and an image result's "Make it 3D", which opens Photo to 3D), on
+  the account's own GPU or key; it is finished as Image to 3D's models are (below), and on this
+  install's GPUs (hosted runs) 3D isn't offered yet. Polls,
   uploads, outputs and cancels go there, and nothing falls back to the studio's own providers. If
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
-  (Canvas, Cinema, Shorts, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
-  plan with the studio's own AI helpers or keep projects of their own. A 3D model sent here answers the
-  same: Image to 3D has its own route (below). So do the Audio hub's Split
-  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
-  turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
-  own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
-  soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
-  available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
-  dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
-  (it opens Edit speech). Restore & colourise
-  and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
-  `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
+  (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
+  plan with the studio's own AI helpers or keep projects of their own. The Audio tools have their own routes (below).
+  Restore & colourise is left out of the Video tools tabs and the result menus for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
-  Fuobe Animation's cloud half, Kandinsky 6.0, Kandinsky VSR, Bria green screen and Bria guided cut-out) answers `own-gpu-tool` for a guest or an account, even on its own key, and is left out
-  of its pickers; Audio → Extend & remix is left out of the Audio tabs. Each opens once a live call passes.
+  Fuobe Animation's cloud half, Kandinsky 6.0, Kandinsky VSR, Bria green screen and Bria guided cut-out) runs on an
+  account's own key like any paid model: it stays in the account's pickers once it has a key, an account without the
+  key is asked for it (`add-key`), and a guest gets the sign-up card. Audio → Extend & remix shows to everyone, its tab
+  marked "Use your own fal.ai key". `src/lib/own-setup.ts` labels these and every other item that runs only on a
+  visitor's own GPU or key (`ownSetupOnly`, `ownSetupLabel`, `ownSetupStep`), and the hosted runs never place one on
+  this studio's GPUs or keys. The items that need a bigger card than this studio's (Open-H3 Regenerate: Upscale →
+  Video's "Regenerate · creative" and its first step, "Regenerate in 2K" and "Enhance" in result menus, the Canvas
+  node, Shorts' Enhance, Cinema's "Finish in 2K" on a GPU take, MiniMax H3 at 2K on
+  your GPU, Character Swap's Sharpen and its 1080p / 2K / 4K on your GPU; and Kandinsky 6.0 Pro) show to everyone,
+  marked "Runs on your own GPU · 48 GB" (Kandinsky Pro's choice says about 80 GB). An account runs them on its own GPU
+  only, when that GPU has the memory (`src/server/own-setup-run.ts`); otherwise it gets "Connect your GPU" (`connect-gpu`).
+  Cinema's exact orbit is marked "Runs on your own GPU · 48 GB or fal.ai key". Faceless's "Regenerate to 1080p" is
+  left out of an account's episodes: its route is not one of an account's tool runs.
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
@@ -292,6 +307,14 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   only the account's own picture, takes no text from the request and saves under a name the server makes; the page
   fills the description from that run's text. A guest gets the sign-up card. The checks are
   `src/server/account-tool-run.ts`.
+  The modes and options that haven't yet passed a real render on this studio's GPU (Group swap's "one by one", Object
+  swap's Change it, Remove it and New background, From picture with its Light and own person choices, Fix faces and
+  MiniMax H3 Motion transfer) show to everyone, marked with what they run on ("Runs on your own GPU · 24 GB",
+  `src/lib/own-setup.ts`). An account runs them on its own GPU; without one it gets "Connect your GPU"
+  (`connect-gpu`). The mark leaves by itself once the feature's graphs are validated and its pass is recorded in
+  `workflows/comfyui/gpu-tested.json` (`genjutsuLive`; "Clean the voice first", in Genjutsu and Character Swap
+  Studio, works the same way through `soundLive`). Cinema Studio's World mode carries the same mark
+  until its graph is validated (`src/server/own-setup-live.ts`), and Image to 3D's "Trim spikes" says what it runs on.
 - **Storyboard.** An account makes boards the same way (`POST /api/storyboards`), and the film of a board
   (`POST /api/storyboards/<id>/film`). Every frame, shot and join is a run of its own on the account's ComfyUI, or on
   its own fal.ai or Replicate key on the cloud engine, with only its own pictures as look references, and a board (or
@@ -307,9 +330,98 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   finished on this server (the web GLB the viewer loads) under its limits (`src/server/model3d-finish.ts`): one account's
   finish at a time across the server, at low priority; a model over 300 MB, a server or account short of room, or more
   than 60 finishes in an hour keep the model as it came (still viewable and downloadable). Its turntable is recorded in
-  the browser ("Record turntable"), not on the server. Refine detail, the TRELLIS.2 final, Idol 3D's other sides and
-  Film it photoreal stay the owner's, and Retexture opens once its cloud models pass a live call. On this install's
+  the browser ("Record turntable"), not on the server. Film it photoreal runs as a Fly around (below). Refine detail (Hi3D), the TRELLIS.2 final,
+  Idol 3D's other sides ("Make the other sides from the front") and Trim spikes show to everyone and run on the
+  account's own GPU through the same route; each is labelled with what it runs on ("Runs on your own GPU · 24 GB")
+  until its graph is validated on this studio's GPU (`graphs` in `src/lib/own-setup.ts`, read by the page with
+  `ownSetupsNow`, `src/server/own-setup-live.ts`), when the label leaves by itself. Retexture opens once its cloud
+  models pass a live call. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
+- **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
+  /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
+  or the owner's, reads as 404; a guest gets the sign-up card), up to 50 of 1 MB each and 120 saves a minute, deleted
+  with the account. Every job in a project (a clip's 24 fps copy or browser copy, its words, a mask, a scene anchor,
+  queued takes, Sharpen, the assembly) is a run of its own on the account's ComfyUI, or on its own fal.ai key on the
+  cloud engine, with only its own uploads and results, after the same checks as Genjutsu's. A queue counts once against
+  its limits: a take that waits for the one before it starts later in the same run. The pictures a project names (the
+  character, an imported anchor) and its clips are the account's own. Its assembled clips are its own runs, to open and
+  download. The checks are `src/server/swap-studio-account.ts`.
+- **Shorts Studio.** An account makes its own shorts the same way (`POST /api/shorts/sessions`), on its own ComfyUI or
+  on its own fal.ai or Replicate key on the cloud engine: each segment's cut, restyle and the stitch under the clip's
+  sound are runs of its own, with only its own files, and a short counts once against its limits. A new take of a
+  segment (`POST /api/shorts/sessions/<id>/segments/<n>`) and Stitch again (`.../stitch`) go through the same checks.
+  Its shorts and the presets it makes from its own pictures are its own projects (`src/server/account-projects.ts`):
+  its History, a short's page (`/shorts/<id>`) and its preset list show only its own, and another account's or the
+  owner's read as not found (404). It keeps up to 50 shorts. Deleting a short deletes its runs for good (an account
+  has no Trash). It downloads the full video, each part, and "Download parts" as one zip of its own runs.
+  Enhance (`.../enhance`) isn't offered to it yet (403 `own-gpu-tool`). A guest gets the sign-up card.
+- **Cinema Studio.** An account makes, reopens and runs its own projects (`/api/cinema/projects/**`): up to 50,
+  each with its folders, takes, Director settings, brief and AI Director chat, deleted with the account. Another
+  account's project, or the owner's, reads as not found (404), and the owner's lists never show an account's. A take
+  (`POST .../generate`, World mode and Blockout to film included), a retry (`.../items/<id>/retry`) and a 2K finish
+  (`.../items/<id>/finish`) run the same way as Genjutsu's: every step on the account's ComfyUI or its own fal.ai or
+  Replicate key, with only its own files, after the same checks. A project's cover and a grid's tiles must be its own
+  files. Its AI Director writes the shot breakdown without the studio's AI helper (no GPU or key needed). Its Delete
+  deletes a take for good (it has no Trash). "Create 3D scene" and an exact orbit run there too: on its GPU their first
+  step is a 3D model, finished on this server under its limits as Image to 3D's are. Saving a still as an element, the
+  elements list and sharing a project are left out: those are the owner's library. A guest gets the sign-up card.
+- **Photodump, Fashion Factory, Character Sheet and AI Influencer.** An account runs them the same way
+  (`POST /api/photodump`, `/api/photodump/fashion`, `/api/photodump/character`, `/api/influencer`, and a photo's retry
+  `/api/photodump/retry`): every photo on its own ComfyUI or its own fal.ai or Replicate key, with only its own files,
+  after the same checks, and a set counts once against its limits. Its packs (`/api/photodump/packs`) and its
+  characters (`/api/photodump/characters`: a name and photos of one person, saved from New character or from a
+  Character Sheet's "Save as character") are its own projects: up to 50 of each, from its own photos, deleted with the
+  account; another account's or the owner's read as not found (404). An account's character goes into a run as its
+  first photo (an @mention names the owner's elements only). Its runs are its own (each tool's History and recent
+  sheets), and a retried photo replaces the failed one for good (it has no Trash). The price is its run's: free on its
+  GPU, its own key's price on the cloud engine. A guest gets the sign-up card on Generate, on Create pack, on New
+  character and before choosing a photo.
+- **Video tools, Turnaround video, Fly around and Katana.** An account runs Remove object and Remove a person
+  (`POST /api/remove-object`, its mask preview `.../preview` and "Redo from here" `.../reroll`), Evolution
+  (`POST /api/evolution`), Mixed Media (`POST /api/mixed-media`, a preview frame `.../preview` and "Try again"
+  `.../retry`), Turnaround video (`POST /api/turnaround`), Fly around (`POST /api/fly-around`: Image to 3D's "Film it
+  photoreal" and the exact orbits) and Katana (`POST /api/katana`, `.../<id>/retry`) the same way as Genjutsu's: every
+  step on the account's ComfyUI or its own fal.ai or Replicate key, with only its own files, after the same checks, and
+  a run counts once against its limits. Their price checks are priced for the account's own GPU or key. Their results
+  are its own runs (each tool's history, "Your …" feeds and its runs list), to open and download. "Redo from here" and
+  "Try again" take only its own removal or render, and a Mixed Media render's frame count (`GET
+  /api/mixed-media/progress`) answers for its own renders only (anyone else's reads as 404). Evolution's direction
+  (`POST /api/evolution/direction`, and a run sent without one) is written by Fuobe's offline writer, never the studio's
+  AI helper. Turnaround and Fly around never use the studio's WorldCast worker for an account; a character from the
+  owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
+  /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
+  the sign-up card.
+- **Audio tools.** An account runs Split soundtrack and Clean up dialogue, Video tools → Remove dialogue, Edit speech,
+  Loop / extend, Join and Clean up voice (`POST /api/audio-tools`) the same way as Genjutsu's: every step on its own
+  ComfyUI, or on its own fal.ai or Replicate key where a step is a cloud model, with only its own files, after the same
+  checks, and a run counts once against its limits. Its price check is its own run's. Its stems, clean dialogue,
+  edited speech and mixes are its own runs, to reopen in the mixer, open and download, and Export mix keeps the WAV as
+  one of its runs (above). Edit speech runs on the account's own GPU only (AuK's files and a 24 GB card): its tab and
+  page carry the "own setup" label (`audio:edit-speech`), and its upload and run ask an account without a GPU to
+  connect one. Result menus offer Remove dialogue, Clean up dialogue and Edit speech, and Captions offers "Fix this line".
+  A guest gets the sign-up card.
+- **Translate & dub.** An account keeps dubs of its own (`GET`/`POST /api/dub`, `GET`/`PATCH`/`DELETE /api/dub/<id>`,
+  `POST /api/dub/<id>/voice`): up to 50, in the account project store, deleted with the account. Another account's dub,
+  or the owner's, reads as not found (404), and the owner's list never shows an account's. A dub (one shot on its own
+  key, or step by step) and the voice of each language run the same way as Genjutsu's: every step on its own ComfyUI
+  or key, with only its own video. Its translations run on its own GPU (Qwen3.5 4B, `oss-qwen35-translate`), never on
+  the studio's AI helper, on either engine: a cloud step-by-step dub with a key and no GPU is asked to connect one. Its
+  reviewed lines are saved with its dub, and its dubbed videos are its own runs, to open and download. A guest gets the
+  sign-up card.
+- **Faceless Studio, the Explainer and Content Factory.** An account's channels (`/api/faceless/channels/**`), their
+  episodes (`/api/faceless/episodes/**`), its explainers (`/api/explainer`) and its series
+  (`/api/content-factory/series/**`) are its own (`src/server/account-projects.ts` kinds `faceless`, `explainer` and
+  `content-factory`; up to 50 of each, deleted with the account). Another account's, or the owner's, read as not found
+  (404), and the owner's lists never show an account's. Its scripts, episode plans, channel names, topic ideas and
+  document summaries are the offline writer's: never the studio's AI helper. A render, a retry, a timeline change, an
+  upscale, a channel avatar, a narrator sample and a reference clip's reading run on its own ComfyUI or its own fal.ai or
+  Replicate key, with only its own files, after the same checks as Genjutsu's (`src/server/account-tool-run.ts`); the
+  whole render is planned and checked before its first step starts, and a series' episodes render as one run. Writing a
+  script for review, a channel and a series made from a preset need no GPU or key. The server never fetches a link for
+  it: a channel's YouTube reference is kept as the link, and an explainer's link source and a series' TikTok or
+  Instagram link are the owner's (it attaches the file or uploads the clip). "Generate in Claude" (the studio's own MCP
+  server) and "Regenerate to 1080p" (held with Open-H3 Regenerate) aren't offered to it (403 `own-gpu-tool`). A guest
+  gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

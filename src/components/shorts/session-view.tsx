@@ -23,14 +23,16 @@ import { MediaThumb } from "@/components/studio/result-media";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Viewer } from "@/components/studio/viewer";
 import { chainState, ENHANCE_COPY, formatSeconds, segmentSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
-import { finishLengthProblem, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { finishLengthProblem } from "@/lib/catalog/regenerate";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import { originalSoundLabel, originalSoundOn } from "@/lib/av/original-sound";
-import { useEngineMode } from "@/lib/api";
+import { useEngineMode, useIsOwner } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
 import { formatCost, ratioValue, timeAgo } from "@/lib/format";
 import { downloadHref, downloadName } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { onZipLink } from "@/lib/zip-download";
 import { useShortsActions, useShortsSession, useSubmitGuard, type ShortsSessionView as View } from "./hooks";
 import { Steps } from "./ui";
 
@@ -99,6 +101,8 @@ function Session({ s }: { s: View }) {
   const router = useRouter();
   const actions = useShortsActions(s.id);
   const engineMode = useEngineMode();
+  // The studio's owner keeps a Trash; a signed-in account's short is its own runs (deleted for good, its parts zipped as the owner's are).
+  const owner = useIsOwner();
   const [open, setOpen] = useState<Generation | null>(null);
   const [confirm, setConfirm] = useState(false);
   const gens = s.generations;
@@ -128,6 +132,8 @@ function Session({ s }: { s: View }) {
       .catch((e: Error) => toastError(e));
   };
   const enhanceGuard = useSubmitGuard();
+  // Enhance needs a 48 GB card: a visitor runs it on its own GPU (own-setup.ts), else gets the step that sets it up.
+  const press = useOwnSetupPress();
   const enhance = (i: number) => {
     if (actions.enhance.isPending) return;
     void enhanceGuard(`enhance:${i}:${s.segments[i].primary}`, (requestId) => actions.enhance.mutateAsync({ index: i, requestId }))
@@ -191,7 +197,13 @@ function Session({ s }: { s: View }) {
               </a>
             )}
             {parts.length > 0 && (
-              <a href={`/api/generations/zip?ids=${parts.join(",")}`} className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-background px-4 text-[13px] font-medium hover:bg-accent">
+              <a
+                href={`/api/generations/zip?ids=${parts.join(",")}`}
+                download
+                // Asks first: a refusal (a zip still going, too big) is a toast, never a page of its own.
+                onClick={onZipLink}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-background px-4 text-[13px] font-medium hover:bg-accent"
+              >
                 <FolderDown className="size-4" /> Download parts{parts.length < s.segments.length ? ` (${parts.length})` : ""}
               </a>
             )}
@@ -262,15 +274,15 @@ function Session({ s }: { s: View }) {
                 onRegenerate={() => regenerate(i)}
                 regenerating={actions.regenerate.isPending && actions.regenerate.variables?.index === i}
                 busy={actions.regenerate.isPending}
-                enhanceable={REGEN_OFFERED && s.engine === "open" && engineMode !== "cloud"}
-                onEnhance={() => enhance(i)}
+                enhanceable={s.engine === "open" && engineMode !== "cloud"}
+                onEnhance={() => press("regenerate:enhance", () => enhance(i))}
                 enhancing={actions.enhance.isPending && actions.enhance.variables?.index === i}
                 onPrimary={(gid) => actions.primary.mutate({ index: i, generationId: gid }, { onError: (e) => toastError(e) })}
               />
             ))}
           </div>
           {/* A cloud short: Enhance (H3 regenerate) needs your GPU, said once rather than on every segment. */}
-          {REGEN_OFFERED && s.engine === "cloud" && engineMode !== "cloud" && <p className="text-[12px] text-muted-foreground">{ENHANCE_COPY.cloudSession}.</p>}
+          {s.engine === "cloud" && engineMode !== "cloud" && <p className="text-[12px] text-muted-foreground">{ENHANCE_COPY.cloudSession}.</p>}
         </section>
       </div>
       {open && <Viewer generation={open} index={0} onClose={() => setOpen(null)} />}
@@ -278,7 +290,7 @@ function Session({ s }: { s: View }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this short?</AlertDialogTitle>
-            <AlertDialogDescription>Its segments and videos move to the Trash, where you can restore them for 30 days.</AlertDialogDescription>
+            <AlertDialogDescription>{owner ? "Its segments and videos move to the Trash, where you can restore them for 30 days." : "Its segments and videos are deleted for good."}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
@@ -287,7 +299,7 @@ function Session({ s }: { s: View }) {
               onClick={() =>
                 actions.remove.mutate(s.id, {
                   onSuccess: () => {
-                    toast("Moved to Trash");
+                    toast(owner ? "Moved to Trash" : "Deleted");
                     router.push("/shorts?tab=history");
                   },
                   onError: (e) => toastError(e),
@@ -440,6 +452,7 @@ function SegmentCard({
               >
                 {enhancing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                 {ENHANCE_COPY.label}
+                <OwnSetupChip setup="regenerate:enhance" />
                 <span className="font-mono text-[11px] font-normal text-muted-foreground">1080p · Free</span>
               </button>
             )}

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useCreateGeneration } from "@/lib/api";
+import { OwnSetupChip } from "@/components/own-setup";
 import {
   HI3D_CLOUD_NOTE,
   HI3D_DEFAULT,
@@ -23,7 +23,8 @@ import {
 } from "@/lib/av/hi3d";
 import type { Engine } from "@/lib/catalog/types";
 import { toastError } from "@/lib/refusals";
-import { priceLine, useRunPreview } from "./hooks";
+import { priceLine, useCreate3d, useRunPreview } from "./hooks";
+import { useModel3dSetup } from "./own-setups";
 
 /** "Powered by Hi3D 1.0", linked to Hi3D's site as its licence asks, wherever its results or its switch show. */
 export function PoweredByHi3d({ className }: { className?: string }) {
@@ -71,6 +72,8 @@ export function RefineOption({
   onUseGpu: () => void;
 }) {
   const [last, setLast] = useState<Hi3dResolution>(value ?? HI3D_DEFAULT);
+  // A visitor's refine runs on its own GPU: what that needs, until Hi3D's graph is validated on this studio's GPU.
+  const setup = useModel3dSetup("refine");
   if (!openAllowed) return null;
   if (engine !== "open") {
     return (
@@ -86,9 +89,12 @@ export function RefineOption({
   return (
     <div className="mt-3 rounded-xl border p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <Label htmlFor="m3d-refine" className="text-[13px]">
-          {HI3D_LABEL}
-        </Label>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <Label htmlFor="m3d-refine" className="text-[13px]">
+            {HI3D_LABEL}
+          </Label>
+          <OwnSetupChip setup={setup} />
+        </span>
         <Switch id="m3d-refine" checked={on} onCheckedChange={(v) => onChange(v ? last : null)} aria-describedby="m3d-refine-hint" />
       </div>
       <p id="m3d-refine-hint" className="mt-1 text-[12px] text-muted-foreground">
@@ -114,7 +120,8 @@ export function RefineOption({
 
 /** "Refine this mesh" on a finished model: Hi3D refines its geometry from the photo it was made from. */
 export function RefineDialog({ glb, photo, open, onOpenChange, feature }: { glb: string; photo: string; open: boolean; onOpenChange: (v: boolean) => void; feature?: string }) {
-  const create = useCreateGeneration();
+  // The owner's as a studio run; an account's on its own GPU (POST /api/image-to-3d).
+  const create = useCreate3d();
   const [resolution, setResolution] = useState<Hi3dResolution>(HI3D_DEFAULT);
   const req = refineRequest({ glb, photo, resolution, feature });
   const preview = useRunPreview(open ? req : null);

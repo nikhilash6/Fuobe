@@ -1,8 +1,8 @@
 // Genjutsu for visitors, in a browser (a studio with a password and public sign-up, fuobe.com by default): a guest and a
 // signed-in account see no "isn't available here" note, the clip drop and the mode's example ("Use this example") are
-// on, "Describe my character" is shown, and the guest's upload opens the sign-up card. Describing answers a guest with
-// the sign-up card and an account with no GPU with "connect-gpu". The account is a throwaway one this script makes and
-// deletes.
+// on, and the guest's upload opens the sign-up card. "Describe my character" (shown with the form, once a clip is in)
+// answers a guest with the sign-up card and an account with no GPU with "connect-gpu". The account is a throwaway one
+// this script makes and deletes.
 // No run is started (that needs the account's own GPU or key).
 // Usage: node tests/e2e/genjutsu-accounts-live.mjs [appUrl] [--shots <dir>]   Exits 1 on a failed check.
 import fs from "node:fs";
@@ -40,8 +40,6 @@ try {
     check(`${who}: the clip drop is on`, !disabled);
     const use = page.locator("[data-use-example]");
     if (await use.count()) check(`${who}: Use this example is offered`, await use.first().isVisible());
-    const describeButton = page.getByRole("button", { name: /Describe my character/ }).first();
-    check(`${who}: Describe my character is shown`, await describeButton.isVisible().catch(() => false));
     if (shots) await page.screenshot({ path: path.join(shots, `genjutsu-${who}.png`), fullPage: false });
   };
   // Describing the character: a guest gets the sign-up card; an account with no GPU is asked to connect one.

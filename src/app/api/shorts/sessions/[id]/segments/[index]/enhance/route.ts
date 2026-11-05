@@ -1,8 +1,13 @@
+import { ownGpuTool, toolViewer } from "@/server/account-tool-run";
 import { enhanceSegment, ShortsError } from "@/server/shorts";
 import { NonceSchema, handle, once, optionalBody } from "@/server/shorts-schemas";
 
-/** Enhance (H3 regenerate): a 1080p take of this segment, redrawn on your GPU (a repeated requestId gets the first answer). */
+/**
+ * Enhance (H3 regenerate): a 1080p take of this segment, redrawn on your GPU (a repeated requestId gets the first answer).
+ * The owner's only: it isn't offered on an account's own GPU yet.
+ */
 export async function POST(request: Request, ctx: RouteContext<"/api/shorts/sessions/[id]/segments/[index]/enhance">) {
+  if (toolViewer(request).kind !== "owner") return ownGpuTool();
   return handle(async () => {
     const { id, index } = await ctx.params;
     const i = Number(index);

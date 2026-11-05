@@ -96,12 +96,12 @@ describe("MiniMax H3 on your GPU: the catalog entry", () => {
     expect(getModel("oss-wan22-14b-fast")!.badges).toEqual(["open", "fast", "top"]);
   });
 
-  it("has seven graphs in the library, none validated yet, with their packs, pinned files and bound frames", () => {
+  it("has seven graphs in the library, each validated by a GPU run, with their packs, pinned files and bound frames", () => {
     for (const id of ALL) {
       const w = wf(id);
       expect(w, id).toBeDefined();
-      expect(w.validated, id).toBe(false);
-      expect(requirements.workflows[id].validated, id).toBeUndefined();
+      expect(w.validated, id).toBe(true);
+      expect(requirements.workflows[id].validated, id).toBe(true);
       expect(w.limits).toMatchObject({ maxFrames: 362, dimensionMultiple: 32 });
       expect(w.vramGb).toBe(32);
       expect(w.outputs).toEqual([{ node: "174", kind: "video" }]);

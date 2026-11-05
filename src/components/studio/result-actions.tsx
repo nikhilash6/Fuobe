@@ -90,6 +90,7 @@ import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { enhanceRequest, rerenderRequest } from "@/lib/catalog/regenerate";
 import { toastError } from "@/lib/refusals";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 
 export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   animate: Clapperboard,
@@ -250,8 +251,11 @@ export function useActionRunner(opts: RunnerOptions = {}) {
   const deleteUpload = useContext(UploadDeleteContext);
   const share = useShare();
   const skillBuilder = useSkillBuilder();
+  const press = useOwnSetupPress();
   return (a: OutputAction, g: Generation, index: number) => {
     const o = g.outputs[index];
+    // An item that runs on the visitor's own setup: a guest signs up, an account without it connects its GPU first.
+    if (a.ownSetup && !a.href && !press(a.ownSetup)) return;
     switch (a.id) {
       case "favorite":
         return void actions.favorite(g);
@@ -574,6 +578,7 @@ export function ActionMenu({
         <DropdownMenuItem key={a.id} asChild>
           <Link href={a.href} prefetch={false}>
             <Icon /> {a.label}
+            <OwnSetupChip setup={a.ownSetup} className="ml-auto" />
           </Link>
         </DropdownMenuItem>
       );
@@ -589,6 +594,7 @@ export function ActionMenu({
         }}
       >
         <Icon className={cn(a.id === "favorite" && g.favorite && "fill-current")} /> {a.id === "save-character" ? "Save as element…" : a.label}
+        <OwnSetupChip setup={a.ownSetup} className="ml-auto" />
       </DropdownMenuItem>
     );
   };

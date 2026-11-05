@@ -533,7 +533,7 @@ export const NODE_PACKS: NodePack[] = [
   }),
   pack("h3-relay", "https://github.com/akatz-ai/h3-relay/tree/e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220", {
     ...GPL,
-    note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in (H3_RELAY=1): it registers HTTP routes when it loads",
+    note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in: it registers HTTP routes when it loads",
   }),
   // Genjutsu's Openjutsu modes (Group swap, Scene edit, From picture, Fix faces, Fix colours): pinned in packs.json and
   // install-comfyui.sh (OPENJUTSU_MODES=1). LICENSE files read at the pinned commits.

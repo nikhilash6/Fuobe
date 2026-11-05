@@ -94,25 +94,13 @@ describe("round-4 ComfyUI workflows", () => {
   it("keeps the whole library validated, and every output role is a typed role", () => {
     expect(manifest.workflows.length).toBeGreaterThanOrEqual(132);
     expect(new Set(manifest.workflows.map((w) => w.id)).size).toBe(manifest.workflows.length);
-    // The owner's SOTA image families (2026-10-31) wait for a /prompt check on a ComfyUI that isn't rendering, and the
-    // MiniMax H3 graphs and Restore & colourise on node packs this server doesn't have (h3_character_swap, H3 Relay,
-    // ComfyUI-LTXVideo): never installed here, so their /prompt check names a missing node (tests/comfy-character-swap.test.ts,
-    // tests/restore-comfy.test.ts). MiniMax H3's video graphs wait for their first run.
+    // Graphs on node packs this server doesn't have (h3_character_swap, H3 Relay, ComfyUI-LTXVideo) name a missing node at
+    // their /prompt check (tests/comfy-character-swap.test.ts, tests/restore-comfy.test.ts); the rest wait for a GPU run.
     expect(manifest.workflows.filter((w) => !w.validated).map((w) => w.id)).toEqual([
       // Green screen and fine hair (nm10-keying): ComfyUI-RMBG 3.3.0 and the CorridorKey wrapper aren't on the validation
       // server (tests/keying.test.ts checks their classes against the packs' source).
       "image-matte-feynobg",
-      "minimax-h3-t2v",
-      "minimax-h3-i2v",
-      "minimax-h3-flf2v",
-      "minimax-h3-t2v-hq",
-      "minimax-h3-i2v-hq",
-      "minimax-h3-flf2v-hq",
-      "minimax-h3-orbit",
       // MiniMax H3 on 8-31 GB cards: FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
-      "minimax-h3-fast-t2v",
-      "minimax-h3-fast-i2v",
-      "minimax-h3-fast-flf2v",
       "minimax-h3-trim-t2v",
       // Design a voice: ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
       "tts-qwen3-design",
@@ -131,11 +119,8 @@ describe("round-4 ComfyUI workflows", () => {
       "krea2-inpaint",
       "krea2-outpaint",
       "video-restore-ltx25-tiled",
-      // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
-      "voice-clean-bed-reuse",
       // Hi3D refine (hi3d-refine): Comfyui-Hi3d-T8 needs an Ampere-or-newer NVIDIA GPU, so it isn't on the validation server.
       "mesh-refine-hi3d",
-      "video-character-swap-h3",
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
@@ -157,10 +142,7 @@ describe("round-4 ComfyUI workflows", () => {
       "world-hy-nomas-turn",
       // Genjutsu's Openjutsu modes not checked against ComfyUI yet; each opens only after its /prompt
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
-      "video-group-swap-h3-one-by-one",
       "image-from-picture-prepare",
-      "video-from-picture-solar",
-      "video-from-picture-h3",
       "video-motion-transfer-h3",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);

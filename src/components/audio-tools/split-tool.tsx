@@ -15,8 +15,7 @@ import { ACCEPT, fileToSlot, kindOfFile, LibraryGrid, type SlotValue } from "@/c
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { SelfHostNote } from "@/components/self-host-note";
-import { useAskBeforeUpload, useEngine, useGenerations, useIsAccount, useLikelyVisitor } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations, useIsAccount } from "@/lib/api";
 import {
   backgroundLowered,
   clock,
@@ -147,7 +146,7 @@ export function uploadSource(f: File, kind: "audio" | "video", put: (s: Source) 
   );
 }
 
-/** disabled: a visitor (the split doesn't run here for them), so nothing is uploaded or picked only to be refused. */
+/** disabled: nothing is uploaded or picked. A guest is asked to sign up first, and an account with nothing to run on to connect its GPU. */
 function AddMedia({ onPick, onUpdate, disabled }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -673,11 +672,6 @@ function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[
 // ---------------------------------------------------------------------------
 // The tool
 
-/**
- * Why a guest or an account can't split: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so the
- * page says so up front and its upload and run are off, instead of a run the server refuses.
- */
-const SELF_HOSTED = "Split soundtrack isn't available here";
 /** Where the time estimate is for: the host's device when it said; else a CPU's, the figures the estimate then uses. */
 const onDevice = (device?: string) => (device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU");
 
@@ -696,7 +690,6 @@ function stemsOf(outputs: OutputFile[]): Stem[] {
 
 export function SplitSoundtrackTool() {
   const [engine, setEngine, mode] = useEngine();
-  const visitor = useLikelyVisitor();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
   const [quality, setQuality] = useState<SplitQuality | null>(null);
@@ -758,7 +751,7 @@ export function SplitSoundtrackTool() {
   const channels = p?.channels ?? source?.channels;
   const picked: SplitQuality = quality ?? p?.hostPick ?? "fast";
   const cloudProblem = mode === "cloud" ? CLOUD_ONLY_PROBLEM : CLOUD_SPLIT_PROBLEM;
-  const blocker = visitor ? SELF_HOSTED : !source ? "Add a soundtrack to split" : source.uploading ? "Uploading…" : engine === "cloud" ? cloudProblem : null;
+  const blocker = !source ? "Add a soundtrack to split" : source.uploading ? "Uploading…" : engine === "cloud" ? cloudProblem : null;
   const error = preview.error ? (preview.error as Error).message : null;
   const go = () => {
     if (blocker) return void toast(blocker);
@@ -776,14 +769,12 @@ export function SplitSoundtrackTool() {
   const stems = useMemo(() => (g?.status === "succeeded" ? stemsOf(g.outputs) : []), [g]);
 
   return (
-    <ToolShell title="Audio" selfHostedOnly>
+    <ToolShell title="Audio">
       {!source && (
         <ToolHero
           title={goal === "clean" ? "Clean up dialogue" : "Split any soundtrack"}
           subtitle={goal === "clean" ? "Clear speech from a noisy or musical recording or video: the music and effects out from under it, or kept quietly." : "Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer."}
-        >
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>}
-        </ToolHero>
+        />
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-8")}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -798,7 +789,7 @@ export function SplitSoundtrackTool() {
           />
         </div>
         {!source ? (
-          <AddMedia onPick={take} onUpdate={setSource} disabled={visitor} />
+          <AddMedia onPick={take} onUpdate={setSource} />
         ) : (
           <SourcePanel
             source={source}
@@ -813,8 +804,7 @@ export function SplitSoundtrackTool() {
           <CleanDialoguePanel
             source={ready ? { ref: ready.ref, kind: ready.kind, name: baseName(ready), duration: ready.duration, channels: ready.channels } : null}
             engine={engine}
-            visitor={visitor}
-            blocker={visitor ? SELF_HOSTED : !source ? "Add a soundtrack to clean" : source.uploading ? "Uploading…" : null}
+            blocker={!source ? "Add a soundtrack to clean" : source.uploading ? "Uploading…" : null}
             onMixer={() => {
               setGoal("split");
               setMixPreset(mixPresetFor("split", true));
@@ -877,11 +867,7 @@ export function SplitSoundtrackTool() {
             )}
             <div className="flex flex-wrap items-center gap-3">
               <p className={cn("min-w-0 flex-1 text-[13px]", error && !blocker ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
-                {visitor && engine !== "cloud" ? (
-                  <>
-                    <span className="font-mono text-foreground">{openToolPrice(p, true)}</span>
-                  </>
-                ) : blocker && engine !== "cloud" ? (
+                {blocker && engine !== "cloud" ? (
                   blocker
                 ) : engine === "cloud" ? (
                   mode === "cloud" ? (
@@ -900,7 +886,7 @@ export function SplitSoundtrackTool() {
                   "Checking…"
                 )}
               </p>
-              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={visitor || run.isPending || g?.status === "queued" || g?.status === "running"}>
+              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={run.isPending || g?.status === "queued" || g?.status === "running"}>
                 {run.isPending || g?.status === "queued" || g?.status === "running" ? <Loader2 className="size-4 animate-spin" /> : <SlidersVertical className="size-4" />} Split it
               </Button>
             </div>

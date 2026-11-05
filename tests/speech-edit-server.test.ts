@@ -128,16 +128,16 @@ describe("public sign-up", () => {
   let n = 0;
   const newAccount = () => auth.createAccount(`speech${++n}@example.com`, "long enough");
 
-  it("prices a visitor's edit on its own GPU, never a demo, and only of its own file; the run is own-gpu-tool for an account", async () => {
+  it("prices a visitor's edit on its own GPU, never a demo, and only of its own file; an account without a GPU is asked to connect one", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     auth.setPassword("install password");
     const who = newAccount();
     const cookie = auth.createSession(who.id).value;
-    // Through the sign-in proxy: the price check passes, the run is refused as a tool (it would use the studio's GPU).
+    // Through the sign-in proxy: the price check passes; the run goes to its own GPU, and with none it's asked to connect one.
     expect(passed(proxy(req("/api/audio-tools?preview=1", cookie)))).toBe(true);
     const run = proxy(req("/api/audio-tools", cookie));
     expect(run.status).toBe(403);
-    expect((await run.json()).code).toBe("own-gpu-tool");
+    expect((await run.json()).code).toBe("connect-gpu");
     // The owner's file answers a guest and an account as one that's gone.
     const owners = wav("owners.wav");
     for (const c of [undefined, cookie]) {
@@ -185,9 +185,9 @@ describe("where Edit speech shows up", () => {
     expect(has(outputActions(g("music", "audio"), 0))).toBeUndefined();
     expect(has(outputActions(g("tts", "audio"), 0, { engineMode: "cloud" }))).toBeUndefined();
     expect(has(outputActions(g("lipsync", "video"), 0))?.href).toMatch(/^\/audio\/edit-speech\?video=/);
-    // A guest or an account (public sign-up) can't run it: the edit runs on a self-hosted Fuobe only.
-    expect(has(outputActions(g("tts", "audio"), 0, { visitor: true }))).toBeUndefined();
-    expect(has(outputActions(g("lipsync", "video"), 0, { visitor: true }))).toBeUndefined();
+    // A guest or an account (public sign-up) gets it too: an account runs it on its own GPU.
+    expect(has(outputActions(g("tts", "audio"), 0, { visitor: true }))?.href).toMatch(/^\/audio\/edit-speech\?audio=/);
+    expect(has(outputActions(g("lipsync", "video"), 0, { visitor: true }))?.href).toMatch(/^\/audio\/edit-speech\?video=/);
   });
 
   it("has its model, licence and a row on the GPU pre-flight board", () => {

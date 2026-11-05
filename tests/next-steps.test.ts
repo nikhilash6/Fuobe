@@ -92,11 +92,11 @@ describe("Keep going with this", () => {
     expect(steps.every((s) => s.href.includes("video=%2Fapi%2Ffiles%2Fclip.mp4"))).toBe(true);
   });
 
-  it("splits a sounded clip's soundtrack, and offers Remove dialogue to the owner only", () => {
+  it("splits a sounded clip's soundtrack, and offers Remove dialogue to everyone (an account runs it on its own GPU)", () => {
     const sounded = clip({ op: "lipsync", feature: "lipsync" });
     expect(ids(sounded)).toContain("split-soundtrack");
     expect(ids(sounded)).toContain("remove-dialogue");
-    expect(ids(sounded, { ...ALL_ADAPTERS, visitor: true })).not.toContain("remove-dialogue");
+    expect(ids(sounded, { ...ALL_ADAPTERS, visitor: true })).toContain("remove-dialogue");
     expect(ids(sounded, { ...ALL_ADAPTERS, visitor: true })).not.toContain("restore-video");
   });
 
