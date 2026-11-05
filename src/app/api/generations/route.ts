@@ -19,7 +19,7 @@ import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, disk
 import { accountInputProblem } from "@/server/account-inputs";
 import { db } from "@/server/db";
 import { findView, requestViewKey } from "@/server/any-angle";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, cancelGeneration, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, cancelGeneration, CHAINED_RUN, createGenerations, getGeneration, inChain, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
@@ -88,22 +88,27 @@ interface Replaced {
 /** A `replaces` for a run that can't be taken over any more: started on its GPU meanwhile, or stopped already. */
 const NOT_REPLACEABLE = "This run has already started or stopped, so nothing new was run.";
 
+/** A `replaces` for a waiting step of a longer run: moving it alone would cancel it and leave the rest of the run without it. */
+const CHAINED = "chained";
+
 /**
  * Beside the request: the account's own run (waiting for its GPU or key, or failed) this one takes the place of ("Run
  * with your fal.ai key" on it). A waiting run takes its whole batch with it: every job of the same request not handed
  * over yet stops once this one is made, and this one makes their outputs (never the whole batch again). Undefined: no
- * `replaces`; null: one that can't be taken over any more (asked again just before the run is made, nothing awaited).
+ * `replaces`; null: one that can't be taken over any more (asked again just before the run is made, nothing awaited);
+ * CHAINED: a waiting step of a longer run (it waits for an earlier step, or a later one waits for it), never moved alone.
  */
-function replacedRun(body: unknown, accountId: string): Replaced | null | undefined {
+function replacedRun(body: unknown, accountId: string): Replaced | typeof CHAINED | null | undefined {
   const id = (body as { replaces?: unknown } | null)?.replaces;
   if (id === undefined || id === null) return undefined;
   if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(id)) return null;
   const row = db()
-    .prepare("SELECT status, external_id, batch_id, request_json FROM generations WHERE id = ? AND json_extract(request_json, '$.account') = ?")
-    .get(id, accountId) as { status: string; external_id: string | null; batch_id: string | null; request_json: string } | undefined;
+    .prepare("SELECT status, external_id, batch_id, request_json, depends_on FROM generations WHERE id = ? AND json_extract(request_json, '$.account') = ?")
+    .get(id, accountId) as { status: string; external_id: string | null; batch_id: string | null; request_json: string; depends_on: string | null } | undefined;
   if (!row) return null;
   if (row.status === "failed") return { ids: [id] };
   if (row.status !== "queued" || row.external_id) return null;
+  if (inChain({ id, depends_on: row.depends_on })) return CHAINED;
   if (!row.batch_id) return { ids: [id] };
   // Its batch's jobs (the same request; a chain's later steps have their own), and those not handed over yet.
   const jobs = db()
@@ -111,6 +116,8 @@ function replacedRun(body: unknown, accountId: string): Replaced | null | undefi
     .all(row.batch_id, row.request_json) as { id: string; status: string; external_id: string | null }[];
   const ids = jobs.filter((j) => j.status === "queued" && !j.external_id).map((j) => j.id);
   if (!ids.includes(id)) ids.push(id);
+  // A job of the batch that a later step waits for: the batch is part of a longer run too.
+  if (ids.some((j) => j !== id && inChain(j))) return CHAINED;
   let asked = 1;
   try {
     asked = Math.max(1, Number((JSON.parse(row.request_json) as { params?: { numOutputs?: unknown } }).params?.numOutputs) || 1);
@@ -197,6 +204,8 @@ export async function POST(request: Request) {
   const replacing = account && !preview ? replacedRun(body, account.id) : undefined;
   // A run that started or stopped meanwhile (another tile's press took it already): nothing new runs.
   if (replacing === null) return refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
+  // A waiting step of a longer run: it goes on as it is (moved alone, the rest of the run would go without it).
+  if (replacing === CHAINED) return refuse(409, CHAINED_RUN, { code: "chained-run" });
   let replaces = replacing;
   // It makes the outputs of the jobs it stops, not its whole batch's again.
   req = withReplacedOutputs(req, replaces);
@@ -338,10 +347,10 @@ export async function POST(request: Request) {
     // of its batch's tiles meanwhile took it already (or it started on its GPU), so nothing new runs.
     if (replaces && account) {
       const now = replacedRun(body, account.id);
-      if (!now) {
+      if (!now || now === CHAINED) {
         unhit(`run:${account.id}`);
         if (stamp?.hold) queueRelease(stamp.hold);
-        return refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
+        return now === CHAINED ? refuse(409, CHAINED_RUN, { code: "chained-run" }) : refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
       }
       // Fewer of its jobs left to stop (one was handed over meanwhile): fewer outputs. A run on this install's GPUs keeps
       // the count it was priced and set aside for.

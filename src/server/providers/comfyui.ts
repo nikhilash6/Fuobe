@@ -557,6 +557,18 @@ function forget(promptId: string) {
   globalThis.__fuobeComfyMisses?.delete(promptId);
 }
 
+/**
+ * A job's place in ComfyUI's queue (`/queue` queue_pending): how many jobs go before it (0: next), or -1 when it isn't
+ * there. The list is ComfyUI's heap, not in order: the jobs before it are the ones with a lower number.
+ */
+export function queuePlace(pending: unknown[][], promptId: string): number {
+  const mine = pending.find((q) => q[1] === promptId);
+  if (!mine) return -1;
+  const n = mine[0];
+  if (typeof n !== "number") return pending.indexOf(mine);
+  return pending.filter((q) => typeof q[0] === "number" && q[0] < n).length;
+}
+
 // ---------------------------------------------------------------------------
 // Outputs
 
@@ -2961,7 +2973,7 @@ export const comfyProvider: ProviderAdapter = {
     const p = progress.get(externalId);
     const queue = await comfyJson<{ queue_running?: unknown[][]; queue_pending?: unknown[][] }>("/queue", worker);
     const running = queue.queue_running?.some((q) => q[1] === externalId);
-    const pendingIdx = queue.queue_pending?.findIndex((q) => q[1] === externalId) ?? -1;
+    const pendingIdx = queuePlace(queue.queue_pending ?? [], externalId);
     if (!running && pendingIdx < 0 && !entry) {
       // It may have finished between the two requests (ComfyUI moves it from the queue to the history at once).
       const again = (await comfyJson<Record<string, HistoryEntry>>(`/history/${encodeURIComponent(externalId)}`, worker))[externalId];
@@ -2980,7 +2992,11 @@ export const comfyProvider: ProviderAdapter = {
       return { state: "failed", error: "ComfyUI restarted and lost this run. Press Retry." };
     }
     globalThis.__fuobeComfyMisses?.delete(externalId);
-    if (pendingIdx >= 0) return { state: "queued", position: pendingIdx, message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
+    if (pendingIdx >= 0) {
+      // The job the GPU runs now (another one), by its name there: a new one is a queue that moves.
+      const busy = queue.queue_running?.[0]?.[1];
+      return { state: "queued", position: pendingIdx, ...(typeof busy === "string" && { busyWith: busy.slice(0, 64) }), message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
+    }
     const total = Number(meta.nodeCount ?? 0);
     const stepFrac = p && p.max ? p.value / p.max : 0;
     const progressValue = total ? Math.min(0.99, ((p?.nodesDone ?? 0) - 1 + stepFrac) / total) : stepFrac || undefined;

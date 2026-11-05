@@ -35,7 +35,17 @@ export interface RemoteOutput {
  * what was missing when it failed (`fix`: the tile's "Fix it").
  */
 export type PollResult =
-  | { state: "queued"; progress?: number; message?: string; sentAt?: number; timeoutError?: string; /** Jobs ahead of it in the queue (0: next). */ position?: number }
+  | {
+      state: "queued";
+      progress?: number;
+      message?: string;
+      sentAt?: number;
+      timeoutError?: string;
+      /** Jobs ahead of it in the queue (0: next). */
+      position?: number;
+      /** The job its GPU runs now (another one): a new one there is a queue that moves, and one job may take its own time. */
+      busyWith?: string;
+    }
   | { state: "running"; progress?: number; message?: string; sentAt?: number }
   | { state: "succeeded"; outputs: RemoteOutput[]; message?: string }
   /**

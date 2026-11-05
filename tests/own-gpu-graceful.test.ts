@@ -35,10 +35,10 @@ const uploadsRoute = await import("@/app/api/uploads/route");
 const gpuRoute = await import("@/app/api/account/gpu/route");
 const generationRoute = await import("@/app/api/generations/[id]/route");
 const smallerRoute = await import("@/app/api/generations/[id]/smaller/route");
-const { cancelGeneration, getGeneration, LEASE, OWN_QUEUE, SELF_HEAL, STALE_SUBMIT } = await import("@/server/generations");
+const { asAccount, CHAINED_RUN, cancelGeneration, createGenerations, getGeneration, LEASE, OWN_QUEUE, SELF_HEAL, STALE_SUBMIT } = await import("@/server/generations");
 const { ownRunNote } = await import("@/server/run-events");
 const { cleanGpuAddress, checkGpuAddress, visitorStatus } = await import("@/server/account-gpu");
-const { comfyProvider, onOwnGpu } = await import("@/server/providers/comfyui");
+const { comfyProvider, onOwnGpu, queuePlace } = await import("@/server/providers/comfyui");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { runAsTenant } = await import("@/server/tenant");
@@ -95,6 +95,13 @@ async function startRun(): Promise<string> {
   expect(r.status, await r.clone().text()).toBe(201);
   return ((await r.json()) as { items: { id: string }[] }).items[0].id;
 }
+/** A later step of the run `first`: it waits for that run's result, as a relight's clip waits for its still. */
+function laterStep(first: string, pic: string): string {
+  const [g] = asAccount(a, () => createGenerations({ feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic] } } as Parameters<typeof createGenerations>[0], { dependsOn: first }));
+  return g.id;
+}
+/** A run's kept state before its job is sent (its wait, and which instance holds it). */
+const setPending = (id: string, meta: object) => db().prepare("UPDATE generations SET external_meta_json = ? WHERE id = ?").run(JSON.stringify(meta), id);
 /** Tick the runner until the row is done (or the time is up), noting every message the tile showed on the way. */
 async function settle(id: string, ms = 15_000, seen: string[] = []) {
   const end = Date.now() + ms;
@@ -519,6 +526,27 @@ describe("the reported case, end to end: a RunPod pod that is stopped (its addre
 });
 
 describe("what the owner learns of an account's failed run on its own GPU", () => {
+  it("a GPU disconnected while its job runs: the run stops in plain words, and the owner gets its line", async () => {
+    const warn = vi.spyOn(console, "warn");
+    fake.opts.delayMs = 60_000;
+    try {
+      const id = await startRun();
+      for (let i = 0; i < 500 && getGeneration(id)?.status !== "running"; i++) {
+        await globalThis.__fuobeRunner?.tick();
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      auth.setAccountGpu(a, null);
+      const g = await settle(id);
+      expect(g?.status).toBe("failed");
+      plainWords(g?.error);
+      expect(ownRunNote(id)).toMatchObject({ cause: "connect-gpu", stage: "poll" });
+      const line = warn.mock.calls.map((c) => String(c[0])).find((l) => l.includes('"evt":"own-run"') && l.includes(id));
+      expect(JSON.parse(line!)).toMatchObject({ run: id, account: a, place: "own-gpu", stage: "poll", cause: "connect-gpu", outcome: "failed" });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("keeps at most 2 KB of what the GPU said, counted in bytes, never cutting a character in two", async () => {
     const { keptText } = await import("@/server/run-events");
     const wide = "é".repeat(3000);
@@ -598,6 +626,48 @@ describe("a busy GPU: a queue that keeps moving is waited out", () => {
       fake.opts.promptId = undefined;
     }
   });
+
+  it("counts its place by ComfyUI's queue numbers: the list ComfyUI answers isn't in order", async () => {
+    expect(queuePlace([[1, "a"], [4, "mine"], [2, "b"], [5, "c"], [3, "d"]], "mine")).toBe(3);
+    expect(queuePlace([[7, "mine"], [9, "a"]], "mine")).toBe(0);
+    expect(queuePlace([[1, "a"]], "mine")).toBe(-1);
+    fake.opts.promptId = "job-heap";
+    const heap = { status: 200, body: JSON.stringify({ queue_running: [[0, "someone-else"]], queue_pending: [[1, "a"], [4, "job-heap"], [2, "b"], [5, "c"], [3, "d"]] }), contentType: "application/json" };
+    fake.opts.answer = (m, p) => (p === "/queue" && m === "GET" ? heap : p.startsWith("/history/") ? empty : undefined);
+    try {
+      const id = await startRun();
+      for (let i = 0; i < 500 && !/ahead/.test(getGeneration(id)?.message ?? ""); i++) {
+        await globalThis.__fuobeRunner?.tick();
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      expect(getGeneration(id)?.message).toBe("In ComfyUI's queue · 3 ahead");
+      await cancelGeneration(id);
+    } finally {
+      fake.opts.promptId = undefined;
+    }
+  });
+
+  it("next in line behind one long job: waits while that job runs (up to one job's own time), then runs", async () => {
+    OWN_QUEUE.scale = 0.001; // the 30 minutes without moving: 1.8 s; one job's 45 minutes: 2.7 s
+    fake.opts.promptId = "job-next";
+    const started = Date.now();
+    // One render runs ahead of it for about 2.3 s (past the 30 minutes), then it is this job's turn.
+    fake.opts.answer = (m, p) => {
+      if (Date.now() - started > 2300) return undefined;
+      if (p === "/queue" && m === "GET") return { status: 200, body: JSON.stringify({ queue_running: [[0, "long-render"]], queue_pending: [[1, "job-next"]] }), contentType: "application/json" };
+      if (p.startsWith("/history/")) return empty;
+      return undefined;
+    };
+    try {
+      const seen: string[] = [];
+      const g = await settle(await startRun(), 20_000, seen);
+      expect(g?.status, g?.error ?? "").toBe("succeeded");
+      expect(seen).toContain("Next in ComfyUI's queue");
+    } finally {
+      OWN_QUEUE.scale = 1;
+      fake.opts.promptId = undefined;
+    }
+  });
 });
 
 describe("runs that wait, and a file too big for the address", () => {
@@ -646,6 +716,31 @@ describe("runs that wait, and a file too big for the address", () => {
     expect(again.status).toBe(409);
     expect(((await again.json()) as { error: string }).error).toBe("This run has already started or stopped, so nothing new was run.");
     for (const id of [...jobs, ...made]) await cancelGeneration(id);
+  });
+
+  it("Run with your key on a waiting step of a longer run: refused in plain words, and the whole run goes on as it was", async () => {
+    SELF_HEAL.scale = 0.01;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const first = await startRun();
+    for (let i = 0; i < 500 && !getGeneration(first)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+    const pic = await uploadPng();
+    const second = laterStep(first, pic);
+    const made = db().prepare("SELECT COUNT(*) FROM generations").pluck().get();
+    const body = { feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", engine: "cloud", prompt: "", inputs: { images: [pic] } };
+    // The step that waits, and the one that waits for it: neither moves alone.
+    for (const id of [first, second]) {
+      const r = await generationsRoute.POST(json("/api/generations", "POST", { ...body, replaces: id }));
+      expect(r.status).toBe(409);
+      const said = (await r.json()) as { error: string; code: string };
+      expect(said).toEqual({ error: CHAINED_RUN, code: "chained-run" });
+      plainWords(said.error);
+    }
+    expect(CHAINED_RUN).toBe("This step is part of a longer run, so it can't move to your key on its own. It goes on by itself, or cancel it and run the tool again with your key.");
+    // Nothing stopped and nothing new was made: the first step still waits, the second still waits for it.
+    expect(getGeneration(first)).toMatchObject({ status: "queued", waiting: expect.anything() });
+    expect(getGeneration(second)?.status).toBe("queued");
+    expect(db().prepare("SELECT COUNT(*) FROM generations").pluck().get()).toBe(made);
+    for (const id of [first, second]) await cancelGeneration(id);
   });
 
   it("a file the address refuses as too big: Send a smaller copy makes one, and the run made again with it runs", async () => {
@@ -710,6 +805,65 @@ describe("runs that wait, and a file too big for the address", () => {
   });
 });
 
+describe("a step of a longer run that waited, taken over after a restart", () => {
+  /** The run's first step, done on the GPU, with a picture for the next step to start from. */
+  async function firstStepDone(): Promise<{ first: string; pic: string }> {
+    fake.opts.output = "both";
+    const first = await startRun();
+    expect((await settle(first))?.status).toBe("succeeded");
+    return { first, pic: await uploadPng() };
+  }
+
+  it("goes on with what is left of its wait (its tries and its time), and runs once", async () => {
+    const info = vi.spyOn(console, "info");
+    try {
+      const { first, pic } = await firstStepDone();
+      fake.log.length = 0;
+      const second = laterStep(first, pic);
+      // It waited for the GPU on an instance that is gone (its hold ran out): seven tries, two minutes.
+      const since = Date.now() - 2 * 60_000;
+      setPending(second, {
+        heal: { since, deadline: Date.now() + 60_000, firstSeen: { "gpu-starting": since }, tries: 7, next: 0, index: 0, words: "Waiting for your GPU to start up", trouble: { cause: "gpu-starting", actions: [] } },
+        lease: { by: "gone", until: Date.now() - 1 },
+      });
+      const g = await settle(second, 20_000);
+      expect(g?.status, g?.error ?? "").toBe("succeeded");
+      expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+      // Healed on its seventh try, its wait counted from when it began.
+      const healed = info.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes('"evt":"own-run"') && l.includes(`"run":"${second}"`) && l.includes('"outcome":"healed"'))
+        .map((l) => JSON.parse(l) as { attempt: number; waitedMs: number });
+      expect(healed).toHaveLength(1);
+      expect(healed[0].attempt).toBe(7);
+      expect(healed[0].waitedMs).toBeGreaterThanOrEqual(2 * 60_000);
+    } finally {
+      info.mockRestore();
+      fake.opts.output = undefined;
+    }
+  });
+
+  it("one cut off in the middle of its send is never sent again, and the owner gets its line", async () => {
+    const warn = vi.spyOn(console, "warn");
+    try {
+      const { first, pic } = await firstStepDone();
+      fake.log.length = 0;
+      const second = laterStep(first, pic);
+      setPending(second, { heal: { since: Date.now() - 60_000, deadline: Date.now() + 60_000, firstSeen: {}, tries: 2, next: 0, index: 0, sending: Date.now() - 1000 }, lease: { by: "gone", until: Date.now() - 1 } });
+      const g = await settle(second);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toBe("This run was interrupted while it was being sent. Press Retry.");
+      expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
+      expect(ownRunNote(second)).toMatchObject({ cause: "interrupted-sending", stage: "chain", hostKind: "web" });
+      const line = warn.mock.calls.map((c) => String(c[0])).find((l) => l.includes('"evt":"own-run"') && l.includes(second));
+      expect(JSON.parse(line!)).toMatchObject({ run: second, account: a, place: "own-gpu", cause: "interrupted-sending", outcome: "failed" });
+    } finally {
+      warn.mockRestore();
+      fake.opts.output = undefined;
+    }
+  });
+});
+
 // Last: the server's own state is replaced here (a new instance of the runner's module on the same database).
 describe("a wait survives a restart or a deploy", () => {
   it("another instance's look while this one holds a waiting run leaves it alone", async () => {
@@ -752,6 +906,7 @@ describe("a wait survives a restart or a deploy", () => {
       expect(g?.status).toBe("failed");
       expect(g?.error).toBe("This run stopped because your keys changed while it waited. Press Retry.");
       expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
+      expect(ownRunNote(id)).toMatchObject({ cause: "keys-changed", stage: "submit" });
     } finally {
       shut.draining = false;
       STALE_SUBMIT.ms = 2 * 60_000;
@@ -849,6 +1004,8 @@ describe("a wait survives a restart or a deploy", () => {
       const g = await settle(id, 10_000);
       expect(g?.status).toBe("failed");
       expect(g?.error).toBe("This run was interrupted while it was being sent. Press Retry.");
+      // The owner's note says why: a server cut off in the middle of the send.
+      expect(ownRunNote(id)).toMatchObject({ cause: "interrupted-sending", stage: "submit" });
       // Exactly one job across both instances, also once the first instance's send ends.
       expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
       fake.dropHeld();

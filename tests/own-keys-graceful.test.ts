@@ -207,6 +207,34 @@ describe("an account's run on its own key waits out a busy or down provider", ()
     for (const id of ids) await gens.cancelGeneration(id);
   });
 
+  it("a waiting step of a longer run doesn't offer Run with your other key, and moving it alone is refused", async () => {
+    gens.SELF_HEAL.scale = 0.1;
+    fal.script = (r) => (isSubmit(r) ? { status: 429, body: { detail: "Too many requests" }, headers: { "Retry-After": "1" } } : null);
+    const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
+    for (let i = 0; i < 500 && !gens.getGeneration(g.id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+    const offered = () => (gens.getGeneration(g.id)?.waiting?.actions ?? []).map((a) => a.kind);
+    // On its own, the run offers its other key.
+    expect(offered()).toContain("run-with-key");
+    // A later step waits for its result (as a relight's clip waits for its still).
+    const [later] = gens.asAccount(A, () => gens.createGenerations({ feature: "image", modelId: "nano-banana-pro", engine: "cloud", prompt: "the same harbour at night" }, { dependsOn: g.id }));
+    expect(offered()).not.toContain("run-with-key");
+    expect(offered()).toContain("retry");
+    // Its next try doesn't offer it either.
+    const heal = () => (JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(g.id))) as { heal: { tries: number; trouble: { actions: { kind: string }[] } } }).heal;
+    const tries = heal().tries;
+    for (let i = 0; i < 1000 && heal().tries === tries; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(heal().tries).toBeGreaterThan(tries);
+    expect(heal().trouble.actions.map((a) => a.kind)).not.toContain("run-with-key");
+    // Pressed anyway (a tile drawn before): refused in plain words, and both steps go on as they were.
+    const text = JSON.stringify({ feature: "image", modelId: "nano-banana-pro", engine: "cloud", prompt: "a quiet harbour at dawn", replaces: g.id });
+    const r = await generationsRoute.POST(new Request("http://localhost:3000/api/generations", { method: "POST", headers: { cookie: cookies.A, host: "localhost:3000", "content-type": "application/json", "content-length": String(text.length) }, body: text }));
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: gens.CHAINED_RUN, code: "chained-run" });
+    expect(gens.getGeneration(g.id)?.status).toBe("queued");
+    expect(gens.getGeneration(later.id)?.status).toBe("queued");
+    for (const id of [g.id, later.id]) await gens.cancelGeneration(id);
+  });
+
   it("a 502 at submit may have started a job already: never sent twice", async () => {
     fal.script = (r) => (isSubmit(r) ? { status: 502, body: "<!DOCTYPE html><html><head><title>502 Bad gateway</title></head></html>" } : null);
     const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
@@ -215,6 +243,23 @@ describe("an account's run on its own key waits out a busy or down provider", ()
     expect(done.error).toBe("fal.ai is having trouble right now. Press Retry in a few minutes.");
     expect(done.trouble?.details).toBe("fal.ai answered 502 · 502 Bad gateway");
     expect(fal.log.filter(isSubmit)).toHaveLength(1);
+  });
+});
+
+describe("Not billed", () => {
+  it("isn't said of a run cut off while it was being sent (fal.ai may have the job)", async () => {
+    const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });
+    await settle(g.id);
+    const stopped = (error: string, meta: object) =>
+      db().prepare("UPDATE generations SET status = 'failed', external_id = NULL, error = ?, external_meta_json = ? WHERE id = ?").run(error, JSON.stringify(meta), g.id);
+    // Refused before fal.ai took it: nothing was billed.
+    stopped("fal.ai didn't accept your key. Check it in Settings → Your keys.", {});
+    expect(gens.getGeneration(g.id)!.notBilled).toBe(true);
+    // Its server was cut off in the middle of the send.
+    stopped("This run was interrupted while it was being sent. Press Retry.", { heal: { since: 1, deadline: 2, firstSeen: {}, tries: 1, next: 0, index: 0, sending: Date.now() } });
+    expect(gens.getGeneration(g.id)!.notBilled).toBeUndefined();
+    stopped("fal.ai is having trouble right now. Press Retry in a few minutes.", { heal: { since: 1, deadline: 2, firstSeen: {}, tries: 1, next: 0, index: 0, sending: Date.now() } });
+    expect(gens.getGeneration(g.id)!.notBilled).toBeUndefined();
   });
 });
 

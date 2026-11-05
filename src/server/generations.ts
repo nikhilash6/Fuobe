@@ -230,9 +230,10 @@ export function toGeneration(r: Row): Generation {
     ...(r.status === "failed" && r.fix_json && { fix: parseFix(r.fix_json) }),
     ...(r.status === "failed" && r.fix_json && parseTrouble(r.fix_json)),
     // Waiting for its own GPU or key to come back: why, the buttons that help, and until when (never the owner's note).
-    ...(r.status === "queued" && !r.external_id && r.external_meta_json && waitingOf(r.external_meta_json)),
-    // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
-    ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
+    ...(r.status === "queued" && !r.external_id && r.external_meta_json && waitingOf(r)),
+    // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed. Not
+    // said of a run whose send was under way when it stopped: the provider may have the job.
+    ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && !maybeSent(r) && { notBilled: true as const }),
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
     ...(stored.place === "pool" && { place: "pool" as const }),
     ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
@@ -269,11 +270,36 @@ function parseTrouble(json: string): { trouble: RunTrouble } | Record<string, ne
   }
 }
 
-/** A waiting run's diagnosis (external_meta_json `heal`), as the Generation field. */
-function waitingOf(json: string): { waiting: RunTrouble & { until?: number } } | Record<string, never> {
-  const h = readMeta(json).heal;
-  return h?.trouble && typeof h.trouble.cause === "string" && Array.isArray(h.trouble.actions) ? { waiting: { ...h.trouble, ...(h.deadline && { until: h.deadline }) } } : {};
+/**
+ * A waiting run's diagnosis (external_meta_json `heal`), as the Generation field. A step of a longer run never offers
+ * Run with your key (moving it alone would leave the rest of the run without it), also when its wait was kept before.
+ */
+function waitingOf(r: Pick<Row, "id" | "depends_on" | "external_meta_json">): { waiting: RunTrouble & { until?: number } } | Record<string, never> {
+  const h = readMeta(r.external_meta_json).heal;
+  if (!h?.trouble || typeof h.trouble.cause !== "string" || !Array.isArray(h.trouble.actions)) return {};
+  const t = h.trouble.actions.some((a) => a.kind === "run-with-key") && inChain(r) ? withoutKeyOffer(h.trouble) : h.trouble;
+  return { waiting: { ...t, ...(h.deadline && { until: h.deadline }) } };
 }
+
+/** A run whose job was being sent when it stopped (a server cut off in the middle of the send): its provider may have it. */
+const maybeSent = (r: Pick<Row, "error" | "external_meta_json">): boolean => r.error === CUT_OFF_SENDING || typeof readMeta(r.external_meta_json).heal?.sending === "number";
+
+/**
+ * A run that is one step of a longer one: it waits for an earlier step, or a later step (queued or running) waits for it.
+ * Run with your key can't move such a step alone (the route answers 409 CHAINED_RUN, and its tile doesn't offer it).
+ */
+export function inChain(r: string | Pick<Row, "id" | "depends_on">): boolean {
+  const id = typeof r === "string" ? r : r.id;
+  const dependsOn = typeof r === "string" ? (db().prepare("SELECT depends_on FROM generations WHERE id = ?").pluck().get(id) as string | null | undefined) : r.depends_on;
+  if (dependsOn) return true;
+  return !!db().prepare(`SELECT 1 FROM generations WHERE status IN ('queued', 'running') AND ${DEPENDENTS_OF} LIMIT 1`).get({ id, quoted: JSON.stringify(id) });
+}
+
+/** What a step of a longer run that can't move to a key alone says (POST /api/generations with `replaces` on it). */
+export const CHAINED_RUN = "This step is part of a longer run, so it can't move to your key on its own. It goes on by itself, or cancel it and run the tool again with your key.";
+
+/** A trouble's buttons without Run with your key (a step of a longer run). */
+const withoutKeyOffer = <T extends { actions: TroubleAction[] }>(t: T): T => ({ ...t, actions: t.actions.filter((a) => a.kind !== "run-with-key") });
 
 /**
  * What a run keeps in external_meta_json before its provider has it (external_id NULL): which instance is handing it
@@ -1602,8 +1628,10 @@ async function advanceDependents(): Promise<void> {
       (id) => db().prepare("SELECT status, provider, outputs_json, request_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "provider" | "outputs_json" | "request_json"> | undefined,
     );
     const earlier = stored.frame ? "The previous frame" : "An earlier step";
-    const fail = (error: string) => {
+    const fail = (error: string, cause = "earlier-step") => {
       update(r.id, { status: "failed", error, message: null, completed_at: Date.now() });
+      // An account's own step: the owner's log line and note, as for any of its runs.
+      ownFailed(r.id, ownAccountOf(stored), factsOf(r, { stage: "chain" }), cause);
       // Steps waiting only to feed this one (the other lanes of a per-frame render) are dropped before they are paid for.
       dropUnused(allIds);
     };
@@ -1630,6 +1658,13 @@ async function advanceDependents(): Promise<void> {
     }
     // Another instance (a deploy's other one) launching this step already: left to it.
     if (!claim(r.id)) continue;
+    // A step that waited for its own GPU or key, taken over after a restart or a deploy (its wait is kept with it, as a
+    // run's is: takeOver). One cut off in the middle of its send may have reached its GPU or provider: never sent twice.
+    const heal = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null).heal;
+    if (heal && typeof heal.sending === "number") {
+      fail(CUT_OFF_SENDING, "interrupted-sending");
+      continue;
+    }
     submitting().add(r.id);
     let handedOff = false;
     // An account's step reads its inputs, and is planned, as its run was: as that account, on its own ComfyUI and its own
@@ -1686,6 +1721,8 @@ async function advanceDependents(): Promise<void> {
       const mode = chainMode(prepared, deps as Pick<Row, "provider">[], original);
       if (mode.error) throw new Error(mode.error);
       const p = mode.forceDemo ? { ...prepared, demo: true, providerId: "mock" as const, cost: 0 } : prepared;
+      // Its wait goes on with what is left of it (its tries and its time), where it still goes; its tile keeps its words.
+      const resume = heal && !mode.forceDemo && p.providerId === r.provider ? heal : undefined;
       update(r.id, {
         ...(moved.note && { model_id: p.plan.model.id, engine: p.plan.model.engine }),
         provider: p.providerId,
@@ -1694,13 +1731,13 @@ async function advanceDependents(): Promise<void> {
         prompt: p.plan.prompt,
         cost_usd: p.cost,
         request_json: JSON.stringify(original),
-        message: mode.forceDemo ? "Demo — an earlier step ran as a demo" : p.demo ? "Demo mode — no provider connected" : "Submitting",
+        ...(!resume && { message: mode.forceDemo ? "Demo — an earlier step ran as a demo" : p.demo ? "Demo mode — no provider connected" : "Submitting" }),
       });
       // In the background: an upload must not hold up the runner's other polls.
       handedOff = true;
-      void submit(r.id, p.route, p.providerId, p.plan, p.req, 0);
+      void submit(r.id, p.route, p.providerId, p.plan, p.req, 0, resume);
     } catch (e) {
-      fail((e as Error).message);
+      fail((e as Error).message, e instanceof AccountRunError ? e.refusal.code : "chain");
     } finally {
       if (!handedOff) submitting().delete(r.id);
     }
@@ -1946,7 +1983,9 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   }
   const own = accountRun(req.account, providerId, "submit");
   if ("error" in own) {
-    updateIfGoing(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+    if (updateIfGoing(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null })) {
+      ownFailed(id, req.account, { provider: providerId, model: plan.model.id, op: plan.op, stage: "submit" }, own.code);
+    }
     // A chained step advanceDependents marked as being handed over isn't any more.
     submitting().delete(id);
     return Promise.resolve();
@@ -2055,8 +2094,10 @@ async function submitNow(
         if (now + wait <= heal.deadline) {
           if (link) noteGpuState(account!, link.url, false, { trouble: asStatus(error, trouble, link) });
           // Kept with the run (another instance goes on with it after a restart or a deploy), the tile saying what it
-          // waits for and showing what helps.
-          if (!markWaiting(id, heal, trouble, now + wait, waitingWords(trouble, isCloudProvider(providerId) ? providerId : undefined, pod))) return;
+          // waits for and showing what helps. A step of a longer run doesn't offer Run with your key: moving it alone
+          // would leave the rest of the run without it.
+          const shown = trouble.actions.some((a) => a.kind === "run-with-key") && inChain(id) ? withoutKeyOffer(trouble) : trouble;
+          if (!markWaiting(id, heal, shown, now + wait, waitingWords(shown, isCloudProvider(providerId) ? providerId : undefined, pod))) return;
           if (heal.tries === 1 || heal.firstSeen[trouble.cause] === now) ownEvent(id, account!, error, trouble, facts({ attempt: heal.tries, waitedMs: now - heal.since }), "waiting");
           if (!(await pause(id, wait))) return;
           // The account changed its GPU meanwhile (a new address or password, this computer, or none): this run goes there.
@@ -2181,6 +2222,33 @@ function failRun(id: string, e: unknown, trouble: Diagnosis | undefined, account
   if (fix) markStale(account ? `acct:${account}` : "install");
   if (own && account && facts) ownEvent(id, account, e, trouble, facts, "failed");
   return true;
+}
+
+/** An account's own run (its GPU or key), never one on this install's GPUs: its account, else undefined. */
+const ownAccountOf = (req: Pick<GenerationRequest, "account" | "place"> | null | undefined): string | undefined => (req?.account && req.place !== "pool" ? req.account : undefined);
+
+/** ownAccountOf for a stored request (unreadable: none). */
+const ownAccountIn = (requestJson: string): string | undefined => {
+  try {
+    return ownAccountOf(JSON.parse(requestJson) as GenerationRequest);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * An account's own run that failed in this server's own words (cut off by a restart, refused as its account runs now, an
+ * earlier step that didn't finish): the owner's log line and note, as failRun writes them for a GPU's or key's failure.
+ * `cause` says which. Nothing for the owner's runs or runs on this install's GPUs (`account` undefined).
+ */
+function ownFailed(id: string, account: string | undefined, f: RunFacts, cause: string): void {
+  if (!account) return;
+  try {
+    const hostKind = f.provider === "comfyui" ? hostKindOf(accountGpu(account)) : undefined;
+    recordOwnRun({ run: id, account, ...f, hostKind, cause, outcome: "failed" });
+  } catch {
+    // A log line never stops a run.
+  }
 }
 
 /** generations.fix_json: what the GPU was missing (GenerationFix) and, for an account, what its GPU or key ran into. */
@@ -2967,8 +3035,8 @@ function startRunner(): void {
 function sweepInterrupted(): void {
   const now = Date.now();
   const rows = db()
-    .prepare("SELECT id, provider, request_json, external_meta_json FROM generations WHERE status IN ('queued','running') AND external_id IS NULL AND depends_on IS NULL AND created_at < ?")
-    .all(now - STALE_SUBMIT.ms) as Pick<Row, "id" | "provider" | "request_json" | "external_meta_json">[];
+    .prepare("SELECT id, provider, model_id, op, request_json, external_meta_json FROM generations WHERE status IN ('queued','running') AND external_id IS NULL AND depends_on IS NULL AND created_at < ?")
+    .all(now - STALE_SUBMIT.ms) as Pick<Row, "id" | "provider" | "model_id" | "op" | "request_json" | "external_meta_json">[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
@@ -2977,8 +3045,11 @@ function sweepInterrupted(): void {
     if (meta.lease && typeof meta.lease.until === "number" && meta.lease.until > now) continue;
     if (meta.heal && takeOver(r, meta.heal)) continue;
     // A run that waited and was cut off in the middle of its send may have reached its GPU or provider: never sent twice.
-    const words = meta.heal && typeof meta.heal.sending === "number" ? CUT_OFF_SENDING : "This run stopped before it started. Press Retry.";
-    updateIfGoing(r.id, { status: "failed", error: words, completed_at: Date.now(), message: null }, " AND external_id IS NULL");
+    const cutOff = !!meta.heal && typeof meta.heal.sending === "number";
+    const words = cutOff ? CUT_OFF_SENDING : "This run stopped before it started. Press Retry.";
+    if (updateIfGoing(r.id, { status: "failed", error: words, completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
+      ownFailed(r.id, ownAccountIn(r.request_json), factsOf(r, { stage: "submit" }), cutOff ? "interrupted-sending" : "interrupted");
+    }
   }
 }
 
@@ -2990,7 +3061,7 @@ const CUT_OFF_SENDING = "This run was interrupted while it was being sent. Press
  * and its wait goes on where it was (its budget and its tries kept). False: it isn't one this can take (one cut off in
  * the middle of its send among them: it fails, rather than being sent twice).
  */
-function takeOver(r: Pick<Row, "id" | "provider" | "request_json">, h: HealState): boolean {
+function takeOver(r: Pick<Row, "id" | "provider" | "model_id" | "op" | "request_json">, h: HealState): boolean {
   if (typeof h.sending === "number") return false;
   let stored: GenerationRequest;
   try {
@@ -3008,7 +3079,9 @@ function takeOver(r: Pick<Row, "id" | "provider" | "request_json">, h: HealState
   } catch (e) {
     // It can't run as the account runs now (its key removed, its model switched off): said in its own words.
     const refusal = e instanceof AccountRunError ? e.refusal.error : (e as Error).message;
-    updateIfGoing(r.id, { status: "failed", error: refusal, completed_at: Date.now(), message: null }, " AND external_id IS NULL");
+    if (updateIfGoing(r.id, { status: "failed", error: refusal, completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
+      ownFailed(r.id, account, factsOf(r, { stage: "submit" }), e instanceof AccountRunError ? e.refusal.code : "refused");
+    }
     return true;
   }
   // Planned for another provider now (its GPU disconnected, another key): its polls would ask the provider it was made
@@ -3018,7 +3091,9 @@ function takeOver(r: Pick<Row, "id" | "provider" | "request_json">, h: HealState
       const gpu = accountGpu(account);
       const end = diagnoseGpuJob({ kind: gpu ? "moved" : "disconnected" }, { kind: "link", url: gpuLink(gpu)?.url ?? "" });
       failRun(r.id, new Error("moved"), end, account, { provider: r.provider, model: p.plan.model.id, op: p.plan.op, stage: "submit" });
-    } else updateIfGoing(r.id, { status: "failed", error: "This run stopped because your keys changed while it waited. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL");
+    } else if (updateIfGoing(r.id, { status: "failed", error: "This run stopped because your keys changed while it waited. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
+      ownFailed(r.id, account, { provider: r.provider, model: p.plan.model.id, op: p.plan.op, stage: "submit" }, "keys-changed");
+    }
     return true;
   }
   submitting().add(r.id);
@@ -3066,7 +3141,10 @@ async function pollGuarded(r: Row): Promise<void> {
     const onPool = account ? poolOf(r) : false;
     const own = account && !onPool ? accountRun(account, r.provider, "poll") : undefined;
     if (onPool) await runOnPool(account!, () => pollOne(r));
-    else if (own && "error" in own) update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+    else if (own && "error" in own) {
+      update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+      ownFailed(r.id, account!, factsOf(r, { stage: "poll" }), own.code);
+    }
     else if (own) await own.run(() => pollOne(r));
     else await pollOne(r);
   } catch (e) {
@@ -3223,15 +3301,25 @@ async function pollOne(r: Row): Promise<void> {
     const ownQueue = !!own && !onPool;
     let movedAt = typeof ctx.meta.queueMovedAt === "number" ? ctx.meta.queueMovedAt : run.submitted_at;
     const pos = res?.state === "queued" && typeof res.position === "number" ? res.position : undefined;
-    if (ownQueue && pos !== undefined && (typeof ctx.meta.queuePos !== "number" || pos < ctx.meta.queuePos)) {
-      // Its place first seen is where it starts; only a place nearer the front is a queue that moves.
-      if (typeof ctx.meta.queuePos === "number") movedAt = now;
+    // The job its GPU runs now (another one): a new one there is a queue that moves too.
+    const busyWith = res?.state === "queued" && typeof res.busyWith === "string" ? res.busyWith : undefined;
+    const wasBusyWith = typeof ctx.meta.busyWith === "string" ? ctx.meta.busyWith : undefined;
+    const nearer = pos !== undefined && (typeof ctx.meta.queuePos !== "number" || pos < ctx.meta.queuePos);
+    if (ownQueue && pos !== undefined && (nearer || busyWith !== wasBusyWith)) {
+      // Its place first seen is where it starts; a place nearer the front, or another job running ahead of it, is a
+      // queue that moves.
+      if (typeof ctx.meta.queuePos === "number" && (nearer || (busyWith !== undefined && wasBusyWith !== undefined))) movedAt = now;
+      const place = nearer ? pos : ctx.meta.queuePos;
       db()
-        .prepare("UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.queuePos', @pos, '$.queueMovedAt', @movedAt) WHERE id = @id AND external_id IS NOT NULL")
-        .run({ id: r.id, pos, movedAt });
+        .prepare(
+          "UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.queuePos', @place, '$.queueMovedAt', @movedAt, '$.busyWith', @busyWith) WHERE id = @id AND external_id IS NOT NULL",
+        )
+        .run({ id: r.id, place, movedAt, busyWith: busyWith ?? null });
     }
+    // While a job runs ahead of it, that one job may take its own time (45 minutes) before the queue counts as stuck.
+    const stillMs = ownQueue && busyWith ? Math.max(queueMs, TIMEOUT_MS) : queueMs;
     const queueOver = ownQueue
-      ? now - Math.max(run.submitted_at, movedAt) > queueMs * OWN_QUEUE.scale || now - run.submitted_at > OWN_QUEUE_CAP_MS * OWN_QUEUE.scale
+      ? now - Math.max(run.submitted_at, movedAt) > stillMs * OWN_QUEUE.scale || now - run.submitted_at > OWN_QUEUE_CAP_MS * OWN_QUEUE.scale
       : now - run.submitted_at > queueMs;
     const overdue = run.started_at ? now - run.started_at > runMs : !startsNow && queueOver;
     if (overdue) {
