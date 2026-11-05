@@ -100,8 +100,10 @@ none of this install's GPUs can run right now (none holds its files, serves its 
 needs). A run that asks for one, on any step, is refused before Run. The price check answers `allowed: false` with the
 label's words as `text` and the setup itself as `ownSetup` (`{ need: "gpu", vramGb? }` or `{ need: "key", provider }`),
 and Run opens that setup (Connect your GPU, or Add your key) instead of staying off. The run itself is refused with
-403, `code: "connect-gpu"` or `"add-key"`. `GET /api/status` lists the open models these GPUs can't run right now
-(`viewer.pool.own`), so the pickers can label them.
+403, `code: "connect-gpu"` or `"add-key"`. A mode whose own check refuses it while it is planned here (MiniMax H3 at
+2K, Kandinsky 6.0 Pro) gets the same answer, but with no plan in it: only `modelId`, `place`, `quote` and `line`.
+When the account has its own GPU, these runs go to that GPU, as before. `GET /api/status` lists the open models these
+GPUs can't run right now (`viewer.pool.own`), so the pickers can label them.
 
 For a visitor with no GPU of its own, the pickers never leave out what these GPUs keep off. The model picker, the preset
 galleries and the camera motion, effect and Mix pickers show each such item with its label ("Runs on your own GPU ·

@@ -295,6 +295,7 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   only, when that GPU has the memory (`src/server/own-setup-run.ts`); otherwise it gets "Connect your GPU" (`connect-gpu`).
   Cinema's and the Video studio's exact orbit are marked "Runs on your own GPU · 48 GB or fal.ai key". Faceless's
   "Regenerate to 1080p" shows on an account's finished open-source episodes with its label, and runs on its own GPU.
+  MiniMax H3's "Fast decode", once it is offered, carries its label in the same way.
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
