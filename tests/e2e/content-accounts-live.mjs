@@ -30,6 +30,10 @@ const seriesAsk = { prompt: "Three hotels you can only reach by boat", settings:
 async function routes(req, who) {
   const send = (method, p, data) => req.fetch(`${app}${p}`, { method, headers: { origin: app, "content-type": "application/json" }, ...(data !== undefined && { data }) });
   const body = async (r) => r.json().catch(() => ({}));
+  const asksFirst = async (r) => {
+    const b = await body(r);
+    return (r.status() === 400 && /narrator/.test(b.error ?? "")) || (r.status() === 403 && ["connect-gpu", "add-key"].includes(b.code));
+  };
   for (const p of ["/api/faceless/channels", "/api/faceless/episodes", "/api/explainer", "/api/content-factory/series"]) {
     const r = await send("GET", p);
     check(`${who}: ${p} lists nothing yet`, r.status() === 200 && JSON.stringify(await body(r)) === '{"items":[]}', String(r.status()));
@@ -88,8 +92,9 @@ async function routes(req, who) {
       check("account: reopens its episode", one.status() === 200, String(one.status()));
       const page = await send("GET", `/faceless/${channel.id}/${episode.id}`);
       check("account: its episode's page opens", page.status() === 200, String(page.status()));
+      // No narrator yet (open engine): it asks for one; with one, for its own GPU or key. Nothing starts either way.
       const render = await send("POST", `/api/faceless/episodes/${episode.id}/render`, {});
-      check("account: its render asks for its own GPU or key first", render.status() === 403 && ["connect-gpu", "add-key"].includes((await body(render)).code), String(render.status()));
+      check("account: its render asks for a narrator, then its own GPU or key", await asksFirst(render), String(render.status()));
     }
     const del = await send("DELETE", `/api/faceless/channels/${channel.id}`);
     check("account: deletes its channel", del.status() === 204, String(del.status()));
@@ -102,7 +107,7 @@ async function routes(req, who) {
     const page = await send("GET", `/explainer/${explainer.id}`);
     check("account: its explainer's page opens", page.status() === 200, String(page.status()));
     const render = await send("POST", `/api/faceless/episodes/${explainer.id}/render`, {});
-    check("account: the explainer's render asks for its own GPU or key first", render.status() === 403, String(render.status()));
+    check("account: the explainer's render asks for a narrator, then its own GPU or key", await asksFirst(render), String(render.status()));
     const del = await send("DELETE", `/api/faceless/episodes/${explainer.id}`);
     check("account: deletes its explainer", del.status() === 204, String(del.status()));
   }
