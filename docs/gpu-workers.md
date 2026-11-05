@@ -636,10 +636,10 @@ seconds later, or 1.5 seconds later while the beat says that a person's job wait
 
 When a job's run shows live previews (never one whose results are checked before anyone sees them), the claim says
 `reportPreview: true`. The worker then sends its ComfyUI's latest preview with its progress: a JPEG of at most 64 KB,
-at most one every 2 seconds. ComfyUI makes PNG previews, so the worker makes each one again with ffmpeg: at most 512
-pixels on its long side, from a local PNG or JPEG file only, with no metadata. Without ffmpeg, or when the picture
-doesn't fit in 64 KB, it sends none. The studio keeps a preview only from the attempt that holds the job, and drops a
-larger one (the progress stays).
+at most one every 2 seconds. A JPEG preview of 64 KB or less goes as it is. A PNG preview, or a larger JPEG, is made
+again with ffmpeg first: at most 512 pixels on its long side, from a local PNG or JPEG file only, with no metadata.
+Without ffmpeg, only small JPEG previews go; a picture that still doesn't fit in 64 KB is not sent. The studio keeps a
+preview only from the attempt that holds the job, and drops a larger one (the progress stays).
 
 ### When something goes wrong
 
@@ -785,7 +785,8 @@ its target), at most once an hour each.
     and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
     before the studio hears that it was sent).
   - `running` can carry `preview`: the latest preview picture of the job, a JPEG of at most 64 KB as base64, at most
-    one every 2 seconds. A claim says `reportPreview: true` when the run shows one: only with hosted runs on
+    one every 2 seconds (see "Live previews"). A progress report with a preview may weigh up to about 91 KB (the
+    preview as base64 and a few KB more); any other stays under the small limit. A claim says `reportPreview: true` when the run shows one: only with hosted runs on
     (`FUOBE_HOSTED_RUNS=1`; without them, no job shows one, as before). The worker keeps the latest
     preview its ComfyUI sends on its socket and adds it to a `running` report. A PNG preview, or a JPEG over 64 KB, is
     made a smaller JPEG with ffmpeg first (at most 512 pixels on its long side); a worker without ffmpeg sends only
@@ -803,9 +804,6 @@ its target), at most once an hour each.
     and waits as a job no worker took (its wait limit holds, unless a worker ran it before). Refused later on (a worker
     that started again after an update and took its own job back), it counts as an attempt, and the job keeps its
     claim's time.
-  - `running` may carry `preview`: a JPEG as base64, at most 64 KB, at most one every 2 seconds (see "Live
-    previews"). A progress report with a preview may weigh up to about 91 KB (the preview as base64 and a few KB
-    more); any other stays under the small limit.
   - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,
     `input-crashed` (its ComfyUI stopped twice on the job), `input-unreadable` (ffmpeg could not read a clip or a
     sound), `bad-ticket` (a ticket it can't use, or a graph where a ticket belongs), `unsafe-model` (a 3D model that

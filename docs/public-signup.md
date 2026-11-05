@@ -274,8 +274,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   and the apps that take a picture, a clip or a sound. Their chained steps (multi-shot films,
   Frames mode, Extend, relit effects) run there too, as the account's own. So does a 3D model (the
   Image to 3D and Photo to 3D apps, and an image result's "Make it 3D", which opens Photo to 3D), on
-  the account's own GPU or key; it is finished as Image to 3D's models are (below), and on this
-  install's GPUs (hosted runs) 3D isn't offered yet. Polls,
+  the account's own GPU or key; it is finished as Image to 3D's models are (below). On this install's GPUs
+  (hosted runs), a 3D model runs only where a worker finishes it ([Hosted runs](#hosted-runs)). Polls,
   uploads, outputs and cancels go there, and nothing falls back to the studio's own providers. If
   the account's ComfyUI can't be reached, the run waits for it, then says why in plain words
   ([When your GPU or key has a problem](#when-your-gpu-or-key-has-a-problem)). A cloud model, an AI helper or
@@ -353,7 +353,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   until its graph is validated on this studio's GPU (`graphs` in `src/lib/own-setup.ts`, read by the page with
   `ownSetupsNow`, `src/server/own-setup-live.ts`), when the label leaves by itself. Retexture and Rig run on the
   account's own fal.ai key. On this install's
-  GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
+  GPUs (hosted runs), Image to 3D and Refine detail run only where a worker finishes the model
+  ([Hosted runs](#hosted-runs)). A guest gets the sign-up card.
 - **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
   /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
   or the owner's, reads as 404; a guest gets the sign-up card), up to 50 of 1 MB each and 120 saves a minute, deleted
@@ -627,42 +628,59 @@ keep their words as before.
 
 ## Hosted runs
 
-By default an account runs only on its own GPU or its own key. An owner who wants accounts to run on the studio's own
-ComfyUI instead sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
+By default an account runs only on its own GPU or its own key. An owner who wants accounts to run on this install's
+own GPUs too sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
+
+Something must answer for these runs: a billing service (below), whose policy says who may run what, or
+`FUOBE_HOSTED_FREE=1`, which makes them free for every account within the install's own limits. With neither, hosted
+runs stay closed even when switched on.
 
 With it on:
 
-- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps). The run goes
-  to this install's ComfyUI server (the address in Settings). An install whose ComfyUI runs on the owner's computer
-  doesn't offer hosted runs.
+- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps) and in the
+  tools that plan their runs as ordinary generations (Genjutsu, Shorts, Cinema, Storyboard, the audio tools, palette
+  lock and the others above). Every step of a tool's run passes the same checks as a studio run, and the whole run has
+  one price. The run goes to this install's GPUs: its workers, when Settings says ComfyUI runs on workers
+  ([gpu-workers.md](gpu-workers.md)), or else its own ComfyUI server, only when that is on this machine. An install
+  whose ComfyUI runs on the owner's computer doesn't offer hosted runs.
 - An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU" or "This
   studio's GPUs"), and the person can pick either.
-- Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
-  Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
+- A model, mode or option that runs only on a person's own GPU or key keeps its label there ("Runs on your own GPU ·
+  48 GB", `src/lib/own-setup.ts`), and Run opens that setup. So does a run that no worker can take (none holds its
+  files or may run its lane). Extra LoRAs added to a request stay on the account's own GPU.
+- A 3D model (Image to 3D, and Refine detail on its model) runs there only while a worker's CPU slot finishes it, and
+  only when the billing service's policy allows 3D (`kinds.model3d`). Every other 3D model stays on the account's
+  own GPU or key.
 - A choice that needs an NVIDIA RTX card (RTX Video's upscale, frame generation and HDR) doesn't go to the studio's
   GPUs when their last GPU check says the card can't run it, or that their ComfyUI lacks the RTX Video nodes. The run
   goes to the account's own GPU when it has one, or answers 403 `not-offered` ("This one needs an NVIDIA RTX card, and
   this studio's GPUs can't run it right now…").
 - When a billing service names the models that may run on the studio's GPUs, that applies to every model a run uses,
   not only its main one.
-- An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
+- An account can upload pictures for these runs. Clips and sound go to the workers only when the install allows them
+  (`FUOBE_POOL_MEDIA_INPUTS`, [Clips and sound](gpu-workers.md#clips-and-sound)) and the billing service's policy
+  does too (`uploads`); with no billing service, `FUOBE_POOL_MEDIA_INPUTS` alone says. Otherwise they need the
+  account's own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
   Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
 - A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
-  `FUOBE_POOL_WAIT_MIN` minutes (30 by default); past that it fails.
+  `FUOBE_POOL_WAIT_MIN` minutes (30 by default), or what the billing service says, before a GPU first takes it; past
+  that it fails, not charged.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
 
 Two optional services can go with it:
 
 - a **billing service** ([billing-hook.md](billing-hook.md)): prices runs on this install's GPUs, sets the price aside
-  before a run starts, and shows the person a balance. Without one, these runs are free.
+  before a run starts, and shows the person a balance. Without one, these runs are closed, or free with
+  `FUOBE_HOSTED_FREE=1`.
 - a **moderation service** ([moderation-hook.md](moderation-hook.md)): checks a run before it starts and, when it asks
   to, its outputs before they show. Without one, nothing is checked.
 
-The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side),
-`src/server/run-stamp.ts` (what every row of a run carries) and `src/lib/hosted.ts` (the browser's side). The tests are
-`tests/hosted-runs.test.ts`, `tests/billing-hook.test.ts`, `tests/billing-release.test.ts` and
-`tests/moderation-hook.test.ts`.
+The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side
+and the gate), `src/server/account-tool-run.ts` (a tool's run), `src/server/run-stamp.ts` (what every row of a run
+carries) and `src/lib/hosted.ts` (the browser's side). The tests are `tests/hosted-runs.test.ts`,
+`tests/hosted-tool-runs.test.ts`, `tests/pool-account-runs.test.ts`, `tests/billing-hook.test.ts`,
+`tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`.
 
 ## Uploads
 

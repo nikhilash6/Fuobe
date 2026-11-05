@@ -130,10 +130,14 @@ required rule is missing.
   size.
 - NVFP4 files need a Blackwell card. The queue doesn't read a card's generation, so leave lanes with NVFP4 files off an
   older card's allowed lanes. Give smaller and older cards an fp8 or GGUF workflow where one exists.
-- A workflow that loads no model file, fetches none on its first run and has `vramGb: 0` (the number 0, written in the
-  entry) is CPU work: joins, trims, adding sound, Ken Burns, still to clip. The index marks it `"cpu": true`. Nothing
-  in the studio reads the marker yet. The index build stops when an entry has no `vramGb` number, so a workflow never
-  becomes CPU work by mistake. Set `vramGb` above 0 when any node of the workflow uses the GPU.
+- A workflow that loads no model file, fetches none on its first run, has `vramGb: 0` (the number 0, written in the
+  entry) and names no card in `gpu` is CPU work: joins, trims, adding sound, Ken Burns, still to clip. The index marks
+  it `"cpu": true`. The studio reads the marker: a run of CPU work only is free and never counted on this install's
+  GPUs, and its jobs go to a worker's CPU slot. The index build stops when an entry has no `vramGb` number, so a
+  workflow never becomes CPU work by mistake. Set `vramGb` above 0 when any node of the workflow loads something into
+  graphics memory.
+- Some nodes need a particular card but no graphics memory of their own (the NVIDIA RTX Video nodes). Set `gpu` for
+  such a workflow (for example `"gpu": "nvidia-rtx"`), so it is never CPU work.
 
 ## 7. The rest of the studio
 
