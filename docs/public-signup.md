@@ -587,53 +587,105 @@ account with that provider. The studio's own keys are never used for an account'
 
 An account's GPU can be off, starting up, or behind a password. Its key can be refused, or its
 provider can be busy. In each case the account sees one plain sentence that says what is wrong
-and what to do, a small details line for the curious (the address, the status and the reason), and
-buttons that help. `src/lib/diagnose.ts` reads every failure the same way, for Settings, the
-composer and a failed run. The owner's own runs, and runs on this studio's GPUs (hosted runs),
-keep their words as before.
+and what to do, a small details line for the curious, and buttons that help. The details line
+names the kind of address ("RunPod pod, port 8188", "your tunnel", "your web address"), never the
+address itself, with the status and the reason; a token or key the answer echoed is taken out.
+`src/lib/diagnose.ts` reads every failure the same way, for Settings, the composer and a run. The
+owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words as before.
 
 - **Settings → Your GPU.** Test and Connect say what is wrong with the address: a RunPod pod that is
   stopped ("Your RunPod pod isn't running, or ComfyUI isn't on port 8188", with **Start your pod**,
-  a link to RunPod's pods page), a GPU starting up, no answer, a password that is missing or wrong,
-  a sign-in page in front, or another app on that address. `PUT /api/account/gpu` answers 422 with
-  `error` (the sentence) and `trouble` (`cause`, `details`, `actions`, `retryable`). An address
-  pasted without `https://` gets it added, and a `?…` or `#…` part is left out; the answer's `note`
-  says so. A GPU that is off or starting up is checked again by itself (5, 10, 20, 30 seconds, for 3
-  to 5 minutes), and **Save anyway** (`{ "anyway": true }`) keeps its address: runs wait for it. Too
-  many checks (429) count down and check again by themselves. The saved address's card says
-  **Offline** with the reason, and **Check now** (`{ "saved": true }`) asks it again.
+  a link to RunPod's pods page), a pod that is on while ComfyUI starts, a GPU starting up, no
+  answer, a password that is missing or wrong, a sign-in page in front, or another app on that
+  address. `PUT /api/account/gpu` answers 422 with `error` (the sentence) and `trouble` (`cause`,
+  `details`, `actions`, `retryable`). An address pasted without `https://` gets it added, and a
+  `?…` or `#…` part is left out; the answer's `note` says so. An `http://` address that sends to
+  the same host's `https://` is followed to the port it named. A GPU that is off or starting up is
+  checked again by itself (5, 10, 20, 30 seconds, for 3 to 5 minutes). After Test, which saves
+  nothing, the words say to press **Connect** once it answers; when the checks stop, they say so,
+  with **Check again** and **Save anyway** (`{ "anyway": true }`, which keeps the address: runs wait
+  for it). Too many checks (429) count down and check again by themselves. The saved address's card
+  says **Offline** with the reason, and **Check now** (`{ "saved": true }`) asks it again. A local
+  address (`localhost`, a home network) offers **Use this computer** where this browser can reach
+  its ComfyUI, and **Pair with a code**.
+- **Settings → Your keys.** A key whose provider account has no balance left shows **Add credit**
+  (a link to the provider's billing page) instead of **Ready**, with the day it ran out. A saved key
+  has **Check again** (`PUT /api/account/keys/<provider>` with `{ "recheck": true }`): the provider's
+  free check, run on the saved key, which clears a refusal or an empty balance once the provider
+  takes the key. A check that finds the provider busy or out of reach (429 or 5xx) asks twice more
+  by itself, then says "fal.ai is busy right now, so we couldn't check your key. Try again in a
+  minute." with the status in `details`. A run the provider takes on the key clears both marks too.
 - **Before Run.** When the account's GPU didn't answer its last status check, the composer shows
   the reason and its buttons above Generate. It reads the status the strip already has (every 30
-  seconds), so the GPU is never asked more often. When one of the account's keys runs the tool's
-  cloud version (a preset's cloud route, or a Fuobe Original on the cloud engine), **Run with your
-  fal.ai key** switches to Cloud and runs it there, billed to that key. A run started anyway waits.
-  The account menu says why the GPU is offline: "pod stopped", "starting up", "needs a password".
+  seconds), so the GPU is never asked more often. Its words say what happens to runs ("Start your
+  pod, and your runs start as soon as it answers. A run you start now waits for it."); a problem
+  waiting can't fix (a password, another app on the address) says "Runs can't reach your GPU until
+  this is fixed." When one of the account's keys runs the tool's cloud version (a preset's cloud
+  route, or a Fuobe Original on the cloud engine), **Run with your fal.ai key** sits right after the
+  first fix. It runs this one run there, billed to that key, and leaves the engine switch where it
+  was: the next run goes to the GPU again. A key the provider refused, or whose balance ran out, is
+  not offered. A paid model on a key whose balance ran out says so above Generate, with **Add
+  credit**. A graph that needs a second ComfyUI (ThinkSound, LatentSync 1.6) says so before Run, with
+  **Run with your key** when one runs its cloud version, and **Pick another model**. The account
+  menu says why the GPU is offline: "pod stopped", "starting up", "needs a password".
 - **A run that waits.** A run whose GPU is off, starting up or out of reach waits and tries again by
-  itself, with a growing wait (up to a minute between tries). Its tile says what it waits for
-  ("Waiting for your RunPod pod to start", "Waiting for your GPU to start up"). A GPU that is off
-  waits up to 30 minutes, one starting up 10 minutes. Before the run fails, the GPU is asked once
-  more. A run whose account saves another address while it waits stops and says so. A provider
-  that is busy (429) or down (503) at submit is tried again for 1 to 3 minutes; a 502 or 504 at
-  submit is not, because the job may have started. Waiting never retries what it can't fix: a
-  refused key, an empty balance, a missing add-on or file, or an input the model refuses. A 403
-  that isn't about the key (a model the key may not run) says to pick another model; the key
-  stays as it is.
+  itself, with a growing wait (up to a minute between tries, or what the other side asked for).
+  Before each try it asks the GPU's `/system_stats` only; its files go once the GPU answers, and a
+  file already sent is never sent twice. Its tile says what it waits for ("Your RunPod pod is off.
+  Start it, and this run goes on by itself", "Waiting for your GPU to start up"), until when it
+  waits, and the buttons that help (**Start your pod**, **Check my GPU**, **Run with your fal.ai
+  key**, which moves this run to the key: it stops waiting and the cloud run takes its place). The
+  Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
+  GPU that is off 30 minutes, one starting up 10 minutes, and 40 minutes in all. Before the run
+  fails, the GPU is asked once more. When the account saves a new address (or password) while a
+  run waits, the run goes there; when it disconnects its GPU, the run stops and says so, with
+  **Connect your GPU**. A provider that is busy (429) or down (503) at submit is tried again for 1
+  to 3 minutes; a 502 or 504 at submit is not, because the job may have started. The same holds on
+  the GPU: a failure at ComfyUI's `/prompt` is tried again only when it proves nothing arrived
+  (nothing listening, no such name, a stopped pod, a tunnel that is down). Waiting never retries
+  what it can't fix: a refused key, an empty balance, a missing add-on or file, or an input the
+  model refuses. A 403 that isn't about the key (a model the key may not run) says to pick another
+  model; the key stays as it is. A wait is kept with the run (`external_meta_json`), and the server
+  that waits renews its hold on it: after a restart, or when a deploy's new instance takes over,
+  the run goes on with what is left of its wait, on one instance only. Runs that wait for the GPU
+  count apart from the 4 runs at once (up to 4 more wait); a fifth waiting run answers 429 "You
+  have 4 runs waiting for your GPU. Cancel one, or run one with your key, to start another."
 - **A paired ComfyUI.** A run for a ComfyUI paired with a code (Fuobe Connect) that is off says
   "Waiting for your paired ComfyUI. Start ComfyUI there (or start your pod), and this run goes on
-  by itself." It doesn't ask for a Fuobe tab, because a paired ComfyUI needs none.
+  by itself." It doesn't ask for a Fuobe tab, because a paired ComfyUI needs none. A Fuobe tab
+  that runs this computer's ComfyUI and is signed out says so, with **Log in**.
 - **While it runs.** A GPU or provider that stops answering mid-run is asked again with a growing
   wait, and after 3 misses the tile says "Your GPU stopped answering. Waiting for it to come back".
-  It stops after 15 minutes (10 for a key's provider) in plain words. A key refused or a balance
-  gone while a run is polled fails it at once, and the job is stopped there. A ComfyUI that
-  restarted and lost a run gets it sent once more. A run whose account moved to another address
-  says so. A result that can't be copied is tried 3 times first. A graph that needs a second
-  ComfyUI (ThinkSound, LatentSync 1.6) is refused before anything is sent.
-- **A failed run.** The tile shows the sentence, the details line, and up to three buttons: **Start
-  your pod**, **Check my GPU** (the Test above, on the saved address), **Open Settings → Your GPU**
-  or **Your keys** (**Replace key**), **Add credit on fal.ai** (or Replicate), **Run with your
-  Replicate key** when the other key runs the same model, and **Retry**. The Library's card shows
-  the same sentence with up to two of them. The run keeps them in `trouble`
+  On the account's GPU it stops after 15 minutes in plain words. On a key the job is accepted (and
+  paid), so it waits on until the run's own time limit; a call to fal.ai or Replicate that hangs is
+  given up after 20 seconds (60 for a submit or a result) and asked again. A key refused or a
+  balance gone while a run is polled fails it at once, and the job is stopped there. A ComfyUI that
+  restarted and lost a run gets it sent once more, as the same job of its batch (its own seed). A
+  run whose account moved to another address says so. A job in the GPU's queue waits as long as
+  its place keeps moving (2 hours at most); it stops when its place hasn't moved for 30 minutes,
+  saying the GPU was busy. A made result whose copy breaks off (a connection dropped, a 5xx) is
+  copied again at later looks for up to 15 minutes ("Your result is made. Copying it from your
+  GPU"), never made again. Sending a file to the GPU may take as long as its size needs at 128 KB/s
+  plus a minute (5 to 30 minutes).
+- **A failed run.** The tile shows the sentence, the details line, and up to three buttons (two on
+  a narrow tile; the ones that help least go first): **Start your pod**, **Run with your fal.ai
+  key** right after it, **Check my GPU** (the Test above, on the saved address), **Open Settings →
+  Your GPU** or **Your keys** (**Replace key**), **Add credit on fal.ai** (or Replicate), **Run with
+  your Replicate key** when the other key runs the same model (on that key, never back on fal.ai),
+  **Pick another model** (it opens the studio's model picker), **Try one size smaller** after a
+  run ran out of graphics memory or took too long, **Send a smaller copy** after a file was too big
+  for the address (`POST /api/generations/<id>/smaller` makes a smaller copy of the file as a new
+  file of the account's, and the run starts again with it), and **Retry**. A button that starts a
+  run stays pressed until it has, so a second click starts nothing. The Library's card shows the
+  same sentence with up to two of them (one in the list). The run keeps them in `trouble`
   (`GET /api/generations/<id>`), next to `fix` for **Fix it**.
+- **For the owner.** Each wait, heal and failure of an account's run on its own GPU or key writes
+  one JSON line to the server's log (`"evt":"own-run"`: the run, the account, the place, provider,
+  model, stage, status or network code, the kind of address, the cause, the try and the time
+  waited). It never holds a prompt, a key, a token, an address or a file's name. A failed run also
+  keeps, for the owner only, the cause, stage, code, kind of address and the provider's own words
+  (cleaned, 2 KB at most): `ownRunNote(id)` in `src/server/run-events.ts` reads it, and no account
+  or visitor answer carries it.
 
 ## Hosted runs
 
