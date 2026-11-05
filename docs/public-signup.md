@@ -330,8 +330,12 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   finished on this server (the web GLB the viewer loads) under its limits (`src/server/model3d-finish.ts`): one account's
   finish at a time across the server, at low priority; a model over 300 MB, a server or account short of room, or more
   than 60 finishes in an hour keep the model as it came (still viewable and downloadable). Its turntable is recorded in
-  the browser ("Record turntable"), not on the server. Film it photoreal runs as a Fly around (below). Refine detail, the TRELLIS.2 final and Idol 3D's other sides stay
-  the owner's, and Retexture opens once its cloud models pass a live call. On this install's
+  the browser ("Record turntable"), not on the server. Film it photoreal runs as a Fly around (below). Refine detail (Hi3D), the TRELLIS.2 final,
+  Idol 3D's other sides ("Make the other sides from the front") and Trim spikes show to everyone and run on the
+  account's own GPU through the same route; each is labelled with what it runs on ("Runs on your own GPU · 24 GB")
+  until its graph is validated on this studio's GPU (`graphs` in `src/lib/own-setup.ts`, read by the page with
+  `ownSetupsNow`, `src/server/own-setup-live.ts`), when the label leaves by itself. Retexture opens once its cloud
+  models pass a live call. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
 - **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
   /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,

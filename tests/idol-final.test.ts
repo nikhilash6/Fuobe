@@ -60,13 +60,15 @@ describe("Build the final with TRELLIS.2", () => {
     expect(FINAL_3D.note).toBe("A textured, riggable .glb · 16 GB GPU");
   });
 
-  it("is wired into the card and the studio (model access, open models, no visitors; ?image= fills the picture)", () => {
+  it("is wired into the card and the studio (model access, open models, a visitor's own GPU; ?image= fills the picture)", () => {
     const root = process.cwd();
     const card = fs.readFileSync(path.join(root, "src/components/model3d/model-card.tsx"), "utf8");
     const studio = fs.readFileSync(path.join(root, "src/components/model3d/model3d-studio.tsx"), "utf8");
     expect(card).toContain("finalBuildHref(g, view, finalAllowed)");
     expect(card).toContain("{FINAL_3D.note}");
-    expect(studio).toContain('const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");');
+    expect(studio).toContain('const finalAllowed = engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");');
+    // A visitor's final runs on its own GPU: the link carries its label until TRELLIS.2's graph is validated here.
+    expect(card).toContain("<OwnSetupChip setup={finalSetup} />");
     expect(studio).toContain("readModel3dLink(params)");
     expect(studio).toContain("onImage={fromImage}");
     // A second click on the same link still fills the form (the URL doesn't change, so UrlModel can't).

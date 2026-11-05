@@ -35,6 +35,11 @@ interface Entry {
   setup: OwnSetup;
   /** A feature that opens on this studio's GPU once its real render passes (workflows/comfyui/gpu-tested.json). */
   passes?: string;
+  /**
+   * The ComfyUI graphs that run it on this studio's GPU: its label leaves once the manifest marks each one validated
+   * (ownSetupNow in src/server/own-setup-live.ts; a page passes the answer to its client).
+   */
+  graphs?: readonly string[];
 }
 
 const gpu = (vramGb?: number, more: Omit<Extract<OwnSetup, { need: "gpu" }>, "need" | "vramGb"> = {}): OwnSetup => ({ need: "gpu", ...(vramGb && { vramGb }), ...more });
@@ -82,10 +87,10 @@ const ITEMS: Record<string, Entry> = {
   // Kandinsky 6.0 (open) at Pro quality: an 80 GB card.
   "oss-kandinsky6:pro": { setup: gpu(80) },
   // Image to 3D's extra steps on a GPU.
-  "image-to-3d:hi3d-refine": { setup: gpu(24, { files: true }) },
-  "image-to-3d:trellis-final": { setup: gpu(24) },
-  "image-to-3d:idol-other-sides": { setup: gpu(8, { files: true }) },
-  "image-to-3d:idol-clean": { setup: gpu(8, { files: true }) },
+  "image-to-3d:hi3d-refine": { setup: gpu(24, { files: true }), graphs: ["mesh-refine-hi3d"] },
+  "image-to-3d:trellis-final": { setup: gpu(24), graphs: ["image-to-3d-trellis2"] },
+  "image-to-3d:idol-other-sides": { setup: gpu(8, { files: true }), graphs: ["image-to-views-idol"] },
+  "image-to-3d:idol-clean": { setup: gpu(8, { files: true }), graphs: ["image-to-splat-idol-clean"] },
   // Tools whose steps run on a GPU of the visitor's own.
   "audio:edit-speech": { setup: gpu(24, { files: true }) },
   "video-tools:restore": { setup: gpu(24, { files: true, orKey: "fal" }) },
@@ -133,6 +138,11 @@ export function ownSetupOnly(modelOrAppId: string, engine?: Engine): OwnSetup | 
  */
 export function ownSetupItem(id: string): OwnSetup | null {
   return ITEMS[id]?.setup ?? null;
+}
+
+/** The graphs whose validation opens an item on this studio's GPU (none: the label stays, or follows `passes`). */
+export function ownSetupGraphs(id: string): readonly string[] {
+  return ITEMS[id]?.graphs ?? [];
 }
 
 /** Every id this table holds (tests, and the hosted runs' checks). */

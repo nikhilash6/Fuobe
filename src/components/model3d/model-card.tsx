@@ -26,6 +26,8 @@ import { recordableType, recordTurntable } from "./turntable";
 import { hasWebgl2, SplatViewer, useReducedMotion } from "./splat-viewer";
 import { FALLBACK_TEXT, hazeCutoffFor } from "@/lib/av/splat-view";
 import { TurnChips } from "./turn-chips";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
+import { useModel3dSetup } from "./own-setups";
 
 /**
  * Left out of the card's next steps: its own Animate the spin button is that step (and knows a turntable recorded
@@ -93,6 +95,10 @@ export function ModelCard({
   const focusViewer = useRef(false);
   const hydrated = useHydrated();
   const owner = useIsOwner();
+  // A visitor's refine and final run on its own GPU: their labels until their graphs are validated on this studio's GPU.
+  const refineSetup = useModel3dSetup("refine");
+  const finalSetup = useModel3dSetup("final");
+  const press = useOwnSetupPress();
   const canRecord = hydrated && !!recordableType();
   // A splat opens in the splat viewer where the browser draws WebGL2 and the file isn't too big for it (it says so).
   const [splatNote, setSplatNote] = useState<string | null>(null);
@@ -466,8 +472,9 @@ export function ModelCard({
             </Button>
           )}
           {refinable && (
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRefining(true)}>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => press(refineSetup, () => setRefining(true))}>
               <Wand2 className="size-3.5" /> Refine this mesh
+              <OwnSetupChip setup={refineSetup} />
             </Button>
           )}
           {view.glb && !view.splat && g.op !== "splat" && !view.rigged && (
@@ -514,6 +521,7 @@ export function ModelCard({
             <Button asChild variant="outline" size="sm" className="rounded-full">
               <Link href={final} prefetch={false} onClick={() => view.photo && onFinal?.(view.photo)}>
                 <Box className="size-3.5" /> {FINAL_3D.label}
+                <OwnSetupChip setup={finalSetup} />
               </Link>
             </Button>
             <p className="text-[12px] text-muted-foreground">{FINAL_3D.note}</p>
