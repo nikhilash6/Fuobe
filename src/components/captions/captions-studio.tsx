@@ -153,7 +153,8 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
   const [source, setSource] = useState("auto");
   const [quick, setQuick] = useState(false);
   // "Clean the voice first": on for a video's speech on your GPU, off in the cloud (it adds a paid step there).
-  const voiceFirstShown = useVoiceFirstShown();
+  // Shown to every visitor: until it passes on this studio's GPU it runs on their own GPU or key, labelled so.
+  const voiceFirstShown = useVoiceFirstShown(true);
   const voiceFirstLive = useVoiceFirstLive();
   const [voiceFirst, setVoiceFirst] = useState<boolean | null>(null);
   const cleanFirst = voiceFirstShown && (voiceFirst ?? (engine === "open" && voiceFirstDefault("video", voiceFirstLive)));

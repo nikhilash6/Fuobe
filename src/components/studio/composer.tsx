@@ -291,7 +291,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const voice = useClipFacts(voiceRef).data;
   // "Clean the voice first" (Transcribe, Lipsync): the recording or the video's speech apart from its music and effects
   // before the model hears it. On for a video's speech on your GPU, off for a recording (src/lib/av/voice-first.ts).
-  const voiceFirstShown = useVoiceFirstShown();
+  // Shown to every visitor: until it passes on this studio's GPU it runs on their own GPU or key, labelled so.
+  const voiceFirstShown = useVoiceFirstShown(true);
   const voiceFirstLive = useVoiceFirstLive();
   const [voiceFirstAsked, setVoiceFirstAsked] = useState<boolean | null>(null);
   const voiceFirstKind: "audio" | "video" | null = !config.voiceFirst ? null : typed.slots.audio?.ref ? "audio" : typed.slots.video?.ref && config.ops.includes("transcribe") ? "video" : null;

@@ -101,10 +101,14 @@ describe("Genjutsu's Openjutsu features before and after they open", () => {
     expect((await r.json()).error ?? "").not.toBe(NOT_HERE);
   });
 
-  it("the new makers' models sent straight to /api/generations run for the owner only", async () => {
+  it("the new makers' models sent straight to /api/generations run on an account's own GPU, never this studio's", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
-    const cookie = auth.createSession(auth.createAccount(`oj${++n}@example.com`, "long enough").id).value;
+    const account = auth.createAccount(`oj${++n}@example.com`, "long enough").id;
+    const cookie = auth.createSession(account).value;
     const owner = auth.createSession().value;
+    // The account's own clip, so nothing but the place stops its run.
+    const mine = saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "mine.mp4", accountId: account }).url;
+    const own = (b: { inputs: { video: string; images?: string[] } }) => ({ ...b, inputs: { video: mine, ...(b.inputs.images && { images: b.inputs.images.map(() => mine) }) } });
     const runs = [
       { feature: "genjutsu", modelId: "oss-h3-group-swap", op: "group-swap", inputs: { video: clip, images: [clip] } },
       { feature: "genjutsu", modelId: "oss-h3-scene-edit", op: "scene-edit", inputs: { video: clip }, params: { extra: { openjutsu: { action: "remove" } } } },
@@ -128,17 +132,19 @@ describe("Genjutsu's Openjutsu features before and after they open", () => {
     for (const b of runs) {
       const open = directRunFeatures(b.modelId, (b.params?.extra?.openjutsu ?? {}) as Record<string, unknown>)!.every((f) => live[f]);
       for (const [who, preview] of [[cookie, false], [cookie, true], [undefined, true]] as const) {
-        const r = await send(b, who, preview);
+        const r = await send(who ? own(b) : b, who, preview);
         const j = await r.json();
-        // A feature that passed goes past the gate (other rules may still stop it: here the clip isn't the visitor's).
-        if (open) {
-          expect(j.code ?? "", `${b.modelId} ${who ? "account" : "guest"}${preview ? " price check" : ""}`).not.toBe("own-gpu-tool");
-          continue;
-        }
-        expect(r.status, `${b.modelId} ${who ? "account" : "guest"}${preview ? " price check" : ""}`).toBe(403);
-        expect(j.code).toBe("own-gpu-tool");
-        expect(j.error).toBe(access.OWN_GPU_TOOL_MESSAGE);
+        const label = `${b.modelId} ${who ? "account" : "guest"}${preview ? " price check" : ""}`;
+        // Never "isn't available here": it runs on the visitor's own setup.
+        expect(j.code ?? "", label).not.toBe("own-gpu-tool");
+        if (open || preview) continue;
+        // An account with no GPU of its own is asked to connect one: its run goes nowhere else.
+        expect(r.status, label).toBe(403);
+        expect(j.code, label).toBe("connect-gpu");
+        expect(r.headers.get(access.CONNECT_GPU_HEADER), label).toBe("1");
       }
+      // A guest's run: sign up first.
+      expect((await send(b)).status, b.modelId).toBe(401);
       // The owner's request isn't refused by the gate (it may still fail later: no ComfyUI here).
       const r = await send(b, owner, true);
       expect(((await r.json()) as { code?: string }).code ?? "", b.modelId).not.toBe("own-gpu-tool");
