@@ -1028,8 +1028,9 @@ const SAME_PRESS = "(CASE WHEN @hold IS NOT NULL THEN json_extract(g.request_jso
  *
  * - `class`: the run's ("paid" when the billing service said so, else "free").
  * - `rankAt`: the run's place in line. The first job any of its rows had on the workers sets it (the row itself, or a
- *   step of the same run that fed it). A later step with no such job yet keeps the time the run was made (less its head
- *   start). Null for a run's first job: it waits from now.
+ *   step of the same run that fed it). A row with no such job yet keeps the time the run was made (less its head start):
+ *   a run's first job waits in the order it came, and so does one sent again after its first send was cut off before
+ *   its job was made (a restart or a deploy: generations.ts sendAgainOnWorkers).
  * - `started`: a worker took one of those jobs. The run's wait limit no longer applies then (it applies only before the
  *   run's first start).
  *
@@ -1063,7 +1064,7 @@ export function runPlaceOf(generationId: string): { class: "paid" | "free"; rank
   const boost = Math.max(0, Math.min(Number(g.boost) || 0, 24 * 60 * 60_000));
   return {
     class: g.cls === "paid" ? "paid" : "free",
-    rankAt: jobs[0]?.rank_at ?? (g.depends_on ? g.created_at - boost : null),
+    rankAt: jobs[0]?.rank_at ?? g.created_at - boost,
     started: jobs.some((t) => t.claimed_at !== null),
   };
 }

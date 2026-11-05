@@ -1754,6 +1754,77 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     expect(jobsOf(step)).toHaveLength(0);
   });
 
+  /**
+   * What a process killed in the middle of a run's first send leaves behind: the run made minutes ago, no job id on it,
+   * its turn and its lease with that process (quiet for longer than 20 s). `job`: it had made the run's job, and was killed
+   * before it noted it on the run; else no job was made. The time the run was made.
+   */
+  function cutOffFirstSend(id: string, token: string, o: { job?: boolean } = {}): number {
+    const made = Date.now() - 5 * MIN;
+    if (!o.job) db().prepare("DELETE FROM relay_tasks WHERE generation_id = ?").run(id);
+    db().prepare("DELETE FROM generation_runs WHERE id = ?").run(id);
+    db()
+      .prepare("UPDATE generations SET external_id = NULL, external_meta_json = json_object('lease', json_object('by', ?, 'until', ?)), message = 'Submitting', created_at = ? WHERE id = ?")
+      .run(token, Date.now() + 30_000, made, id);
+    sendingIn(token, id, QUIET_MS + 1000);
+    return made;
+  }
+
+  it("a run whose first send was cut off before its job was made is sent once by one of them, in its place in line, and its output arrives with no error", async () => {
+    const w = standInWorker();
+    const d = driver(w);
+    const { id } = await pressRun();
+    const made = cutOffFirstSend(id, "app-cut-off-run");
+    // Another account's run, pressed after it, waits in line meanwhile.
+    const { id: later } = await pressRun(IMAGE, b1);
+    await Promise.all([tick(), app2.tick()]);
+    for (let i = 0; i < 200 && !jobsOf(id).length; i++) await sleep(25);
+    await sleep(1000);
+    await Promise.all([tick(), app2.tick()]);
+    expect(jobsOf(id), "one job for it on the workers").toHaveLength(1);
+    // It waits from the time it was made: before the run pressed after it.
+    expect(jobsOf(id)[0].rank_at).toBe(made);
+    expect(jobsOf(id)[0].rank_at!).toBeLessThan(taskOf(later)!.rank_at!);
+    const watch = watchOf(id, { "other process": there(id) });
+    await watch.look();
+    expect(watch.path()).toEqual(["queued"]);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    expect(jobsOf(id)).toHaveLength(1);
+    expect((await ended(later))?.status).toBe("succeeded");
+  });
+
+  it("a run whose first send was cut off after its job was made is never sent twice: it ends in plain words, and that job stops", async () => {
+    standInWorker();
+    const { id, task } = await pressRun();
+    cutOffFirstSend(id, "app-cut-off-run-2", { job: true });
+    await Promise.all([tick(), app2.tick()]);
+    await expectFreeFailure(id);
+    await Promise.all([tick(), app2.tick()]);
+    expect(jobsOf(id).map((t) => t.id), "nothing more was sent").toEqual([task.id]);
+    expect(jobsOf(id)[0].state, "the job it made stops with it").toBe("canceled");
+  });
+
+  it("a run on the install's own ComfyUI whose first send was cut off is never sent again: it ends in plain words, and nothing more is posted", async () => {
+    onInstallServer();
+    const posts = comfy.posts();
+    const r = await run(IMAGE);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const id = r.body.items![0].id;
+    // Its job reached that ComfyUI (no task here), and the process that posted it was killed before it noted it on the run.
+    const noted = () => (db().prepare("SELECT external_id FROM generations WHERE id = ?").get(id) as { external_id: string | null }).external_id;
+    for (let i = 0; i < 200 && !(comfy.posts() > posts && noted()); i++) await sleep(25);
+    expect(comfy.posts()).toBeGreaterThan(posts);
+    cutOffFirstSend(id, "app-cut-off-run-3");
+    const sent = comfy.posts();
+    await Promise.all([tick(), app2.tick()]);
+    await expectFreeFailure(id);
+    await Promise.all([tick(), app2.tick()]);
+    await sleep(500);
+    expect(comfy.posts(), "nothing more was posted to that ComfyUI").toBe(sent);
+    expect(jobsOf(id)).toHaveLength(0);
+  });
+
   it("a step and a preview picture the worker reports to the other process are seen here too: a refresh, both sessions, the list and the other process show the same step", async () => {
     const w = standInWorker();
     const { id } = await pressRun();

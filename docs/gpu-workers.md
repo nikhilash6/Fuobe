@@ -657,7 +657,10 @@ job is made; when the process that was sending it stopped part way, the next one
 made, and the step is sent now (in its run's place); one made, and the step ends in the one plain sentence and that
 job stops, so it is never run twice. That look is for steps on the workers, whose jobs are tasks in the studio's
 database. A step sent to the install's own ComfyUI (on the studio's machine) may be in its queue already, so when its
-send was cut off it ends in the plain sentence instead of being sent again. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
+send was cut off it ends in the plain sentence instead of being sent again. A run's first job is the same: a run whose
+first send was cut off (a restart or a deploy) before its job was made on the workers is sent again by one app process,
+in the place it had (a run's first job waits from the time the run was made), instead of failing; one whose job was
+made, or that went to the install's own ComfyUI, ends in the plain sentence. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
 with its files, and one that a CPU slot runs at its next progress report (the worker sends one at least every 10
 seconds). A 3D model finished this way waits for the output check when the run asked for one, as any run's outputs do.
 The time a CPU task runs is never counted as GPU time.

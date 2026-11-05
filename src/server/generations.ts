@@ -3345,19 +3345,23 @@ function startRunner(): void {
 /**
  * Runs with no job yet that no app process that still runs is handing over (takeSubmitTurn: its process stopped, by a
  * restart, or a deploy's old instance gone). One waiting for its own GPU or key goes on here, with what is left of its
- * wait (one process takes it); one cut off in the middle of its hand-over can't be recovered, and fails. A run a process
- * that still runs is sending or waiting on (this one, or another in a deploy's overlap) is left to it. Runs at start and
- * every tick; not while this server stops (the app process that goes on looks).
+ * wait (one process takes it); so does one on this install's workers whose job was never made (sendAgainOnWorkers). One
+ * cut off in the middle of its hand-over can't be recovered, and fails. A run a process that still runs is sending or
+ * waiting on (this one, or another in a deploy's overlap) is left to it. Runs at start and every tick; not while this
+ * server stops (the app process that goes on looks).
  */
 function sweepInterrupted(): void {
   if (draining()) return;
   const now = Date.now();
   const rows = db()
     .prepare(
-      `SELECT g.id, g.provider, g.model_id, g.op, g.request_json, g.external_meta_json FROM generations g
+      `SELECT g.id, g.provider, g.model_id, g.op, g.request_json, g.external_meta_json, g.batch_id, g.created_at FROM generations g
          WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before AND NOT ${TURN_HELD("g", false)}`,
     )
-    .all({ before: now - STALE_SUBMIT.ms, __me: runnerToken(), __quiet: now - QUIET_MS, __now: now }) as Pick<Row, "id" | "provider" | "model_id" | "op" | "request_json" | "external_meta_json">[];
+    .all({ before: now - STALE_SUBMIT.ms, __me: runnerToken(), __quiet: now - QUIET_MS, __now: now }) as Pick<
+    Row,
+    "id" | "provider" | "model_id" | "op" | "request_json" | "external_meta_json" | "batch_id" | "created_at"
+  >[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
@@ -3366,7 +3370,7 @@ function sweepInterrupted(): void {
       if (takeOver(r, meta.heal)) continue;
       // (As it is now: the process it was taken from may have marked it as being sent since this look.)
       meta = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null);
-    }
+    } else if (sendAgainOnWorkers(r)) continue;
     // A run that waited and was cut off in the middle of its send may have reached its GPU or provider: never sent twice.
     const cutOff = !!meta.heal && typeof meta.heal.sending === "number";
     const words = cutOff ? CUT_OFF_SENDING : "This run stopped before it started. Press Retry.";
@@ -3381,6 +3385,41 @@ function sweepInterrupted(): void {
 
 /** A waiting run whose app process was cut off while it sent the job (its GPU or provider may have it): not sent again. */
 const CUT_OFF_SENDING = "This run was interrupted while it was being sent. Press Retry.";
+
+/**
+ * A run on this install's workers whose hand-over was cut off before its job was made (a restart or a deploy while its
+ * inputs were being made ready): its job would be a task of this database, and there is none, so nothing reached a
+ * worker. It is taken by this process (one process takes it) and sent now as it was decided (its stamp: its place in
+ * line, its class, its hold), as the same job of its batch, instead of failing. Its job waits from the time the run was
+ * made (pool.ts runPlaceOf), so it keeps its place. False: not one of those, and it fails as before (one on the install's
+ * own ComfyUI may be in that ComfyUI's queue already; one whose job was made may run, and stops with it).
+ */
+function sendAgainOnWorkers(r: Pick<Row, "id" | "provider" | "request_json" | "external_meta_json" | "batch_id" | "created_at">): boolean {
+  if (r.provider !== "comfyui" || !poolOnWorkers() || hasJobFor(r.id)) return false;
+  let stored: GenerationRequest;
+  try {
+    stored = JSON.parse(r.request_json) as GenerationRequest;
+  } catch {
+    return false;
+  }
+  const account = stored.account;
+  if (!account || stored.place !== "pool") return false;
+  // Another app process took it first.
+  if (!takeSubmitTurn(r.id)) return true;
+  try {
+    // Looked at again under the turn: a job the process that held it made meanwhile (it stalled rather than stopped).
+    if (hasJobFor(r.id)) throw new LetGo("Its job was made");
+    const p = runOnPool(account, () => withRunStamp(stampOf(stored), () => prepare(stored)));
+    if (p.providerId !== r.provider) throw new LetGo("Planned elsewhere now");
+    submitting().add(r.id);
+    void submit(r.id, p.route, p.providerId, p.plan, p.req, jobIndexOf(r, readMeta(r.external_meta_json)));
+    return true;
+  } catch {
+    // It fails as before (the sweep's look, once this process has given its turn back).
+    handOverEnds(r.id);
+    return false;
+  }
+}
 
 /**
  * A waiting run whose turn no app process that still runs holds: taken by this one, planned again as its account runs now
