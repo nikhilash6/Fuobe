@@ -20,6 +20,7 @@ import { madeNoun } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { computerState, rememberComfy, rememberedComfy, restartComputerRunner, store, stored } from "./computer-runtime";
 import { InstallConnect, PairInstead } from "./fuobe-connect";
+import { OTHER_BROWSERS } from "./open-connect";
 import { useLocalComfy, type Finder } from "./use-local-comfy";
 
 /**
@@ -121,9 +122,6 @@ const UNSUPPORTED_OWNER: Record<Unsupported, string> = {
   safari: "Safari doesn't let a website talk to programs on your Mac, so this page can't reach your ComfyUI. Use a ComfyUI on a server below, and it works from Safari.",
   http: "Your browser marks this page as not secure, so it doesn't let the page talk to programs on this computer, like ComfyUI. Use a ComfyUI on a server below, or give this studio a secure address.",
 };
-
-/** Under Safari's words, a quieter last line: what the other browsers allow (never "open Fuobe in…": it is open). */
-const OTHER_BROWSERS = "Chrome, Edge and Firefox allow this, so switching browser also works.";
 
 /** The words, for a <p>: the two sentences, and on Safari the other browsers' line below them. */
 export const unsupportedWords = (why: Unsupported, owner = false) => (

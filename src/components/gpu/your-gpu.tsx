@@ -34,8 +34,9 @@ async function call<T>(method: string, body?: unknown, test = false): Promise<T>
 
 /**
  * "Your GPU" (public sign-up): an account's own ComfyUI, where its runs go (never this studio's keys
- * or GPU). The server calls it, so it needs a public address: a Cloudflare Tunnel or ngrok in front
- * of a local ComfyUI. Nothing here looks for a ComfyUI on this device: it shows the tunnel command. 36rem wide at most
+ * or GPU). The server calls it, so it needs a web address anyone can reach: cloudflared (or another tunnel) in front
+ * of a local ComfyUI. Nothing here looks for a ComfyUI on this device: it shows how to make that address (TunnelSteps),
+ * in words a visitor needs no dictionary for. 36rem wide at most
  * from sm up, unless a wider page lifts that (className, as ConnectChoice's).
  */
 export function YourGpu({ className, onLinked }: { className?: string; onLinked?: () => void } = {}) {
@@ -92,7 +93,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   return (
     <div className={cn("w-full min-w-0 space-y-4 sm:max-w-[36rem]", className)}>
       <p className="text-[13px] text-muted-foreground">
-        {gpu ? "Your runs go to your ComfyUI through this web address." : "Your runs go to your ComfyUI through a secure web address. Here's how to make one:"}
+        {gpu ? "Your runs go to your ComfyUI through this web address." : "Your runs reach your ComfyUI through a web address. Here's how to give it one:"}
       </p>
       {gpu ? (
         <div className="flex items-start gap-2.5 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px]">
@@ -114,11 +115,11 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
       <div className="space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor={`${id}-url`} className="text-[13px]">
-            {gpu ? "Connect another address" : "Your ComfyUI's public address"}
+            {gpu ? "Connect another address" : "Your ComfyUI's web address"}
           </Label>
-          <Input id={`${id}-url`} placeholder="https://your-tunnel.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} aria-invalid={!!error || local} />
+          <Input id={`${id}-url`} placeholder="https://your-address.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} aria-invalid={!!error || local} />
           {local && (
-            <p className="text-[12px] text-destructive">That address only works on your own network. Paste the https address your tunnel prints.</p>
+            <p className="text-[12px] text-destructive">That address only works on your own computer or network. Paste the one cloudflared shows, ending in trycloudflare.com.</p>
           )}
         </div>
         <div className="space-y-1.5">
@@ -127,7 +128,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
           </Label>
           <Input id={`${id}-token`} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} aria-describedby={`${id}-token-hint`} />
           <p id={`${id}-token-hint`} className="text-[12px] text-muted-foreground">
-            Only if your tunnel or ComfyUI asks for a password or token.
+            Only if your ComfyUI or its web address asks for a password or token.
           </p>
         </div>
         {error && <p className="text-[12px] text-destructive">{error}</p>}

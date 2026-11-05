@@ -23,7 +23,8 @@ import { openConnect, openFinder, useComputerState, type FindReason } from "./co
  * "Connect your GPU": the ComfyUI on this computer first (the quickest way: nothing to install, runs while Fuobe is
  * open in this browser). For an account, a link (a tunnel) second, for runs that go on with the tab closed; for the
  * owner of a hosted studio, a ComfyUI at a server address (a cloud GPU, a tunnel). On a phone, in Safari, or on a page
- * that can't ask for the permission, only the second way, with why.
+ * that can't ask for the permission, only the second way, with why; or, when the computer was connected from another
+ * browser, its state (runs started here go to it), with the second way on request.
  */
 
 export type AccountGpuView = OwnerGpuView | { mode: "link"; url: string; hasToken: boolean };
@@ -120,12 +121,16 @@ function ComputerProblem({ here, server }: { here: ReturnType<typeof useHere>; s
       );
     return null;
   }
-  return (
-    <p className="text-[12px] text-muted-foreground">
-      {server === "down" ? "ComfyUI isn't running on your computer. Start it there." : server === "no-setting" ? "ComfyUI on your computer needs Fuobe's setting again. Open Fuobe there to see how." : "Offline. Open Fuobe on the computer that runs ComfyUI."}
-    </p>
-  );
+  // The server's word: this browser doesn't hold the jobs (a phone, Safari, another computer). The tab that runs them is
+  // in the browser that connected the computer, which may be on this very computer: never "open Fuobe" as if it weren't.
+  return <p className="text-[12px] text-muted-foreground">{SERVER_PROBLEM[server ?? "offline"]}</p>;
 }
+
+const SERVER_PROBLEM: Record<"down" | "no-setting" | "offline", string> = {
+  down: "ComfyUI isn't running on your computer. Start it, and your runs go on by themselves.",
+  "no-setting": "ComfyUI on your computer needs Fuobe's setting again. The Fuobe tab in the browser you connected it from shows how.",
+  offline: "Offline. Your runs start when a Fuobe tab is open in the browser you connected your computer from.",
+};
 
 /** "Other websites could also send work to your ComfyUI": the guard isn't in it yet. */
 function NoGuard({ port }: { port: number }) {
@@ -195,6 +200,7 @@ function ComputerStatus({ gpu, onDisconnect, other, look = true }: { gpu: Comput
           {busy ? <Loader2 className="animate-spin" /> : <Unplug />} Disconnect
         </Button>
       </div>
+      {!look && online && <p className="text-[12px] text-muted-foreground">Runs you start from here go to your computer.</p>}
       {mine?.busy && <p className="text-[12px] text-muted-foreground">Disconnect stops the runs going on now.</p>}
       {gpu.cors === "any" && <p className="text-[12px] text-amber-700 dark:text-amber-400">Your ComfyUI lets every website in. To keep it private, start it with --enable-cors-header {window.location.origin} instead.</p>}
       {look && online && guard === false && gpu.cors !== "any" && shownPort && <NoGuard port={shownPort} />}
@@ -343,7 +349,7 @@ export function OwnerServerComfy({
         label={hosted ? "Server address" : "ComfyUI server URL"}
         idleLabel="Connect"
         placeholder={hosted ? "https://…" : "http://127.0.0.1:8188"}
-        hint={hosted ? "An address Fuobe's server can reach: a cloud GPU, or a tunnel to your own." : "Where ComfyUI listens; a local install is http://127.0.0.1:8188."}
+        hint={hosted ? "A web address Fuobe's server can reach: a cloud GPU, or the ComfyUI on your computer through cloudflared." : "Where ComfyUI listens; a local install is http://127.0.0.1:8188."}
         hideDefault={hosted}
         extraValues={computer ? { comfyWhere: "server" } : undefined}
         place={place}
@@ -446,27 +452,36 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, lo
   const [link, setLink] = useState(false);
   if (q.isError) return <p className="text-[13px] text-muted-foreground">{q.error.message}</p>;
   if (!q.data) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
+  const disconnect = async () => {
+    qc.setQueryData(["account-gpu"], await gpuCall("DELETE"));
+    void qc.invalidateQueries({ queryKey: ["viewer"] });
+    void qc.invalidateQueries({ queryKey: ["status"] });
+  };
   if (support !== "ok") {
-    // A phone, Safari, a plain-http page: only the link, and nothing looks for a ComfyUI on this device.
+    // A phone, Safari, a plain-http page: nothing looks for a ComfyUI on this device.
+    // Connected with "this computer" already (from another browser): runs started here go to it, so its state comes
+    // first, and the web address (which would take the runs off it) only on request.
+    if (gpu?.mode === "computer")
+      return (
+        <div className="space-y-4">
+          <ComputerStatus gpu={gpu} look={false} onDisconnect={disconnect} other={{ label: link ? "Keep using your computer" : "Use a web address instead", onClick: () => setLink((v) => !v) }} />
+          {link && (
+            <>
+              <p className="text-[12px] text-muted-foreground">Once a web address is connected, your runs go there instead of to your computer.</p>
+              <YourGpu className={className} onLinked={onStart} />
+            </>
+          )}
+        </div>
+      );
+    // Why not this computer, then the web address form (once connected, the form alone says so).
     return (
       <div className="space-y-4">
-        <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>
+        {!gpu && <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>}
         <YourGpu className={className} onLinked={onStart} />
       </div>
     );
   }
-  if (gpu?.mode === "computer" && !flow && !link)
-    return (
-      <ComputerStatus
-        gpu={gpu}
-        onDisconnect={async () => {
-          qc.setQueryData(["account-gpu"], await gpuCall("DELETE"));
-          void qc.invalidateQueries({ queryKey: ["viewer"] });
-          void qc.invalidateQueries({ queryKey: ["status"] });
-        }}
-        other={{ label: "Use a link instead", onClick: () => setLink(true) }}
-      />
-    );
+  if (gpu?.mode === "computer" && !flow && !link) return <ComputerStatus gpu={gpu} onDisconnect={disconnect} other={{ label: "Use a link instead", onClick: () => setLink(true) }} />;
   const linked = gpu?.mode === "link";
   return (
     <ChoiceCards
@@ -591,13 +606,22 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className, look
         {computer ? serverOpen && serverBox : serverForm}
       </div>
     );
-  // A phone, Safari, a plain-http page: what the computer said last (if it runs there), why not here, and the server way.
+  // A phone, Safari, a plain-http page. While ComfyUI runs on the owner's computer, runs started here go to it: its
+  // state, and the server way (which would stop them) only on request. Otherwise why not here, and the server way.
   if (support !== "ok")
     return (
       <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
-        {state}
-        <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p>
-        {serverBox}
+        {computer ? (
+          <>
+            {state}
+            {serverOpen && serverBox}
+          </>
+        ) : (
+          <>
+            <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p>
+            {serverBox}
+          </>
+        )}
       </div>
     );
   if (computer && !flow)
@@ -664,7 +688,10 @@ export function OwnerComfyWhere({ value, onChange }: { value: string; onChange: 
           );
         })}
       </div>
-      {support !== "ok" && (picking || computer) ? (
+      {support !== "ok" && computer ? (
+        // Set up from another browser: runs started here go there, and this page can't see that ComfyUI itself.
+        <p className="text-[13px] text-muted-foreground">Your runs go to your computer while a Fuobe tab is open in the browser you connected it from.</p>
+      ) : support !== "ok" && picking ? (
         <p className="text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p>
       ) : picking && !computer ? (
         <ThisComputer
