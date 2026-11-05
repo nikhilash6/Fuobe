@@ -278,7 +278,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. The Audio tools have their own routes (below).
-  Restore & colourise is left out of the Video tools tabs and the result menus for them.
+  Restore & colourise runs for accounts (below), but is still left out of the Video tools tabs and the result menus
+  for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
@@ -393,6 +394,15 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
   /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
   the sign-up card.
+- **Restore & colourise.** An account runs it (`POST /api/restore`) on its own GPU only, the same way as the Video
+  tools: every window, join and the sound put back on its own ComfyUI, with only its own clip and reference picture,
+  after the same checks. Its ComfyUI needs the gated Restore IC-LoRA; the run names the file before anything starts.
+  The prompt is the account's own words, or Fuobe's offline template filled with its few words. The prompt writer
+  (`POST /api/restore/prompt`) stays the owner's, because it uses the studio's AI helper. A cloud run is refused with
+  one sentence that says to switch to the open engine: the gated LoRA is never sent with a visitor's own key. Its price
+  check (`POST /api/restore/estimate`) is priced for the account's own GPU. With hosted runs on, an account without a
+  GPU of its own gets the "own setup" label (`video-tools:restore`) in the price check, and Run opens Connect your GPU.
+  A guest gets the sign-up card.
 - **Audio tools.** An account runs Split soundtrack and Clean up dialogue, Video tools → Remove dialogue, Edit speech,
   Loop / extend, Join and Clean up voice (`POST /api/audio-tools`) the same way as Genjutsu's: every step on its own
   ComfyUI, or on its own fal.ai or Replicate key where a step is a cloud model, with only its own files, after the same
