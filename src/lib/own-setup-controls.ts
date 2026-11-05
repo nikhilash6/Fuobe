@@ -1,4 +1,5 @@
 import type { Engine } from "./catalog/types";
+import { H3_DECODER } from "./gpu/h3-tier";
 import { ownSetupOnly, type OwnSetup } from "./own-setup";
 
 /**
@@ -9,6 +10,8 @@ import { ownSetupOnly, type OwnSetup } from "./own-setup";
 export function controlSetup(modelId: string | undefined, param: string, value: string | number): string | undefined {
   // Kandinsky 6.0 (open) at Pro quality.
   if (modelId === "oss-kandinsky6" && param === "quality" && value === "pro") return "oss-kandinsky6:pro";
+  // MiniMax H3's fast decoder, whenever it is offered.
+  if (param === H3_DECODER.param && value === "fast") return "h3:fast-decode";
   return undefined;
 }
 

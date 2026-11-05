@@ -198,6 +198,17 @@ describe("beside a setting's value", () => {
     expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "pro" } } })).toContain("oss-kandinsky6:pro");
     expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "lite" } } })).not.toContain("oss-kandinsky6:pro");
   });
+
+  it("MiniMax H3's fast decoder carries its label, and the server asks the run by the same id", async () => {
+    const { controlSetup } = await import("@/lib/own-setup-controls");
+    const { requestSetupIds } = await import("@/server/pool-own-setup");
+    expect(controlSetup("oss-minimax-h3", "decoder", "fast")).toBe("h3:fast-decode");
+    expect(controlSetup("oss-minimax-h3", "decoder", "standard")).toBeUndefined();
+    expect(ownSetupOnly("h3:fast-decode")).not.toBeNull();
+    expect(ownSetupLabel(ownSetupOnly("h3:fast-decode")!)).not.toMatch(REASON);
+    expect(requestSetupIds({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", params: { extra: { decoder: "fast" } } })).toContain("h3:fast-decode");
+    expect(requestSetupIds({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", params: { extra: { decoder: "standard" } } })).not.toContain("h3:fast-decode");
+  });
 });
 
 describe("a cloud model a visitor runs on its own key only", () => {
