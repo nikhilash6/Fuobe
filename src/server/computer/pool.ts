@@ -786,8 +786,8 @@ function onSoon(w: WorkerRow, now: number): boolean {
 /**
  * Is every worker that could run this workflow (any workflow: null) away now: paused, draining, outside its hours,
  * silent, or never connected? A run made then would wait for nothing until its wait limit ended it, so the price check
- * and Run say "Starting soon" instead and nothing is made. False when no worker could run it at all (workersCanRun
- * refuses that) or one is on.
+ * says "Starting soon" (Run is off), and a press of Run makes nothing. False when no worker could run it at all
+ * (workersCanRun refuses that) or one is on.
  */
 export function workersAway(workflowId: string | null, now = Date.now()): boolean {
   const able = ableWorkers(workflowId);

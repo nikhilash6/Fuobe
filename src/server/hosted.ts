@@ -86,8 +86,8 @@ export function poolTakes(endpoint: string | undefined): boolean {
 
 /**
  * Are this install's GPUs all away for this endpoint now (on the workers: every worker that could run it paused, silent or
- * outside its hours)? Then a run waits for nothing: the price check and Run say "Starting soon" and nothing is made. On
- * this install's own ComfyUI: never.
+ * outside its hours)? Then a run waits for nothing: the price check says "Starting soon" (Run is off), and a press of
+ * Run makes nothing. On this install's own ComfyUI: never.
  */
 export function poolAway(endpoint: string | undefined): boolean {
   if (!endpoint || !poolOnWorkers()) return false;

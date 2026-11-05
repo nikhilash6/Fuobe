@@ -598,6 +598,9 @@ export function useCreateGeneration() {
       // The runs going and the line changed: the price check before the next Run asks again.
       refreshPriceChecks(qc);
     },
+    // Refused (every GPU that could run it went away since the price check, a limit, a new price): the price check asks
+    // again, so Run and its words show where things stand now.
+    onError: () => refreshPriceChecks(qc),
   });
 }
 

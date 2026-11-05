@@ -181,7 +181,7 @@ const request = (url: string, o: { method?: string; body?: unknown; cookie?: str
 /** Press Run (POST /api/generations) as a session. */
 async function run(body: Record<string, unknown>, cookie = a1) {
   const r = await generationsRoute.POST(request("/api/generations", { body, cookie }));
-  return { status: r.status, body: (await r.json()) as { items?: { id: string }[]; code?: string; error?: string } };
+  return { status: r.status, headers: r.headers, body: (await r.json()) as { items?: { id: string }[]; code?: string; error?: string } };
 }
 
 /** The price check before Run. */
@@ -1063,14 +1063,15 @@ describe("the worker steps aside for another program", () => {
     expect(back.state).toBe("waiting");
     expect(back.requeues, "a step aside costs no attempt").toBe(0);
     // The game runs for 40 minutes, past the run's 20 minute wait limit. Near its end, another account presses Run: with
-    // the only worker stepped aside, it is told the run starts soon, and no run is made that would wait for nothing.
+    // the only worker stepped aside, no run is made that would wait for nothing (the price check says it starts soon).
     await pass(35 * MIN, [d], watch);
     const all = () => (db().prepare('SELECT COUNT(*) AS n FROM generations').get() as { n: number }).n;
     const rows = all();
     const holds = svc.holds.size;
     const theirs = await run(IMAGE, b1);
     expect(theirs.status, JSON.stringify(theirs.body)).toBe(503);
-    expect(theirs.body).toMatchObject({ error: HOSTED_WORDS.startingSoon, code: "busy" });
+    expect(theirs.body).toMatchObject({ error: billing.BILLING_WAIT.run, code: "busy" });
+    expect((await priceCheck(IMAGE, b1)).body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
     expect(all()).toBe(rows);
     expect(svc.holds.size).toBe(holds);
     await pass(5 * MIN, [d], watch);
@@ -1208,7 +1209,7 @@ describe("no worker online", () => {
     expect(g.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
   });
 
-  it("Run pressed while every worker is away makes no run that would wait for nothing, in the same words; once one is back, Run works", async () => {
+  it("Run pressed while every worker is away makes no run that would wait for nothing, and promises no start; once one is back, Run works", async () => {
     const away = [
       standInWorker("paused here", { connected: true }),
       standInWorker("never connected", { connected: false }),
@@ -1222,7 +1223,11 @@ describe("no worker online", () => {
     const holds = svc.holds.size;
     const r = await run(IMAGE);
     expect(r.status, JSON.stringify(r.body)).toBe(503);
-    expect(r.body).toMatchObject({ error: HOSTED_WORDS.startingSoon, code: "busy" });
+    // Plain words that promise no start (no run was made), and no billing card: the price check, asked again, says
+    // "Starting soon" with Run off.
+    expect(r.body).toEqual({ error: billing.BILLING_WAIT.run, code: "busy" });
+    expect(r.headers.get("x-fuobe-billing")).toBeNull();
+    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
     expect(made()).toBe(rows);
     expect(svc.holds.size).toBe(holds);
     // The silent one beats again: Run is back on, and the run goes in line.

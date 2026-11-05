@@ -95,6 +95,13 @@ const OWN: PlaceDecision = { kind: "own" };
 /** What an account whose own GPU didn't answer is asked, when its run named no place (never moved and charged unasked). */
 export const OWN_GPU_QUIET = "Your GPU isn't answering right now. Run this on this studio's GPUs instead, or try again when your GPU is back.";
 
+/**
+ * Run pressed while every GPU here that could run it is away (it was there when the price check before Run asked): no
+ * run is made, and the answer promises no start. It is no billing refusal, so no card opens for it: the page says the
+ * words and asks the price check again, which now says "Starting soon" with Run off until one of those GPUs is back.
+ */
+const awayRefusal = (): Refusal => ({ status: 503, body: { error: BILLING_WAIT.run, code: "busy" }, headers: { "Retry-After": "15" } });
+
 /** A run this install's GPUs won't take, refused in the words the price check before Run gives too. */
 const notOffered = (error: string): PlaceDecision => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
 
@@ -343,8 +350,8 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   }
   // Every GPU here that could run it is off for now (paused, silent, outside its hours): a run made now would only wait
   // until its wait limit ended it. It goes to the account's own GPU as any run these GPUs can't take now, else it isn't
-  // made, in the words the price check gave before Run.
-  if (runAway(planned, gate.steps)) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("busy", HOSTED_WORDS.startingSoon) };
+  // made (awayRefusal).
+  if (runAway(planned, gate.steps)) return ownFallback ? OWN : { kind: "refuse", refusal: awayRefusal() };
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
   return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };

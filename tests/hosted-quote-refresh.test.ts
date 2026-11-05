@@ -92,4 +92,23 @@ describe("the price check asks again by itself", () => {
       vi.stubGlobal("window", new EventTarget());
     }
   });
+
+  it("a press of Run that is refused asks it again too (every GPU that could run it went away since it was asked)", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({ error: "Try again in a moment.", code: "busy" }, { status: 503 }));
+    try {
+      const qc = new QueryClient();
+      qc.setQueryData([HOSTED_QUOTE_KEY, body], free);
+      let create: ReturnType<typeof useCreateGeneration> | undefined;
+      function Probe() {
+        create = useCreateGeneration();
+        return null;
+      }
+      renderToStaticMarkup(createElement(QueryClientProvider, { client: qc }, createElement(Probe)));
+      await expect(create!.mutateAsync({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" })).rejects.toThrow("Try again in a moment.");
+      expect(qc.getQueryState([HOSTED_QUOTE_KEY, body])?.isInvalidated).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.stubGlobal("window", new EventTarget());
+    }
+  });
 });
