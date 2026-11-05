@@ -98,6 +98,8 @@ import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
+import { pathOnWorker, startWorkerModelFinish, stopWorkerFinish, workersFinish } from "./computer/finish";
+import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
@@ -541,7 +543,7 @@ export const ASSET_FREE: Record<string, string> = {
   "assist_connectors.tools_json": "the tool names a connector is limited to",
   "relay_runners.facts_json": "what a person's computer said about its ComfyUI: its GPU, memory, version and LoRA names",
   "relay_tasks.graph_json": "the graph a person's computer runs: file names on that computer's ComfyUI, never a Fuobe file",
-  "relay_tasks.extra_json": "the run's LoRA names and where they download from, as its generation's request has them (which keeps them)",
+  "relay_tasks.extra_json": "the run's LoRA names and where they download from, as its generation's request has them (which keeps them); a finished camera path's clip, which the next step's request keeps too",
   "relay_tasks.wanted_json": "the results asked of a person's computer: file names on its ComfyUI",
   "relay_tasks.received_json": "how much of each result has arrived",
   "relay_tasks.result_json": "the finished entry a person's ComfyUI reported: its own file names",
@@ -549,6 +551,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_tasks.needs_json": "what a job for the workers needs: workflow, model file names and sizes, node packs, VRAM",
   "relay_tasks.tried_json": "the ids of the workers that lost or failed this job",
   "relay_tasks.ticket_json": "an account's job ticket for the workers: settings, and the names and SHA-256 of the job's own staged inputs",
+  "relay_tasks.finish_json": "a finishing job's ticket for a worker's CPU slot: settings, and the names and SHA-256 of the job's own staged inputs",
   "relay_workers.facts_json": "what a worker said about its ComfyUI: its GPU, memory and version",
   "relay_workers.inventory_json": "a worker's model files and node packs: names, sizes and hashes on that PC",
   "relay_workers.lanes_json": "the lanes a worker can run: hashes of model file names",
@@ -557,6 +560,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.allow_json": "the lanes the owner lets a worker run, with their delays",
   "relay_workers.seen_json": "the countries and network hashes a worker's token was used from",
   "relay_workers.ceiling_json": "the most a worker's PC may run: lanes, workflow ids and sizes",
+  "relay_workers.cpu_slot_json": "the kinds of finishing job a worker's CPU slot runs",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
 };
 
@@ -603,6 +607,7 @@ export function assetInUse(assetId: string, exceptGeneration = ""): boolean {
 export function deleteGeneration(id: string): void {
   // A 3D job's finish or turntable render stops with it.
   stopModelFinish(id);
+  stopWorkerFinish(id);
   const assets = db().prepare("SELECT id FROM assets WHERE generation_id = ?").all(id) as { id: string }[];
   db().transaction(() => {
     db().prepare("DELETE FROM generations WHERE id = ?").run(id);
@@ -1092,9 +1097,10 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   const catalogModel = getModel(original.modelId);
   const found = catalogModel && offeredFor(catalogModel, original.engine);
   const shotModel = found && dualEngine(found) ? onEngine(found, engineFor(found, original.engine)) : found;
-  // An account's 3D model is finished on this server under its own limits (model3d-finish.ts); on this install's GPUs it isn't offered yet.
-  // Any Angle's 3D view is the exception: a splat and its turntable, nothing to finish here.
-  if (original.account && original.place === "pool" && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) throw new Error(OWN_GPU_TOOL_MESSAGE);
+  // An account's 3D model is finished on this server under its own limits (model3d-finish.ts). On this install's GPUs it
+  // is finished on a worker's CPU slot (computer/finish.ts): offered only while a worker runs that finish. Any Angle's 3D
+  // view is the exception: a splat and its turntable, nothing to finish.
+  if (original.account && original.place === "pool" && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel && !workersFinish("model3d")) throw new Error(OWN_GPU_TOOL_MESSAGE);
   if (!opts.dependsOn && shotModel?.options.multiShot?.mode === "concat" && (original.params?.shots?.filter((x) => x.prompt.trim()).length ?? 0) > 1) {
     return createShotFilm(original, shotModel);
   }
@@ -1616,17 +1622,30 @@ async function advanceDependents(): Promise<void> {
       comfyWaits().delete(r.id);
       // A camera path drawn through the still's depth on this server (Uni3C's guide where no browser drew one); a demo
       // depth step hands on a demo render. Only once ComfyUI answers: a sweep that waits for it renders nothing.
+      let pathWaits = false;
       for (let i = 0; i < slots.length; i++) {
         if (slots[i].render !== "path") continue;
         // The still, once the other slots are in (it can come from an earlier step too: a Canvas node's picture).
         const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
         const keys = request.params?.cameraPath ?? [];
         if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
-        else {
+        else if (account && stored.place === "pool" && workersFinish("path")) {
+          // A run on this install's GPUs: the path is drawn on a worker's CPU slot (computer/finish.ts), never here. The
+          // step waits for it, sweep by sweep.
+          const depth = values[i]!;
+          const got = await asRun(() => pathOnWorker(r.id, i, { photo, depth, keys, frames: PATH_FRAMES, fps: PATH_FPS }));
+          if (got.state === "failed") throw new Error(got.error);
+          if (got.state === "waiting") {
+            pathWaits = true;
+            continue;
+          }
+          values[i] = got.url;
+        } else {
           update(r.id, { message: "Rendering the camera path" });
           values[i] = await asRun(() => renderPathVideo({ photo, depth: values[i]!, keys }, r.id));
         }
       }
+      if (pathWaits) continue;
       if (model?.routes.some((x) => x.provider === "llm")) await probeLocal();
       // Filled with the slots that have an input; stored with its whole chain (and what was skipped) for a retry.
       const filled = withChainInputs({ ...request, chain: slots }, values as string[]);
@@ -2669,10 +2688,12 @@ function resumeFinish(r: Row): void {
   const outputs = JSON.parse(r.outputs_json || "[]") as OutputFile[];
   // An account's model: one account finish at a time, and no turntable on the server (its browser records one).
   const account = accountOf(r);
-  startModelFinish(r.id, outputs, {
+  // An account's run on this install's GPUs is finished on a worker's CPU slot, never here (computer/finish.ts).
+  const onWorker = !!account && (JSON.parse(r.request_json) as GenerationRequest).place === "pool" && workersFinish("model3d");
+  (onWorker ? startWorkerModelFinish : startModelFinish)(r.id, outputs, {
     op: r.op,
     provider: r.provider,
-    account,
+    account: account!,
     onMessage: (message) => update(r.id, { message }),
     done: (finished) => {
       const now = db().prepare("SELECT status, external_meta_json FROM generations WHERE id = ?").get(r.id) as Pick<Row, "status" | "external_meta_json"> | undefined;
@@ -2992,6 +3013,7 @@ export async function cancelGeneration(id: string): Promise<void> {
   // awaits, so it can't mark the job done in between.
   if ((JSON.parse(r.external_meta_json ?? "{}") as Record<string, unknown>).finishing) {
     stopModelFinish(id);
+  stopWorkerFinish(id);
     update(id, { status: "canceled", completed_at: Date.now(), message: null });
     return;
   }
@@ -3013,6 +3035,7 @@ export async function cancelGeneration(id: string): Promise<void> {
     else if ("run" in own) await own.run(cancel);
   }
   stopModelFinish(id);
+  stopWorkerFinish(id);
   update(id, { status: "canceled", completed_at: Date.now(), message: null });
   // Steps waiting only to feed this one are dropped too (nothing was spent on them).
   dropUnused(depIds(r.depends_on));

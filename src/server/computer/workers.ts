@@ -73,6 +73,8 @@ export interface WorkerRow {
   catalog_version?: string | null;
   /** What its PC may ever run (worker.json `ceiling`), as its last beat said. NULL: no ceiling of its own. */
   ceiling_json?: string | null;
+  /** Its CPU slot (src/lib/relay.ts CpuSlot), as its last beat said. NULL: none. */
+  cpu_slot_json?: string | null;
 }
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");

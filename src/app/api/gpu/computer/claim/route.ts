@@ -14,14 +14,15 @@ export async function POST(request: Request) {
   if (principal instanceof Response) return principal;
   const limited = rateOf(callerKey(request, principal), "claim", 60);
   if (limited) return limited;
-  const body = (await request.json().catch(() => null)) as { device?: unknown; running?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { device?: unknown; running?: unknown; slot?: unknown } | null;
   const running = Array.isArray(body?.running) ? body.running.filter((x): x is string => typeof x === "string").slice(0, 32) : [];
   try {
     const worker = requestWorker(request);
     // Job tickets made for the catalog before this version of the studio are made again first (ticket-refresh.ts).
     if (worker?.kind === "pool") await refreshTicketsBeforeClaim();
-    // A shared GPU takes the best task it can run from its pool (pool.ts); a person's computer, their own oldest.
-    const task = worker?.kind === "pool" ? workerClaim(worker, running) : claim(principal, String(body?.device ?? ""), running);
+    // A shared GPU takes the best task it can run from its pool (pool.ts), for its GPU or for its CPU slot (`slot`:
+    // "cpu"); a person's computer, their own oldest.
+    const task = worker?.kind === "pool" ? workerClaim(worker, running, Date.now(), body?.slot === "cpu" ? "cpu" : "gpu") : claim(principal, String(body?.device ?? ""), running);
     if (!task) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     return Response.json({ task }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

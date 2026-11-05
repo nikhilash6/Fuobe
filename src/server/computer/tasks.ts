@@ -22,7 +22,9 @@ import {
   type ReportEvent,
   type TaskInput,
   type WantedFile,
+  previewOf,
 } from "@/lib/relay";
+import type { FinishTicket } from "@/lib/finish-ticket";
 import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 import { runCeilingMs } from "../queue-settings";
@@ -63,11 +65,19 @@ export interface Progress {
   node?: string;
   nodesDone?: number;
   position?: number;
+  /** A worker's latest live preview (a JPEG as base64, src/lib/relay.ts PREVIEW_LIMITS), and when it came. */
+  preview?: string;
+  previewAt?: number;
   at: number;
 }
 
 const progressMap = () => (globalThis.__fuobeRelayProgress ??= new Map());
 export const taskProgress = (id: string): Progress | undefined => progressMap().get(id);
+/** A task's latest live preview from its worker: a JPEG (at most 64 KB) and when it came, or null. */
+export function taskPreview(id: string): { jpeg: Buffer; at: number } | null {
+  const p = progressMap().get(id);
+  return p?.preview ? { jpeg: Buffer.from(p.preview, "base64"), at: p.previewAt ?? p.at } : null;
+}
 
 /** The relay's tables are made with the database (db.ts RELAY_TABLES). */
 const rdb = () => db();
@@ -82,6 +92,10 @@ export interface TaskRow {
   graph_json: string | null;
   /** An account's task for workers: its job ticket (src/lib/job-ticket.ts), in place of a graph (graph_json is NULL). */
   ticket_json?: string | null;
+  /** A finishing job for a worker's CPU slot (src/lib/finish-ticket.ts), in place of a graph (graph_json is NULL). */
+  finish_json?: string | null;
+  /** The worker slot that takes it: "cpu" (light CPU work, a finishing job), or NULL (its GPU's). */
+  slot?: string | null;
   prompt_id: string;
   prefix: string | null;
   meta_batch: number;
@@ -315,6 +329,8 @@ export interface NewTask {
    * inputs the ticket names.
    */
   ticket?: JobTicket;
+  /** A finishing job (src/lib/finish-ticket.ts): no graph and no ticket; the worker's CPU slot runs it with its own code. */
+  finish?: FinishTicket;
   prefix?: string;
   metaBatch?: boolean;
   preview?: boolean;
@@ -325,8 +341,10 @@ export interface NewTask {
   loras?: { file: string; url?: string }[];
   /** How many results its workflow says one job makes (an owner's job keeps no more than that, and at least 16). */
   outputs?: number;
+  /** More to keep with it (a finishing job's step). */
+  extra?: Record<string, unknown>;
   /** For workers (pool.ts): the pools that may take it, and what they need to. */
-  pool?: { pools: string[]; account?: string; class?: "paid" | "free" | "owner"; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string };
+  pool?: { pools: string[]; account?: string; class?: "paid" | "free" | "owner"; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string; slot?: "cpu" };
 }
 
 /** A ComfyUI job for a computer: the graph, the inputs it names, and a prompt id minted here. */
@@ -335,24 +353,24 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   const promptId = crypto.randomUUID();
   const now = Date.now();
   const d = rdb();
-  const named = t.ticket ? new Set(t.ticket.inputs.map((i) => i.name)) : graphStrings(t.graph);
+  const named = t.finish ? new Set(t.finish.inputs.map((i) => i.name)) : t.ticket ? new Set(t.ticket.inputs.map((i) => i.name)) : graphStrings(t.graph);
   d.transaction(() => {
     const pool = t.pool;
     d.prepare(
       `INSERT INTO relay_tasks (id, principal, generation_id, state, graph_json, prompt_id, prefix, meta_batch, preview, workflow_id, extra_json, created_at, updated_at,
-         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class, ticket_json)
-       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class, ticket_json, finish_json, slot)
+       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       t.principal,
       t.generationId,
-      t.ticket ? null : JSON.stringify(t.graph),
+      t.ticket || t.finish ? null : JSON.stringify(t.graph),
       promptId,
       t.prefix ?? null,
       t.metaBatch ? 1 : 0,
       t.preview ? 1 : 0,
       t.workflowId ?? null,
-      JSON.stringify({ made: t.made, loras: t.loras ?? [], ...(t.outputs && { outputs: t.outputs }) }),
+      JSON.stringify({ ...t.extra, made: t.made, loras: t.loras ?? [], ...(t.outputs && { outputs: t.outputs }) }),
       now,
       now,
       pool?.account ?? null,
@@ -365,6 +383,8 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
       pool?.onlyWorker ?? null,
       pool ? (pool.class ?? (pool.account ? "free" : "owner")) : null,
       t.ticket ? JSON.stringify(t.ticket) : null,
+      t.finish ? JSON.stringify(t.finish) : null,
+      pool?.slot ?? null,
     );
     const free = d.prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL ORDER BY created_at").all(t.principal) as { name: string }[];
     let n = 0;
@@ -501,7 +521,16 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
   return { runner: free, heldElsewhere: !free && elsewhere, waiting, stops };
 }
 
-export function noteProgress(id: string, r: Record<string, unknown>, now: number) {
+/**
+ * Does a worker's task show live previews: a task on the workers whose run asked for previews, that isn't a finishing
+ * job, and whose results aren't checked before anyone sees them.
+ */
+export function showsPreview(t: Pick<TaskRow, "pools" | "preview" | "finish_json" | "extra_json">): boolean {
+  return !!t.pools && !!t.preview && !t.finish_json && !json<{ checkOutputs?: boolean }>(t.extra_json, {}).checkOutputs;
+}
+
+/** Keep a task's live progress. A preview is kept only from a progress report (`o.preview`), never from a beat. */
+export function noteProgress(id: string, r: Record<string, unknown>, now: number, o: { preview?: boolean } = {}) {
   const p: Progress = { at: now };
   for (const k of ["value", "max", "nodesDone", "position"] as const) {
     const v = nonNeg(r[k]);
@@ -509,6 +538,9 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   }
   const node = str(r.node, 64);
   if (node) p.node = node;
+  // A worker's live preview: a JPEG of at most 64 KB (previewOf); a larger one, or anything else, is dropped.
+  const preview = o.preview ? previewOf(r.preview) : undefined;
+  if (preview) Object.assign(p, { preview, previewAt: now });
   progressMap().set(id, { ...progressMap().get(id), ...p });
 }
 
@@ -556,14 +588,19 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
   const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
   // An account's task for workers hands out its job ticket, never a graph (src/lib/job-ticket.ts).
   const ticket = t.ticket_json ? json<JobTicket | null>(t.ticket_json, null) : null;
+  // A finishing job hands out its finish ticket (src/lib/finish-ticket.ts): no graph and no job ticket.
+  const finish = t.finish_json ? json<FinishTicket | null>(t.finish_json, null) : null;
   return {
     id: t.id,
     generationId: t.generation_id,
     lease,
-    ...(ticket ? { ticket } : { graph: json(t.graph_json, {}) }),
+    ...(finish ? { finish } : ticket ? { ticket } : { graph: json(t.graph_json, {}) }),
+    ...(t.slot === "cpu" && { slot: "cpu" as const }),
     ...(t.pools && { class: (t.class === "paid" || t.class === "owner" ? t.class : t.class === "free" || t.account ? "free" : "owner") as "paid" | "free" | "owner", ...(t.workflow_id && { workflowId: t.workflow_id }) }),
     promptId: t.prompt_id,
     preview: !!t.preview,
+    // A worker sends live previews only of a run that shows them: never of one whose results are checked first.
+    ...(showsPreview(t) && { reportPreview: true as const }),
     ...(t.prefix && { prefix: t.prefix }),
     ...(t.meta_batch && { metaBatch: true }),
     inputs,
@@ -691,7 +728,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       return { ok: true };
     case "running":
       setTask(t.id, { ...seen, state: "running", ...(!t.started_at && { started_at: now }), note: null });
-      noteProgress(t.id, { ...e, position: undefined }, now);
+      // A live preview only from the attempt that holds the lease, for a run that shows them.
+      noteProgress(t.id, { ...e, position: undefined }, now, { preview: showsPreview(t) });
       return { ok: true };
     case "finished":
     case "passes": {
@@ -923,7 +961,7 @@ export function sweepRelay(now = Date.now()): { inputs: number; tasks: number } 
     .all(now - RELAY_TIMES.keepMs) as { id: string; finished_at: number | null }[];
   for (const t of ended) {
     fs.rmSync(taskDir(t.id), { recursive: true, force: true });
-    d.prepare("UPDATE relay_tasks SET graph_json = NULL, ticket_json = NULL WHERE id = ?").run(t.id);
+    d.prepare("UPDATE relay_tasks SET graph_json = NULL, ticket_json = NULL, finish_json = NULL WHERE id = ?").run(t.id);
   }
   const old = d.prepare("DELETE FROM relay_tasks WHERE state IN ('done','failed','canceled') AND finished_at < ?").run(now - RELAY_TIMES.keepMs);
   return { inputs: stale.length, tasks: old.changes };

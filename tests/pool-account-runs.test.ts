@@ -140,7 +140,7 @@ function workerRunner(token: string) {
       origin: "http://localhost:3000",
       sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 50))),
       compose: (t) => composeOnWorker(t),
-      beatExtra: () => ({ protocol: 2, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null, catalogVersion: catalogVersion() }),
+      beatExtra: () => ({ protocol: 3, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null, catalogVersion: catalogVersion() }),
     },
     { device: "worker", port: comfy.port, clientId: "worker-test" },
   );
@@ -191,7 +191,7 @@ function accountTask(o: { lane?: string; account?: string; rankAt?: number; notA
 type WorkerRow = import("@/server/computer/workers").WorkerRow;
 const workerRow = (w: { id: string }) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
 const beatAs = (w: { id: string }, now = Date.now()) =>
-  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion() }), now);
+  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion() }), now);
 const claimAs = (w: { id: string }, running: string[] = [], now = Date.now()) => pool.workerClaim(workerRow(w), running, now);
 
 describe("with hosted runs off, nothing changes", () => {
@@ -387,7 +387,7 @@ describe("the line", () => {
     // The worker pauses at once (another program on the GPU): the job goes back in line at no cost.
     pool.workerBeat(
       db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as never,
-      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: true, why: "gpu-busy:game.exe", until: null }, gpu: {}, running: [{ task: first.id }], stopped: [] }),
+      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: true, why: "gpu-busy:game.exe", until: null }, gpu: {}, running: [{ task: first.id }], stopped: [] }),
     );
     const back = rowOf(first.id);
     expect(back.state).toBe("waiting");
@@ -426,7 +426,7 @@ describe("the line", () => {
     // The worker pauses at once (its owner pressed the pause): the run goes back in line.
     pool.workerBeat(
       db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as never,
-      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: true, why: "here-now", until: null }, gpu: {}, running: [{ task: t.id }], stopped: [] }),
+      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: true, why: "here-now", until: null }, gpu: {}, running: [{ task: t.id }], stopped: [] }),
     );
     const back = await until(() => {
       const g = getGeneration(id);
@@ -710,23 +710,24 @@ describe("graphs and results for the workers", () => {
 });
 
 describe("nothing of a run on the workers goes to a ComfyUI address", () => {
-  it("an account's picture is made again from its pixels (no EXIF) and kept for its task", async () => {
+  it("an account's picture is kept for its task as it came (the worker makes it again from its pixels), and never decoded here", async () => {
     const sharp = (await import("sharp")).default;
     const jpeg = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#c33" } })
       .jpeg()
       .withExif({ IFD0: { Copyright: "private note", Artist: "someone" } })
       .toBuffer();
     expect((await sharp(jpeg).metadata()).exif).toBeDefined();
-    const { comfyProvider } = await import("@/server/providers/comfyui");
+    const { comfyProvider, mediaInfoFor } = await import("@/server/providers/comfyui");
     const staged = await hosted.runOnPool(accountId, () => comfyProvider.prepareFile!(jpeg, "image/jpeg", "me.jpg"));
     const row = db().prepare("SELECT principal, content_type FROM relay_inputs WHERE name = ?").get(staged) as { principal: string; content_type: string };
-    expect(row).toEqual({ principal: `acct:${accountId}`, content_type: "image/png" });
+    expect(row).toEqual({ principal: `acct:${accountId}`, content_type: "image/jpeg" });
     const fs = await import("node:fs");
     const path = await import("node:path");
-    const kept = fs.readFileSync(path.join(dir, "relay", "in", staged));
-    const meta = await sharp(kept).metadata();
-    expect(meta.format).toBe("png");
-    expect(meta.exif).toBeUndefined();
+    expect(fs.readFileSync(path.join(dir, "relay", "in", staged)).equals(jpeg)).toBe(true);
+    // Its size as it shows (turned by its orientation), as the worker's upright copy has it.
+    expect(hosted.runOnPool(accountId, () => mediaInfoFor(staged))).toMatchObject({ width: 8, height: 8 });
+    // Something that isn't a picture is never kept as one.
+    await expect(hosted.runOnPool(accountId, () => comfyProvider.prepareFile!(Buffer.from("not a picture"), "image/jpeg", "x.jpg"))).rejects.toThrow();
     expect(serverComfyCalls()).toEqual([]);
   });
 

@@ -101,7 +101,7 @@ function addWorker(): W {
 const beat = (w: W, o: { catalogVersion?: string | null; ceiling?: unknown } = {}) =>
   pool.workerBeat(
     workerRow(w),
-    pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: o.catalogVersion === undefined ? VERSION : o.catalogVersion, ...(o.ceiling !== undefined && { ceiling: o.ceiling }) }),
+    pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: o.catalogVersion === undefined ? VERSION : o.catalogVersion, ...(o.ceiling !== undefined && { ceiling: o.ceiling }) }),
   );
 const claim = (w: W) => pool.workerClaim(workerRow(w), []);
 

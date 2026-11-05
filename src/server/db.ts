@@ -1021,6 +1021,11 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "ticket_json", "TEXT"],
   ["relay_workers", "catalog_version", "TEXT"],
   ["relay_workers", "ceiling_json", "TEXT"],
+  // The CPU slot (docs/gpu-workers.md): a task for a worker's CPU slot ("cpu"; NULL: its GPU's), a finishing job's
+  // ticket (src/lib/finish-ticket.ts), and the CPU slot a worker's last beat said it has (NULL: none).
+  ["relay_tasks", "slot", "TEXT"],
+  ["relay_tasks", "finish_json", "TEXT"],
+  ["relay_workers", "cpu_slot_json", "TEXT"],
 ];
 
 declare global {

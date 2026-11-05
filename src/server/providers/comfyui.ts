@@ -24,7 +24,7 @@ import { CONTEXT_LOOP_IDS, runName } from "@/lib/openjutsu-graphs";
 import { reuseOf, reviewOfRun } from "@/lib/catalog/remove-object";
 import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
 import type { GenInput, MediaKind, ModelRoute, Operation } from "@/lib/catalog/types";
-import { imageSize } from "@/lib/image-size";
+import { imageSize, orientedImageSize } from "@/lib/image-size";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
 import { ocrText, parseOcrFrame, parseOcrLines, type OcrFrame } from "@/lib/ocr";
 import { getSetting, isCandidate, savedSetting } from "../settings";
@@ -209,10 +209,19 @@ const poolMedia = () => new Set((process.env.FUOBE_POOL_MEDIA_INPUTS ?? "image")
 /** May a job for workers send them files of this kind ("image", "video", "audio")? */
 export const workersTake = (kind: "image" | "video" | "audio"): boolean => poolMedia().has(kind);
 
-export async function forWorkers(data: Buffer, contentType: string, name: string): Promise<{ data: Buffer; contentType: string; name: string }> {
+/**
+ * A file for a job on the workers: refused when they don't take its kind. A picture is made again from its pixels here
+ * (no EXIF, no GPS), unless `o.onWorker`: then the worker makes it again itself before its ComfyUI reads it, and this
+ * server only checks that it is a picture it can size.
+ */
+export async function forWorkers(data: Buffer, contentType: string, name: string, o: { onWorker?: boolean } = {}): Promise<{ data: Buffer; contentType: string; name: string }> {
   const kind = contentType.split("/")[0];
   if (!poolMedia().has(kind)) throw new ProviderError(kind === "video" ? "The shared GPUs don't take clips yet." : kind === "audio" ? "The shared GPUs don't take sound yet." : "The shared GPUs don't take this kind of file.");
   if (kind !== "image") return { data, contentType, name };
+  if (o.onWorker) {
+    if (!imageSize(data)) throw new ProviderError("The shared GPUs don't take this kind of file.");
+    return { data, contentType, name };
+  }
   const sharp = (await import("sharp")).default;
   const png = await sharp(data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 }).rotate().png().toBuffer();
   return { data: png, contentType: "image/png", name: name.replace(/\.[^.]*$/, "") + ".png" };
@@ -1001,8 +1010,9 @@ function rememberSent(uploaded: string, data: Buffer, contentType: string, name:
     const info = probeMedia(data) ?? webmInfo(data) ?? aviInfo(data);
     if (info) rememberMedia(uploaded, info);
   } else if (/^image\//.test(contentType)) {
-    // A start frame's size: "auto" makes an image-to-video clip in the picture's own shape.
-    const size = imageSize(data);
+    // A start frame's size: "auto" makes an image-to-video clip in the picture's own shape (as it shows, turned by its
+    // EXIF orientation: a worker makes the picture again upright).
+    const size = orientedImageSize(data);
     if (size) rememberMedia(uploaded, { container: "image", ...size, hasVideo: false, hasAudio: false });
   }
 }
@@ -1310,7 +1320,10 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   const computer = computerScope();
   if (computer) {
     if (worker === "isolated") throw new ProviderError(ISOLATED_ON_COMPUTER);
-    const sent = onWorkers(computer) ? await forWorkers(data, contentType, name) : { data, contentType, name };
+    // An account's run on the workers sends its pictures as they came: the worker makes each one again from its pixels
+    // before its ComfyUI reads it (bin/lib/worker/picture.mjs), so this server never decodes them. The owner's own jobs
+    // are made again here, as before.
+    const sent = onWorkers(computer) ? await forWorkers(data, contentType, name, { onWorker: computer !== "owner" }) : { data, contentType, name };
     const staged = stageInput(computer, sent.data, sent.contentType, sent.name);
     rememberSent(staged, sent.data, sent.contentType, sent.name);
     return staged;
@@ -1659,6 +1672,8 @@ export const comfyProvider: ProviderAdapter = {
         prefix: typeof meta.prefix === "string" ? meta.prefix : undefined,
         metaBatch,
         preview: true,
+        // A run whose results are checked before anyone sees them sends no live previews from the workers.
+        ...(forPool && runStamp()?.checkOutputs && { extra: { checkOutputs: true } }),
         workflowId: manifest.id,
         made: model?.kind,
         loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),

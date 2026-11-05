@@ -7,6 +7,7 @@
  * Pure (no I/O): the server's checks and the tab's script share it. None of these words reach the UI.
  */
 
+import type { FinishTicket } from "./finish-ticket";
 import type { Ceiling, JobTicket } from "./job-ticket";
 
 /** Where a task is. */
@@ -28,9 +29,11 @@ export interface HistoryEntryLike {
 /**
  * Why the tab gave up on a task by itself (the server says it in plain words). A worker adds three: its ComfyUI stopped
  * twice while running the task ("input-crashed"), a clip or a sound that couldn't be made again ("input-unreadable"),
- * and a job ticket it refused (src/lib/job-ticket.ts), or a graph where a ticket belongs ("bad-ticket").
+ * and a job ticket it refused (src/lib/job-ticket.ts), or a graph where a ticket belongs ("bad-ticket"). A finishing job
+ * (src/lib/finish-ticket.ts) adds two: a 3D model that isn't a self-contained binary glTF ("unsafe-model"), and a finish
+ * that couldn't be made ("finish-failed").
  */
-export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified", "input-crashed", "input-unreadable", "bad-ticket"] as const;
+export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified", "input-crashed", "input-unreadable", "bad-ticket", "unsafe-model", "finish-failed"] as const;
 export type TabFailure = (typeof TAB_FAILURES)[number];
 
 /**
@@ -53,8 +56,11 @@ export type ReportEvent =
   | { event: "refused"; status: number; body: unknown }
   /** Waiting in ComfyUI's queue: how many prompts are before it. */
   | { event: "queued"; position: number }
-  /** Running: the sampler's steps, and the node. */
-  | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
+  /**
+   * Running: the sampler's steps, and the node. A worker may add its ComfyUI's latest preview (`preview`: a JPEG as
+   * base64, at most PREVIEW_LIMITS.maxBytes, at most one every PREVIEW_LIMITS.everyMs). A larger one is dropped.
+   */
+  | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number; preview?: string }
   /**
    * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), how long its ComfyUI spent
    * executing the job (`execMs`: execution only, no waits, no uploads), its GPU's name (`device`), and `kept` when the
@@ -156,6 +162,15 @@ export interface ClaimedTask {
   /** A worker's task: its class in the line ("owner": the owner's own job), and its workflow. */
   class?: "paid" | "free" | "owner";
   workflowId?: string;
+  /** A worker's task for its CPU slot (light CPU work, or a finishing job): "cpu". Absent: its GPU's. */
+  slot?: "cpu";
+  /** A finishing job (src/lib/finish-ticket.ts), in place of a graph or a job ticket: the worker runs it with its own code. */
+  finish?: FinishTicket;
+  /**
+   * A worker's task whose run shows a live preview: the worker may send its ComfyUI's latest preview with its progress
+   * (PREVIEW_LIMITS). Absent: it sends none (a run whose results are checked before anyone sees them never has it).
+   */
+  reportPreview?: true;
 }
 
 /** The tab's facts about its ComfyUI (never its command line: that holds paths and user names). */
@@ -261,6 +276,34 @@ export interface WorkerBeat {
    * going quiet during that sleep goes on with no blame: no attempt counted, and this worker may take it again.
    */
   slept?: number;
+  /**
+   * Its CPU slot (docs/gpu-workers.md, "The CPU slot"), when it has one: the finishing jobs it runs. Absent or null: no
+   * CPU slot, and its GPU's slot takes light CPU work as before.
+   */
+  cpuSlot?: CpuSlot | null;
+  /** The tasks its CPU slot works on, with where each is (as `running` for its GPU's). */
+  cpuRunning?: { task: string; position?: number; value?: number; max?: number; node?: string; nodesDone?: number }[];
+}
+
+/** A worker's CPU slot: it takes light CPU work (catalog workflows marked cpu) and these finishing jobs. */
+export interface CpuSlot {
+  finishes: string[];
+}
+
+/**
+ * A worker's live preview in a progress report: a JPEG, at most this big, at most one this often. A larger one is
+ * dropped (the report itself is kept).
+ */
+export const PREVIEW_LIMITS = { maxBytes: 64 * 1024, everyMs: 2000 };
+
+/** A report's preview as kept: base64 of a JPEG of at most PREVIEW_LIMITS.maxBytes, else undefined. */
+export function previewOf(v: unknown): string | undefined {
+  if (typeof v !== "string" || !v || v.length % 4 !== 0 || v.length > Math.ceil(PREVIEW_LIMITS.maxBytes / 3) * 4) return undefined;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(v)) return undefined;
+  const pad = v.endsWith("==") ? 2 : v.endsWith("=") ? 1 : 0;
+  if ((v.length / 4) * 3 - pad > PREVIEW_LIMITS.maxBytes) return undefined;
+  // A JPEG starts FF D8 FF ("/9j/" in base64).
+  return v.startsWith("/9j/") ? v : undefined;
 }
 
 /** Task timings (DESIGN 5.5): the runner lease, how often the tab beats, when a computer counts as gone. */
@@ -454,6 +497,10 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
       return "A clip or sound in this run couldn't be read.";
     case "bad-ticket":
       return "This run couldn't be made with these settings.";
+    case "unsafe-model":
+      return "This 3D model couldn't be opened for the web, so it is kept as it is.";
+    case "finish-failed":
+      return "This run couldn't finish.";
     default:
       return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }

@@ -1,7 +1,8 @@
-import { GIVE_BACK, RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
+import { GIVE_BACK, previewOf, RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
 import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
 import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { noteFinished } from "@/server/computer/bench";
+import { planFinish } from "@/server/computer/finish";
 import { leased, report, type TaskRow } from "@/server/computer/tasks";
 import { onComputer, planRelayOutputs } from "@/server/providers/comfyui";
 import { enter } from "@/server/rate";
@@ -10,8 +11,10 @@ const EVENTS = new Set(["sent", "refused", "queued", "running", "finished", "pas
 
 /** Reports read at once: one person's, and across the server (each holds its body in memory while it is read). */
 const AT_ONCE = { person: 2, all: 16 };
-/** A report over this size counts against a lower limit a minute. */
-const LARGE_BYTES = 64 * 1024;
+/** A report over this size counts against a lower limit a minute (a progress report with a preview stays under it). */
+const LARGE_BYTES = 128 * 1024;
+/** The most a progress report with a worker's live preview may weigh (its preview is kept only up to 64 KB). */
+const RUNNING_BYTES = 256 * 1024;
 
 /** The event as the tab sent it, with only the fields each one has, or null. */
 function eventOf(b: Record<string, unknown>): ReportEvent | null {
@@ -29,8 +32,11 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
       return { event: e, status: num(b.status) ?? 400, body: b.body };
     case "queued":
       return { event: e, position: num(b.position) ?? -1 };
-    case "running":
-      return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }) };
+    case "running": {
+      // A worker's live preview: kept only as a JPEG of at most 64 KB (a larger one is dropped, the report kept).
+      const preview = previewOf(b.preview);
+      return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }), ...(preview && { preview }) };
+    }
     case "finished":
       return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...exec } : null;
     case "passes":
@@ -104,13 +110,17 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
     } catch {}
     const event = body && typeof body === "object" ? eventOf(body) : null;
     if (!event) return no(400, "Not a report");
-    if (!LARGE_EVENTS.has(event.event) && raw!.length > RELAY_LIMITS.smallReportBytes) return no(413, "That report is too large");
+    // A progress report is a few KB, unless it carries a worker's live preview.
+    const withPreview = event.event === "running" && typeof body?.preview === "string";
+    if (!LARGE_EVENTS.has(event.event) && raw!.length > (withPreview ? RUNNING_BYTES : RELAY_LIMITS.smallReportBytes)) return no(413, "That report is too large");
     // Where the job is now (it may have moved while the body arrived).
     const t = leased(principal, id, lease);
-    const answer = report(t, event, (entries, passes) => onComputer(t.principal, () => planRelayOutputs(t, entries, passes)));
+    // A finishing job (src/lib/finish-ticket.ts) names its results by role; any other job, by its workflow's outputs.
+    const answer = report(t, event, (entries, passes) => onComputer(t.principal, () => (t.finish_json ? planFinish(t, entries) : planRelayOutputs(t, entries, passes))));
     // A worker's finished job counts toward its lane's times there (not results kept from an earlier try: their time
-    // there would be only the upload's). The workers' log keeps its measured run (tasks.ts report).
-    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running" && !event.kept) noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
+    // there would be only the upload's; not a CPU slot's work, which uses no GPU). The workers' log keeps its measured
+    // run (tasks.ts report).
+    if (t.pools && !t.slot && (event.event === "finished" || event.event === "passes") && answer.state !== "running" && !event.kept) noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
     return Response.json(answer, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return relayAnswer(e);

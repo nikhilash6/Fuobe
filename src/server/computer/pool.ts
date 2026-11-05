@@ -1,8 +1,9 @@
 import "server-only";
 import crypto from "node:crypto";
+import { FINISH_KINDS, FINISH_RUN_MS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
 import { allLanes, laneLabel, lanesFor, MEDIA_KINDS, needsOf, type Inventory, type Needs } from "@/lib/lanes";
-import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
+import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
@@ -25,6 +26,11 @@ import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRo
  * every input against its rules, and keeps its ComfyUI behind the guard. An older one is told to update.
  */
 export const MIN_PROTOCOL = 2;
+/**
+ * The oldest worker program that takes an account's job ticket: 3 makes every picture again from its pixels before its
+ * ComfyUI reads it (the studio sends an account's pictures as they came), and has a CPU slot when worker.json asks.
+ */
+export const TICKET_PROTOCOL = 3;
 /** A worker's own pause while a model folder of its isn't there yet: it keeps its last list of files. */
 export const MODELS_NOT_READY = "models-not-ready";
 /** A task avoids workers that lost or failed it, unless no other worker that can run it beat this recently. */
@@ -63,7 +69,7 @@ export const classRank = (t: Pick<TaskRow, "class" | "account">): number => (t.c
  */
 const LINE_ORDER = `${CLASS_RANK}, rank_at, created_at, id`;
 /** The columns the line's counts read (never a task's graph or files). */
-const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class, extra_json";
+const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class, extra_json, slot, finish_json";
 /**
  * A task a worker took that is still sending its files to its ComfyUI this long after the claim (or after its ComfyUI lost
  * it and it began sending them again on the same claim) goes back in line.
@@ -88,6 +94,43 @@ export function attemptDeadline(t: Pick<TaskRow, "state" | "claimed_at" | "lane"
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
 const MAX_RUNNING = 32;
+
+// ---------------------------------------------------------------------------
+// The CPU slot (docs/gpu-workers.md): a worker may run one CPU task beside its GPU job
+
+/** A worker's two slots: its GPU's (the jobs that use its GPU) and its CPU slot's (light CPU work, finishing jobs). */
+export type WorkerSlot = "gpu" | "cpu";
+
+/** The device a worker's slot takes its tasks under: its GPU's `wkr-<id>`, its CPU slot's `wkr-<id>-cpu`. */
+export const slotDevice = (w: Pick<WorkerRow, "id">, slot: WorkerSlot = "gpu") => (slot === "cpu" ? `wkr-${w.id}-cpu` : `wkr-${w.id}`);
+
+/** A worker's CPU slot as its last beat said (null: it has none, and its GPU's slot takes light CPU work as before). */
+export function cpuSlotOf(w: Pick<WorkerRow, "cpu_slot_json">): CpuSlot | null {
+  const s = w.cpu_slot_json ? json<CpuSlot | null>(w.cpu_slot_json, null) : null;
+  return s && Array.isArray(s.finishes) ? s : null;
+}
+
+/** A CPU slot as a beat may say it: the finishing jobs it runs, known kinds only. */
+function cleanCpuSlot(v: unknown): CpuSlot | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const f = (v as { finishes?: unknown }).finishes;
+  return { finishes: Array.isArray(f) ? FINISH_KINDS.filter((k) => f.includes(k)) : [] };
+}
+
+/** A finishing job's kind (src/lib/finish-ticket.ts), or null for any other task. */
+const finishKind = (t: Pick<TaskRow, "finish_json">): string | null => (t.finish_json ? (json<FinishTicket | null>(t.finish_json, null)?.kind ?? "?") : null);
+
+/**
+ * The slot of this worker that takes a task: a finishing job always its CPU slot; light CPU work (a task marked "cpu")
+ * its CPU slot when it has one, else its GPU's slot, as before; anything else its GPU's.
+ */
+export function slotFor(t: Pick<TaskRow, "slot" | "finish_json">, w: Pick<WorkerRow, "cpu_slot_json">): WorkerSlot {
+  if (t.finish_json) return "cpu";
+  return t.slot === "cpu" && cpuSlotOf(w) ? "cpu" : "gpu";
+}
+
+/** The run limit of a task in a CPU slot: its lane's run ceiling, never more than a finishing job's. */
+const cpuRunLimitMs = (t: Pick<TaskRow, "lane">) => Math.min(FINISH_RUN_MS, runCeilingMs(t.lane));
 
 // ---------------------------------------------------------------------------
 // What a worker is now
@@ -142,7 +185,7 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
     return { state: "waiting-for-yield", words: `Waiting for local ComfyUI work to make room${w.local_until ? ` (starts about ${clock(w.local_until, tz)})` : ""}` };
   }
   // Built from another catalog while people's runs may come here: it takes the owner's own jobs, and theirs once updated.
-  if (hostedRunsOn() && catalogVersion() && !catalogCurrent(w)) return { state: "update-worker", words: "Update the worker: it takes only your own jobs until then" };
+  if (hostedRunsOn() && ((catalogVersion() && !catalogCurrent(w)) || (w.protocol ?? 0) < TICKET_PROTOCOL)) return { state: "update-worker", words: "Update the worker: it takes only your own jobs until then" };
   return { state: "idle", words: "Ready" };
 }
 
@@ -195,6 +238,8 @@ export function cleanBeat(b: unknown): WorkerBeat {
     stopped: Array.isArray(o.stopped) ? o.stopped.filter((x): x is string => typeof x === "string").slice(0, 64) : [],
     held: Array.isArray(o.held) ? o.held.filter((x): x is string => typeof x === "string").slice(0, 16) : [],
     ...((num(o.slept) ?? 0) > 0 && { slept: Math.min(num(o.slept)!, MAX_SLEPT_MS) }),
+    cpuSlot: cleanCpuSlot(o.cpuSlot),
+    cpuRunning: Array.isArray(o.cpuRunning) ? (o.cpuRunning.slice(0, MAX_RUNNING) as WorkerBeat["running"]) : [],
   };
 }
 
@@ -213,17 +258,20 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     const facts = b.facts ? { ...b.facts, loras: undefined } : undefined;
     d.prepare(
       `UPDATE relay_workers SET seen_at = ?, device = ?, protocol = ?, version = ?, paused_local = ?, local_why = ?, local_until = ?,
-         warm_lane = ?, facts_json = COALESCE(?, facts_json), catalog_version = ?, ceiling_json = ? WHERE id = ?`,
-    ).run(now, device, b.protocol, b.version, b.local.paused ? 1 : 0, b.local.why, b.local.until, b.warmLane, facts ? JSON.stringify(facts) : null, b.catalogVersion ?? null, b.ceiling ? JSON.stringify(b.ceiling) : null, w.id);
+         warm_lane = ?, facts_json = COALESCE(?, facts_json), catalog_version = ?, ceiling_json = ?, cpu_slot_json = ? WHERE id = ?`,
+    ).run(now, device, b.protocol, b.version, b.local.paused ? 1 : 0, b.local.why, b.local.until, b.warmLane, facts ? JSON.stringify(facts) : null, b.catalogVersion ?? null, b.ceiling ? JSON.stringify(b.ceiling) : null, b.cpuSlot ? JSON.stringify(b.cpuSlot) : null, w.id);
     // Its PC slept: a job taken back from it for going quiet meanwhile counts against no one.
     if (b.slept) forgiveSleep(w, b.slept, now);
-    for (const r of b.running) {
+    // The tasks of both its slots stay alive, with their progress.
+    for (const r of [...b.running, ...(b.cpuRunning ?? [])]) {
       const t = typeof r?.task === "string" ? (d.prepare("SELECT * FROM relay_tasks WHERE id = ? AND worker_id = ?").get(r.task, w.id) as TaskRow | undefined) : undefined;
       if (!t || !(SENT_STATES as readonly string[]).includes(t.state)) continue;
       setTask(t.id, { device_seen_at: now });
       noteProgress(t.id, r as unknown as Record<string, unknown>, now);
     }
     for (const id of b.stopped) d.prepare("UPDATE relay_tasks SET stop = 0 WHERE id = ? AND device = ?").run(id, device);
+    // A task its CPU slot held that ended with a stop: the CPU slot heard it in its reports and emptied its ComfyUI then.
+    d.prepare("UPDATE relay_tasks SET stop = 0 WHERE device = ? AND stop = 1 AND state IN ('done','failed','canceled')").run(slotDevice(w, "cpu"));
     const stops = (d.prepare("SELECT id, prompt_id, prefix FROM relay_tasks WHERE device = ? AND stop = 1").all(device) as { id: string; prompt_id: string; prefix: string | null }[]).map((s) => ({
       task: s.id,
       promptId: s.prompt_id,
@@ -235,7 +283,10 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     const stopNow = !!fresh.stop_now || (b.local.paused && !!b.local.why && (b.local.why === "here-now" || b.local.why.startsWith("gpu-busy")));
     if (stopNow) {
       const held = new Set(b.held ?? []);
+      // Another program on its GPU stops only its GPU's job: its CPU slot's task needs no GPU, and goes on.
+      const gpuOnly = !fresh.stop_now && b.local.why !== "here-now";
       for (const t of d.prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(w.id) as TaskRow[]) {
+        if (gpuOnly && t.device === slotDevice(w, "cpu")) continue;
         // Its result is being saved, or the worker keeps the finished results on its disk (the studio may not have heard
         // that it finished): let it send them, which needs no GPU, instead of running the job again.
         if (t.state === "collecting" || held.has(t.id)) continue;
@@ -290,7 +341,8 @@ export function claimableNow(w: WorkerRow, now = Date.now()): number {
   const rows = db()
     .prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS NOT NULL AND INSTR(',' || pools || ',', ?) > 0 ORDER BY ${LINE_ORDER} LIMIT ?`)
     .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
-  return rows.filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now)).length;
+  // Only its GPU's: work its CPU slot takes never asks local ComfyUI work to make room.
+  return rows.filter((t) => fitsSlot(t, w, now, "gpu") && retryOk(t, w, now) && beforeWindowEnds(t, w, now)).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,28 +415,31 @@ export function inventoryHash(inv: Inventory): string {
 const LOOK_AT = 200;
 
 /**
- * A worker asks for work, inside one transaction: first a task it had and lost track of; then, if it holds none and may
- * take work, the best waiting task it can run (its pool, its allowed lanes and their delays, the files and VRAM it
- * needs, the retry rule, and the end of its hours). One task at a time: a worker that holds a task gets nothing new
- * until that one ends or goes back in line, so one worker's token never holds more than one person's job. Sticky
- * lanes: its warm lane goes first until another lane's best task has waited longer than switch_after_ms (and is older).
+ * A worker asks for work for one of its slots (its GPU's, or its CPU slot: `slot`), inside one transaction: first a task
+ * that slot had and lost track of; then, if the slot holds none and the worker may take work, the best waiting task that
+ * slot can run (its pool, its allowed lanes and their delays, the files and VRAM it needs, the retry rule, and the end of
+ * its hours). One task at a time in each slot: a slot that holds a task gets nothing new until that one ends or goes back
+ * in line, so one worker's token never holds more than one person's GPU job and one CPU task. Sticky lanes: its warm
+ * lane goes first until another lane's best task has waited longer than switch_after_ms (and is older).
  */
-export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): ClaimedTask | null {
+export function workerClaim(w: WorkerRow, running: string[], now = Date.now(), slot: WorkerSlot = "gpu"): ClaimedTask | null {
   const d = db();
-  const device = `wkr-${w.id}`;
+  const device = slotDevice(w, slot);
   return d.transaction((): ClaimedTask | null => {
     sweepPool(now);
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
+    // A worker with no CPU slot (as its last beat said) has nothing to claim for one.
+    if (slot === "cpu" && !cpuSlotOf(fresh)) return null;
     const held = d.prepare(`SELECT * FROM relay_tasks WHERE worker_id = ? AND device = ? AND state IN ('sending','queued','running','collecting') AND stop = 0 ORDER BY ${LINE_ORDER}`).all(fresh.id, device) as TaskRow[];
     const mine = held.find((t) => !running.includes(t.id));
-    if (mine) return claimed(mine, fresh, device, now);
+    if (mine) return claimed(mine, fresh, device, now, slot);
     if (held.length || !eligible(fresh, now)) return null;
-    const t = pick(fresh, now);
-    return t ? claimed(t, fresh, device, now) : null;
+    const t = pick(fresh, now, slot);
+    return t ? claimed(t, fresh, device, now, slot) : null;
   }).immediate();
 }
 
-function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): ClaimedTask {
+function claimed(t: TaskRow, w: WorkerRow, device: string, now: number, slot: WorkerSlot = "gpu"): ClaimedTask {
   const needs = json<Needs | null>(t.needs_json, null);
   const bench = t.lane ? benchOf(w)[t.lane] : undefined;
   if (t.state === "waiting") logWorkerJob("claimed", t, w.id, now);
@@ -396,8 +451,9 @@ function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): Claimed
   const c = takeTask(t, device, now, { worker_id: w.id, ...before, ...(t.state !== "waiting" && t.device === device && t.claimed_at && { claimed_at: t.claimed_at }) });
   // A job given back once for running past its limit gets the whole run ceiling on its next try (a lane's times may
   // come from shorter jobs than this one); past that, it fails.
-  const limit = runLimitedOf(t) ? runCeilingMs(t.lane) : runLimitMs(bench?.p90Ms, t.lane, bench?.loadMs);
-  const stall = stallLimitMs(t.lane);
+  // A CPU slot's task has the CPU slot's own run limit (a finishing job's at most).
+  const limit = slot === "cpu" ? cpuRunLimitMs(t) : runLimitedOf(t) ? runCeilingMs(t.lane) : runLimitMs(bench?.p90Ms, t.lane, bench?.loadMs);
+  const stall = Math.min(stallLimitMs(t.lane), limit);
   return {
     ...c,
     // A job ticket carries its run and stall limits too.
@@ -433,6 +489,8 @@ function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   const needs = json<Needs | null>(t.needs_json, null);
   if (ceilingProblem(ceilingOf(w), { workflowId: needs?.workflowId, lane, size: needs?.size })) return false;
   if (needs?.catalogVersion && needs.catalogVersion !== w.catalog_version) return false;
+  // A ticket's pictures come as they were sent: only a worker that makes them again from their pixels takes it.
+  if (needs?.catalogVersion && (w.protocol ?? 0) < TICKET_PROTOCOL) return false;
   if (refusedBy(t).includes(refusalKey(w))) return false;
   if (needs?.workflowId ? !cap.workflows.includes(needs.workflowId) : !cap.lanes.includes(lane)) return false;
   const vram = factsOf(w).vramBytes ?? 0;
@@ -441,12 +499,26 @@ function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   return true;
 }
 
+/**
+ * May this slot of this worker run this task: a finishing job only in a CPU slot that says it runs that kind (in the
+ * task's pools, for its worker when it names one); light CPU work in its CPU slot when it has one, else in its GPU's
+ * slot; anything else only in its GPU's slot. Then `fits` as for any task.
+ */
+function fitsSlot(t: TaskRow, w: WorkerRow, now: number, slot: WorkerSlot): boolean {
+  if (slotFor(t, w) !== slot) return false;
+  const kind = finishKind(t);
+  if (kind === null) return fits(t, w, now);
+  if (!(t.pools ?? "").split(",").includes(w.pool) || (t.only_worker && t.only_worker !== w.id) || t.stop) return false;
+  if (refusedBy(t).includes(refusalKey(w))) return false;
+  return !!cpuSlotOf(w)?.finishes.includes(kind);
+}
+
 /** The retry rule: a worker that lost or failed this task takes it again only when no other capable worker is about. */
 function retryOk(t: TaskRow, w: WorkerRow, now: number): boolean {
   const tried = json<string[]>(t.tried_json, []);
   if (!tried.includes(w.id)) return true;
   const others = db().prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL AND id != ? AND seen_at > ?").all(w.id, now - RETRY_WINDOW_MS) as WorkerRow[];
-  return !others.some((o) => !tried.includes(o.id) && fits(t, o, now + RETRY_WINDOW_MS));
+  return !others.some((o) => !tried.includes(o.id) && fitsSlot(t, o, now + RETRY_WINDOW_MS, slotFor(t, o)));
 }
 
 /** Near the end of its hours, only a task that ends before they do. */
@@ -461,16 +533,17 @@ function beforeWindowEnds(t: TaskRow, w: WorkerRow, now: number): boolean {
  * the best one, in the same class, while the best one has waited less than the pick allowance (the install's setting,
  * capped by this worker's switch_after_ms; 0: strict order).
  */
-function pick(w: WorkerRow, now: number): TaskRow | null {
+function pick(w: WorkerRow, now: number, slot: WorkerSlot = "gpu"): TaskRow | null {
   const settings = queueSettings(now);
+  // A CPU slot looks only at the tasks marked for one.
   const rows = db()
-    .prepare(`SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ORDER BY ${LINE_ORDER} LIMIT ?`)
+    .prepare(`SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ${slot === "cpu" ? "AND slot = 'cpu' " : ""}ORDER BY ${LINE_ORDER} LIMIT ?`)
     .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
-  const ok = lineOrder(rows, settings.fairShare).filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
+  const ok = lineOrder(rows, settings.fairShare).filter((t) => fitsSlot(t, w, now, slot) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
   if (!ok.length) return null;
   const best = ok[0];
   const allowance = Math.min(w.switch_after_ms, settings.pickAllowanceMs);
-  if (allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane) return best;
+  if (slot === "cpu" || allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane) return best;
   const warm = ok.find((t) => t.lane === w.warm_lane && classRank(t) === classRank(best));
   return warm && (best.rank_at ?? best.created_at) >= now - allowance ? warm : best;
 }
@@ -720,20 +793,23 @@ function estFor(t: Pick<TaskRow, "lane" | "est_ms">, workers: WorkerRow[], typic
 export function placeInLine(t: TaskRow, now = Date.now()): { place: number; etaSeconds: number | null } {
   const d = db();
   const all = poolWorkers().filter((w) => sharePool({ pools: w.pool }, t));
-  const workers = all.filter((w) => eligible(w, now) && fits({ ...t, created_at: 0 }, w, now));
+  // Each worker serves a task in one of its slots (slotFor): a slot's own line is the tasks that slot would take.
+  const serves = (x: TaskRow, w: WorkerRow) => fitsSlot({ ...x, created_at: 0 }, w, now, slotFor(t, w));
+  const workers = all.filter((w) => eligible(w, now) && serves(t, w));
   const before = lineBefore(t, now);
-  // Ahead of it: a task the same workers would serve first (with none able to run it now, any that could run it at all).
-  const able = workers.length ? workers : all.filter((w) => fits({ ...t, created_at: 0 }, w, now));
-  const ahead = before.filter((x) => sharePool(x, t) && (!able.length || able.some((w) => fits({ ...x, created_at: 0 }, w, now))));
+  // Ahead of it: a task the same slots of the same workers would serve first (with none able to run it now, any that
+  // could run it at all).
+  const able = workers.length ? workers : all.filter((w) => serves(t, w));
+  const ahead = before.filter((x) => sharePool(x, t) && (!able.length || able.some((w) => serves(x, w))));
   if (!workers.length) return { place: ahead.length + 1, etaSeconds: null };
   const typical = memo(typicalPoolMs);
   const own = estFor(t, workers, typical);
   const warm = workers.some((w) => w.warm_lane === t.lane);
   const load = warm ? 0 : Math.max(0, ...workers.map((w) => (t.lane && benchOf(w)[t.lane]?.loadMs) || 0));
   const sum = ahead.reduce((s, x) => s + estFor(x, workers, typical), 0);
-  // The jobs these workers hold now: what is left of each.
-  const ids = new Set(workers.map((w) => w.id));
-  const running = (d.prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state IN ('sending','queued','running','collecting') AND worker_id IS NOT NULL`).all() as TaskRow[]).filter((x) => ids.has(x.worker_id!));
+  // The jobs these workers' slots hold now: what is left of each.
+  const devices = new Set(workers.map((w) => slotDevice(w, slotFor(t, w))));
+  const running = (d.prepare(`SELECT ${LINE_COLS}, device FROM relay_tasks WHERE pools IS NOT NULL AND state IN ('sending','queued','running','collecting') AND worker_id IS NOT NULL`).all() as TaskRow[]).filter((x) => !!x.device && devices.has(x.device));
   const left = running.reduce((s, x) => s + Math.max(0, estFor(x, workers, typical) - (now - (x.claimed_at ?? now))), 0);
   return { place: ahead.length + 1, etaSeconds: Math.round(((sum + left) / workers.length + load + own) / 1000) };
 }
@@ -839,9 +915,9 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
   const lane = workflowId ? poolLane(workflowId) : null;
   const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
   // A new run of a person's, in the free class (a paid run's head start is the billing service's to price, not to quote).
-  const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify(needs) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null } as unknown as TaskRow;
+  const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify(needs) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null, slot: workflowId && cpuWorkflow(workflowId) ? "cpu" : null, finish_json: null } as unknown as TaskRow;
   const p = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
-  const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fits({ ...probe, created_at: 0 }, w, now))).length;
+  const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fitsSlot({ ...probe, created_at: 0 }, w, now, slotFor(probe, w)))).length;
   return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: null };
 }
 
@@ -862,6 +938,8 @@ export function poolFields(
   const lane = poolLane(workflowId);
   return {
     pools: ["pool"],
+    // Light CPU work (the requirements index marks the workflow cpu) goes to a worker's CPU slot when it has one.
+    ...(cpuWorkflow(workflowId) && { slot: "cpu" as const }),
     account: o.account,
     class: o.class ?? (o.account ? ("free" as const) : ("owner" as const)),
     // A head start is only inside a class, and never more than a day.
@@ -871,6 +949,14 @@ export function poolFields(
     notAfter: o.waitMs ? now + o.waitMs : undefined,
     onlyWorker: o.onlyWorker,
   };
+}
+
+/**
+ * Is a workflow light CPU work: the requirements index marks it `cpu` (no model file, no graphics memory, no card its
+ * nodes need: a join, a trim, adding sound, a Ken Burns move, a filter).
+ */
+export function cpuWorkflow(workflowId: string): boolean {
+  return (loadIndex().workflows as Record<string, { cpu?: boolean } | undefined>)[workflowId]?.cpu === true;
 }
 
 /** The queue block for GET /api/generations/<id>: the task's place in its lane and the estimated wait. Null when no pool task waits. */
@@ -915,6 +1001,8 @@ export interface WorkerView {
   /** What its PC may ever run (null: no ceiling of its own), and the allowed lanes inside it. */
   ceiling: Ceiling | null;
   lanesInside: string[];
+  /** Its CPU slot (light CPU work and the finishing jobs it runs), as its last beat said; null: none. */
+  cpuSlot: CpuSlot | null;
   /** The catalog version its build composes job tickets for, and whether it is this studio's (else: update the worker). */
   catalogVersion: string | null;
   catalogCurrent: boolean;
@@ -951,6 +1039,7 @@ export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
     lanes: capableOf(w).lanes,
     ceiling: ceilingOf(w),
     lanesInside: lanesInside(Object.keys(allowOf(w)), ceilingOf(w)),
+    cpuSlot: cpuSlotOf(w),
     catalogVersion: w.catalog_version ?? null,
     catalogCurrent: catalogCurrent(w),
     facts: factsOf(w),
