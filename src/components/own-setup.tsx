@@ -70,8 +70,11 @@ export function useOwnSetupViewer(): OwnSetupViewer | null {
   return { kind: v.kind, gpu: v.gpu, keys: v.keys };
 }
 
-/** Opens what a step asks for. True when it opened something (the run waits); false for `run`. */
-export function openOwnSetupStep(step: OwnSetupStep): boolean {
+/**
+ * Opens what a step asks for. True when it opened something (the run waits); false for `run`. `requirement`: the
+ * item's label, said on "Connect your GPU".
+ */
+export function openOwnSetupStep(step: OwnSetupStep, requirement?: string): boolean {
   switch (step.kind) {
     case "sign-up":
       askToSignUp("run");
@@ -80,7 +83,9 @@ export function openOwnSetupStep(step: OwnSetupStep): boolean {
       openAddKey(step.provider);
       return true;
     case "connect-gpu":
-      window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { action: "run", ...(step.gpuOnly ? { gpuOnly: true, needs: "gpu" } : { needs: "any" }) } }));
+      window.dispatchEvent(
+        new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { action: "run", ...(step.gpuOnly ? { gpuOnly: true, needs: "gpu" } : { needs: "any" }), ...(requirement && { requirement }) } }),
+      );
       return true;
     default:
       return false;
@@ -96,7 +101,7 @@ export function useOwnSetupPress(): (item: OwnSetup | string | null | undefined,
   return useCallback(
     (item, run) => {
       const o = typeof item === "string" ? ownSetupOnly(item) : (item ?? null);
-      if (openOwnSetupStep(ownSetupStep(o, viewer))) return false;
+      if (openOwnSetupStep(ownSetupStep(o, viewer), o ? ownSetupLabel(o) : undefined)) return false;
       run?.();
       return true;
     },

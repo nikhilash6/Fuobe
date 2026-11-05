@@ -1336,6 +1336,8 @@ export interface ConnectGpuDetail extends RefusalDetail {
   needs?: ConnectNeeds;
   /** A tool only a GPU runs (no fal.ai or Replicate key can): the card offers the GPU alone, to accounts too. */
   gpuOnly?: boolean;
+  /** What the item needs, in its own-setup label's words ("Runs on your own GPU · 48 GB"): said under the card's title. */
+  requirement?: string;
 }
 export type ConnectNeeds = "gpu" | "key" | "any";
 const asNeeds = (v: string | null): ConnectNeeds | undefined => (v === "gpu" || v === "key" || v === "any" ? v : undefined);

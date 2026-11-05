@@ -92,6 +92,9 @@ describe("a model over the memory of this install's GPUs", () => {
     win.window = target;
     expect(openOwnSetupStep(ownSetupStep(setup, ACCOUNT))).toBe(true);
     expect(seen).toEqual([{ type: "fuobe:connect-gpu", detail: { action: "run", gpuOnly: true, needs: "gpu" } }]);
+    // With the item's label, the card says what it needs under its title.
+    openOwnSetupStep(ownSetupStep(setup, ACCOUNT), ownSetupLabel(setup));
+    expect(seen[1]?.detail).toMatchObject({ requirement: "Runs on your own GPU · 48 GB" });
   });
 
   it("an app's own tool says the label and sends Run to the setup, never a refusal", () => {
