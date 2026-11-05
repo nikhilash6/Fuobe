@@ -1,4 +1,4 @@
-import { guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { avatarRequest, handle, makeAvatar } from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
 
@@ -12,7 +12,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/faceless/ch
   return handle(async () => {
     const { id } = await ctx.params;
     if (viewer.kind === "owner") return Response.json(makeAvatar(id), { status: 201 });
-    const run = await runAccountTool(request, viewer.account, { tool: "faceless", files: [], plan: () => planned(() => [{ request: avatarRequest(id) }]), start: () => makeAvatar(id) });
-    return run.ok ? Response.json({ ...run.value, ...(run.gpuWarning && { gpuWarning: run.gpuWarning }) }, { status: 201 }) : run.response;
+    // A resend of the same press (the page's id in its header) gets the avatar the first one started.
+    return onceForAccount(
+      viewer.account,
+      `faceless-avatar:${id}`,
+      pressIdOf(request),
+      () => runAccountTool(request, viewer.account, { tool: "faceless", files: [], plan: () => planned(() => [{ request: avatarRequest(id) }]), start: () => makeAvatar(id) }),
+      ({ value, gpuWarning }) => Response.json({ ...value, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    );
   }, request);
 }

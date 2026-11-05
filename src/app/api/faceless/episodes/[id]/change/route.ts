@@ -1,4 +1,4 @@
-import { asViewer, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { applyChange, body, ChangeSchema, changeGraph, episodeView, graphFiles, graphToolSteps, handle, previewChange } from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
 
@@ -20,8 +20,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/faceless/ep
       return Response.json(episodeView(id), { status: 201 });
     }
     const graph = asViewer(viewer, () => changeGraph(id, c));
-    const out = await runAccountTool(request, viewer.account, { tool: "faceless", files: graphFiles(graph), plan: () => planned(() => graphToolSteps(changeGraph(id, c))), start: () => applyChange(id, c) });
-    if (!out.ok) return out.response;
-    return Response.json({ ...asViewer(viewer, () => episodeView(id)), ...(out.gpuWarning && { gpuWarning: out.gpuWarning }) }, { status: 201 });
+    // A resend of the same press (the page's id in its header) gets the change the first one started.
+    return onceForAccount(
+      viewer.account,
+      `faceless-change:${id}`,
+      pressIdOf(request),
+      () => runAccountTool(request, viewer.account, { tool: "faceless", files: graphFiles(graph), plan: () => planned(() => graphToolSteps(changeGraph(id, c))), start: () => applyChange(id, c) }),
+      ({ gpuWarning }) => Response.json({ ...asViewer(viewer, () => episodeView(id)), ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    );
   }, request);
 }

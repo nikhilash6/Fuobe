@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -103,6 +103,11 @@ describe("Genjutsu's Openjutsu features before and after they open", () => {
 
   it("the new makers' models sent straight to /api/generations run on an account's own GPU, never this studio's", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    // Room on the server's disk, whatever the machine running this has free: only the place may stop a run here.
+    globalThis.__fuobeTestDiskFree = 1e13;
+    onTestFinished(() => {
+      globalThis.__fuobeTestDiskFree = undefined;
+    });
     const account = auth.createAccount(`oj${++n}@example.com`, "long enough").id;
     const cookie = auth.createSession(account).value;
     const owner = auth.createSession().value;

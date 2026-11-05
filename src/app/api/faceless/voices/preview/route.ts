@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { asViewer, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { body, handle, voicePreview, voicePreviewPlan } from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
 
@@ -18,7 +18,13 @@ export async function POST(request: Request) {
     if (viewer.kind === "owner") return Response.json(voicePreview(voice));
     const p = asViewer(viewer, () => voicePreviewPlan(voice));
     if ("made" in p) return Response.json(p.made);
-    const out = await runAccountTool(request, viewer.account, { tool: "faceless", files: [], plan: () => planned(() => [{ request: p.request }]), start: () => voicePreview(voice) });
-    return out.ok ? Response.json(out.value) : out.response;
+    // A resend of the same press (the page's id in its header) gets the sample the first one started.
+    return onceForAccount(
+      viewer.account,
+      `faceless-voice:${voice.id}`,
+      pressIdOf(request),
+      () => runAccountTool(request, viewer.account, { tool: "faceless", files: [], plan: () => planned(() => [{ request: p.request }]), start: () => voicePreview(voice) }),
+      ({ value }) => Response.json(value),
+    );
   }, request);
 }

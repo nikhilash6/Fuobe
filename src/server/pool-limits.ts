@@ -42,17 +42,51 @@ export interface LimitRefusal {
   retryAfterS: number;
 }
 
-/** An account's runs going now (queued or running), wherever they run: a run's jobs and chain steps share a batch. */
-export function accountActiveRuns(accountId: string): number {
+/**
+ * A run let in whose rows are still being made: a tool's start that awaits something (a channel, a plan) before it
+ * makes its rows. It counts as one run going (and, on this install's GPUs, one in line) from the moment it is let in
+ * until its rows exist (closeAdmission), so requests that arrive meanwhile meet the limits with it counted. One whose
+ * process stopped before it closed counts for OPEN_ADMISSION_MS at most.
+ */
+export const OPEN_ADMISSION_MS = 10 * 60_000;
+
+/**
+ * Note a run let in whose rows aren't made yet (call it inside admitRun's `make`, so it is noted in the same locked step
+ * as the count). `pool`: it counts against the policy's limits on runs on this install's GPUs too. Returns its key.
+ */
+export function openAdmission(accountId: string, pool: boolean, now = Date.now()): string {
+  const key = crypto.randomBytes(12).toString("hex");
+  db().prepare("INSERT INTO open_admissions (key, account, pool, at) VALUES (?, ?, ?, ?)").run(key, accountId, pool ? 1 : 0, now);
+  return key;
+}
+
+/** The run's rows exist now (they count from here), or it was never made: it no longer counts as open. */
+export function closeAdmission(key: string): void {
+  db().prepare("DELETE FROM open_admissions WHERE key = ?").run(key);
+}
+
+/** An account's open admissions (all of them, or only those on this install's GPUs). */
+function openCount(accountId: string, poolOnly: boolean, now = Date.now()): number {
   const r = db()
-    .prepare("SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?")
-    .get(accountId) as { n: number };
+    .prepare(`SELECT COUNT(*) AS n FROM open_admissions WHERE account = ? AND at > ?${poolOnly ? " AND pool = 1" : ""}`)
+    .get(accountId, now - OPEN_ADMISSION_MS) as { n: number };
   return r.n;
 }
 
 /**
+ * An account's runs going now (queued or running), wherever they run: a run's jobs and chain steps share a batch. A run
+ * let in whose rows are still being made counts too (openAdmission).
+ */
+export function accountActiveRuns(accountId: string): number {
+  const r = db()
+    .prepare("SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?")
+    .get(accountId) as { n: number };
+  return r.n + openCount(accountId, false);
+}
+
+/**
  * An account's runs going now on this install's GPUs, and how many of them haven't started yet (no row of theirs has).
- * Runs of light work only (joins, trims) don't count.
+ * Runs of light work only (joins, trims) don't count. A run let in whose rows are still being made counts as one in line.
  */
 export function poolRunCounts(accountId: string): { active: number; waiting: number } {
   const r = db()
@@ -65,7 +99,16 @@ export function poolRunCounts(accountId: string): { active: number; waiting: num
          GROUP BY k)`,
     )
     .get(accountId) as { active: number; waiting: number };
-  return { active: r.active, waiting: r.waiting };
+  const open = openCount(accountId, true);
+  return { active: r.active + open, waiting: r.waiting + open };
+}
+
+/**
+ * Forget one hourly admission (admitRun noted it at `at`) of a run that made nothing: no rows, nothing sent, so it isn't
+ * one of the hour's runs.
+ */
+export function forgetAdmission(accountId: string, at: number): void {
+  db().prepare("DELETE FROM pool_admissions WHERE id = (SELECT id FROM pool_admissions WHERE account = ? AND at = ? ORDER BY id DESC LIMIT 1)").run(accountId, at);
 }
 
 declare global {
@@ -82,6 +125,7 @@ declare global {
 export function prunePoolAdmissions(now = Date.now(), force = false): number {
   if (!force && now - (globalThis.__fuobePoolAdmissionsPruned ?? 0) < 60_000) return 0;
   globalThis.__fuobePoolAdmissionsPruned = now;
+  db().prepare("DELETE FROM open_admissions WHERE at < ?").run(now - OPEN_ADMISSION_MS);
   return db().prepare("DELETE FROM pool_admissions WHERE at < ?").run(now - KEEP_MS).changes;
 }
 

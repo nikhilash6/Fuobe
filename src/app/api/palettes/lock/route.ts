@@ -43,8 +43,10 @@ const Body = z.object({
 
 /**
  * Make the images, then recolour each one to the palette (open engine: a chained palette-transfer step). The owner's run
- * as always; an account's with only its own pictures, after the checks every tool run gets (src/server/tool-runs.ts),
- * on its own GPU or on this install's GPUs; a guest signs up first.
+ * as always. An account's runs on this install's GPUs only (hosted runs), with only its own pictures, after the checks
+ * every tool run gets (src/server/tool-runs.ts), and with no more pictures at once than a run there makes; on its own
+ * GPU or key its colours go in the prompt instead (the composer sends no lock there), so it is refused here as before.
+ * A guest signs up first.
  */
 export async function POST(request: Request) {
   const viewer = toolViewer(request);
@@ -58,12 +60,16 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, { status: 400 });
   if (viewer.kind === "account") {
     const { request: asked, colors, strength, requestId } = parsed.data;
+    const req = asked as Parameters<typeof createLockedRun>[0];
     return runToolForAccount(request, viewer.account, {
       tool: "palette-lock",
       files: asked.inputs?.images ?? [],
       requestId,
       wishes,
-      start: () => createLockedRun(asked as Parameters<typeof createLockedRun>[0], colors, strength),
+      poolOnly: true,
+      start: () => createLockedRun(req, colors, strength),
+      // Each picture is its own image-and-recolour chain: no more of them than a run there makes at once.
+      poolStart: (cap) => () => createLockedRun({ ...req, params: { ...req.params, numOutputs: Math.min(req.params?.numOutputs ?? 1, cap) } }, colors, strength),
       ok: ({ items }, gpuWarning) => Response.json({ items, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
     });
   }

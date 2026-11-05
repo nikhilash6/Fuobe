@@ -1,4 +1,4 @@
-import { bodyTooBig, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { startStep, transcribeClip, TranscribeSchema, transcribeRequest } from "@/server/genjutsu";
 import { body, handle } from "@/server/shorts-schemas";
 
@@ -17,12 +17,19 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, TranscribeSchema, "Add a clip first");
     if (viewer.kind === "owner") return Response.json(transcribeClip(input), { status: 201 });
-    const r = await runAccountTool(request, viewer.account, {
-      tool: "genjutsu",
-      files: [input.source.url],
-      plan: () => [{ request: transcribeRequest(input) }],
-      start: () => startStep(transcribeRequest(input)),
-    });
-    return r.ok ? Response.json(r.value, { status: 201 }) : r.response;
+    // A resend of the same press (the page's id in its header) gets the transcription the first one started.
+    return onceForAccount(
+      viewer.account,
+      "genjutsu-transcribe",
+      pressIdOf(request),
+      () =>
+        runAccountTool(request, viewer.account, {
+          tool: "genjutsu",
+          files: [input.source.url],
+          plan: () => [{ request: transcribeRequest(input) }],
+          start: () => startStep(transcribeRequest(input)),
+        }),
+      ({ value }) => Response.json(value, { status: 201 }),
+    );
   }, request);
 }

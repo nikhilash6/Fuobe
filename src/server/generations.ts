@@ -519,6 +519,7 @@ export const ASSET_FREE: Record<string, string> = {
   "gpu_snapshots.report_json": "readiness built from that inventory",
   "generations.external_meta_json": "the provider's job handles",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
+  "tool_presses.answer_json": "a copy of the answer one press of a tool's Run got, for a resend of it: its runs' own rows keep their files",
   "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
   "admin_tokens.scopes_json": "an admin token's scope names",
   "admin_audit.detail_json": "small facts about an admin action: counts, ids and names, never a file's URL",

@@ -19,6 +19,8 @@ const Body = z.object({
   duration: z.number().positive().max(36_000).optional(),
   /** Open engine: the voice split (MelBand RoFormer or DBS). */
   voiceSplit: z.enum(VOICE_SPLIT_IDS as [VoiceSplit, ...VoiceSplit[]]).optional(),
+  /** The page's id for this press of Run: a resend of it gets the first dub. */
+  requestId: z.string().trim().min(8).max(64).optional(),
 });
 
 /** Recent dubs with the state of every step: the owner's, or a signed-in account's own (a guest has none). */
@@ -48,7 +50,7 @@ async function post(request: Request, preview: boolean) {
     return onceForAccount(
       viewer.account,
       "dub",
-      undefined,
+      input.requestId,
       () =>
         runAccountTool(request, viewer.account, {
           tool: "dub",

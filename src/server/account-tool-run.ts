@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, GUEST_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
@@ -12,20 +13,21 @@ import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, disk
 import { accountInputProblem } from "./account-inputs";
 import { checkAccountLoras } from "./account-loras";
 import { requestViewer, type Account } from "./auth";
-import { db } from "./db";
 import { accountRun, AccountRunError, asAccount, asVisitor, outputKind, previewChained, type AccountRunRefusal } from "./generations";
 import { BILLING_HEADER, type Quote } from "./billing";
 import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
 import { runOnPool } from "./hosted";
-import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, poolMayTake, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
+import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
 import { cancelGeneration, captureRun } from "./generations";
-import { AdmitRefused, admitRun, clientAddress, poolLimitRefusal } from "./pool-limits";
+import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, closeAdmission, forgetAdmission, openAdmission, poolLimitRefusal } from "./pool-limits";
 import { hit, unhit } from "./rate";
 import { withRunStamp, type RunStamp } from "./run-stamp";
 import { once } from "./shorts-schemas";
 import { ShortsError } from "./shorts";
+import { hostedRunsOn } from "./hosted-switch";
+import { answerPress, claimPress, releasePress, toolPressId, type PressAnswer } from "./tool-presses";
 
 /**
  * A tool's run for a signed-in account (public sign-up): Genjutsu first, then the other tools that plan a run as a
@@ -84,19 +86,67 @@ export function priceAsRun<T>(request: Request, fn: () => T): T {
   return asViewer(toolViewer(request), fn);
 }
 
-/** A refused run, kept as its parts so a repeat of the same request id gets its own copy of the answer. */
+/** A refused run, kept as its parts so a repeat of the same request id gets its own copy of the answer. `held`: refused after its hold was made. */
 class Refused {
   constructor(
-    readonly status: number,
-    readonly headers: [string, string][],
-    readonly text: string,
+    readonly answer: PressAnswer,
+    readonly held: boolean,
   ) {}
+}
+
+const asAnswer = async (r: Response): Promise<PressAnswer> => ({ status: r.status, headers: [...r.headers], text: await r.text() });
+const fromAnswer = (a: PressAnswer): Response => new Response(a.text, { status: a.status, headers: a.headers });
+
+/**
+ * The press of Run a tool's run belongs to (onceForAccount): its id for the billing service's reserve, so every resend
+ * of the press asks for the same hold (hosted-run.ts reservePool). Null: a run with no id from its page.
+ */
+const PRESS = new AsyncLocalStorage<{ pressId: string | null }>();
+
+/** How long a resend waits for its press to be answered by another server process, before it says it is starting. */
+const PRESS_WAIT_MS = 30_000;
+
+/** A resend whose press another server process is still starting, after PRESS_WAIT_MS. */
+const STARTING: PressAnswer = {
+  status: 409,
+  headers: [
+    ["content-type", "application/json"],
+    ["cache-control", "no-store"],
+    ["retry-after", "5"],
+  ],
+  text: JSON.stringify({ error: "This run is starting. It shows in your runs in a moment.", code: "press-starting" }),
+};
+
+/**
+ * A press kept in the database (tool-presses.ts), with hosted runs on: a resend that reaches another server process, or
+ * comes after a restart, gets the first answer (waiting for it while that process starts it), never a second run.
+ */
+async function keptPress(accountId: string, scope: string, clientId: string, attempt: (tries: number) => Promise<PressAnswer>): Promise<PressAnswer> {
+  const until = Date.now() + PRESS_WAIT_MS;
+  let claim = claimPress(accountId, scope, clientId);
+  while (claim.kind === "starting") {
+    if (Date.now() > until) return STARTING;
+    await new Promise((r) => setTimeout(r, 250));
+    claim = claimPress(accountId, scope, clientId);
+  }
+  if (claim.kind === "done") return claim.answer;
+  try {
+    const answer = await attempt(claim.tries);
+    answerPress(accountId, scope, clientId, answer);
+    return answer;
+  } catch (e) {
+    releasePress(accountId, scope, clientId, e instanceof Refused && e.held);
+    throw e;
+  }
 }
 
 /**
  * An account's tool run once per client request id (shorts-schemas.ts once): a repeat of the id (a second click that got
- * through, a retried POST) gets the first run, and never another account's. A refusal isn't kept: sent again (after the
- * account connects its GPU, say), the run is checked again. `ok` turns the started run into the route's answer.
+ * through, a retried POST) gets the first run, and never another account's. With hosted runs on, the press is kept in
+ * the database too (keptPress), so a repeat that reaches another server process gets it as well, and its run on this
+ * install's GPUs asks the billing service for one hold however often it is sent. A refusal isn't kept: sent again
+ * (after the account connects its GPU, say), the run is checked again; one refused after its hold was made (and given
+ * back) asks for a new hold then. `ok` turns the started run into the route's answer.
  */
 export async function onceForAccount<T>(
   account: Account,
@@ -105,26 +155,37 @@ export async function onceForAccount<T>(
   fn: () => Promise<AccountToolResult<T>>,
   ok: (r: { value: T; gpuWarning?: string }) => Response,
 ): Promise<Response> {
+  const attempt = async (tries: number): Promise<PressAnswer> => {
+    const out = await PRESS.run({ pressId: id ? toolPressId(scope, id, tries) : null }, fn);
+    if (out.ok) return asAnswer(ok(out));
+    throw new Refused(await asAnswer(out.response), !!out.held);
+  };
   try {
-    const r = await once(`${scope}:acct:${account.id}`, id, async () => {
-      const out = await fn();
-      if (!out.ok) throw new Refused(out.response.status, [...out.response.headers], await out.response.text());
-      return out;
-    });
-    return ok(r);
+    const answer = await once(`${scope}:acct:${account.id}`, id, () => (id && hostedRunsOn() ? keptPress(account.id, scope, id, attempt) : attempt(0)));
+    return fromAnswer(answer);
   } catch (e) {
-    if (e instanceof Refused) return new Response(e.text, { status: e.status, headers: e.headers });
+    if (e instanceof Refused) return fromAnswer(e.answer);
     throw e;
   }
 }
 
-/** An account's runs going now (queued or running), counted as runs: a run's jobs and steps share a batch. */
-export function activeAccountRuns(accountId: string): number {
-  const r = db()
-    .prepare("SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?")
-    .get(accountId) as { n: number };
-  return r.n;
+/** A page's id for a press of Run, as a tool's body carries it beside its own fields (`requestId`), or none. */
+export function requestIdOf(body: unknown): string | undefined {
+  const v = (body as { requestId?: unknown } | null)?.requestId;
+  return typeof v === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : undefined;
 }
+
+/** The header a page sends its id for a press of Run in, for a tool whose body has no field for it. */
+export const PRESS_HEADER = "x-request-id";
+
+/** A page's id for a press of Run, from the request's PRESS_HEADER, or none. */
+export const pressIdOf = (request: Request): string | undefined => requestIdOf({ requestId: request.headers.get(PRESS_HEADER) });
+
+/**
+ * An account's runs going now (queued or running), counted as runs: a run's jobs and steps share a batch, and a run let
+ * in whose rows are still being made counts too (pool-limits.ts accountActiveRuns).
+ */
+export const activeAccountRuns = (accountId: string): number => accountActiveRuns(accountId);
 
 /** A request body over what an account's run may weigh (its files are uploaded first): 413 before it is read. */
 export function bodyTooBig(request: Request): Response | null {
@@ -253,9 +314,21 @@ export interface AccountToolRun<T> {
   place?: PlaceWish;
   /** The price the client showed before Run (hosted-run.ts readWishes). */
   shown?: { amount: number; priceVersion: string } | null;
+  /**
+   * A run made only on this install's GPUs (hosted runs): wherever else it would go (the account's own GPU or key,
+   * hosted runs off), it is refused as a tool that isn't available here, as before.
+   */
+  poolOnly?: boolean;
+  /**
+   * The run as it is made on this install's GPUs, for a tool that spreads the outputs a person picks over separate jobs
+   * of one output each (the palette lock): no more than `cap` of them, the most a run there makes at once, as a studio
+   * run there is cut to it. Planned, placed and priced again as it is cut.
+   */
+  forPool?: (cap: number) => Pick<AccountToolRun<T>, "plan" | "start">;
 }
 
-export type AccountToolResult<T> = { ok: true; value: T; gpuWarning?: string } | { ok: false; response: Response };
+/** A tool's run: started, or refused (`held`: after its hold on this install's GPUs was made, which goes back). */
+export type AccountToolResult<T> = { ok: true; value: T; gpuWarning?: string } | { ok: false; response: Response; held?: boolean };
 
 type Planned = { step: ToolStep; p: ReturnType<typeof previewChained> };
 
@@ -307,6 +380,8 @@ export async function runAccountTool<T>(request: Request, account: Account, aske
   const sent = headerWishes(request);
   const run: AccountToolRun<T> = { ...asked, place: asked.place ?? sent.place, shown: asked.shown ?? sent.shown };
   const no = (response: Response): AccountToolResult<T> => ({ ok: false, response });
+  // A run made only on this install's GPUs, that can't go there (hosted runs off, its own GPU first): as before.
+  if (run.poolOnly && !poolMayTake(account, run.place)) return no(ownGpuTool());
   if (!diskHasRoom()) return no(refuse(503, ACCOUNT_MESSAGES.diskLow));
   if (accountUsage(id).total >= accountTotalBytes(id)) return no(refuse(413, filesFullMessage(id)));
   if (activeAccountRuns(id) >= ACCOUNT_LIMITS.activeRuns) return no(refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" }));
@@ -330,6 +405,22 @@ export async function runAccountTool<T>(request: Request, account: Account, aske
   if (!steps.length) return back(refuse(422, "Nothing to run yet."));
   const place = await placeOf(account, steps, run.place);
   if (place.kind === "refuse") return back(refuse(place.refusal.status, place.refusal.body.error, place.refusal.body, place.refusal.headers));
+  if (run.poolOnly && place.kind !== "pool") return back(ownGpuTool());
+  if (place.kind === "pool" && run.forPool) {
+    // Cut to the most a run there makes at once, then planned and placed again as it will be made (there, or refused).
+    const cut = run.forPool(poolOutputsCap(place.policy));
+    let cutSteps: ToolStep[];
+    try {
+      cutSteps = await runOnPool(id, cut.plan);
+    } catch (e) {
+      return back(errorResponse(e));
+    }
+    if (!cutSteps.length) return back(refuse(422, "Nothing to run yet."));
+    const there = await placeOf(account, cutSteps, "pool");
+    if (there.kind === "refuse") return back(refuse(there.refusal.status, there.refusal.body.error, there.refusal.body, there.refusal.headers));
+    if (there.kind !== "pool") return back(ownGpuTool());
+    return startOnPool(request, account, { ...run, ...cut }, cutSteps, files, there, back);
+  }
   if (place.kind === "pool") return startOnPool(request, account, run, steps, files, place, back);
   let gpuWarning: string | undefined;
   let kind: MediaKind = "video";
@@ -392,8 +483,8 @@ const isThenable = (v: unknown): v is PromiseLike<unknown> => !!v && typeof (v a
  * then the run made as the account's run there (runOnPool, every row stamped with its place and hold) and counted in
  * the same transaction (admitRun). Every row it makes is checked again before anything is sent (madeRunProblem): against
  * the policy, and against what the run was priced and held for (its jobs, its outputs at once, light work only). A row
- * that doesn't match stops the whole run: its rows are stopped, and its hold goes back. Its own GPU's checks (the
- * pre-flight, its LoRAs) don't apply here.
+ * that doesn't match stops the whole run: its rows are stopped, and their reports close its hold (a run that made no
+ * row gives its hold back). Its own GPU's checks (the pre-flight, its LoRAs) don't apply here.
  */
 async function startOnPool<T>(
   request: Request,
@@ -414,58 +505,78 @@ async function startOnPool<T>(
   let stamp: RunStamp;
   if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
   else {
-    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps);
+    // One hold per press of Run: every resend of the press asks for it by the same request id.
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, PRESS.getStore()?.pressId ?? null);
     if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
     stamp = held.stamp;
   }
   const release = () => {
     if (stamp.hold) queueRelease(stamp.hold);
   };
+  /** Refused from here on: after its hold was made, when one was (it goes back). */
+  const refused = (response: Response): AccountToolResult<T> => ({ ...back(response), ...(stamp.hold && { held: true }) });
   const notOffered = (error: string) => refuse(403, error, { code: "not-offered" }, { [BILLING_HEADER]: "not-offered" });
-  type Made = { value: T | Promise<T>; ids: string[]; start: () => void };
+  /** What the start made: its value, its rows (they keep coming while an awaiting start runs) and its open admission. */
+  type Made = { value: T | Promise<T>; ids: string[]; start: () => void; open: string | null };
+  const now = Date.now();
   let admitted: { ok: true; value: Made } | { ok: false; refusal: { status: number; error: string; code: string; retryAfterS?: number } };
   try {
     admitted = runOnPool(id, () =>
       withRunStamp(stamp, () =>
-        admitRun({ accountId: id, pool: pool.light ? null : { policy: pool.policy, addr } }, (): Made => {
+        admitRun({ accountId: id, pool: pool.light ? null : { policy: pool.policy, addr }, now }, (): Made => {
           const made = captureRun(run.start);
-          // A tool that makes its rows as it goes (after an await) is checked once they are all made, below.
-          if (!isThenable(made.value)) {
-            const problem = madeRunProblem(pool, made.ids);
-            if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
-          }
-          return made;
+          // A tool that makes its rows as it goes (after an await) is checked once they are all made, below. Until then
+          // it counts as a run going (and in line) for every later request, from this same locked step: requests sent
+          // together can't all pass the limits while its rows aren't made yet.
+          if (isThenable(made.value)) return { ...made, open: openAdmission(id, !pool.light, now) };
+          const problem = madeRunProblem(pool, made.ids);
+          if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+          return { ...made, open: null };
         }),
       ),
     );
   } catch (e) {
     release();
-    return back(errorResponse(e));
+    return refused(errorResponse(e));
   }
   if (!admitted.ok) {
     release();
     const r = admitted.refusal;
-    return back(r.code === "not-offered" ? notOffered(r.error) : refuse(r.status, r.error, { code: r.code }, { "Retry-After": String(r.retryAfterS ?? 30) }));
+    return refused(r.code === "not-offered" ? notOffered(r.error) : refuse(r.status, r.error, { code: r.code }, { "Retry-After": String(r.retryAfterS ?? 30) }));
   }
   const made = admitted.value;
-  /** Stop what was made (nothing of it was sent) and give the hold back. */
+  /**
+   * Stop what was made (nothing of it was sent). Each stopped row's report closes the hold (billing-outbox.ts), so the
+   * hold goes back by itself only when no row was made.
+   */
   const undo = () => {
     for (const g of made.ids) void cancelGeneration(g);
-    release();
+    if (!made.ids.length) release();
   };
   let value: T;
   try {
     value = await made.value;
   } catch (e) {
     undo();
-    return back(errorResponse(e));
+    return refused(errorResponse(e));
+  } finally {
+    // Its rows exist now and count for themselves (or none will).
+    if (made.open) closeAdmission(made.open);
   }
   if (isThenable(made.value)) {
     const problem = madeRunProblem(pool, made.ids);
     if (problem) {
       undo();
-      return back(notOffered(problem));
+      return refused(notOffered(problem));
     }
+  }
+  // A start that made nothing (a tool that kept its own error, say): nothing runs, so its hold goes back, and it is not
+  // one of the hour's runs.
+  if (!made.ids.length) {
+    release();
+    if (!pool.light) forgetAdmission(id, now);
+    unhit(`run:${id}`);
+    return { ok: true, value };
   }
   made.start();
   return { ok: true, value };

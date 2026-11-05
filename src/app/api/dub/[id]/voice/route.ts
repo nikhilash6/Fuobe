@@ -8,6 +8,8 @@ const Body = z.object({
   /** The reviewed lines (saved with the run); omitted = the saved draft or the translation. */
   cues: z.array(CueSchema).max(3000).optional(),
   lipsync: z.boolean().optional(),
+  /** The page's id for this press of Run: a resend of it gets the first run. */
+  requestId: z.string().trim().min(8).max(64).optional(),
 });
 
 /** Speak one language's reviewed lines in the cloned voice: the voice pipeline; `?preview=1` only prices it. */
@@ -26,7 +28,7 @@ async function post(request: Request, ctx: RouteContext<"/api/dub/[id]/voice">, 
     return onceForAccount(
       viewer.account,
       `dub-voice:${id}`,
-      undefined,
+      parsed.data.requestId,
       () =>
         runAccountTool(request, viewer.account, {
           tool: "dub",

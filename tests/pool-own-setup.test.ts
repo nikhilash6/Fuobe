@@ -1,9 +1,12 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getModel, PRESETS } from "@/lib/catalog";
-import { ownSetupOnly } from "@/lib/own-setup";
+import { ownSetupGraphs, ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
 import { modelOwnSetup, poolOwnSetup, poolRulesOf, poolRunsModel, presetOwnSetup } from "@/lib/pool-rules";
 import { poolRunState, type HostedCheck } from "@/lib/hosted";
-import { needsGpu, poolOwnSetups, requestOwnSetup, requestSetupIds } from "@/server/pool-own-setup";
+import { needsGpu, ownSetupHere, poolOwnSetups, requestOwnSetup, requestSetupIds } from "@/server/pool-own-setup";
 import { loadIndex } from "@/server/gpu/index-file";
 import { planRestore, RESTORE } from "@/lib/catalog/restore";
 
@@ -33,9 +36,37 @@ describe("a request's own setup", () => {
     const plan = planRestore({ engine: "open", title: "R", prompt: "p", negative: "n", source: { url: "/api/files/a.mp4", duration: 12, frames: 192, fps: 16, width: 640, height: 480, hasAudio: true } });
     const windows = plan.steps.filter((s) => s.request.modelId === RESTORE.model);
     expect(windows.length).toBeGreaterThan(0);
-    for (const s of windows) expect(requestOwnSetup({ ...s.request, engine: "open" })).toEqual(ownSetupOnly("video-tools:restore"));
+    // A GPU of the visitor's own only: its gated LoRA goes with no visitor's key, so no key is named.
+    const gpuOnly = { ...(ownSetupOnly("video-tools:restore") as Extract<OwnSetup, { need: "gpu" }>) };
+    delete gpuOnly.orKey;
+    for (const s of windows) expect(requestOwnSetup({ ...s.request, engine: "open" })).toEqual(gpuOnly);
+    expect(gpuOnly).toMatchObject({ need: "gpu" });
+    expect(gpuOnly).not.toHaveProperty("orKey");
     for (const s of plan.steps.filter((x) => x.request.modelId !== RESTORE.model)) expect(requestSetupIds(s.request)).not.toContain("video-tools:restore");
-    expect(ownSetupOnly("video-tools:restore")).toMatchObject({ need: "gpu" });
+  });
+
+  it("follows the manifest: once an item's graphs are validated it runs here like any other, with no change to the code", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-pool-own-setup-"));
+    const manifest = path.join(dir, "manifest.json");
+    const graphs = ownSetupGraphs("video-tools:restore");
+    expect(graphs.length).toBeGreaterThan(0);
+    const write = (validated: boolean, at: number) => {
+      fs.writeFileSync(manifest, JSON.stringify({ workflows: graphs.map((id) => ({ id, validated })) }));
+      fs.utimesSync(manifest, at, at);
+    };
+    const window = { feature: RESTORE.feature, modelId: RESTORE.model, op: "restore-video" as const, params: {}, engine: "open" as const };
+    try {
+      write(false, 1_700_000_000);
+      expect(ownSetupHere("video-tools:restore", "open", manifest)).toEqual(ownSetupOnly("video-tools:restore"));
+      expect(requestOwnSetup(window, manifest)).toMatchObject({ need: "gpu" });
+      write(true, 1_700_000_100);
+      expect(ownSetupHere("video-tools:restore", "open", manifest)).toBeNull();
+      expect(requestOwnSetup(window, manifest)).toBeNull();
+      // An item with no graphs of its own keeps its setup, whatever the manifest says.
+      expect(ownSetupHere("regenerate:h3-2k", "open", manifest)).toEqual(ownSetupOnly("regenerate:h3-2k"));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -314,6 +314,18 @@ describe("an account runs Genjutsu on its own ComfyUI", () => {
     const other = await transcribeRoute.POST(json("/api/genjutsu/transcribe", "POST", { engine: "open", source: { url: clip, duration: 12 } }, "b"));
     expect(other.status).toBe(403);
     expect((await other.json()).code).toBe("input-not-yours");
+    // One press sent twice (the page's id in its header) is one transcription.
+    const press = () => {
+      const req = json("/api/genjutsu/transcribe", "POST", { engine: "open", source: { url: clip, duration: 12 } }, "a");
+      req.headers.set("x-request-id", "press-words-0001");
+      return transcribeRoute.POST(req);
+    };
+    const first = await press();
+    expect(first.status, await first.clone().text()).toBe(201);
+    const n = (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
+    const again = await press();
+    expect(((await again.json()) as { id: string }).id).toBe(((await first.json()) as { id: string }).id);
+    expect((db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n).toBe(n);
   });
 
   it("From picture's describer runs on an account's own GPU before From picture opens here; a first frame counts only for whoever made it", async () => {

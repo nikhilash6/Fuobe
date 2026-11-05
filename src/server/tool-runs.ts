@@ -58,6 +58,10 @@ export interface ToolRoute<T> {
   skipGpuCheck?: boolean;
   /** The place and price the body carries (account-tool-run.ts toolWishes, read before the route reads the body). */
   wishes?: Awaited<ReturnType<typeof toolWishes>>;
+  /** Runs only on this install's GPUs: anywhere else it is refused as before (account-tool-run.ts AccountToolRun). */
+  poolOnly?: boolean;
+  /** The start as it runs on this install's GPUs, with no more outputs at once than `cap` (AccountToolRun.forPool). */
+  poolStart?: (cap: number) => () => T;
 }
 
 /** An account's run of such a tool: its steps planned from `start`, checked, placed and started (runAccountTool). */
@@ -74,6 +78,13 @@ export async function runToolForAccount<T>(request: Request, account: Account, o
         start: o.start,
         skipGpuCheck: o.skipGpuCheck,
         ...o.wishes,
+        ...(o.poolOnly && { poolOnly: true }),
+        ...(o.poolStart && {
+          forPool: (cap: number) => {
+            const start = o.poolStart!(cap);
+            return { plan: () => dryRunSteps(start), start };
+          },
+        }),
       }),
     ({ value, gpuWarning }) => o.ok(value, gpuWarning),
   );

@@ -15,6 +15,7 @@ import { db } from "./db";
 import { handOversDone } from "./generations";
 import { deleteForever } from "./library";
 import { deleteAsset, scratchDir } from "./storage";
+import { forgetAccountPresses } from "./tool-presses";
 
 /**
  * Public sign-up: what an account keeps on this server goes in time. Its uploads after 14 days (even when a run still
@@ -54,6 +55,7 @@ export async function purgeAccount(id: string): Promise<{ runs: number; files: n
   deleteAccountSeries(id);
   deleteAccountFaceless(id);
   deleteAccountProjects(id);
+  forgetAccountPresses(id);
   await runAccountDeletedHooks(id);
   return { runs, files: files.length };
 }

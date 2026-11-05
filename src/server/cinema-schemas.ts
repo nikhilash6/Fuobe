@@ -132,6 +132,8 @@ export const WorldSchema = z.object({
 
 export const GenerateBody = z.object({
   folderId: z.string().max(40).nullable().optional(),
+  /** The page's id for this press of Generate: a resend of it gets the first take (an account's run). */
+  requestId: z.string().trim().min(8).max(64).optional(),
   input: z.object({
     engine: z.enum(["cloud", "open"]),
     mode: z.enum(["video", "image"]),

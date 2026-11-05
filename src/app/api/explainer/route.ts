@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { z } from "zod";
 import { MAX_TOPIC } from "@/lib/catalog/faceless";
 import { projectSavesLimited } from "@/server/account-projects";
-import { asViewer, bodyTooBig, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, bodyTooBig, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { body, composeScript, createEpisode, draftGraph, FacelessError, graphToolSteps, handle, listEpisodes, SettingsSchema, SourceSchema } from "@/server/faceless";
 import { filesRefused, planned, settingsFiles, sourceFiles } from "@/server/faceless-account";
 
@@ -50,12 +50,19 @@ export async function POST(request: Request) {
     const composed = await asViewer(viewer, () => composeScript({ kind: "explainer", channelId: null, topic: input.prompt.trim(), settings: input.settings, sources }, ""));
     const ask = { kind: "explainer" as const, topic: input.prompt, sources, settings: input.settings, composed };
     if (input.review) return Response.json(asViewer(viewer, () => createEpisode(ask)), { status: 201 });
-    const out = await runAccountTool(request, viewer.account, {
-      tool: "explainer",
-      files,
-      plan: () => planned(() => graphToolSteps(draftGraph({ kind: "explainer", title: composed.title ?? input.prompt, settings: input.settings, sources, script: composed }))),
-      start: () => createEpisode({ ...ask, autoRender: true }),
-    });
-    return out.ok ? Response.json({ ...out.value, ...(out.gpuWarning && { gpuWarning: out.gpuWarning }) }, { status: 201 }) : out.response;
+    // A resend of the same press (the page's id in its header) gets the episode the first one started.
+    return onceForAccount(
+      viewer.account,
+      "explainer",
+      pressIdOf(request),
+      () =>
+        runAccountTool(request, viewer.account, {
+          tool: "explainer",
+          files,
+          plan: () => planned(() => graphToolSteps(draftGraph({ kind: "explainer", title: composed.title ?? input.prompt, settings: input.settings, sources, script: composed }))),
+          start: () => createEpisode({ ...ask, autoRender: true }),
+        }),
+      ({ value, gpuWarning }) => Response.json({ ...value, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    );
   }, request);
 }

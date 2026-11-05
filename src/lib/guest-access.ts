@@ -102,15 +102,26 @@ export function guestRead(pathname: string): GuestRead {
  */
 const PREVIEWS = [/^\/api\/(generations|audio-tools|dub|katana|turnaround|fly-around|influencer|photodump|photodump\/fashion|photodump\/character)$/, /^\/api\/dub\/[^/]+\/voice$/];
 
+/**
+ * The run routes whose `?preview=1` prices a run on this install's GPUs only (with hosted runs off the route answers at
+ * once that the run stays where it is, and the proxy treats the request as the run it names): Cinema Studio's Generate,
+ * which plans a take in the account's own project (every step planned, nothing kept).
+ */
+const HOSTED_PREVIEWS = [/^\/api\/cinema\/projects\/[^/]+\/generate$/];
+
 /** The estimate routes (named: a dynamic segment called "estimate" on another route must not pass for one). */
 const ESTIMATES =
   /^\/api\/(ads|ads\/multiplier|assist\/skills\/[^/]+|content-factory|evolution|faceless|genjutsu|influencer|marketing|marketing\/click-to-ad|mixed-media|remove-object|restore|shorts|storyboards|turnaround)\/estimate$/;
 
-/** A POST that only plans and prices a run (an estimate route, or ?preview=1 where PREVIEWS honours it): free, and open to guests. */
-export function isPriceCheck(method: string, pathname: string, search: string): boolean {
+/**
+ * A POST that only plans and prices a run (an estimate route, or ?preview=1 where PREVIEWS honours it): free, and open to
+ * guests. `hosted`: hosted runs are on, so HOSTED_PREVIEWS count too.
+ */
+export function isPriceCheck(method: string, pathname: string, search: string, hosted = false): boolean {
   if (method !== "POST") return false;
   if (ESTIMATES.test(pathname)) return true;
-  return new URLSearchParams(search).get("preview") === "1" && PREVIEWS.some((r) => r.test(pathname));
+  if (new URLSearchParams(search).get("preview") !== "1") return false;
+  return PREVIEWS.some((r) => r.test(pathname)) || (hosted && HOSTED_PREVIEWS.some((r) => r.test(pathname)));
 }
 
 /**
@@ -298,8 +309,6 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
   // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
   /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
-  // The Image studio's palette lock: its images, then each recoloured to the palette (src/server/palettes.ts).
-  /^\/api\/palettes\/lock$/,
   // The photo apps: Photodump, Fashion Factory, Character Sheet, AI Influencer, and a retry of its own photo.
   /^\/api\/(photodump(\/(fashion|character|retry))?|influencer)$/,
   // Video tools: Remove object (a mask preview, and "Redo from here" on its own removal), Evolution (its direction is
@@ -365,6 +374,17 @@ export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJEC
  */
 export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && (pathname === "/api/generations" || ACCOUNT_TOOL_RUNS.some((r) => r.test(pathname)));
+}
+
+/**
+ * Tool runs an account makes on this install's GPUs only (hosted runs on): the Image studio's palette lock (its images,
+ * then each recoloured to the palette, src/server/palettes.ts). On its own GPU or key the colours go in the prompt
+ * instead, so with hosted runs off these stay refused as a tool that isn't available here.
+ */
+const POOL_TOOL_RUNS: readonly RegExp[] = [/^\/api\/palettes\/lock$/];
+
+export function poolToolRun(method: string, pathname: string): boolean {
+  return method === "POST" && POOL_TOOL_RUNS.some((r) => r.test(pathname));
 }
 
 /** The code on an account's run refused because its runs going are at the limit: the next one may wait for a place and send again. */

@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { nanoid } from "nanoid";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { CONNECT_GPU_HEADER, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
-import { ownSetupLabel, ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
+import { ownSetupLabel, type OwnSetup } from "@/lib/own-setup";
 import { gpuState } from "./account-gpu";
 import { accountGpu, type Account } from "./auth";
 import {
@@ -38,7 +38,8 @@ import { readRef } from "./storage";
 import { ACCOUNT_LIMITS } from "./account-files";
 import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
-import { needsGpu, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
+import { needsGpu, ownSetupHere, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
+import { reserveRequestId } from "./tool-presses";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
 
 export { poolCardRefuses };
@@ -203,7 +204,7 @@ export function poolSteps(accountId: string, req: GenerationRequest): PlannedSte
  */
 export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
   for (const s of steps) {
-    const own = s.provider === "comfyui" ? ownSetupOnly(s.modelId, "open") : null;
+    const own = s.provider === "comfyui" ? ownSetupHere(s.modelId, "open") : null;
     if (own) return ownSetupLabel(own);
     if (!poolRunsProvider(s.provider)) return HOSTED_WORDS.notOffered;
     if (s.provider === "comfyui" && poolCardRefuses(s.modelId)) return HOSTED_WORDS.rtxCard;
@@ -337,7 +338,7 @@ export function poolGate(
   // Every step of a chain, not only its first: each one the policy must allow, and the run is priced for all of them.
   const steps = planSteps();
   for (const s of steps ?? []) {
-    const later = s.provider === "comfyui" ? ownSetupOnly(s.modelId, "open") : null;
+    const later = s.provider === "comfyui" ? ownSetupHere(s.modelId, "open") : null;
     if (later) return { ok: false, reason: "ownSetup", setup: later };
   }
   const problem = steps && p ? stepsProblem(p, steps) : null;
@@ -507,7 +508,9 @@ export async function moderateRun(
 
 /**
  * Set the run's price aside (no billing service: nothing to set aside; the run is free). Returns the stamp the run's
- * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md).
+ * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md). `pressId`: the press of
+ * Run it belongs to (a tool's scope and its page's id for the press), so every resend of that press asks for the same
+ * hold; none, a fresh request id.
  */
 export async function reservePool(
   account: Account,
@@ -516,12 +519,13 @@ export async function reservePool(
   shown: { amount: number; priceVersion: string } | null,
   checkOutputs: boolean,
   steps?: RunFacts["steps"],
+  pressId: string | null = null,
 ): Promise<{ ok: true; stamp: RunStamp } | { ok: false; refusal: Refusal }> {
   const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }) };
   if (!billingConfigured()) return { ok: true, stamp: base };
   const kind = outputKind(planned.op, planned.model);
   const a = await reserve({
-    requestId: nanoid(16),
+    requestId: pressId ? reserveRequestId(account.id, pressId) : nanoid(16),
     account: accountFacts(account),
     run: { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) },
     queue: queueFacts(account.id, planned.route.endpoint),

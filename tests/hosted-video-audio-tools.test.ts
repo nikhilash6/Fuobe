@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -49,6 +50,8 @@ const routes = {
   restore: await import("@/app/api/restore/route"),
 };
 const { ownSetupLabel, ownSetupOnly } = await import("@/lib/own-setup");
+type OwnSetup = import("@/lib/own-setup").OwnSetup;
+const { saveAccountKey } = await import("@/server/account-keys");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
@@ -65,10 +68,12 @@ beforeAll(async () => {
   fake = await startFakeBilling();
   fake.price = { amount: 0, version: "free" };
   auth.setPassword("install password");
-  for (const who of ["none", "gpu"]) {
+  for (const who of ["none", "gpu", "key"]) {
     ids[who] = auth.createAccount(`tools-${who}@example.com`, "long enough").id;
     cookies[who] = `${auth.SESSION_COOKIE}=${auth.createSession(ids[who]).value}`;
   }
+  // "key" has a fal.ai key of its own and no GPU.
+  saveAccountKey(ids.key, "fal", "fal-test-key-0001");
   globalThis.__fuobeTestGpuPort = comfy.port;
   expect((await gpuRoute.PUT(json("/api/account/gpu", "PUT", { url: comfy.url }, "gpu"))).status).toBe(200);
 });
@@ -213,12 +218,54 @@ describe("hosted runs on: an account with no GPU of its own runs them on this in
   });
 });
 
+describe("hosted runs on: one press of Run is one run and one hold, however often it is sent", () => {
+  beforeEach(hostedOn);
+  const pressed: [string, (f: Files) => [{ POST: (r: Request) => Promise<Response> }, string, unknown], string][] = [
+    ["Split soundtrack", (f) => [routes.audio, "/api/audio-tools", { ...split(f), requestId: "press-split-0001" }], "audio-tools"],
+    ["Translate & dub", (f) => [routes.dub, "/api/dub", { ...dub(f), requestId: "press-dub-00001" }], "dub"],
+  ];
+  for (const [name, run, scope] of pressed) {
+    it(`${name}: a resend gets the first run, in this server process or another`, async () => {
+      const f = await filesOf("none");
+      db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+      const before = reserves();
+      const since = Date.now();
+      const first = await send(() => call("none", run(f)));
+      expect(first.status, await first.clone().text()).toBe(201);
+      const answer = await first.text();
+      const rows = places("none", since).length;
+      expect(rows).toBeGreaterThan(0);
+      // The reserve names the press: the account, the tool and the page's id, never a fresh id.
+      const sent = fake.calls_of("/v1/reserve").at(-1)!.body as { requestId: string };
+      const id = (run(f)[2] as { requestId: string }).requestId;
+      expect(sent.requestId).toBe(`r_${crypto.createHash("sha256").update(`${ids.none}\n${scope}\n${id}`).digest("hex").slice(0, 32)}`);
+      const again = await call("none", run(f));
+      expect(again.status).toBe(201);
+      expect(await again.text()).toBe(answer);
+      // Another server process (nothing of the first press in its memory) answers the same, from the database.
+      globalThis.__fuobeShortsRequests?.clear();
+      const elsewhere = await call("none", run(f));
+      expect(elsewhere.status).toBe(201);
+      expect(await elsewhere.text()).toBe(answer);
+      expect(reserves() - before).toBe(1);
+      expect(places("none", since)).toHaveLength(rows);
+    });
+  }
+});
+
 describe("hosted runs on: a tool that runs on a visitor's own setup only", () => {
   beforeEach(hostedOn);
   const restore = (f: Files) => ({ engine: "open", source: { url: f.clip, name: "old.mp4", ...src } });
 
+  // A GPU of its own: Restore's gated LoRA goes with no visitor's key, so no key is named.
+  const restoreSetup = () => {
+    const gpu = { ...(ownSetupOnly("video-tools:restore") as Extract<OwnSetup, { need: "gpu" }>) };
+    delete gpu.orKey;
+    return gpu;
+  };
+
   it("Restore & colourise: its price check says its setup's label, and Run opens that setup with nothing held or made", async () => {
-    const setup = ownSetupOnly("video-tools:restore")!;
+    const setup = restoreSetup();
     const f = await filesOf("none");
     const check = await routes.restoreEstimate.POST(json("/api/restore/estimate", "POST", restore(f), "none"));
     expect(check.status, await check.clone().text()).toBe(200);
@@ -232,6 +279,22 @@ describe("hosted runs on: a tool that runs on a visitor's own setup only", () =>
     expect(await r.json()).toMatchObject({ code: "connect-gpu", error: ownSetupLabel(setup), ownSetup: setup });
     expect(reserves()).toBe(before);
     expect(places("none", since)).toEqual([]);
+  });
+
+  it("Restore & colourise: an account with a key of its own and no GPU is sent to a GPU of its own, never to its key", async () => {
+    const setup = restoreSetup();
+    expect(ownSetupLabel(setup)).not.toMatch(/key/i);
+    const f = await filesOf("key");
+    const check = await routes.restoreEstimate.POST(json("/api/restore/estimate", "POST", restore(f), "key"));
+    expect(check.status, await check.clone().text()).toBe(200);
+    expect(((await check.json()) as { quote?: Record<string, unknown> }).quote).toMatchObject({ allowed: false, text: ownSetupLabel(setup), ownSetup: setup });
+    const before = reserves();
+    const since = Date.now();
+    const r = await routes.restore.POST(json("/api/restore", "POST", restore(f), "key"));
+    expect(r.status, await r.clone().text()).toBe(403);
+    expect(await r.json()).toMatchObject({ code: "connect-gpu", error: ownSetupLabel(setup), ownSetup: setup });
+    expect(reserves()).toBe(before);
+    expect(places("key", since)).toEqual([]);
   });
 
   it("Restore & colourise: an account whose own GPU answers runs it there, with no place in its price check", async () => {

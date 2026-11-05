@@ -1,17 +1,20 @@
 import "server-only";
-import type { GenerationRequest, ModelDef } from "@/lib/catalog/types";
+import fs from "node:fs";
+import path from "node:path";
+import type { Engine, GenerationRequest, ModelDef } from "@/lib/catalog/types";
 import { MODELS } from "@/lib/catalog/models";
 import { directRunFeatures } from "@/lib/catalog/genjutsu";
 import { ENHANCE_FEATURES, REGEN_MODEL, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { RESTORE } from "@/lib/catalog/restore";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
-import { ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
+import { ownSetupGraphs, ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
 import { controlSetup } from "@/lib/own-setup-controls";
 import { RTX_CLASSES, rtxCardOf } from "@/lib/catalog/rtx-video";
 import { gpuFits } from "@/lib/gpu/readiness";
 import { loadIndex } from "./gpu/index-file";
 import { readSnapshot } from "./gpu/snapshots";
 import { poolOnWorkers, poolTakes } from "./hosted";
+import { ownSetupOnlyNow } from "./own-setup-live";
 
 /**
  * What a run on this install's GPUs needs instead, in the "own setup" shape (src/lib/own-setup.ts): the visitor's own GPU
@@ -44,11 +47,49 @@ export function requestSetupIds(req: Pick<GenerationRequest, "modelId" | "op" | 
   return ids;
 }
 
-/** The first static item a request asks for that runs on a visitor's own setup only, or null. */
-export function requestOwnSetup(req: Pick<GenerationRequest, "modelId" | "op" | "feature" | "params" | "engine">): OwnSetup | null {
+const MANIFEST = path.join(process.cwd(), "workflows", "comfyui", "manifest.json");
+
+/** ownSetupOnlyNow's answers, by manifest, item and engine, for the manifest as last modified (it is large: read once). */
+const nowAnswers = new Map<string, { mtimeMs: number; answer: OwnSetup | null }>();
+
+/**
+ * An item's own setup as it stands now, for the pool gate: an item whose graphs the manifest marks validated runs as any
+ * other (own-setup-live.ts ownSetupOnlyNow), so its label leaves the runs on this install's GPUs with the pages' own. An
+ * item with no graphs of its own is ownSetupOnly's answer, with no file read.
+ */
+export function ownSetupHere(id: string, engine?: Engine, manifest = MANIFEST): OwnSetup | null {
+  if (!ownSetupGraphs(id).length) return ownSetupOnly(id, engine);
+  let mtimeMs = 0;
+  try {
+    mtimeMs = fs.statSync(manifest).mtimeMs;
+  } catch {
+    // No manifest: ownSetupOnlyNow keeps the item's own setup.
+  }
+  const key = `${manifest}\n${id}\n${engine ?? ""}`;
+  const kept = nowAnswers.get(key);
+  if (kept && kept.mtimeMs === mtimeMs) return kept.answer;
+  const answer = ownSetupOnlyNow(id, engine, manifest);
+  nowAnswers.set(key, { mtimeMs, answer });
+  return answer;
+}
+
+/**
+ * Items a run on this install's GPUs asks for that only a GPU of the visitor's own runs, whatever else the item names:
+ * Restore & colourise's windows load a gated LoRA that no visitor's key is sent with, so no key runs them.
+ */
+const GPU_ONLY = new Set(["video-tools:restore"]);
+
+/** The first static item a request asks for that runs on a visitor's own setup only (as it stands now), or null. */
+export function requestOwnSetup(req: Pick<GenerationRequest, "modelId" | "op" | "feature" | "params" | "engine">, manifest = MANIFEST): OwnSetup | null {
   for (const id of requestSetupIds(req)) {
-    const o = ownSetupOnly(id, req.engine);
-    if (o) return o;
+    const o = ownSetupHere(id, req.engine, manifest);
+    if (!o) continue;
+    if (GPU_ONLY.has(id) && o.need === "gpu" && o.orKey) {
+      const gpu = { ...o };
+      delete gpu.orKey;
+      return gpu;
+    }
+    return o;
   }
   return null;
 }

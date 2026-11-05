@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { projectSavesLimited } from "@/server/account-projects";
-import { asViewer, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { avatarRequest, body, createChannel, EngineSchema, GenreSchema, handle, listChannels, makeAvatar } from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
 
@@ -36,13 +36,23 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, Create, "Describe the channel and pick a genre");
     if (viewer.kind === "owner") return Response.json(await createChannel(input), { status: 201 });
-    const channel = await asViewer(viewer, () => createChannel(input));
-    const avatar = await runAccountTool(request, viewer.account, {
-      tool: "faceless",
-      files: [],
-      plan: () => planned(() => [{ request: avatarRequest(channel.id) }]),
-      start: () => makeAvatar(channel.id),
-    });
-    return Response.json(avatar.ok ? { ...channel, avatarJob: avatar.value.id } : channel, { status: 201 });
+    const account = viewer.account;
+    // A resend of the same press (the page's id in its header) gets the channel, and its avatar, the first one made.
+    return onceForAccount(
+      account,
+      "faceless-channel",
+      pressIdOf(request),
+      async () => {
+        const channel = await asViewer(viewer, () => createChannel(input));
+        const avatar = await runAccountTool(request, account, {
+          tool: "faceless",
+          files: [],
+          plan: () => planned(() => [{ request: avatarRequest(channel.id) }]),
+          start: () => makeAvatar(channel.id),
+        });
+        return { ok: true as const, value: avatar.ok ? { ...channel, avatarJob: avatar.value.id } : channel };
+      },
+      ({ value }) => Response.json(value, { status: 201 }),
+    );
   }, request);
 }

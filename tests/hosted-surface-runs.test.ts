@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -39,6 +40,7 @@ const sessionsRoute = await import("@/app/api/shorts/sessions/route");
 const estimateRoute = await import("@/app/api/shorts/estimate/route");
 const projectsRoute = await import("@/app/api/cinema/projects/route");
 const generateRoute = await import("@/app/api/cinema/projects/[id]/generate/route");
+const retryRoute = await import("@/app/api/cinema/projects/[id]/items/[generationId]/retry/route");
 const lockRoute = await import("@/app/api/palettes/lock/route");
 const { proxy } = await import("@/proxy");
 const { db } = await import("@/server/db");
@@ -247,6 +249,37 @@ describe("Cinema Studio for an account with no GPU of its own", () => {
     expect(runsSince("none", since)).toHaveLength(1);
   });
 
+  it("one press of Generate sent twice is one take and one hold, in this server process or another; a retry too", async () => {
+    hostedOn();
+    const id = await project("none");
+    const press = { input: STILL, requestId: "press-cinema-0001" };
+    const before = reserves();
+    const since = Date.now();
+    const first = await send(() => generateRoute.POST(json(`/api/cinema/projects/${id}/generate`, "POST", press, "none", shownHeaders()), params({ id })));
+    expect(first.status, await first.clone().text()).toBe(201);
+    const answer = (await first.json()) as { items: { id: string }[] };
+    const sent = fake.calls_of("/v1/reserve").at(-1)!.body as { requestId: string };
+    expect(sent.requestId).toBe(`r_${crypto.createHash("sha256").update(`${ids.none}\ncinema:${id}\n${press.requestId}`).digest("hex").slice(0, 32)}`);
+    const again = await generateRoute.POST(json(`/api/cinema/projects/${id}/generate`, "POST", press, "none", shownHeaders()), params({ id }));
+    expect(((await again.json()) as { items: { id: string }[] }).items.map((g) => g.id)).toEqual(answer.items.map((g) => g.id));
+    globalThis.__fuobeShortsRequests?.clear();
+    const elsewhere = await generateRoute.POST(json(`/api/cinema/projects/${id}/generate`, "POST", press, "none", shownHeaders()), params({ id }));
+    expect(elsewhere.status).toBe(201);
+    expect(((await elsewhere.json()) as { items: { id: string }[] }).items.map((g) => g.id)).toEqual(answer.items.map((g) => g.id));
+    expect(reserves() - before).toBe(1);
+    expect(runsSince("none", since)).toHaveLength(answer.items.length);
+    // A retry of a take: its own press, sent twice, is one run too.
+    const take = answer.items[0].id;
+    db().prepare("UPDATE generations SET status = 'failed' WHERE id = ?").run(take);
+    const retry = () => retryRoute.POST(json(`/api/cinema/projects/${id}/items/${take}/retry`, "POST", { requestId: "press-retry-0001" }, "none", shownHeaders()), params({ id, generationId: take }));
+    const r1 = await send(retry);
+    expect(r1.status, await r1.clone().text()).toBe(201);
+    globalThis.__fuobeShortsRequests?.clear();
+    const r2 = await retry();
+    expect(await r2.text()).toBe(await r1.text());
+    expect(reserves() - before).toBe(2);
+  });
+
   it("an account whose own GPU answers is priced and run there, as before", async () => {
     hostedOn();
     const id = await project("gpu");
@@ -267,24 +300,65 @@ describe("the Image studio's palette lock for accounts", () => {
       json("/api/palettes/lock", "POST", { request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a silk scarf on a marble table", params: { numOutputs: 2 }, signature: {} }, colors: ["#112233", "#aabbcc"], ...extra }, who),
     );
 
-  it("a guest signs up first; an account reaches the route", async () => {
+  it("hosted runs off: refused to every account as before, at the proxy and at the route; nothing runs on its own GPU", async () => {
+    for (const who of ["none", "gpu", undefined]) {
+      const at = await viaProxy("/api/palettes/lock", who);
+      expect(at.status).toBe(403);
+      expect(((await at.json()) as { code: string }).code).toBe("own-gpu-tool");
+    }
+    const since = Date.now();
+    for (const who of ["none", "gpu"]) {
+      const r = await lock(who);
+      expect(r.status).toBe(403);
+      expect(((await r.json()) as { code: string }).code).toBe("own-gpu-tool");
+    }
+    expect(runsSince("gpu", since)).toEqual([]);
+    expect(runsSince("none", since)).toEqual([]);
+    // A guest signs up first at the route.
+    expect((await lock(undefined)).status).toBe(401);
+  });
+
+  it("hosted runs on: an account reaches the route, a guest signs up first; an own GPU that goes first keeps its colours in the prompt", async () => {
+    hostedOn();
+    expect(passed(await viaProxy("/api/palettes/lock", "none"))).toBe(true);
+    expect(passed(await viaProxy("/api/palettes/lock", "gpu"))).toBe(true);
     const guest = await viaProxy("/api/palettes/lock");
     expect(guest.status).toBe(401);
     expect(guest.headers.get(access.GUEST_HEADER)).toBe("1");
-    expect((await lock(undefined)).status).toBe(401);
-    expect(passed(await viaProxy("/api/palettes/lock", "gpu"))).toBe(true);
-  });
-
-  it("hosted runs off: an account with no GPU is asked to connect one; its own GPU runs it", async () => {
-    const none = await lock("none");
-    expect(none.status).toBe(403);
-    expect(((await none.json()) as { code: string }).code).toBe("connect-gpu");
+    // Its own GPU goes first: the lock never runs there (the composer sends its colours in the prompt instead).
     const since = Date.now();
-    const own = await send(() => lock("gpu"));
-    expect(own.status, await own.clone().text()).toBe(201);
+    const own = await lock("gpu");
+    expect(own.status).toBe(403);
+    expect(((await own.json()) as { code: string }).code).toBe("own-gpu-tool");
+    expect(runsSince("gpu", since)).toEqual([]);
+    // Asked for this install's GPUs by name, it runs there.
+    const there = await send(() => lock("gpu", { place: "pool", shown: { amount: fake.price.amount, priceVersion: fake.price.version } }));
+    expect(there.status, await there.clone().text()).toBe(201);
     const rows = runsSince("gpu", since);
     expect(rows.length).toBe(4);
-    expect(rows.some((q) => q.place === "pool")).toBe(false);
+    expect(rows.every((q) => q.place === "pool")).toBe(true);
+  });
+
+  it("hosted runs on: no more pictures at once than a run there makes, as a studio run there is cut", async () => {
+    hostedOn();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), outputsPerRun: 1 } };
+    const since = Date.now();
+    const r = await send(() =>
+      lockRoute.POST(
+        json(
+          "/api/palettes/lock",
+          "POST",
+          { request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a silk scarf on a marble table", params: { numOutputs: 4 }, signature: {} }, colors: ["#112233"], shown: { amount: fake.price.amount, priceVersion: fake.price.version } },
+          "none",
+        ),
+      ),
+    );
+    expect(r.status, await r.clone().text()).toBe(201);
+    const rows = runsSince("none", since);
+    // One picture and its recolouring.
+    expect(rows.map((q) => q.modelId).sort()).toEqual(["oss-palette-image", "oss-z-image-turbo"]);
+    const reserve = fake.calls_of("/v1/reserve").at(-1)!.body as { run: { steps: { model: string; jobs: number }[] } };
+    expect(reserve.run.steps.find((s) => s.model === "oss-z-image-turbo")?.jobs).toBe(1);
   });
 
   it("hosted runs on: an account with no GPU gets both images and their recolouring as one run, held once", async () => {

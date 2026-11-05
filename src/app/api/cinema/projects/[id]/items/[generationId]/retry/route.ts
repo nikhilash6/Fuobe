@@ -1,4 +1,4 @@
-import { guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { guestRun, onceForAccount, requestIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { planRetry, retryItem, retrySteps, startRetry, type RetryPlan } from "@/server/cinema";
 import { handle, withStatus } from "@/server/cinema-schemas";
 
@@ -13,10 +13,12 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cinema/proj
     const { id, generationId } = await ctx.params;
     if (viewer.kind === "owner") return Response.json({ items: retryItem(id, generationId) }, { status: 201 });
     let plan: RetryPlan | null = null;
+    // The page's id for this press (an optional body): a resend of it gets the first retry.
+    const sent: unknown = await request.json().catch(() => null);
     return onceForAccount(
       viewer.account,
       `cinema-retry:${id}:${generationId}`,
-      undefined,
+      requestIdOf(sent),
       () =>
         runAccountTool(request, viewer.account, {
           tool: "cinema",

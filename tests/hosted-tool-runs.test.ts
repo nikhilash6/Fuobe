@@ -37,7 +37,9 @@ const hostedRun = await import("@/server/hosted-run");
 const toolRun = await import("@/server/account-tool-run");
 const { createGenerations } = await import("@/server/generations");
 const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
-const { drainOutbox } = await import("@/server/billing-outbox");
+const { drainOutbox, queueReports } = await import("@/server/billing-outbox");
+const presses = await import("@/server/tool-presses");
+const pressRequestId = presses.reserveRequestId;
 
 let fake: FakeBilling;
 const ids: Record<string, string> = {};
@@ -107,6 +109,22 @@ describe("hosted runs off (the default): tool runs are as before", () => {
     expect(r.status).toBe(403);
     expect(r.body.code).toBe("connect-gpu");
     expect(stored("none")).toEqual([]);
+  });
+
+  it("a press is made once per server process, as before, and nothing of it is kept in the database", async () => {
+    const account = auth.accountById(ids.none)!;
+    let called = 0;
+    const press = () =>
+      toolRun.onceForAccount(
+        account,
+        "test-off",
+        "press-off-00001",
+        async () => ({ ok: true as const, value: ++called }),
+        ({ value }) => Response.json({ value }, { status: 201 }),
+      );
+    expect(await (await press()).json()).toEqual({ value: 1 });
+    expect(await (await press()).json()).toEqual({ value: 1 });
+    expect(db().prepare("SELECT COUNT(*) AS n FROM tool_presses WHERE account = ?").get(account.id)).toEqual({ n: 0 });
   });
 
   it("the seam answers its own GPU or key, whatever the steps", async () => {
@@ -265,6 +283,140 @@ describe("hosted runs on", () => {
     // A guest's words name nothing it can't do yet; an account whose own GPU answers runs it there.
     expect(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, true)).not.toMatch(/Settings/);
     expect(await toolRun.placeOf(auth.accountById(ids.gpu)!, steps)).toEqual({ kind: "own" });
+  });
+
+  it("a press refused after its hold was made asks for a new hold on its next try; the first goes back", async () => {
+    useBilling();
+    const account = auth.accountById(ids.none)!;
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const shown = { amount: fake.price.amount, priceVersion: fake.price.version };
+    const press = (start: () => unknown) =>
+      toolRun.onceForAccount(
+        account,
+        "test-press",
+        "press-tries-0001",
+        () => toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), account, { tool: "test", files: [], shown, plan: () => plan, start }),
+        () => Response.json({ ok: true }, { status: 201 }),
+      );
+    const before = reserves();
+    // Its start makes more than was priced: refused after the hold was made.
+    const bad = await press(() => [...createGenerations(plan[0].request), ...createGenerations({ ...plan[0].request, prompt: "a fox at dusk" })]);
+    expect(bad.status).toBe(403);
+    const good = await press(() => createGenerations(plan[0].request));
+    expect(good.status, await good.clone().text()).toBe(201);
+    const sent = fake.calls_of("/v1/reserve").slice(before).map((c) => (c.body as { requestId: string }).requestId);
+    expect(sent).toEqual([pressRequestId(account.id, "test-press\npress-tries-0001"), pressRequestId(account.id, "test-press\npress-tries-0001\n1")]);
+    await drainOutbox();
+    const holds = [...fake.holds.values()].filter((h) => sent.includes(h.requestId));
+    expect(holds.map((h) => h.released)).toEqual([true, false]);
+    // The press answered: sent again, it is the same run, with no new hold.
+    expect((await press(() => createGenerations(plan[0].request))).status).toBe(201);
+    expect(reserves() - before).toBe(2);
+  });
+
+  it("a resend while another server process starts the press waits for that answer and makes nothing", async () => {
+    const account = auth.accountById(ids.none)!;
+    expect(presses.claimPress(account.id, "test-wait", "press-wait-0001").kind).toBe("claimed");
+    let called = 0;
+    const resend = toolRun.onceForAccount(
+      account,
+      "test-wait",
+      "press-wait-0001",
+      async () => {
+        called++;
+        return { ok: true as const, value: 1 };
+      },
+      () => Response.json({ here: true }, { status: 201 }),
+    );
+    setTimeout(() => presses.answerPress(account.id, "test-wait", "press-wait-0001", { status: 201, headers: [["content-type", "application/json"]], text: JSON.stringify({ elsewhere: true }) }), 300);
+    const r = await resend;
+    expect(r.status).toBe(201);
+    expect(await r.json()).toEqual({ elsewhere: true });
+    expect(called).toBe(0);
+  });
+
+  it("runs sent together whose start awaits before it makes its rows meet the limits one at a time", async () => {
+    useBilling();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), activeRuns: 1 } };
+    const account = auth.accountById(ids.none)!;
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const shown = { amount: fake.price.amount, priceVersion: fake.price.version };
+    const rows = stored("none").length;
+    // A start that waits (a channel made first, say) before it makes its rows.
+    const start = async () => {
+      await new Promise((r) => setTimeout(r, 30));
+      return createGenerations(plan[0].request);
+    };
+    const go = () => toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), account, { tool: "test", files: [], shown, plan: () => plan, start });
+    const [a, b] = await Promise.all([go(), go()]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    const no = (a.ok ? b : a) as Extract<typeof a, { ok: false }>;
+    expect(no.response.status).toBe(429);
+    expect(stored("none").length - rows).toBe(1);
+    // Its rows made, the run counts for itself: nothing is left open, and the next press meets the same limit.
+    expect(db().prepare("SELECT COUNT(*) AS n FROM open_admissions WHERE account = ?").get(account.id)).toEqual({ n: 0 });
+    const third = await go();
+    expect(third.ok).toBe(false);
+    // The account's own limit of runs at once counts such a run too, while its rows are being made.
+    db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), activeRuns: 0, waiting: 0 } };
+    const many = await Promise.all(Array.from({ length: 6 }, go));
+    expect(many.filter((r) => r.ok)).toHaveLength(4);
+  });
+
+  it("a start that makes no rows gives its hold back, answers as the tool does, and isn't one of the hour's runs", async () => {
+    useBilling();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), runsPerHour: 1 } };
+    const account = auth.accountById(ids.none)!;
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const shown = { amount: fake.price.amount, priceVersion: fake.price.version };
+    const hours = () => (db().prepare("SELECT COUNT(*) AS n FROM pool_admissions WHERE account = ?").get(account.id) as { n: number }).n;
+    db().prepare("DELETE FROM pool_admissions WHERE account = ?").run(account.id);
+    for (const start of [() => [], async () => []]) {
+      const before = reserves();
+      const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), account, { tool: "test", files: [], shown, plan: () => plan, start });
+      expect(r.ok).toBe(true);
+      expect(reserves() - before).toBe(1);
+      await drainOutbox();
+      const hold = [...fake.holds.values()].at(-1)!;
+      expect(hold.released).toBe(true);
+      expect(hold.reports.size).toBe(0);
+      expect(hours()).toBe(0);
+    }
+    // The hour still has room for a run that makes something.
+    const real = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), account, { tool: "test", files: [], shown, plan: () => plan, start: () => createGenerations(plan[0].request) });
+    expect(real.ok).toBe(true);
+    expect(hours()).toBe(1);
+  });
+
+  it("a start that made a row and then failed: the row's report closes the hold, which is never released as well", async () => {
+    useBilling();
+    const account = auth.accountById(ids.none)!;
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const shown = { amount: fake.price.amount, priceVersion: fake.price.version };
+    const releases = fake.calls_of("/v1/release").length;
+    const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), account, {
+      tool: "test",
+      files: [],
+      shown,
+      plan: () => plan,
+      start: async () => {
+        createGenerations(plan[0].request);
+        await new Promise((r) => setTimeout(r, 5));
+        throw new Error("The plan changed. Please try again.");
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.response.status).toBe(422);
+    const hold = [...fake.holds.entries()].at(-1)!;
+    // The stopped row reports once it is canceled.
+    await expect.poll(() => (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.hold') = ? AND status = 'canceled'").get(hold[0]) as { n: number }).n).toBe(1);
+    queueReports();
+    await drainOutbox();
+    expect(fake.calls_of("/v1/release").length).toBe(releases);
+    expect(hold[1].released).toBe(false);
+    expect([...hold[1].reports.values()]).toEqual(["canceled"]);
+    expect(fake.calls_of("/v1/refund").filter((c) => (c.body as { holdId: string }).holdId === hold[0])).toHaveLength(1);
   });
 
   it("a 3D model stays on an account's own GPU: refused here in the tools' words", async () => {

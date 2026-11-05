@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { projectSavesLimited } from "@/server/account-projects";
-import { asViewer, guestRun, ownGpuTool, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, guestRun, onceForAccount, ownGpuTool, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { createSeries, handle, listSeries, makeSeries, prepareSeries, ReferenceSchema, seriesReadSteps, seriesReads, type PreparedSeries } from "@/server/content-factory";
 import { body } from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
@@ -38,12 +38,19 @@ export async function POST(request: Request) {
     if (viewer.kind === "account" && input.reference?.kind === "link") return ownGpuTool();
     if (viewer.kind === "owner" || !seriesReads(input)) return Response.json(await asViewer(viewer, () => createSeries(input)), { status: 201 });
     let prepared: PreparedSeries | null = null;
-    const out = await runAccountTool(request, viewer.account, {
-      tool: "content-factory",
-      files: input.reference?.kind === "upload" ? [input.reference.url] : [],
-      plan: () => planned(async () => seriesReadSteps((prepared = await prepareSeries(input)))),
-      start: () => makeSeries(prepared!),
-    });
-    return out.ok ? Response.json({ ...out.value, ...(out.gpuWarning && { gpuWarning: out.gpuWarning }) }, { status: 201 }) : out.response;
+    // A resend of the same press (the page's id in its header) gets the series the first one made.
+    return onceForAccount(
+      viewer.account,
+      "content-factory",
+      pressIdOf(request),
+      () =>
+        runAccountTool(request, viewer.account, {
+          tool: "content-factory",
+          files: input.reference?.kind === "upload" ? [input.reference.url] : [],
+          plan: () => planned(async () => seriesReadSteps((prepared = await prepareSeries(input)))),
+          start: () => makeSeries(prepared!),
+        }),
+      ({ value, gpuWarning }) => Response.json({ ...value, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    );
   }, request);
 }

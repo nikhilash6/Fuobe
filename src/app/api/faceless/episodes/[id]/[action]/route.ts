@@ -1,5 +1,5 @@
 import type { GenerationRequest } from "@/lib/catalog/types";
-import { asViewer, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import {
   episodeView,
   graphFiles,
@@ -77,8 +77,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/faceless/ep
         }),
       );
     }
-    const out = await runAccountTool(request, viewer.account, { tool: "faceless", files: work.files, plan: () => planned(() => checked(id).steps), start: () => run(id) });
-    if (!out.ok) return out.response;
-    return Response.json({ ...asViewer(viewer, () => episodeView(id)), ...(out.gpuWarning && { gpuWarning: out.gpuWarning }) });
+    // A resend of the same press (the page's id in its header) gets the run the first one started.
+    return onceForAccount(
+      viewer.account,
+      `faceless-${action}:${id}`,
+      pressIdOf(request),
+      () => runAccountTool(request, viewer.account, { tool: "faceless", files: work.files, plan: () => planned(() => checked(id).steps), start: () => run(id) }),
+      ({ gpuWarning }) => Response.json({ ...asViewer(viewer, () => episodeView(id)), ...(gpuWarning && { gpuWarning }) }),
+    );
   }, request);
 }

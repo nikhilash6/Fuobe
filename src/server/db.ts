@@ -1114,6 +1114,9 @@ function open(): Database.Database {
   }
   // Admin tokens and the admin API's log.
   db.exec(ADMIN_TABLES);
+  // A tool's press of Run, kept so a resend gets its first answer (tool-presses.ts), and the runs let in whose rows are
+  // still being made (pool-limits.ts openAdmission): not a numbered migration either.
+  db.exec(TOOL_PRESS_TABLES);
   // Skills: the runs that wait across studios. A data folder that ran claude/fuobe-parity-4's earlier build of this
   // feature (its numbered migration at place 27, a skill_runs with no engine column and runs kept in another shape)
   // keeps that table under another name, so these runs start from an empty table. Nothing is deleted.
@@ -1156,6 +1159,30 @@ const ACCOUNT_CANVAS_TABLES = `CREATE TABLE IF NOT EXISTS account_canvases (
     summary_json TEXT
   );
   CREATE INDEX IF NOT EXISTS account_canvases_account ON account_canvases(account_id, updated_at DESC);`;
+
+/**
+ * Each press of a tool's Run an account made with hosted runs on (src/server/tool-presses.ts): by a key made from the
+ * account, the tool and the page's id for the press, with the answer it got once it started (`starting` while it is
+ * being started) and how many of its tries were refused after their hold was made. Kept a day. open_admissions: a run
+ * let in whose rows are still being made (a tool's start that awaits before it makes them), counted until they exist.
+ */
+const TOOL_PRESS_TABLES = `CREATE TABLE IF NOT EXISTS tool_presses (
+    account TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    answer_json TEXT,
+    tries INTEGER NOT NULL DEFAULT 0,
+    starting INTEGER NOT NULL DEFAULT 0,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (account, request_id)
+  );
+  CREATE INDEX IF NOT EXISTS tool_presses_at ON tool_presses(at);
+  CREATE TABLE IF NOT EXISTS open_admissions (
+    key TEXT PRIMARY KEY,
+    account TEXT NOT NULL,
+    pool INTEGER NOT NULL DEFAULT 0,
+    at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS open_admissions_account ON open_admissions(account, at);`;
 
 export function db(): Database.Database {
   globalThis.__fuobeDb ??= open();

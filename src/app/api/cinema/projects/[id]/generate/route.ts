@@ -31,7 +31,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cinema/proj
     return onceForAccount(
       viewer.account,
       `cinema:${id}`,
-      undefined,
+      b.requestId,
       () =>
         runAccountTool(request, viewer.account, {
           tool: "cinema",
