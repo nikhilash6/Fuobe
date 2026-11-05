@@ -110,6 +110,7 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "shorts/shorts-bold-urban": {"poster":"/previews/templates/shorts/shorts-bold-urban.jpg?v=754a8526","video":"/previews/templates/shorts/shorts-bold-urban.mp4?v=1cc2bc71","at":3.542},
   "shorts/shorts-bounding-box": {"poster":"/previews/templates/shorts/shorts-bounding-box.jpg?v=73e89ca8","video":"/previews/templates/shorts/shorts-bounding-box.mp4?v=53044eca","at":3.542},
   "shorts/shorts-circuit": {"poster":"/previews/templates/shorts/shorts-circuit.jpg?v=0713a483","video":"/previews/templates/shorts/shorts-circuit.mp4?v=c5e65281","at":3.542},
+  "shorts/shorts-claymation": {"poster":"/previews/templates/shorts/shorts-claymation.jpg?v=4349cf20","video":"/previews/templates/shorts/shorts-claymation.mp4?v=c88f0289","at":3.542},
   "shorts/shorts-comic-burst": {"poster":"/previews/templates/shorts/shorts-comic-burst.jpg?v=339f38be","video":"/previews/templates/shorts/shorts-comic-burst.mp4?v=7903bb06","at":3.542},
   "shorts/shorts-comic-pop": {"poster":"/previews/templates/shorts/shorts-comic-pop.jpg?v=aec69bca","video":"/previews/templates/shorts/shorts-comic-pop.mp4?v=302e2639","at":3.542},
   "shorts/shorts-desktop": {"poster":"/previews/templates/shorts/shorts-desktop.jpg?v=1451171d","video":"/previews/templates/shorts/shorts-desktop.mp4?v=f1301c6c","at":3.542},
