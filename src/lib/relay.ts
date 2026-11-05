@@ -346,7 +346,7 @@ export const RELAY_WORDS = {
 export const RUNS_ON_COMPUTER_NOTE = "Runs when Fuobe is open on your computer.";
 
 /** The words for a tab's own failure. */
-export function tabFailureWords(reason: TabFailure, status?: number): string {
+export function tabFailureWords(reason: TabFailure, status?: number, plain = false): string {
   switch (reason) {
     case "input-too-big":
       return "Your ComfyUI refused a file as too large. Start ComfyUI with a higher --max-upload-size, or use a smaller file.";
@@ -365,6 +365,7 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
     case "model-unverified":
       return "The GPU that took this run refused it: it needs a model file that GPU couldn't verify.";
     default:
-      return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
+      // An account reads no status code: its ComfyUI couldn't take the run, and what helps.
+      return plain ? "Your ComfyUI couldn't take this run. Restart ComfyUI, then press Retry." : `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }
 }

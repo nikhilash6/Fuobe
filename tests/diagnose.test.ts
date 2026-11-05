@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addressFixNote,
   backoffMs,
+  beforeRunWords,
   BILLING_URL,
   canSaveAnyway,
   checksTooFast,
@@ -10,14 +11,18 @@ import {
   diagnoseGpu,
   diagnoseGpuJob,
   diagnoseKey,
+  diagnoseKeyJob,
   diagnoseRefusal,
   gpuHostOf,
   ISOLATED_ON_GPU,
   retryPlan,
   RUNPOD_CONSOLE_URL,
   shortState,
+  testWords,
   troubleOf,
   waitingWords,
+  withoutAddress,
+  withoutSecrets,
   type Diagnosis,
   type GpuPlace,
 } from "@/lib/diagnose";
@@ -57,7 +62,9 @@ describe("Your GPU: what came back", () => {
       expect(d.actions[0]).toEqual({ kind: "start-gpu", label: "Start your pod", target: RUNPOD_CONSOLE_URL });
       expect(kinds(d)).toContain("check-gpu");
       expect(d.retryable).toBe(true);
-      expect(d.details).toMatch(/abc123xyz-8188\.proxy\.runpod\.net · HTTP 404/);
+      // The kind of address, never the address: a pod's address alone reaches its ComfyUI.
+      expect(d.details).toMatch(/^RunPod pod, port 8188 · HTTP 404/);
+      expect(d.details).not.toMatch(/abc123xyz|proxy\.runpod/);
       plain(d);
     }
     // A check connects once it answers; a run says what to press.
@@ -66,14 +73,19 @@ describe("Your GPU: what came back", () => {
     expect(kinds(diagnoseGpu({ stage: "upload", status: 404 }, pod))).toEqual(["start-gpu", "retry", "check-gpu", "gpu-settings"]);
   });
 
-  it("a RunPod 502 (nothing on the port yet) is the same; 503, 504 and Cloudflare's 52x are a GPU starting up", () => {
-    expect(diagnoseGpu({ stage: "upload", status: 502, body: "<html>Bad gateway</html>" }, pod).cause).toBe("gpu-stopped");
+  it("a RunPod 502 (the pod is on, ComfyUI not ready yet), 503, 504 and Cloudflare's 52x are a GPU starting up", () => {
+    const ready = diagnoseGpu({ stage: "upload", status: 502, body: "<html>Bad gateway</html>" }, pod);
+    expect(ready).toMatchObject({ cause: "gpu-starting", retryable: true });
+    expect(ready.words).toMatch(/^Your pod is on, but ComfyUI on port 8188 wasn't ready/);
+    expect(ready.actions[0]).toMatchObject({ kind: "start-gpu" });
+    plain(ready);
+    expect(diagnoseGpu({ stage: "test", status: 502 }, pod).words).toMatch(/We connect as soon as it is\./);
     for (const status of [502, 503, 504, 520, 522, 524]) {
       const d = diagnoseGpu({ stage: "upload", status, body: "<!DOCTYPE html><html><head><title>Bad gateway</title></head><body>…</body></html>", contentType: "text/html" }, tunnel);
       expect(d.cause, String(status)).toBe("gpu-starting");
       expect(d.retryable).toBe(true);
       // An HTML error page never reaches the words, and only its title the details.
-      expect(d.details).toBe(`quiet-river.trycloudflare.com · HTTP ${status} · Bad gateway`);
+      expect(d.details).toBe(`your tunnel · HTTP ${status} · Bad gateway`);
       plain(d);
     }
     expect(diagnoseGpu({ stage: "upload", status: 503 }, pod)).toMatchObject({ cause: "gpu-starting", actions: expect.arrayContaining([expect.objectContaining({ kind: "start-gpu" })]) });
@@ -256,8 +268,10 @@ describe("waiting, and how long", () => {
   });
 
   it("says what a run waits for, and the strip's short words", () => {
-    expect(waitingWords({ cause: "gpu-stopped" })).toBe("Waiting for your RunPod pod to start");
+    expect(waitingWords({ cause: "gpu-stopped" })).toBe("Your RunPod pod is off. Start it, and this run goes on by itself");
     expect(waitingWords({ cause: "gpu-starting" })).toBe("Waiting for your GPU to start up");
+    expect(waitingWords({ cause: "gpu-starting" }, undefined, true)).toBe("Waiting for ComfyUI to start on your pod");
+    expect(waitingWords({ cause: "gpu-not-found" })).toMatch(/Paste the new one, and this run goes there/);
     expect(waitingWords({ cause: "gpu-offline" })).toBe("Waiting for your GPU");
     expect(waitingWords({ cause: "provider-busy" }, "fal")).toBe("fal.ai is busy, trying again in a moment");
     expect(shortState("gpu-stopped")).toBe("pod stopped");
@@ -279,6 +293,71 @@ describe("the details line", () => {
     expect(cleanDetails("<html><body>no title</body></html>")).toBe("");
     expect(cleanDetails("a\n  b\tc")).toBe("a b c");
     expect(cleanDetails("x".repeat(500)).length).toBe(160);
-    expect(troubleOf(diagnoseGpu({ stage: "upload", status: 404 }, pod))).toEqual({ cause: "gpu-stopped", details: "abc123xyz-8188.proxy.runpod.net · HTTP 404", actions: expect.any(Array) });
+    expect(troubleOf(diagnoseGpu({ stage: "upload", status: 404 }, pod))).toEqual({ cause: "gpu-stopped", details: "RunPod pod, port 8188 · HTTP 404", actions: expect.any(Array) });
+  });
+
+  it("never names the GPU's address, an IP and port, or a credential the answer echoed", () => {
+    const refused = diagnoseGpu({ stage: "upload", error: "Couldn't reach abc123xyz-8188.proxy.runpod.net: connect ECONNREFUSED 104.18.2.3:443" }, pod);
+    expect(refused.details).toBe("RunPod pod, port 8188 · Couldn't reach your GPU: connect ECONNREFUSED your GPU");
+    const v6 = diagnoseGpu({ stage: "test", error: "Couldn't reach quiet-river.trycloudflare.com: connect ECONNREFUSED 2606:4700::6810:84e5:443" }, tunnel);
+    expect(v6.details).not.toMatch(/quiet-river|2606|6810/);
+    const echoed = diagnoseGpu({ stage: "test", status: 200, body: '{"headers":{"Authorization":"Bearer sk-live-123456789","Host":"gpu.example.com"}}' }, withToken);
+    expect(echoed.details).not.toMatch(/sk-live|123456789|gpu\.example\.com/);
+    expect(withoutSecrets("token=abcdef123 password: hunter22 Bearer abc.def-ghi")).toBe("token=•••• password: •••• Bearer ••••");
+    expect(withoutAddress("x.trycloudflare.com took over 15 s", "https://x.trycloudflare.com")).toBe("your GPU took over 15 s");
+    // A redirect elsewhere names that site only; one to the GPU's own address doesn't name it.
+    expect(diagnoseGpu({ stage: "test", status: 302, location: "https://login.example.org/path?next=secret" }, tunnel).details).toBe("your tunnel · HTTP 302 · to login.example.org");
+    expect(diagnoseGpu({ stage: "test", status: 301, location: "/other" }, tunnel).details).toBe("your tunnel · HTTP 301 · to another page of your GPU's address");
+    expect(diagnoseAddress("not-found", "https://quiet-river.trycloudflare.com/").details).toBe("your tunnel · name not found");
+  });
+});
+
+describe("what was sent to ComfyUI's /prompt is never sent twice by itself", () => {
+  it("waits only when the failure proves nothing arrived", () => {
+    // A reset or a timeout after the job went out: the job may be on the GPU, so the run fails and says Retry.
+    expect(diagnoseGpu({ stage: "prompt", error: "Couldn't reach x: socket hang up" }, tunnel)).toMatchObject({ cause: "gpu-offline", retryable: false });
+    expect(diagnoseGpu({ stage: "prompt", status: 502, body: "<html>Bad gateway</html>" }, tunnel)).toMatchObject({ cause: "gpu-starting", retryable: false });
+    // Nothing listens, no such name, a stopped pod, a tunnel that is down: nothing arrived, so it waits.
+    expect(diagnoseGpu({ stage: "prompt", error: "Couldn't reach x: connect ECONNREFUSED 1.2.3.4:443" }, tunnel).retryable).toBe(true);
+    expect(diagnoseGpu({ stage: "prompt", status: 404 }, pod).retryable).toBe(true);
+    expect(diagnoseGpu({ stage: "prompt", status: 530, body: "error code: 1033" }, tunnel).retryable).toBe(true);
+    // A file sent again is harmless: an upload's reset still waits.
+    expect(diagnoseGpu({ stage: "upload", error: "Couldn't reach x: socket hang up" }, tunnel).retryable).toBe(true);
+  });
+
+  it("ngrok's and cloudflared's 'nothing behind me' pages read as a GPU that doesn't answer, whatever their status", () => {
+    const ngrok = { kind: "link" as const, url: "https://x.ngrok-free.app" };
+    expect(diagnoseGpu({ stage: "upload", status: 502, body: "ERR_NGROK_8012 Traffic successfully made it to the ngrok agent, but the agent failed to establish a connection" }, ngrok).cause).toBe("gpu-offline");
+    expect(diagnoseGpu({ stage: "upload", status: 502, body: "Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared" }, tunnel).cause).toBe("gpu-offline");
+  });
+});
+
+describe("words for where they are said", () => {
+  it("before Run: runs start once the GPU answers, and Settings is named for what is there", () => {
+    expect(beforeRunWords(diagnoseGpu({ stage: "status", status: 404 }, pod).words)).toBe(
+      "Your RunPod pod isn't running, or ComfyUI isn't on port 8188. Start your pod, and your runs start as soon as it answers.",
+    );
+    expect(beforeRunWords(diagnoseGpu({ stage: "status", status: 503 }, tunnel).words)).toMatch(/your runs start as soon as ComfyUI is ready\.$/);
+    expect(beforeRunWords(diagnoseGpu({ stage: "status", status: 401 }, tunnel).words)).toBe("Your GPU asks for a password. Add it in Settings → Your GPU.");
+  });
+
+  it("after Test (nothing saved): what to press once it answers; when the checks stop, Save anyway too", () => {
+    const words = diagnoseGpu({ stage: "test", status: 404 }, pod).words;
+    expect(testWords(words)).toMatch(/Start your pod, then press Connect\.$/);
+    expect(testWords(words, true)).toMatch(/^Still no answer\. .*Start your pod, then press Connect again, or Save anyway\.$/);
+  });
+
+  it("a wait the other side asked for is honoured, never cut short", () => {
+    expect(backoffMs(1, { budgetMs: 600_000, firstMs: 5_000, maxMs: 60_000 }, 3_600_000)).toBe(3_600_000);
+  });
+
+  it("a run's own time limits say what happened, with what helps", () => {
+    expect(diagnoseGpuJob({ kind: "too-long", minutes: 45 }, pod).words).toBe("This took longer than 45 minutes, so we stopped it. Press Retry, or try a shorter clip.");
+    expect(diagnoseGpuJob({ kind: "disconnected" }, pod)).toMatchObject({ actions: [{ kind: "gpu-settings", label: "Connect your GPU" }, { kind: "retry" }] });
+    expect(diagnoseKeyJob({ kind: "busy", minutes: 30 }, { provider: "fal" }).words).toBe("fal.ai was busy for 30 minutes, so this run stopped. Press Retry in a few minutes.");
+    expect(diagnoseKeyJob({ kind: "too-long", minutes: 45 }, { provider: "replicate" }).words).toBe("This took longer than 45 minutes on Replicate, so we stopped it. Press Retry.");
+    // Out of memory offers one size smaller first; a file too big for the address, a smaller copy.
+    expect(diagnoseGpuJob({ kind: "error", message: "CUDA out of memory" }, pod).actions[0].kind).toBe("try-smaller");
+    expect(diagnoseGpu({ stage: "upload", status: 413, body: "<html>413</html>" }, tunnel).actions[0].kind).toBe("send-smaller");
   });
 });
