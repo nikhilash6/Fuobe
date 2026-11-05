@@ -665,7 +665,7 @@ export function OwnerComfyWhere({ value, onChange }: { value: string; onChange: 
         })}
       </div>
       {support !== "ok" && (picking || computer) ? (
-        <p className="text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>
+        <p className="text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p>
       ) : picking && !computer ? (
         <ThisComputer
           connect={async () => {

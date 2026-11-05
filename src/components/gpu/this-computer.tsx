@@ -102,17 +102,24 @@ function blockedSteps(): string {
   return "Click the icon to the left of the address, turn on Apps on device, then reload.";
 }
 
+/**
+ * Why this browser can't use the ComfyUI on the person's computer, in their terms, then the way that works from right
+ * here: the web address form shown below these words. The person already has Fuobe open, so no line tells them to open
+ * it; the browser switch is only a last line, said as what those browsers allow.
+ */
 const UNSUPPORTED: Record<"safari" | "phone" | "http", string> = {
-  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or give your ComfyUI a web address.",
-  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or give your ComfyUI a web address.",
-  http: "Your browser only lets a secure page reach apps on this computer. Open Fuobe on the computer that runs ComfyUI, or give your ComfyUI a web address.",
+  phone: "A phone or tablet can't reach the ComfyUI on your computer from a website. Give your ComfyUI a web address below, and your runs reach it from here.",
+  safari:
+    "Safari doesn't let a website talk to programs on your Mac, so this page can't reach your ComfyUI. Give your ComfyUI a web address below, and it works from Safari. Chrome, Edge and Firefox allow this, so switching browser also works.",
+  http: "Your browser marks this page as not secure, so it doesn't let the page talk to programs on this computer, like ComfyUI. Give your ComfyUI a web address below, and it works from here.",
 };
 
-/** The owner's second way is a ComfyUI at a server address (a cloud GPU, a tunnel), not an account's link. */
+/** The owner's way from here is a ComfyUI at a server address (a cloud GPU, a tunnel), shown below these words. */
 const UNSUPPORTED_OWNER: Record<"safari" | "phone" | "http", string> = {
-  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or use a ComfyUI on a server below.",
-  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or use a ComfyUI on a server below.",
-  http: "Your browser only lets a secure page reach apps on this computer. Open the studio over https, or on the computer that runs ComfyUI, or use a ComfyUI on a server below.",
+  phone: "A phone or tablet can't reach the ComfyUI on your computer from a website. Use a ComfyUI on a server below, and your runs reach it from here.",
+  safari:
+    "Safari doesn't let a website talk to programs on your Mac, so this page can't reach your ComfyUI. Use a ComfyUI on a server below, and it works from Safari. Chrome, Edge and Firefox allow this, so switching browser also works.",
+  http: "Your browser marks this page as not secure, so it doesn't let the page talk to programs on this computer, like ComfyUI. Use a ComfyUI on a server below, or give this studio a secure address.",
 };
 
 export const unsupportedWords = (why: "safari" | "phone" | "http", owner = false) => (owner ? UNSUPPORTED_OWNER : UNSUPPORTED)[why];
