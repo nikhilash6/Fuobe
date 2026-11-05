@@ -98,14 +98,21 @@ const poolRuns = (id: string) =>
 const ownRuns = (id: string) =>
   (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = ? AND json_extract(request_json, '$.place') IS NULL").get(id) as { n: number }).n;
 
+/** A worker as the owner adds it, connected once: it said its build (one that takes this studio's job tickets). */
 function standInWorker() {
   const w = pool.addWorker(`stand-in-${++n}`);
   const lanes = allLanes(loadIndex(), sha);
   pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l.lane, { delayMs: 0 }])), claimAfterMs: 0 });
   db()
-    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
-    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
+    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
   return w;
+}
+
+/** A worker's beat, as its program sends it, built for this catalog version. */
+function beatWith(w: { id: string }, version: string | null) {
+  const row = db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as import("@/server/computer/workers").WorkerRow;
+  pool.workerBeat(row, pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: version }));
 }
 
 const withBilling = (policy: Record<string, unknown> = {}) => {
@@ -785,6 +792,34 @@ describe("the price check before Run and the run itself", async () => {
       expect(run.kind === "refuse" && run.refusal.body.error, c.name).toBe(c.refused);
       expect(check?.quote, c.name).toMatchObject({ allowed: false, text: c.refused });
     }
+  });
+
+  it("while every worker that could run it is built from the catalog before the studio's update, Run is off with plain words, never a run that waits for nothing", async () => {
+    const a = account();
+    const acct = auth.accountById(a.id)!;
+    withBilling({ limits: NO_LIMITS });
+    const req = { ...IMAGE, account: a.id } as never;
+    const endpoint = getModel(IMAGE.modelId)!.routes!.find((r) => r.provider === "comfyui")!.endpoint;
+    beatWith(worker, catalogVersion());
+    expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
+    expect(hosted.queueFacts(a.id, endpoint).workersOnline).toBe(1);
+    // The studio was updated; its only worker not yet.
+    beatWith(worker, "e".repeat(64));
+    const before = db().prepare("SELECT COUNT(*) FROM generations").pluck().get();
+    const run = await hostedRun.decidePlace(acct, req, undefined);
+    expect(run.kind).toBe("refuse");
+    expect(run.kind === "refuse" && run.refusal).toMatchObject({ status: 503, body: { code: "busy", error: HOSTED_WORDS.busy } });
+    expect((await hostedRun.poolQuote(acct, req, undefined))?.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.busy });
+    expect((await hostedRun.poolQuote(null, IMAGE as never, undefined))?.quote).toMatchObject({ allowed: false, text: HOSTED_GUEST_WORDS.busy });
+    // Its place in line and the workers there count only a worker that takes the run now.
+    expect(hosted.queueFacts(a.id, endpoint).workersOnline).toBe(0);
+    expect(db().prepare("SELECT COUNT(*) FROM generations").pluck().get()).toBe(before);
+    // The owner's own jobs still go to it: a worker built from another catalog takes those.
+    expect(pool.workersCanRun(endpoint)).toBe(true);
+    // Updated: Run is on again.
+    beatWith(worker, catalogVersion());
+    expect((await hostedRun.poolQuote(acct, req, undefined))?.quote.allowed).toBe(true);
+    expect(hosted.queueFacts(a.id, endpoint).workersOnline).toBe(1);
   });
 
   it("a guest's price check plans every step of a chain too, and words its refusals for someone with no Settings yet", async () => {

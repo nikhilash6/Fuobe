@@ -8,7 +8,7 @@
  * a socket and a clock, and the tests drive it from Node against a stand-in ComfyUI.
  */
 import { isGuard } from "./comfy-guard";
-import { finishProblem, type FinishResult, type FinishStats } from "./finish-ticket";
+import { FINISH_RUN_MS, finishProblem, type FinishResult, type FinishStats } from "./finish-ticket";
 import { fetchWithin } from "./fetch-within";
 import { parseComfyBinary, parseComfyText } from "./comfy-ws";
 import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, writePath, type SystemStats } from "./local-comfy";
@@ -176,6 +176,11 @@ export interface WorkerHooks {
    * job is refused whatever this says: an account's run comes as a ticket.
    */
   graphs?: boolean;
+  /**
+   * The studio is older than job tickets (its last beat answer named no catalog version): its claims name no class, and
+   * every graph it sends is the owner's own job (it sends no account's run to the workers).
+   */
+  olderStudio?(): boolean;
   /** Is a graph job (the owner's own) inside its PC's ceiling, by its lane or workflow? A ticket's are the composer's to check. */
   inside?(t: ClaimedTask): boolean;
   /** How many times its ComfyUI stopped while it ran this task. */
@@ -282,6 +287,8 @@ export const MIN_RUN_LIMIT_MS = 10 * 60_000;
 export const MIN_STALL_MS = 60_000;
 
 const PROGRESS_EVERY_MS = 500;
+/** A finishing job tells the studio it still runs at least this often (and hears a stop in the answer). */
+const FINISH_BEAT_MS = 10_000;
 const POLL_MS = 1000;
 /** How often a ComfyUI that stopped answering is looked for on the other ports. */
 const FIND_EVERY_MS = 20_000;
@@ -842,28 +849,51 @@ export class ComputerRunner {
         this.job(t, { phase: "running", value: 0, max: 100 });
         // Its run limit: past it, the job goes back in line (the next try has the whole limit again).
         const ctrl = new AbortController();
-        const limit = t.runLimitMs && t.runLimitMs > 0 ? t.runLimitMs : 20 * 60_000;
+        const limit = t.runLimitMs && t.runLimitMs > 0 ? t.runLimitMs : FINISH_RUN_MS;
         const started = this.now();
         let timedOut = false;
         const timer = setTimeout(() => {
           timedOut = true;
           ctrl.abort();
         }, limit);
-        let lastAt = 0;
-        const progress = (fraction: number) => {
-          const value = Math.max(0, Math.min(99, Math.round(fraction * 100)));
-          this.job(t, { phase: "running", value, max: 100 });
-          if (this.now() - lastAt < PROGRESS_EVERY_MS * 4) return;
-          lastAt = this.now();
-          void this.report(t, { event: "running", value, max: 100 }).catch(() => null);
+        // A stop from the studio (the run was canceled or deleted): the answer to a progress report says so, or the studio
+        // no longer has the job. Its processes stop at once. A progress report goes at least every FINISH_BEAT_MS, so a
+        // stop is heard even while a step of it says nothing for minutes.
+        let stopped = false;
+        const stopNow = () => {
+          stopped = true;
+          ctrl.abort();
         };
+        let lastAt = 0;
+        let value = 0;
+        const tell = () => {
+          if (stopped) return;
+          lastAt = this.now();
+          void this.report(t, { event: "running", value, max: 100 }).then(
+            (a) => {
+              if (a.stop) stopNow();
+            },
+            (e) => {
+              if (e instanceof Stopped) stopNow();
+            },
+          );
+        };
+        const progress = (fraction: number) => {
+          value = Math.max(0, Math.min(99, Math.round(fraction * 100)));
+          this.job(t, { phase: "running", value, max: 100 });
+          if (this.now() - lastAt >= PROGRESS_EVERY_MS * 4) tell();
+        };
+        const beat = setInterval(() => {
+          if (this.now() - lastAt >= FINISH_BEAT_MS) tell();
+        }, FINISH_BEAT_MS);
         let made: FinishMade | { refused: "unsafe-model" | "finish-failed" };
         try {
           made = await this.deps.finish(t, inputs, { signal: ctrl.signal, progress }).catch((): { refused: "finish-failed" } => ({ refused: "finish-failed" }));
         } finally {
           clearTimeout(timer);
+          clearInterval(beat);
         }
-        if (!this.alive) throw new Stopped();
+        if (!this.alive || stopped) throw new Stopped();
         if (timedOut) {
           await this.giveBack(t, "run-limit");
           return this.job(t, { phase: "failed" });
@@ -920,8 +950,10 @@ export class ComputerRunner {
       return null;
     }
     if (!t.graph || typeof t.graph !== "object") return "bad-ticket";
-    // A studio names the owner's own job "owner"; a graph for any other job, or for one that names no class, is refused.
-    if (worker && (t.class !== "owner" || worker.graphs === false)) return "bad-ticket";
+    // A studio names the owner's own job "owner"; a graph for any other job is refused, and so is one that names no class,
+    // unless the studio is older than job tickets (its every graph job is the owner's own, and names no class).
+    const cls = t.class ?? (worker?.olderStudio?.() ? "owner" : undefined);
+    if (worker && (cls !== "owner" || worker.graphs === false)) return "bad-ticket";
     if (worker?.inside && !worker.inside(t)) return "outside-ceiling";
     return null;
   }

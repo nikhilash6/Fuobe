@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
-import { ffmpegOf, PROTOCOL, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
+import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
@@ -71,6 +71,24 @@ export const MODELS_CHECK_MS = 60_000;
  * next beat says how long (`slept`), so a job the studio took back meanwhile counts against no one.
  */
 export const SLEPT_MS = 60_000;
+
+/**
+ * After a claim that found no job for a slot, that slot asks again only this long after (ms): two idle slots never ask
+ * more often than the studio's limit allows.
+ */
+export const IDLE_CLAIM_MS = 3000;
+
+/**
+ * The shortest wait after a claim that found nothing while the last beat said a person's job waits that this worker may
+ * take now (ms): it asks again soon, but never once a second for as long as that word lasts (a beat comes every 10 s).
+ */
+export const CLAIM_GAP_MS = 1500;
+
+/**
+ * May a slot claim now: `missedAt` is when its last claim found nothing (-Infinity after a job, or before any claim). Not
+ * before `idleMs` has gone by since, or CLAIM_GAP_MS while a person's job waits for it (`claimable`).
+ */
+export const claimDue = (t, missedAt, claimable = 0, idleMs = IDLE_CLAIM_MS) => t - missedAt >= (claimable > 0 ? Math.min(CLAIM_GAP_MS, idleMs) : idleMs);
 
 /** A worker token as the studio makes them. */
 const NEXT_TOKEN = /^fuobe_wkr_[A-Za-z0-9_-]{43}$/;
@@ -160,8 +178,8 @@ export function siteOf(answer) {
  * Run until `signal` aborts or the studio stops it. Returns why it ended: "aborted" (Ctrl+C, the scheduled task's end),
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
  * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
- * options), readCounters, readListeners, gpuEveryMs, readGpuGen, and for job tickets: composer (src/lib/ticket-compose.ts
- * as built), catalogVersion, catalogDir, allLanes }.
+ * options), readCounters, readListeners, gpuEveryMs, readGpuGen, idleClaimMs (IDLE_CLAIM_MS), canCleanPictures, and for
+ * job tickets: composer (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes }.
  */
 export async function runWorker(saved, deps) {
   // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
@@ -363,7 +381,7 @@ async function work(saved, deps, owner) {
   // Pictures of an account's job are made again here: without the tool for it (pnpm install in its checkout), such a
   // job goes back to the line for another worker.
   const pictureTool = deps.canCleanPictures ?? canCleanPictures();
-  if (!pictureTool) log("It can't make pictures again here (run pnpm install in its checkout): an account's job with a picture goes back to the line.");
+  if (!pictureTool) log("It can't make pictures again here (run pnpm install in its checkout): it takes only the owner's own jobs until it can.");
   /**
    * An input for its ComfyUI: read from the studio once, kept by its SHA-256 (in the slot's own `cacheDir`), a clip or
    * sound made again by ffmpeg, and a picture of an account's job ticket or of a finishing job made again from its pixels.
@@ -520,7 +538,8 @@ async function work(saved, deps, owner) {
       beatExtra: () => {
         sleptSent = slept;
         return {
-          protocol: PROTOCOL,
+          // Without its picture tool, it takes no job ticket: the studio sends it the owner's own jobs only.
+          protocol: protocolOf(pictureTool),
           version: VERSION,
           // It saves the next token a beat answer gives it (never one for a token from the environment).
           canRotateToken: canRotate,
@@ -566,6 +585,7 @@ async function work(saved, deps, owner) {
         hold,
         input: takeInput,
         graphs: cfg.acceptGraphs !== false,
+        olderStudio: () => !!answer && typeof answer.worker?.catalogVersion !== "string",
         inside: (t) => graphInside(ceiling, t),
         // The studio's stall limit comes with each job; a stallMin in worker.json wins over it on this PC.
         stallMs: 10 * 60_000,
@@ -630,6 +650,7 @@ async function work(saved, deps, owner) {
           hold: cpuHold,
           input: takeInputIn(cpuCacheDir),
           graphs: cfg.acceptGraphs !== false,
+          olderStudio: () => !!answer && typeof answer.worker?.catalogVersion !== "string",
           inside: (t) => graphInside(ceiling, t),
           stallMs: 10 * 60_000,
           stallLocalMs: Number(cfg.stallMin) > 0 ? Number(cfg.stallMin) * 60_000 : null,
@@ -654,10 +675,17 @@ async function work(saved, deps, owner) {
       { device: "worker-cpu", port: 8191, clientId: crypto.randomBytes(8).toString("hex"), slot: "cpu" },
     );
   }
+  // When each slot's last claim found nothing (claimDue): it asks again a little later.
+  const idleClaimMs = deps.idleClaimMs ?? IDLE_CLAIM_MS;
+  let gpuMissedAt = -Infinity;
+  let cpuMissedAt = -Infinity;
   const takeCpu = () => {
     busyCpu = true;
     cpuJob = cpuRunner
       .claimAndRun()
+      .then((had) => {
+        cpuMissedAt = had ? -Infinity : now();
+      })
       .catch((e) => log(`A CPU slot job stopped: ${e.message}`))
       .finally(() => {
         busyCpu = false;
@@ -691,6 +719,9 @@ async function work(saved, deps, owner) {
     jobUsesGpu = !o?.onlyHeld;
     job = runner
       .claimAndRun(o)
+      .then((had) => {
+        if (!o?.onlyHeld) gpuMissedAt = had ? -Infinity : now();
+      })
       .catch((e) => log(`A job stopped: ${e.message}`))
       .finally(() => {
         busyJob = false;
@@ -887,7 +918,7 @@ async function work(saved, deps, owner) {
               .finally(() => (starting = null));
           }
         }
-        if (comfy.ready && answer?.runner && !busyJob && !holdBack && !heldFirst) take();
+        if (comfy.ready && answer?.runner && !busyJob && !holdBack && !heldFirst && claimDue(t, gpuMissedAt, siteOf(answer).claimable ?? 0, idleClaimMs)) take();
       } else if (comfy.alive() && (stopNow || !busyJob)) {
         log("Stopping its own ComfyUI (paused).");
         await comfy.stop();
@@ -907,7 +938,7 @@ async function work(saved, deps, owner) {
               })
               .finally(() => (cpuStarting = null));
           }
-          if (cpuComfy.ready && answer?.runner && !busyCpu) takeCpu();
+          if (cpuComfy.ready && answer?.runner && !busyCpu && claimDue(t, cpuMissedAt, 0, idleClaimMs)) takeCpu();
         } else if (cpuComfy.alive() && (!busyCpu || pause.why === "here-now" || answer?.worker?.pauseNow)) {
           await cpuComfy.stop();
         }

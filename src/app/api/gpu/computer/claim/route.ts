@@ -12,9 +12,10 @@ import { refreshTicketsBeforeClaim } from "@/server/computer/ticket-refresh";
 export async function POST(request: Request) {
   const principal = principalOf(request);
   if (principal instanceof Response) return principal;
-  const limited = rateOf(callerKey(request, principal), "claim", 60);
-  if (limited) return limited;
   const body = (await request.json().catch(() => null)) as { device?: unknown; running?: unknown; slot?: unknown } | null;
+  // Each of a worker's slots claims for itself, each counted on its own: an idle CPU slot never uses up its GPU's claims.
+  const limited = rateOf(callerKey(request, principal), body?.slot === "cpu" ? "claim-cpu" : "claim", 60);
+  if (limited) return limited;
   const running = Array.isArray(body?.running) ? body.running.filter((x): x is string => typeof x === "string").slice(0, 32) : [];
   try {
     const worker = requestWorker(request);

@@ -164,7 +164,8 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
     const w = studio.pool.addWorker(`pc-${Math.random().toString(36).slice(2, 8)}`);
     const lanes = studio.lanes();
     studio.pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l, { delayMs: 0 }])), claimAfterMs: 0 });
-    studio.db().prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?").run(JSON.stringify({ lanes, workflows: studio.workflows() }), JSON.stringify({ vramBytes: 32 * 2 ** 30 }), w.id);
+    // Connected once: it said its build (one that takes this studio's job tickets).
+    studio.db().prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?").run(JSON.stringify({ lanes, workflows: studio.workflows() }), JSON.stringify({ vramBytes: 32 * 2 ** 30 }), program.catalogVersion, w.id);
     return w;
   }
 

@@ -99,9 +99,10 @@ function standInWorker(name = "stand-in") {
   const w = pool.addWorker(name);
   const lanes = allLanes(loadIndex(), sha);
   pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l.lane, { delayMs: 0 }])), claimAfterMs: 0 });
+  // Connected once: it said its build (one that takes this studio's job tickets).
   db()
-    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
-    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
+    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
   return w;
 }
 type WorkerRow = import("@/server/computer/workers").WorkerRow;

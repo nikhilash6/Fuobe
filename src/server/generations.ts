@@ -98,7 +98,7 @@ import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
-import { pathOnWorker, startWorkerModelFinish, stopWorkerFinish, workersFinish } from "./computer/finish";
+import { finishTask, pathOnWorker, startWorkerModelFinish, stopWorkerFinish, workersFinish } from "./computer/finish";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -107,7 +107,7 @@ import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } 
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
-import { placeInLine, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
+import { placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { poolLane } from "./computer/pool";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
@@ -1629,9 +1629,9 @@ async function advanceDependents(): Promise<void> {
         const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
         const keys = request.params?.cameraPath ?? [];
         if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
-        else if (account && stored.place === "pool" && workersFinish("path")) {
+        else if (account && stored.place === "pool" && (workersFinish("path") || finishTask(r.id, "path", i))) {
           // A run on this install's GPUs: the path is drawn on a worker's CPU slot (computer/finish.ts), never here. The
-          // step waits for it, sweep by sweep.
+          // step waits for it, sweep by sweep (once queued, it stays the worker's even while no CPU slot is about).
           const depth = values[i]!;
           const got = await asRun(() => pathOnWorker(r.id, i, { photo, depth, keys, frames: PATH_FRAMES, fps: PATH_FPS }));
           if (got.state === "failed") throw new Error(got.error);
@@ -2688,8 +2688,10 @@ function resumeFinish(r: Row): void {
   const outputs = JSON.parse(r.outputs_json || "[]") as OutputFile[];
   // An account's model: one account finish at a time, and no turntable on the server (its browser records one).
   const account = accountOf(r);
-  // An account's run on this install's GPUs is finished on a worker's CPU slot, never here (computer/finish.ts).
-  const onWorker = !!account && (JSON.parse(r.request_json) as GenerationRequest).place === "pool" && workersFinish("model3d");
+  // An account's run on this install's GPUs is finished on a worker's CPU slot, never here (computer/finish.ts): queued
+  // there even while no CPU slot is about (it waits in line, and past its wait the model is kept as it is).
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  const onWorker = !!account && stored.place === "pool" && poolOnWorkers();
   (onWorker ? startWorkerModelFinish : startModelFinish)(r.id, outputs, {
     op: r.op,
     provider: r.provider,
@@ -2701,6 +2703,13 @@ function resumeFinish(r: Row): void {
       if (!now || now.status !== "running") return;
       const meta = JSON.parse(now.external_meta_json ?? "{}") as Record<string, unknown>;
       delete meta.finishing;
+      // The moderation service asked to see this run's outputs first: the finished model and its turntable are held, and
+      // the row waits ("Checking"), as any run's outputs are.
+      if (stored.checkOutputs && moderationConfigured()) {
+        update(r.id, { external_meta_json: JSON.stringify(meta) });
+        holdForCheck(r.id, finished);
+        return;
+      }
       update(r.id, { status: "succeeded", outputs_json: JSON.stringify(finished), external_meta_json: JSON.stringify(meta), progress: 1, message: null, completed_at: Date.now() });
       // The model can be opened and downloaded now; its turntable is rendered after and added to the result.
       if (!account) startTurntable(r.id, outputStore(r.id));

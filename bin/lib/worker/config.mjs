@@ -10,6 +10,13 @@ import path from "node:path";
  */
 export const PROTOCOL = 3;
 
+/**
+ * The protocol this worker says it speaks: PROTOCOL, or 2 when it can't make pictures again (no sharp in its checkout).
+ * The studio then sends it no job ticket (an account's run with a picture would only come back), and its owner's own jobs
+ * go on as before.
+ */
+export const protocolOf = (canCleanPictures) => (canCleanPictures ? PROTOCOL : 2);
+
 /** Where the worker keeps its settings: %LOCALAPPDATA%\FuobeWorker on Windows, ~/.config/fuobe-worker elsewhere. */
 export function workerHome(env = process.env, home = os.homedir()) {
   if (env.FUOBE_WORKER_HOME) return env.FUOBE_WORKER_HOME;

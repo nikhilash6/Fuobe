@@ -160,17 +160,25 @@ export const catalogKnows = (catalog: ComposeCatalog, id: string) => catalog.has
  * The worker's side: check the ticket (its catalog version, its settings, its inputs against the files the job sends,
  * the PC's ceiling), then compose the graph with the composer and the worker's own catalog and facts. The files the
  * composer makes itself (made.<i>) are made here again: their copies on the studio are never read.
+ *
+ * `remake`: the studio's side when it makes a waiting ticket again for its catalog after an update (ticket-refresh.ts):
+ * the files the graph makes may come out other than the ticket's (the composer that makes them changed), so they are
+ * given back as they came out, for the studio to stage in place of the old ones, never checked against them.
  */
 export async function composeTicket(
   job: { ticket: unknown; generationId: string; inputs: { name: string; sha256: string }[] },
-  env: { catalog: ComposeCatalog; catalogVersion: string; ceiling?: Ceiling | null; laneOf?: (workflowId: string) => string | null; facts?: WorkerFacts },
+  env: { catalog: ComposeCatalog; catalogVersion: string; ceiling?: Ceiling | null; laneOf?: (workflowId: string) => string | null; facts?: WorkerFacts; remake?: boolean },
 ): Promise<TicketOutcome> {
   if (!GENERATION_ID.test(String(job.generationId))) return { ok: false, reason: "bad-ticket", detail: "not a run id" };
   const refused = ticketProblem(job.ticket, { catalogVersion: env.catalogVersion, known: (id) => catalogKnows(env.catalog, id), inputs: job.inputs });
   if (refused) return { ok: false, ...refused };
   const t = job.ticket as JobTicket;
   const lane = (id: string) => env.laneOf?.(id) ?? null;
-  const before = ceilingProblem(env.ceiling, { workflowId: t.workflowId, lane: lane(t.workflowId), size: t.size });
+  // A workflow that picks its graph at run time (`video-concat-{n}`) has no lane or name in the ceiling until it is
+  // composed: before, only its sizes are checked; after, the graph it came out as, as the studio checked it.
+  const templated = t.workflowId.includes("{");
+  const ceiling = templated && env.ceiling ? { ...env.ceiling, lanes: undefined, workflows: undefined } : env.ceiling;
+  const before = ceilingProblem(ceiling, { workflowId: templated ? null : t.workflowId, lane: templated ? null : lane(t.workflowId), size: t.size });
   if (before) return { ok: false, reason: "outside-ceiling", detail: before };
   // The request, with each file in its slot.
   const input = { ...t.settings } as GenInput & Record<string, unknown>;
@@ -201,9 +209,10 @@ export async function composeTicket(
       accountOnInstall: true,
       made: async (data, contentType) => {
         const slot = made[madeHere.length];
-        if (!slot) throw new ComposeError("The ticket has no place for a file the graph makes");
-        madeHere.push({ name: slot.name, data: Buffer.from(data), contentType });
-        return slot.name;
+        if (!slot && !env.remake) throw new ComposeError("The ticket has no place for a file the graph makes");
+        const name = slot?.name ?? `made-${madeHere.length}`;
+        madeHere.push({ name, data: Buffer.from(data), contentType });
+        return name;
       },
       media: (name) => {
         const m = facts.get(name);
@@ -216,10 +225,10 @@ export async function composeTicket(
       reuseModels: async () => f.reuseModels,
       idolPack: async () => f.idolPack,
     });
-    if (madeHere.length !== made.length) return { ok: false, reason: "bad-ticket", detail: "the ticket names files the graph doesn't make" };
+    if (!env.remake && madeHere.length !== made.length) return { ok: false, reason: "bad-ticket", detail: "the ticket names files the graph doesn't make" };
     // A file made here is the studio's to the byte, or the ticket wasn't made for this graph.
     for (const [i, m] of madeHere.entries()) {
-      if (crypto.createHash("sha256").update(m.data).digest("hex") !== made[i].sha256) return { ok: false, reason: "bad-ticket", detail: "a file the graph makes isn't the ticket's" };
+      if (!env.remake && crypto.createHash("sha256").update(m.data).digest("hex") !== made[i].sha256) return { ok: false, reason: "bad-ticket", detail: "a file the graph makes isn't the ticket's" };
     }
     const after = ceilingProblem(env.ceiling, { workflowId: out.manifest.id, lane: lane(out.manifest.id), size: out.size });
     if (after) return { ok: false, reason: "outside-ceiling", detail: after };

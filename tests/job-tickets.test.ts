@@ -253,6 +253,21 @@ describe("the PC's ceiling", () => {
     expect(await run({ maxMegapixels: s.size.megapixels / 2 }, { ...s.ticket, size: { ...s.ticket.size, megapixels: 0 } })).toMatchObject({ ok: false, reason: "outside-ceiling" });
   });
 
+  it("a workflow that picks its graph at run time (a join of clips) is held to the graph it picks, as the studio offers it", async () => {
+    const s = await studioSide({ endpoint: "video-concat-{n}", op: "concat" as Operation, kind: "video" }, "ceil-gen-2");
+    expect(s.ticket.workflowId).toBe("video-concat-{n}");
+    const lanes: Record<string, string> = { "video-concat-2": "join-lane-2", "video-concat-3": "join-lane-3" };
+    const run = (ceiling: Parameters<typeof ceilingProblem>[0]) => composeTicket({ ticket: s.ticket, generationId: "ceil-gen-2", inputs: s.inputs }, { catalog, catalogVersion: VERSION, ceiling, laneOf: (id) => lanes[id] ?? "small" });
+    // The two clips make the two-clip graph: a ceiling that names it, or its lane, lets it run.
+    expect(await run({ workflows: ["video-concat-2"] })).toMatchObject({ ok: true, workflowId: "video-concat-2" });
+    expect(await run({ lanes: ["join-lane-2"] })).toMatchObject({ ok: true });
+    // One that names only another graph, or another lane, refuses it (after composing, by the graph it came out as).
+    expect(await run({ workflows: ["video-concat-3"] })).toMatchObject({ ok: false, reason: "outside-ceiling" });
+    expect(await run({ lanes: ["small"] })).toMatchObject({ ok: false, reason: "outside-ceiling" });
+    // Its sizes are held before composing as for any ticket.
+    expect(await run({ workflows: ["video-concat-2"], maxSeconds: 0.5 })).toMatchObject({ ok: false, reason: "outside-ceiling" });
+  });
+
   it("a ceiling is kept the same way on the worker (worker.json) and in the studio", () => {
     const raw = { lanes: ["small", "0123456789ab", "nope"], workflows: ["selftest-image", "../x"], maxMegapixels: 4, maxSeconds: 0, maxOutputs: 2.7, other: true };
     expect(ceilingOf(raw)).toEqual(cleanCeiling(raw));

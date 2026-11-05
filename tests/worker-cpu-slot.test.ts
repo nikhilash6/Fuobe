@@ -380,6 +380,67 @@ describe("the 3D finish on the worker", () => {
     expect(db().prepare("SELECT account_id FROM assets WHERE id = ?").pluck().get(clip.assetId)).toBe(accountId);
   });
 
+  it("a turntable that didn't come back leaves the account's words on the model, never the worker's", async () => {
+    const { ACCOUNT_TURNTABLE } = await import("@/server/model3d-finish");
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const gid = generation(accountId, "image-to-3d");
+    const raw = saveFile({ data: glb(), contentType: "model/gltf-binary", name: "model.glb", source: "generation", generationId: gid });
+    const outputs = [{ url: raw.url, kind: "model3d" as const, contentType: "model/gltf-binary", assetId: raw.id }];
+    let finished: import("@/lib/catalog/types").OutputFile[] | null = null;
+    finish.startWorkerModelFinish(gid, outputs, { op: "image-to-3d", provider: "comfyui", account: accountId, done: (o) => void (finished = o) });
+    const id = finish.finishTask(gid, "model3d")!.id;
+    // A turntable render that fails, naming things of its PC.
+    const failing = path.join(tempDir("fuobe-cpu-slot-turntable-"), "turntable.mjs");
+    fs.writeFileSync(failing, 'console.error("no browser at C:/Users/someone-private/browsers/chrome.exe"); process.exit(1);');
+    start(w, s, p, { finishers: finishers({ workDir: path.join(p.workDir, "cpu"), ffmpeg: null, scripts: { turntable: failing } }) });
+    const t = await ended(id);
+    expect(t.state, t.error ?? "").toBe("done");
+    const got = await until(() => finished, 30_000);
+    const mesh = got.find((o) => o.kind === "model3d")!;
+    const meta = mesh.meta as { web?: string; finish: { turntable: string } };
+    expect(meta.web).toBeTruthy();
+    expect(meta.finish.turntable).toBe(ACCOUNT_TURNTABLE);
+    expect(JSON.stringify(got)).not.toMatch(/someone-private|chrome|browsers/);
+  });
+
+  it("a finish its run no longer wants stops on the worker while it runs: the run was deleted", async () => {
+    const { deleteGeneration } = await import("@/server/generations");
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const gid = generation(accountId, "image-to-3d");
+    const raw = saveFile({ data: glb(), contentType: "model/gltf-binary", name: "model.glb", source: "generation", generationId: gid });
+    const outputs = [{ url: raw.url, kind: "model3d" as const, contentType: "model/gltf-binary", assetId: raw.id }];
+    finish.startWorkerModelFinish(gid, outputs, { op: "image-to-3d", provider: "comfyui", account: accountId, done: () => {} });
+    const id = finish.finishTask(gid, "model3d")!.id;
+    // A finish that goes on until it is told to stop, saying how far it got now and then.
+    let started = false;
+    let stopped = false;
+    const slow = {
+      kinds: ["model3d"],
+      finish: async (_t: unknown, _inputs: unknown, o: { signal: AbortSignal; progress: (f: number) => void }) => {
+        started = true;
+        for (let i = 0; i < 600 && !o.signal.aborted; i++) {
+          o.progress(i / 600);
+          await sleep(100);
+        }
+        stopped = o.signal.aborted;
+        return { refused: "finish-failed" };
+      },
+    };
+    start(w, s, p, { finishers: slow });
+    await until(() => started, 30_000);
+    expect(row(id).state).toBe("running");
+    deleteGeneration(gid);
+    expect(row(id).state).toBe("canceled");
+    // Its next progress report hears the stop, and the finish's processes are stopped at once.
+    await until(() => stopped, 15_000);
+    await sleep(500);
+    expect(s.reports.filter((r) => r.task === id && ["finished", "failed"].includes(String(r.event)))).toEqual([]);
+  });
+
   it("the studio keeps an account's 3D model from the workers only as a binary glTF with every part inside it", async () => {
     const { outputType } = await import("@/server/computer/http");
     const want = { n: 0, filename: "m.glb", subfolder: "", type: "output" as const, kind: "model3d" as const, maxBytes: 1e6 };
@@ -479,8 +540,10 @@ describe("an account's pictures on the worker", () => {
       return { picture: name, sent: await comfyProvider.submit({ route, input: { images: [name], seed: 5 }, generationId: gid, model: getModel("oss-selftest-image") } as never) };
     });
     const id = String((sent.meta as { relay: string }).relay);
-    // The studio keeps it as it came.
-    expect(fs.readFileSync(path.join(dir, "relay", "in", picture)).equals(jpeg)).toBe(true);
+    // The studio keeps it undecoded, its EXIF blanked.
+    const kept = fs.readFileSync(path.join(dir, "relay", "in", picture));
+    expect(kept.length).toBe(jpeg.length);
+    expect(kept.includes(Buffer.from("private note"))).toBe(false);
     start(w, s, p);
     const t = await ended(id);
     expect(t.state, t.error ?? "").toBe("done");

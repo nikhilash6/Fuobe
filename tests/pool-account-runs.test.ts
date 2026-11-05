@@ -120,7 +120,7 @@ function standInWorker(name = "stand-in", o: { paused?: boolean } = {}) {
   const lanes = allLanes(loadIndex(), sha);
   pool.patchWorker(w.id, { paused: !!o.paused, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l.lane, { delayMs: 0 }])), claimAfterMs: 0 });
   db()
-    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ? WHERE id = ?")
+    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
     .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
   return w;
 }
@@ -710,7 +710,7 @@ describe("graphs and results for the workers", () => {
 });
 
 describe("nothing of a run on the workers goes to a ComfyUI address", () => {
-  it("an account's picture is kept for its task as it came (the worker makes it again from its pixels), and never decoded here", async () => {
+  it("an account's picture is kept for its task with only its pixels' parts (the worker makes it again from its pixels), and never decoded here", async () => {
     const sharp = (await import("sharp")).default;
     const jpeg = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#c33" } })
       .jpeg()
@@ -723,7 +723,12 @@ describe("nothing of a run on the workers goes to a ComfyUI address", () => {
     expect(row).toEqual({ principal: `acct:${accountId}`, content_type: "image/jpeg" });
     const fs = await import("node:fs");
     const path = await import("node:path");
-    expect(fs.readFileSync(path.join(dir, "relay", "in", staged)).equals(jpeg)).toBe(true);
+    // Never decoded here: the same JPEG, byte for byte the same size, with what it carried besides its pixels blanked.
+    const kept = fs.readFileSync(path.join(dir, "relay", "in", staged));
+    expect(kept.length).toBe(jpeg.length);
+    expect(kept.subarray(0, 2).equals(jpeg.subarray(0, 2))).toBe(true);
+    expect(kept.includes(Buffer.from("private note"))).toBe(false);
+    expect((await sharp(kept).metadata()).exif).toBeUndefined();
     // Its size as it shows (turned by its orientation), as the worker's upright copy has it.
     expect(hosted.runOnPool(accountId, () => mediaInfoFor(staged))).toMatchObject({ width: 8, height: 8 });
     // Something that isn't a picture is never kept as one.

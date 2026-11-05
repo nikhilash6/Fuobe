@@ -29,6 +29,7 @@ import { probeMedia, type MediaInfo } from "@/lib/media-probe";
 import { ocrText, parseOcrFrame, parseOcrLines, type OcrFrame } from "@/lib/ocr";
 import { getSetting, isCandidate, savedSetting } from "../settings";
 import { decodePng } from "../png";
+import { pictureWithoutMetadata } from "../media-clean";
 import { probeAvi } from "../avi-probe";
 import { probeWebm } from "../webm-probe";
 import { adoptFile, contentTypeFor, readRef, saveFile, scratchDir } from "../storage";
@@ -212,18 +213,29 @@ export const workersTake = (kind: "image" | "video" | "audio"): boolean => poolM
 /**
  * A file for a job on the workers: refused when they don't take its kind. A picture is made again from its pixels here
  * (no EXIF, no GPS), unless `o.onWorker`: then the worker makes it again itself before its ComfyUI reads it, and this
- * server only checks that it is a picture it can size.
+ * server only checks that it is a picture it can size, and blanks what it carries besides its pixels (EXIF and GPS,
+ * XMP, comments, text) without decoding it: none of that ever leaves for a worker. A JPEG keeps its orientation. A
+ * kind of picture whose such parts this server can't blank that way (a GIF, say) is made again from its pixels here.
  */
 export async function forWorkers(data: Buffer, contentType: string, name: string, o: { onWorker?: boolean } = {}): Promise<{ data: Buffer; contentType: string; name: string }> {
   const kind = contentType.split("/")[0];
   if (!poolMedia().has(kind)) throw new ProviderError(kind === "video" ? "The shared GPUs don't take clips yet." : kind === "audio" ? "The shared GPUs don't take sound yet." : "The shared GPUs don't take this kind of file.");
   if (kind !== "image") return { data, contentType, name };
+  const refused = () => new ProviderError("The shared GPUs don't take this kind of file.");
   if (o.onWorker) {
-    if (!imageSize(data)) throw new ProviderError("The shared GPUs don't take this kind of file.");
-    return { data, contentType, name };
+    if (!imageSize(data)) throw refused();
+    const clean = pictureWithoutMetadata(data, contentType);
+    if (clean) return { data: clean, contentType, name };
   }
   const sharp = (await import("sharp")).default;
-  const png = await sharp(data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 }).rotate().png().toBuffer();
+  const png = await sharp(data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 })
+    .rotate()
+    .png()
+    .toBuffer()
+    .catch((e: unknown) => {
+      if (o.onWorker) throw refused();
+      throw e;
+    });
   return { data: png, contentType: "image/png", name: name.replace(/\.[^.]*$/, "") + ".png" };
 }
 
@@ -263,6 +275,12 @@ export function installComfyLocal(worker: ComfyWorker = "main"): boolean {
 
 /** Said when a run on this install's GPUs can't go where it was planned (its row's own words then say it plainly). */
 export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this machine, so runs of accounts don't go to it.";
+
+/** Said to the owner when a job is larger than every worker's PC may ever run (its ceiling: `fuobe worker setup`). */
+export const NO_WORKER_FOR_SIZE = "No worker may run a job this large: each PC's limits, set with fuobe worker setup, are lower. Pick a smaller size, a shorter clip or fewer results.";
+
+/** Said to an account when its run is larger than this install's GPUs ever make (refused before it is queued). */
+export const POOL_TOO_BIG = "This size isn't offered here yet. Pick a smaller size, a shorter clip or fewer results.";
 
 /** Said to the owner when no worker is allowed the lane of a job sent to the workers. */
 export const NO_WORKER_FOR_LANE = "No worker can run this model yet. Allow its lane for a worker that has its model files, in Settings → Open-source engine · ComfyUI → Workers.";
@@ -1005,14 +1023,15 @@ const mediaKey = (name: string) => {
 };
 
 /** What the server reads from a file it sends to ComfyUI (a clip's length and size, a picture's size), by its name there. */
-function rememberSent(uploaded: string, data: Buffer, contentType: string, name: string) {
+function rememberSent(uploaded: string, data: Buffer, contentType: string, name: string, oriented = false) {
   if (MEDIA_FILE.test(contentType) || MEDIA_EXT.test(name) || /\.(webm|mkv|avi)$/i.test(name)) {
     const info = probeMedia(data) ?? webmInfo(data) ?? aviInfo(data);
     if (info) rememberMedia(uploaded, info);
   } else if (/^image\//.test(contentType)) {
-    // A start frame's size: "auto" makes an image-to-video clip in the picture's own shape (as it shows, turned by its
-    // EXIF orientation: a worker makes the picture again upright).
-    const size = orientedImageSize(data);
+    // A start frame's size: "auto" makes an image-to-video clip in the picture's own shape. `oriented`: an account's
+    // picture that a worker makes again upright (turned by its EXIF orientation) is sized as it shows; any other is sized
+    // by its pixels, as the ComfyUI that gets it reads them.
+    const size = oriented ? orientedImageSize(data) : imageSize(data);
     if (size) rememberMedia(uploaded, { container: "image", ...size, hasVideo: false, hasAudio: false });
   }
 }
@@ -1325,7 +1344,7 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
     // are made again here, as before.
     const sent = onWorkers(computer) ? await forWorkers(data, contentType, name, { onWorker: computer !== "owner" }) : { data, contentType, name };
     const staged = stageInput(computer, sent.data, sent.contentType, sent.name);
-    rememberSent(staged, sent.data, sent.contentType, sent.name);
+    rememberSent(staged, sent.data, sent.contentType, sent.name, onWorkers(computer) && computer !== "owner");
     return staged;
   }
   // A run on this install's workers with no account behind it (a guest's price check) never sends anything.
@@ -1661,6 +1680,9 @@ export const comfyProvider: ProviderAdapter = {
       // The owner's job that no worker is allowed and able to run would wait with no end (the owner's jobs have no wait
       // limit unless the owner sets one): it is refused now, as an account's run is.
       if (forPool && computer === "owner" && !workersCanRun(manifest.id)) throw new ProviderError(NO_WORKER_FOR_LANE);
+      // A job larger than every PC that could run it may ever make (its ceiling) would never be taken: refused now, the
+      // owner's and an account's alike, before it waits in line.
+      if (forPool && workersCanRun(manifest.id) && !workersCanRun(manifest.id, { size: prepared.size })) throw new ProviderError(computer === "owner" ? NO_WORKER_FOR_SIZE : POOL_TOO_BIG);
       const outputs = Math.max(1, manifest.outputs.length) * Math.max(1, Math.round(Number(input.numOutputs) || 1));
       // An account's run on the workers: a job ticket, and the worker composes the graph (the owner's own jobs keep theirs).
       const ticket = forPool && computer !== "owner" ? accountTicket(prepared, computer, { outputs, kind: model?.kind }) : undefined;

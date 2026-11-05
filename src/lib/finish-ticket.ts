@@ -59,7 +59,10 @@ export const FINISH_FILES: Record<FinishKind, Record<string, { kind: "model3d" |
 /** A path's frames and frame rate: at most this many, and this fast. */
 export const PATH_LIMITS = { maxFrames: 241, maxFps: 60, maxKeys: 64 };
 
-/** The longest a finish may run on a worker (its CPU slot's run limit for a finish). */
+/**
+ * The longest a finish runs on a worker whose claim names no run limit. The studio's claim names one: its lane's run
+ * ceiling (queue-settings.ts, the owner's to set).
+ */
 export const FINISH_RUN_MS = 20 * 60_000;
 
 const SHA = /^[0-9a-f]{64}$/;

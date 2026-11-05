@@ -355,7 +355,8 @@ run limit and stall limit, and the sending clock, end an attempt long before tha
 it shows no progress from the attempt before.
 
 A job of the owner's that no worker can run is refused when it is sent, as an account's run is. Allow its lane for a
-worker that has its model files first. The same check keeps an account's run out of the line when no worker could ever
+worker that has its model files first. A job larger than every worker's PC may ever run (its ceiling's largest
+picture, longest clip or most results) is refused when it is sent too, the owner's and an account's alike. The same check keeps an account's run out of the line when no worker could ever
 take it: a worker must be allowed the lane, its last list of files must have the workflow's files and node packs, and
 it must have the VRAM.
 
@@ -409,8 +410,18 @@ can't use at all fails the run, and the person who started it sees one plain sen
 
 After an update of the studio that changes the catalog version, each job still waiting in line gets its ticket made
 again for the new catalog before the next claim, with its place kept. The studio composes the same request again, so
-its settings and files are checked again. A job whose workflow is no longer in the catalog, or whose settings are no
-longer allowed, ends with one plain sentence. A job that a worker already holds finishes with the ticket it has.
+its settings and files are checked again. The files the graph makes itself (a palette swatch, say) are made again too,
+and staged in place of the old ones when they come out different. The job's lane and what it needs come from the new
+catalog. A job whose workflow is no longer in the catalog, or whose settings are no longer allowed, ends with one
+plain sentence. A job that a worker already holds finishes with the ticket it has.
+
+Tickets only move forward. While a deploy's old and new app processes share the database, only the process that
+started last makes tickets again, and only it ever ends a run for this. The other process leaves every ticket as it
+is. A process that has said nothing for 5 minutes no longer counts.
+
+An account's run needs a worker that takes this studio's job tickets now: protocol 3 or newer, built for this studio's
+catalog. While every worker that could run it is built from the catalog before the studio's update, Run is off and
+says the studio is busy, and the place in line counts no workers. The owner's own jobs still go to those workers.
 
 ### What the worker checks itself
 
@@ -466,8 +477,11 @@ its folders, and its copies of the inputs. At start, and whenever it stops, it e
 starts a job that its ComfyUI did not have last, it clears its ComfyUI the same way.
 
 The owner's pictures for workers are made again from their pixels on the studio (no EXIF, no GPS). An account's
-pictures go to the worker as they came, and the worker makes each one again from its pixels before its ComfyUI or a
-finishing job reads it (see "Pictures of an account's run"). The studio never decodes them. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
+pictures go to the worker without being decoded, and the worker makes each one again from its pixels before its
+ComfyUI or a finishing job reads it (see "Pictures of an account's run"). Before they leave, the studio blanks what
+they carry besides their pixels, in place: EXIF and GPS, XMP, comments and text chunks. A JPEG keeps only its
+orientation. A kind of picture that the studio can't blank that way (a GIF, say) is made again from its pixels on the
+studio instead. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
 `image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. The worker
 then makes each one again before its ComfyUI reads it (see "Clips and sound"). Every VideoHelperSuite save node of a
 graph for the workers is sent with `save_metadata` off, so no prompt rides inside a result. An account's run is shaped
@@ -506,9 +520,9 @@ else of the file stays: no EXIF, no GPS, no XMP, no comment. If the picture can'
 words. The studio sizes the picture as it shows (turned by its orientation), so a clip in the picture's own shape keeps
 that shape.
 
-The worker needs sharp for this, which `pnpm install` puts in its checkout. Without it, the worker logs so, and an
-account's job with a picture goes back to the line for another worker. Only a worker of protocol 3 or newer takes an
-account's job ticket. While accounts' runs may come to the install's GPUs, an older one reads **Update the worker**.
+The worker needs sharp for this, which `pnpm install` puts in its checkout. Without it, the worker logs so and says
+protocol 2 in its beat, so the studio sends it only the owner's own jobs. Only a worker of protocol 3 or newer takes an
+account's job ticket or a finishing job. While accounts' runs may come to the install's GPUs, an older one reads **Update the worker**.
 
 ### The CPU slot
 
@@ -539,9 +553,22 @@ On the studio, a worker holds at most one GPU job and one CPU task. Each slot cl
 claim), so a CPU task never waits for the GPU's job, nor holds it up. The line counts each slot apart: a CPU task never
 stands ahead of a GPU job on a worker with a CPU slot, and the place and the wait say so. A worker with no CPU slot takes
 light CPU work in its GPU's slot, as before, and no finishing job. A finishing job goes only to a CPU slot that runs its
-kind, in the run's class and at the run's place in line. A CPU task's run limit is its lane's run ceiling, at most 20
-minutes. Another program on the GPU stops only the GPU's job; a pause now by hand stops both. A 3D run of an account on
-the install's GPUs is taken only while a worker's CPU slot runs the 3D finish.
+kind, in the run's class and at the run's place in line. Light CPU work has its lane's run limits in either slot. A
+finishing job's run limit is its lane's run ceiling, which the owner sets in the queue settings. Another program on the
+GPU stops only the GPU's job; a pause now by hand stops both. A 3D run of an account on the install's GPUs is taken
+only while a worker heard from in the last few minutes, built for this studio's catalog, has a CPU slot that runs the
+3D finish.
+
+A finishing job is queued once for its run (and step), even when two app processes ask at the same time, and its
+results are stored once. It waits for a CPU slot as long as its run may wait in line. If no CPU slot takes it by then,
+a 3D model keeps its raw GLB and a camera path's step ends with one plain sentence. While it waits, the run's place in
+line is the finishing job's. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
+with its files, and one that a CPU slot runs at its next progress report (the worker sends one at least every 10
+seconds). A 3D model finished this way waits for the output check when the run asked for one, as any run's outputs do.
+The time a CPU task runs is never counted as GPU time.
+
+Each slot claims on its own count (60 claims a minute each). After a claim that found nothing, a slot asks again 3
+seconds later, or 1.5 seconds later while the beat says that a person's job waits for it.
 
 ### Live previews
 
@@ -676,7 +703,9 @@ its target), at most once an hour each.
 - `POST /api/gpu/computer/claim`: the browser's claimed task plus
   `{ lane, estMs, runLimitMs, stallMs, notAfter, attempt, models, class, workflowId }`. An account's job carries
   `ticket` in place of `graph`, with its run and stall limits in it too. `class` is `owner` for the owner's own job,
-  the only kind that comes with a graph. See "The run limit" above for `runLimitMs`.
+  the only kind that comes with a graph. See "The run limit" above for `runLimitMs`. A worker treats a graph that
+  names no class as the owner's own job only while the studio's beat answer names no catalog version (a studio older
+  than job tickets, which sends no account's run to workers).
   `stallMs` is how long the job may go with no progress before the worker gives it back (see "The stall limit"). A
   worker ignores a `stallMs` under one minute, and uses its own 10 minutes then.
   A worker's CPU slot sends `slot: "cpu"` and gets only work for that slot, with `slot: "cpu"` on the task. A
@@ -687,17 +716,22 @@ its target), at most once an hour each.
 - Reports, inputs and results work as they do for the browser, with these additions:
   - `finished`, and the last `passes` report, carry `execMs` (the time that its ComfyUI spent executing the job, from
     ComfyUI's own timestamps: no waits, no uploads) and `device` (the GPU's name). The workers' log keeps both
-    (`GET /api/admin/workers/jobs`), and the billing service gets them as `gpuMs` and `device`. A job that ran more
+    (`GET /api/admin/workers/jobs`), and the billing service gets them as `gpuMs` and `device`. For a CPU task
+    (light CPU work, a finishing job), neither is kept: its time never counts as the run's GPU time, nor in a lane's
+    typical time. A job that ran more
     than once counts once: the attempt whose result was kept. The studio keeps at most the run ceiling of the job's lane,
     and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
     before the studio hears that it was sent).
   - `give-back` with `why` (`stalled`, `run-limit` or `media`) puts the job back in line. The job keeps its place and
     counts as an attempt. Only a worker's job can be given back. With `update-worker` (a ticket for another catalog)
-    or `outside-ceiling` (more than its PC allows), the job never ran there: it costs no attempt, it waits as a job no
-    worker took (its wait limit holds, unless a worker ran it before), and that worker is not offered it again until
-    its build or its ceiling changes.
+    or `outside-ceiling` (more than its PC allows), that worker is not offered the job again until its build or its
+    ceiling changes. Refused on the claim that took it from the line, before anything was sent, it costs no attempt
+    and waits as a job no worker took (its wait limit holds, unless a worker ran it before). Refused later on (a worker
+    that started again after an update and took its own job back), it counts as an attempt, and the job keeps its
+    claim's time.
   - `running` may carry `preview`: a JPEG as base64, at most 64 KB, at most one every 2 seconds (see "Live
-    previews"). A progress report with a preview may weigh up to 256 KB; any other stays under the small limit.
+    previews"). A progress report with a preview may weigh up to about 91 KB (the preview as base64 and a few KB
+    more); any other stays under the small limit.
   - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,
     `input-crashed` (its ComfyUI stopped twice on the job), `input-unreadable` (ffmpeg could not read a clip or a
     sound), `bad-ticket` (a ticket it can't use, or a graph where a ticket belongs), `unsafe-model` (a 3D model that

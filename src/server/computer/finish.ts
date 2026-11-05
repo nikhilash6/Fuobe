@@ -6,12 +6,13 @@ import { FINISH_FILES, FINISH_VERSION, finishProblem, PATH_LIMITS, type FinishKi
 import type { HistoryEntryLike, WantedFile } from "@/lib/relay";
 import { accountTotalBytes, accountUsage, diskFloorBytes, diskFreeBytes, diskHasRoom } from "../account-files";
 import { db } from "../db";
-import { accountFinishProblem, MODEL_FINISH_VERSION, modelToFinish, OWN_ORBIT, withTurntable } from "../model3d-finish";
+import { pictureWithoutMetadata } from "../media-clean";
+import { ACCOUNT_TURNTABLE, accountFinishProblem, MODEL_FINISH_VERSION, modelToFinish, OWN_ORBIT, withTurntable } from "../model3d-finish";
 import { getSetting } from "../settings";
 import { absolutePath, deleteAsset, getAsset, readRef, saveFile, type Asset } from "../storage";
 import { tenantAccount } from "../tenant";
-import { cpuSlotOf, poolWaitMs } from "./pool";
-import { createTask, json, receivedFile, resultOf, stageInput, stagedInput, type FinishedPlan, type TaskRow } from "./tasks";
+import { cpuSlotOf, poolWaitMs, RETRY_WINDOW_MS, ticketReady } from "./pool";
+import { createTask, endTask, json, receivedFile, resultOf, stageInput, stagedInput, type FinishedPlan, type TaskRow } from "./tasks";
 import type { WorkerRow } from "./workers";
 
 /**
@@ -28,11 +29,18 @@ import type { WorkerRow } from "./workers";
  * it. The owner's own runs, and runs on an account's own GPU or key, keep this server's finish, as before.
  */
 
-/** The finishing jobs a worker's CPU slot runs (any pool worker not revoked, paused or not: a run then waits in line). */
-export function workersFinish(kind: FinishKind): boolean {
+/**
+ * Does a worker's CPU slot run this kind of finishing job: a pool worker not revoked, heard from in the last few minutes
+ * (paused or not: a run then waits in line), whose program takes this studio's job tickets (ticketReady), and whose last
+ * beat said its CPU slot runs that kind. A worker gone quiet for longer, or built from another catalog, counts for none:
+ * a run is then never queued for a finish nothing would take.
+ */
+export function workersFinish(kind: FinishKind, now = Date.now()): boolean {
   if (getSetting("comfyWhere") !== "workers") return false;
-  const rows = db().prepare("SELECT cpu_slot_json FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL AND pool = 'pool' AND cpu_slot_json IS NOT NULL").all() as Pick<WorkerRow, "cpu_slot_json">[];
-  return rows.some((w) => !!cpuSlotOf(w)?.finishes.includes(kind));
+  const rows = db()
+    .prepare("SELECT cpu_slot_json, protocol, catalog_version FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL AND pool = 'pool' AND cpu_slot_json IS NOT NULL AND seen_at > ?")
+    .all(now - RETRY_WINDOW_MS) as Pick<WorkerRow, "cpu_slot_json" | "protocol" | "catalog_version">[];
+  return rows.some((w) => ticketReady(w) && !!cpuSlotOf(w)?.finishes.includes(kind));
 }
 
 /** A finishing job's ticket as its task keeps it, or null. */
@@ -48,10 +56,22 @@ export function finishTask(generationId: string, kind: FinishKind, step = 0): Ta
 const runTask = (generationId: string) =>
   db().prepare("SELECT class, rank_at FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND finish_json IS NULL ORDER BY created_at DESC LIMIT 1").get(generationId) as Pick<TaskRow, "class" | "rank_at"> | undefined;
 
+/** The wait the run was stamped with (the billing service's limit), else this install's (FUOBE_POOL_WAIT_MIN). */
+function runWaitMs(generationId: string): number {
+  const r = db().prepare("SELECT json_extract(request_json, '$.waitMs') AS w FROM generations WHERE id = ?").get(generationId) as { w: unknown } | undefined;
+  const w = Number(r?.w);
+  return Number.isFinite(w) && w > 0 ? w : poolWaitMs();
+}
+
 /**
- * Queue a finishing job for an account's run: its files staged as the account's, its ticket checked as the worker will
- * check it, in the run's class and at the run's place in line (a job no worker takes within the wait limit fails, not
- * charged). Returns the task's id.
+ * Queue a finishing job for an account's run: its files staged as the account's (a picture with what it carries besides
+ * its pixels blanked, as for a run's job), its ticket checked as the worker will check it, in the run's class and at the
+ * run's place in line. It waits for a worker's CPU slot as long as the run was allowed to wait in line (its stamped wait,
+ * else this install's): a job no CPU slot took by then fails, and the run ends without what it would have made (a 3D
+ * model keeps its raw GLB; a camera path's step says one plain sentence). Once a CPU slot took it, it waits in its place
+ * after any recovery, as every job does. Once a run (and step): while a job of this kind for it is in line, running or
+ * done, its id comes back and nothing new is queued, in one locked step even while another app process (a deploy's
+ * overlap) asks too. Returns the task's id.
  */
 export function queueFinish(o: {
   kind: FinishKind;
@@ -62,8 +82,16 @@ export function queueFinish(o: {
   step?: number;
 }): string {
   const principal = `acct:${o.account}` as const;
+  const queued = () => {
+    const had = finishTask(o.generationId, o.kind, o.step ?? 0);
+    return had && had.state !== "canceled" ? had.id : null;
+  };
+  const was = queued();
+  if (was) return was;
   const inputs = o.inputs.map((i) => {
-    const name = stageInput(principal, i.data, i.contentType, i.name);
+    const data = i.contentType.startsWith("image/") ? pictureWithoutMetadata(i.data, i.contentType) : i.data;
+    if (!data) throw new Error("This run couldn't finish.");
+    const name = stageInput(principal, data, i.contentType, i.name);
     return { slot: i.slot, name, sha256: stagedInput(principal, name)!.sha256 };
   });
   const ticket: FinishTicket = { v: FINISH_VERSION, kind: o.kind, settings: o.settings, inputs };
@@ -73,28 +101,36 @@ export function queueFinish(o: {
     console.warn(`[fuobe] A finishing job for ${o.generationId} wasn't queued: ${problem}.`);
     throw new Error("This run couldn't finish.");
   }
-  const run = runTask(o.generationId);
-  const now = Date.now();
-  const t = createTask({
-    principal,
-    generationId: o.generationId,
-    graph: {},
-    finish: ticket,
-    workflowId: `finish-${o.kind}`,
-    made: o.kind === "model3d" ? "model3d" : "video",
-    ...(o.step !== undefined && { extra: { step: o.step } }),
-    pool: {
-      pools: ["pool"],
-      account: o.account,
-      class: run?.class === "paid" ? "paid" : "free",
-      rankAt: run?.rank_at ?? now,
-      lane: "small",
-      needs: { workflowId: `finish-${o.kind}`, files: [], packs: [], minVramBytes: 0 },
-      notAfter: now + poolWaitMs(),
-      slot: "cpu",
-    },
-  });
-  return t.id;
+  // Looked at again with the write lock: another process that queued it meanwhile wins (the inputs staged here go with
+  // the next sweep of staged files that no task took).
+  return db()
+    .transaction((): string => {
+      const again = queued();
+      if (again) return again;
+      const run = runTask(o.generationId);
+      const now = Date.now();
+      const t = createTask({
+        principal,
+        generationId: o.generationId,
+        graph: {},
+        finish: ticket,
+        workflowId: `finish-${o.kind}`,
+        made: o.kind === "model3d" ? "model3d" : "video",
+        ...(o.step !== undefined && { extra: { step: o.step } }),
+        pool: {
+          pools: ["pool"],
+          account: o.account,
+          class: run?.class === "paid" ? "paid" : "free",
+          rankAt: run?.rank_at ?? now,
+          lane: "small",
+          needs: { workflowId: `finish-${o.kind}`, files: [], packs: [], minVramBytes: 0 },
+          notAfter: now + runWaitMs(o.generationId),
+          slot: "cpu",
+        },
+      });
+      return t.id;
+    })
+    .immediate();
 }
 
 /**
@@ -126,6 +162,7 @@ export function planFinish(t: Pick<TaskRow, "id" | "finish_json">, entries: Hist
   if (budget <= 0) return { error: "There's no room to keep this result right now." };
   const wanted: WantedFile[] = results.map((r, n) => ({ n, filename: r.filename, subfolder: "", type: "output", kind: roles[r.role].kind, maxBytes: Math.max(1, Math.min(roles[r.role].maxBytes, budget)) }));
   const stats = Array.isArray(out.stats) && out.stats[0] && typeof out.stats[0] === "object" ? (out.stats[0] as Record<string, unknown>) : {};
+  // Why no turntable came back, as the worker said it (it may name things of its PC): for the server's log only.
   const turntable = Array.isArray(out.turntable) && typeof out.turntable[0] === "string" ? out.turntable[0].slice(0, 200) : undefined;
   const kept: FinishStats = {
     ...(typeof stats.material === "string" && /^[a-z]{1,16}$/.test(stats.material) && { material: stats.material }),
@@ -205,7 +242,7 @@ export function startWorkerModelFinish(generationId: string, outputs: OutputFile
     clearInterval(watching().get(generationId));
     watching().delete(generationId);
     if (r.state === "failed") return o.done(keep({ error: `web GLB: ${r.why === "tab:unsafe-model" ? "the model isn't a self-contained GLB, so it is kept as it is" : "the finish didn't come back, so the model is kept as it is"}` }));
-    o.done(storeModelFinish(generationId, outputs, i, r));
+    o.done(storeModelFinishOnce(id, () => storeModelFinish(generationId, outputs, i, r)));
   };
   const timer = setInterval(look, LOOK_MS);
   timer.unref?.();
@@ -213,10 +250,18 @@ export function startWorkerModelFinish(generationId: string, outputs: OutputFile
   look();
 }
 
-/** Stop looking at a run's finish on a worker (the run was canceled or deleted; its task stops with the run). */
+/**
+ * A run was canceled or deleted: its finishing jobs on the workers stop with it (the 3D finish and every camera path
+ * step). One still in line ends at once, with its staged files; one a worker's CPU slot runs is taken off it (the slot
+ * hears it in its next report or the worker's next beat). This server stops looking at it too.
+ */
 export function stopWorkerFinish(generationId: string): void {
   clearInterval(watching().get(generationId));
   watching().delete(generationId);
+  const live = db()
+    .prepare("SELECT id FROM relay_tasks WHERE generation_id = ? AND finish_json IS NOT NULL AND state IN ('waiting','sending','queued','running','collecting')")
+    .all(generationId) as { id: string }[];
+  for (const t of live) endTask(t.id, "canceled", { error: "Stopped" });
 }
 
 /**
@@ -263,6 +308,25 @@ export function glbFileSelfContained(file: string): boolean {
   }
 }
 
+/**
+ * The finished outputs of a run's 3D finish, stored once: the first look at the finished job (in this process or another,
+ * as in a deploy's overlap) stores its files and notes the outputs on the job, in one locked step; every later look gets
+ * those outputs, and nothing is stored twice.
+ */
+function storeModelFinishOnce(taskId: string, store: () => OutputFile[]): OutputFile[] {
+  const storedOf = () => json<{ stored?: OutputFile[] }>((db().prepare("SELECT extra_json FROM relay_tasks WHERE id = ?").get(taskId) as Pick<TaskRow, "extra_json"> | undefined)?.extra_json ?? null, {}).stored;
+  return db()
+    .transaction((): OutputFile[] => {
+      const had = storedOf();
+      if (had) return had;
+      const outputs = store();
+      const row = db().prepare("SELECT extra_json FROM relay_tasks WHERE id = ?").get(taskId) as Pick<TaskRow, "extra_json"> | undefined;
+      if (row) db().prepare("UPDATE relay_tasks SET extra_json = ? WHERE id = ?").run(JSON.stringify({ ...json<Record<string, unknown>>(row.extra_json, {}), stored: outputs }), taskId);
+      return outputs;
+    })
+    .immediate();
+}
+
 /** The model output with the worker's finish on it: the web GLB, the turntable clip and its poster, stored as the run's. */
 function storeModelFinish(generationId: string, outputs: OutputFile[], i: number, r: Extract<FinishOutcome, { state: "done" }>): OutputFile[] {
   const mesh = outputs[i];
@@ -282,7 +346,10 @@ function storeModelFinish(generationId: string, outputs: OutputFile[], i: number
     const clip = save("turntable", "video/mp4", "turntable.mp4", "generation");
     const poster = clip ? save("poster", r.files.poster?.contentType ?? "image/webp", "poster.webp", "derived") : null;
     const ownOrbit = outputs.some((x) => x.kind === "video" && x.meta?.role === "orbit");
-    const turntable = ownOrbit ? OWN_ORBIT : clip ? "done" : (r.turntable ?? "skipped: no turntable");
+    // No turntable came back: the account's words, as its own finish here gives them (its browser records one). The
+    // worker's reason, which may name things of its PC, goes to the server's log only.
+    if (!clip && !ownOrbit && r.turntable) console.warn(`[fuobe] 3D finish for ${generationId}: no turntable came back (${r.turntable.replace(/[^\x20-\x7e]/g, "?")}).`);
+    const turntable = ownOrbit ? OWN_ORBIT : clip ? "done" : ACCOUNT_TURNTABLE;
     const finish = { version: MODEL_FINISH_VERSION, ...(r.stats.material && { material: r.stats.material }), ...(r.stats.triangles !== undefined && { triangles: r.stats.triangles }), rawBytes: r.stats.bytesIn ?? getAsset(mesh.assetId!)?.size, webBytes: r.stats.bytesOut ?? web.size, webAsset: web.id, turntable };
     const next = outputs.map((x, j) => (j === i ? { ...mesh, meta: { ...mesh.meta, web: web.url, finish } } : x));
     if (!clip) return next;
@@ -317,7 +384,10 @@ export async function pathOnWorker(generationId: string, step: number, input: { 
   if (!account) return { state: "failed", error: "This run couldn't finish." };
   const t = finishTask(generationId, "path", step);
   if (!t || t.state === "canceled") {
-    const [photo, depth] = await Promise.all([readRef(input.photo), readRef(input.depth)]);
+    const read = await Promise.all([readRef(input.photo), readRef(input.depth)]);
+    const pictures = await Promise.all(read.map(finishPicture)).catch(() => null);
+    if (!pictures) return { state: "failed", error: "This run couldn't finish." };
+    const [photo, depth] = pictures;
     const id = queueFinish({
       kind: "path",
       generationId,
@@ -337,11 +407,39 @@ export async function pathOnWorker(generationId: string, step: number, input: { 
   if (r.state === "failed") return { state: "failed", error: "This run couldn't finish." };
   const f = r.files.path;
   if (!f) return { state: "failed", error: "This run couldn't finish." };
-  // Kept once: a later sweep finds the stored file by the task.
-  const kept = json<{ kept?: string }>(t.extra_json, {}).kept;
-  if (kept) return { state: "done", url: kept };
-  const clip = saveFile({ data: fs.readFileSync(f.path), contentType: "video/mp4", name: "path-render.mp4", source: "derived", generationId });
-  const extra = { ...json<Record<string, unknown>>(t.extra_json, {}), kept: clip.url };
-  db().prepare("UPDATE relay_tasks SET extra_json = ? WHERE id = ?").run(JSON.stringify(extra), t.id);
-  return { state: "done", url: clip.url };
+  return { state: "done", url: keepPathClip(generationId, t.id, f.path) };
+}
+
+/**
+ * A picture for a finishing job: as it is when queueFinish can blank what it carries besides its pixels; any other kind
+ * of picture (a GIF, say) made again from its pixels here, upright, as a PNG. Throws when it isn't a picture.
+ */
+async function finishPicture<T extends { data: Buffer; contentType: string; name: string }>(f: T): Promise<T> {
+  if (!f.contentType.startsWith("image/") || pictureWithoutMetadata(f.data, f.contentType)) return f;
+  const sharp = (await import("sharp")).default;
+  const png = await sharp(f.data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 }).rotate().png().toBuffer();
+  return { ...f, data: png, contentType: "image/png", name: "picture.png" };
+}
+
+/**
+ * The path clip of a finished job, stored as the run's file once: a later sweep (or another app process at the same
+ * time) finds the stored file by the task. The look and the write are one locked step, and the clip is noted only on a
+ * task that had none; a copy stored by a second caller anyway is deleted.
+ */
+function keepPathClip(generationId: string, taskId: string, file: string): string {
+  const keptOf = () => json<{ kept?: string }>((db().prepare("SELECT extra_json FROM relay_tasks WHERE id = ?").get(taskId) as Pick<TaskRow, "extra_json"> | undefined)?.extra_json ?? null, {}).kept;
+  return db()
+    .transaction((): string => {
+      const kept = keptOf();
+      if (kept) return kept;
+      const clip = saveFile({ data: fs.readFileSync(file), contentType: "video/mp4", name: "path-render.mp4", source: "derived", generationId });
+      const row = db().prepare("SELECT extra_json FROM relay_tasks WHERE id = ?").get(taskId) as Pick<TaskRow, "extra_json">;
+      const extra = { ...json<Record<string, unknown>>(row.extra_json, {}), kept: clip.url };
+      const r = db().prepare("UPDATE relay_tasks SET extra_json = ? WHERE id = ? AND json_extract(COALESCE(extra_json, '{}'), '$.kept') IS NULL").run(JSON.stringify(extra), taskId);
+      const other = r.changes === 1 ? undefined : keptOf();
+      if (!other) return clip.url;
+      deleteAsset(clip.id);
+      return other;
+    })
+    .immediate();
 }

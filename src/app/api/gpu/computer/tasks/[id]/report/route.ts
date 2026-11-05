@@ -1,4 +1,4 @@
-import { GIVE_BACK, previewOf, RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
+import { GIVE_BACK, PREVIEW_LIMITS, previewOf, RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
 import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
 import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { noteFinished } from "@/server/computer/bench";
@@ -15,8 +15,11 @@ const AT_ONCE = { person: 2, all: 16 };
 const LARGE_BYTES = 64 * 1024;
 /** A worker's: its progress report with a live preview stays under it. */
 const LARGE_BYTES_WORKER = 128 * 1024;
-/** The most a progress report with a worker's live preview may weigh (its preview is kept only up to 64 KB). */
-const RUNNING_BYTES = 256 * 1024;
+/**
+ * The most a progress report with a worker's live preview may weigh: its preview (a JPEG of at most 64 KB, as base64)
+ * and a few KB for the rest, about 91 KB in all.
+ */
+const RUNNING_BYTES = Math.ceil(PREVIEW_LIMITS.maxBytes / 3) * 4 + 4 * 1024;
 
 /** The event as the tab sent it, with only the fields each one has, or null. */
 function eventOf(b: Record<string, unknown>): ReportEvent | null {

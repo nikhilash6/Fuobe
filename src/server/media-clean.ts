@@ -56,13 +56,15 @@ export function patchStream(patches: Patch[], start: number): Transform {
 // ---------------------------------------------------------------------------
 // Reading
 
+/** A file read by its descriptor, or a file already in memory (`fd` a Buffer). */
 class Reader {
   constructor(
-    private readonly fd: number,
+    private readonly fd: number | Buffer,
     readonly size: number,
   ) {}
   read(at: number, n: number): Buffer {
     const len = Math.max(0, Math.min(n, this.size - at));
+    if (typeof this.fd !== "number") return Buffer.from(this.fd.subarray(at, at + len));
     const buf = Buffer.alloc(len);
     let got = 0;
     while (got < len) {
@@ -513,4 +515,100 @@ export function cachedPatches(abs: string, stat: { size: number; mtimeMs: number
   if (cache.size >= 500) cache.delete(cache.keys().next().value!);
   cache.set(key, patches);
   return patches;
+}
+
+// ---------------------------------------------------------------------------
+// Pictures sent on to another machine
+
+/**
+ * A JPEG's EXIF block made again with only its orientation (1 to 8): "Exif", a big-endian TIFF header and one IFD with
+ * the one tag. 32 bytes: it fits in any EXIF segment that held an orientation.
+ */
+function orientationOnly(orientation: number): Buffer {
+  const b = Buffer.alloc(32);
+  b.write("Exif", 0, "latin1");
+  b.write("MM", 6, "latin1");
+  b.writeUInt16BE(42, 8);
+  b.writeUInt32BE(8, 10);
+  b.writeUInt16BE(1, 14);
+  b.writeUInt16BE(0x0112, 16);
+  b.writeUInt16BE(3, 18);
+  b.writeUInt32BE(1, 20);
+  b.writeUInt16BE(orientation, 24);
+  return b;
+}
+
+/** A JPEG's EXIF orientation (other than 1), read from its first EXIF segment: the patches that keep only it there. */
+function keepOrientation(r: Reader): Patch[] {
+  let at = 2;
+  for (;;) {
+    const h = r.read(at, 4);
+    if (h.length < 4 || h[0] !== 0xff) return [];
+    const m = h[1];
+    if (m === 0xff) {
+      at += 1;
+      continue;
+    }
+    if (m === 0xd9 || m === 0xda) return [];
+    if (m === 0x01 || (m >= 0xd0 && m <= 0xd7)) {
+      at += 2;
+      continue;
+    }
+    const len = h.readUInt16BE(2);
+    if (len < 2) return [];
+    if (m === 0xe1 && len - 2 >= 32 && r.read(at + 4, 6).toString("latin1") === "Exif\0\0") {
+      const exif = r.read(at + 4, len - 2);
+      const o = tiffOrientation(exif);
+      // After the patches that blank the segment: it stays EXIF, with the orientation alone in it.
+      return o && o !== 1 ? [{ at: at + 1, bytes: Buffer.from([0xe1]) }, { at: at + 4, bytes: orientationOnly(o) }] : [];
+    }
+    at += 2 + len;
+  }
+}
+
+/** The orientation tag (0x0112) of IFD0 in an EXIF block ("Exif\0\0" and a TIFF header), or null. */
+function tiffOrientation(exif: Buffer): number | null {
+  const start = 6;
+  if (exif.length < start + 8) return null;
+  const le = exif.toString("latin1", start, start + 2) === "II";
+  if (!le && exif.toString("latin1", start, start + 2) !== "MM") return null;
+  const u16 = (o: number) => (le ? exif.readUInt16LE(o) : exif.readUInt16BE(o));
+  const u32 = (o: number) => (le ? exif.readUInt32LE(o) : exif.readUInt32BE(o));
+  const ifd = start + u32(start + 4);
+  if (ifd + 2 > exif.length) return null;
+  const n = u16(ifd);
+  for (let i = 0; i < n; i++) {
+    const e = ifd + 2 + i * 12;
+    if (e + 12 > exif.length) return null;
+    if (u16(e) === 0x0112) {
+      const v = u16(e + 8);
+      return v >= 1 && v <= 8 ? v : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * A picture with what it carries besides its pixels blanked, as the share files are (the same patches): a JPEG's EXIF,
+ * XMP, comments and other application segments, a PNG's text and EXIF chunks, a WebP's EXIF and XMP, an SVG's
+ * metadata. Nothing is decoded, and the size and every offset stay. A JPEG keeps its EXIF orientation (alone in its EXIF
+ * segment), so it shows the way it did. The same bytes back when there was nothing to blank; null for any other kind of
+ * picture (a GIF, say: it is made again from its pixels instead), or one that can't be read where such data lives.
+ */
+export function pictureWithoutMetadata(data: Buffer, contentType = ""): Buffer | null {
+  try {
+    const r = new Reader(data, data.length);
+    const head = r.read(0, 16);
+    const at = (s: string, i = 0) => head.toString("latin1", i, i + s.length) === s;
+    let patches: Patch[] = [];
+    if (head.length >= 8 && head.readUInt32BE(0) === 0x89504e47) patches = png(r);
+    else if (head[0] === 0xff && head[1] === 0xd8) patches = [...jpeg(r), ...keepOrientation(r)];
+    else if (at("RIFF") && at("WEBP", 8)) patches = riff(r, true);
+    else if (contentType.split(";")[0].trim().toLowerCase() === "image/svg+xml") patches = svg(r);
+    else return null;
+    return patches.length ? overlay(data, 0, patches) : data;
+  } catch (e) {
+    if (e instanceof Unreadable || e instanceof RangeError) return null;
+    throw e;
+  }
 }

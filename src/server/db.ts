@@ -822,6 +822,11 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     principal TEXT,
     worker_id TEXT
   );
+  CREATE TABLE IF NOT EXISTS catalog_processes (
+    version TEXT PRIMARY KEY,
+    started_at INTEGER NOT NULL,
+    seen_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS worker_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at INTEGER NOT NULL,

@@ -105,6 +105,8 @@ export function finishers(o) {
   async function finish(t, inputs, { signal, progress }) {
     const kind = t.finish?.kind;
     if (!kinds.includes(kind)) return { refused: "finish-failed" };
+    // Each script may run as long as the job's run limit (the studio's, in its claim); the runner stops the job there too.
+    const timeoutMs = Number(t.runLimitMs) > 0 ? Number(t.runLimitMs) : 20 * 60_000;
     // Its own emptied folder: nothing of another job is beside it, and nothing of it stays.
     const dir = path.join(o.workDir, "finish", String(t.id).replace(/[^A-Za-z0-9_-]/g, "_"));
     fs.rmSync(dir, { recursive: true, force: true });
@@ -117,7 +119,7 @@ export function finishers(o) {
       if (kind === "model3d") {
         const raw = put("raw.glb", inputs.model);
         const web = path.join(dir, "web.glb");
-        const r = await runScript(finishGlb, ["--in", raw, "--out", web, "--material", String(t.finish.settings.material ?? "auto"), "--limits", "account"], { cwd: dir, signal, env, timeoutMs: 5 * 60_000 });
+        const r = await runScript(finishGlb, ["--in", raw, "--out", web, "--material", String(t.finish.settings.material ?? "auto"), "--limits", "account"], { cwd: dir, signal, env, timeoutMs });
         if (r.code === REFUSED) return { refused: "unsafe-model" };
         const stats = r.code === 0 && fs.existsSync(web) ? lastJson(r.stdout) : null;
         if (!stats) return { refused: "finish-failed" };
@@ -131,7 +133,7 @@ export function finishers(o) {
             cwd: dir,
             signal,
             env,
-            timeoutMs: 10 * 60_000,
+            timeoutMs,
             onLine: (line) => {
               const m = /^frame (\d+)\/(\d+)$/.exec(line.trim());
               if (m) progress(0.3 + 0.7 * (Number(m[1]) / Number(m[2])));
@@ -155,7 +157,7 @@ export function finishers(o) {
         cwd: dir,
         signal,
         env,
-        timeoutMs: 10 * 60_000,
+        timeoutMs,
         onLine: (line) => {
           const m = /^frame (\d+)\/(\d+)$/.exec(line.trim());
           if (m) progress(Number(m[1]) / Number(m[2]));

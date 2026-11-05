@@ -393,6 +393,27 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   return { id, promptId };
 }
 
+/**
+ * One of a task's inputs put in place of another (a job ticket made again, whose graph's own file came out new): `next`
+ * is staged as the task's, after its other inputs, and `old` (when given) goes with its file. `next` null: `old` only
+ * goes. Returns the new input's name and SHA-256.
+ */
+export function swapTaskInput(t: Pick<TaskRow, "id" | "principal">, old: string | null, next: { data: Buffer; contentType: string; name: string } | null): { name: string; sha256: string } | null {
+  const d = rdb();
+  let made: { name: string; sha256: string } | null = null;
+  if (next) {
+    const name = stageInput(t.principal as Principal, next.data, next.contentType, next.name);
+    const n = (d.prepare("SELECT COALESCE(MAX(n), -1) + 1 AS n FROM relay_inputs WHERE task_id = ?").get(t.id) as { n: number }).n;
+    d.prepare("UPDATE relay_inputs SET task_id = ?, n = ? WHERE name = ?").run(t.id, n, name);
+    made = { name, sha256: crypto.createHash("sha256").update(next.data).digest("hex") };
+  }
+  if (old) {
+    fs.rmSync(inputFile(old), { force: true });
+    d.prepare("DELETE FROM relay_inputs WHERE name = ? AND task_id = ?").run(old, t.id);
+  }
+  return made;
+}
+
 /** The names of the inputs a principal staged that no task has taken yet (its next task's files). */
 export const freeInputs = (principal: Principal): string[] =>
   (rdb().prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL").all(principal) as { name: string }[]).map((r) => r.name);
@@ -740,8 +761,11 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       const entries = e.event === "finished" ? [e.entry] : e.entries;
       if (!Array.isArray(entries) || entries.some((x) => !x || typeof x !== "object")) throw new RelayError(400, "Bad history entry");
       const p = plan(entries, e.event === "passes");
-      // A worker's job ended on its ComfyUI: the workers' log keeps its measured run (the billing service settles with it).
-      if (t.pools && t.worker_id && (!("follow" in p) || !t.meta_batch)) logWorkerJob("finished", t, t.worker_id, now, execFields(e, t, now) ?? {});
+      // A worker's job ended on its ComfyUI: the workers' log keeps its measured run (the billing service settles with it,
+      // and a lane's typical run is read from it). CPU work (light CPU work, a finishing job) uses no GPU: its time and
+      // device are never kept as the run's GPU time.
+      const cpuWork = t.slot === "cpu" || !!t.finish_json;
+      if (t.pools && t.worker_id && (!("follow" in p) || !t.meta_batch)) logWorkerJob("finished", t, t.worker_id, now, cpuWork ? {} : (execFields(e, t, now) ?? {}));
       if ("follow" in p) {
         if (!t.meta_batch) {
           endTask(t.id, "failed", { error: "This run finished without a result. Press Retry." });

@@ -284,6 +284,73 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
     expect(row(mine.id)).toMatchObject({ state: "waiting", claimed_at: first, requeues: 0 });
   });
 
+  it("a run that started keeps its claim's time when its worker, back after a restart, refuses its ticket, as an attempt", async () => {
+    const w = addWorker();
+    beat(w);
+    const mine = await accountTask();
+    const got = claim(w)!;
+    expect(got.id).toBe(mine.id);
+    const first = row(mine.id).claimed_at;
+    tasks.report(row(mine.id), { event: "sent", promptId: got.promptId }, () => ({ error: "unused" }));
+    tasks.report(row(mine.id), { event: "running", value: 1, max: 4 }, () => ({ error: "unused" }));
+    // Its wait limit has passed since: it no longer applies to a run that started.
+    db().prepare("UPDATE relay_tasks SET not_after = ? WHERE id = ?").run(Date.now() - 60_000, mine.id);
+    // The worker starts again (an update), takes its own job back, and its new build refuses the ticket.
+    expect(pool.workerClaim(workerRow(w), [])?.id).toBe(mine.id);
+    tasks.report(row(mine.id), { event: "give-back", why: "update-worker" }, () => ({ error: "unused" }));
+    // Not on the claim that took it from the line: an attempt, as any other give-back.
+    expect(row(mine.id)).toMatchObject({ state: "waiting", claimed_at: first, requeues: 1 });
+    pool.sweepPool();
+    expect(row(mine.id)).toMatchObject({ state: "waiting", claimed_at: first });
+    // A worker that refuses it on the claim that took it from the line, before anything ran, leaves that claim's time
+    // as it was too, at no cost.
+    const b = addWorker();
+    beat(b);
+    expect(claim(b)?.id).toBe(mine.id);
+    tasks.report(row(mine.id), { event: "give-back", why: "outside-ceiling" }, () => ({ error: "unused" }));
+    expect(row(mine.id)).toMatchObject({ state: "waiting", claimed_at: first, requeues: 1 });
+  });
+
+  it("refusals that come after anything ran count as attempts, so they can never keep a run in line for good", async () => {
+    const w = addWorker();
+    beat(w);
+    const mine = await accountTask();
+    for (let i = 0; i < pool.MAX_ATTEMPTS; i++) {
+      // Each time a build of its own it says it has (its refusal is then never the same one twice).
+      beat(w, { ceiling: { maxOutputs: 4 + i } });
+      const got = claim(w)!;
+      expect(got.id).toBe(mine.id);
+      tasks.report(row(mine.id), { event: "sent", promptId: got.promptId }, () => ({ error: "unused" }));
+      tasks.report(row(mine.id), { event: "give-back", why: "outside-ceiling" }, () => ({ error: "unused" }));
+    }
+    expect(row(mine.id)).toMatchObject({ state: "failed", error: pool.GAVE_BACK_WORDS });
+  });
+
+  it("a job larger than every PC may ever make is refused before it is queued, the owner's and an account's alike", async () => {
+    const { NO_WORKER_FOR_SIZE, POOL_TOO_BIG } = await import("@/server/providers/comfyui");
+    const w = addWorker();
+    // The picture is about 1.9 MP; the only PC makes at most 1 MP.
+    beat(w, { ceiling: { maxMegapixels: 1 } });
+    expect(pool.workersCanRun("selftest-image")).toBe(true);
+    expect(pool.workersCanRun("selftest-image", { size: { megapixels: 1.9, seconds: 0, outputs: 1 } })).toBe(false);
+    const before = db().prepare("SELECT COUNT(*) FROM relay_tasks").pluck().get() as number;
+    await expect(accountTask()).rejects.toThrow(POOL_TOO_BIG);
+    const route = { provider: "comfyui", endpoint: "selftest-image", op: "edit" } as never;
+    const ownerJob = async () => {
+      const name = (await comfyProvider.prepareFile!(PICTURE, "image/png", "me.png", route))!;
+      return comfyProvider.submit({ route, input: { images: [name], seed: 5 }, generationId: generation(null), model: getModel("oss-selftest-image") } as never);
+    };
+    await expect(ownerJob()).rejects.toThrow(NO_WORKER_FOR_SIZE);
+    // Nothing waits in line for nothing.
+    expect(db().prepare("SELECT COUNT(*) FROM relay_tasks").pluck().get()).toBe(before);
+    // A PC that makes it: both go in line.
+    beat(w, { ceiling: { maxMegapixels: 4 } });
+    const mine = await accountTask();
+    expect(row(mine.id).state).toBe("waiting");
+    const own = await ownerJob();
+    expect(row(String((own.meta as { relay: string }).relay)).state).toBe("waiting");
+  });
+
   it("a waiting task whose ticket was made for the catalog before an update gets its ticket made again, with its place kept", async () => {
     const { refreshTickets } = await import("@/server/computer/ticket-refresh");
     const w = addWorker();
@@ -311,6 +378,97 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
     // Nothing left to do the second time.
     expect(await refreshTickets()).toEqual({ refreshed: 0, ended: 0 });
     expect(claim(w)?.id).toBe(mine.id);
+  });
+
+  it("while a deploy's two app processes share the line, only the newest makes tickets again, and an older one never ends a run", async () => {
+    const { refreshTickets } = await import("@/server/computer/ticket-refresh");
+    db().prepare("DELETE FROM catalog_processes").run();
+    try {
+      const w = addWorker();
+      beat(w);
+      const mine = await accountTask();
+      // A ticket the older process's catalog has no workflow for: only the newest catalog knows it.
+      const newer = await accountTask();
+      db().prepare("UPDATE relay_tasks SET ticket_json = ? WHERE id = ?").run(JSON.stringify({ ...JSON.parse(row(newer.id).ticket_json!), workflowId: "a-workflow-only-the-new-catalog-has" }), newer.id);
+      const was = { mine: row(mine.id), newer: row(newer.id) };
+      const t0 = Date.now();
+      // The new process (this studio's version) started a minute after the old one, and says so.
+      expect(await refreshTickets({ version: VERSION, startedAt: t0, now: t0 })).toEqual({ refreshed: 0, ended: 0 });
+      // The old one, still serving claims, leaves both tickets as they are: never made for its older catalog, never ended.
+      expect(await refreshTickets({ version: OTHER, startedAt: t0 - 60_000, now: t0 + 1000 })).toEqual({ refreshed: 0, ended: 0 });
+      for (const id of [mine.id, newer.id]) {
+        const now = row(id);
+        const before = id === mine.id ? was.mine : was.newer;
+        expect(now).toMatchObject({ state: "waiting", ticket_json: before.ticket_json, needs_json: before.needs_json });
+      }
+      // A worker built for the new catalog still takes the run.
+      expect(claim(w)?.id).toBe(mine.id);
+      tasks.endTask(mine.id, "canceled");
+      // A rollback: a process of the older version that started later is the newest now, and only it makes tickets again.
+      const back = await accountTask();
+      expect(await refreshTickets({ version: OTHER, startedAt: t0 + 60_000, now: t0 + 61_000 })).toMatchObject({ refreshed: 1 });
+      expect(JSON.parse(row(back.id).ticket_json!).catalogVersion).toBe(OTHER);
+      expect(await refreshTickets({ version: VERSION, startedAt: t0, now: t0 + 62_000 })).toEqual({ refreshed: 0, ended: 0 });
+      expect(JSON.parse(row(back.id).ticket_json!).catalogVersion).toBe(OTHER);
+      // A process that went quiet for minutes has stopped: the one left makes them again for its catalog.
+      expect(await refreshTickets({ version: VERSION, startedAt: t0, now: t0 + 61_000 + 6 * 60_000 })).toMatchObject({ refreshed: 1 });
+      expect(JSON.parse(row(back.id).ticket_json!).catalogVersion).toBe(VERSION);
+    } finally {
+      db().prepare("DELETE FROM catalog_processes").run();
+    }
+  });
+
+  it("a ticket made again for a new catalog gets the files its graph makes made again, and its lane and needs from the new catalog", async () => {
+    const { refreshTickets } = await import("@/server/computer/ticket-refresh");
+    db().prepare("DELETE FROM catalog_processes").run();
+    try {
+      const w = addWorker();
+      beat(w);
+      // A palette transfer: the composer makes the palette's swatch picture itself, and the ticket names it.
+      const gid = generation(accountId);
+      const route = { provider: "comfyui", endpoint: "palette-transfer-image", op: "color-match" } as never;
+      const sent = await hosted.runOnPool(accountId, async () => {
+        const name = (await comfyProvider.prepareFile!(PICTURE, "image/png", "me.png", route))!;
+        return comfyProvider.submit({ route, input: { images: [name], palette: ["#112233", "#ddeeff", "#884422"], seed: 7 }, generationId: gid, model: getModel("oss-palette-image") } as never);
+      });
+      const id = String((sent.meta as { relay: string }).relay);
+      const fresh = row(id);
+      const ticket = JSON.parse(fresh.ticket_json!) as import("@/lib/job-ticket").JobTicket;
+      const made = ticket.inputs.find((i) => i.slot.startsWith("made."))!;
+      expect(made).toBeTruthy();
+      const want = { lane: fresh.lane, needs: JSON.parse(fresh.needs_json!) };
+      // As it was before an update that changed how the swatch is drawn: other bytes, staged under its name, another
+      // catalog, and a lane and needs from that catalog.
+      const old = tasks.inputsOf(id).find((i) => i.name === made.name)!;
+      const oldBytes = Buffer.from("a swatch drawn by an older composer");
+      fs.writeFileSync(path.join(dir, "relay", "in", made.name), oldBytes);
+      db().prepare("UPDATE relay_inputs SET sha256 = ? WHERE name = ?").run(sha(oldBytes.toString()), old.name);
+      const before = { ...ticket, catalogVersion: OTHER, inputs: ticket.inputs.map((i) => (i.name === made.name ? { ...i, sha256: sha(oldBytes.toString()) } : i)) };
+      db()
+        .prepare("UPDATE relay_tasks SET ticket_json = ?, needs_json = ?, lane = ? WHERE id = ?")
+        .run(JSON.stringify(before), JSON.stringify({ workflowId: "palette-transfer-image", files: [], packs: [], minVramBytes: 0, catalogVersion: OTHER }), "small", id);
+      expect(claim(w)).toBeNull();
+      expect(await refreshTickets()).toEqual({ refreshed: 1, ended: 0 });
+      const after = row(id);
+      const next = JSON.parse(after.ticket_json!) as import("@/lib/job-ticket").JobTicket;
+      const swatch = next.inputs.find((i) => i.slot === made.slot)!;
+      // The swatch as this catalog draws it, staged as the task's in place of the old one.
+      expect(swatch.sha256).toBe(made.sha256);
+      expect(tasks.inputsOf(id).map((i) => i.name)).toContain(swatch.name);
+      if (swatch.name !== made.name) expect(fs.existsSync(path.join(dir, "relay", "in", made.name))).toBe(false);
+      expect(crypto.createHash("sha256").update(fs.readFileSync(path.join(dir, "relay", "in", swatch.name))).digest("hex")).toBe(made.sha256);
+      // Its lane and what it needs, from this catalog; its place as it was.
+      expect(after.lane).toBe(want.lane);
+      expect(JSON.parse(after.needs_json!)).toEqual(want.needs);
+      expect(after.rank_at).toBe(fresh.rank_at);
+      // A worker built for this catalog takes it, and composes the very same swatch.
+      const got = claim(w)!;
+      expect(got.id).toBe(id);
+      const out = await composer.composeTicket({ ticket: got.ticket, generationId: gid, inputs: tasks.inputsOf(id).map((i) => ({ name: i.name, sha256: i.sha256 })) }, { catalog: { has: () => true, get: (await import("@/server/providers/comfyui")).getWorkflow } as never, catalogVersion: VERSION });
+      expect(out.ok, out.ok ? "" : out.detail).toBe(true);
+    } finally {
+      db().prepare("DELETE FROM catalog_processes").run();
+    }
   });
 });
 
@@ -373,7 +531,7 @@ afterEach(async () => {
 });
 
 /** Start `fuobe worker run` in this process (its ComfyUI a stand-in process of its own). */
-function start(w: W, s: Studio, p: Pc, o: { ceiling?: unknown; acceptGraphs?: boolean } = {}) {
+function start(w: W, s: Studio, p: Pc, o: { ceiling?: unknown; acceptGraphs?: boolean; pictures?: boolean } = {}) {
   const ctrl = new AbortController();
   const cfg = {
     site: SITE,
@@ -406,6 +564,7 @@ function start(w: W, s: Studio, p: Pc, o: { ceiling?: unknown; acceptGraphs?: bo
     composer,
     catalogVersion: VERSION,
     allLanes,
+    ...(o.pictures === false && { canCleanPictures: false }),
   });
   const r = { ctrl, done };
   running.push(r);
@@ -483,6 +642,51 @@ describe("the worker program composes tickets and keeps to its PC's ceiling", ()
     expect((await ended(mine.id)).state).toBe("failed");
     expect(s.reports).toContainEqual({ event: "failed", reason: "bad-ticket" });
     expect(prompts(p)).toBe(0);
+  });
+
+  it("a studio older than job tickets, whose graphs name no class, still gets the owner's own jobs run", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const own = ownerTask();
+    // As such a studio answers: no catalog version in its beat answer, and no class on its jobs.
+    s.rewrite = (q, body) => {
+      if (q === "/api/gpu/computer/beat") {
+        const b = body as { worker?: Record<string, unknown> };
+        if (b.worker) delete b.worker.catalogVersion;
+        return b;
+      }
+      if (q !== "/api/gpu/computer/claim") return body;
+      const { task } = body as { task: Record<string, unknown> };
+      const { class: _c, ...rest } = task;
+      void _c;
+      return { task: rest };
+    };
+    start(w, s, p);
+    const t = await ended(own.id);
+    expect(t.state, t.error ?? "").toBe("done");
+    expect(prompts(p)).toBe(1);
+  });
+
+  it("with no picture tool in its checkout, it says an older protocol, so it takes the owner's own jobs and no account's ticket", async () => {
+    const { MIN_PROTOCOL, TICKET_PROTOCOL } = pool;
+    const { protocolOf, PROTOCOL } = await import("../bin/lib/worker/config.mjs");
+    expect(protocolOf(true)).toBe(PROTOCOL);
+    expect(protocolOf(false)).toBeLessThan(TICKET_PROTOCOL);
+    expect(protocolOf(false)).toBeGreaterThanOrEqual(MIN_PROTOCOL);
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const mine = await accountTask();
+    const own = ownerTask();
+    start(w, s, p, { pictures: false });
+    const t = await ended(own.id);
+    expect(t.state, t.error ?? "").toBe("done");
+    expect(workerRow(w).protocol).toBe(protocolOf(false));
+    // The account's run was never offered to it: it waits in line, with no attempt counted.
+    expect(row(mine.id)).toMatchObject({ state: "waiting", requeues: 0, claimed_at: null });
+    expect(s.reports).not.toContainEqual(expect.objectContaining({ event: "give-back" }));
+    expect(p.logs.some((l) => /pnpm install/.test(l))).toBe(true);
   });
 
   it("with acceptGraphs off, the owner's own whole graph is refused too", async () => {
