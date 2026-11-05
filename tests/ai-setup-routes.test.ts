@@ -183,6 +183,44 @@ describe("the tab's reports and waits", () => {
     expect((await (await report(body.code, a)).json()).aiReadAt).toBeGreaterThan(0);
   });
 
+  it("lets only the leading tab take the wait: a second tab (the phone, after the computer) never ends it", async () => {
+    const { body } = await create(a);
+    await report(body.code, a, facts({ tabId: "computer-tab-1" }));
+    expect((await (await report(body.code, a, facts({ tabId: "phone-tab-22", way: "address" }))).json()).mine).toBe(false);
+    const s = store().byCode.get(body.code.replaceAll("-", ""))!;
+    const wait = (tab: string) => {
+      const ctrl = new AbortController();
+      const r = req(`/api/setup/session/${body.code}/wait?tab=${tab}`, { cookie: a });
+      const answer = waitRoute.GET(new Request(r, { signal: ctrl.signal }), ctx({ code: body.code })).then((r) => r.json());
+      return { answer, stop: () => ctrl.abort() };
+    };
+    let leaderDone = false;
+    const leader = wait("computer-tab-1");
+    void leader.answer.then(() => (leaderDone = true));
+    await new Promise((r) => setTimeout(r, 20));
+    // The phone's wait starts after the computer's: it doesn't end the computer's wait.
+    const follower = wait("phone-tab-22");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(leaderDone).toBe(false);
+    // The AI's read pokes the computer's tab, not the phone's.
+    s.tabAt = Date.now() - 10_000;
+    const reading = read(body.code, "?format=json");
+    expect(await leader.answer).toEqual({ poke: true });
+    await report(body.code, a, facts({ tabId: "computer-tab-1" }));
+    expect((await reading).status).toBe(200);
+    // Once the computer's tab is quiet, the phone's wait is the setup's own again.
+    s.waiter?.(false);
+    s.tabAt = Date.now() - 60_000;
+    const again = wait("phone-tab-22");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(s.waiter).toBeDefined();
+    s.waiter!(true);
+    expect(await again.answer).toEqual({ poke: true });
+    // The phone's first wait ran out its own time meanwhile (stopped here, as a closed tab stops it).
+    follower.stop();
+    expect(await follower.answer).toEqual({ poke: false });
+  });
+
   it("End this code ends it at once", async () => {
     const { body } = await create(a);
     expect((await oneRoute.DELETE(req(`/api/setup/session/${body.code}`, { method: "DELETE", cookie: a }), ctx({ code: body.code }))).status).toBe(204);
@@ -235,10 +273,30 @@ describe("the public status", () => {
     const r = await read(body.code);
     expect(r.status).toBe(429);
     expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
-    // Without a trusted proxy every visitor looks the same: only the shared budget for guesses applies.
+    // With no proxy in front (no X-Forwarded-For) every visitor looks the same: only the shared budget for guesses applies.
     let last = 0;
     for (let i = 0; i < 601; i++) last = (await read(`ZZZZ-ZZZZ-${"ABCDEFGHJKMN".slice(i % 8, (i % 8) + 4)}`)).status;
     expect(last).toBe(429);
+  });
+
+  it("limits guesses per visitor without a trusted proxy too, under the shared budget", async () => {
+    const at = (ip: string) => read("ZZZZ-ZZZZ-ZZZZ", "", { "x-forwarded-for": ip });
+    // The last hop is the visitor a proxy in front saw (a made-up first hop changes nothing).
+    for (let i = 0; i < 10; i++) expect((await at(`203.0.113.${i}, 198.51.100.7`)).status).toBe(404);
+    const r = await at("198.51.100.7");
+    expect(r.status).toBe(429);
+    expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect((await at("198.51.100.8")).status).toBe(404);
+    // A visitor past its own budget doesn't use up the shared one: everyone together still gets 600.
+    for (let i = 0; i < 50; i++) expect((await at("198.51.100.7")).status).toBe(429);
+    let ok = 0;
+    for (let v = 0; v < 60; v++) for (let i = 0; i < 10; i++) if ((await at(`2001:db8:${v + 100}::1`)).status === 404) ok++;
+    // 11 reads were counted before (10 + 1 from .8): the shared 600 holds, whatever the visitors say they are.
+    expect(ok).toBe(600 - 11);
+    expect((await at("192.0.2.1")).status).toBe(429);
+    // An active code never uses these budgets.
+    const { body } = await create(a);
+    expect((await read(body.code)).status).toBe(200);
   });
 
   it("limits guesses per visitor behind a trusted proxy", async () => {

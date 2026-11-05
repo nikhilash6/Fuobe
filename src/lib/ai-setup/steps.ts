@@ -5,6 +5,7 @@
  */
 import { FIRST_MODEL_NAME } from "./first-picture";
 import type { InstallKind, SetupView } from "./facts";
+import { RESTART_WAIT_MIN } from "./restart";
 
 export type StepId = "comfyui" | "allowed" | "guard" | "connect" | "address" | "connected" | "model" | "picture";
 export type StepState = "done" | "todo" | "working" | "warn";
@@ -120,10 +121,12 @@ export function stepsOf(v: SetupView): Step[] {
       : t?.comfy === "found" || t?.comfy === "unreadable"
         ? step("comfyui", "done", t.port ? `${t.install ? `${INSTALL_LABEL[t.install]}, on` : "On"} port ${t.port}` : undefined)
         : t?.comfy === "waiting"
-          ? step("comfyui", "working", "Restarting, or closed")
+          ? step("comfyui", "working", t.quietMin ? `Starting again: ${t.quietMin} min so far` : "Restarting, or closed")
           : t?.comfy === "other"
             ? step("comfyui", "warn", t.port ? `Another app answers on port ${t.port}` : "Another app answers")
-            : step("comfyui", "todo");
+            : t?.comfy === "none" && (t.quietMin ?? 0) >= RESTART_WAIT_MIN
+              ? step("comfyui", "warn", `Stopped ${t.quietMin} min ago`)
+              : step("comfyui", "todo");
 
   if (v.way === "connect") {
     const guarded = t?.guard === "connect" ? step("connect", "done", "Other websites stay out") : step("connect", "todo");

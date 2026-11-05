@@ -6,8 +6,9 @@
 import { COMFY_PORTS } from "@/lib/local-comfy";
 import { FIRST_MODEL_NAME } from "./first-picture";
 import type { AddressCause, InstallKind, SetupView } from "./facts";
+import { RESTART_WAIT_MIN } from "./restart";
 import { isConnected, isDone } from "./steps";
-import type { BrowserName, Os, Way } from "./ways";
+import { aiSetupHref, type BrowserName, type Os, type Way } from "./ways";
 
 export interface NextStep {
   id: string;
@@ -79,10 +80,42 @@ const CPU_HOW: Record<Os, string[]> = {
 
 const OWN_KEY = "With no usable graphics card, Fuobe also runs with the person's own fal.ai or Replicate key: {site}/settings, then Your keys.";
 
+/** The page that ends a web address's setup on the computer: the box for the address, under the same code. */
+const ADDRESS_PAGE = `{site}${aiSetupHref("address")}`;
+
+/** On a phone, the address goes into Fuobe on the computer: how the person gets there. */
+const ON_COMPUTER_HOW = [
+  `Ask the person to open ${ADDRESS_PAGE} in a browser on the computer that runs ComfyUI, and to sign in with the same account as on the phone.`,
+  "Fuobe shows the box Your ComfyUI's web address there, with the same setup code as on the phone. If the code is different, the person signed in with another account.",
+  "The person pastes the address there (it is on that computer's clipboard) and presses Connect.",
+];
+
 const gb = (tenths: number) => `${(tenths / 10).toFixed(tenths >= 100 ? 0 : 1)} GB`;
 
 /** The status words' site: the studio's own address (never a visitor's word). */
 const fill = (s: string, site: string) => s.replaceAll("{site}", site);
+
+type Say = (id: string, words: string, how?: string[], step?: number) => NextStep;
+
+/**
+ * No web address yet: start the tunnel, then paste its address into Fuobe on the computer. From a phone, or with the
+ * Fuobe page closed, the person opens the page that shows the box for it, signed in to the same account.
+ */
+function startTunnel(v: SetupView, say: Say, open: boolean): NextStep {
+  if (v.phone)
+    return say(
+      "start-tunnel",
+      "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3). The address then goes into Fuobe on the computer, because it is on the computer's clipboard, not the phone's. Don't paste the address into this chat.",
+      ON_COMPUTER_HOW,
+      2,
+    );
+  return say(
+    "start-tunnel",
+    "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3), then ask the person to paste the address into Your ComfyUI's web address in Fuobe and press Connect. Don't paste the address into this chat.",
+    open ? [] : [`The Fuobe page isn't open now. The person opens ${ADDRESS_PAGE} on this computer first, signed in to the same account.`],
+    2,
+  );
+}
 
 export function nextOf(v: SetupView, now: number): NextStep {
   const { site, way, os } = v;
@@ -90,17 +123,20 @@ export function nextOf(v: SetupView, now: number): NextStep {
   const guide = (step?: number) => `${site}/api/setup/guide/${way}/${os}${step !== undefined ? `#step-${step}` : ""}`;
   const say = (id: string, words: string, how: string[] = [], step?: number): NextStep => ({ id, say: fill(words, site), how: how.map((h) => fill(h, site)), guide: guide(step) });
 
-  // The Fuobe tab: its checks need it open.
-  if (!t || now - v.tabAt > TAB_QUIET_MS) {
+  // The Fuobe tab: its checks need it open. A web address that Fuobe doesn't have yet needs no tab until it is pasted
+  // (a phone's tab sleeps while the person reads their AI): the next step is the tunnel, and the page to paste it in.
+  const quiet = !t || now - v.tabAt > TAB_QUIET_MS;
+  if (quiet && !(way === "address" && v.server.gpu !== "link")) {
     if (t && !t.visible)
       return say("wake-fuobe", "The Fuobe tab is asleep in the background, so Fuobe can't check. Ask the person to click on the Fuobe tab once, then come back to you.");
     return way === "address"
-      ? say("open-fuobe", "The Fuobe page isn't open. Ask the person to open {site}/connect?setup=ai in any browser, and to press Set it up with my AI. The setup code stays the same.")
+      ? say("open-fuobe", `The Fuobe page isn't open. Ask the person to open ${ADDRESS_PAGE} in a browser on the computer that runs ComfyUI, signed in to the same account. The setup code stays the same.`)
       : say(
           "open-fuobe",
-          "The Fuobe page isn't open. Ask the person to open {site}/connect?setup=ai in Chrome, Edge or Firefox on the computer that runs ComfyUI, and to press Set it up with my AI. The setup code stays the same.",
+          `The Fuobe page isn't open. Ask the person to open {site}${aiSetupHref()} in Chrome, Edge or Firefox on the computer that runs ComfyUI, signed in to the same account. The setup code stays the same.`,
         );
   }
+  if (!t || quiet) return startTunnel(v, say, false);
 
   if (isDone(v)) {
     const keep =
@@ -122,14 +158,7 @@ export function nextOf(v: SetupView, now: number): NextStep {
       if (linked && v.server.online === false)
         return say("link-offline", "Fuobe can't reach ComfyUI at the saved address. If cloudflared started again, it made a new address: the person pastes the new one in Fuobe.", [], 3);
       if (linked) return say("checking-link", "Fuobe is checking the saved address. Wait a few seconds, then check again.");
-      return say(
-        "start-tunnel",
-        v.phone
-          ? "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3). The address is then on the computer's clipboard, not the phone's: ask the person to open {site}/connect?setup=ai on that computer, sign in, paste the address under Your ComfyUI's web address and press Connect. Don't paste the address into this chat."
-          : "Fuobe doesn't have ComfyUI's web address yet. Start cloudflared (guide Steps 2 and 3), then ask the person to paste the address into Fuobe and press Connect. Don't paste the address into this chat.",
-        [],
-        2,
-      );
+      return startTunnel(v, say, true);
     }
 
     if (t.browser === "unsupported") return say("use-address", "This browser can't reach ComfyUI from a website. Ask the person to choose A web address in Fuobe.");
@@ -142,6 +171,17 @@ export function nextOf(v: SetupView, now: number): NextStep {
       );
     if (t.browser === "blocked")
       return say("unblock-browser", "The browser blocks Fuobe from reaching apps on this computer.", [BLOCKED_HOW[t.browserName ?? "other"], "Or the person switches to A web address in Fuobe."], 5);
+    if (t.comfy === "none" && (t.quietMin ?? 0) >= RESTART_WAIT_MIN)
+      return say(
+        "not-back",
+        `ComfyUI stopped answering on port ${t.port ?? 8188} ${t.quietMin} min ago, and it hasn't come back. Ask the person to look at ComfyUI's window.`,
+        [
+          "If the window shows an error, read its last lines with the person, and fix that first.",
+          "If the window closed, start ComfyUI again: with Fuobe's start file if the person used it, else the way they always start it.",
+          "Fuobe finds ComfyUI again by itself as soon as it answers.",
+        ],
+        1,
+      );
     if (!t.comfy || t.comfy === "none")
       return say(
         "start-comfyui",
@@ -153,7 +193,8 @@ export function nextOf(v: SetupView, now: number): NextStep {
     if (t.comfy === "waiting")
       return say(
         "restarting",
-        `ComfyUI stopped answering on port ${t.port ?? 8188} a moment ago: it is restarting, or it was closed. Wait a few seconds, then check again. If it isn't back in a minute, ask the person to start it again.`,
+        `ComfyUI stopped answering on port ${t.port ?? 8188} ${t.quietMin ? `${t.quietMin} min ago` : "less than a minute ago"}. It is most likely starting again: a portable or Easy-Install ComfyUI can take up to ${RESTART_WAIT_MIN} minutes, while it loads its custom nodes. Wait 30 seconds, then check again. Don't start a second ComfyUI meanwhile.`,
+        ["If the person closed ComfyUI, ask them to start it again.", `Fuobe says so if ComfyUI isn't back after ${RESTART_WAIT_MIN} minutes.`],
       );
     if (way === "connect") {
       if (t.guard !== "connect") return say("install-connect", "Fuobe Connect isn't in ComfyUI yet. Install it (guide Step 2), then restart ComfyUI.", [], 2);
@@ -212,8 +253,12 @@ export function nextOf(v: SetupView, now: number): NextStep {
     if (t.cpu)
       return say(
         "cpu-only",
-        "ComfyUI runs on the processor, not on a graphics card, so no picture model fits. Make ComfyUI use the graphics card, restart it (ask the person first), then check again.",
-        [...(t.cpuFlag ? ["ComfyUI was started with --cpu. Start it again without --cpu."] : CPU_HOW[os]), OWN_KEY],
+        "ComfyUI runs on the computer's processor, not on a graphics card. Fuobe's picture models need a graphics card (the smallest, SDXL, needs 8 GB), so none fits, and on the processor one picture would take many minutes. Tell the person plainly. If the computer has a graphics card, make ComfyUI use it, restart ComfyUI (ask the person first), then check again.",
+        [
+          ...(t.cpuFlag ? ["ComfyUI was started with --cpu. Start it again without --cpu."] : CPU_HOW[os]),
+          ...(way === "address" ? ["The web address stays the same while cloudflared runs: the person doesn't paste it again after ComfyUI restarts."] : []),
+          OWN_KEY,
+        ],
         0,
       );
     if (t.modelWhy === "setup")

@@ -483,6 +483,20 @@ GPU and at `/connect?setup=ai`. A guest signs up first and comes back there. The
 way for the browser (this browser, or a web address on Safari, on a phone and on a page on plain
 http), gives the AI a short message with two links (the steps and the status), and ticks off each
 step as the account's open tab sees it. It ends with a first picture made on the account's GPU.
+`/connect?setup=ai&way=address` opens the panel on the web address, with the box for it in focus.
+
+- **From a phone.** The commands run on the computer, so the tunnel's address lands on the
+  computer's clipboard. The status, the steps and the phone's panel send the person to
+  `/connect?setup=ai&way=address` on that computer, signed in to the same account: the box for the
+  address is there, under the same setup code (a different code means another account). Until
+  Fuobe has an address, the status's next step is the tunnel even while the phone's tab sleeps.
+- **ComfyUI starting again.** When ComfyUI stops answering on this computer, the panel and the
+  status say it is starting again for up to 5 minutes (a portable or Easy-Install ComfyUI loads
+  every add-on first), with the minutes so far. After that they say it didn't come back: look at
+  its window, or start it again.
+- **On the processor.** A ComfyUI with no graphics card (its device is `cpu`) is named as such on
+  every way, the web address included, with what it means: no picture model fits, and a picture
+  would take many minutes.
 
 - **The code.** `POST /api/setup/session` (`{ way, os, phone?, fresh?, resume? }`) gives the
   account one setup code of 12 letters and digits, like `ABCD-EFGH-JKMN`. The same call again
@@ -507,12 +521,16 @@ step as the account's open tab sees it. It ends with a first picture made on the
   Windows start file) are open to everyone. The steps tell the AI to show each command and wait for
   a yes, to use exactly `--enable-cors-header <the studio's address>`, never `--listen`, and to
   check Fuobe's files by their SHA-256. For a web address, they run the tunnel in a window the
-  person sees, keep its log where only that user can read it, warn when ComfyUI-Manager is
+  person sees, keep its log where only that user can read it (`~/.fuobe` on a Mac or Linux,
+  `~\.fuobe` in the user's own folder on Windows), warn when ComfyUI-Manager is
   installed (anyone with the address can use it), and stop the tunnel when the person is done. When
   the address asks for a password or a token, they keep it and put it in Fuobe's Access token.
 - **Limits.** 6 new codes a minute and 20 an hour per account. 30 status reads a minute per code.
-  Unknown codes: 10 per 10 minutes per visitor (behind a trusted proxy, `FUOBE_TRUST_PROXY=1`) and
-  600 per 10 minutes for everyone together. The steps and Fuobe's files: 60 a minute per visitor
+  Unknown codes: 10 per 10 minutes per visitor and 600 per 10 minutes for everyone together. The
+  visitor is the client behind a trusted proxy (`FUOBE_TRUST_PROXY=1`), else the last
+  `X-Forwarded-For` hop a proxy in front set: a made-up hop only moves its own reads to another
+  budget, the shared one still holds, and an active code never uses either. With no proxy at all,
+  only the shared budget applies. The steps and Fuobe's files: 60 a minute per visitor
   (behind a trusted proxy), and no budget shared by everyone, so no visitor can use up another
   person's. All answer 429 with `Retry-After`.
 

@@ -174,7 +174,8 @@ export function useSetupSession(o: { way: Way; os: Os; phone: boolean; facts: Om
           await sleep(1000);
           continue;
         }
-        const res = await fetch(`/api/setup/session/${c}/wait`, { signal: ctrl.signal, cache: "no-store" }).catch(() => null);
+        // With this tab's id: a tab that doesn't lead the setup (the phone, once the computer took over) waits on its own.
+        const res = await fetch(`/api/setup/session/${c}/wait?tab=${encodeURIComponent(tabId.current)}`, { signal: ctrl.signal, cache: "no-store" }).catch(() => null);
         if (!alive) return;
         const j = res?.ok ? ((await res.json().catch(() => null)) as { poke?: boolean; slow?: boolean } | null) : null;
         if (!j) {

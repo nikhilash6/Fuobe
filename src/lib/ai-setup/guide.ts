@@ -8,7 +8,7 @@ import { GUARD_SHA256 } from "@/lib/comfy-guard";
 import { LIVE_NODES_SHA256 } from "@/lib/comfy-live-nodes";
 import { showCode } from "./code";
 import { MODEL_STEP, STOP_STEP } from "./next-step";
-import { OS_NAME, type BrowserName, type Os, type Way } from "./ways";
+import { aiSetupHref, OS_NAME, type BrowserName, type Os, type Way } from "./ways";
 
 /** A picture model's files, as the workflow manifest lists them (the guide route passes them in). */
 export interface GuideModel {
@@ -389,12 +389,12 @@ function addressSteps(i: GuideInput): string {
       ? lines(
           "## Step 3: Start the web address",
           "",
-          "1. Remove an old log, so that the address you read is the new one:",
-          "   Remove-Item fuobe-tunnel.log -ErrorAction SilentlyContinue",
-          "2. Start the tunnel in a window of its own, with its log in a file in this folder. It keeps the tunnel's process number, to stop only this tunnel later:",
-          '   Start-Process cloudflared -ArgumentList "tunnel","--url","http://127.0.0.1:8188","--logfile","fuobe-tunnel.log" -PassThru | Select-Object -ExpandProperty Id | Set-Content fuobe-tunnel.pid',
+          "1. Make a folder in the person's own user folder for the tunnel's log (other users of the computer can't read it), and remove an old log, so that the address you read is the new one:",
+          "   New-Item -ItemType Directory -Force ~\\.fuobe | Out-Null; Get-ChildItem ~\\.fuobe -Filter tunnel.log | Remove-Item",
+          "2. Start the tunnel in a window of its own, with its log in that folder. It keeps the tunnel's process number, to stop only this tunnel later:",
+          '   Start-Process cloudflared -WorkingDirectory ~\\.fuobe -ArgumentList "tunnel","--url","http://127.0.0.1:8188","--logfile","tunnel.log" -PassThru | Select-Object -ExpandProperty Id | Set-Content ~\\.fuobe\\tunnel.pid',
           "3. Wait about 10 seconds. Then put the address on the clipboard without showing it:",
-          '   Select-String -Path fuobe-tunnel.log -Pattern "https://[-a-z0-9]+[.]trycloudflare[.]com" | Select-Object -Last 1 | ForEach-Object Matches | ForEach-Object Value | Set-Clipboard',
+          '   Select-String -Path ~\\.fuobe\\tunnel.log -Pattern "https://[-a-z0-9]+[.]trycloudflare[.]com" | Select-Object -Last 1 | ForEach-Object Matches | ForEach-Object Value | Set-Clipboard',
           "   If the clipboard stays empty, wait 10 seconds more and run it again.",
           "4. Do not print, read out or keep the address. Tell the person to keep the cloudflared window open. Closing it stops the address.",
         )
@@ -424,14 +424,15 @@ function addressSteps(i: GuideInput): string {
   const give = lines(
     "## Step 4: Give the address to Fuobe",
     "",
-    `1. Ask the person to paste the address (it is on this computer's clipboard) into Your ComfyUI's web address in Fuobe, then press Connect. Fuobe tests it. If Fuobe is open only on a phone, the person opens ${i.site}/connect?setup=ai on this computer, signs in, and pastes it there. In a chat, do not ask the person to paste it into the chat.`,
-    "2. Read the status. When the web address works and Fuobe is connected, go on.",
+    `1. Ask the person to paste the address (it is on this computer's clipboard) into Your ComfyUI's web address in Fuobe, then press Connect. Fuobe tests it. In a chat, do not ask the person to paste it into the chat.`,
+    `2. If Fuobe is open only on a phone, or not open at all: the person opens ${i.site}${aiSetupHref("address")} in a browser on this computer, and signs in with the same account. Fuobe shows the box Your ComfyUI's web address there, with the same setup code. If the code is different, they signed in with another account. They paste the address there and press Connect.`,
+    "3. Read the status. When the web address works and Fuobe is connected, go on.",
   );
   const stop = lines(
     `## Step ${STOP_STEP}: When the person is done`,
     "",
-    "Runs reach ComfyUI only while cloudflared runs, and so does anyone else who has the address. When the person is done, they close the tunnel's window. Or stop this tunnel (and no other cloudflared the person runs)" + (os === "windows" ? ", in the same folder as Step 3:" : ":"),
-    os === "windows" ? "   Stop-Process -Id (Get-Content fuobe-tunnel.pid)" : "   pkill -f .fuobe/tunnel.log",
+    "Runs reach ComfyUI only while cloudflared runs, and so does anyone else who has the address. When the person is done, they close the tunnel's window. Or stop this tunnel (and no other cloudflared the person runs):",
+    os === "windows" ? "   Stop-Process -Id (Get-Content ~\\.fuobe\\tunnel.pid)" : "   pkill -f .fuobe/tunnel.log",
     "The next time cloudflared starts, it makes a new address. The person pastes the new one in Fuobe.",
   );
   return lines(stepZero(i), "", findComfy(i), "", install, "", start, "", give, "", modelStep(i), "", stop);

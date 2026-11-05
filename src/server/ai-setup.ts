@@ -281,6 +281,8 @@ export function reportSetup(s: Setup, facts: TabFacts, o: { claim?: boolean } = 
   const quiet = !s.tab || now - s.tabAt > TAB_QUIET_MS;
   const lead = !s.tabId || s.tabId === facts.tabId || quiet || (!!s.tab && !s.tab.visible && facts.visible) || !!o.claim;
   if (!lead) return { mine: false };
+  // Another tab took over: the one that led until now hears it at once (its wait ends, and its next report says so).
+  if (s.tabId && s.tabId !== facts.tabId) s.waiter?.(false);
   s.tabId = facts.tabId;
   s.tab = facts;
   s.tabAt = now;
@@ -293,11 +295,17 @@ export function reportSetup(s: Setup, facts: TabFacts, o: { claim?: boolean } = 
   return { mine: true };
 }
 
-/** The tab waits for a poke (a long poll): `poke` when an outside read asks for a fresh look; `slow` when the server is full. */
-export function waitSetup(s: Setup, signal?: AbortSignal, ms = WAIT_MS): Promise<{ poke: boolean; slow?: true }> {
+/**
+ * The tab waits for a poke (a long poll): `poke` when an outside read asks for a fresh look; `slow` when the server is
+ * full. `tabId`: the waiting tab. While another tab leads the setup and is still heard from (the computer, after the
+ * phone), this one only waits out the time: it never takes the leader's wait, so two tabs never end each other's waits
+ * in turn (each answer starts the other tab's next wait at once).
+ */
+export function waitSetup(s: Setup, signal?: AbortSignal, ms = WAIT_MS, tabId?: string, now = Date.now()): Promise<{ poke: boolean; slow?: true }> {
   const st = store();
   if (st.waiting >= MAX_WAITERS) return Promise.resolve({ poke: false, slow: true });
-  s.waiter?.(false);
+  const follower = !!tabId && !!s.tabId && tabId !== s.tabId && !!s.tab && now - s.tabAt <= TAB_QUIET_MS;
+  if (!follower) s.waiter?.(false);
   return new Promise((resolve) => {
     let done = false;
     const finish = (poke: boolean) => {
@@ -310,7 +318,7 @@ export function waitSetup(s: Setup, signal?: AbortSignal, ms = WAIT_MS): Promise
     };
     const timer = setTimeout(() => finish(false), ms);
     st.waiting++;
-    s.waiter = finish;
+    if (!follower) s.waiter = finish;
     signal?.addEventListener("abort", () => finish(false), { once: true });
   });
 }
@@ -338,9 +346,9 @@ export async function readSetup(s: Setup, now = Date.now()): Promise<void> {
 export const freshPart = () => crypto.randomBytes(4).toString("hex");
 
 /**
- * A visitor's key for the limits on guessing (unknown codes): its address behind a trusted proxy, else null. Without
- * one every visitor would share a key, and those limits would be one limit for the whole site: only the shared budget
- * applies then.
+ * A visitor's key for the setup's own limits: its address behind a trusted proxy, else null. Without one every visitor
+ * would share a key, and a limit on it would be one limit for the whole site. (Codes that aren't active also use the
+ * last X-Forwarded-For hop without a trusted proxy: ai-setup-http.ts guessKey.)
  */
 export function visitorKey(headers: Headers): string | null {
   const k = LoginGuard.clientKey(headers);
