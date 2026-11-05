@@ -565,6 +565,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_tasks.refusal_json": "a ComfyUI refusal: node classes and model names",
   "relay_tasks.needs_json": "what a job for the workers needs: workflow, model file names and sizes, node packs, VRAM",
   "relay_tasks.tried_json": "the ids of the workers that lost or failed this job",
+  "relay_tasks.progress_json": "a job's live step, node name and place in its ComfyUI's queue (its preview picture is a file in the task's folder, never a Fuobe file)",
   "relay_workers.facts_json": "what a worker said about its ComfyUI: its GPU, memory and version",
   "relay_workers.inventory_json": "a worker's model files and node packs: names, sizes and hashes on that PC",
   "relay_workers.lanes_json": "the lanes a worker can run: hashes of model file names",
