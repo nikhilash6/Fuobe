@@ -626,7 +626,16 @@ billing policy's `kinds.model3d` says, as for any other kind.
 A finishing job is queued once for its run (and step), even when two app processes ask at the same time, and its
 results are stored once. It waits for a CPU slot as long as its run may wait in line. If no CPU slot takes it by then,
 a 3D model keeps its raw GLB and a camera path's step ends with one plain sentence. While it waits, the run's place in
-line is the finishing job's. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
+line is the finishing job's. A camera path for a run on the workers is always queued for a CPU slot, even while no
+worker with one is about, and is never drawn on the studio's server. (A run on the install's own ComfyUI, on the
+studio's machine, has its path drawn there, as the install's own runs do.)
+
+A chain's later step (sent once the steps before it are done) keeps its run's class and place in line: the place of
+the first job a step of the same run had on the workers, or else the time the run was made. Once a worker took any of
+the run's jobs, the step has no wait limit, since the wait limit applies only before the run's first start. Only steps
+of the same press of Run count (the same billing hold; with none, the same batch). A result kept from an earlier run
+gives a new step neither that run's place nor its start. When two app processes run on one database (a deploy's
+overlap), only the one that takes a step's turn sends it, so each step is sent once. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
 with its files, and one that a CPU slot runs at its next progress report (the worker sends one at least every 10
 seconds). A 3D model finished this way waits for the output check when the run asked for one, as any run's outputs do.
 The time a CPU task runs is never counted as GPU time.

@@ -542,6 +542,50 @@ describe("finishing jobs and their run", () => {
     expect(row(id)).toMatchObject({ class: "paid", rank_at: rankAt, slot: "cpu" });
   });
 
+  it("a camera-path step of an account's run on the workers is queued for a CPU slot even with none about, and never drawn here", async () => {
+    const generations = await import("@/server/generations");
+    const { saveFile } = await import("@/server/storage");
+    const { runnerByHand, tick } = await import("./helpers/app-process");
+    // A worker with no CPU slot: no worker draws camera paths right now.
+    const w = addWorker();
+    beat(w, { cpuSlot: null });
+    expect(finish.workersFinish("path")).toBe(false);
+    const still = saveFile({ data: smallPng(), contentType: "image/png", name: "still.png", source: "upload", accountId });
+    const depth = saveFile({ data: smallPng(), contentType: "image/png", name: "depth.png", source: "derived", accountId });
+    // The run's scene step is done (its depth picture); its next step films along the path drawn through it.
+    const scene = generation(accountId, "scene");
+    db().prepare("UPDATE generations SET status = 'succeeded', outputs_json = ?, completed_at = ? WHERE id = ?").run(JSON.stringify([{ url: depth.url, kind: "image" }]), Date.now(), scene);
+    const step = `cpu-slot-path-step-${++gens}`;
+    const now = Date.now();
+    const request = {
+      feature: "canvas",
+      modelId: "oss-uni3c-path",
+      op: "camera-path",
+      prompt: "The camera flies around the subject",
+      inputs: { images: [still.url] },
+      chain: [{ slot: "video", render: "path" }],
+      params: { numOutputs: 1, cameraPath: [{ t: 0, azimuth: 0, elevation: 0, distance: 1 }, { t: 1, azimuth: 30, elevation: 4, distance: 0.9 }] },
+      account: accountId,
+      place: "pool",
+    };
+    db()
+      .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, depends_on) VALUES (?, 'canvas', 'oss-uni3c-path', 'open', 'comfyui', 'camera-path', 'video', 'queued', ?, '[]', ?, ?, ?)")
+      .run(step, JSON.stringify(request), now, now, scene);
+    generations.ensureRunner();
+    runnerByHand();
+    await tick();
+    const t = finish.finishTask(step, "path");
+    expect(t, "its camera path, queued on the workers").toMatchObject({ slot: "cpu", state: "waiting", account: accountId });
+    const g = generations.getGeneration(step)!;
+    expect(g.status).toBe("queued");
+    expect(g.message).not.toBe("Rendering the camera path");
+    // Turned again, it still waits for a CPU slot: the same job, and nothing drawn on this server.
+    await tick();
+    expect(finish.finishTask(step, "path")!.id).toBe(t!.id);
+    expect(db().prepare("SELECT COUNT(*) FROM assets WHERE generation_id = ? AND name = 'path-render.mp4'").pluck().get(step)).toBe(0);
+    await generations.cancelGeneration(step);
+  });
+
   it("are queued once for a run (and step), however often they are asked", () => {
     const gid = generation(accountId, "image-to-3d");
     const queue = () => finish.queueFinish({ kind: "model3d", generationId: gid, account: accountId, inputs: [{ slot: "model", data: Buffer.from("glTF fake model bytes"), contentType: "model/gltf-binary", name: "model.glb" }], settings: { material: "auto", turntable: true } });

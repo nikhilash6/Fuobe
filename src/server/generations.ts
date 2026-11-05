@@ -117,7 +117,7 @@ import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
-import { finishTask, pathOnWorker, poolFinishes3d, startWorkerModelFinish, stopWorkerFinish, workersFinish } from "./computer/finish";
+import { finishTask, pathOnWorker, poolFinishes3d, startWorkerModelFinish, stopWorkerFinish } from "./computer/finish";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -1717,9 +1717,11 @@ async function advanceDependents(): Promise<void> {
         const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
         const keys = request.params?.cameraPath ?? [];
         if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
-        else if (account && stored.place === "pool" && (workersFinish("path") || finishTask(r.id, "path", i))) {
-          // A run on this install's GPUs: the path is drawn on a worker's CPU slot (computer/finish.ts), never here. The
-          // step waits for it, sweep by sweep (once queued, it stays the worker's even while no CPU slot is about).
+        else if (account && stored.place === "pool" && (poolOnWorkers() || finishTask(r.id, "path", i))) {
+          // A run on this install's GPUs (the workers): the path is drawn on a worker's CPU slot (computer/finish.ts),
+          // never here, whether or not one is about right now. The step waits for it, sweep by sweep, in the run's place
+          // in line; one no CPU slot took within the run's wait fails in plain words. (A run on this install's own
+          // ComfyUI, on this machine, has its path drawn here, as the install's own runs do.)
           const depth = values[i]!;
           const got = await asRun(() => pathOnWorker(r.id, i, { photo, depth, keys, frames: PATH_FRAMES, fps: PATH_FPS }));
           if (got.state === "failed") throw new Error(got.error);
