@@ -215,6 +215,42 @@ describe("runs at once on this install's GPUs", () => {
     expect(poolRuns(a.id)).toBe(1);
   });
 
+  it("a run not made is noted in the same transaction: a limit, a refusal from inside, or an error, which is thrown again", () => {
+    const a = account();
+    const p = { limits: { activeRuns: 1, waiting: 0, runsPerHour: 0, outputsPerRun: 0, maxMegapixels: 0, maxSeconds: 0, keepDays: 0, spaceBytes: 0 } };
+    const insert = () =>
+      db()
+        .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'queued', ?, '[]', ?, ?)")
+        .run(`tx-${++n}`, JSON.stringify({ account: a.id, place: "pool" }), Date.now(), Date.now());
+    const noted: string[] = [];
+    const note = (why: { error: string } | Error) => {
+      noted.push(why instanceof Error ? `error: ${why.message}` : why.error);
+      db().prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(`test.noted.${a.id}.${noted.length}`, "1");
+    };
+    const kept = () => (db().prepare("SELECT COUNT(*) AS n FROM settings WHERE key LIKE ?").get(`test.noted.${a.id}.%`) as { n: number }).n;
+    // A refusal from inside: nothing make wrote is kept, the note is.
+    const r = limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, () => {
+      insert();
+      throw new limits.AdmitRefused({ status: 403, error: "no", code: "not-offered" });
+    });
+    expect(r.ok).toBe(false);
+    expect(poolRuns(a.id)).toBe(0);
+    // An error: thrown again once the note is kept.
+    expect(() =>
+      limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, () => {
+        insert();
+        throw new Error("rows failed");
+      }),
+    ).toThrow("rows failed");
+    expect(poolRuns(a.id)).toBe(0);
+    // A limit.
+    expect(limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, insert).ok).toBe(true);
+    expect(limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, insert).ok).toBe(false);
+    expect(poolRuns(a.id)).toBe(1);
+    expect(noted).toEqual(["no", "error: rows failed", limits.POOL_LIMIT_WORDS.active(1)]);
+    expect(kept()).toBe(3);
+  });
+
   it("runs on the account's own GPU never count against the policy, and keep the studio's own limit of 4", async () => {
     withBilling({ limits: { activeRuns: 1, waiting: 0, runsPerHour: 0 } });
     const a = account({ gpu: "online" });

@@ -36,6 +36,7 @@ import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import { queueRequestRelease } from "./billing-outbox";
 import { notePressGaveUp, reserveRequestId } from "./run-requests";
+import { db } from "./db";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
 import { readSnapshot } from "./gpu/snapshots";
@@ -446,8 +447,11 @@ export async function reservePool(
   if (!a.ok) {
     if (a.unsure) {
       // A try may have made a hold the app never heard of: it goes back, and a resend of this press is refused at once.
-      if (pressId) notePressGaveUp(account.id, pressId);
-      queueRequestRelease(requestId);
+      // A resend of the press that got there first (it made the run, or was refused and gave its hold back) owns the
+      // press's one hold, so nothing is released by its request id. One statement decides, after any run it made.
+      db().transaction(() => {
+        if (!pressId || notePressGaveUp(account.id, pressId)) queueRequestRelease(requestId);
+      })();
     }
     return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }) }) };
   }

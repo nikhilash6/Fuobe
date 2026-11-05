@@ -890,6 +890,7 @@ export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
     ids_json TEXT,
     hold_id TEXT,
     gave_up INTEGER NOT NULL DEFAULT 0,
+    refusal_json TEXT,
     at INTEGER NOT NULL,
     PRIMARY KEY (account, request_id)
   );
@@ -1001,6 +1002,8 @@ const HOOK_COLUMNS: [string, string, string][] = [
   // A report one app process is sending now, until when: no other process sends it meanwhile (billing-outbox.ts).
   ["billing_outbox", "sending_until", "INTEGER"],
   ["billing_outbox", "sending_by", "TEXT"],
+  // The answer a press of Run got when it was refused after its hold was made (run-requests.ts).
+  ["run_requests", "refusal_json", "TEXT"],
 ];
 
 /**

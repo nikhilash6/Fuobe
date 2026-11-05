@@ -821,6 +821,86 @@ describe("a press of Run sent twice (a network drop at submit)", () => {
     expect(svc.holds.size - holds, "holds made").toBe(1);
   });
 
+  it("a send that stops waiting for the billing service after a resend of the same press made its run leaves that run's hold alone", async () => {
+    const w = standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const was = { ...billing.RESERVE_RETRY };
+    // One try for the first send, then its whole wait is over.
+    Object.assign(billing.RESERVE_RETRY, { forMs: 3000, firstMs: 200 });
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    try {
+      // The service answers the first send's reserve only after the app stopped waiting for it.
+      Object.assign(svc, { slowMs: 2500, slowPath: "/v1/reserve" });
+      const reserves = svc.callsOf("/v1/reserve").length;
+      const first = run(press);
+      for (let i = 0; i < 200 && svc.callsOf("/v1/reserve").length === reserves; i++) await sleep(10);
+      expect(svc.callsOf("/v1/reserve").length, "the first send's reserve reached the service").toBe(reserves + 1);
+      // The page sends the press again, and the service answers that one at once: it makes the run.
+      Object.assign(svc, { slowMs: 0, slowPath: null });
+      const again = await run(press);
+      expect(again.status, JSON.stringify(again.body)).toBe(201);
+      const id = again.body.items![0].id;
+      // Only then does the first send stop waiting.
+      expect((await first).status).toBe(503);
+      expect(made() - rows, "runs made").toBe(1);
+      const hold = svc.holds.get(holdOf(id)!)!;
+      const requestId = hold.requestId;
+      expect(db().prepare("SELECT COUNT(*) AS n FROM billing_outbox WHERE key = ?").get(`release:request:${requestId}`)).toEqual({ n: 0 });
+      await outbox.drainOutbox(Date.now() + outbox.REQUEST_RELEASE_AFTER_MS + 1000);
+      expect(hold.released, "the run's hold stays open").toBe(false);
+      expect(svc.callsOf("/v1/release").some((c) => (c.body as { requestId?: string }).requestId === requestId)).toBe(false);
+      // The run finishes and settles against its own hold.
+      const watch = watchOf(id);
+      const d = driver(w);
+      lookAtEveryStep(d, watch);
+      await workAll(d);
+      await expectOnce(id, watch, { place: 1 });
+      expect(hold.released).toBe(false);
+    } finally {
+      Object.assign(billing.RESERVE_RETRY, was);
+    }
+  });
+
+  it("a press refused by the limits after its hold was made gives the hold back, and a resend of it gets the same answer, never a run against that hold", async () => {
+    standInWorker();
+    (svc.policy as { limits: { activeRuns: number } }).limits.activeRuns = 1;
+    billing.resetBillingCache();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    // The first press's reserve is slow; meanwhile another press makes a run, so the first is over the limit once
+    // its hold is made.
+    Object.assign(svc, { slowMs: 800, slowPath: "/v1/reserve" });
+    const reserves = svc.callsOf("/v1/reserve").length;
+    const first = run(press);
+    for (let i = 0; i < 200 && svc.callsOf("/v1/reserve").length === reserves; i++) await sleep(10);
+    Object.assign(svc, { slowMs: 0, slowPath: null });
+    const other = await run({ ...IMAGE, requestId: `press-${crypto.randomUUID()}` });
+    expect(other.status, JSON.stringify(other.body)).toBe(201);
+    const a = await first;
+    expect(a.status, JSON.stringify(a.body)).toBe(429);
+    expect(made() - rows, "runs made").toBe(1);
+    const reserve = svc.callsOf("/v1/reserve").find((c, i) => i >= reserves && (c.body as { requestId?: string }).requestId !== undefined);
+    const requestId = (reserve!.body as { requestId: string }).requestId;
+    const hold = [...svc.holds.values()].find((h) => h.requestId === requestId)!;
+    for (let i = 0; i < 100 && !hold.released; i++) {
+      await outbox.sweepBilling();
+      await sleep(10);
+    }
+    expect(hold.released, "the refused press's hold goes back").toBe(true);
+    // The other run ends, so the limit would let the press through now; its answer was lost, and the page sends it again.
+    db().prepare("UPDATE generations SET status = 'canceled' WHERE id = ?").run(other.body.items![0].id);
+    const before = svc.callsOf("/v1/reserve").length;
+    const again = await run(press);
+    expect(again.status).toBe(a.status);
+    expect(again.body).toEqual(a.body);
+    expect(svc.callsOf("/v1/reserve").length, "no second reserve").toBe(before);
+    expect(made() - rows, "runs made").toBe(1);
+    // A new press works.
+    expect((await run({ ...IMAGE, requestId: `press-${crypto.randomUUID()}` })).status).toBe(201);
+  });
+
   it("with hosted runs off, a press id changes nothing: each request makes its run, as before", async () => {
     delete process.env.FUOBE_HOSTED_RUNS;
     delete process.env.FUOBE_BILLING_URL;

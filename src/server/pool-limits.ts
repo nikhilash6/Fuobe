@@ -164,22 +164,49 @@ export class AdmitRefused extends Error {
  * policy's limits on runs on this install's GPUs. All in one BEGIN IMMEDIATE transaction; a run on this install's GPUs is
  * noted for the hourly counts in the same transaction. `make` may throw AdmitRefused (or anything else) to keep nothing.
  * `prior`, looked at first in the same transaction: what this same request made already (a resend of one press of Run,
- * run-requests.ts); when it says anything, nothing is counted or made, and it is the answer.
+ * run-requests.ts); when it says anything, nothing is counted or made, and it is the answer. `refused`, called in the
+ * same transaction when the run is not made (a limit, AdmitRefused, or another error from `make`, which is thrown again
+ * once the transaction ends): what it writes is kept, while nothing `make` wrote is.
  */
 export function admitRun<T, P = never>(
-  o: { accountId: string; pool: { policy: Pick<Policy, "limits">; addr: string | null } | null; now?: number; prior?: () => P | null },
+  o: {
+    accountId: string;
+    pool: { policy: Pick<Policy, "limits">; addr: string | null } | null;
+    now?: number;
+    prior?: () => P | null;
+    refused?: (why: AdmitRefused["refusal"] | Error) => void;
+  },
   make: () => T,
 ): { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | { ok: false; prior: P } {
+  type Answer = { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | { ok: false; prior: P };
   const now = o.now ?? Date.now();
   const d = db();
+  const refused = o.refused;
+  let failed: { e: unknown } | null = null;
+  let answer: Answer | null;
   try {
-    return d
-      .transaction((): { ok: true; value: T } | { ok: false; refusal: AdmitRefused["refusal"] } | { ok: false; prior: P } => {
+    answer = d
+      .transaction((): Answer | null => {
         const prior = o.prior?.() ?? null;
         if (prior !== null) return { ok: false, prior };
         const refusal = accountLimitRefusal(o.accountId) ?? (o.pool ? poolLimitRefusal(o.accountId, o.pool.policy, o.pool.addr, now) : null);
-        if (refusal) return { ok: false, refusal };
-        const value = make();
+        if (refusal) {
+          refused?.(refusal);
+          return { ok: false, refusal };
+        }
+        let value: T;
+        if (!refused) value = make();
+        else {
+          try {
+            // In a savepoint: a make that refuses or fails keeps nothing it wrote, and the refusal is still noted.
+            value = d.transaction(make)();
+          } catch (e) {
+            refused(e instanceof AdmitRefused ? e.refusal : e instanceof Error ? e : new Error(String(e)));
+            if (e instanceof AdmitRefused) return { ok: false, refusal: e.refusal };
+            failed = { e };
+            return null;
+          }
+        }
         if (o.pool) {
           d.prepare("INSERT INTO pool_admissions (account, addr, at) VALUES (?, ?, ?)").run(o.accountId, o.pool.addr, now);
           prunePoolAdmissions(now, true);
@@ -191,4 +218,6 @@ export function admitRun<T, P = never>(
     if (e instanceof AdmitRefused) return { ok: false, refusal: e.refusal };
     throw e;
   }
+  if (failed) throw (failed as { e: unknown }).e;
+  return answer!;
 }

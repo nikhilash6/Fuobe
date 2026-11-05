@@ -526,6 +526,7 @@ export const ASSET_FREE: Record<string, string> = {
   "generations.external_meta_json": "the provider's job handles",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
   "run_requests.ids_json": "the ids of the runs one press of Run made, never a file",
+  "run_requests.refusal_json": "the status, words and code a refused press of Run got, never a file",
   "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
   "admin_tokens.scopes_json": "an admin token's scope names",
   "admin_audit.detail_json": "small facts about an admin action: counts, ids and names, never a file's URL",

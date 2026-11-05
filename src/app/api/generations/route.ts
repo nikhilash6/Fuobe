@@ -31,7 +31,7 @@ import { runOnPool } from "@/server/hosted";
 import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 import { hostedRunsOn } from "@/server/hosted-switch";
-import { notePress, pressSeen, readPressId } from "@/server/run-requests";
+import { notePress, notePressRefused, pressSeen, readPressId, type PressRefusal, type PressSeen } from "@/server/run-requests";
 
 /**
  * List generations, newest first. Filters: kind / kinds, features (`x*` = prefix), models, statuses,
@@ -54,6 +54,23 @@ const BODY_TOO_BIG = "That request is over 4 MB. Upload pictures and clips first
 
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}, headers: Record<string, string> = {}) =>
   Response.json({ error, ...extra }, { status, headers: { "Cache-Control": "no-store", ...headers } });
+
+/** The answer to an account's run that can't go where it was planned: Connect your GPU, Add your key (the client opens either). */
+const accountRunAnswer = (r: AccountRunRefusal): PressRefusal => ({
+  status: 403,
+  body: { error: r.error, code: r.code, ...(r.provider && { provider: r.provider }) },
+  headers: r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {},
+});
+
+/** The answer to a run the limits refuse as it is made (admitRun), or one with a step this install's GPUs don't take. */
+const limitAnswer = (r: AdmitRefused["refusal"]): PressRefusal => ({
+  status: r.status,
+  body: { error: r.error, code: r.code },
+  headers: r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) },
+});
+
+/** The answer to a run whose rows couldn't be made (as the route's own catch says it, for an account's run). */
+const thrownAnswer = (e: Error): PressRefusal => (e instanceof AccountRunError ? accountRunAnswer(e.refusal) : { status: 422, body: { error: e.message }, headers: {} });
 
 /** Start a generation; `?preview=1` only says what it would run as (model, operation, jobs, outputs, cost). */
 export async function POST(request: Request) {
@@ -108,8 +125,8 @@ export async function POST(request: Request) {
   /** An account's run that can't go where it was planned: Connect your GPU, Add your key (the client opens either). */
   const refused = (r: AccountRunRefusal) => {
     if (account) unhit(`run:${account.id}`);
-    const headers: Record<string, string> = r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {};
-    return refuse(403, r.error, { code: r.code, ...(r.provider && { provider: r.provider }) }, headers);
+    const a = accountRunAnswer(r);
+    return refuse(a.status, a.body.error, a.body, a.headers);
   };
   // Beside the request (never in it): the place the client prefers, and the price it showed (hosted runs, billing hook).
   const { wish, shown } = readWishes(body);
@@ -123,10 +140,12 @@ export async function POST(request: Request) {
   const pressId = account && !preview && hostedRunsOn() ? readPressId(body) : null;
   const paused = () => refuse(503, BILLING_WAIT.run, { code: "paused" }, { [BILLING_HEADER]: "paused" });
   const madeAlready = (ids: string[]) => Response.json({ items: ids.map((id) => getGeneration(id)).filter((g) => !!g) }, { status: 201 });
+  // The answer a press got before, for a resend of it: the same refusal, or the run it made.
+  const answerAgain = (seen: Exclude<PressSeen, null>) =>
+    seen === "gave-up" ? paused() : "refused" in seen ? refuse(seen.refused.status, seen.refused.body.error, seen.refused.body, seen.refused.headers) : madeAlready(seen.ids);
   if (account && pressId) {
     const seen = pressSeen(account.id, pressId);
-    if (seen === "gave-up") return paused();
-    if (seen) return madeAlready(seen.ids);
+    if (seen) return answerAgain(seen);
   }
   const notes: string[] = [];
   if (account && !preview) {
@@ -280,8 +299,11 @@ export async function POST(request: Request) {
             {
               accountId: account.id,
               pool: pool && !pool.light ? { policy: pool.policy, addr } : null,
-              // A resend of this press that got here first made the run (or gave up): nothing is made twice.
+              // A resend of this press that got here first made the run (or gave up, or was refused): nothing is made twice.
               ...(pressId && { prior: () => pressSeen(account.id, pressId) }),
+              // Refused after its hold was made: the hold goes back, so a resend gets this same answer, never a run
+              // against that hold. Noted in the same transaction, before any resend can look.
+              ...(pressId && stamp?.hold && { refused: (why: AdmitRefused["refusal"] | Error) => notePressRefused(account.id, pressId, stamp?.hold ?? null, why instanceof Error ? thrownAnswer(why) : limitAnswer(why)) }),
             },
             () => {
               const run = captureRun(make);
@@ -297,15 +319,16 @@ export async function POST(request: Request) {
         if (!admitted.ok && "prior" in admitted) {
           unhit(`run:${account.id}`);
           const prior = admitted.prior;
-          // The service gives one press one hold; a different one (a service that made a second) goes back.
-          if (stamp?.hold && (prior === "gave-up" || stamp.hold !== prior.hold)) queueRelease(stamp.hold);
-          return prior === "gave-up" ? paused() : madeAlready(prior.ids);
+          // The service gives one press one hold; a different one (a service that made a second) goes back, and so does
+          // the hold of a press that made no run.
+          if (stamp?.hold && (prior === "gave-up" || "refused" in prior || stamp.hold !== prior.hold)) queueRelease(stamp.hold);
+          return answerAgain(prior);
         }
         if (!admitted.ok) {
           unhit(`run:${account.id}`);
           if (stamp?.hold) queueRelease(stamp.hold);
-          const r = admitted.refusal;
-          return refuse(r.status, r.error, { code: r.code }, r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) });
+          const a = limitAnswer(admitted.refusal);
+          return refuse(a.status, a.body.error, a.body, a.headers);
         }
         items = admitted.value.value;
       } else items = make();
