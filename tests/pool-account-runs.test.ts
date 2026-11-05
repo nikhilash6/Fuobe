@@ -328,7 +328,9 @@ describe("an account's run on the workers", () => {
     const before = (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n;
     const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" });
     expect(r.status, JSON.stringify(r.body)).toBe(403);
-    expect(r.body.code).toBe("not-offered");
+    // It runs on the account's own GPU instead: Run opens Connect your GPU.
+    expect(r.body.code).toBe("connect-gpu");
+    expect((r.body as { ownSetup?: unknown }).ownSetup).toMatchObject({ need: "gpu" });
     expect((db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n).toBe(before);
     // Its files are there again: the run goes in line.
     db().prepare("UPDATE relay_workers SET lanes_json = ? WHERE id = ?").run(JSON.stringify({ ...lanesNow, workflows }), w.id);

@@ -2,9 +2,8 @@ import "server-only";
 import crypto from "node:crypto";
 import { nanoid } from "nanoid";
 import type { GenerationRequest } from "@/lib/catalog/types";
-import { OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
-import { RTX_CLASSES, rtxCardOf } from "@/lib/catalog/rtx-video";
-import { gpuFits } from "@/lib/gpu/readiness";
+import { CONNECT_GPU_HEADER, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { ownSetupLabel, ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
 import { gpuState } from "./account-gpu";
 import { accountGpu, type Account } from "./auth";
 import {
@@ -35,10 +34,13 @@ import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
-import { readSnapshot } from "./gpu/snapshots";
 import { ACCOUNT_LIMITS } from "./account-files";
 import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
+import { needsGpu, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
+import { ADD_KEY_HEADER } from "@/lib/your-keys";
+
+export { poolCardRefuses };
 
 /**
  * The generations route's side of hosted runs (hosted.ts), the billing hook (billing.ts) and the moderation hook
@@ -108,6 +110,29 @@ export const OWN_GPU_QUIET = "Your GPU isn't answering right now. Run this on th
 /** A run this install's GPUs won't take, refused in the words the price check before Run gives too. */
 const notOffered = (error: string): { kind: "refuse"; refusal: Refusal } => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
 
+/**
+ * A run that runs on the visitor's own setup only (own-setup.ts): refused in its label's words, with the setup itself so
+ * the client opens it (Connect your GPU, or Add your key) instead of saying no.
+ */
+const ownSetupRefusal = (setup: OwnSetup): { kind: "refuse"; refusal: Refusal } => ({
+  kind: "refuse",
+  refusal: {
+    status: 403,
+    body: { error: ownSetupLabel(setup), code: setup.need === "key" ? "add-key" : "connect-gpu", ownSetup: setup, ...(setup.need === "key" && { provider: setup.provider }) },
+    headers: setup.need === "key" ? { [ADD_KEY_HEADER]: setup.provider } : { [CONNECT_GPU_HEADER]: "1" },
+  },
+});
+
+/** A gate's refusal as the run's answer: its words, with the own setup that would run it. */
+function gateRefusal(gate: GateRefusal): { kind: "refuse"; refusal: Refusal } {
+  if (gate.reason === "ownSetup") return ownSetupRefusal(gate.setup ?? needsGpu());
+  const error = gateWords(gate.reason, false);
+  if (gate.reason === "model3d") return { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } };
+  const r = notOffered(error);
+  if (gate.setup) r.refusal.body.ownSetup = gate.setup;
+  return r;
+}
+
 const askPlace = (): Refusal => ({ status: 409, body: { error: OWN_GPU_QUIET, code: "own-gpu-offline" }, headers: { [PLACE_ASK_HEADER]: "1" } });
 
 /** Does the policy put runs on this install's GPUs first, before the account's own GPU? */
@@ -165,6 +190,8 @@ export function poolSteps(accountId: string, req: GenerationRequest): PlannedSte
  */
 export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
   for (const s of steps) {
+    const own = s.provider === "comfyui" ? ownSetupOnly(s.modelId, "open") : null;
+    if (own) return ownSetupLabel(own);
     if (!poolRunsProvider(s.provider)) return HOSTED_WORDS.notOffered;
     if (s.provider === "comfyui" && poolCardRefuses(s.modelId)) return HOSTED_WORDS.rtxCard;
     if (freeStep(s)) {
@@ -204,15 +231,25 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
 
 /**
  * Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, a model their card can't run,
- * LoRAs, or a kind of file.
+ * LoRAs, a kind of file, or one that runs on the visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or
+ * a workflow none of this install's GPUs can run right now: none holds its files, serves its lane, or has the memory).
  */
-export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs";
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "ownSetup";
+
+/**
+ * A gate's refusal: its reason, and the visitor's own setup that would run it (`setup`: always with "ownSetup"; with the
+ * others, a GPU of its own, which runs what this install's GPUs don't take).
+ */
+export type GateRefusal = { ok: false; reason: GateReason; setup?: OwnSetup };
 
 /** The words for a gate's reason: an account may connect its own GPU in Settings, a guest has nowhere to do that yet. */
-export function gateWords(reason: GateReason, guest: boolean): string {
+export function gateWords(reason: Exclude<GateReason, "ownSetup">, guest: boolean): string {
   if (reason === "model3d") return OWN_GPU_TOOL_MESSAGE;
   return (guest ? HOSTED_GUEST_WORDS : HOSTED_WORDS)[reason];
 }
+
+/** A gate's refusal in words: the own setup's label (the same for a guest and an account), or the reason's words. */
+export const gateText = (gate: GateRefusal, guest: boolean): string => (gate.reason === "ownSetup" ? ownSetupLabel(gate.setup ?? needsGpu()) : gateWords(gate.reason, guest));
 
 /**
  * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
@@ -221,29 +258,40 @@ export function gateWords(reason: GateReason, guest: boolean): string {
  * allowed its lane, a card that can run it, LoRAs, the kinds of file it sends, and every later step of a chain (planned
  * only once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs no policy is
  * checked. Passed, it gives the planned steps for the run's one price.
+ *
+ * First of all, every step's own setup (own-setup.ts): a model, mode or option that runs on a visitor's own GPU or key
+ * only is refused as "ownSetup" with that setup, on the run's own step and on every later step of a chain alike.
  */
 export function poolGate(
   p: Policy | null,
   planned: Planned,
   req: GenerationRequest,
   planSteps: () => PlannedStep[] | null,
-): { ok: true; steps: PlannedStep[] | null } | { ok: false; reason: GateReason } {
+): { ok: true; steps: PlannedStep[] | null } | GateRefusal {
+  const own = requestOwnSetup({ ...req, modelId: planned.model.id, engine: "open" });
+  if (own) return { ok: false, reason: "ownSetup", setup: own };
+  const gpu = needsGpu(planned.route.endpoint);
   const kind = outputKind(planned.op, planned.model);
   if (kind === "model3d") return { ok: false, reason: "model3d" };
-  if (p && (!poolAllowsRun(p, planned, req.presetId) || !kindAllowed(p, kind))) return { ok: false, reason: "notOffered" };
-  // Nothing of this install's would ever run it (no worker is allowed its lane): never a run that waits for nothing.
-  if (!poolTakes(planned.route.endpoint)) return { ok: false, reason: "notOffered" };
-  if (poolCardRefuses(planned.model.id)) return { ok: false, reason: "rtxCard" };
-  if (req.loras?.length) return { ok: false, reason: "loras" };
+  if (p && (!poolAllowsRun(p, planned, req.presetId) || !kindAllowed(p, kind))) return { ok: false, reason: "notOffered", setup: gpu };
+  // Nothing of this install's runs it right now (no worker holds its files, is allowed its lane, or has the memory it
+  // needs): a run that would wait for nothing, so it runs on the visitor's own GPU instead.
+  if (!poolTakes(planned.route.endpoint)) return { ok: false, reason: "ownSetup", setup: gpu };
+  if (poolCardRefuses(planned.model.id)) return { ok: false, reason: "rtxCard", setup: gpu };
+  if (req.loras?.length) return { ok: false, reason: "loras", setup: gpu };
   if (p) {
     const inputs = inputCounts(req);
     const takes = poolUploads(p);
-    if ((inputs.image && !takes.image) || (inputs.video && !takes.video) || (inputs.audio && !takes.audio)) return { ok: false, reason: "inputs" };
+    if ((inputs.image && !takes.image) || (inputs.video && !takes.video) || (inputs.audio && !takes.audio)) return { ok: false, reason: "inputs", setup: gpu };
   }
   // Every step of a chain, not only its first: each one the policy must allow, and the run is priced for all of them.
   const steps = planSteps();
+  for (const s of steps ?? []) {
+    const later = s.provider === "comfyui" ? ownSetupOnly(s.modelId, "open") : null;
+    if (later) return { ok: false, reason: "ownSetup", setup: later };
+  }
   const problem = steps && p ? stepsProblem(p, steps) : null;
-  if (problem) return { ok: false, reason: problem === HOSTED_WORDS.rtxCard ? "rtxCard" : "notOffered" };
+  if (problem) return { ok: false, reason: problem === HOSTED_WORDS.rtxCard ? "rtxCard" : "notOffered", setup: gpu };
   return { ok: true, steps };
 }
 
@@ -276,22 +324,6 @@ export function poolRequest(req: GenerationRequest, p: Pick<Policy, "limits"> | 
   const cap = Math.min(ACCOUNT_LIMITS.outputsPerRun, ...policyCap);
   if ((req.params?.numOutputs ?? 1) <= cap) return { req, capped: false };
   return { req: { ...req, params: { ...req.params, numOutputs: cap } }, capped: true };
-}
-
-/**
- * A model that needs an NVIDIA RTX card (src/lib/catalog/rtx-video.ts) on this install's GPUs: refused when the install's
- * last GPU check says its card can't run it (a CPU, an Apple, AMD or Intel device, an older NVIDIA card) or its ComfyUI
- * lacks the RTX Video nodes. A card the name doesn't tell, or no check yet, never refuses (the run says what it finds).
- * On the workers that check is of another machine, so it isn't made: a worker takes a job only when it has the job's
- * node packs and files.
- */
-export function poolCardRefuses(modelId: string): boolean {
-  if (poolOnWorkers()) return false;
-  const need = rtxCardOf(modelId);
-  if (!need) return false;
-  const inv = readSnapshot({ kind: "install", key: "install", via: "server" })?.inventory;
-  if (!inv?.reachable) return false;
-  return gpuFits(need, inv) === false || RTX_CLASSES.some((c) => inv.nodes.missing.includes(c));
 }
 
 /**
@@ -345,8 +377,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (ownFallback) return OWN;
-    const error = gateWords(gate.reason, false);
-    return gate.reason === "model3d" ? { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } } : notOffered(error);
+    return gateRefusal(gate);
   }
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
@@ -467,7 +498,14 @@ export interface PoolLine {
 }
 
 /** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
-const notOfferedQuote = (text: string): Quote => ({ allowed: false, amount: 0, priceVersion: "", text, code: "not-offered" });
+/**
+ * A price check refused for what this install's GPUs don't take: its words, and (`ownSetup`) the visitor's own setup
+ * that runs it, so Run opens that setup (Connect your GPU, Add your key, or a guest's sign-up) instead of staying off.
+ */
+const notOfferedQuote = (text: string, setup?: OwnSetup): Quote & { ownSetup?: OwnSetup } => ({ allowed: false, amount: 0, priceVersion: "", text, code: "not-offered", ...(setup && { ownSetup: setup }) });
+
+/** A gate's refusal as the price check's quote (gateText: the label's words for an own setup). */
+const gateQuote = (gate: GateRefusal, guest: boolean) => notOfferedQuote(gateText(gate, guest), gate.reason === "model3d" ? undefined : gate.setup);
 
 /**
  * A price check on this install's GPUs (hosted runs on): the plan there, the billing service's quote (no service: free,
@@ -508,7 +546,7 @@ export async function poolQuote(
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { planned, quote: notOfferedQuote(gateWords(gate.reason, !account)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+    return { planned, quote: gateQuote(gate, !account), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
   // Light work only (joins, trims): free, and never counted against the policy's limits, so the service isn't asked.
   if (lightRun(gate.steps)) {
@@ -574,7 +612,7 @@ export function toolGate(
   p: Policy | null,
   viewer: string | null,
   steps: ToolRunStep[],
-): "unplanned" | { ok: false; reason: GateReason } | { ok: true; main: ToolPoolRun["main"]; rows: PlannedStep[] } {
+): "unplanned" | GateRefusal | { ok: true; main: ToolPoolRun["main"]; rows: PlannedStep[] } {
   let main: ToolPoolRun["main"] | null = null;
   const rows: PlannedStep[] = [];
   for (const step of steps) {
@@ -593,7 +631,7 @@ export function toolGate(
     if (planned.route.provider !== "comfyui") return "unplanned";
     const gate = poolGate(p, planned, req, () => (deps ? [asPlannedStep(req, planned, true)] : poolSteps(viewer ?? GUEST_PLAN, req)));
     // A tool adds its LoRAs itself (a person adds none to it): said as a step that runs on an own GPU, not as extra LoRAs.
-    if (!gate.ok) return gate.reason === "loras" ? { ok: false, reason: "notOffered" } : gate;
+    if (!gate.ok) return gate.reason === "loras" ? { ok: false, reason: "notOffered", setup: gate.setup } : gate;
     rows.push(...(gate.steps ?? [asPlannedStep(req, planned, deps > 0)]));
     main ??= { req, planned };
   }
@@ -625,8 +663,7 @@ export async function decideToolPlace(account: Account, steps: ToolRunStep[], wi
   if (gate === "unplanned") return OWN;
   if (!gate.ok) {
     if (ownFallback) return OWN;
-    const error = gateWords(gate.reason, false);
-    return gate.reason === "model3d" ? { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } } : notOffered(error);
+    return gateRefusal(gate);
   }
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
   return { kind: "pool", policy: p, main: gate.main, steps: pricedSteps(gate.rows), light: lightRun(gate.rows) };
@@ -656,7 +693,7 @@ export async function toolPoolQuote(
   };
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { quote: notOfferedQuote(gateWords(gate.reason, !account)), line: lineOf(undefined) };
+    return { quote: gateQuote(gate, !account), line: lineOf(undefined) };
   }
   const endpoint = gate.main.planned.route.endpoint;
   if (lightRun(gate.rows)) return { quote: FREE_QUOTE, line: lineOf(endpoint) };
