@@ -100,7 +100,22 @@ than `outputsPerRun` allows (or Fuobe's own cap of 4) is refused before Run with
 makes. It is never priced as a smaller run. The studios' own runs are cut to the cap instead, and say so. Before
 anything of a tool's run is sent, Fuobe checks the rows its start made against what was priced and held: no more jobs
 of any model, no more outputs at once than the cap, and only CPU work for a run held as CPU work. A run whose rows
-don't match is stopped: its rows are canceled and its hold goes back (403, `code: "not-offered"`).
+don't match is stopped (403, `code: "not-offered"`): its rows are canceled, and their reports close its hold. A hold
+gets a `release` only when none of its rows were made, never as well as its rows' reports. A tool run whose start makes
+no rows at all (it kept its own error, say) sends nothing: its hold gets a `release`, and the run doesn't count toward
+the hour. The palette lock spreads the pictures a person picks over separate jobs of one picture each: on this install's
+GPUs it makes no more of them than `outputsPerRun` allows, as a studio run there is cut.
+
+One press of Run is one hold and one run, however often it is sent. A tool page sends its own id for each press
+(`requestId` in the body, or the `x-request-id` header for a tool whose body has no field for it). With hosted runs on,
+the press is kept in the database for a day: a resend that reaches another server process, or comes after a restart,
+gets the first answer and makes nothing. The reserve's `requestId` is made from the account and the press (a hash, so
+one account can never name another's hold). A press refused after its hold was made gives that hold back; a resend of
+it asks for a new hold under a new `requestId`.
+
+The limits on runs at once and in line count a tool run from the moment it is let in. A tool whose start waits for
+something (a channel, a plan) before it makes its rows still counts as one run going, and one in line, until its rows
+exist, so requests sent together can't all pass the limits.
 
 Some models, modes and options run on a visitor's own setup only (`src/lib/own-setup.ts`), and so does a workflow that
 none of this install's GPUs can run right now (none holds its files, serves its kind of work, or has the memory it
@@ -110,7 +125,13 @@ and Run opens that setup (Connect your GPU, or Add your key) instead of staying 
 403, `code: "connect-gpu"` or `"add-key"`. A mode whose own check refuses it while it is planned here (MiniMax H3 at
 2K, Kandinsky 6.0 Pro) gets the same answer, but with no plan in it: only `modelId`, `place`, `quote` and `line`.
 When the account has its own GPU, these runs go to that GPU, as before. `GET /api/status` lists the open models these
-GPUs can't run right now (`viewer.pool.own`), so the pickers can label them.
+GPUs can't run right now (`viewer.pool.own`), so the pickers can label them. An item whose graphs the workflow manifest
+marks validated runs here like any other, as its label leaves the pages, with no code change. Restore & colourise names
+a GPU of the visitor's own only: its gated LoRA is never sent with a visitor's key.
+
+A tool page whose price check answers `{ place: "pool", quote, line }` shows the service's words and the place in line
+in its price slot, not its own words for a run on the visitor's own GPU. When the quote is refused, Run sends nothing
+and says why, or opens the visitor's own setup when `ownSetup` names one.
 
 For a visitor with no GPU of its own, the pickers never leave out what these GPUs keep off. The model picker, the preset
 galleries and the camera motion, effect and Mix pickers show each such item with its label ("Runs on your own GPU ·

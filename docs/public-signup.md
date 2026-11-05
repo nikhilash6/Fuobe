@@ -420,8 +420,10 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   page carry the "own setup" label (`audio:edit-speech`), and its upload and run ask an account without a GPU to
   connect one. Result menus offer Remove dialogue, Clean up dialogue and Edit speech, and Captions offers "Fix this line".
   A guest gets the sign-up card.
-- **Palette lock.** An account runs the Image studio's palette lock (`POST /api/palettes/lock`) the same way: its
-  images, then each one recoloured to the palette, on its own ComfyUI or key, after the same checks.
+- **Palette lock.** An account's palette lock (`POST /api/palettes/lock`: its images, then each one recoloured to the
+  palette) runs on this install's GPUs only, with hosted runs on, after the same checks, and with no more pictures at
+  once than a run there makes. A run on the account's own GPU or key keeps its colours in the prompt, as before: the
+  composer sends no lock there, and the route and the proxy refuse one (`own-gpu-tool`).
 - **Translate & dub.** An account keeps dubs of its own (`GET`/`POST /api/dub`, `GET`/`PATCH`/`DELETE /api/dub/<id>`,
   `POST /api/dub/<id>/voice`): up to 50, in the account project store, deleted with the account. Another account's dub,
   or the owner's, reads as not found (404), and the owner's list never shows an account's. A dub (one shot on its own
