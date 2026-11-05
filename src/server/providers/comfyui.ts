@@ -1206,7 +1206,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       },
       sent,
       accountOnInstall: !!tenantAccount() && !!(poolScope.getStore() || serverScope.getStore()),
-      ownStudio: !ownGpu() && !computerScope() && !tenantAccount(),
+      // (Asked only for the graph it is about, H3 Person Removal's review: no other run reads the settings for it.)
+      ownStudio: endpointTemplate === H3_REMOVAL_WORKFLOW && !ownGpu() && !computerScope() && !tenantAccount(),
     });
     // What the composer used: the request without the files it dropped (an account's file it didn't send).
     const used = out.dropped.length && request.extra ? { ...request, extra: Object.fromEntries(Object.entries(request.extra).filter(([k]) => !out.dropped.includes(k))) } : request;
