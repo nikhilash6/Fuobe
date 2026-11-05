@@ -1,31 +1,54 @@
 # Fuobe Connect
 
-A ComfyUI custom node pack. It lets [Fuobe](https://github.com/workingprototype/Fuobe) use your ComfyUI with one
-install, the way ComfyUI's own page uses it at `http://127.0.0.1:8188`. You do not need a start flag, a second file or
-a changed start file. It adds no nodes.
+A ComfyUI custom node pack. It lets [Fuobe](https://fuobe.com), an open creative studio, use the ComfyUI on your own
+computer, the way ComfyUI's own page uses it at `http://127.0.0.1:8188`. You do not need a start flag, a second file
+or a changed start file. It adds no nodes. It is optional: Fuobe also runs without it.
+
+The source of this pack is the `integrations/fuobe-connect` folder of the Fuobe repository:
+<https://github.com/workingprototype/Fuobe/tree/main/integrations/fuobe-connect>. This repository is a copy of that
+folder, with its history. Every change is made there first.
+
+## Two modes
+
+Fuobe Connect works in two ways. You can use one, both or neither.
+
+1. Direct mode (on when you install it). A Fuobe page that is open in your browser sends its runs to the ComfyUI on
+   this computer. ComfyUI still turns away every other website. Fuobe Connect checks each request of the studio before
+   ComfyUI sees it.
+2. Pairing (off until you pair). You approve a short code with your Fuobe account. ComfyUI then gets your Fuobe jobs
+   from the studio over HTTPS and runs them with no Fuobe tab open. Use it for Safari, phones and PCs with no screen.
+   It opens no port. Every job gets the same checks as in direct mode.
 
 ## Install
 
-**ComfyUI-Manager:** open the Manager, choose **Custom Nodes Manager**, search for `Fuobe Connect`, press **Install**,
-then press **Restart**.
+Use one of these three ways. Then restart ComfyUI.
 
-**Git:** in a terminal, in ComfyUI's `custom_nodes` folder:
+1. ComfyUI-Manager: open the Manager, choose **Custom Nodes Manager**, search for `Fuobe Connect` and press
+   **Install**. The Manager finds Fuobe Connect only after it is listed in the
+   [Comfy Registry](https://registry.comfy.org). Until then, use one of the two other ways.
+2. ComfyUI-Manager's **Install via Git URL**: enter `https://github.com/workingprototype/ComfyUI-Fuobe-Connect`.
+   Recent versions of the Manager allow this only when two things are true: its `config.ini` has
+   `allow_git_url_install = true` in the `[default]` section, and ComfyUI listens only on this computer. Older versions
+   need `security_level = weak` in the same file.
+3. Git: in a terminal, in ComfyUI's `custom_nodes` folder, run:
 
-```
-git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect
-```
+   ```
+   git clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect
+   ```
 
-Then restart ComfyUI.
+Fuobe Connect installs no Python packages. It uses the `aiohttp` that comes with ComfyUI.
 
-Then open Fuobe and choose **Connect your GPU**. Chrome and Edge ask once to let the page reach apps on this computer.
+## Connect in direct mode
+
+Open Fuobe and choose **Connect your GPU**. Chrome and Edge ask once to let the page reach apps on this computer.
 Press **Allow**. Fuobe finds ComfyUI and connects. If your browser can't reach this computer from a website (Safari,
 phones, some other browsers), use pairing (below).
 
-## What a trusted studio can do
+## What a trusted studio can do, and what it can't
 
-**Direct mode (the default).** ComfyUI turns away requests from every other website. Fuobe Connect adds one exception:
-the Fuobe studios you trust. By default these are `https://fuobe.com` and `https://www.fuobe.com`. A studio's address
-must start with `https://` (`http://` only for a studio on this computer, such as `http://localhost:3000`).
+ComfyUI turns away requests from every other website. Fuobe Connect adds one exception: the Fuobe studios you trust.
+By default these are `https://fuobe.com` and `https://www.fuobe.com`. A studio's address must start with `https://`
+(`http://` only for a studio on this computer, such as `http://localhost:3000`).
 
 A trusted studio reaches this ComfyUI only at `127.0.0.1`, `::1` or `localhost`. It never reaches it at a network
 address (unless you allow that, below) or under another name that leads to this computer, such as `127.0.0.1.nip.io`.
@@ -144,19 +167,70 @@ mode, before it reaches ComfyUI. The job's inputs leave the input folder when th
 The **Connect to Fuobe** window shows the studio, the account that approved the code (masked, for example
 `a•••@example.com`, when the studio says), and the last jobs with their node types and times. Fuobe doesn't fill in
 the code from a link: you type the code that your own ComfyUI shows, so a link that someone sends you can't connect
-their ComfyUI to your account. **Pause jobs** stops this computer from taking new jobs. **Disconnect** tells
-the studio to forget this computer first. If the studio can't be reached, Fuobe Connect keeps trying every minute, and
-you can also remove the computer in Fuobe's settings.
+their ComfyUI to your account. **Pause jobs** and **Disconnect** stop the jobs (see the next section).
 
 On a PC with no screen, start ComfyUI with `FUOBE_CONNECT_PAIR=1`. The code and the link then appear in ComfyUI's
 console. `FUOBE_CONNECT_SITE=https://studio.example.com` chooses the studio for that.
 
-**What pairing sends to the studio.** When you press Connect: this computer's name (the one you typed, else its
-network name), the GPU's name, its memory and ComfyUI's version. While paired, about every minute: the GPU's name and
-memory, the computer's memory, the operating system, ComfyUI's version, whether ComfyUI is the portable build, and the
-progress of a running job. Every five minutes: the file names in your `loras` folder (up to 20,000), so Fuobe can use
-your LoRAs. To stop sending the LoRA names, start ComfyUI with `FUOBE_CONNECT_LORAS=0`. After a job: its results, and
-for a failed job the error type and message, without the folders on this computer.
+### What pairing sends to the studio
+
+When you press Connect: this computer's name (the one you typed, else its network name), the GPU's name, its memory
+and ComfyUI's version. While paired, about every minute: the GPU's name and memory, the computer's memory, the
+operating system, ComfyUI's version, whether ComfyUI is the portable build, and the progress of a running job. Every
+five minutes: the file names in your `loras` folder (up to 20,000), so Fuobe can use your LoRAs. To stop sending the
+LoRA names, start ComfyUI with `FUOBE_CONNECT_LORAS=0`. After a job: its results, and for a failed job the error type
+and message, without the folders on this computer.
+
+## Stop unattended jobs
+
+Fuobe Connect runs jobs with no Fuobe tab open only after you pair. If you never press **Connect** (and never start
+ComfyUI with `FUOBE_CONNECT_PAIR=1`), it runs none. To stop them after you paired:
+
+1. To stop for a time, open **Extensions → Connect to Fuobe** and press **Pause jobs**. ComfyUI then takes no new
+   Fuobe job until you press **Resume jobs**. The pause stays after a restart of ComfyUI. A job that already runs goes
+   on to its end. While paused, ComfyUI still sends the studio its status (see "What pairing sends to the studio" above).
+2. To stop for good, press **Disconnect** in the same window. Fuobe Connect stops at once: it takes no more jobs and
+   sends nothing more about the jobs that it ran. It then tells the studio to forget this computer and deletes the
+   token here. If the studio can't be reached, Fuobe Connect keeps the token unused and tries again every minute. A
+   prompt that ComfyUI already runs stays in ComfyUI's queue. Cancel it in ComfyUI if you want it to stop.
+3. You can also remove the computer in Fuobe's settings. The studio then refuses the token, and Fuobe Connect deletes it
+   the next time it calls the studio (within about a minute).
+
+On a PC with no screen, a program on that computer can do steps 1 and 2. ComfyUI must run at `127.0.0.1:8188` for
+these commands (change the port if yours is different). On Windows, run them in Command Prompt, not PowerShell.
+
+```
+curl -X POST -H "Content-Type: application/json" -d "{\"paused\": true}" http://127.0.0.1:8188/fuobe/connect/jobs
+curl -X POST -H "Content-Type: application/json" -d "{}" http://127.0.0.1:8188/fuobe/connect/unpair
+```
+
+To remove Fuobe Connect, press **Disconnect** first. Then delete the `ComfyUI-Fuobe-Connect` folder from
+`custom_nodes` (or uninstall it in ComfyUI-Manager) and restart ComfyUI.
+
+## Security: known limits
+
+Fuobe Connect's checks went through four rounds of security review. The last round found no way around them. These
+known limits remain. Each one is of low severity.
+
+1. Another node pack can change a prompt after the check. ComfyUI lets a node pack add a handler (`on_prompt`) that
+   ComfyUI runs on every prompt, after Fuobe Connect checked it. If one of your node packs changes prompts in such a
+   handler, the workflow that runs is not exactly the one that Fuobe Connect checked. Fuobe Connect adds no such
+   handler.
+2. A number that comes through a link has no limit. ComfyUI checks a number's min and max only when the workflow
+   writes the number. A number that a listed node works out (a math node, for example) reaches the next node
+   unchecked. A studio can then ask for a very large picture or very many steps. This can only keep your GPU busy or
+   make ComfyUI run out of memory. To stop it, cancel the prompt in ComfyUI, or press **Pause jobs** if you paired.
+3. In a workflow with no loop, ComfyUI runs each node's `IS_CHANGED` check, also for a node that leads to no output.
+   ComfyUI doesn't check such a node first. Fuobe Connect checks every value written into it the same way as
+   elsewhere, so it can still read only Fuobe's own inputs.
+4. ComfyUI sends the live messages of a prompt queued without a client id to every open socket, a studio's too (see
+   above). The studio can't download that prompt's files or control it.
+5. A listed node does in ComfyUI's folders what it always does: for example, it saves into your output folder. The
+   checks follow the listed nodes at the versions that Fuobe's workflows pin. A newer version of a node pack can read
+   its inputs in a new way.
+6. A trusted studio can read facts about this computer: ComfyUI's start options, the GPU and its memory, and the names
+   and places on disk of your model files (see above). It can also use your GPU with the listed nodes. Add only
+   studios that you trust. To let no website use this ComfyUI from the browser, set the studios to `none`.
 
 ## Files
 
