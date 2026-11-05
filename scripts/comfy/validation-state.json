@@ -479,6 +479,24 @@
     "error": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')",
     "at": "2026-11-02T15:11:18.633Z"
   },
+  "minimax-h3-fast-flf2v": {
+    "sha256": "14443d1182167b2d69d5ed0d0952592dfcd7adc2d911e4c0d33b9f2225d4317b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:31:32.634Z"
+  },
+  "minimax-h3-fast-i2v": {
+    "sha256": "b5808ec208ba7d99a8ee25b103f1aade3aeec524c975ea831c30141ee29c6e48",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:31:32.634Z"
+  },
+  "minimax-h3-fast-t2v": {
+    "sha256": "5236321955d3b5cb16c5daa2a8c1154b57b0032c22864a0d417b94560dd60c2e",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:31:32.631Z"
+  },
   "minimax-h3-flex-flf2v": {
     "sha256": "a76ec6135a539210a9589118f1859746864ba13dded68f5f5fb1ab585a3995c3",
     "validated": true,
@@ -1075,9 +1093,9 @@
   },
   "video-character-swap-h3": {
     "sha256": "37496982555a84ada4ccb22a155639d6ed8817b0cf0a868aa1497bd05c1c9de2",
-    "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'Prepare · 24 fps / pixel budget' not found. The custom node may not be installed. (Node ID '#31')",
-    "at": "2026-10-27T04:10:39.868Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:31:32.635Z"
   },
   "video-character-swap-h3-relay": {
     "sha256": "7ff9fd0074152ee5bd15e187b04faec8d876164ea77b0df07224f2c41e677ee6",

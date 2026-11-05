@@ -101,9 +101,6 @@ describe("round-4 ComfyUI workflows", () => {
       // server (tests/keying.test.ts checks their classes against the packs' source).
       "image-matte-feynobg",
       // MiniMax H3 on 8-31 GB cards: FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
-      "minimax-h3-fast-t2v",
-      "minimax-h3-fast-i2v",
-      "minimax-h3-fast-flf2v",
       "minimax-h3-trim-t2v",
       // Design a voice: ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
       "tts-qwen3-design",
@@ -126,7 +123,6 @@ describe("round-4 ComfyUI workflows", () => {
       "voice-clean-bed-reuse",
       // Hi3D refine (hi3d-refine): Comfyui-Hi3d-T8 needs an Ampere-or-newer NVIDIA GPU, so it isn't on the validation server.
       "mesh-refine-hi3d",
-      "video-character-swap-h3",
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",

@@ -118,8 +118,9 @@ describe("the FastH3 graphs", () => {
     }
     expect(entry(TRIM).notes).toMatch(/8 GB figure is FastVideo's test/);
     expect(entry("minimax-h3-fast-i2v").notes).toMatch(/FL2VA was not distilled/);
-    // Unvalidated like the other H3 graphs until a GPU run.
-    for (const id of [...FAST, TRIM]) expect(entry(id).validated, id).toBe(false);
+    // The FastH3 V2 graphs passed a GPU run; Trim waits for one.
+    for (const id of FAST) expect(entry(id).validated, id).toBe(true);
+    expect(entry(TRIM).validated).toBe(false);
   });
 
   it("give the full graphs a decode loader of their own, so Fast decode swaps only the decoder", () => {
@@ -217,13 +218,13 @@ describe("Auto and Options → GPU tier, decided once per run", () => {
     }
   });
 
-  it("keeps Auto on the full model until ComfyUI has accepted the smaller build's graph; asking for it still runs it", () => {
+  it("keeps Auto on the full model until ComfyUI has accepted the smaller build's graph, then takes it on a smaller card; asking for it runs it", () => {
     checked({ gb: 16, name: RTX4070 });
     try {
       const accepted = (id: string) => entry(id)?.validated === true;
-      expect(accepted("minimax-h3-fast-t2v")).toBe(false);
-      expect(h3Gpu("minimax-h3-t2v", {}, has, accepted)).toEqual({ gpuTier: "standard" });
-      expect(h3Gpu("minimax-h3-t2v", {}, has)).toEqual({ gpuTier: "standard" });
+      expect(accepted("minimax-h3-fast-t2v")).toBe(true);
+      expect(h3Gpu("minimax-h3-t2v", {}, has, () => false)).toEqual({ gpuTier: "standard" });
+      expect(h3Gpu("minimax-h3-t2v", {}, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.int8.file });
       expect(h3Gpu("minimax-h3-t2v", { gpuTier: "fast" }, has, accepted)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.int8.file });
     } finally {
       dropSnapshots("install");
