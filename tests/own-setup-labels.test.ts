@@ -183,3 +183,16 @@ describe("the reason never appears in a visitor's words", () => {
     }
   });
 });
+
+describe("beside a setting's value", () => {
+  it("Kandinsky 6.0's Pro quality carries its label, and the server asks the run by the same id", async () => {
+    const { controlSetup } = await import("@/lib/own-setup-controls");
+    const { requestSetupIds } = await import("@/server/pool-own-setup");
+    expect(controlSetup("oss-kandinsky6", "quality", "pro")).toBe("oss-kandinsky6:pro");
+    expect(controlSetup("oss-kandinsky6", "quality", "lite")).toBeUndefined();
+    expect(controlSetup("oss-minimax-h3", "quality", "pro")).toBeUndefined();
+    expect(ownSetupLabel(ownSetupOnly("oss-kandinsky6:pro")!)).toBe("Runs on your own GPU · 80 GB");
+    expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "pro" } } })).toContain("oss-kandinsky6:pro");
+    expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "lite" } } })).not.toContain("oss-kandinsky6:pro");
+  });
+});

@@ -7,6 +7,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useLikelyVisitor } from "@/lib/api";
+import { OwnSetupChip } from "@/components/own-setup";
+import { wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { FORMAT_INFO } from "@/lib/av/formats";
 import { OPERATION_LABELS, type GenParams, type ModelDef, type Operation, type VideoFormat } from "@/lib/catalog/types";
 import { colormapLabel, durationLabel, formatOf, hiddenChanges, MATTE_OUTPUT_LABELS, settingsSummary, videoToolNote, type SettingsShape } from "@/lib/composer";
@@ -283,6 +285,13 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
             value={p.resolution ?? d.resolution ?? shape.resolution[0]}
             onChange={(v) => setP({ resolution: v })}
           />
+          {/* MiniMax H3 (open) at 2K finishes with Open-H3 Regenerate: a visitor runs it on its own GPU (own-setup.ts). */}
+          {visitor && model && shape.resolution.find((r) => wantsH3TwoK(model.id, r)) && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+              {shape.resolution.find((r) => wantsH3TwoK(model.id, r))}
+              <OwnSetupChip setup="regenerate:h3-2k" />
+            </p>
+          )}
         </Section>
       )}
       {shape.fps && (

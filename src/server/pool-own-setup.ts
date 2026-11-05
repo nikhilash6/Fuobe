@@ -5,6 +5,7 @@ import { directRunFeatures } from "@/lib/catalog/genjutsu";
 import { ENHANCE_FEATURES, REGEN_MODEL, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
+import { controlSetup } from "@/lib/own-setup-controls";
 import { RTX_CLASSES, rtxCardOf } from "@/lib/catalog/rtx-video";
 import { gpuFits } from "@/lib/gpu/readiness";
 import { loadIndex } from "./gpu/index-file";
@@ -28,7 +29,11 @@ export function requestSetupIds(req: Pick<GenerationRequest, "modelId" | "op" | 
   const extra = req.params?.extra ?? {};
   if (wantsH3TwoK(req.modelId, req.params?.resolution)) ids.push("regenerate:h3-2k");
   if (req.modelId === REGEN_MODEL && req.feature && ENHANCE_FEATURES.has(req.feature)) ids.push("regenerate:enhance");
-  if (req.modelId === "oss-kandinsky6" && extra.quality === "pro") ids.push("oss-kandinsky6:pro");
+  // A model setting whose value has an id of its own (Kandinsky 6.0 at Pro): the one table the pickers read too.
+  for (const [param, v] of Object.entries(extra)) {
+    const id = typeof v === "string" || typeof v === "number" ? controlSetup(req.modelId, param, v) : undefined;
+    if (id) ids.push(id);
+  }
   if (wantsVoiceFirst(req)) ids.push("sound:clean-voice-first");
   const genjutsu = extra.openjutsu;
   const features = directRunFeatures(req.modelId, genjutsu && typeof genjutsu === "object" ? (genjutsu as Record<string, unknown>) : {});

@@ -23,6 +23,7 @@ import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from 
 import { composerOnPool, composerPlace } from "@/lib/run-place";
 import { PoolNote } from "./pool-note";
 import { modelOwnSetup, poolRunsModel } from "@/lib/pool-rules";
+import { controlSetup } from "@/lib/own-setup-controls";
 import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { HoldFilesCtx } from "@/lib/held-files";
 import { pendingStep } from "@/lib/guest-draft";
@@ -1293,7 +1294,7 @@ export function Composer({ docked }: { docked: boolean }) {
           onStrength={(v) => setDraft({ presetStrength: v })}
         />
       )}
-      {shownControls.length > 0 && <ControlsChip controls={shownControls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} />}
+      {shownControls.length > 0 && <ControlsChip controls={shownControls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} setupOf={setupViewer ? (param, v) => controlSetup(model?.id, param, v) : undefined} />}
       {opts.lightSphere && <LightSphereChip value={draft.slots.image} onChange={setLight} />}
       {effectiveOp === "insert-moment" && <InsertRangeChip clip={facts?.duration} start={p.startTime} resume={p.endTime} onChange={setInsertRange} />}
     </>
