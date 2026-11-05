@@ -21,18 +21,26 @@ export const HIDDEN_WORDS = "This result was removed by the studio's checks. Not
 export const UNCHECKED_WORDS = "This result couldn't be checked in time, so it was removed. Not charged.";
 export const CHECKING_WORDS = "Checking";
 
-/** Hold a finished run's files for their check (the runner calls it instead of marking the row succeeded). */
-export function holdForCheck(generationId: string, outputs: OutputFile[], now = Date.now()): void {
+/**
+ * Hold a finished run's files for their check (the runner calls it instead of marking the row succeeded). `live`: only
+ * while the run still goes (queued or running), as the runner saves it: a run stopped meanwhile stays stopped, nothing of
+ * it is held, and the caller removes its files. Returns whether the files were held.
+ */
+export function holdForCheck(generationId: string, outputs: OutputFile[], o: { live?: boolean; now?: number } = {}): boolean {
+  const now = o.now ?? Date.now();
   const d = db();
   const ids = outputs.map((o) => o.assetId).filter((x): x is string => !!x);
-  d.transaction(() => {
+  const live = o.live ? " AND status IN ('queued', 'running')" : "";
+  return d.transaction((): boolean => {
+    const held = d.prepare(`UPDATE generations SET status = 'running', stage = 'checking', progress = 0.99, message = ?, outputs_json = ?, updated_at = ? WHERE id = ?${live}`).run(CHECKING_WORDS, JSON.stringify(outputs), now, generationId).changes > 0;
+    if (!held) return false;
     for (const id of ids) {
       d.prepare("UPDATE assets SET held = 1 WHERE id = ?").run(id);
       d.prepare("INSERT OR IGNORE INTO output_checks (asset_id, generation_id, state, asked_at, tries, next_at) VALUES (?, ?, 'waiting', ?, 0, ?)").run(id, generationId, now, now);
     }
-    d.prepare("UPDATE generations SET status = 'running', stage = 'checking', progress = 0.99, message = ?, outputs_json = ?, updated_at = ? WHERE id = ?").run(CHECKING_WORDS, JSON.stringify(outputs), now, generationId);
     // A run with no saved file (words only) has nothing to check: it succeeds as it is.
     if (!ids.length) d.prepare("UPDATE generations SET status = 'succeeded', stage = NULL, progress = 1, message = NULL, completed_at = ?, updated_at = ? WHERE id = ?").run(now, now, generationId);
+    return true;
   })();
 }
 

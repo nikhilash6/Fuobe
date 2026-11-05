@@ -788,6 +788,32 @@ describe("the price check before Run and the run itself", async () => {
     }
   });
 
+  it("a chain whose later step only away workers could run is told it starts soon, though a worker for its first step is on", async () => {
+    const endpointOf = (id: string) => getModel(id)!.routes.find((r) => r.provider === "comfyui")!.endpoint;
+    const first = endpointOf("oss-z-image-turbo");
+    const later = endpointOf("oss-rtx-video-upscale");
+    const laterLane = pool.poolLane(later);
+    expect(pool.poolLane(first)).not.toBe(laterLane);
+    const lanes = allLanes(loadIndex(), sha).map((l) => l.lane);
+    // The worker that is on may run every lane but the later step's; the only one that may run that lane is away.
+    pool.patchWorker(worker.id, { allow: Object.fromEntries(lanes.filter((l) => l !== laterLane).map((l) => [l, { delayMs: 0 }])) });
+    const away = standInWorker();
+    pool.patchWorker(away.id, { allow: { [laterLane]: { delayMs: 0 } } });
+    db().prepare("UPDATE relay_workers SET paused_local = 1, local_why = 'gpu-busy:game.exe' WHERE id = ?").run(away.id);
+    const chain = [
+      { id: "s0", modelId: "oss-z-image-turbo", op: "t2i", provider: "comfyui", kind: "image", presetId: null, waits: false },
+      { id: "s1", modelId: "oss-rtx-video-upscale", op: "upscale-video", provider: "comfyui", kind: "video", presetId: null, waits: true },
+    ];
+    const planned = { route: { endpoint: first } };
+    expect(hostedRun.runAway(planned as never, [chain[0]])).toBe(false);
+    expect(hostedRun.runAway(planned as never, chain)).toBe(true);
+    // A step that isn't on this install's GPUs (a cloud step) is not looked at.
+    expect(hostedRun.runAway(planned as never, [chain[0], { ...chain[1], provider: "fal" }])).toBe(false);
+    // The away worker is back: the chain may be made.
+    db().prepare("UPDATE relay_workers SET paused_local = 0, local_why = NULL WHERE id = ?").run(away.id);
+    expect(hostedRun.runAway(planned as never, chain)).toBe(false);
+  });
+
   it("a guest's price check plans every step of a chain too, and words its refusals for someone with no Settings yet", async () => {
     withBilling({ limits: NO_LIMITS });
     expect((await hostedRun.poolQuote(null, EFFECT as never, undefined))?.quote.allowed).toBe(true);

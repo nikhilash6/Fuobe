@@ -2671,23 +2671,29 @@ async function pollOne(r: Row): Promise<void> {
   // An image-to-3D GLB from ComfyUI gets the server's finish first (the web GLB, seconds): the outputs are
   // stored now and the row stays running until it's done, so a restart resumes it from them. The turntable
   // is rendered after the job has succeeded (src/server/model3d-finish.ts).
+  // Stopped (or taken over by another app process) while its results were saved: the files saved here belong to no run,
+  // so they go now instead of filling the account's space.
+  const dropSaved = () => {
+    for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+  };
   if (modelToFinish(r, outputs) >= 0) {
-    updateLive(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" });
+    if (!updateLive(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" })) return dropSaved();
     resumeFinish({ ...r, outputs_json: JSON.stringify(outputs) });
     return;
   }
   // The moderation service asked to see this run's outputs first: they are held, and the row waits ("Checking").
   if (stored.checkOutputs && moderationConfigured()) {
-    holdForCheck(r.id, outputs);
+    if (!holdForCheck(r.id, outputs, { live: true })) dropSaved();
     return;
   }
-  updateLive(r.id, {
+  const saved = updateLive(r.id, {
     status: "succeeded",
     outputs_json: JSON.stringify(outputs),
     progress: 1,
     message: dropped ? `Kept ${ACCOUNT_LIMITS.outputsPerJob} of ${ACCOUNT_LIMITS.outputsPerJob + dropped} results` : null,
     completed_at: Date.now(),
   });
+  if (!saved) dropSaved();
 }
 
 /**

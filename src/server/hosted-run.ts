@@ -159,6 +159,16 @@ export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
 }
 
 /**
+ * Are the workers that could run some GPU step of a run all away now (paused, silent, outside their hours): its own
+ * model's, or a later step's of a chain? Then the run would wait for nothing at that step, so it isn't made. Light steps
+ * (a join, a trim) are left out, as they cost nothing.
+ */
+export function runAway(planned: Pick<Planned, "route">, steps: PlannedStep[] | null | undefined): boolean {
+  if (poolAway(planned.route.endpoint)) return true;
+  return (steps ?? []).some((s) => s.provider === "comfyui" && !freeStep(s) && poolAway(stepEndpoint(s)));
+}
+
+/**
  * Is a run light work only: every step it makes a ComfyUI step that needs no model and no graphics memory (a filter, a
  * trim, a join, adding sound, a Ken Burns move)? Such a run is free and never counts against the policy's limits on runs
  * at once, in line or an hour. Unknown steps (null: the plan couldn't be made) count as GPU work.
@@ -331,7 +341,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   // Every GPU here that could run it is off for now (paused, silent, outside its hours): a run made now would only wait
   // until its wait limit ended it. It goes to the account's own GPU as any run these GPUs can't take now, else it isn't
   // made, in the words the price check gave before Run.
-  if (poolAway(planned.route.endpoint)) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("busy", HOSTED_WORDS.startingSoon) };
+  if (runAway(planned, gate.steps)) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("busy", HOSTED_WORDS.startingSoon) };
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
   return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };
@@ -503,7 +513,7 @@ export async function poolQuote(
   }
   // Every GPU here that could run it is off for now: Run is off and says it starts soon (the price check asks again by
   // itself, and Run comes back on once one is back), never a run that would wait for nothing.
-  if (poolAway(planned.route.endpoint)) {
+  if (runAway(planned, gate.steps)) {
     if (hasGpu && wish !== "pool") return null;
     return { planned, quote: startingSoonQuote(), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
