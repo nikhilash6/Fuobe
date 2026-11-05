@@ -14,7 +14,10 @@ import {
   diagnoseKeyJob,
   diagnoseRefusal,
   gpuHostOf,
+  isLoaderNode,
   ISOLATED_ON_GPU,
+  loaderFiles,
+  modelFileProblem,
   retryPlan,
   RUNPOD_CONSOLE_URL,
   shortState,
@@ -195,6 +198,123 @@ describe("Your GPU: a run that failed there", () => {
     expect(diagnoseGpuJob({ kind: "save" }, tunnel).words).toMatch(/couldn't copy it from your GPU/);
     expect(diagnoseGpuJob({ kind: "isolated" }, tunnel)).toMatchObject({ words: ISOLATED_ON_GPU, actions: [{ kind: "pick-model" }] });
     expect(diagnoseRefusal("KSampler: Value 9 smaller than min of 10")).toMatchObject({ cause: "gpu-refused", details: "KSampler: Value 9 smaller than min of 10" });
+  });
+});
+
+describe("Your GPU: a model file a loader can't read, or doesn't have", () => {
+  // The reported case: MiniMax H3 on an account's own GPU through a tunnel, five times the same error in a VAELoader.
+  const VIDEO_VAE = "minimax_h3_video_vae_int8_convrot.safetensors";
+  const LIVE = "'utf-8' codec can't decode byte 0xf7 in position 0: invalid start byte";
+  const graph = {
+    "12": { class_type: "UNETLoader", inputs: { unet_name: "minimax_h3_fast_fp8_scaled.safetensors", weight_dtype: "default" } },
+    "13": { class_type: "CLIPLoader", inputs: { clip_name: "umt5_xxl_fp8_e4m3fn_scaled.safetensors", type: "wan" } },
+    "14": { class_type: "VAELoader", inputs: { vae_name: VIDEO_VAE } },
+    "15": { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } },
+    "16": { class_type: "LoraLoaderModelOnly", inputs: { model: ["12", 0], lora_name: "h3_lightx2v_4step.safetensors", strength_model: 1 } },
+  };
+  const URL_OF = "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors";
+
+  it("the reported case: the video VAE named, Download it again, Get the file and Check my GPU, never Retry", () => {
+    const err = { node_id: "14", node_type: "VAELoader", exception_message: LIVE };
+    expect(modelFileProblem(err.node_type, err.exception_message)).toBe("damaged");
+    const files = loaderFiles(err, graph);
+    expect(files).toEqual([VIDEO_VAE]);
+    const d = diagnoseGpuJob({ kind: "error", nodeType: err.node_type, message: err.exception_message, files, fileUrl: URL_OF }, tunnel);
+    expect(d).toMatchObject({
+      cause: "gpu-model-file",
+      words: `A model file on your GPU can't be read: ${VIDEO_VAE}. It's damaged or didn't finish downloading. Download it again, then run.`,
+      retryable: false,
+    });
+    expect(d.actions).toEqual([
+      { kind: "get-file", label: "Get the file", target: URL_OF },
+      { kind: "check-gpu", label: "Check my GPU" },
+    ]);
+    expect(kinds(d)).not.toContain("retry");
+    expect(d.details).toBe(`VAELoader · ${LIVE}`);
+    plain(d);
+    expect(d.words).not.toMatch(/utf-8|codec|0xf7|Traceback/);
+  });
+
+  it("each loader type, and each way a file can't be read", () => {
+    const loaders = ["VAELoader", "UNETLoader", "CheckpointLoaderSimple", "CLIPLoader", "DualCLIPLoader", "LoraLoader", "LoraLoaderModelOnly", "ControlNetLoader", "UpscaleModelLoader", "UnetLoaderGGUF"];
+    const damaged = [
+      LIVE,
+      "invalid load key, '<'.",
+      "Error while deserializing header: HeaderTooLarge",
+      "SafetensorError: Error while deserializing header: MetadataIncompleteBuffer",
+      "safetensors_rust.SafetensorError: incomplete metadata, file not fully covered",
+      "unexpected EOF, expected 1234 more bytes. The file might be corrupted.",
+      "PytorchStreamReader failed reading zip archive: failed finding central directory",
+      "File is not a zip file",
+    ];
+    for (const nodeType of loaders) {
+      for (const message of damaged) {
+        expect(modelFileProblem(nodeType, message), `${nodeType}: ${message}`).toBe("damaged");
+        const d = diagnoseGpuJob({ kind: "error", nodeType, message, files: ["x.safetensors"] }, tunnel);
+        expect(d.cause).toBe("gpu-model-file");
+        expect(d.words).toMatch(/^A model file on your GPU can't be read: x\.safetensors\./);
+        expect(d.retryable).toBe(false);
+        plain(d);
+      }
+    }
+    // The same words from a node that loads no model file, and another loader problem: the add-on's words, as before.
+    expect(modelFileProblem("KSampler", LIVE)).toBeNull();
+    expect(diagnoseGpuJob({ kind: "error", nodeType: "KSampler", message: LIVE }, tunnel).cause).toBe("gpu-job-error");
+    expect(modelFileProblem("VAELoader", "Some other problem")).toBeNull();
+    expect(diagnoseGpuJob({ kind: "error", nodeType: "VAELoader", message: "Some other problem" }, tunnel).cause).toBe("gpu-job-error");
+    // Out of memory while loading a model stays out of memory.
+    expect(diagnoseGpuJob({ kind: "error", nodeType: "UNETLoader", message: "CUDA out of memory. Tried to allocate 2.00 GiB" }, tunnel).cause).toBe("gpu-out-of-memory");
+  });
+
+  it("a file that isn't there says add it; one that can't be read says download it again", () => {
+    for (const message of [
+      "[Errno 2] No such file or directory: '/workspace/ComfyUI/models/vae/minimax_h3_video_vae_int8_convrot.safetensors'",
+      "FileNotFoundError: minimax_h3_video_vae_int8_convrot.safetensors",
+      "Model in folder 'vae' with filename 'minimax_h3_video_vae_int8_convrot.safetensors' not found.",
+      "Value not in list: vae_name: 'minimax_h3_video_vae_int8_convrot.safetensors' not in ['ae.safetensors']",
+    ]) {
+      expect(modelFileProblem("VAELoader", message), message).toBe("missing");
+      const d = diagnoseGpuJob({ kind: "error", nodeType: "VAELoader", message, files: [VIDEO_VAE] }, tunnel);
+      expect(d).toMatchObject({ cause: "gpu-model-file", words: `Your GPU doesn't have the model file ${VIDEO_VAE}. Add it, then run.`, retryable: false });
+      plain(d);
+    }
+    // No file name known: still plain words.
+    expect(diagnoseGpuJob({ kind: "error", nodeType: "VAELoader", message: LIVE }, tunnel).words).toBe("A model file on your GPU can't be read. It's damaged or didn't finish downloading. Download it again, then run.");
+    expect(diagnoseGpuJob({ kind: "error", nodeType: "VAELoader", message: "No such file or directory" }, tunnel).words).toBe("Your GPU doesn't have a model file this needs. Add it, then run.");
+    // Another value not in the list (not a file): not this.
+    expect(modelFileProblem("CLIPLoader", "Value not in list: type: 'wan9' not in ['wan', 'sd3']")).toBeNull();
+  });
+
+  it("finds the file: the failing node's inputs, else what ComfyUI reported, else the error's own words", () => {
+    // By the error's node id: the video VAE, not the audio one beside it.
+    expect(loaderFiles({ node_id: "15", node_type: "VAELoader", exception_message: LIVE }, graph)).toEqual(["minimax_h3_audio_vae_fp32.safetensors"]);
+    // A link to another node is not a file; a LoRA's file is.
+    expect(loaderFiles({ node_id: "16", node_type: "LoraLoaderModelOnly", exception_message: "invalid load key, '<'." }, graph)).toEqual(["h3_lightx2v_4step.safetensors"]);
+    // No graph: the inputs ComfyUI sent with the error (each in a list).
+    expect(loaderFiles({ node_id: "9", node_type: "CheckpointLoaderSimple", exception_message: "invalid load key", current_inputs: { ckpt_name: ["sdxl/juggernaut.safetensors"] } })).toEqual(["sdxl/juggernaut.safetensors"]);
+    // No node id: every node of that class, the one the error names first.
+    expect(loaderFiles({ node_type: "VAELoader", exception_message: `Error while deserializing header: HeaderTooLarge in ${VIDEO_VAE}` }, graph)).toEqual([VIDEO_VAE]);
+    expect(loaderFiles({ node_type: "VAELoader", exception_message: LIVE }, graph)).toEqual([VIDEO_VAE, "minimax_h3_audio_vae_fp32.safetensors"]);
+    // Nothing else: a file the error itself names (its base name, no folder).
+    expect(loaderFiles({ node_type: "UpscaleModelLoader", exception_message: "[Errno 2] No such file or directory: '/models/upscale_models/4x-UltraSharp.pth'" })).toEqual(["4x-UltraSharp.pth"]);
+    expect(loaderFiles({ node_type: "UpscaleModelLoader", exception_message: LIVE })).toEqual([]);
+    expect(isLoaderNode("DualCLIPLoader")).toBe(true);
+    expect(isLoaderNode("KSampler")).toBe(false);
+  });
+
+  it("Get the file only for an https link; Check my GPU only for a GPU at a web address", () => {
+    const base = { kind: "error" as const, nodeType: "VAELoader", message: LIVE, files: [VIDEO_VAE] };
+    expect(kinds(diagnoseGpuJob({ ...base, fileUrl: "http://example.com/x.safetensors" }, tunnel))).toEqual(["check-gpu"]);
+    expect(kinds(diagnoseGpuJob({ ...base, fileUrl: "javascript:alert(1)" }, tunnel))).toEqual(["check-gpu"]);
+    expect(kinds(diagnoseGpuJob({ ...base, fileUrl: URL_OF }, { kind: "computer" }))).toEqual(["get-file"]);
+    expect(kinds(diagnoseGpuJob(base, { kind: "connect" }))).toEqual([]);
+    // The address never reaches the details line; a password it echoed neither.
+    const echoed = diagnoseGpuJob({ ...base, message: `invalid load key at https://quiet-river.trycloudflare.com/x token=abcdef123456` }, tunnel);
+    expect(echoed.details).not.toMatch(/quiet-river|abcdef123456/);
+    // A traceback stays in the details line, on one line.
+    const tb = diagnoseGpuJob({ ...base, message: `${LIVE}\nTraceback (most recent call last):\n  File "nodes.py", line 1` }, tunnel);
+    expect(tb.words).not.toMatch(/Traceback/);
+    expect(tb.details).not.toMatch(/\n/);
   });
 });
 

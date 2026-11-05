@@ -399,6 +399,61 @@ describe("ComfyUI output mapping", () => {
   });
 });
 
+describe("a model file a loader can't read: plain words on an account's own GPU only", () => {
+  const VAE = "minimax_h3_video_vae_int8_convrot.safetensors";
+  const LIVE = "'utf-8' codec can't decode byte 0xf7 in position 0: invalid start byte";
+  const graph = {
+    "14": { class_type: "VAELoader", inputs: { vae_name: VAE } },
+    "15": { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } },
+  };
+  const failedEntry = (id: string) => ({
+    prompt: [1, id, graph],
+    status: { status_str: "error", messages: [["execution_error", { node_id: "14", node_type: "VAELoader", exception_message: LIVE }]] as [string, Record<string, unknown>][] },
+    outputs: {},
+  });
+
+  it("the owner's runs keep ComfyUI's words", async () => {
+    handler = () => json({ "p-vae": failedEntry("p-vae") });
+    expect(await comfyProvider.poll(pollCtx("p-vae"))).toEqual({ state: "failed", error: `VAELoader: ${LIVE}` });
+  });
+
+  it("a computer's run: an account's says which file and where to get it; the owner's and the workers' keep the words", async () => {
+    const { onComputer, planRelayOutputs, relayFailure, modelFileUrl } = await import("@/server/providers/comfyui");
+    const t = { id: "task-vae", workflow_id: "minimax-h3-t2v", meta_batch: 0, prefix: null, pools: null } as unknown as Parameters<typeof planRelayOutputs>[0];
+    const entries = [failedEntry("p1")];
+    expect(onComputer("owner", () => planRelayOutputs(t, entries, false))).toEqual({ error: `VAELoader: ${LIVE}` });
+    // This studio's GPUs (the workers) running an account's job: their words, as before.
+    expect(onComputer("acct:someone", () => planRelayOutputs({ ...t, pools: "pool" }, entries, false))).toEqual({ error: `VAELoader: ${LIVE}` });
+    const plan = onComputer("acct:someone", () => planRelayOutputs(t, entries, false));
+    expect("error" in plan).toBe(true);
+    const task = { ...t, state: "failed", error: (plan as { error: string }).error, refusal_json: null } as unknown as Parameters<typeof relayFailure>[0];
+    const read = onComputer("acct:someone", () => relayFailure(task, undefined));
+    expect(read.error).toBe(`A model file on your GPU can't be read: ${VAE}. It's damaged or didn't finish downloading. Download it again, then run.`);
+    expect(read.trouble).toMatchObject({ cause: "gpu-model-file", retryable: false, details: `VAELoader · ${LIVE}` });
+    // This computer: no Check my GPU (it asks a GPU at a web address); where the file downloads from.
+    expect(read.trouble?.actions).toEqual([{ kind: "get-file", label: "Get the file", target: modelFileUrl(VAE) }]);
+    expect(modelFileUrl(VAE)).toMatch(/^https:\/\/huggingface\.co\/Kijai\/MiniMax-H3-experimental\/resolve\/[0-9a-f]{40}\/minimax_h3_video_vae_int8_convrot\.safetensors$/);
+    // A file in a folder, and one nothing knows.
+    expect(modelFileUrl(`vae/${VAE}`)).toBe(modelFileUrl(VAE));
+    expect(modelFileUrl("my_own_vae_v2.safetensors")).toBeUndefined();
+  });
+
+  it("an account's computer refusing a file outside the workflow's list: the file named, no Retry", async () => {
+    const { onComputer, relayFailure, getWorkflow: wf } = await import("@/server/providers/comfyui");
+    const file = "my_own_vae_v2.safetensors";
+    const body = { error: { type: "prompt_outputs_failed_validation", message: "Prompt outputs failed validation" }, node_errors: { "14": { class_type: "VAELoader", errors: [{ type: "value_not_in_list", message: "Value not in list", details: `vae_name: '${file}' not in ['ae.safetensors']`, extra_info: { input_name: "vae_name", received_value: file } }] } } };
+    const task = { id: "task-ref", workflow_id: "minimax-h3-t2v", pools: null, state: "failed", error: null, refusal_json: JSON.stringify({ status: 400, body }) } as unknown as Parameters<typeof relayFailure>[0];
+    const manifest = wf("minimax-h3-t2v").manifest;
+    const read = onComputer("acct:someone", () => relayFailure(task, manifest));
+    expect(read.error).toBe(`Your GPU doesn't have the model file ${file}. Add it, then run.`);
+    expect(read.trouble?.cause).toBe("gpu-model-file");
+    expect(read.trouble?.actions.map((a) => a.kind)).not.toContain("retry");
+    // The owner's computer, and the workers: as before.
+    expect(onComputer("owner", () => relayFailure(task, manifest)).trouble).toBeUndefined();
+    expect(onComputer("acct:someone", () => relayFailure({ ...task, pools: "pool" }, manifest)).trouble).toBeUndefined();
+  });
+});
+
 describe("ComfyUI uploads and submit", () => {
   /** A minimal MP4: ftyp + moov with mvhd and one video trak (tkhd 1280x720, mdhd, hdlr vide, stts 50 frames). */
   function tinyMp4(): Buffer {

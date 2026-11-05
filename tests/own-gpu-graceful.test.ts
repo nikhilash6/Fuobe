@@ -1127,3 +1127,77 @@ describe("a wait survives a restart or a deploy", () => {
     }
   });
 });
+
+describe("a model file its GPU can't read, or doesn't have", () => {
+  // The reported case: MiniMax H3 on an account's own GPU through a tunnel; its VAELoader read a damaged video VAE, and
+  // the tile said "Press Retry" five times.
+  const VAE = "minimax_h3_video_vae_int8_convrot.safetensors";
+  const LIVE = "'utf-8' codec can't decode byte 0xf7 in position 0: invalid start byte";
+  const graph = {
+    "12": { class_type: "UNETLoader", inputs: { unet_name: "minimax_h3_fast_fp8_scaled.safetensors", weight_dtype: "default" } },
+    "13": { class_type: "CLIPLoader", inputs: { clip_name: "umt5_xxl_fp8_e4m3fn_scaled.safetensors", type: "wan" } },
+    "14": { class_type: "VAELoader", inputs: { vae_name: VAE } },
+    "15": { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } },
+    "16": { class_type: "LoraLoaderModelOnly", inputs: { model: ["12", 0], lora_name: "h3_lightx2v_4step.safetensors", strength_model: 1 } },
+  };
+  /** ComfyUI's history for a job whose node failed with these words (its graph as it was sent). */
+  const failedWith = (nodeId: string, nodeType: string, message: string) => (m: string, p: string) => {
+    if (m !== "GET" || !p.startsWith("/history/")) return undefined;
+    const id = decodeURIComponent(p.slice("/history/".length));
+    const error = { prompt_id: id, node_id: nodeId, node_type: nodeType, executed: [], exception_message: message, exception_type: "UnicodeDecodeError", traceback: ['  File "execution.py", line 1'], current_inputs: {}, current_outputs: {} };
+    return { status: 200, contentType: "application/json", body: JSON.stringify({ [id]: { prompt: [1, id, graph, {}, []], status: { status_str: "error", completed: false, messages: [["execution_start", {}], ["execution_error", error]] }, outputs: {} } }) };
+  };
+
+  it("the reported case: the video VAE named, where to get it again, Check my GPU, and never Retry", async () => {
+    fake.opts.answer = failedWith("14", "VAELoader", LIVE);
+    const g = await settle(await startRun());
+    expect(g?.status).toBe("failed");
+    expect(g?.error).toBe(`A model file on your GPU can't be read: ${VAE}. It's damaged or didn't finish downloading. Download it again, then run.`);
+    plainWords(g?.error);
+    expect(g?.trouble?.cause).toBe("gpu-model-file");
+    expect(kinds(g?.trouble)).toEqual(["get-file", "check-gpu"]);
+    // Where the requirement index downloads it from, pinned to its revision.
+    expect(g?.trouble?.actions[0]).toMatchObject({ label: "Get the file", target: expect.stringMatching(/^https:\/\/huggingface\.co\/Kijai\/MiniMax-H3-experimental\/resolve\/[0-9a-f]{40}\/minimax_h3_video_vae_int8_convrot\.safetensors$/) });
+    // ComfyUI's own words stay in the details line.
+    expect(g?.trouble?.details).toBe(`VAELoader · ${LIVE}`);
+    // It isn't sent again by itself: waiting can't mend a file.
+    expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+    expect(ownRunNote(g!.id)).toMatchObject({ cause: "gpu-model-file", stage: "poll" });
+  });
+
+  it("a file its ComfyUI doesn't have: add it, then run", async () => {
+    fake.opts.answer = failedWith("12", "UNETLoader", "[Errno 2] No such file or directory: '/workspace/ComfyUI/models/diffusion_models/minimax_h3_fast_fp8_scaled.safetensors'");
+    const g = await settle(await startRun());
+    expect(g?.error).toBe("Your GPU doesn't have the model file minimax_h3_fast_fp8_scaled.safetensors. Add it, then run.");
+    expect(g?.trouble?.cause).toBe("gpu-model-file");
+    expect(kinds(g?.trouble)).not.toContain("retry");
+  });
+
+  it("a file outside the workflow's list that its loader doesn't list: refused before it runs, named", async () => {
+    const file = "my_own_vae_v2.safetensors";
+    fake.opts.answer = (m, p) =>
+      m === "POST" && p === "/prompt"
+        ? {
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({
+              error: { type: "prompt_outputs_failed_validation", message: "Prompt outputs failed validation" },
+              node_errors: { "14": { class_type: "VAELoader", errors: [{ type: "value_not_in_list", message: "Value not in list", details: `vae_name: '${file}' not in ['ae.safetensors']`, extra_info: { input_name: "vae_name", received_value: file } }] } },
+            }),
+          }
+        : undefined;
+    const g = await settle(await startRun());
+    expect(g?.status).toBe("failed");
+    expect(g?.error).toBe(`Your GPU doesn't have the model file ${file}. Add it, then run.`);
+    expect(g?.trouble?.cause).toBe("gpu-model-file");
+    expect(kinds(g?.trouble)).not.toContain("retry");
+    expect(g?.trouble?.details).toMatch(/^VAELoader · Value not in list: vae_name: 'my_own_vae_v2\.safetensors' not in/);
+  });
+
+  it("another node with the same words keeps the add-on's words and Retry", async () => {
+    fake.opts.answer = failedWith("20", "KSampler", LIVE);
+    const g = await settle(await startRun());
+    expect(g?.trouble?.cause).toBe("gpu-job-error");
+    expect(g?.error).toBe("Your GPU hit a problem while making this. Press Retry, or update your add-ons.");
+  });
+});

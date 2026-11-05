@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { CreditCard, ExternalLink, KeyRound, Loader2, Minimize2, Monitor, Play, RefreshCw, RotateCcw, Settings2, Shuffle, Stethoscope } from "lucide-react";
+import { CreditCard, Download, ExternalLink, KeyRound, Loader2, Minimize2, Monitor, Play, RefreshCw, RotateCcw, Settings2, Shuffle, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -52,12 +52,15 @@ const ICONS: Record<TroubleActionKind, typeof Play> = {
   "use-computer": Monitor,
   "send-smaller": Minimize2,
   "try-smaller": Minimize2,
+  "get-file": Download,
 };
 
 /** The first button stands out (the one most likely to help); the rest are quieter. One line each, cut short when narrow. */
 const PILL = "inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap";
 const MAIN = "bg-highlight text-highlight-foreground hover:opacity-90";
 const QUIET = "bg-secondary hover:bg-accent";
+/** A link that leaves Fuobe (a model file's download): https only. */
+const HTTPS = /^https:\/\/[^\s"'<>]+$/i;
 
 export interface TroubleHandlers {
   onRetry?: () => void;
@@ -76,7 +79,7 @@ export interface TroubleHandlers {
  * When some buttons must go (a small tile), the ones that help least go first: Settings (Check my GPU leads there too),
  * Pair with a code, then the rest. The first button (the one most likely to help) always stays, and the order is kept.
  */
-const DROP_FIRST: TroubleActionKind[] = ["gpu-settings", "pair", "use-computer", "pick-model", "retry", "check-gpu", "key-settings", "try-smaller", "send-smaller", "add-credit", "run-with-key", "start-gpu"];
+const DROP_FIRST: TroubleActionKind[] = ["gpu-settings", "pair", "use-computer", "pick-model", "retry", "check-gpu", "key-settings", "try-smaller", "send-smaller", "add-credit", "run-with-key", "get-file", "start-gpu"];
 
 export function fitActions(actions: TroubleAction[], max?: number): TroubleAction[] {
   if (!max || actions.length <= max) return actions;
@@ -136,6 +139,8 @@ export function TroubleActions({
     if (a.kind === "use-computer") return !!handlers.onUseComputer;
     if (a.kind === "send-smaller") return !!handlers.onSendSmaller;
     if (a.kind === "try-smaller") return !!handlers.onTrySmaller;
+    // Where a model file downloads from: only an https link.
+    if (a.kind === "get-file") return !!a.target && HTTPS.test(a.target);
     // On a tile, Check my GPU leads to Settings when that is what helps: one button fewer.
     if (compact && a.kind === "gpu-settings" && actions.some((x) => x.kind === "check-gpu") && a.label.startsWith("Open Settings")) return false;
     return true;
@@ -177,7 +182,7 @@ export function TroubleActions({
         const cls = cn(PILL, i === 0 && a.kind !== "retry" ? MAIN : QUIET);
         const words = <span className="truncate">{compact ? shortLabel(a) : a.label}</span>;
         const stop = (e: React.MouseEvent) => e.stopPropagation();
-        if ((a.kind === "start-gpu" || a.kind === "add-credit") && a.target) {
+        if ((a.kind === "start-gpu" || a.kind === "add-credit" || a.kind === "get-file") && a.target) {
           return (
             <a key={a.kind} href={a.target} target="_blank" rel="noopener noreferrer" onClick={stop} title={a.label} className={cls}>
               <Icon className="size-3 shrink-0" /> {words}

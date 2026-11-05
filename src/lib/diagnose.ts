@@ -41,6 +41,8 @@ export type TroubleCause =
   | "gpu-out-of-memory"
   | "gpu-stopped-run"
   | "gpu-job-error"
+  /** A model file a loader can't read (damaged, cut short) or doesn't have: words name the file. */
+  | "gpu-model-file"
   | "gpu-restarted"
   | "gpu-moved"
   | "gpu-went-away"
@@ -81,12 +83,14 @@ export type TroubleActionKind =
   /** Send a smaller copy of the file the GPU's address refused as too big (a run made again with it, on a click). */
   | "send-smaller"
   /** Run it again one size or length smaller (out of memory), on a click. */
-  | "try-smaller";
+  | "try-smaller"
+  /** Open where a model file downloads from (an https link: the file, or a gated file's Hugging Face page). */
+  | "get-file";
 
 export interface TroubleAction {
   kind: TroubleActionKind;
   label: string;
-  /** A link (start-gpu, add-credit, gpu-settings, key-settings, pair) or the provider (run-with-key). */
+  /** A link (start-gpu, add-credit, gpu-settings, key-settings, pair, get-file) or the provider (run-with-key). */
   target?: string;
   /** run-with-key: the model that runs this tool on that key (its cloud version), and its operation there. */
   modelId?: string;
@@ -211,6 +215,7 @@ const A = {
   smaller: (): TroubleAction => ({ kind: "send-smaller", label: "Send a smaller copy" }),
   trySmaller: (): TroubleAction => ({ kind: "try-smaller", label: "Try one size smaller" }),
   connectGpu: (): TroubleAction => ({ kind: "gpu-settings", label: "Connect your GPU", target: "/settings#your-gpu" }),
+  getFile: (url: string): TroubleAction => ({ kind: "get-file", label: "Get the file", target: url }),
 };
 
 /**
@@ -539,9 +544,114 @@ export const isOutOfMemoryText = (s: string) => OOM.test(s);
 
 const minutes = (n: number) => `${n} minute${n === 1 ? "" : "s"}`;
 
+// ---------------------------------------------------------------------------
+// A model file a loader can't read
+
+/** The files a loader reads its model from. */
+export const MODEL_FILE = /\.(safetensors|ckpt|pt|pth|bin|gguf|sft)$/i;
+const MODEL_FILE_IN_TEXT = /[^\s'"`,:;()[\]{}<>|\\/]{1,200}\.(?:safetensors|ckpt|pt|pth|bin|gguf|sft)\b/gi;
+/**
+ * A node that loads a model file: VAELoader, UNETLoader, CheckpointLoaderSimple, CLIPLoader, DualCLIPLoader, LoraLoader
+ * and LoraLoaderModelOnly, ControlNetLoader, UpscaleModelLoader, a GGUF loader.
+ */
+export const isLoaderNode = (nodeType: string | undefined): boolean => !!nodeType && /Loader/.test(nodeType);
+/** A file that is there but can't be read: damaged, cut short, a web page saved under its name, or another format. */
+const UNREADABLE_FILE =
+  /['"]?utf-?8['"]? codec can'?t decode|invalid load key|Error while deserializing header|HeaderTooLarge|SafetensorError|incomplete metadata|MetadataIncompleteBuffer|unexpected EOF|PytorchStreamReader failed|not a zip file|failed finding central directory/i;
+/**
+ * A file that isn't there: the system's words, ComfyUI's own ("Model in folder 'vae' with filename '…' not found"), or
+ * what an older ComfyUI says when a loader opens a name its folder doesn't have (no path to open).
+ */
+const MISSING_FILE = /No such file or directory|FileNotFoundError|\[Errno 2\]|Model in folder .{0,80} with filename .{0,400} not found|expected str, bytes or os\.PathLike object, not NoneType/i;
+
+/**
+ * What a node's error says about its model file: it can't be read ("damaged"), it isn't there ("missing"), or nothing
+ * (another problem, or a node that loads no model file).
+ */
+export function modelFileProblem(nodeType: string | undefined, message: string | undefined): "damaged" | "missing" | null {
+  if (!isLoaderNode(nodeType)) return null;
+  const m = String(message ?? "").slice(0, 4096);
+  if (MISSING_FILE.test(m) || (/not in list/i.test(m) && new RegExp(MODEL_FILE_IN_TEXT.source, "i").test(m))) return "missing";
+  return UNREADABLE_FILE.test(m) ? "damaged" : null;
+}
+
+/** A file name as the person's ComfyUI lists it, safe to show: one line, short. */
+const shownFile = (name: string) =>
+  [...name]
+    .filter((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127)
+    .join("")
+    .trim()
+    .slice(0, 160);
+
+/** The model files among a node's inputs (a value that names a file; links to other nodes are left out). */
+function fileValues(inputs: unknown): string[] {
+  if (!inputs || typeof inputs !== "object") return [];
+  const out: string[] = [];
+  for (const v of Object.values(inputs as Record<string, unknown>)) {
+    // ComfyUI's current_inputs keeps each value in a list.
+    for (const x of Array.isArray(v) ? v : [v]) if (typeof x === "string" && MODEL_FILE.test(x.trim())) out.push(x.trim());
+  }
+  return out;
+}
+
+/** The last part of a file's name ("vae/x.safetensors" and "vae\\x.safetensors" are "x.safetensors"). */
+const baseOf = (name: string) => name.split(/[\\/]/).pop() ?? name;
+
+/**
+ * The model file a loader that failed was reading: its inputs in the graph that was sent (by the error's node id), else
+ * the inputs ComfyUI reported with the error, else every node of that class in the graph, else a file the error names.
+ * One the error names wins; when it can't be told which, all of them (at most three).
+ */
+export function loaderFiles(err: { node_id?: unknown; node_type?: unknown; exception_message?: unknown; current_inputs?: unknown }, graph?: unknown): string[] {
+  const g = graph && typeof graph === "object" ? (graph as Record<string, { class_type?: unknown; inputs?: unknown } | undefined>) : undefined;
+  const id = typeof err.node_id === "string" || typeof err.node_id === "number" ? String(err.node_id) : undefined;
+  const said = String(err.exception_message ?? "").slice(0, 4096);
+  const node = id ? g?.[id] : undefined;
+  let found = node ? fileValues(node.inputs) : [];
+  if (!found.length) found = fileValues(err.current_inputs);
+  if (!found.length && g && typeof err.node_type === "string") found = Object.values(g).flatMap((n) => (n && n.class_type === err.node_type ? fileValues(n.inputs) : []));
+  found = [...new Set(found.map(shownFile).filter(Boolean))];
+  const named = found.filter((f) => said.includes(baseOf(f)));
+  if (named.length) return named.slice(0, 3);
+  if (found.length) return found.slice(0, 3);
+  const inText = [...new Set((said.match(MODEL_FILE_IN_TEXT) ?? []).map(shownFile).filter(Boolean))];
+  return inText.slice(0, 1);
+}
+
+/** A model file a loader can't read, or doesn't have: the file named, where to get it again, never Retry (it can't help). */
+function modelFileTrouble(problem: "damaged" | "missing", e: { nodeType?: string; message?: string; files?: string[]; fileUrl?: string }, place: GpuPlace): Diagnosis {
+  const files = (e.files ?? []).map(shownFile).filter(Boolean).slice(0, 3);
+  const named = files.join(" or ");
+  const words =
+    problem === "missing"
+      ? named
+        ? `Your GPU doesn't have the model file ${named}. Add it, then run.`
+        : "Your GPU doesn't have a model file this needs. Add it, then run."
+      : named
+        ? `A model file on your GPU can't be read: ${named}. It's damaged or didn't finish downloading. Download it again, then run.`
+        : "A model file on your GPU can't be read. It's damaged or didn't finish downloading. Download it again, then run.";
+  const url = e.fileUrl && /^https:\/\/[^\s"'<>]+$/i.test(e.fileUrl) ? e.fileUrl : undefined;
+  const said = cleanDetails(withoutAddress(String(e.message ?? ""), place.kind === "link" ? place.url : undefined), 160);
+  return {
+    cause: "gpu-model-file",
+    words,
+    details: joinDetails(e.nodeType, said),
+    // Check my GPU asks a GPU at a web address (this computer and a paired ComfyUI have their own notes).
+    actions: [...(url ? [A.getFile(url)] : []), ...(place.kind === "link" ? [A.check()] : [])],
+    retryable: false,
+  };
+}
+
 /** A job that failed on the person's own GPU while it ran: its own words for the details line, plain words above. */
 export type GpuJobTrouble =
-  | { kind: "error"; nodeType?: string; message?: string }
+  | {
+      kind: "error";
+      nodeType?: string;
+      message?: string;
+      /** A loader's model file (loaderFiles), and where it downloads from (https), for a file it can't read or doesn't have. */
+      files?: string[];
+      fileUrl?: string;
+    }
   | { kind: "interrupted" }
   | { kind: "lost"; resent?: boolean }
   | { kind: "moved" }
@@ -558,6 +668,8 @@ export function diagnoseGpuJob(e: GpuJobTrouble, place: GpuPlace): Diagnosis {
     case "error": {
       const msg = (e.message ?? "").trim();
       if (isOutOfMemoryText(msg)) return { cause: "gpu-out-of-memory", words: OUT_OF_MEMORY_WORDS, details: joinDetails(e.nodeType, cleanDetails(msg, 120)), actions: [A.trySmaller(), A.retry(), A.pick()], retryable: false };
+      const file = modelFileProblem(e.nodeType, msg);
+      if (file) return modelFileTrouble(file, e, place);
       return {
         cause: "gpu-job-error",
         words: "Your GPU hit a problem while making this. Press Retry, or update your add-ons.",

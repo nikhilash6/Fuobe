@@ -19,7 +19,7 @@ const { failedRunHandlers, movingRun, reuseHref, studioHrefFor, waitingRunHandle
 const { RunTroubleActions } = await import("@/components/gpu/run-trouble-actions");
 const { StatusCover } = await import("@/components/library/asset-card");
 type RunTroubleDeps = import("@/lib/run-trouble").RunTroubleDeps;
-const { diagnoseGpu, RUNPOD_CONSOLE_URL, troubleOf, withKeyAction, withOfferAfterFirst } = await import("@/lib/diagnose");
+const { diagnoseGpu, diagnoseGpuJob, RUNPOD_CONSOLE_URL, troubleOf, withKeyAction, withOfferAfterFirst } = await import("@/lib/diagnose");
 const { getModel, getPreset } = await import("@/lib/catalog");
 const { TroubleActions, TroubleDetails, autoCheckIn, fitActions } = await import("@/components/gpu/trouble");
 const { FailedTile } = await import("@/components/studio/feed");
@@ -137,6 +137,29 @@ describe("the buttons", () => {
     expect(html).toContain("Start your pod");
     expect(html).toContain("Run with your fal.ai key");
     expect(html).toContain(end.words.replaceAll("'", "&#x27;"));
+  });
+
+  it("a model file its GPU can't read: the tile and the Library card name it, with Get the file (a new tab) and Check my GPU", () => {
+    const VAE = "minimax_h3_video_vae_int8_convrot.safetensors";
+    const url = "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors";
+    const d = diagnoseGpuJob({ kind: "error", nodeType: "VAELoader", message: "'utf-8' codec can't decode byte 0xf7 in position 0: invalid start byte", files: [VAE], fileUrl: url }, { kind: "link", url: "https://quiet-river.trycloudflare.com" });
+    const g = { id: "g-vae", status: "failed", error: d.words, trouble: troubleOf(d), outputs: [], createdAt: Date.now(), request: { feature: "video", modelId: "oss-minimax-h3", prompt: "" }, feature: "video", kind: "video", modelId: "oss-minimax-h3", op: "t2v" };
+    for (const html of [render(createElement(FailedTile, { g: g as never, ratio: 16 / 9, onRetry: () => {} })), render(createElement(StatusCover, { g: g as never, actionable: true }))]) {
+      expect(html).toContain(VAE);
+      expect(html).toContain("Download it again, then run.");
+      expect(html).toContain(`href="${url}"`);
+      expect(html).toContain('target="_blank"');
+      expect(html).toContain('rel="noopener noreferrer"');
+      expect(html).toContain("Get the file");
+      expect(html).toContain("Check my GPU");
+      expect(html).toContain("VAELoader · &#x27;utf-8&#x27; codec");
+    }
+    // Get the file leads (the button that helps most).
+    expect(fitActions(d.actions, 1).map((a) => a.kind)).toEqual(["get-file"]);
+    // Only an https link is drawn.
+    const plainHttp = render(createElement(TroubleActions, { actions: [{ kind: "get-file", label: "Get the file", target: "http://example.com/x.safetensors" }, { kind: "check-gpu", label: "Check my GPU" }] }));
+    expect(plainHttp).not.toContain("Get the file");
+    expect(render(createElement(TroubleActions, { actions: [{ kind: "get-file", label: "Get the file", target: "javascript:alert(1)" }] }))).toBe("");
   });
 
   it("the details line is small and only there when there is something to say", () => {
