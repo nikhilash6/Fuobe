@@ -352,7 +352,9 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
   });
 
   it("a waiting task whose ticket was made for the catalog before an update gets its ticket made again, with its place kept", async () => {
-    const { refreshTickets } = await import("@/server/computer/ticket-refresh");
+    const { noteCatalogProcess, processStart, refreshTickets } = await import("@/server/computer/ticket-refresh");
+    // The app process before the update said its catalog version when it ran.
+    noteCatalogProcess(OTHER, processStart() - 60_000, Date.now() - 60_000);
     const w = addWorker();
     beat(w);
     const mine = await accountTask();
@@ -418,6 +420,30 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
     }
   });
 
+  it("an older process that serves a claim before the newer one has served any changes nothing, and never touches a version it doesn't know", async () => {
+    const { noteCatalogProcess, refreshTickets } = await import("@/server/computer/ticket-refresh");
+    db().prepare("DELETE FROM catalog_processes").run();
+    try {
+      const w = addWorker();
+      beat(w);
+      // A run the newer process queued, whose ticket names a workflow only the newer catalog has.
+      const newer = await accountTask();
+      db().prepare("UPDATE relay_tasks SET ticket_json = ? WHERE id = ?").run(JSON.stringify({ ...JSON.parse(row(newer.id).ticket_json!), workflowId: "a-workflow-only-the-new-catalog-has" }), newer.id);
+      const was = row(newer.id);
+      const t0 = Date.now();
+      // The older process (another catalog, started a minute before) serves a worker's claim first: the newer version is
+      // one it doesn't know, so its ticket stays as it is and its run goes on.
+      expect(await refreshTickets({ version: OTHER, startedAt: t0 - 60_000, now: t0 })).toEqual({ refreshed: 0, ended: 0 });
+      expect(row(newer.id)).toMatchObject({ state: "waiting", ticket_json: was.ticket_json, needs_json: was.needs_json });
+      // Once the newer process has said it runs (at its start and with its beat), the older one isn't the newest either.
+      noteCatalogProcess(VERSION, t0, t0 + 1000);
+      expect(await refreshTickets({ version: OTHER, startedAt: t0 - 60_000, now: t0 + 2000 })).toEqual({ refreshed: 0, ended: 0 });
+      expect(row(newer.id)).toMatchObject({ state: "waiting", ticket_json: was.ticket_json });
+    } finally {
+      db().prepare("DELETE FROM catalog_processes").run();
+    }
+  });
+
   it("a ticket made again for a new catalog gets the files its graph makes made again, and its lane and needs from the new catalog", async () => {
     const { refreshTickets } = await import("@/server/computer/ticket-refresh");
     db().prepare("DELETE FROM catalog_processes").run();
@@ -448,6 +474,9 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
         .prepare("UPDATE relay_tasks SET ticket_json = ?, needs_json = ?, lane = ? WHERE id = ?")
         .run(JSON.stringify(before), JSON.stringify({ workflowId: "palette-transfer-image", files: [], packs: [], minVramBytes: 0, catalogVersion: OTHER }), "small", id);
       expect(claim(w)).toBeNull();
+      // The app process before the update said its catalog version when it ran.
+      const { noteCatalogProcess, processStart } = await import("@/server/computer/ticket-refresh");
+      noteCatalogProcess(OTHER, processStart() - 60_000, Date.now() - 60_000);
       expect(await refreshTickets()).toEqual({ refreshed: 1, ended: 0 });
       const after = row(id);
       const next = JSON.parse(after.ticket_json!) as import("@/lib/job-ticket").JobTicket;

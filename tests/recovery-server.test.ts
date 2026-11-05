@@ -1564,6 +1564,18 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     return { app, token };
   }
 
+  it("each app process says its catalog version from its start, before it serves any worker's claim", async () => {
+    const version = catalogVersion()!;
+    const t0 = Date.now();
+    db().prepare("DELETE FROM catalog_processes").run();
+    // The other process's beat (every 5 s, from its start) says it again.
+    for (let i = 0; i < 100 && !db().prepare("SELECT 1 FROM catalog_processes WHERE version = ?").get(version); i++) await sleep(100);
+    const r = db().prepare("SELECT started_at, seen_at FROM catalog_processes WHERE version = ?").get(version) as { started_at: number; seen_at: number } | undefined;
+    expect(r, "the catalog version of the app processes").toBeTruthy();
+    expect(r!.seen_at).toBeGreaterThanOrEqual(t0);
+    expect(r!.started_at).toBeLessThanOrEqual(r!.seen_at);
+  });
+
   it("the other process serves the worker and a session: the same run, the same state", async () => {
     const w = standInWorker();
     const { id } = await pressRun();

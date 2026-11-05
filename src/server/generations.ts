@@ -128,7 +128,9 @@ import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
+import { catalogVersion } from "./computer/catalog-version";
 import { poolLane, queueOfGeneration } from "./computer/pool";
+import { noteCatalogProcess, processStart } from "./computer/ticket-refresh";
 import { runPreviewAt } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
@@ -3161,11 +3163,15 @@ declare global {
 
 const runnerToken = () => (globalThis.__fuobeRunnerToken ??= `${process.pid}:${nanoid(12)}`);
 
-/** Say that this app process still runs. */
+/**
+ * Say that this app process still runs, and which catalog version it makes job tickets for (ticket-refresh.ts: a newer
+ * process is known from its start, before it serves any worker's claim).
+ */
 function beat(now = Date.now()): void {
   db()
     .prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET seen_at = excluded.seen_at")
     .run(runnerToken(), now, now);
+  noteCatalogProcess(catalogVersion(), processStart(), now);
 }
 
 /**

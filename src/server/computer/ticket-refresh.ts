@@ -17,7 +17,10 @@ import { endTask, inputsOf, json, setTask, swapTaskInput, type TaskRow } from ".
  * allowed) ends its run in one plain sentence. Only waiting tasks: one a worker holds finishes with the ticket it has.
  *
  * Only forward: while a deploy's two app processes share the database, only the one started last (the newest version)
- * makes tickets again, and only it ever ends a run for it. The other leaves every ticket as it is.
+ * makes tickets again, and only it ever ends a run for it. The other leaves every ticket as it is. Each app process says
+ * its version and start in the database from its start, and again with its beat (noteCatalogProcess), so the newer one
+ * is known before it serves any claim. And a process remakes only the tickets of a version it knows to be older: one whose
+ * processes started before it, or have all stopped. A ticket of a version it doesn't know is never touched.
  */
 
 declare global {
@@ -27,8 +30,19 @@ declare global {
 /** When this app process started. */
 export const processStart = () => (globalThis.__fuobeProcessStart ??= Math.round(Date.now() - process.uptime() * 1000));
 
-/** An app process that said nothing for this long has stopped (each one says so at most a minute apart while workers claim). */
+/** An app process that said nothing for this long has stopped (each one says so with its beat, every few seconds). */
 const GONE_MS = 5 * 60_000;
+
+/**
+ * Say that an app process of this catalog version runs (started at `startedAt`): at its start and with its beat
+ * (generations.ts keepBeating), and before it remakes tickets.
+ */
+export function noteCatalogProcess(version: string | null = catalogVersion(), startedAt = processStart(), now = Date.now()): void {
+  if (!version) return;
+  db()
+    .prepare("INSERT INTO catalog_processes (version, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(version) DO UPDATE SET started_at = MAX(started_at, excluded.started_at), seen_at = MAX(seen_at, excluded.seen_at)")
+    .run(version, startedAt, now);
+}
 
 /**
  * Say that a process of this catalog version runs (started at `startedAt`), and whether it is the newest: of the app
@@ -36,20 +50,28 @@ const GONE_MS = 5 * 60_000;
  * the newest from its start; so is a rollback's.
  */
 export function newestCatalog(version: string, startedAt = processStart(), now = Date.now()): boolean {
-  const d = db();
-  d.prepare("INSERT INTO catalog_processes (version, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(version) DO UPDATE SET started_at = MAX(started_at, excluded.started_at), seen_at = MAX(seen_at, excluded.seen_at)").run(version, startedAt, now);
-  const later = d.prepare("SELECT 1 FROM catalog_processes WHERE version != ? AND seen_at > ? AND started_at > ? LIMIT 1").get(version, now - GONE_MS, startedAt);
+  noteCatalogProcess(version, startedAt, now);
+  const later = db().prepare("SELECT 1 FROM catalog_processes WHERE version != ? AND seen_at > ? AND started_at > ? LIMIT 1").get(version, now - GONE_MS, startedAt);
   return !later;
 }
+
+/**
+ * SQL: the catalog versions a process of version @version started at @startedAt may remake tickets of. Only versions it
+ * knows (their processes said so) and that are older than it: started before it, or every process of it has stopped.
+ */
+const OLDER_VERSIONS = "SELECT version FROM catalog_processes WHERE version != @version AND (started_at < @startedAt OR seen_at <= @gone)";
 
 export async function refreshTickets(o: { version?: string; startedAt?: number; now?: number } = {}): Promise<{ refreshed: number; ended: number }> {
   const version = o.version ?? catalogVersion();
   if (!version) return { refreshed: 0, ended: 0 };
+  const startedAt = o.startedAt ?? processStart();
+  const now = o.now ?? Date.now();
   // A process of an older version (a deploy's overlap) leaves every ticket as it is.
-  if (!newestCatalog(version, o.startedAt ?? processStart(), o.now ?? Date.now())) return { refreshed: 0, ended: 0 };
+  if (!newestCatalog(version, startedAt, now)) return { refreshed: 0, ended: 0 };
+  // Only tickets of a version known to be older: never one this process doesn't know (it may be newer).
   const rows = db()
-    .prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND ticket_json IS NOT NULL AND json_extract(ticket_json, '$.catalogVersion') IS NOT ?")
-    .all(version) as TaskRow[];
+    .prepare(`SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND ticket_json IS NOT NULL AND json_extract(ticket_json, '$.catalogVersion') IN (${OLDER_VERSIONS})`)
+    .all({ version, startedAt, gone: now - GONE_MS }) as TaskRow[];
   const catalog = { has: (id: string) => loadManifest().workflows.some((w) => w.id === id), get: getWorkflow };
   let refreshed = 0;
   let ended = 0;
