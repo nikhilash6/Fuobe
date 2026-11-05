@@ -252,6 +252,38 @@ describe("a run's buttons, in a studio and in the Library", () => {
   });
 });
 
+describe("Settings → Your GPU: a local address", () => {
+  it("offers Use this computer where this browser can reach its ComfyUI, and elsewhere says why, with Pair with a code", async () => {
+    const { LocalAddressWays, USE_COMPUTER_ELSEWHERE } = await import("@/components/gpu/your-gpu");
+    const button = '<span class="truncate">Use this computer</span>';
+    const ok = render(createElement(LocalAddressWays, { support: "ok", onUseComputer: () => {} }));
+    expect(ok).toContain(button);
+    expect(ok).toContain("Pair with a code");
+    for (const why of ["safari", "phone", "http"] as const) {
+      const html = render(createElement(LocalAddressWays, { support: why, onUseComputer: () => {} }));
+      expect(html).not.toContain(button);
+      expect(html).toContain(USE_COMPUTER_ELSEWHERE[why].replaceAll("'", "&#x27;"));
+      expect(html).toContain("Pair with a code");
+    }
+    expect(USE_COMPUTER_ELSEWHERE.safari).toBe("Use this computer works in Chrome, Edge or Firefox. Safari doesn't let a website reach programs on your Mac.");
+  });
+
+  it("Use this computer sends the account's runs to the ComfyUI on this computer", async () => {
+    const { chooseThisComputer } = await import("@/components/gpu/your-gpu");
+    const calls: { url: string; method?: string; body?: unknown }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method, body: init?.body });
+      return Response.json({ gpu: { mode: "computer" } });
+    });
+    try {
+      expect(await chooseThisComputer()).toEqual({ gpu: { mode: "computer" } });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(calls).toEqual([{ url: "/api/account/gpu", method: "PUT", body: JSON.stringify({ mode: "computer" }) }]);
+  });
+});
+
 describe("Try one size smaller", () => {
   it("steps the size down first, then the length, and offers nothing when neither can", () => {
     const model = { options: { resolutions: ["480p", "720p", "1080p"], durations: [5, 10] }, defaults: { resolution: "1080p", duration: 10 } };

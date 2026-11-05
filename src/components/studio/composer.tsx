@@ -1781,7 +1781,7 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {emptyPayer && model && (
         <div role="note" className="mx-1 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
-          <p className="min-w-0 flex-1 basis-56">Your {CLOUD_KEY[emptyPayer].label} balance ran out on your last run. Add credit there, then run.</p>
+          <p className="min-w-0 flex-1 basis-56">Your {CLOUD_KEY[emptyPayer].label} balance is empty. Add credit there, then run.</p>
           <TroubleActions actions={[{ kind: "add-credit", label: `Add credit on ${CLOUD_KEY[emptyPayer].label}`, target: BILLING_URL[emptyPayer] }]} />
         </div>
       )}

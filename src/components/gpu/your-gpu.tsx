@@ -51,6 +51,29 @@ async function call<T>(method: string, body?: unknown, test = false): Promise<T>
   return j;
 }
 
+/** "Use this computer": the account's runs go to the ComfyUI on this computer (its Fuobe tab runs them). */
+export const chooseThisComputer = () => call<GpuState>("PUT", { mode: "computer" });
+
+/** Why this browser can't use the ComfyUI on its computer, said where Use this computer would be. */
+export const USE_COMPUTER_ELSEWHERE: Record<Exclude<ReturnType<typeof useComputerSupport>, "ok">, string> = {
+  safari: "Use this computer works in Chrome, Edge or Firefox. Safari doesn't let a website reach programs on your Mac.",
+  phone: "Use this computer works in a browser on your computer, not on a phone or tablet.",
+  http: "Use this computer needs a secure page, and your browser marks this one as not secure.",
+};
+
+/**
+ * Under a local address: Use this computer where this browser can reach its ComfyUI (else why not, in a line), and Pair
+ * with a code.
+ */
+export function LocalAddressWays({ support, onUseComputer }: { support: ReturnType<typeof useComputerSupport>; onUseComputer: () => void | Promise<unknown> }) {
+  return (
+    <>
+      <TroubleActions actions={diagnoseAddress("local").actions} handlers={support === "ok" ? { onUseComputer } : {}} />
+      {support !== "ok" && <p className="text-[12px] text-muted-foreground">{USE_COMPUTER_ELSEWHERE[support]}</p>}
+    </>
+  );
+}
+
 /** A check that didn't pass, as shown under the field: its words, details and buttons, and when it checks again by itself. */
 interface Failed {
   words: string;
@@ -161,7 +184,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   // "Use this computer": runs go to the ComfyUI on this computer (its Fuobe tab runs them), not a web address.
   const useComputer = async () => {
     try {
-      await call("PUT", { mode: "computer" });
+      await chooseThisComputer();
       void qc.invalidateQueries({ queryKey: ["account-gpu"] });
       linked();
       toast.success("Your runs go to the ComfyUI on this computer now. Keep a Fuobe tab open here.");
@@ -247,7 +270,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
             <div className="space-y-1.5">
               <p className="text-[12px] text-destructive">That address only works on your own computer or network. Paste the one cloudflared shows, ending in trycloudflare.com.</p>
               {/* Or the ways that need no web address: the ComfyUI on this computer (where this browser can reach it), or a code. */}
-              <TroubleActions actions={diagnoseAddress("local").actions} handlers={support === "ok" ? { onUseComputer: useComputer } : {}} />
+              <LocalAddressWays support={support} onUseComputer={useComputer} />
             </div>
           )}
           {note && <p className="text-[12px] text-muted-foreground">{note}</p>}
