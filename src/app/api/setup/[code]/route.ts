@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { setupCode } from "@/lib/ai-setup/code";
-import { BAD_CODE, NOT_ACTIVE, notActiveText, toPublic, toText } from "@/lib/ai-setup/status";
+import { BAD_CODE, NOT_ACTIVE, notActiveBusy, notActiveText, toPublic, toText } from "@/lib/ai-setup/status";
 import { freshPart, readSetup, setupOf, viewOf } from "@/server/ai-setup";
 import { answer, guessBudget, inMinutes } from "@/server/ai-setup-http";
 import { hit } from "@/server/rate";
@@ -22,8 +22,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/setup/[code]
   if (!setup) {
     const r = guessBudget("setup:miss", request.headers, 10, 600, TEN_MINUTES);
     if (!r.ok) {
-      const error = `Too many codes that aren't active. Try again in ${inMinutes(r.retryAfterS)}.`;
-      return answer(request, 429, { ...NOT_ACTIVE, error, retryAfterS: r.retryAfterS }, `${error}\n`, { "Retry-After": String(r.retryAfterS) });
+      // Still what to do: the code Fuobe shows now works at once; the wait is only for a person with no new code.
+      const busy = notActiveBusy(inMinutes(r.retryAfterS));
+      return answer(request, 429, { ...busy.json, retryAfterS: r.retryAfterS }, busy.text, { "Retry-After": String(r.retryAfterS) });
     }
     return answer(request, 404, { ...NOT_ACTIVE }, notActiveText());
   }

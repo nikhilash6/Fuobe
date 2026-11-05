@@ -311,6 +311,28 @@ describe("the public status", () => {
     expect((await read(body.code)).status).toBe(200);
   });
 
+  it("still says what to do past the budget for codes that aren't active: ask for the code Fuobe shows now", async () => {
+    const at = (q = "") => read("ZZZZ-ZZZZ-ZZZZ", q, { "x-forwarded-for": "198.51.100.9" });
+    for (let i = 0; i < 10; i++) expect((await at()).status).toBe(404);
+    const text = await at();
+    expect(text.status).toBe(429);
+    const wait = Number(text.headers.get("retry-after"));
+    expect(wait).toBeGreaterThan(0);
+    expect(text.headers.get("content-type")).toMatch(/^text\/plain/);
+    const words = await text.text();
+    expect(words).toMatch(/^[\x0a\x20-\x7e]*$/);
+    expect(words).toContain("Ask the person for the code Fuobe shows now.");
+    expect(words).toContain("A code that is active works at once.");
+    expect(words).toMatch(/only if the person has no new code, wait \d+ (s|min), then try again\./);
+    const json = await (await at("?format=json")).json();
+    expect(json).toMatchObject({ fuobe_setup: 1, state: "not_active", next: { id: "new-code" }, retryAfterS: expect.any(Number) });
+    expect(json.next.say).toContain("Ask the person for the code Fuobe shows now.");
+    expect(json.error).toContain("Ask the person for the code Fuobe shows now.");
+    // The code Fuobe shows now works at once: an active code never uses this budget.
+    const { body } = await create(a);
+    expect((await read(body.code, "", { "x-forwarded-for": "198.51.100.9" })).status).toBe(200);
+  });
+
   it("limits guesses per visitor behind a trusted proxy", async () => {
     process.env.FUOBE_TRUST_PROXY = "1";
     try {

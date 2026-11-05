@@ -1046,42 +1046,24 @@ function AddressForm({
         Keep the address to yourself. Paste it here, not in your AI&apos;s chat.{" "}
         {!showToken && <Quiet onClick={() => setWithToken(true)}>Has a password or token?</Quiet>}
       </p>
-      {phone && <OnComputer site={site} host={host} />}
+      {phone && <OnComputer host={host} />}
     </div>
   );
 }
 
 /**
- * On a phone: the address is on the computer's clipboard, so it goes into Fuobe there. The link opens this box on the
- * computer, under the same code once the person signs in with the same account.
+ * On a phone: the address is on the computer's clipboard, so it goes into Fuobe there: the page that opens this box on
+ * the computer, under the same code once the person logs in with the same account. The button that sends that page is
+ * the one at the top of the panel (PhoneSend), never a second one here.
  */
-function OnComputer({ site, host }: { site: string; host: string }) {
+function OnComputer({ host }: { host: string }) {
   const path = aiSetupHref("address");
-  const link = `${site}${path}`;
-  const share = typeof navigator !== "undefined" && typeof navigator.share === "function";
   return (
-    <div className="space-y-1.5 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
-      <p>
-        The address goes on your computer&apos;s clipboard, not your phone&apos;s. On that computer, open <span className="break-all font-medium">{host}{path}</span> and sign in with this
-        account. This box is there, with the same setup code. Paste the address in it. If your phone shares the computer&apos;s clipboard, you can paste it here instead.
-      </p>
-      <Button
-        size="sm"
-        variant="secondary"
-        className="h-9"
-        onClick={async () => {
-          if (share) {
-            try {
-              await navigator.share({ title: "Paste my ComfyUI's web address in Fuobe", url: link });
-              return;
-            } catch {}
-          }
-          await copyWithToast(link, "Link copied");
-        }}
-      >
-        <Send /> {share ? "Send this link to my computer" : "Copy this link for my computer"}
-      </Button>
-    </div>
+    <p className="rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
+      The address goes on your computer&apos;s clipboard, not your phone&apos;s. On that computer, open <span className="break-all font-medium">{host}{path}</span> and log in with
+      this account, or press {sendLabel(canShare())} at the top. This box is there, with the same setup code. Paste the address in it. If your phone shares the
+      computer&apos;s clipboard, you can paste it here instead.
+    </p>
   );
 }
 
@@ -1108,26 +1090,38 @@ function ModelDownload({ model, gbTenths, os, onCheck, checking }: { model: Firs
   );
 }
 
-/** On a phone: the steps run on the computer. Send this page there, or use an AI app here with the computer's system picked. */
+/** Can this browser hand a link to another app (the share sheet)? Else the link is copied. */
+const canShare = () => typeof navigator !== "undefined" && typeof navigator.share === "function";
+/** The name of the phone's one button that sends the setup to the computer. */
+const sendLabel = (share: boolean) => (share ? "Send to my computer" : "Copy link for my computer");
+
+/**
+ * On a phone: the steps run on the computer. One button sends this setup there on the way picked here (a web address
+ * opens at the box for it, Fuobe Connect at its checks), under the same code once the person logs in with this account.
+ * Or an AI app here, with the computer's system picked.
+ */
 function PhoneSend({ site, os, way, onOs }: { site: string; os: Os | null; way: Way; onOs: (os: Os) => void }) {
-  const link = `${site}/connect?setup=ai`;
-  const share = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const link = `${site}${aiSetupHref(way)}`;
+  const share = canShare();
   return (
     <div className="space-y-3">
-      <Button
-        className="h-11 w-full"
-        onClick={async () => {
-          if (share) {
-            try {
-              await navigator.share({ title: "Set up Fuobe on my computer", url: link });
-              return;
-            } catch {}
-          }
-          await copyWithToast(link, "Link copied");
-        }}
-      >
-        <Send /> {share ? "Send to my computer" : "Copy link for my computer"}
-      </Button>
+      <div className="space-y-1.5">
+        <Button
+          className="h-11 w-full"
+          onClick={async () => {
+            if (share) {
+              try {
+                await navigator.share({ title: "Set up Fuobe on my computer", url: link });
+                return;
+              } catch {}
+            }
+            await copyWithToast(link, "Link copied");
+          }}
+        >
+          <Send /> {sendLabel(share)}
+        </Button>
+        <p className="text-[12px] text-muted-foreground">It opens this setup on your computer. Log in there with this account.</p>
+      </div>
       <div className="space-y-1.5">
         <p className="text-[12px] text-muted-foreground">
           Or start with an AI app on this phone. The commands run on your computer.{" "}

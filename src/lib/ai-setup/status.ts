@@ -117,5 +117,15 @@ export const NOT_ACTIVE = {
 
 export const notActiveText = () => `Fuobe setup status: ${NOT_ACTIVE.next.say}\n`;
 
+/**
+ * A code that isn't active, after too many of them from one place (429): the same next step, because a code that is
+ * active works at once. The wait (`wait`, like "7 min") is only for when the person has no new code.
+ */
+export function notActiveBusy(wait: string) {
+  const say = `${NOT_ACTIVE.next.say} A code that is active works at once. Too many codes that are not active were read from here: only if the person has no new code, wait ${wait}, then try again.`;
+  const error = `Too many codes that are not active. Ask the person for the code Fuobe shows now. With no new code, try again in ${wait}.`;
+  return { json: { ...NOT_ACTIVE, next: { ...NOT_ACTIVE.next, say }, error }, text: `Fuobe setup status: ${say}\n` };
+}
+
 /** A code in the wrong shape. */
 export const BAD_CODE = "A setup code has 12 letters and digits, like ABCD-EFGH-JKMN.";

@@ -482,7 +482,9 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
 
 An account can let its own AI (ChatGPT, Claude, or a coding agent such as Claude Code, Codex or
 Gemini CLI) do the setup: **Set it up with my AI** on the Connect your GPU card, in Settings → Your
-GPU and at `/connect?setup=ai`. A guest signs up first and comes back there. The panel picks the
+GPU and at `/connect?setup=ai`. A guest who opens that link gets **Log in** first, for the account it
+started with (most often on a phone), then **Sign up free**. Both come back to the same link, its
+way included. The panel picks the
 way for the browser (Fuobe Connect first while it is published, then this browser, or a web address
 on Safari, on a phone and on a page on plain http), gives the AI a short message with two links (the
 steps and the status), and ticks off each step as the account's open tab sees it. It ends with a
@@ -504,6 +506,9 @@ address, with the box for it in focus.
   `/connect?setup=ai&way=address` on that computer, signed in to the same account: the box for the
   address is there, under the same setup code (a different code means another account). Until
   Fuobe has an address, the status's next step is the tunnel even while the phone's tab sleeps.
+  The phone has one **Send to my computer** button (**Copy link for my computer** where the
+  browser can't share). It sends `/connect?setup=ai` with the way the phone is on: `way=address`
+  for a web address, `way=connect` for Fuobe Connect. The computer opens on that same way.
 - **ComfyUI starting again.** When ComfyUI stops answering on this computer, the panel and the
   status say it is starting again for up to 5 minutes (a portable or Easy-Install ComfyUI loads
   every add-on first), with the minutes so far. After that they say it didn't come back: look at
@@ -547,7 +552,9 @@ address, with the box for it in focus.
   budget, the shared one still holds, and an active code never uses either. With no proxy at all,
   only the shared budget applies. The steps and Fuobe's files: 60 a minute per visitor
   (behind a trusted proxy), and no budget shared by everyone, so no visitor can use up another
-  person's. All answer 429 with `Retry-After`.
+  person's. All answer 429 with `Retry-After`. Past the budget for unknown codes, the answer still
+  tells the AI to ask the person for the code Fuobe shows now: a code that is active works at once,
+  and the wait is only for a person with no new code.
 
 The code is `src/server/ai-setup.ts`, `src/lib/ai-setup/`, `src/components/gpu/ai-setup/` and
 `src/app/api/setup/`.
