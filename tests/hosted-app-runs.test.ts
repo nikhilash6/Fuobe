@@ -7,7 +7,7 @@ import { tempDir } from "./helpers/temp-dir";
 /**
  * The apps made in one go (AI Influencer, Photodump, Fashion Factory, Character Sheet, Turnaround, Fly around) for an
  * account: on its own GPU as any tool run; with hosted runs on and no GPU of its own, on this install's GPUs as one run
- * held once; priced before Run with their place there. Characters and saved packs stay the owner's.
+ * held once; priced before Run with their place there. A character or pack the account doesn't have is refused.
  */
 const dir = tempDir("fuobe-hosted-app-runs-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -186,13 +186,21 @@ describe("hosted runs on: an account with no GPU of its own runs the apps on thi
     expect(places("gpu", since).every((p) => p === "own")).toBe(true);
   });
 
-  it("characters and saved packs stay the owner's library: a visitor is told they aren't there", async () => {
-    const el = await routes.photodump.POST(json("/api/photodump", "POST", { packId: "winter-special", engine: "open", elementId: "el-1" }, "none"));
-    expect(el.status).toBe(404);
-    const pack = await routes.photodump.POST(json("/api/photodump", "POST", { packId: "my-own-pack", engine: "open", selfie: await upload("none") }, "none"));
-    expect(pack.status).toBe(404);
-    const base = await routes.fashion.POST(json("/api/photodump/fashion", "POST", { step: "base", templateId: "t", elementId: "el-1", engine: "open" }, "none"));
-    expect(base.status).toBe(404);
+  it("a character or pack the account doesn't have is refused, and nothing is held or made", async () => {
+    const before = reserves();
+    const since = Date.now();
+    const asks = [
+      () => routes.photodump.POST(json("/api/photodump", "POST", { packId: "winter-special", engine: "open", elementId: "el-1" }, "none")),
+      async () => routes.photodump.POST(json("/api/photodump", "POST", { packId: "my-own-pack", engine: "open", selfie: await upload("none") }, "none")),
+      () => routes.fashion.POST(json("/api/photodump/fashion", "POST", { step: "base", templateId: "t", elementId: "el-1", engine: "open" }, "none")),
+    ];
+    for (const ask of asks) {
+      const r = await ask();
+      expect(r.status, await r.clone().text()).toBeGreaterThanOrEqual(400);
+      expect(r.status).toBeLessThan(500);
+    }
+    expect(reserves()).toBe(before);
+    expect(places("none", since)).toEqual([]);
   });
 
   it("another account's file never goes in", async () => {

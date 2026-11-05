@@ -3,6 +3,8 @@ import { CinemaError, deleteProject, getProject, listFolders, spentUsd, updatePr
 import { ProjectPatch, asCinemaViewer, body, refsRefused } from "@/server/cinema-schemas";
 import { cinemaContext } from "@/server/cinema-generate";
 import { worldcastContextNow } from "@/server/worldcast-on";
+import { graphsReady } from "@/server/own-setup-live";
+import { WORLD_MODEL } from "@/lib/world";
 
 /**
  * The project with its folders, its estimated spend and what this install can run (cloud models allowed, a civitai key).
@@ -17,7 +19,9 @@ export async function GET(req: Request, ctx: RouteContext<"/api/cinema/projects/
     const { cloudAllowed, civitai } = cinemaContext();
     // The studio's WorldCast worker, for its owner only (N7-9): the Fly path says what it films on.
     const worldcast = viewer.kind === "owner" ? await worldcastContextNow() : undefined;
-    return Response.json({ project, folders: listFolders(id), spentUsd: spentUsd(id), context: { cloudAllowed, civitai, ...(worldcast !== undefined && { worldcast }) } });
+    // World mode's graph has passed its check on this studio's GPU: its "runs on your own GPU" mark leaves (own-setup.ts).
+    const worldReady = graphsReady(WORLD_MODEL);
+    return Response.json({ project, folders: listFolders(id), spentUsd: spentUsd(id), context: { cloudAllowed, civitai, worldReady, ...(worldcast !== undefined && { worldcast }) } });
   });
 }
 

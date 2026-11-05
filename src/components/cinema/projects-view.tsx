@@ -189,9 +189,11 @@ export function CinemaProjects({ examples, starters: given = [] }: { examples?: 
       <Suspense fallback={null}>
         <OpenerQuery onOpener={markOpener} />
       </Suspense>
-      {blockout && !!data?.length && (
+      {/* With no projects yet (a guest, a new account), New project opens the new one on Blockout. */}
+      {blockout && !isLoading && (
         <p className="mb-5 flex items-center gap-2 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px] text-brand-text">
-          <Box className="size-4 shrink-0" /> Blockout to film: pick the project to film it in, or start a new one.
+          <Box className="size-4 shrink-0" />{" "}
+          {data?.length ? "Blockout to film: pick the project to film it in, or start a new one." : "Blockout to film: start a new project to film it in."}
         </p>
       )}
       {opener === "world" && !!data?.length && (

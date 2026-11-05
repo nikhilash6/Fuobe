@@ -4,7 +4,7 @@ import { body, handle } from "@/server/shorts-schemas";
 
 /**
  * From picture's "What happens": starts the describer on the part; the page waits for its text (a generation). The
- * owner's, or an account's on its own GPU (src/server/account-tool-run.ts) once From picture is open to everyone.
+ * owner's, or an account's on its own GPU (src/server/account-tool-run.ts).
  */
 export async function POST(request: Request) {
   const viewer = toolViewer(request);
@@ -19,8 +19,8 @@ export async function POST(request: Request) {
     const r = await runAccountTool(request, viewer.account, {
       tool: "genjutsu",
       files: [input.source.url, input.ownPerson ? undefined : input.frame],
-      plan: () => [{ request: sceneRequest(input, { owner: false }) }],
-      start: () => startStep(sceneRequest(input, { owner: false })),
+      plan: () => [{ request: sceneRequest(input, { owner: false, ownSetup: true }) }],
+      start: () => startStep(sceneRequest(input, { owner: false, ownSetup: true })),
     });
     return r.ok ? Response.json(r.value, { status: 201 }) : r.response;
   }, request);

@@ -14,7 +14,9 @@ import { PromptInput, ELEMENT_ICONS, type PromptInputHandle } from "@/components
 import { ShotsEditor } from "@/components/studio/shots-editor";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { uploadFile, useAssets, useModelAccess, useStatus } from "@/lib/api";
+import { uploadFile, useAssets, useIsOwner, useModelAccess, useStatus } from "@/lib/api";
+import { OwnSetupMark } from "@/components/own-setup";
+import { ownSetupLabel, ownSetupOnly } from "@/lib/own-setup";
 import { offered } from "@/lib/model-access";
 import { getModel } from "@/lib/catalog";
 import {
@@ -304,7 +306,7 @@ export interface PromptBarProps {
   onSettings: (patch: Partial<DirectorSettings>) => void;
   palettes: { name: string; hex: string[] }[];
   onPalettes: (p: { name: string; hex: string[] }[]) => void;
-  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean };
+  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean; worldReady?: boolean };
   brief: string;
   spentUsd: number;
   costCapUsd: number | null;
@@ -328,6 +330,9 @@ const ACTIONS: { id: BarAction; label: string; icon: typeof Video; hint: string 
 export function PromptBar(props: PromptBarProps) {
   const { projectId, folderId, engine, draft, setDraft, settings, onSettings, context, brief, spentUsd, costCapUsd, elements, promptRef } = props;
   const generate = useCinemaGenerate(projectId);
+  // World mode on a visitor's own GPU: its mark until its graph has passed on this studio's GPU (src/lib/own-setup.ts).
+  const owner = useIsOwner();
+  const worldSetup = !owner && !context.worldReady ? ownSetupOnly("cinema:world") : null;
   const status = useStatus().data;
   const [movesOpen, setMovesOpen] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -589,9 +594,13 @@ export function PromptBar(props: PromptBarProps) {
                 props.onWorld!();
               }} className={cn(chip, chipIdle)} aria-label="World: describe a world, then steer it turn by turn">
               <Globe className="size-3.5" /> World
+              {worldSetup && <OwnSetupMark setup={worldSetup} />}
             </button>
           </TooltipTrigger>
-          <TooltipContent>World: describe a world once, then steer it turn by turn with words and camera moves (your GPU)</TooltipContent>
+          <TooltipContent>
+            World: describe a world once, then steer it turn by turn with words and camera moves (your GPU)
+            {worldSetup && <span className="block">{ownSetupLabel(worldSetup)}</span>}
+          </TooltipContent>
         </Tooltip>
       )}
     </>

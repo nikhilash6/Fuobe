@@ -150,8 +150,6 @@ describe("round-4 ComfyUI workflows", () => {
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
       "video-group-swap-h3-one-by-one",
       "image-from-picture-prepare",
-      "video-from-picture-solar",
-      "video-from-picture-h3",
       "video-motion-transfer-h3",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);

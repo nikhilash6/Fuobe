@@ -1229,6 +1229,18 @@
     "error": null,
     "at": "2026-11-03T18:55:13.488Z"
   },
+  "video-from-picture-h3": {
+    "sha256": "a07fc6d3c3ea995ebb79839a29269270a3224563031ff6b70e67a0f5dda88aeb",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T22:58:35.061Z"
+  },
+  "video-from-picture-solar": {
+    "sha256": "dcb8ca8b4918c4a4e9a488eb02eff30e4f77767a553f3f22d5a4e4511e606271",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T22:58:35.056Z"
+  },
   "video-group-swap-h3": {
     "sha256": "a946ec11f2e0ed403b49e2f43a10801918829e407bd7fe3ab10a6065fc3ec25a",
     "validated": true,
