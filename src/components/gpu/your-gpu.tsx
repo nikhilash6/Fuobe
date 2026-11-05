@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useStatus, type GpuTroubleView } from "@/lib/api";
-import { canSaveAnyway } from "@/lib/diagnose";
+import { canSaveAnyway, diagnoseAddress, testWords } from "@/lib/diagnose";
+import { useComputerSupport } from "@/components/gpu/open-connect";
 import { responseError, toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +81,9 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   const [info, setInfo] = useState<GpuInfo | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [failed, setFailed] = useState<Failed | null>(null);
+  // A Test's own check by itself found the GPU answering: Connect is what is left to press.
+  const [answered, setAnswered] = useState(false);
+  const support = useComputerSupport();
   const [now, setNow] = useState(() => Date.now());
   // The self-check: when it started and how many checks it made (diagnose.ts retryPlan "check").
   const auto = useRef<{ startedAt: number; attempt: number; connecting: boolean } | null>(null);
@@ -97,6 +101,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
       const r = await call<PutAnswer>("PUT", { url: url.trim(), token: token.trim() || undefined, ...(mode === "anyway" && { anyway: true }) }, mode === "test");
       auto.current = null;
       setFailed(null);
+      setAnswered(mode === "test" && again);
       setInfo(r.info ?? null);
       setNote(r.note ?? null);
       if (r.url && mode === "test") setUrl(r.url);
@@ -125,7 +130,11 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
       run.attempt++;
       const wait = trouble ? (e.retryAfterS ? e.retryAfterS * 1000 : autoCheckIn(trouble.cause, run.attempt, run.startedAt)) : null;
       if (wait === null) auto.current = null;
-      setFailed({ words: e.message, trouble, connecting, ...(wait !== null && { againAt: Date.now() + wait }) });
+      // A Test saves nothing, so nothing connects by itself: its words say to press Connect once the GPU answers. A
+      // Connect's promise ("we connect as soon as it answers") holds while it checks by itself; after that, it says so.
+      const words = !trouble?.retryable ? e.message : !connecting ? testWords(e.message, wait === null && run.attempt > 1) : wait === null ? testWords(e.message, true) : e.message;
+      setAnswered(false);
+      setFailed({ words, trouble, connecting, ...(wait !== null && { againAt: Date.now() + wait }) });
     } finally {
       setBusy(null);
     }
@@ -148,6 +157,18 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   const stopAuto = () => {
     auto.current = null;
     setFailed((f) => (f ? { ...f, againAt: undefined } : f));
+  };
+  // "Use this computer": runs go to the ComfyUI on this computer (its Fuobe tab runs them), not a web address.
+  const useComputer = async () => {
+    try {
+      await call("PUT", { mode: "computer" });
+      void qc.invalidateQueries({ queryKey: ["account-gpu"] });
+      linked();
+      toast.success("Your runs go to the ComfyUI on this computer now. Keep a Fuobe tab open here.");
+      setUrl("");
+    } catch (e) {
+      toastError(e);
+    }
   };
   const remove = async () => {
     setBusy("remove");
@@ -223,7 +244,11 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
             aria-invalid={!!failed || local}
           />
           {local && (
-            <p className="text-[12px] text-destructive">That address only works on your own computer or network. Paste the one cloudflared shows, ending in trycloudflare.com.</p>
+            <div className="space-y-1.5">
+              <p className="text-[12px] text-destructive">That address only works on your own computer or network. Paste the one cloudflared shows, ending in trycloudflare.com.</p>
+              {/* Or the ways that need no web address: the ComfyUI on this computer (where this browser can reach it), or a code. */}
+              <TroubleActions actions={diagnoseAddress("local").actions} handlers={support === "ok" ? { onUseComputer: useComputer } : {}} />
+            </div>
           )}
           {note && <p className="text-[12px] text-muted-foreground">{note}</p>}
         </div>
@@ -250,10 +275,17 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
               </p>
             )}
             {failed.trouble && <TroubleActions actions={failed.trouble.actions.filter((a) => a.kind !== "gpu-settings" && a.kind !== "check-gpu")} />}
+            {/* The checks by itself stopped: check again now (its wait starts over). */}
+            {!failed.againAt && failed.trouble?.retryable && !!url.trim() && !local && (
+              <button type="button" onClick={() => void send(failed.connecting ? "save" : "test")} disabled={busy !== null} className="text-[12px] font-medium text-brand-text underline-offset-2 hover:underline">
+                Check again
+              </button>
+            )}
           </div>
         )}
         {info && (
           <p className="text-[12px] text-muted-foreground">
+            {answered && <span className="font-medium text-foreground">Your GPU answers now. </span>}
             ComfyUI answered{info.device ? `: ${info.device}` : ""}
             {gib(info.vramBytes) ? ` · ${gib(info.vramBytes)} VRAM` : ""}
             {info.version ? ` · ComfyUI ${info.version}` : ""}
@@ -261,7 +293,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
         )}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => void send("save")} disabled={!url.trim() || local || busy !== null}>
-            {busy === "save" && <Loader2 className="animate-spin" />} Connect
+            {busy === "save" && <Loader2 className="animate-spin" />} {answered ? "Connect now" : "Connect"}
           </Button>
           <Button size="sm" variant="secondary" onClick={() => void send("test")} disabled={!url.trim() || local || busy !== null}>
             {busy === "test" && <Loader2 className="animate-spin" />} Test

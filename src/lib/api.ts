@@ -898,6 +898,10 @@ export interface StatusInfo {
       host?: "runpod" | "tunnel" | "web";
     };
     keys?: CloudProvider[];
+    /** Of those, the ones a run would be taken on now (not refused, balance not known to be empty). */
+    usableKeys?: CloudProvider[];
+    /** Keys whose provider account's balance ran out on a run (Add credit before the next one). */
+    emptyKeys?: CloudProvider[];
     paidAllowed?: boolean;
     /** Hosted runs (FUOBE_HOSTED_RUNS=1): runs may go to this studio's GPUs, so a GPU of one's own is optional. */
     hosted?: boolean;

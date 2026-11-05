@@ -57,6 +57,11 @@ export interface CatalogApi {
 
 const Ctx = createContext<CatalogApi | null>(null);
 
+/** The studio's catalog, or null outside a studio (a tile shown on another page). */
+export function useOptionalCatalog(): CatalogApi | null {
+  return useContext(Ctx);
+}
+
 export function useCatalog(): CatalogApi {
   const c = useContext(Ctx);
   if (!c) throw new Error("useCatalog outside CatalogProvider");

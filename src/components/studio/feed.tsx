@@ -17,6 +17,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
 import { onCloudKey } from "@/lib/before-run";
+import { openModelPicker } from "@/lib/open-model-picker";
+import { smallerRun } from "@/lib/smaller-run";
+import { useOptionalCatalog } from "./catalog";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { useCreateGeneration, useGenerationActions, useStatus } from "@/lib/api";
 import { placeholdersOn } from "@/lib/demo-mode";
@@ -70,6 +73,10 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // The bar: the steps, or how much of the result has reached the studio.
   const bar = saving ? Math.round((local.job.phase === "done" ? 1 : (local.job.saved ?? 0)) * 100) : pct;
   const where = local ? (local.here ? "Keep this tab open" : "Running in another Fuobe tab") : null;
+  // Waiting for its own GPU or key to come back: what helps meanwhile, and until when it waits.
+  const waiting = g.status === "queued" ? g.waiting : undefined;
+  const create = useCreateGeneration();
+  const until = waiting?.until && waiting.until > now ? new Date(waiting.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
   return (
     // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
     // otherwise make the tile wider than its column and spill over the next card.
@@ -100,7 +107,21 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
             {pct != null && <span>{pct}%</span>}
             <span className={cn(pct != null && "before:mr-1.5 before:content-['·']")}>{elapsed(g.createdAt, Math.max(now, g.createdAt))}</span>
             {left != null && <span className="before:mr-1.5 before:content-['·']">{leftLabel(left)}</span>}
+            {until && <span className="before:mr-1.5 before:content-['·']">waits until {until}</span>}
           </p>
+          {waiting && (
+            <TroubleActions
+              className="mt-1.5"
+              actions={waiting.actions}
+              skip={["retry"]}
+              max={2}
+              compact
+              handlers={{
+                // This run moves to the key: it stops waiting, and the cloud run takes its place (one server call).
+                onRunWithKey: (a) => create.mutateAsync({ ...onCloudKey(g.request, a), replaces: g.id } as Generation["request"]).catch((e) => toastError(e)),
+              }}
+            />
+          )}
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -127,27 +148,66 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   );
 }
 
+/** A failed tile narrower than this (in px, at the feed's 224 px height) shows two trouble buttons, not three. */
+const NARROW_TILE_PX = 260;
+
+/** "Send a smaller copy": the run's file made smaller on the server, then the run started again with it. */
+async function smallerCopyRequest(g: Generation): Promise<{ request: Generation["request"]; note: string }> {
+  const res = await fetch(`/api/generations/${encodeURIComponent(g.id)}/smaller`, { method: "POST" });
+  const j = (await res.json().catch(() => ({}))) as { request?: Generation["request"]; note?: string; error?: string };
+  if (!res.ok || !j.request) throw new Error(j.error ?? "We couldn't make a smaller copy. Press Retry.");
+  return { request: j.request, note: j.note ?? "Sent a smaller copy." };
+}
+
 export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
   const create = useCreateGeneration();
+  const feed = useContext(FeedCtx);
+  const catalog = useOptionalCatalog();
   const trouble = g.status === "failed" ? g.trouble : undefined;
+  const shape = Math.max(ratio, 0.8);
+  const narrow = shape * 224 < NARROW_TILE_PX;
+  const run = (request: Generation["request"], done?: string) =>
+    create.mutateAsync(request).then(
+      () => void (done && toast.success(done)),
+      (e) => toastError(e),
+    );
+  const smaller = trouble ? smallerRun(g.request, catalog?.getModel(g.modelId)) : null;
+  const [retrying, setRetrying] = useState(false);
   return (
-    <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: Math.max(ratio, 0.8) }}>
-      <div className="min-h-0 space-y-1 overflow-hidden">
-        <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
-        {g.error && <p className="line-clamp-5 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground">{g.error}</p>}
-        {/* An account's own GPU or key: what came back, small, for the curious. */}
-        <TroubleDetails details={trouble?.details} />
+    <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: shape }}>
+      <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
+        <p className="shrink-0 text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
+        {g.error && <p className={cn("shrink-0 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground", narrow ? "line-clamp-4" : "line-clamp-5")}>{g.error}</p>}
+        {/* An account's own GPU or key: what came back, small, for the curious (the first thing cut when room is short). */}
+        <TroubleDetails details={trouble?.details} className="min-h-0" />
       </div>
       {trouble && (
         <TroubleActions
-          className="mt-2"
+          className="mt-2 shrink-0"
           actions={trouble.actions}
           skip={["retry"]}
-          max={3}
-          handlers={{ onRunWithKey: (a) => create.mutate(onCloudKey(g.request, a), { onError: (e) => toastError(e) }) }}
+          max={narrow ? 2 : 3}
+          compact
+          context="run"
+          handlers={{
+            onRunWithKey: (a) => run(onCloudKey(g.request, a)),
+            // In a studio: its settings come back into the composer, and its model picker opens.
+            onPickModel: feed?.reuse
+              ? () => {
+                  feed.reuse?.(g);
+                  openModelPicker();
+                }
+              : undefined,
+            onTrySmaller: smaller ? () => run(smaller.request, `Running it again at ${smaller.what}.`) : undefined,
+            onSendSmaller: () =>
+              smallerCopyRequest(g).then(
+                ({ request, note }) => run(request, note),
+                (e) => toastError(e),
+              ),
+          }}
         />
       )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex shrink-0 flex-wrap gap-1.5">
         {g.status === "failed" && g.fix && (
           // Something was missing on the GPU: the guided fix shows what, and how to add it.
           <button
@@ -161,11 +221,15 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
           </button>
         )}
         <button
+          disabled={create.isPending || retrying}
           onClick={(e) => {
             e.stopPropagation();
+            // A second click a moment later starts nothing more (each run is billed or uses the GPU).
+            setRetrying(true);
+            setTimeout(() => setRetrying(false), 3000);
             onRetry();
           }}
-          className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
+          className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent disabled:opacity-70"
         >
           <RotateCcw className="size-3" /> Retry
         </button>

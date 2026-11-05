@@ -2,12 +2,13 @@
  * The check before Run (public sign-up): an account whose own GPU at a web address didn't answer its last status check
  * (the status strip's, every 30 s; nothing here asks the GPU) sees what is wrong and its fixes above Generate, instead
  * of starting a run that can only wait. When one of its keys runs the tool's cloud version, "Run with your fal.ai key"
- * is offered too: an explicit click, because it spends the person's own credit. Pure, for the composer and its tests.
+ * is offered too: an explicit click, for that run only (the engine switch stays where it was), because it spends the
+ * person's own credit. Pure, for the composer and its tests.
  */
 import { dualEngine } from "./catalog/engines";
 import type { Engine, GenerationRequest } from "./catalog/types";
-import { withKeyAction, type Diagnosis, type TroubleAction } from "./diagnose";
-import { cloudVersionKey, type CloudProvider } from "./your-keys";
+import { beforeRunWords, withKeyAction, type Diagnosis, type TroubleAction } from "./diagnose";
+import { cloudVersion, isCloudProvider, type CloudProvider } from "./your-keys";
 
 type Routed = { id: string; engine: string; engines?: Engine[]; routes: { provider: string }[] };
 
@@ -15,6 +16,8 @@ export interface BeforeRunViewer {
   kind: "guest" | "account";
   gpu: { connected: boolean; mode?: "computer" | "link"; online?: boolean; trouble?: Pick<Diagnosis, "cause" | "words" | "actions" | "retryable" | "details"> };
   keys?: CloudProvider[];
+  /** The keys a run would be taken on now (not refused, balance not known to be empty): the ones offered. */
+  usableKeys?: CloudProvider[];
   paidAllowed?: boolean;
 }
 
@@ -23,10 +26,15 @@ export interface BeforeRun {
   words: string;
   details?: string;
   actions: TroubleAction[];
+  /** Waiting can fix it: a run started now waits for the GPU (else runs can't reach it until this is fixed). */
+  waits: boolean;
 }
 
 /** The words when the status check gave no reason (an older answer). */
 export const GPU_OFF_WORDS = "Your GPU isn't answering right now.";
+
+/** What follows the sentence before Run: a run started now waits, or can't reach the GPU until it is fixed. */
+export const beforeRunTail = (waits: boolean) => (waits ? "A run you start now waits for it." : "Runs can't reach your GPU until this is fixed.");
 
 /**
  * The check before Run, or null when there is nothing to say: not an account, the tool doesn't run on its own GPU (a
@@ -39,7 +47,7 @@ export function gpuBeforeRun(o: {
   engine: Engine;
   /** The run goes to this studio's GPUs (hosted runs), not the account's own. */
   onPool?: boolean;
-  preset?: Parameters<typeof cloudVersionKey>[0];
+  preset?: Parameters<typeof cloudVersion>[0];
   has: (id: string) => boolean;
   getModel: (id: string) => Routed | undefined;
 }): BeforeRun | null {
@@ -49,26 +57,32 @@ export function gpuBeforeRun(o: {
   const toOwnGpu = dualEngine(model) ? o.engine === "open" : model.engine === "open";
   const gpu = viewer.gpu;
   if (!toOwnGpu || !gpu.connected || gpu.mode !== "link" || gpu.online !== false) return null;
-  const key = viewer.paidAllowed !== false ? cloudVersionKey(o.preset, model, viewer.keys ?? [], o.has, o.getModel) : null;
+  const twin = viewer.paidAllowed !== false ? cloudVersion(o.preset, model, viewer.usableKeys ?? viewer.keys ?? [], o.has, o.getModel) : null;
   const base: TroubleAction[] = gpu.trouble?.actions ?? [
     { kind: "check-gpu", label: "Check my GPU" },
     { kind: "gpu-settings", label: "Open Settings → Your GPU", target: "/settings#your-gpu" },
   ];
+  const fixes = base.filter((a) => a.kind !== "retry" && a.kind !== "run-with-key");
+  // The key's run right after the first fix (Start your pod), so a narrow composer keeps it.
+  const offer = twin ? [withKeyAction(twin.provider, twin.modelId, twin.op)] : [];
   return {
-    words: gpu.trouble?.words ?? GPU_OFF_WORDS,
+    words: gpu.trouble ? beforeRunWords(gpu.trouble.words) : GPU_OFF_WORDS,
     ...(gpu.trouble?.details && { details: gpu.trouble.details }),
-    actions: [...base.filter((a) => a.kind !== "retry" && a.kind !== "run-with-key"), ...(key ? [withKeyAction(key)] : [])],
+    actions: [...fixes.slice(0, 1), ...offer, ...fixes.slice(1)],
+    waits: gpu.trouble ? gpu.trouble.retryable : true,
   };
 }
 
 /**
- * A failed run's request again, on the cloud version its trouble names ("Run with your fal.ai key"): the same words and
- * inputs on the cloud engine. A preset's open-graph settings (`extra`) stay behind when the model changes.
+ * A request again, on the cloud version a trouble names ("Run with your fal.ai key"): the same words and inputs on the
+ * cloud engine, on that provider's key (`prefer`: a model on fal.ai and Replicate goes where the button said). A preset's
+ * open-graph settings (`extra`) stay behind when the model changes. For this one run: nothing else changes.
  */
-export function onCloudKey(request: GenerationRequest, a: Pick<TroubleAction, "modelId" | "op">): GenerationRequest {
+export function onCloudKey(request: GenerationRequest, a: Pick<TroubleAction, "modelId" | "op" | "target">): GenerationRequest {
+  const prefer = isCloudProvider(a.target) ? { prefer: a.target } : {};
   const modelId = a.modelId ?? request.modelId;
-  if (modelId === request.modelId) return { ...request, engine: "cloud" };
+  if (modelId === request.modelId) return { ...request, engine: "cloud", ...prefer };
   const { extra: _extra, ...params } = request.params ?? {};
   void _extra;
-  return { ...request, engine: "cloud", modelId, params, ...(a.op && { op: a.op as GenerationRequest["op"] }) };
+  return { ...request, engine: "cloud", modelId, params, ...(a.op && { op: a.op as GenerationRequest["op"] }), ...prefer };
 }
