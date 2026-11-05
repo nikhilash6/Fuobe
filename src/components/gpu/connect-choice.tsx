@@ -16,7 +16,8 @@ import type { OwnerGpuView } from "@/lib/connections";
 import { addressKind, refusedOnHosted } from "@/lib/page-place";
 import { cn } from "@/lib/utils";
 import { restartComputerRunner, rememberComfy, rememberedComfy } from "./computer-runtime";
-import { PairedComfyUIs } from "./fuobe-connect";
+import { FUOBE_CONNECT_PUBLISHED } from "@/lib/fuobe-connect";
+import { PairInstead, PairedComfyUIs } from "./fuobe-connect";
 import { GuardFix, SettingFix, ThisComputer, unsupportedWords } from "./this-computer";
 import { lookOn, useComputerSupport, usePagePlace } from "./use-local-comfy";
 import { openConnect, openFinder, useComputerState, type FindReason } from "./computer-runner";
@@ -509,7 +510,7 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, lo
         className={className}
         instead={linked}
         title="Keep it running with this tab closed"
-        sub="Give your ComfyUI a web address. Takes about two minutes."
+        sub={FUOBE_CONNECT_PUBLISHED ? "Pair your ComfyUI with a code, or give it a web address. Takes about two minutes." : "Give your ComfyUI a web address. Takes about two minutes."}
         open={link || linked}
         onToggle={() => setLink((v) => !v)}
         computer={
@@ -530,7 +531,10 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, lo
           </div>
         }
       >
-        <YourGpu className={className} onLinked={onStart} />
+        <div className="space-y-3">
+          {FUOBE_CONNECT_PUBLISHED && <PairInstead />}
+          <YourGpu className={className} onLinked={onStart} />
+        </div>
       </ChoiceCards>
     </div>
   );

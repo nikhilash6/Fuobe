@@ -101,7 +101,7 @@ describe("the guide", () => {
   it("Windows commands have no $ and no braces, so they also run through powershell.exe -Command", () => {
     for (const g of guides.filter((g) => g.os === "windows")) {
       for (const line of commands(g.text)) {
-        if (!/^ {3}(curl\.exe|Get-|New-Item|Start-Process|Select-String|Remove-Item|Stop-Process|Expand-Archive|Rename-Item|certutil|winget|cloudflared|git )/.test(line)) continue;
+        if (!/^ {3}(curl\.exe|Get-|New-Item|Start-Process|Select-String|Remove-Item|Stop-Process|Expand-Archive|Rename-Item|Split-Path|certutil|winget|cloudflared|git )/.test(line)) continue;
         expect(line.replace("%{http_code}", ""), line).not.toMatch(/[$`{}]/);
       }
       expect(g.text).toContain("winget install --id Cloudflare.cloudflared -e --accept-source-agreements --accept-package-agreements".repeat(g.way === "address" ? 1 : 0));
@@ -115,6 +115,34 @@ describe("the guide", () => {
     expect(g).toContain(`${SITE}/api/setup/files/start/8188`);
     expect(g).toContain("ask the person to answer Y");
     expect(g).not.toMatch(/Where-Object/);
+  });
+
+  it("reads ComfyUI's folder on every system, a Mac's memory, and where --cpu comes from, with numbered items in order", () => {
+    const section = (t: string, from: string) => t.slice(t.indexOf(from), t.indexOf("\n## Step", t.indexOf(from) + 1));
+    const numbers = (s: string) => s.split("\n").flatMap((l) => (/^(\d+)\. /.exec(l) ? [Number(/^(\d+)\. /.exec(l)![1])] : []));
+    for (const g of guides.filter((g) => g.os !== "other")) {
+      const step0 = section(g.text, "## Step 0:");
+      const step1 = section(g.text, "## Step 1: Find ComfyUI");
+      for (const s of [step0, step1]) expect(numbers(s), `${g.way}/${g.os}`).toEqual(numbers(s).map((_, i) => i + 1));
+      if (g.os === "windows") {
+        expect(step1).toContain("7. If main.py has no drive letter in front of it (for example ComfyUI\\main.py, as the portable build and Easy-Install start it), it is in ComfyUI's working folder.");
+        expect(step1).toContain('   Split-Path (Split-Path (Get-CimInstance Win32_Process -Filter "ProcessId=1234").ExecutablePath)');
+        expect(step1).toContain("8. If the command line has --cpu, ComfyUI runs on the processor only, never on the graphics card. The portable build's run_cpu.bat starts it with --cpu, and run_nvidia_gpu.bat starts it without.");
+        expect(step1).toContain("and so does Fuobe's Start ComfyUI for Fuobe.bat");
+      }
+      if (g.os === "mac") {
+        expect(step0).toContain("   sysctl -n machdep.cpu.brand_string");
+        expect(step0).toContain("2. Look at the memory. The answer is in bytes: 17179869184 is 16 GB.\n   sysctl -n hw.memsize");
+        // The working folder alone, without lsof's field letter in front of it.
+        expect(step1).toContain("   lsof -a -p PID -d cwd -Fn | sed -n 's/^n//p'");
+        expect(step1).not.toContain("-Fn | tail");
+        expect(step1).toContain("5. If the command has --cpu, ComfyUI runs on the processor only, never on the GPU.");
+      }
+      if (g.os === "linux") {
+        expect(step1).toContain("   readlink /proc/PID/cwd");
+        expect(step1).toContain(`${g.way === "address" ? 4 : 5}. If the command has --cpu, ComfyUI runs on the processor only, never on the graphics card.`);
+      }
+    }
   });
 
   it("has the steps the status points to, from installing ComfyUI to the first model", () => {

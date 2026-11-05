@@ -79,7 +79,18 @@ const CPU_HOW: Record<Os, string[]> = {
   other: ["If the computer has a graphics card, ComfyUI's PyTorch can't use it. Install the PyTorch build for that card, as ComfyUI's own page shows (https://github.com/comfyanonymous/ComfyUI)."],
 };
 
-const OWN_KEY = "With no usable graphics card, Fuobe also runs with the person's own fal.ai or Replicate key: {site}/settings, then Your keys.";
+/** ComfyUI was started with --cpu: start it again without it (guide Step 1 says where the flag is). */
+const CPU_FLAG_HOW = (os: Os, way: Way): string[] => [
+  "ComfyUI was started with --cpu. Start it again without --cpu. Guide Step 1 says where the flag is.",
+  ...(os === "windows"
+    ? [
+        "Portable: close ComfyUI's window, then start ComfyUI with run_nvidia_gpu.bat, not run_cpu.bat. Another start file: start ComfyUI with the same line without --cpu, from a new start file (don't change the person's own).",
+        ...(way === "direct" ? ["Then run Fuobe's start file again (guide Step 3), so that Start ComfyUI for Fuobe.bat starts it without --cpu."] : []),
+      ]
+    : ["Started from a terminal: the same command without --cpu. Stability Matrix: remove it in Launch Options."]),
+];
+
+const OWN_KEY ="With no usable graphics card, Fuobe also runs with the person's own fal.ai or Replicate key: {site}/settings, then Your keys.";
 
 /** The page that ends a web address's setup on the computer: the box for the address, under the same code. */
 const ADDRESS_PAGE = `{site}${aiSetupHref("address")}`;
@@ -308,11 +319,11 @@ export function nextOf(v: SetupView, now: number): NextStep {
         "cpu-only",
         "ComfyUI runs on the computer's processor, not on a graphics card. Fuobe's picture models need a graphics card (the smallest, SDXL, needs 8 GB), so none fits, and on the processor one picture would take many minutes. Tell the person plainly. If the computer has a graphics card, make ComfyUI use it, restart ComfyUI (ask the person first), then check again.",
         [
-          ...(t.cpuFlag ? ["ComfyUI was started with --cpu. Start it again without --cpu."] : CPU_HOW[os]),
+          ...(t.cpuFlag ? CPU_FLAG_HOW(os, way) : CPU_HOW[os]),
           ...(way === "address" ? ["The web address stays the same while cloudflared runs: the person doesn't paste it again after ComfyUI restarts."] : []),
           OWN_KEY,
         ],
-        0,
+        t.cpuFlag ? 1 : 0,
       );
     if (t.modelWhy === "setup")
       return say(

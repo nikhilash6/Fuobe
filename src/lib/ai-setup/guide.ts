@@ -130,6 +130,15 @@ const curl = (os: Os) => (os === "windows" ? "curl.exe" : "curl");
 const TUNNEL = "cloudflared tunnel --url http://127.0.0.1:8188 --logfile ~/.fuobe/tunnel.log";
 const sep = (os: Os) => (os === "windows" ? "\\" : "/");
 
+/** Step 1's line about --cpu (the status points there when ComfyUI was started with it). */
+const CPU_FLAG: Record<"windows" | "mac" | "linux", string> = {
+  windows:
+    "If the command line has --cpu, ComfyUI runs on the processor only, never on the graphics card. The portable build's run_cpu.bat starts it with --cpu, and run_nvidia_gpu.bat starts it without. A start file made from that command line keeps --cpu, and so does Fuobe's Start ComfyUI for Fuobe.bat. To use the graphics card, start ComfyUI without --cpu: with run_nvidia_gpu.bat, or with the same command without --cpu. Ask the person first: it restarts ComfyUI.",
+  mac: "If the command has --cpu, ComfyUI runs on the processor only, never on the GPU. To use the GPU, start ComfyUI the same way without --cpu (Stability Matrix: remove it in Launch Options). Ask the person first: it restarts ComfyUI.",
+  linux:
+    "If the command has --cpu, ComfyUI runs on the processor only, never on the graphics card. To use the graphics card, start ComfyUI the same way without --cpu (Stability Matrix: remove it in Launch Options; a service or Docker: remove it from its start command). Ask the person first: it restarts ComfyUI.",
+};
+
 function stepZero(i: GuideInput): string {
   if (i.os === "mac")
     return lines(
@@ -137,9 +146,11 @@ function stepZero(i: GuideInput): string {
       "",
       "1. Look at the chip:",
       "   sysctl -n machdep.cpu.brand_string",
+      "2. Look at the memory. The answer is in bytes: 17179869184 is 16 GB.",
+      "   sysctl -n hw.memsize",
       "   Fuobe's first pictures need Apple silicon (M1 or newer) with 16 GB of memory or more. On an Intel Mac, tell the person plainly that pictures are very slow there.",
-      `2. With no usable GPU, Fuobe also runs with the person's own fal.ai or Replicate key (${i.site}/settings, then Your keys). Say so before a long install.`,
-      "3. If ComfyUI is not installed, the easiest way is ComfyUI Desktop for Apple silicon: https://www.comfy.org/download . Ask the person first. They download it, open it and follow its steps. ComfyUI Desktop uses port 8000.",
+      `3. With no usable GPU, Fuobe also runs with the person's own fal.ai or Replicate key (${i.site}/settings, then Your keys). Say so before a long install.`,
+      "4. If ComfyUI is not installed, the easiest way is ComfyUI Desktop for Apple silicon: https://www.comfy.org/download . Ask the person first. They download it, open it and follow its steps. ComfyUI Desktop uses port 8000.",
     );
   if (i.os === "linux")
     return lines(
@@ -181,6 +192,10 @@ function findComfy(i: GuideInput): string {
           '   Get-CimInstance Win32_Process -Filter "ProcessId=1234" | Select-Object -ExpandProperty CommandLine',
           '   Get-CimInstance Win32_Process -Filter "ProcessId=1234" | Select-Object -ExpandProperty ExecutablePath',
           "   If the command line has --base-directory <folder>, that folder holds custom_nodes and models. If not, custom_nodes and models are next to main.py.",
+          "7. If main.py has no drive letter in front of it (for example ComfyUI\\main.py, as the portable build and Easy-Install start it), it is in ComfyUI's working folder. For the portable build and Easy-Install, that is the folder that holds python_embeded. This command shows it (put the number from item 5 in place of 1234). main.py is in that folder, or in its ComfyUI folder:",
+          '   Split-Path (Split-Path (Get-CimInstance Win32_Process -Filter "ProcessId=1234").ExecutablePath)',
+          "   If the program is in a virtual environment (venv\\Scripts\\python.exe), the working folder is most often the one that holds venv: go one folder up from the answer.",
+          `8. ${CPU_FLAG.windows}`,
           "",
           "Common places for custom_nodes:",
           "- Portable: ComfyUI_windows_portable\\ComfyUI\\custom_nodes",
@@ -194,8 +209,9 @@ function findComfy(i: GuideInput): string {
             "4. Find the program on that port and the folder it runs in. Put the port in place of 8188, and the number that the first command shows in place of PID:",
             "   lsof -nP -iTCP:8188 -sTCP:LISTEN",
             "   ps -o command= -p PID",
-            "   lsof -a -p PID -d cwd -Fn | tail -1",
+            "   lsof -a -p PID -d cwd -Fn | sed -n 's/^n//p'",
             "   If the command has --base-directory <folder>, that folder holds custom_nodes and models. If not, custom_nodes and models are next to main.py.",
+            `5. ${CPU_FLAG.mac}`,
             "",
             "Common places for custom_nodes:",
             "- ComfyUI Desktop: ~/Documents/ComfyUI/custom_nodes, unless the person chose another folder",
@@ -212,6 +228,7 @@ function findComfy(i: GuideInput): string {
               "4. If ComfyUI runs as a service or in Docker, the setting goes into the start command of that service or container. Ask the person before you change a service or a container.",
             i.way === "connect" &&
               "4. If ComfyUI runs in Docker, custom_nodes is the folder that the container maps to its custom_nodes. Ask the person which folder that is.",
+            `${i.way === "address" ? 4 : 5}. ${CPU_FLAG.linux}`,
             "",
             "Common places for custom_nodes:",
             "- A git install: ~/ComfyUI/custom_nodes",

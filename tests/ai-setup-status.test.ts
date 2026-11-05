@@ -208,6 +208,29 @@ describe("the steps and the next step", () => {
     expect(stepsOf(view({ comfy: "none" }))[0]).toMatchObject({ state: "todo" });
   });
 
+  it("points a ComfyUI started with --cpu to the guide step that says where the flag is", () => {
+    const facts = { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", cpu: true, cpuFlag: true } as const;
+    const byWay: Record<"direct" | "connect" | "address", [Partial<TabFacts>, Partial<SetupView>]> = {
+      direct: [facts, {}],
+      connect: [{ ...facts, cors: undefined, guard: "connect" }, {}],
+      address: [{ address: "ok", model: "none", cpu: true, cpuFlag: true }, { server: { gpu: "link", online: true } }],
+    };
+    for (const way of ["direct", "connect", "address"] as const)
+      for (const os of ["windows", "mac", "linux"] as const) {
+        const [f, o] = byWay[way];
+        const next = nextOf(view({ ...f, way }, { ...o, way, os }), NOW);
+        expect(next.id, `${way}/${os}`).toBe("cpu-only");
+        expect(next.guide).toBe(`${SITE}/api/setup/guide/${way}/${os}#step-1`);
+        const how = next.how.join(" ");
+        expect(how).toContain("ComfyUI was started with --cpu. Start it again without --cpu. Guide Step 1 says where the flag is.");
+        expect(how.includes("run_nvidia_gpu.bat, not run_cpu.bat"), `${way}/${os}`).toBe(os === "windows");
+        expect(how.includes("Start ComfyUI for Fuobe.bat starts it without --cpu"), `${way}/${os}`).toBe(os === "windows" && way === "direct");
+        expect(how.includes("the same command without --cpu"), `${way}/${os}`).toBe(os !== "windows");
+      }
+    // Without the flag (a PyTorch that can't use the card): Step 0, as before.
+    expect(nextOf(view({ ...facts, cpuFlag: false }), NOW).guide).toBe(`${SITE}/api/setup/guide/direct/windows#step-0`);
+  });
+
   it("says a web address's ComfyUI runs on the processor, not that its GPU is too small", () => {
     const v = view({ way: "address", address: "ok", model: "none", modelWhy: "small", cpu: true }, { server: { gpu: "link", online: true } });
     expect(stepsOf(v)[2]).toMatchObject({ id: "model", state: "warn", detail: "ComfyUI runs on the processor" });

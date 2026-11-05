@@ -157,9 +157,10 @@ try {
     // The link, the second choice, fits inside the dialog.
     const linkToggle = dialog.getByRole("button", { name: /Keep it running with this tab closed/ });
     await linkToggle.click();
-    const field = await until(() => dialog.locator("input").first().boundingBox(), 10_000);
+    const field = await until(() => dialog.locator("input").last().boundingBox(), 10_000);
     const box = await dialog.boundingBox();
     check("the link form fits inside the dialog", !!field && !!box && field.x + field.width <= box.x + box.width - 16, JSON.stringify({ field, box }));
+    check("pairing with a code is offered there too", await dialog.getByText("Pair your ComfyUI with a code", { exact: true }).isVisible());
     await page.screenshot({ path: path.join(shots, "1b-link.png") });
     await linkToggle.click();
     await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
