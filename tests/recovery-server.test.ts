@@ -1598,7 +1598,7 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     const { id } = await pressRun();
     const d = driver(w);
     await workAll(d);
-    expect((await ended(id)).status).toBe("succeeded");
+    expect((await ended(id))?.status).toBe("succeeded");
     // The run's next step, made as its run's steps are (as the account, on this install's GPUs, with the run's stamp):
     // its input, the first step's picture, is ready for both processes.
     const first = JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(id) as { request_json: string }).request_json);
@@ -1614,7 +1614,7 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await Promise.all([tick(), app2.tick()]);
     expect(jobs(), "its jobs on the workers").toBe(1);
     await workAll(d);
-    expect((await ended(step.id)).status).toBe("succeeded");
+    expect((await ended(step.id))?.status).toBe("succeeded");
     expect(jobs()).toBe(1);
     const ran = db().prepare("SELECT COUNT(*) AS n FROM worker_jobs WHERE generation_id = ? AND event = 'finished'").get(step.id) as { n: number };
     expect(ran.n, "the workers ran it once").toBe(1);
