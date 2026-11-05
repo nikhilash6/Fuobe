@@ -30,7 +30,8 @@ function checkout() {
 /** A worker folder whose dist has every part, stamped with `stamp`. */
 function dist(stamp: string | null) {
   const dir = tempDir("fuobe-worker-dist-");
-  for (const f of ["computer-runner.mjs", "allowed-nodes.json", "input-rules.json", "file-pins.json"]) fs.writeFileSync(path.join(dir, f), "{}");
+  fs.mkdirSync(path.join(dir, "compose/lib"), { recursive: true });
+  for (const f of ["computer-runner.mjs", "allowed-nodes.json", "input-rules.json", "file-pins.json", "catalog-version.json", "compose/lib/ticket-compose.mjs"]) fs.writeFileSync(path.join(dir, f), "{}");
   if (stamp !== null) fs.writeFileSync(path.join(dir, STAMP_FILE), JSON.stringify({ built: "scripts/build-worker.mjs", stamp }));
   return dir;
 }

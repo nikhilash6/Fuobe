@@ -55,6 +55,22 @@ export async function readGpu(cmd = "nvidia-smi") {
   return { ...g, apps };
 }
 
+/** `nvidia-smi --query-gpu=compute_cap --format=csv,noheader` → the first GPU's generation ("8.9"), or null. */
+export function parseGpuGen(text) {
+  const line = String(text ?? "").split(/\r?\n/).map((l) => l.trim()).find(Boolean);
+  return line && /^\d{1,2}\.\d{1,2}$/.test(line) ? line : null;
+}
+
+/**
+ * The GPU's generation (its compute capability), or null when nvidia-smi can't say (an older one, or none).
+ *
+ * @param {string | string[]} [cmd] its path, or a command and its first arguments (as readGpu takes it)
+ */
+export async function readGpuGen(cmd = "nvidia-smi") {
+  const [bin, ...pre] = Array.isArray(cmd) ? cmd : [cmd];
+  return parseGpuGen(await run(bin, [...pre, "--query-gpu=compute_cap", "--format=csv,noheader"]));
+}
+
 /**
  * Is another program using the GPU? Others' VRAM is the GPU's used memory minus what the worker's own ComfyUI holds
  * (`ownMb`, with an allowance for its CUDA context while it runs). Busy above `busyVramMb`, or when another process

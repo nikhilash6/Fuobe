@@ -43,6 +43,7 @@ const { setSetting } = await import("@/server/settings");
 const { getGeneration } = await import("@/server/generations");
 const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
+const { catalogVersion } = await import("@/server/computer/catalog-version");
 const billing = await import("@/server/billing");
 const qs = await import("@/server/queue-settings");
 const { loadManifest, comfyProvider, onComputer, NO_WORKER_FOR_LANE } = await import("@/server/providers/comfyui");
@@ -98,15 +99,16 @@ function standInWorker(name = "stand-in") {
   const w = pool.addWorker(name);
   const lanes = allLanes(loadIndex(), sha);
   pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l.lane, { delayMs: 0 }])), claimAfterMs: 0 });
+  // Connected once: it said its build (one that takes this studio's job tickets).
   db()
-    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
-    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
+    .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
   return w;
 }
 type WorkerRow = import("@/server/computer/workers").WorkerRow;
 const workerRow = (w: { id: string }) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
 const beatAs = (w: { id: string }, now = Date.now()) =>
-  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
+  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion() }), now);
 const claimAs = (w: { id: string }, now = Date.now()) => pool.workerClaim(workerRow(w), [], now);
 const rowOf = (id: string) => db().prepare("SELECT * FROM relay_tasks WHERE id = ?").get(id) as import("@/server/computer/tasks").TaskRow;
 const taskOf = (generationId: string) => db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? ORDER BY created_at DESC").get(generationId) as import("@/server/computer/tasks").TaskRow | undefined;

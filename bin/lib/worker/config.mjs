@@ -4,8 +4,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-/** 2: it says which inputs it takes, makes every clip and sound again, and keeps its ComfyUI behind the guard. */
-export const PROTOCOL = 2;
+/**
+ * 2: it says which inputs it takes, makes every clip and sound again, and keeps its ComfyUI behind the guard. 3: it makes
+ * every picture of a job ticket again from its pixels too, and may have a CPU slot.
+ */
+export const PROTOCOL = 3;
+
+/**
+ * The protocol this worker says it speaks: PROTOCOL, or 2 when it can't make pictures again (no sharp in its checkout).
+ * The studio then sends it no job ticket (an account's run with a picture would only come back), and its owner's own jobs
+ * go on as before.
+ */
+export const protocolOf = (canCleanPictures) => (canCleanPictures ? PROTOCOL : 2);
 
 /** Where the worker keeps its settings: %LOCALAPPDATA%\FuobeWorker on Windows, ~/.config/fuobe-worker elsewhere. */
 export function workerHome(env = process.env, home = os.homedir()) {

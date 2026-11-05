@@ -105,7 +105,8 @@ export function partnerFlag(comfyDir) {
 
 /**
  * ComfyUI's start arguments (3.3): localhost only, its own folders, no metadata, no browser, only the packs it needs,
- * and no partner nodes where this ComfyUI has the flag. `o.port`: this start's port (else worker.json's).
+ * and no partner nodes where this ComfyUI has the flag. `o.port`: this start's port (else worker.json's). The CPU slot's
+ * ComfyUI (`cfg.cpuOnly`) runs on the CPU only, and never touches the GPU.
  */
 export function comfyArgs(cfg, packs = [], o = {}) {
   const f = folders(cfg.workDir);
@@ -122,6 +123,7 @@ export function comfyArgs(cfg, packs = [], o = {}) {
     "--extra-model-paths-config", path.join(cfg.workDir, "extra_model_paths.yaml"),
     "--disable-all-custom-nodes",
     ...(packs.length ? ["--whitelist-custom-nodes", ...packs] : []),
+    ...(cfg.cpuOnly ? ["--cpu"] : []),
   ];
 }
 
@@ -427,7 +429,8 @@ export class OwnComfy {
     this.crashes = this.crashes.filter((c) => (this.o.now ?? Date.now)() - c.at < 3_600_000);
     this.expectExit = false;
     this.ready = false;
-    const env = { ...comfyEnv(this.o.env ?? process.env, this.cfg.comfyEnv), ...(this.guarded && { [GUARD.env]: this.key }) };
+    // The CPU slot's ComfyUI sees no GPU at all.
+    const env = { ...comfyEnv(this.o.env ?? process.env, this.cfg.comfyEnv), ...(this.cfg.cpuOnly && { CUDA_VISIBLE_DEVICES: "-1" }), ...(this.guarded && { [GUARD.env]: this.key }) };
     if (!this.cfg.comfyCommand) {
       // The guard is written into an emptied folder at each start (nothing else stays beside it), and ComfyUI starts
       // through it in Python's isolated mode: no script folder, no user site and no PYTHON* variable on its import path.

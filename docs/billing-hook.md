@@ -88,8 +88,8 @@ this install's GPUs can run (a ComfyUI step: not a text step, a step made in the
 isn't offered here. It is refused before Run, never part way through.
 
 A run made only of CPU work is free and never counted. Fuobe asks the service for no quote and no hold, and the run
-counts against none of the policy's limits. For now it still waits in the same line on this install's GPUs as GPU work.
-It does not run on the install's own CPU yet.
+counts against none of the policy's limits. A worker with a CPU slot runs it beside its GPU's job, in a line of its
+own ([gpu-workers.md](gpu-workers.md), "The CPU slot"). A worker with none runs it in its GPU's line, as before.
 
 3D runs (Image to 3D and the other 3D tools) aren't offered on this install's GPUs yet, whatever `kinds.model3d` says.
 They run on the account's own GPU, as before. An account with no GPU of its own is told the tool isn't available here

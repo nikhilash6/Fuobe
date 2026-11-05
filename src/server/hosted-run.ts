@@ -29,7 +29,7 @@ import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, poolTicketsReady, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -183,9 +183,9 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
 
 /**
  * Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, a model their card can't run,
- * LoRAs, or a kind of file.
+ * LoRAs, a kind of file, or (`busy`) not right now: the GPUs that could run it are being updated.
  */
-export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs";
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "busy";
 
 /** The words for a gate's reason: an account may connect its own GPU in Settings, a guest has nowhere to do that yet. */
 export function gateWords(reason: GateReason, guest: boolean): string {
@@ -223,6 +223,10 @@ export function poolGate(
   const steps = planSteps();
   const problem = steps && p ? stepsProblem(p, steps) : null;
   if (problem) return { ok: false, reason: problem === HOSTED_WORDS.rtxCard ? "rtxCard" : "notOffered" };
+  // A run its GPUs could take, but none of them can right now (every one that could is built from the catalog before
+  // this studio's update): Run is off until one is updated, never a run that waits in line for nothing.
+  const endpoints = [planned.route.endpoint, ...(steps ?? []).filter((s) => s.provider === "comfyui").map(stepEndpoint)];
+  if (!endpoints.every((e) => poolTicketsReady(e))) return { ok: false, reason: "busy" };
   return { ok: true, steps };
 }
 
@@ -325,6 +329,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   if (!gate.ok) {
     if (ownFallback) return OWN;
     const error = gateWords(gate.reason, false);
+    if (gate.reason === "busy") return { kind: "refuse", refusal: billingRefusal("busy", error) };
     return gate.reason === "model3d" ? { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } } : notOffered(error);
   }
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
@@ -487,7 +492,9 @@ export async function poolQuote(
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { planned, quote: notOfferedQuote(gateWords(gate.reason, !account)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+    const words = gateWords(gate.reason, !account);
+    const quote = gate.reason === "busy" ? { ...notOfferedQuote(words), code: "busy" as const } : notOfferedQuote(words);
+    return { planned, quote, line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
   // Light work only (joins, trims): free, and never counted against the policy's limits, so the service isn't asked.
   if (lightRun(gate.steps)) {

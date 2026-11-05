@@ -56,6 +56,7 @@ const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
 const { getGeneration, ensureRunner } = await import("@/server/generations");
 const pool = await import("@/server/computer/pool");
+const { catalogVersion } = await import("@/server/computer/catalog-version");
 const tasks = await import("@/server/computer/tasks");
 const billing = await import("@/server/billing");
 const outbox = await import("@/server/billing-outbox");
@@ -149,9 +150,10 @@ function standInWorker(name = "stand-in", o: { paused?: boolean; lanes?: string[
   const w = pool.addWorker(name);
   const lanes = o.lanes ?? allLanes(loadIndex(), sha).map((l) => l.lane);
   pool.patchWorker(w.id, { paused: !!o.paused, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l, { delayMs: 0 }])), claimAfterMs: 0 });
+  // Connected once: it said its build (one that takes this studio's job tickets).
   db()
-    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
-    .run(JSON.stringify({ lanes, workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+    .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
+    .run(JSON.stringify({ lanes, workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
   return w;
 }
 

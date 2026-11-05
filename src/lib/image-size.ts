@@ -13,6 +13,54 @@ export function imageSize(data: Uint8Array): { width: number; height: number } |
   }
 }
 
+/**
+ * The size a picture shows at: its pixel size, turned when its EXIF orientation (a JPEG's) says it is stored on its
+ * side (orientations 5 to 8). Null as for imageSize.
+ */
+export function orientedImageSize(data: Uint8Array): { width: number; height: number } | null {
+  const size = imageSize(data);
+  if (!size) return null;
+  const o = exifOrientation(data);
+  return o !== null && o >= 5 && o <= 8 ? { width: size.height, height: size.width } : size;
+}
+
+/** A JPEG's EXIF orientation (1 to 8), or null when it has none (or isn't a JPEG). */
+export function exifOrientation(b: Uint8Array): number | null {
+  try {
+    if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+    let o = 2;
+    while (o + 4 < b.length && b[o] === 0xff) {
+      const marker = b[o + 1];
+      if (marker === 0xda || marker === 0xd9) return null;
+      const len = u16be(b, o + 2);
+      if (len < 2) return null;
+      if (marker === 0xe1 && len >= 16 && ascii(b, o + 4, 4) === "Exif") return tiffOrientation(b, o + 10, Math.min(b.length, o + 2 + len));
+      o += 2 + len;
+    }
+  } catch {}
+  return null;
+}
+
+/** The orientation tag (0x0112) of a TIFF header at `start` (an EXIF block), within `end`. */
+function tiffOrientation(b: Uint8Array, start: number, end: number): number | null {
+  const le = ascii(b, start, 2) === "II";
+  if (!le && ascii(b, start, 2) !== "MM") return null;
+  const u16 = (at: number) => (le ? b[at] | (b[at + 1] << 8) : (b[at] << 8) | b[at + 1]);
+  const u32 = (at: number) => (le ? (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16)) + b[at + 3] * 2 ** 24 : u32be(b, at));
+  const ifd = start + u32(start + 4);
+  if (ifd + 2 > end) return null;
+  const n = u16(ifd);
+  for (let i = 0; i < n; i++) {
+    const at = ifd + 2 + i * 12;
+    if (at + 12 > end) return null;
+    if (u16(at) === 0x0112) {
+      const v = u16(at + 8);
+      return v >= 1 && v <= 8 ? v : null;
+    }
+  }
+  return null;
+}
+
 const ascii = (b: Uint8Array, o: number, n: number) => String.fromCharCode(...b.subarray(o, o + n));
 const u16be = (b: Uint8Array, o: number) => (b[o] << 8) | b[o + 1];
 const u16le = (b: Uint8Array, o: number) => b[o] | (b[o + 1] << 8);

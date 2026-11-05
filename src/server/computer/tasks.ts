@@ -22,7 +22,10 @@ import {
   type ReportEvent,
   type TaskInput,
   type WantedFile,
+  previewOf,
 } from "@/lib/relay";
+import type { FinishTicket } from "@/lib/finish-ticket";
+import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 import { runCeilingMs } from "../queue-settings";
 
@@ -62,11 +65,19 @@ export interface Progress {
   node?: string;
   nodesDone?: number;
   position?: number;
+  /** A worker's latest live preview (a JPEG as base64, src/lib/relay.ts PREVIEW_LIMITS), and when it came. */
+  preview?: string;
+  previewAt?: number;
   at: number;
 }
 
 const progressMap = () => (globalThis.__fuobeRelayProgress ??= new Map());
 export const taskProgress = (id: string): Progress | undefined => progressMap().get(id);
+/** A task's latest live preview from its worker: a JPEG (at most 64 KB) and when it came, or null. */
+export function taskPreview(id: string): { jpeg: Buffer; at: number } | null {
+  const p = progressMap().get(id);
+  return p?.preview ? { jpeg: Buffer.from(p.preview, "base64"), at: p.previewAt ?? p.at } : null;
+}
 
 /** The relay's tables are made with the database (db.ts RELAY_TABLES). */
 const rdb = () => db();
@@ -79,6 +90,12 @@ export interface TaskRow {
   device: string | null;
   lease_hash: string | null;
   graph_json: string | null;
+  /** An account's task for workers: its job ticket (src/lib/job-ticket.ts), in place of a graph (graph_json is NULL). */
+  ticket_json?: string | null;
+  /** A finishing job for a worker's CPU slot (src/lib/finish-ticket.ts), in place of a graph (graph_json is NULL). */
+  finish_json?: string | null;
+  /** The worker slot that takes it: "cpu" (light CPU work, a finishing job), or NULL (its GPU's). */
+  slot?: string | null;
   prompt_id: string;
   prefix: string | null;
   meta_batch: number;
@@ -290,6 +307,12 @@ export function stageInput(principal: Principal, data: Buffer, contentType: stri
   return staged;
 }
 
+/** An input a principal staged and no task has taken yet: its SHA-256 and content type (a job ticket names both). */
+export function stagedInput(principal: Principal, name: string): { sha256: string; contentType: string } | null {
+  const r = rdb().prepare("SELECT sha256, content_type FROM relay_inputs WHERE principal = ? AND name = ? AND task_id IS NULL").get(principal, name) as { sha256: string; content_type: string } | undefined;
+  return r ? { sha256: r.sha256, contentType: r.content_type } : null;
+}
+
 /** Every string a graph's nodes take (the names of the inputs it loads are among them). */
 function graphStrings(graph: Record<string, { inputs?: Record<string, unknown> }>): Set<string> {
   const out = new Set<string>();
@@ -301,6 +324,13 @@ export interface NewTask {
   principal: Principal;
   generationId: string;
   graph: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  /**
+   * An account's run on the workers: its job ticket. The task then keeps no graph (the worker composes it), and takes the
+   * inputs the ticket names.
+   */
+  ticket?: JobTicket;
+  /** A finishing job (src/lib/finish-ticket.ts): no graph and no ticket; the worker's CPU slot runs it with its own code. */
+  finish?: FinishTicket;
   prefix?: string;
   metaBatch?: boolean;
   preview?: boolean;
@@ -311,8 +341,10 @@ export interface NewTask {
   loras?: { file: string; url?: string }[];
   /** How many results its workflow says one job makes (an owner's job keeps no more than that, and at least 16). */
   outputs?: number;
+  /** More to keep with it (a finishing job's step). */
+  extra?: Record<string, unknown>;
   /** For workers (pool.ts): the pools that may take it, and what they need to. */
-  pool?: { pools: string[]; account?: string; class?: "paid" | "free" | "owner"; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string };
+  pool?: { pools: string[]; account?: string; class?: "paid" | "free" | "owner"; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string; slot?: "cpu" };
 }
 
 /** A ComfyUI job for a computer: the graph, the inputs it names, and a prompt id minted here. */
@@ -321,24 +353,24 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   const promptId = crypto.randomUUID();
   const now = Date.now();
   const d = rdb();
-  const named = graphStrings(t.graph);
+  const named = t.finish ? new Set(t.finish.inputs.map((i) => i.name)) : t.ticket ? new Set(t.ticket.inputs.map((i) => i.name)) : graphStrings(t.graph);
   d.transaction(() => {
     const pool = t.pool;
     d.prepare(
       `INSERT INTO relay_tasks (id, principal, generation_id, state, graph_json, prompt_id, prefix, meta_batch, preview, workflow_id, extra_json, created_at, updated_at,
-         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class)
-       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class, ticket_json, finish_json, slot)
+       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       t.principal,
       t.generationId,
-      JSON.stringify(t.graph),
+      t.ticket || t.finish ? null : JSON.stringify(t.graph),
       promptId,
       t.prefix ?? null,
       t.metaBatch ? 1 : 0,
       t.preview ? 1 : 0,
       t.workflowId ?? null,
-      JSON.stringify({ made: t.made, loras: t.loras ?? [], ...(t.outputs && { outputs: t.outputs }) }),
+      JSON.stringify({ ...t.extra, made: t.made, loras: t.loras ?? [], ...(t.outputs && { outputs: t.outputs }) }),
       now,
       now,
       pool?.account ?? null,
@@ -350,12 +382,36 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
       pool?.notAfter ?? null,
       pool?.onlyWorker ?? null,
       pool ? (pool.class ?? (pool.account ? "free" : "owner")) : null,
+      t.ticket ? JSON.stringify(t.ticket) : null,
+      t.finish ? JSON.stringify(t.finish) : null,
+      pool?.slot ?? null,
     );
     const free = d.prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL ORDER BY created_at").all(t.principal) as { name: string }[];
     let n = 0;
     for (const f of free) if (named.has(f.name)) d.prepare("UPDATE relay_inputs SET task_id = ?, n = ? WHERE name = ?").run(id, n++, f.name);
   })();
   return { id, promptId };
+}
+
+/**
+ * One of a task's inputs put in place of another (a job ticket made again, whose graph's own file came out new): `next`
+ * is staged as the task's, after its other inputs, and `old` (when given) goes with its file. `next` null: `old` only
+ * goes. Returns the new input's name and SHA-256.
+ */
+export function swapTaskInput(t: Pick<TaskRow, "id" | "principal">, old: string | null, next: { data: Buffer; contentType: string; name: string } | null): { name: string; sha256: string } | null {
+  const d = rdb();
+  let made: { name: string; sha256: string } | null = null;
+  if (next) {
+    const name = stageInput(t.principal as Principal, next.data, next.contentType, next.name);
+    const n = (d.prepare("SELECT COALESCE(MAX(n), -1) + 1 AS n FROM relay_inputs WHERE task_id = ?").get(t.id) as { n: number }).n;
+    d.prepare("UPDATE relay_inputs SET task_id = ?, n = ? WHERE name = ?").run(t.id, n, name);
+    made = { name, sha256: crypto.createHash("sha256").update(next.data).digest("hex") };
+  }
+  if (old) {
+    fs.rmSync(inputFile(old), { force: true });
+    d.prepare("DELETE FROM relay_inputs WHERE name = ? AND task_id = ?").run(old, t.id);
+  }
+  return made;
 }
 
 /** The names of the inputs a principal staged that no task has taken yet (its next task's files). */
@@ -426,6 +482,7 @@ export function cleanFacts(f: unknown, keep?: ComputerFacts): ComputerFacts {
     ...(typeof o.portable === "boolean" && { portable: o.portable }),
     ...((o.cors === "exact" || o.cors === "any" || o.cors === "other") && { cors: o.cors }),
     ...(typeof o.guard === "boolean" && { guard: o.guard }),
+    ...(typeof o.gpuGen === "string" && /^\d{1,2}\.\d{1,2}$/.test(o.gpuGen) && { gpuGen: o.gpuGen }),
     ...(loras && { loras }),
   };
 }
@@ -485,7 +542,16 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
   return { runner: free, heldElsewhere: !free && elsewhere, waiting, stops };
 }
 
-export function noteProgress(id: string, r: Record<string, unknown>, now: number) {
+/**
+ * Does a worker's task show live previews: a task on the workers whose run asked for previews, that isn't a finishing
+ * job, and whose results aren't checked before anyone sees them.
+ */
+export function showsPreview(t: Pick<TaskRow, "pools" | "preview" | "finish_json" | "extra_json">): boolean {
+  return !!t.pools && !!t.preview && !t.finish_json && !json<{ checkOutputs?: boolean }>(t.extra_json, {}).checkOutputs;
+}
+
+/** Keep a task's live progress. A preview is kept only from a progress report (`o.preview`), never from a beat. */
+export function noteProgress(id: string, r: Record<string, unknown>, now: number, o: { preview?: boolean } = {}) {
   const p: Progress = { at: now };
   for (const k of ["value", "max", "nodesDone", "position"] as const) {
     const v = nonNeg(r[k]);
@@ -493,6 +559,9 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   }
   const node = str(r.node, 64);
   if (node) p.node = node;
+  // A worker's live preview: a JPEG of at most 64 KB (previewOf); a larger one, or anything else, is dropped.
+  const preview = o.preview ? previewOf(r.preview) : undefined;
+  if (preview) Object.assign(p, { preview, previewAt: now });
   progressMap().set(id, { ...progressMap().get(id), ...p });
 }
 
@@ -538,13 +607,21 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
   setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...(fresh && t.pools && { attempts: 0, sending_since: null }), ...fields });
   if (fresh) rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
   const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
+  // An account's task for workers hands out its job ticket, never a graph (src/lib/job-ticket.ts).
+  const ticket = t.ticket_json ? json<JobTicket | null>(t.ticket_json, null) : null;
+  // A finishing job hands out its finish ticket (src/lib/finish-ticket.ts): no graph and no job ticket.
+  const finish = t.finish_json ? json<FinishTicket | null>(t.finish_json, null) : null;
   return {
     id: t.id,
     generationId: t.generation_id,
     lease,
-    graph: json(t.graph_json, {}),
+    ...(finish ? { finish } : ticket ? { ticket } : { graph: json(t.graph_json, {}) }),
+    ...(t.slot === "cpu" && { slot: "cpu" as const }),
+    ...(t.pools && { class: (t.class === "paid" || t.class === "owner" ? t.class : t.class === "free" || t.account ? "free" : "owner") as "paid" | "free" | "owner", ...(t.workflow_id && { workflowId: t.workflow_id }) }),
     promptId: t.prompt_id,
     preview: !!t.preview,
+    // A worker sends live previews only of a run that shows them: never of one whose results are checked first.
+    ...(showsPreview(t) && { reportPreview: true as const }),
     ...(t.prefix && { prefix: t.prefix }),
     ...(t.meta_batch && { metaBatch: true }),
     inputs,
@@ -672,7 +749,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       return { ok: true };
     case "running":
       setTask(t.id, { ...seen, state: "running", ...(!t.started_at && { started_at: now }), note: null });
-      noteProgress(t.id, { ...e, position: undefined }, now);
+      // A live preview only from the attempt that holds the lease, for a run that shows them.
+      noteProgress(t.id, { ...e, position: undefined }, now, { preview: showsPreview(t) });
       return { ok: true };
     case "finished":
     case "passes": {
@@ -683,8 +761,11 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       const entries = e.event === "finished" ? [e.entry] : e.entries;
       if (!Array.isArray(entries) || entries.some((x) => !x || typeof x !== "object")) throw new RelayError(400, "Bad history entry");
       const p = plan(entries, e.event === "passes");
-      // A worker's job ended on its ComfyUI: the workers' log keeps its measured run (the billing service settles with it).
-      if (t.pools && t.worker_id && (!("follow" in p) || !t.meta_batch)) logWorkerJob("finished", t, t.worker_id, now, execFields(e, t, now) ?? {});
+      // A worker's job ended on its ComfyUI: the workers' log keeps its measured run (the billing service settles with it,
+      // and a lane's typical run is read from it). CPU work (light CPU work, a finishing job) uses no GPU: its time and
+      // device are never kept as the run's GPU time.
+      const cpuWork = t.slot === "cpu" || !!t.finish_json;
+      if (t.pools && t.worker_id && (!("follow" in p) || !t.meta_batch)) logWorkerJob("finished", t, t.worker_id, now, cpuWork ? {} : (execFields(e, t, now) ?? {}));
       if ("follow" in p) {
         if (!t.meta_batch) {
           endTask(t.id, "failed", { error: "This run finished without a result. Press Retry." });
@@ -904,7 +985,7 @@ export function sweepRelay(now = Date.now()): { inputs: number; tasks: number } 
     .all(now - RELAY_TIMES.keepMs) as { id: string; finished_at: number | null }[];
   for (const t of ended) {
     fs.rmSync(taskDir(t.id), { recursive: true, force: true });
-    d.prepare("UPDATE relay_tasks SET graph_json = NULL WHERE id = ?").run(t.id);
+    d.prepare("UPDATE relay_tasks SET graph_json = NULL, ticket_json = NULL, finish_json = NULL WHERE id = ?").run(t.id);
   }
   const old = d.prepare("DELETE FROM relay_tasks WHERE state IN ('done','failed','canceled') AND finished_at < ?").run(now - RELAY_TIMES.keepMs);
   return { inputs: stale.length, tasks: old.changes };

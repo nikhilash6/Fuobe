@@ -8,12 +8,14 @@
  * a socket and a clock, and the tests drive it from Node against a stand-in ComfyUI.
  */
 import { isGuard } from "./comfy-guard";
+import { FINISH_RUN_MS, finishProblem, type FinishResult, type FinishStats } from "./finish-ticket";
 import { fetchWithin } from "./fetch-within";
 import { parseComfyBinary, parseComfyText } from "./comfy-ws";
 import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, writePath, type SystemStats } from "./local-comfy";
 import {
   DONE_SHOWN_MS,
   META_BATCH_HISTORY,
+  PREVIEW_LIMITS,
   RELAY_LIMITS,
   RELAY_TIMES,
   type BeatAnswer,
@@ -27,6 +29,9 @@ import {
   type TaskInput,
   type WantedFile,
 } from "./relay";
+
+/** A file's bytes as an ArrayBuffer of exactly its length. */
+const toArrayBuffer = (d: ArrayBuffer | Uint8Array): ArrayBuffer => (d instanceof Uint8Array ? (d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer) : d);
 
 /** The parts of a WebSocket the runner uses (the browser's, or Node's). */
 export interface SocketLike {
@@ -64,11 +69,64 @@ export interface RunnerDeps {
   vet?: (t: ClaimedTask) => TabFailure | null | Promise<TabFailure | null>;
   /** A job ended here, done or not: a worker deletes its files. */
   ended?: (t: ClaimedTask, phase: LocalJob["phase"]) => void | Promise<void>;
+  /**
+   * A worker program's composer (src/lib/ticket-compose.ts): the graph of a job ticket (src/lib/job-ticket.ts), built
+   * from its own copy of the catalog, with the small files the graph makes itself; or why it refuses the ticket. A
+   * browser tab has none: it never gets a ticket.
+   */
+  compose?: (t: ClaimedTask) => Promise<ComposedJob | { refused: TicketRefused }>;
+  /** More facts to send with its ComfyUI's (a worker's GPU generation). */
+  factsExtra?: () => Partial<ComputerFacts>;
   /** More to say in each beat (a worker's pause, its GPU, its inventory), and what the studio answered. */
   beatExtra?: () => Record<string, unknown>;
   onBeat?: (a: BeatAnswer) => void;
   /** What only a worker program does (docs/gpu-workers.md). A browser tab has none of it. */
   worker?: WorkerHooks;
+  /**
+   * A worker's CPU slot runs finishing jobs (src/lib/finish-ticket.ts) with its own code: the inputs by slot in, the
+   * files it made by role out (with what it measured), or why it refuses the job. A runner without it gives a finishing
+   * job back. A browser tab never gets one.
+   */
+  finish?: (t: ClaimedTask, inputs: Record<string, ArrayBuffer>, o: { signal: AbortSignal; progress: (fraction: number) => void }) => Promise<FinishMade | { refused: "unsafe-model" | "finish-failed" }>;
+}
+
+/** The files a finishing job made, by role, and what it measured. */
+export interface FinishMade {
+  files: { role: string; name: string; data: ArrayBuffer | Uint8Array; contentType: string }[];
+  stats?: FinishStats;
+  turntable?: string;
+}
+
+/**
+ * A worker's live preview for a progress report: the latest preview of its job as base64, when it is a JPEG of at most
+ * PREVIEW_LIMITS.maxBytes and the last one went at least PREVIEW_LIMITS.everyMs ago (else undefined: none is sent).
+ */
+export async function previewForReport(preview: Blob | undefined, lastSentAt: number, now: number, shrink?: (b: Blob) => Promise<Blob | null>): Promise<string | undefined> {
+  if (!preview || preview.size === 0 || now - lastSentAt < PREVIEW_LIMITS.everyMs) return undefined;
+  const isJpeg = async (b: Blob) => {
+    if (b.size === 0 || b.size > PREVIEW_LIMITS.maxBytes || (b.type && b.type !== "image/jpeg")) return null;
+    const bytes = new Uint8Array(await b.arrayBuffer());
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff ? bytes : null;
+  };
+  // A PNG or a big JPEG is made again as a small JPEG first, when the worker can.
+  let bytes = await isJpeg(preview);
+  if (!bytes && shrink) {
+    const small = await shrink(preview).catch(() => null);
+    bytes = small ? await isJpeg(small) : null;
+  }
+  if (!bytes) return undefined;
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** Why a worker refuses a job ticket: another catalog, more than its PC allows, or a ticket it can't use (or a graph where a ticket belongs). */
+export type TicketRefused = "update-worker" | "outside-ceiling" | "bad-ticket";
+
+/** A job ticket composed on the worker: its graph, and the files the graph makes itself (sent to its ComfyUI with the inputs). */
+export interface ComposedJob {
+  graph: NonNullable<ClaimedTask["graph"]>;
+  made: { name: string; data: ArrayBuffer | Uint8Array; contentType: string }[];
 }
 
 /** A finished job's results as a worker keeps them on its own disk: its entries (one, or a meta-batch's passes). */
@@ -113,6 +171,18 @@ export interface WorkerHooks {
   stallLocalMs?: number | null;
   /** Free its ComfyUI's memory (before the one retry after it ran out). */
   free(): Promise<void>;
+  /**
+   * It takes full graphs from the studio for the owner's own jobs (false: job tickets only). A graph for anyone else's
+   * job is refused whatever this says: an account's run comes as a ticket.
+   */
+  graphs?: boolean;
+  /**
+   * The studio is older than job tickets (its last beat answer named no catalog version): its claims name no class, and
+   * every graph it sends is the owner's own job (it sends no account's run to the workers).
+   */
+  olderStudio?(): boolean;
+  /** Is a graph job (the owner's own) inside its PC's ceiling, by its lane or workflow? A ticket's are the composer's to check. */
+  inside?(t: ClaimedTask): boolean;
   /** How many times its ComfyUI stopped while it ran this task. */
   crashes(t: ClaimedTask): number;
   /** Its ComfyUI won't let go of a prompt: stop it (the worker starts it again). */
@@ -122,6 +192,11 @@ export interface WorkerHooks {
    * `onlyHeld`: the claim was made only to send kept results (the worker may not take other work now).
    */
   claimed(t: ClaimedTask | null, o: { onlyHeld: boolean }): void | Promise<void>;
+  /**
+   * A live preview its ComfyUI made that isn't a JPEG small enough to send (a PNG, or a big JPEG): made again as a small
+   * JPEG (at most 512 pixels on its long side), or null when it can't. Without it, only a small JPEG is sent.
+   */
+  shrinkPreview?(preview: Blob): Promise<Blob | null>;
 }
 
 /** ComfyUI's words for running out of memory (lib/gpu/fix-codes.ts says the same). */
@@ -212,6 +287,8 @@ export const MIN_RUN_LIMIT_MS = 10 * 60_000;
 export const MIN_STALL_MS = 60_000;
 
 const PROGRESS_EVERY_MS = 500;
+/** A finishing job tells the studio it still runs at least this often (and hears a stop in the answer). */
+const FINISH_BEAT_MS = 10_000;
 const POLL_MS = 1000;
 /** How often a ComfyUI that stopped answering is looked for on the other ports. */
 const FIND_EVERY_MS = 20_000;
@@ -257,7 +334,7 @@ export class ComputerRunner {
 
   constructor(
     private deps: RunnerDeps,
-    private o: { device: string; port: number; host?: string; clientId: string; access?: "ask" | "blocked" },
+    private o: { device: string; port: number; host?: string; clientId: string; access?: "ask" | "blocked"; slot?: "cpu" },
   ) {
     this.now = deps.now ?? Date.now;
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -360,7 +437,7 @@ export class ComputerRunner {
     const l = await this.look();
     if (l.comfy !== "ok") return null;
     if (o.guard || this.guard === undefined) this.guard = await this.read<unknown>("/fuobe/guard").then(isGuard, () => false);
-    const f: ComputerFacts = statsFacts(l.stats, this.deps.origin, this.guard);
+    const f: ComputerFacts = { ...statsFacts(l.stats, this.deps.origin, this.guard), ...this.deps.factsExtra?.() };
     if (o.loras) {
       const loras = await this.read<unknown>("/models/loras").catch(() => null);
       if (Array.isArray(loras)) f.loras = loras.filter((x): x is string => typeof x === "string");
@@ -556,7 +633,11 @@ export class ComputerRunner {
 
   private leases = new Map<string, string>();
   private promptOf = new Map<string, string>();
+  /** The files a composed job ticket's graph makes, by task and name: sent from here, never read from the studio. */
+  private madeOf = new Map<string, Map<string, { data: ArrayBuffer | Uint8Array; contentType: string }>>();
   private stoppedDone = new Set<string>();
+  /** The files a finishing job made, by task and name: uploaded from here, never read from ComfyUI. */
+  private finishMade = new Map<string, Map<string, Blob>>();
 
   /**
    * Ask for a job and run it (one at a time). True when there was one. Only while ComfyUI here answers to this site: a
@@ -569,7 +650,8 @@ export class ComputerRunner {
       // A worker's kept results go up without its ComfyUI (`onlyHeld`); anything else needs ComfyUI answering.
       if (!o.onlyHeld && (await this.look()).comfy !== "ok") return false;
       const running = this.view.jobs.filter((j) => j.phase !== "done" && j.phase !== "failed").map((j) => j.taskId);
-      const res = await this.deps.api("/api/gpu/computer/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: this.o.device, running }) });
+      // A worker's CPU slot claims for itself (`slot`): its work never waits for its GPU's job, nor holds it up.
+      const res = await this.deps.api("/api/gpu/computer/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: this.o.device, running, ...(this.o.slot && { slot: this.o.slot }) }) });
       if (res.status !== 200) {
         if (res.status === 401) this.stop("signed-out");
         if (res.status === 204) await this.deps.worker?.claimed(null, { onlyHeld: !!o.onlyHeld });
@@ -606,12 +688,16 @@ export class ComputerRunner {
     try {
       await this.runJob(t);
     } finally {
+      this.madeOf.delete(t.id);
+      this.finishMade.delete(t.id);
       const phase = this.view.jobs.find((j) => j.taskId === t.id)?.phase;
       if (this.deps.ended && (phase === "done" || phase === "failed")) await Promise.resolve(this.deps.ended(t, phase)).catch(() => {});
     }
   }
 
   private async runJob(t: ClaimedTask): Promise<void> {
+    // A finishing job runs with the worker's own code, never on ComfyUI.
+    if (t.finish !== undefined) return this.runFinish(t);
     this.promptOf.set(t.id, t.promptId);
     this.job(t, { phase: t.resume === "collecting" ? "saving" : t.resume === "running" ? "running" : t.resume === "queued" ? "queued" : "sending" });
     try {
@@ -621,7 +707,17 @@ export class ComputerRunner {
       // A worker's results kept from before (it stopped after its ComfyUI finished): they go up, the job doesn't run again.
       const held = worker ? await worker.hold.get(t).catch(() => null) : null;
       if (!held) {
-        const problem = graphProblem(t.graph, t.inputs.map((i) => i.name));
+        // A job ticket becomes its graph here (a worker's composer); a graph comes only for the owner's own jobs.
+        const notMine = await this.graphOf(t);
+        if (notMine === "update-worker" || notMine === "outside-ceiling") {
+          await this.giveBack(t, notMine);
+          return this.job(t, { phase: "failed" });
+        }
+        if (notMine) {
+          await this.report(t, { event: "failed", reason: "bad-ticket" });
+          return this.job(t, { phase: "failed" });
+        }
+        const problem = graphProblem(t.graph!, t.inputs.map((i) => i.name));
         if (problem) {
           await this.report(t, { event: "failed", reason: "unsafe-graph" });
           return this.job(t, { phase: "failed" });
@@ -690,6 +786,179 @@ export class ComputerRunner {
   }
 
   /**
+   * A finishing job (src/lib/finish-ticket.ts) on a worker's CPU slot: its ticket checked, its inputs read (each checked
+   * against its SHA-256, a picture made again first), the worker's own code run on them within the run limit, its files
+   * kept before the studio hears of them, then the files the studio asks for uploaded. Results kept from an earlier try
+   * go up without running it again. No ComfyUI is used.
+   */
+  private async runFinish(t: ClaimedTask): Promise<void> {
+    const worker = this.deps.worker;
+    try {
+      const held = worker ? await worker.hold.get(t).catch(() => null) : null;
+      let wanted = t.wanted;
+      let entries: HistoryEntryLike[] | null = held?.entries ?? null;
+      let phase = t.resume ?? "sending";
+      if (held && phase !== "collecting") {
+        if (phase === "sending") await this.report(t, { event: "sent", promptId: t.promptId, kept: true });
+        const a = await this.report(t, this.endReport(held, true));
+        if (a.stop) throw new Stopped();
+        if (!a.wanted) return this.job(t, { phase: a.state === "done" ? "done" : "failed" });
+        wanted = a.wanted;
+        phase = "collecting";
+      }
+      if (phase !== "collecting") {
+        if (!this.deps.finish || !worker) {
+          if (worker) await this.giveBack(t, "update-worker");
+          else await this.report(t, { event: "failed", reason: "bad-ticket" });
+          return this.job(t, { phase: "failed" });
+        }
+        if (finishProblem(t.finish, { inputs: t.inputs })) {
+          await this.report(t, { event: "failed", reason: "bad-ticket" });
+          return this.job(t, { phase: "failed" });
+        }
+        this.job(t, { phase: "sending" });
+        // Its inputs, by slot: from the studio, checked against their SHA-256 (a picture made again first).
+        const inputs: Record<string, ArrayBuffer> = {};
+        for (const i of t.finish!.inputs) {
+          const input = t.inputs.find((x) => x.name === i.name);
+          if (!input) {
+            await this.report(t, { event: "failed", reason: "bad-ticket" });
+            return this.job(t, { phase: "failed" });
+          }
+          const read = async (): Promise<ArrayBuffer | TabFailure> => {
+            const res = await this.deps.api("/api/gpu/computer/tasks/" + t.id + "/inputs/" + input.n, { headers: { "X-Fuobe-Lease": t.lease } });
+            if (res.status === 404 || res.status === 409) throw new Stopped();
+            if (res.status === 429) return "input-changed";
+            if (!res.ok) throw new Error("The studio answered HTTP " + res.status + " for a file");
+            const data = await res.arrayBuffer();
+            return (await this.deps.sha256(data)) === input.sha256 ? data : "input-changed";
+          };
+          const got = await worker.input(t, input, read);
+          if (got === "give-back") {
+            await this.giveBack(t, "media");
+            return this.job(t, { phase: "failed" });
+          }
+          if (typeof got === "string") {
+            await this.report(t, { event: "failed", reason: got });
+            return this.job(t, { phase: "failed" });
+          }
+          inputs[i.slot] = got;
+        }
+        if (phase === "sending") await this.report(t, { event: "sent", promptId: t.promptId });
+        await this.report(t, { event: "running", value: 0, max: 100 });
+        this.job(t, { phase: "running", value: 0, max: 100 });
+        // Its run limit: past it, the job goes back in line (the next try has the whole limit again).
+        const ctrl = new AbortController();
+        const limit = t.runLimitMs && t.runLimitMs > 0 ? t.runLimitMs : FINISH_RUN_MS;
+        const started = this.now();
+        let timedOut = false;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          ctrl.abort();
+        }, limit);
+        // A stop from the studio (the run was canceled or deleted): the answer to a progress report says so, or the studio
+        // no longer has the job. Its processes stop at once. A progress report goes at least every FINISH_BEAT_MS, so a
+        // stop is heard even while a step of it says nothing for minutes.
+        let stopped = false;
+        const stopNow = () => {
+          stopped = true;
+          ctrl.abort();
+        };
+        let lastAt = 0;
+        let value = 0;
+        const tell = () => {
+          if (stopped) return;
+          lastAt = this.now();
+          void this.report(t, { event: "running", value, max: 100 }).then(
+            (a) => {
+              if (a.stop) stopNow();
+            },
+            (e) => {
+              if (e instanceof Stopped) stopNow();
+            },
+          );
+        };
+        const progress = (fraction: number) => {
+          value = Math.max(0, Math.min(99, Math.round(fraction * 100)));
+          this.job(t, { phase: "running", value, max: 100 });
+          if (this.now() - lastAt >= PROGRESS_EVERY_MS * 4) tell();
+        };
+        const beat = setInterval(() => {
+          if (this.now() - lastAt >= FINISH_BEAT_MS) tell();
+        }, FINISH_BEAT_MS);
+        let made: FinishMade | { refused: "unsafe-model" | "finish-failed" };
+        try {
+          made = await this.deps.finish(t, inputs, { signal: ctrl.signal, progress }).catch((): { refused: "finish-failed" } => ({ refused: "finish-failed" }));
+        } finally {
+          clearTimeout(timer);
+          clearInterval(beat);
+        }
+        if (!this.alive || stopped) throw new Stopped();
+        if (timedOut) {
+          await this.giveBack(t, "run-limit");
+          return this.job(t, { phase: "failed" });
+        }
+        if ("refused" in made) {
+          await this.report(t, { event: "failed", reason: made.refused });
+          return this.job(t, { phase: "failed" });
+        }
+        const results: FinishResult[] = made.files.map((f) => ({ filename: f.name, subfolder: "", type: "output", role: f.role }));
+        const entry: HistoryEntryLike = {
+          status: { status_str: "success", completed: true },
+          outputs: { finish: { results, ...(made.stats && { stats: [made.stats] }), ...(made.turntable && { turntable: [made.turntable] }) } },
+        };
+        const files = new Map(made.files.map((f) => [f.name, new Blob([toArrayBuffer(f.data)], { type: f.contentType })]));
+        this.finishMade.set(t.id, files);
+        const execMs = this.now() - started;
+        // Kept on its disk first: a stop from here on uploads them instead of running the job again.
+        await worker.hold
+          .keep(t, { kind: "finished", entries: [entry], execMs }, async (f) => {
+            const b = files.get(f.filename);
+            return b ? new Response(b) : null;
+          })
+          .catch(() => {});
+        const a = await this.report(t, { event: "finished", entry, execMs: Math.round(execMs) });
+        if (a.stop) throw new Stopped();
+        if (!a.wanted) return this.job(t, { phase: a.state === "done" ? "done" : "failed" });
+        wanted = a.wanted;
+        entries = [entry];
+      }
+      if (!wanted) return;
+      await this.collect(t, wanted, entries ?? [], t.received ?? []);
+    } catch (e) {
+      if (e instanceof Stopped) {
+        if (e.gone) worker?.hold.drop(t.id);
+        return this.job(t, { phase: "failed" });
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * The job's graph, or why it is refused. A ticket is composed by the worker's own composer (a runner without one gives
+   * it back to a worker that has one, or refuses it in a browser). A graph is taken as it is by a browser tab; a worker
+   * takes one only for the owner's own job, and only while it takes graphs at all.
+   */
+  private async graphOf(t: ClaimedTask): Promise<TicketRefused | null> {
+    const worker = this.deps.worker;
+    if (t.ticket !== undefined) {
+      if (!this.deps.compose) return worker ? "update-worker" : "bad-ticket";
+      const c = await this.deps.compose(t).catch((): { refused: TicketRefused } => ({ refused: "bad-ticket" }));
+      if ("refused" in c) return c.refused;
+      t.graph = c.graph;
+      this.madeOf.set(t.id, new Map(c.made.map((m) => [m.name, { data: m.data, contentType: m.contentType }])));
+      return null;
+    }
+    if (!t.graph || typeof t.graph !== "object") return "bad-ticket";
+    // A studio names the owner's own job "owner"; a graph for any other job is refused, and so is one that names no class,
+    // unless the studio is older than job tickets (its every graph job is the owner's own, and names no class).
+    const cls = t.class ?? (worker?.olderStudio?.() ? "owner" : undefined);
+    if (worker && (cls !== "owner" || worker.graphs === false)) return "bad-ticket";
+    if (worker?.inside && !worker.inside(t)) return "outside-ceiling";
+    return null;
+  }
+
+  /**
    * A worker's report of a finished job: its entries, its ComfyUI's execution time and its GPU's name (`kept`: results
    * kept from an earlier try).
    */
@@ -742,7 +1011,7 @@ export class ComputerRunner {
   private async resend(t: ClaimedTask): Promise<boolean> {
     const own = { promptIds: [t.promptId] };
     await this.send("/history", { delete: [t.promptId] }, own, { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: [t.promptId] }) }).catch(() => null);
-    const body = { prompt: t.graph, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
+    const body = { prompt: t.graph!, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
     const res = await this.send("/prompt", body, own, { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     const answer = (await res?.json().catch(() => ({}))) as { prompt_id?: string } | undefined;
     if (!res?.ok || typeof answer?.prompt_id !== "string") return false;
@@ -774,9 +1043,12 @@ export class ComputerRunner {
     if (!there) await this.waitForComfy(t);
     const names = t.inputs.map((i) => i.name);
     const worker = this.deps.worker;
+    const made = this.madeOf.get(t.id);
     for (const input of t.inputs) {
       // From the studio, checked against its SHA-256. A worker reads it at most once a job (it keeps a copy), so a
-      // studio that says it was read enough times (429) means it failed.
+      // studio that says it was read enough times (429) means it failed. A file a composed ticket's graph makes itself
+      // is the worker's own (its composer checked it against the ticket): the studio's copy is never read.
+      const own = made?.get(input.name);
       const read = async (): Promise<ArrayBuffer | TabFailure> => {
         const res = await this.deps.api(`/api/gpu/computer/tasks/${t.id}/inputs/${input.n}`, { headers: { "X-Fuobe-Lease": t.lease } });
         if (res.status === 404 || res.status === 409) throw new Stopped();
@@ -785,7 +1057,7 @@ export class ComputerRunner {
         const data = await res.arrayBuffer();
         return (await this.deps.sha256(data)) === input.sha256 ? data : "input-changed";
       };
-      const got = worker ? await worker.input(t, input, read) : await read();
+      const got = own ? toArrayBuffer(own.data) : worker ? await worker.input(t, input, read) : await read();
       if (got === "give-back") return got;
       if (typeof got === "string") {
         await this.report(t, { event: "failed", reason: got });
@@ -808,7 +1080,7 @@ export class ComputerRunner {
         return false;
       }
     }
-    const body = { prompt: t.graph, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
+    const body = { prompt: t.graph!, prompt_id: t.promptId, client_id: this.o.clientId, ...(t.preview && { extra_data: { preview_method: "auto" } }) };
     const res = await this.send("/prompt", body, { promptIds: [t.promptId] }, { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     if (!res) {
       await this.waitForComfy(t);
@@ -862,6 +1134,8 @@ export class ComputerRunner {
     const worker = this.deps.worker;
     let lastSent = 0;
     let lastKey = "";
+    let lastPreview: Blob | undefined;
+    let lastPreviewAt = -Infinity;
     let following: string | undefined;
     // A worker's watchdog: when the job last moved (a step, a node, its place, a pass).
     let movedAt = this.now();
@@ -949,11 +1223,19 @@ export class ComputerRunner {
       moved(JSON.stringify([w.s, w.s === "pending" ? w.ahead : null, ev?.value, ev?.max, ev?.node, ev?.nodesDone]));
       const report: ReportEvent = w.s === "pending" ? { event: "queued", position: w.ahead } : { event: "running", value: ev?.value, max: ev?.max, node: ev?.node, nodesDone: ev?.nodesDone };
       const key = JSON.stringify(report);
-      if (key !== lastKey && this.now() - lastSent >= PROGRESS_EVERY_MS) {
-        const a = await this.report(t, report);
+      // A worker sends its ComfyUI's latest preview with its progress, when the claim asks for one: a small JPEG, at most
+      // one every 2 s.
+      const shown = worker && t.reportPreview && w.s === "running" ? this.view.jobs.find((j) => j.taskId === t.id)?.preview : undefined;
+      // Each preview is tried once (one that can't be sent is never made again).
+      const due = !!shown && shown !== lastPreview && this.now() - lastPreviewAt >= PREVIEW_LIMITS.everyMs && this.now() - lastSent >= PROGRESS_EVERY_MS;
+      const preview = due ? await previewForReport(shown, lastPreviewAt, this.now(), worker?.shrinkPreview?.bind(worker)) : undefined;
+      if (due) lastPreview = shown;
+      if ((key !== lastKey || preview) && this.now() - lastSent >= PROGRESS_EVERY_MS) {
+        const a = await this.report(t, preview && report.event === "running" ? { ...report, preview } : report);
         if (a.stop) throw new Stopped();
         lastKey = key;
         lastSent = this.now();
+        if (preview) lastPreviewAt = this.now();
       }
       this.job(t, w.s === "pending" ? { phase: "queued", position: w.ahead } : { phase: "running", value: ev?.value, max: ev?.max });
       // The socket says when steps move; without it, a read a second.
@@ -972,8 +1254,9 @@ export class ComputerRunner {
         await this.report(t, { event: "failed", reason: "output-missing" });
         return this.job(t, { phase: "failed" });
       }
-      // A worker's kept copy first (its ComfyUI may have restarted since), else ComfyUI's own file.
-      const kept = this.deps.worker ? await this.deps.worker.hold.file(t, w).catch(() => null) : null;
+      // A finishing job's own file, then a worker's kept copy (its ComfyUI may have restarted since), else ComfyUI's own file.
+      const made = this.finishMade.get(t.id)?.get(w.filename);
+      const kept = made ?? (this.deps.worker ? await this.deps.worker.hold.file(t, w).catch(() => null) : null);
       const res = kept ? null : await this.deps.local(`${this.base}${readPath(viewPath(w))}`, { credentials: "omit", cache: "no-store" }).catch(() => null);
       if (!kept && !res?.ok) {
         await this.report(t, { event: "failed", reason: "output-missing" });

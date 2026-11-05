@@ -85,6 +85,18 @@ export function poolTakes(endpoint: string | undefined): boolean {
 }
 
 /**
+ * Can this install's GPUs take this workflow's job tickets now (an account's run there goes as one): on the workers, one
+ * built for this studio's catalog that may run it (a workflow that picks its graph at run time: every graph it may
+ * pick). After an update of the studio, a worker built from the catalog before takes them once it is updated too:
+ * meanwhile poolTakes still says the run could go there, and this says not yet. Not on the workers: yes.
+ */
+export function poolTicketsReady(endpoint: string | undefined): boolean {
+  if (!endpoint || !poolOnWorkers()) return true;
+  const picks = endpoint.includes("{") ? workflowPicks(endpoint) : [endpoint];
+  return picks.length > 0 && picks.every((id) => workersCanRun(id, { tickets: true }));
+}
+
+/**
  * The steps a run on this install's GPUs can carry out there: ComfyUI's. The price check, the run's admission and its
  * submit read this one table, so a run is refused before Run when a step of it couldn't run there (a text step, a step
  * made in the browser, a cloud model), never part way through.
@@ -112,10 +124,12 @@ export const HOSTED_WORDS = {
   rtxCard: "This one needs an NVIDIA RTX card, and this studio's GPUs can't run it right now. Connect your own GPU in Settings, or pick another choice.",
   notHosted: "Runs on this studio's GPUs aren't open to this account. Connect your own GPU in Settings.",
   waitedTooLong: "This studio's GPUs were busy, so it didn't run. Not charged.",
+  busy: "Busy right now. Try again in a little while.",
 };
 
 /** The same refusals for a guest, who has no Settings to connect a GPU in yet. */
 export const HOSTED_GUEST_WORDS = {
+  busy: HOSTED_WORDS.busy,
   notOffered: "This one isn't offered here. Pick another model.",
   rtxCard: "This one isn't offered here right now. Pick another choice.",
   loras: "Extra LoRAs aren't offered here. Run without them.",

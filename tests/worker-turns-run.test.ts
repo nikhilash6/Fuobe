@@ -34,6 +34,7 @@ const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
 const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
+const { catalogVersion } = await import("@/server/computer/catalog-version");
 const { ComputerRunner } = await import("@/lib/computer-runner");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -66,6 +67,13 @@ function addWorker(): W {
   return w;
 }
 
+/** A person's job comes as a job ticket: the worker's composer here gives its graph, by the run's id. */
+const ticketGraphs = new Map<string, Record<string, unknown>>();
+const composer = {
+  workerFactsFrom: () => ({}),
+  composeTicket: async (job: { generationId: string }) => ({ ok: true, graph: ticketGraphs.get(job.generationId), workflowId: "wf-test", size: { megapixels: 0, seconds: 0, outputs: 1 }, made: [] }),
+};
+
 let gens = 0;
 /** A person's run for the workers, or (`owner`) one of the owner's own, which no turn is asked for. */
 function addTask(o: { owner?: boolean } = {}): string {
@@ -75,10 +83,14 @@ function addTask(o: { owner?: boolean } = {}): string {
     .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'queued', '{}', '[]', ?, ?)")
     .run(gid, now, now);
   const input = tasks.stageInput("owner", FAKE_PNG, "image/png", "in.png");
+  const graph = { "1": { class_type: "LoadImage", inputs: { image: input } }, "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } }, "9": { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "fuobe/worker-test" } } };
+  ticketGraphs.set(gid, graph);
   return tasks.createTask({
     principal: "owner",
     generationId: gid,
-    graph: { "1": { class_type: "LoadImage", inputs: { image: input } }, "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } }, "9": { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "fuobe/worker-test" } } },
+    graph,
+    // (Made for this studio's catalog: an older one would be made again before a claim, and this one composes nothing.)
+    ...(!o.owner && { ticket: { catalogVersion: catalogVersion(), inputs: [{ slot: "images.0", name: input }] } as never }),
     // A person's run (an account's): the studio counts it in the beat's claimableNow.
     pool: { pools: ["pool"], ...(!o.owner && { account: "turns-account" }), rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
   }).id;
@@ -203,6 +215,8 @@ function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { lockOwners?: s
     awake: { set: () => {} },
     sleep: (ms: number) => sleep(Math.min(ms, 50)),
     log: (line: string) => void p.logs.push(line),
+    composer,
+    catalogVersion: "a".repeat(64),
     gpuEveryMs: 200,
     turnGraceMs: 1500,
     ...gpu,

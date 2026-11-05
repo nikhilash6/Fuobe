@@ -25,6 +25,10 @@ export interface Needs {
   packs: string[];
   /** The graphics memory a worker must report, with VRAM_TOLERANCE already allowed for. */
   minVramBytes: number;
+  /** How big the job is (its largest picture in megapixels, its longest clip in seconds, its results): a PC's ceiling reads it. */
+  size?: { megapixels: number; seconds: number; outputs: number };
+  /** A job ticket's catalog version (src/lib/job-ticket.ts): only a worker built for that catalog takes the task. */
+  catalogVersion?: string;
 }
 
 /**

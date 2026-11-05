@@ -108,8 +108,10 @@ const textType = (name: string, owner: boolean) => (/\.srt$/i.test(name) ? "appl
 /**
  * What a result from someone's ComfyUI is, from its first bytes (as an upload's type is: lib/sniff.ts), and whether it
  * is what the server asked for. Never a page or a script: a picture that is really HTML is refused. Throws the words.
+ * A 3D model comes only from the owner's own jobs, or as a binary glTF when `o.glb` (a run on the workers whose 3D
+ * finish runs on a worker: the route checks the whole file's parts once it has arrived).
  */
-export function outputType(head: Buffer, w: WantedFile, owner: boolean): string {
+export function outputType(head: Buffer, w: WantedFile, owner: boolean, o: { glb?: boolean } = {}): string {
   const s = head.length >= 4 ? sniffMedia(head, undefined, { gif: true }) : null;
   switch (w.kind) {
     case "image":
@@ -131,7 +133,7 @@ export function outputType(head: Buffer, w: WantedFile, owner: boolean): string 
       if (!head.includes(0)) return textType(w.filename, owner);
       break;
     case "model3d":
-      if (owner && head.subarray(0, 4).toString("latin1") === "glTF") return "model/gltf-binary";
+      if ((owner || o.glb) && head.subarray(0, 4).toString("latin1") === "glTF") return "model/gltf-binary";
       if (owner && /^ply\r?\n/.test(head.subarray(0, 8).toString("latin1"))) return "model/ply";
       break;
   }

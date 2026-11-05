@@ -822,6 +822,11 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     principal TEXT,
     worker_id TEXT
   );
+  CREATE TABLE IF NOT EXISTS catalog_processes (
+    version TEXT PRIMARY KEY,
+    started_at INTEGER NOT NULL,
+    seen_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS worker_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at INTEGER NOT NULL,
@@ -1016,6 +1021,16 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_workers", "seen_json", "TEXT"],
   ["relay_workers", "last_network", "TEXT"],
   ["relay_workers", "last_net_at", "INTEGER"],
+  // Job tickets (src/lib/job-ticket.ts): an account's task for workers carries one in place of a graph; a worker says
+  // the catalog version its build composes for, and what its PC may ever run (its ceiling).
+  ["relay_tasks", "ticket_json", "TEXT"],
+  ["relay_workers", "catalog_version", "TEXT"],
+  ["relay_workers", "ceiling_json", "TEXT"],
+  // The CPU slot (docs/gpu-workers.md): a task for a worker's CPU slot ("cpu"; NULL: its GPU's), a finishing job's
+  // ticket (src/lib/finish-ticket.ts), and the CPU slot a worker's last beat said it has (NULL: none).
+  ["relay_tasks", "slot", "TEXT"],
+  ["relay_tasks", "finish_json", "TEXT"],
+  ["relay_workers", "cpu_slot_json", "TEXT"],
 ];
 
 declare global {

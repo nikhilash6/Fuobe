@@ -131,6 +131,8 @@ function walk(p: string, out: string[]) {
   if (!fs.existsSync(full)) return;
   const st = fs.statSync(full);
   const posix = p.replace(/\\/g, "/");
+  // The worker's built parts are copies of scanned sources (scripts/build-worker.mjs), and never committed.
+  if (posix === "bin/lib/worker/dist") return;
   if (st.isFile()) {
     if (TEXT.test(posix)) out.push(posix);
     return;
