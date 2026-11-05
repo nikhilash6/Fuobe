@@ -30,6 +30,7 @@ import { parseCueTime } from "@/lib/av/cue-edit";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { usePoolRun } from "@/components/studio/pool-price";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 
 /**
@@ -233,6 +234,8 @@ function RunBar({
   const error = preview.error ? (preview.error as Error).message : null;
   const p = preview.data;
   const shown = blocker ?? error;
+  // A run on this studio's GPUs: the service's price and the place in line, and Run off when it is refused.
+  const { pool, off, go } = usePoolRun(p);
   return (
     <div className="space-y-2">
       {!shown && p && (
@@ -257,13 +260,13 @@ function RunBar({
               <>
                 {p.length !== null && <span className="font-mono text-foreground">{clock(p.length)}</span>}
                 {p.length !== null && " · "}
-                <span className="font-mono text-foreground">{money(p, engine)}</span>
+                <span className="font-mono text-foreground">{pool?.text ?? money(p, engine)}</span>
               </>
             ) : (
               "Pricing…"
             ))}
         </p>
-        <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={onRun} disabled={pending}>
+        <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={() => go(onRun)} disabled={pending || (off && !shown)}>
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />} {label}
         </Button>
       </div>

@@ -150,7 +150,7 @@ describe("hosted runs on", () => {
     expect(place.planned.model.id).toBe(QMA_MODEL);
     expect(place.planned.route.provider).toBe("comfyui");
     const quoted = await poolQuote(auth.accountById(a)!, req, undefined);
-    expect(quoted?.planned.model.id).toBe(QMA_MODEL);
+    expect(quoted?.planned?.model.id).toBe(QMA_MODEL);
     expect(quoted?.quote).toBeTruthy();
   });
 

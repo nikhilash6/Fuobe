@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { refusalShown } from "@/lib/refusals";
 import { postFileWithProgress } from "@/lib/upload";
 
 /**
@@ -47,8 +48,9 @@ export function checkClipFile(file: File, maxBytes: number): string | null {
 /** The file as the body (streamed to disk): an account's clip up to its limit, not only a small form. */
 const upload = (file: File, onProgress: (p: number) => void, signal: AbortSignal) => postFileWithProgress(file, onProgress, signal);
 
+/** The clip's header, read on the server (a signed-in account's own files only: src/app/api/media/probe). */
 async function probe(url: string): Promise<SourceInfo> {
-  const res = await fetch("/api/shorts/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+  const res = await fetch("/api/media/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
   return res.ok ? ((await res.json()) as SourceInfo) : {};
 }
 
@@ -84,6 +86,8 @@ export function useSourceClip(maxBytes: number) {
           setClip((c) => (c && c.preview === local ? { ...c, url: up.url, uploading: false, progress: 1, info } : c));
         } catch (e) {
           if ((e as Error).name === "AbortError") return;
+          // Refused with its own card open (sign up, or connect a GPU or key): the slot is empty again, ready for the clip.
+          if (refusalShown(e)) return setClip((c) => (c && c.preview === local ? null : c));
           setClip((c) => (c && c.preview === local ? { ...c, uploading: false, error: (e as Error).message } : c));
         }
       })();

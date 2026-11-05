@@ -1,10 +1,10 @@
-import { bodyTooBig, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, pressIdOf, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { describeScene, SceneSchema, sceneRequest, startStep } from "@/server/genjutsu";
 import { body, handle } from "@/server/shorts-schemas";
 
 /**
  * From picture's "What happens": starts the describer on the part; the page waits for its text (a generation). The
- * owner's, or an account's on its own GPU (src/server/account-tool-run.ts) once From picture is open to everyone.
+ * owner's, or an account's on its own GPU (src/server/account-tool-run.ts).
  */
 export async function POST(request: Request) {
   const viewer = toolViewer(request);
@@ -16,12 +16,19 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, SceneSchema, "Make and pick the first frame first");
     if (viewer.kind === "owner") return Response.json(describeScene(input, { owner: true }), { status: 201 });
-    const r = await runAccountTool(request, viewer.account, {
-      tool: "genjutsu",
-      files: [input.source.url, input.ownPerson ? undefined : input.frame],
-      plan: () => [{ request: sceneRequest(input, { owner: false }) }],
-      start: () => startStep(sceneRequest(input, { owner: false })),
-    });
-    return r.ok ? Response.json(r.value, { status: 201 }) : r.response;
+    // A resend of the same press (the page's id in its header) gets the describer the first one started.
+    return onceForAccount(
+      viewer.account,
+      "genjutsu-scene",
+      pressIdOf(request),
+      () =>
+        runAccountTool(request, viewer.account, {
+          tool: "genjutsu",
+          files: [input.source.url, input.ownPerson ? undefined : input.frame],
+          plan: () => [{ request: sceneRequest(input, { owner: false, ownSetup: true }) }],
+          start: () => startStep(sceneRequest(input, { owner: false, ownSetup: true })),
+        }),
+      ({ value }) => Response.json(value, { status: 201 }),
+    );
   }, request);
 }

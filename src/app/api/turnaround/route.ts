@@ -1,13 +1,16 @@
 import { requestViewer } from "@/server/auth";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { recordExists } from "@/server/records";
 import { body, handle, once } from "@/server/shorts-schemas";
-import { createTurnaround, previewTurnaround, TurnaroundBodySchema, turnaroundRun } from "@/server/turnaround";
-import { priceAs } from "@/server/visitor";
+import { createTurnaround, planTurnaroundRun, previewTurnaround, startTurnaround, TurnaroundBodySchema, turnaroundRun, turnaroundSteps, type TurnaroundRun } from "@/server/turnaround";
+import { poolPricedCheck } from "@/server/tool-runs";
 import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
  * Turnaround video (build plan N7-6): a 360° turnaround of a cast sheet or a character, on either engine. `?preview=1` plans
- * and prices it (the route, the pictures drawn first, the film's frames, the GPU it needs) without running it.
+ * and prices it (the route, the pictures drawn first, the film's frames, the GPU it needs) without running it. The owner's
+ * run as always; an account's on its own GPU or its own fal.ai or Replicate key, with its own pictures, after the checks
+ * every tool run gets (src/server/account-tool-run.ts); a guest signs up first.
  */
 async function post(request: Request) {
   return handle(async () => {
@@ -16,15 +19,52 @@ async function post(request: Request) {
     if (input.elementId && (requestViewer(request).kind !== "owner" || !recordExists({ kind: "element", ids: [input.elementId] }))) {
       return Response.json({ error: "Character not found" }, { status: 404 });
     }
-    await worldcastContextNow();
+    // An account's run never uses the studio's WorldCast worker, nor asks it anything.
+    if (toolViewer(request).kind !== "account") await worldcastContextNow();
     const run = turnaroundRun(input);
     if (new URL(request.url).searchParams.get("preview")) return Response.json(previewTurnaround(run));
-    const result = await once("turnaround", requestId, () => createTurnaround(run));
-    return Response.json(result, { status: 201 });
+    const viewer = toolViewer(request);
+    if (viewer.kind !== "account") {
+      const result = await once("turnaround", requestId, () => createTurnaround(run));
+      return Response.json(result, { status: 201 });
+    }
+    let planned: TurnaroundRun | null = null;
+    return onceForAccount(
+      viewer.account,
+      "turnaround",
+      requestId,
+      () =>
+        runAccountTool(request, viewer.account, {
+          tool: "turnaround",
+          files: [...Object.values(input.views ?? {}), input.sheet],
+          plan: () => turnaroundSteps((planned = planTurnaroundRun(run))),
+          start: () => startTurnaround(planned!),
+        }),
+      ({ value, gpuWarning }) => Response.json({ ...value, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    );
   });
 }
 
-/** A visitor (public sign-up) gets the price of its run on its own GPU, never a demo (src/server/visitor.ts). */
+/** The steps a turnaround's body would make (a character from the library is never planned for a visitor). */
+function turnaroundPlan(raw: unknown) {
+  const input = TurnaroundBodySchema.parse(raw);
+  delete input.requestId;
+  if (input.elementId) throw new Error("Character not found");
+  return turnaroundSteps(planTurnaroundRun(turnaroundRun(input)));
+}
+
+/**
+ * A price check (`?preview=1`) is priced as the asker's run would go, with its place, price and line on this install's
+ * GPUs when it would go there (src/server/tool-runs.ts poolPricedCheck); a guest's run signs up first.
+ */
 export async function POST(request: Request) {
-  return priceAs(request, () => post(request));
+  const viewer = toolViewer(request);
+  const preview = !!new URL(request.url).searchParams.get("preview");
+  if (preview) return poolPricedCheck(request, () => post(request), turnaroundPlan);
+  if (viewer.kind === "guest") return guestRun();
+  if (viewer.kind === "account") {
+    const big = bodyTooBig(request);
+    if (big) return big;
+  }
+  return post(request);
 }

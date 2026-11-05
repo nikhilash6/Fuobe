@@ -141,6 +141,13 @@ describe("Genjutsu: estimates", () => {
     expect(e.notes.join(" ")).toMatch(/Qwen-Image 2.1 first puts your character into the part's first frame/);
   });
 
+  it("a clip run as windows says how it is joined, with no test status in the notes", async () => {
+    const e = await (await estimateRoute.POST(json(body({ engine: "open", mode: "swap", subject: "the skateboard", source: { url: clip, ...src } })))).json();
+    const said = e.notes.join(" ");
+    expect(said).toMatch(/runs as 3 windows, joined with the clip's own sound/);
+    expect(said).not.toMatch(/tested|validat|install-comfyui|scripts\//i);
+  });
+
   describe("key mixes: a run is all real or all a demo, so a missing key is said before anything is paid for", () => {
     const say = async (b: Record<string, unknown>, route: { POST: (r: Request) => Promise<Response> } = estimateRoute) => {
       const res = await route.POST(json(b));

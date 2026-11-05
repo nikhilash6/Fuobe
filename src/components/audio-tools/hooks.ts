@@ -1,10 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import type { SpeechEffect } from "@/lib/speech-edit";
+import { COMPUTER_KICK_EVENT } from "@/lib/api";
 import { responseError } from "@/lib/refusals";
 
 export type AudioToolBody =
@@ -68,7 +70,7 @@ export type AudioToolBody =
       sourceDuration?: number;
     };
 
-async function post<T>(url: string, body: AudioToolBody): Promise<T> {
+async function post<T>(url: string, body: AudioToolBody & { requestId?: string }): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw responseError(res, j.error ?? "Something went wrong. Please try again.");
@@ -99,7 +101,12 @@ export function useAudioToolPreview(body: AudioToolBody | null) {
 export function useAudioToolRun() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: AudioToolBody) => post<{ batchId: string; result: Generation; items: Generation[] }>("/api/audio-tools", body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["generations"] }),
+    // Each press carries its own id: a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount).
+    mutationFn: (body: AudioToolBody & { requestId?: string }) => post<{ batchId: string; result: Generation; items: Generation[] }>("/api/audio-tools", { ...body, requestId: body.requestId ?? nanoid(16) }),
+    onSuccess: () => {
+      // The tab that runs this person's jobs on the ComfyUI on this computer (an account's "Your GPU") asks at once.
+      window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
+      void qc.invalidateQueries({ queryKey: ["generations"] });
+    },
   });
 }

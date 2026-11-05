@@ -90,6 +90,8 @@ export interface OutputAction {
   /** Set on file links: the browser downloads instead of navigating. */
   download?: string;
   destructive?: boolean;
+  /** An item that runs on the visitor's own setup (src/lib/own-setup.ts): its label sits next to the action's. */
+  ownSetup?: string;
 }
 
 export interface ActionContext {
@@ -114,9 +116,6 @@ export interface ActionContext {
 
 /** A draft's one-tap 1080p render: a new paid run, said before the tap (left out while placeholders are on). */
 export const draftRenderPaid = (placeholders: boolean | undefined): string => (placeholders ? "" : " · paid");
-
-/** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
-const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue", "remove-person", "clean-dialogue", "edit-speech"]);
 
 const q = (url: string) => encodeURIComponent(url);
 
@@ -144,7 +143,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   }
   const out: OutputAction[] = [];
   const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => {
-    if (!(ctx.visitor && OWNER_ONLY_ACTIONS.has(id))) out.push({ id, label, href, placement });
+    out.push({ id, label, href, placement });
   };
   // A Kinetic Motion result (a clip, a frame, a contact sheet or a version) opens its recipe in the Kinetic editor.
   // A visitor opens only their own (an owner's result shown on a public page would not open for them).
@@ -191,8 +190,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("reframe", "Reframe", `/reframe?video=${q(o.url)}`);
       link("lipsync", "Lipsync", `/lipsync?video=${q(o.url)}`);
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
-      // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in.
-      link("restore-video", "Restore & colourise", `/video-tools/restore?video=${q(o.url)}`);
+      // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in. It runs
+      // on the viewer's own GPU or fal.ai key (own-setup.ts), and says so.
+      out.push({ id: "restore-video", label: "Restore & colourise", href: `/video-tools/restore?video=${q(o.url)}`, placement: "menu", ownSetup: "video-tools:restore" });
       // A mask or clean foreground from Remove background or Green screen: on to ProRes 4444 or EXR for the edit (Export runs on
       // your GPU). A cut-out isn't offered: Export would drop its transparency (src/lib/av/keying.ts).
       if (ctx.engineMode !== "cloud" && exportsCleanly(g.op, g.request?.params)) link("export-pro", "Export as ProRes or EXR", `/upscale/export?video=${q(o.url)}&format=prores_4444`);
@@ -265,7 +265,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // delete that first checks nothing uses the file.
   if (g.feature === "upload") {
     // An upload's Regenerate (it has no words of its own) sits with its other hand-offs.
-    if (REGEN_OFFERED && o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
+    // Open-H3 Regenerate needs a 48 GB card: the item says so (own-setup.ts), and a visitor runs it on its own GPU only.
+    if (o.kind === "video" && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url), ownSetup: "regenerate:upscale" });
     return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete for good…", placement: "menu", destructive: true }];
   }
   if (g.outputs.length > 1) out.push({ id: "download-all", label: `Download all ${g.outputs.length} (.zip)`, placement: "menu", href: `/api/generations/zip?ids=${g.id}`, download: "" });
@@ -275,9 +276,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // results keep their upscalers in Upscale.
   if (o.kind === "video" && g.status === "succeeded") {
     if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
-    else if (REGEN_OFFERED && (g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
-    // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words.
-    if (REGEN_OFFERED && canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu" });
+    else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt), ownSetup: "regenerate:upscale" });
+    // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words (a 48 GB card).
+    if (canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu", ownSetup: "regenerate:enhance" });
   }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });

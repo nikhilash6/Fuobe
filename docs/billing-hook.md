@@ -79,13 +79,65 @@ defaults where the request names none), or for a workflow sized by its input (an
 input's size, an upscale's times its factor, within the workflow's limits. It is null for sound, text and 3D.
 
 `steps` lists every step of the run that uses this install's GPUs, the run's own step first: a chain (a film of
-several shots, a picture and then a step on it, MiniMax H3 at 2K with its finish for each take) is priced once, with one
-quote and one hold, for one press of Run.
+several shots, a picture and then a step on it) is priced once, with one quote and one hold, for one press of Run.
 Steps of CPU work are left out: they cost nothing. The requirements index marks these `cpu`: no model file, no
 graphics memory and no card their nodes need, such as filters, trims, joins, adding sound and Ken Burns moves. A step
-whose nodes run on the card (RTX Video) is GPU work. Every step must be one the policy allows (`pool`, `kinds`) and one
-this install's GPUs can run (a ComfyUI step: not a text step, a step made in the browser or a cloud model), or the run
-isn't offered here. It is refused before Run, never part way through.
+whose nodes run on the card (RTX Video) is GPU work. A text step inside the run (a script, lyrics, a translation)
+is written by the install's AI helper: it is left out too, and never counted. Every other step must be one the policy
+allows (`pool`, `kinds`) and one this install's GPUs can run (a ComfyUI step: not a step made in the browser or a
+cloud model), or the run isn't offered here. It is refused before Run, never part way through.
+
+A tool's run (Shorts, Cinema Studio, Storyboard, the apps, the palette lock and every other tool an account runs) goes
+through the same gate as a studio run: every step is checked, the run is priced once from every step, held once, and
+counted once. Its price check answers `{ place: "pool", quote, line }` beside the tool's own answer when the run would
+go to this install's GPUs, and the tool's own answer is then priced as a run there (so an account with no GPU of its
+own is priced, not asked to connect one). A tool whose body has no field for the place or the price shown reads them
+from the request's headers: `x-fuobe-place` (`own` or `pool`) and `x-fuobe-shown` (`{ amount, priceVersion }` as
+URI-encoded JSON). A field in the body wins.
+
+A tool makes its own requests, so each of its steps is priced as it asks. A step that asks for more outputs at once
+than `outputsPerRun` allows (or Fuobe's own cap of 4) is refused before Run with words that say how many a run there
+makes. It is never priced as a smaller run. The studios' own runs are cut to the cap instead, and say so. Before
+anything of a tool's run is sent, Fuobe checks the rows its start made against what was priced and held: no more jobs
+of any model, no more outputs at once than the cap, and only CPU work for a run held as CPU work. A run whose rows
+don't match is stopped (403, `code: "not-offered"`): its rows are canceled, and their reports close its hold. A hold
+gets a `release` only when none of its rows were made, never as well as its rows' reports. A tool run whose start makes
+no rows at all (it kept its own error, say) sends nothing: its hold gets a `release`, and the run doesn't count toward
+the hour. The palette lock spreads the pictures a person picks over separate jobs of one picture each: on this install's
+GPUs it makes no more of them than `outputsPerRun` allows, as a studio run there is cut.
+
+One press of Run is one hold and one run, however often it is sent. A tool page sends its own id for each press
+(`requestId` in the body, or the `x-request-id` header for a tool whose body has no field for it). With hosted runs on,
+the press is kept in the database for a day: a resend that reaches another server process, or comes after a restart,
+gets the first answer and makes nothing. The reserve's `requestId` is made from the account and the press (a hash, so
+one account can never name another's hold). A press refused after its hold was made gives that hold back; a resend of
+it asks for a new hold under a new `requestId`.
+
+The limits on runs at once and in line count a tool run from the moment it is let in. A tool whose start waits for
+something (a channel, a plan) before it makes its rows still counts as one run going, and one in line, until its rows
+exist, so requests sent together can't all pass the limits.
+
+Some models, modes and options run on a visitor's own setup only (`src/lib/own-setup.ts`), and so does a workflow that
+none of this install's GPUs can run right now (none holds its files, serves its kind of work, or has the memory it
+needs). A run that asks for one, on any step, is refused before Run. The price check answers `allowed: false` with the
+label's words as `text` and the setup itself as `ownSetup` (`{ need: "gpu", vramGb? }` or `{ need: "key", provider }`),
+and Run opens that setup (Connect your GPU, or Add your key) instead of staying off. The run itself is refused with
+403, `code: "connect-gpu"` or `"add-key"`. A mode whose own check refuses it while it is planned here (MiniMax H3 at
+2K, Kandinsky 6.0 Pro) gets the same answer, but with no plan in it: only `modelId`, `place`, `quote` and `line`.
+When the account has its own GPU, these runs go to that GPU, as before. `GET /api/status` lists the open models these
+GPUs can't run right now (`viewer.pool.own`), so the pickers can label them. An item whose graphs the workflow manifest
+marks validated runs here like any other, as its label leaves the pages, with no code change. Restore & colourise names
+a GPU of the visitor's own only: its gated LoRA is never sent with a visitor's key.
+
+A tool page whose price check answers `{ place: "pool", quote, line }` shows the service's words and the place in line
+in its price slot, not its own words for a run on the visitor's own GPU. When the quote is refused, Run sends nothing
+and says why, or opens the visitor's own setup when `ownSetup` names one.
+
+For a visitor with no GPU of its own, the pickers never leave out what these GPUs keep off. The model picker, the preset
+galleries and the camera motion, effect and Mix pickers show each such item with its label ("Runs on your own GPU ·
+48 GB", "Use your own fal.ai key"). A preset card says the `cardText` ("Try free") only when these GPUs run it. An app's
+own tool says the label in its place chip, and its Run opens the setup too. "Connect your GPU" says the label under
+its title.
 
 A run made only of CPU work is free and never counted. Fuobe asks the service for no quote and no hold, and the run
 counts against none of the policy's limits. A worker with a CPU slot runs it beside its GPU's job, in a line of its
@@ -132,6 +184,8 @@ or a chain's later step), so Run never fails on them once pressed. The page asks
 
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
+The card that shows it offers "Run at this price": the same run is sent again with the new price in `x-fuobe-shown`, so
+a run started without a price check (a result's Upscale, a retry, Run again) runs at the price the person accepted.
 
 A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that fails or is removed says "Not
 charged" only when its reserve answer set an amount aside (`amount` above 0). `maxWaitMs` is how long the run may wait

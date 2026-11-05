@@ -5,6 +5,7 @@ import { useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { GenerationRequest } from "./catalog/types";
 import { lineWords } from "./pool-line";
+import type { OwnSetup } from "./own-setup";
 
 /**
  * The browser's side of hosted runs and the optional billing service (src/server/hosted.ts, src/server/billing.ts).
@@ -33,6 +34,11 @@ export interface HostedQuote {
   etaS?: number | null;
   action?: BillingAction;
   offer?: BillingOffer;
+  /**
+   * Refused because it runs on the visitor's own setup (src/lib/own-setup.ts): what that setup is. Run opens it (Connect
+   * your GPU, Add your key, or a guest's sign-up) instead of staying off.
+   */
+  ownSetup?: OwnSetup;
 }
 
 /** The billing service's words for an account's balance (the top bar's chip and the account menu). */
@@ -54,6 +60,8 @@ export interface BillingRefusalDetail {
   action?: BillingAction;
   offer?: BillingOffer;
   quote?: HostedQuote;
+  /** A changed price: the same run sent again at the new price (true when it started). */
+  runAgain?: () => Promise<boolean>;
 }
 
 /** Fired for every refusal marked x-fuobe-billing (watchGuestRefusals): the billing card opens. */
@@ -148,14 +156,17 @@ export function refreshPriceChecks(qc: QueryClient): void {
  * What Run says and does for a run on this studio's GPUs, from its price check:
  * - `refused`: the run wouldn't be taken now (busy, a limit, not offered here, closed, paused, a top-up): Run is off,
  *   and the price slot says the service's words (`text`), with its line under them (`sub`) and its link or offer;
+ *   `setup`: it runs on the visitor's own setup, whose label is `text`, and Run opens that setup instead of staying off;
  * - otherwise the price (`text`: the service's words, empty when there is none) and, under it, where the run would stand
  *   in line and the wait (`wait`).
  * Null while there is no answer yet.
  */
-export function poolRunState(check: HostedCheck | null | undefined): { refused: boolean; text: string; sub?: string; wait?: string; action?: BillingAction; offer?: BillingOffer } | null {
+export function poolRunState(
+  check: HostedCheck | null | undefined,
+): { refused: boolean; text: string; sub?: string; wait?: string; action?: BillingAction; offer?: BillingOffer; setup?: OwnSetup } | null {
   const q = check?.quote;
   if (!q) return null;
-  if (!q.allowed) return { refused: true, text: q.text, ...(q.sub && { sub: q.sub }), ...(q.action && { action: q.action }), ...(q.offer && { offer: q.offer }) };
+  if (!q.allowed) return { refused: true, text: q.text, ...(q.sub && { sub: q.sub }), ...(q.action && { action: q.action }), ...(q.offer && { offer: q.offer }), ...(q.ownSetup && { setup: q.ownSetup }) };
   return { refused: false, text: q.text, ...(q.sub && { sub: q.sub }), ...(check?.line && { wait: lineWords(check.line) }) };
 }
 

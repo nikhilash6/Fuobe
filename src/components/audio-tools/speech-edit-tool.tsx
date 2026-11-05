@@ -8,17 +8,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SelfHostNote } from "@/components/self-host-note";
+import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { Feed } from "@/components/studio/feed";
 import { ACCEPT, kindOfFile, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
+import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useHydrated } from "@/lib/api";
 import { clock } from "@/lib/av/audio-tools";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import type { Cue } from "@/lib/cues";
+import type { OwnSetup } from "@/lib/own-setup";
 import { parseCues } from "@/lib/cues";
 import { downloadHref } from "@/lib/library";
 import { readSpeechEditHandoff } from "@/lib/speech-edit-handoff";
@@ -54,8 +55,11 @@ import { uploadSource } from "./split-tool";
 
 const COPY = "Change a word without re-recording it, or how a line sounds: its pitch, pace, mood or noise. The new words come out in the same voice.";
 const SUBTITLE = `${COPY} Free, on your own GPU.`;
-/** A guest or an account (public sign-up): the edit runs on a self-hosted Fuobe only (POST /api/audio-tools answers own-gpu-tool). */
-const SELF_HOSTED = "Edit speech isn't available here";
+/**
+ * What Edit speech needs from a guest's or an account's own setup (src/lib/own-setup.ts): its own GPU with AuK's files
+ * and 24 GB. A guest signs up first; an account without its own GPU connects one (a key doesn't run AuK).
+ */
+const OWN_SETUP = "audio:edit-speech";
 
 type Source = SlotValue & { kind: "audio" | "video"; duration?: number };
 type Mode = "words" | "sound";
@@ -101,11 +105,14 @@ function useArrival(take: (s: Source, cues?: Cue[], line?: number) => void) {
   }, []);
 }
 
-/** disabled: a visitor (the edit doesn't run here for them), so nothing is uploaded, recorded or picked only to be refused. */
+/**
+ * disabled: nothing is uploaded, recorded or picked. A guest is asked to sign up first, and an account without its own
+ * GPU to connect one (the edit runs on a GPU only).
+ */
 function AddMedia({ onPick, onUpdate, disabled }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void; disabled?: boolean }) {
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
-  const askFirst = useAskBeforeUpload();
+  const askFirst = useAskBeforeUpload({ gpuOnly: true });
   const inputId = useId();
   const take = (f: File | undefined) => {
     if (!f || disabled || askFirst()) return;
@@ -258,9 +265,18 @@ function EffectOptions({ effect, onChange }: { effect: SpeechEffect; onChange: (
   }
 }
 
-export function SpeechEditTool() {
+/**
+ * `setup`: what the page read for "audio:edit-speech" (ownSetupsNow): null once its graph is validated on this studio's
+ * GPU, when the label leaves; left out, the static entry.
+ */
+export function SpeechEditTool({ setup }: { setup?: OwnSetup | null } = {}) {
+  const item = setup === undefined ? OWN_SETUP : setup;
   const [engine, setEngine, mode] = useEngine();
-  const visitor = useLikelyVisitor();
+  // A guest or an account: its own setup's label beside the title (after hydration, so it matches the server HTML),
+  // and a press that asks for it first.
+  const hydrated = useHydrated();
+  const visitor = useOwnSetupViewer() !== null;
+  const press = useOwnSetupPress();
   const create = useCreateGeneration();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
@@ -338,27 +354,25 @@ export function SpeechEditTool() {
   const p = preview.data;
   const error = preview.error ? (preview.error as Error).message : null;
   const cloudProblem = mode === "cloud" ? CLOUD_ONLY_SPEECH_EDIT_PROBLEM : CLOUD_SPEECH_EDIT_PROBLEM;
-  const blocker = visitor
-    ? SELF_HOSTED
-    : !source
-      ? "Add a recording"
-      : source.uploading
-        ? "Uploading…"
-        : engine === "cloud"
-          ? cloudProblem
-          : !cues
-            ? "Transcribe it first"
-            : view === "words" && !changes
-              ? "Change the words of a line"
-              : view === "sound" && !range
-                ? "Tick the lines to change"
-                : null;
+  const blocker = !source
+    ? "Add a recording"
+    : source.uploading
+      ? "Uploading…"
+      : engine === "cloud"
+        ? cloudProblem
+        : !cues
+          ? "Transcribe it first"
+          : view === "words" && !changes
+            ? "Change the words of a line"
+            : view === "sound" && !range
+              ? "Tick the lines to change"
+              : null;
   const g = result.data;
   const busy = run.isPending || g?.status === "queued" || g?.status === "running" || onVideo.data?.status === "queued" || onVideo.data?.status === "running";
   const transcribing = create.isPending || t?.status === "queued" || t?.status === "running";
 
   const transcribe = () => {
-    if (!ready || visitor) return;
+    if (!ready || !press(item)) return;
     create.mutate(
       { feature: SPEECH_EDIT_FEATURE, modelId: "oss-qwen3-asr", engine: "open", op: "transcribe", inputs: ready.kind === "video" ? { video: ready.ref } : { audio: ready.ref }, title: `Transcript · ${baseName(ready)}` },
       { onSuccess: (items) => setTranscriptId(items[0]?.id ?? null), onError: (e) => toastError(e) },
@@ -367,6 +381,7 @@ export function SpeechEditTool() {
   const go = () => {
     if (blocker) return void toast(blocker);
     if (error) return void toast.error(error);
+    if (!press(item)) return;
     run.mutate(body!, {
       onSuccess: (r) => {
         const edit = r.items.find((x) => x.op === "speech-edit") ?? r.result;
@@ -382,15 +397,15 @@ export function SpeechEditTool() {
   const warning = p && source?.kind === "video" ? p.notes.find((n) => /Lipsync/.test(n)) : undefined;
 
   return (
-    <ToolShell title="Audio" selfHostedOnly>
+    <ToolShell title="Audio">
       {!source && (
-        <ToolHero title="Edit speech" subtitle={visitor ? COPY : SUBTITLE}>
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>}
+        <ToolHero title="Edit speech" subtitle={SUBTITLE}>
+          {hydrated && visitor && <OwnSetupChip setup={item} short={false} className="mt-3" />}
         </ToolHero>
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-6")}>
         {!source ? (
-          <AddMedia onPick={(s) => take(s)} onUpdate={setSource} disabled={visitor} />
+          <AddMedia onPick={(s) => take(s)} onUpdate={setSource} />
         ) : (
           <SourcePanel source={source} onDuration={(duration) => setSource((s) => (s ? { ...s, duration } : s))} onRemove={clear} />
         )}
@@ -413,7 +428,7 @@ export function SpeechEditTool() {
           <Panel title="1 · Transcribe">
             <div className="flex flex-wrap items-center gap-3">
               <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">Fuobe writes down what was said, line by line, so you can change it like text. Free on your GPU.</p>
-              <Button className="rounded-full" onClick={transcribe} disabled={!ready || transcribing || visitor}>
+              <Button className="rounded-full" onClick={transcribe} disabled={!ready || transcribing}>
                 {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Transcribe
               </Button>
             </div>
@@ -501,7 +516,7 @@ export function SpeechEditTool() {
                   "Checking…"
                 )}
               </p>
-              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={busy || visitor}>
+              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={busy}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Edit speech
               </Button>
             </div>

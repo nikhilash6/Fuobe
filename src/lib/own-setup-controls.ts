@@ -1,0 +1,33 @@
+import type { Engine } from "./catalog/types";
+import { H3_DECODER } from "./gpu/h3-tier";
+import { ownSetupOnly, type OwnSetup } from "./own-setup";
+
+/**
+ * Model settings whose value runs on a visitor's own setup only, by the own-setup.ts id each value is asked by (the
+ * server asks the same ids of a run: src/server/pool-own-setup.ts requestSetupIds). A picker shows that id's label
+ * beside the value.
+ */
+export function controlSetup(modelId: string | undefined, param: string, value: string | number): string | undefined {
+  // Kandinsky 6.0 (open) at Pro quality.
+  if (modelId === "oss-kandinsky6" && param === "quality" && value === "pro") return "oss-kandinsky6:pro";
+  // MiniMax H3's fast decoder, whenever it is offered.
+  if (param === H3_DECODER.param && value === "fast") return "h3:fast-decode";
+  return undefined;
+}
+
+/**
+ * A model a visitor runs on its own key only (an untested cloud route, Mureka Extend on Audio → Extend & remix): the
+ * composer's price then names that key, never "Free · your GPU". Null for anything else.
+ */
+export function keyOnlySetup(m: { id: string; engine: string } | undefined, engine: Engine): Extract<OwnSetup, { need: "key" }> | null {
+  const o = m ? ownSetupOnly(m.id, m.engine === "cloud" ? "cloud" : engine) : null;
+  return o?.need === "key" ? o : null;
+}
+
+/**
+ * Said when Run moves an account's draft to its own setup (a refused price check on this install's GPUs, for an account
+ * that has the GPU or key that runs it): where the next press runs it.
+ */
+export function movedToOwnText(gpuConnected: boolean): string {
+  return gpuConnected ? "Switched to your GPU. Press Run to start." : "Switched to your key. Press Run to start.";
+}

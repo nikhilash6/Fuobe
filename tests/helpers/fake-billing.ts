@@ -118,6 +118,8 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     if (p === "/v1/settle" || p === "/v1/refund") {
       const h = f.holds.get(String(b.holdId));
       if (!h) return json(404, { error: "no such hold" });
+      // A released hold is closed: its amount went back, so none of its rows can settle or refund it again.
+      if (h.released) return json(409, { error: "hold released" });
       const key = `${b.holdId} ${b.generationId}`;
       reportCounts.set(key, (reportCounts.get(key) ?? 0) + 1);
       h.reports.set(String(b.generationId), String(b.status));
@@ -125,6 +127,8 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     }
     if (p === "/v1/release") {
       const h = f.holds.get(String(b.holdId));
+      // A release is for a hold whose rows were never made: one whose rows reported is closed by those reports.
+      if (h?.reports.size) return json(409, { error: "hold has reports" });
       if (h) h.released = true;
       return json(200, { ok: true });
     }

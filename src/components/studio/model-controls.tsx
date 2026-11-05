@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { ModelOptions } from "@/lib/catalog/types";
 import { controlsFor } from "@/lib/composer";
 import { Chip } from "./chip";
+import { OwnSetupChip } from "@/components/own-setup";
 import { cn } from "@/lib/utils";
 
 const label = (v: string | number) =>
@@ -37,6 +38,7 @@ export function ControlsChip({
   onChange,
   title: named,
   op,
+  setupOf,
 }: {
   controls: NonNullable<ModelOptions["controls"]>;
   values: Record<string, unknown>;
@@ -45,6 +47,8 @@ export function ControlsChip({
   title?: string;
   /** The run's operation: values offered on other operations only (Qwen-Image 2.1's Turbo speed: edits) are left out. */
   op?: string;
+  /** A value that runs on the visitor's own setup only (an own-setup.ts id, Kandinsky 6.0's Pro): its label beside it. */
+  setupOf?: (param: string, value: string | number) => string | undefined;
 }) {
   const controls = controlsFor(all, op);
   const title = named ?? (controls.length && controls.every((c) => c.param === "quality") ? "Quality" : "Director");
@@ -76,6 +80,7 @@ export function ControlsChip({
                   {c.values.map((v) => (
                     <SelectItem key={String(v)} value={String(v)}>
                       {c.labels?.[String(v)] ?? label(v)}
+                      <OwnSetupChip setup={setupOf?.(c.param, v)} className="ml-1" />
                     </SelectItem>
                   ))}
                 </SelectContent>

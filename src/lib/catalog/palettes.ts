@@ -370,8 +370,8 @@ export interface SignatureContext {
   caps: SignatureCaps;
   getModel: (id: string) => ModelDef | undefined;
   /**
-   * A guest or a free account: no palette lock. The lock is a second run on the studio's own ComfyUI
-   * (POST /api/palettes/lock), which only the owner starts, so a visitor's colors stay in the prompt.
+   * A guest: no palette lock. The lock is a second run (POST /api/palettes/lock), which the owner or an account starts,
+   * so a guest's colors stay in the prompt.
    */
   visitor?: boolean;
 }

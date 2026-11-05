@@ -55,9 +55,9 @@ describe("Design a voice on this install's GPUs", () => {
       const before = fake.calls_of("/v1/quote").length;
       const q = await poolQuote(account, design(modelId), undefined);
       expect(q, modelId).not.toBeNull();
-      expect(q!.planned.model.id).toBe(modelId);
-      expect(q!.planned.op).toBe("voice-design");
-      expect(q!.planned.route.provider).toBe("comfyui");
+      expect(q!.planned!.model.id).toBe(modelId);
+      expect(q!.planned!.op).toBe("voice-design");
+      expect(q!.planned!.route.provider).toBe("comfyui");
       expect(q!.quote).toMatchObject({ amount: 7, priceVersion: "v7" });
       const sent = fake.calls_of("/v1/quote").slice(before);
       expect(sent).toHaveLength(1);

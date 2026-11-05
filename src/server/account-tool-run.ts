@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, GUEST_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
@@ -12,15 +13,21 @@ import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, disk
 import { accountInputProblem } from "./account-inputs";
 import { checkAccountLoras } from "./account-loras";
 import { requestViewer, type Account } from "./auth";
-import { db } from "./db";
 import { accountRun, AccountRunError, asAccount, asVisitor, outputKind, previewChained, type AccountRunRefusal } from "./generations";
+import { BILLING_HEADER, type Quote } from "./billing";
+import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
-import { moderateRun } from "./hosted-run";
+import { runOnPool } from "./hosted";
+import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
+import { cancelGeneration, captureRun } from "./generations";
+import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, closeAdmission, forgetAdmission, openAdmission, poolLimitRefusal } from "./pool-limits";
 import { hit, unhit } from "./rate";
 import { withRunStamp, type RunStamp } from "./run-stamp";
 import { once } from "./shorts-schemas";
 import { ShortsError } from "./shorts";
+import { hostedRunsOn } from "./hosted-switch";
+import { answerPress, claimPress, releasePress, toolPressId, type PressAnswer } from "./tool-presses";
 
 /**
  * A tool's run for a signed-in account (public sign-up): Genjutsu first, then the other tools that plan a run as a
@@ -38,8 +45,11 @@ import { ShortsError } from "./shorts";
  * - a 3D model only on the account's own GPU or key (model3dAllowed): its finish runs on this server under its limits.
  *
  * Then the tool's own start runs inside asAccount (tenant.ts): every generation it creates is stamped as the account's,
- * reads only its files and goes to its GPU or key. Where a run goes is decided in one place (`placeOf`): today always the
- * account's own GPU or key. Hosted runs (the install's GPUs) hook in there.
+ * reads only its files and goes to its GPU or key. Where a run goes is decided in one place (`placeOf`): with hosted
+ * runs off, always the account's own GPU or key. With them on (FUOBE_HOSTED_RUNS=1), placeOf may put the whole run on
+ * this install's GPUs instead, through the same gate as a studio run (hosted-run.ts decideToolPlace): the policy's
+ * limits, one hold for the whole run priced from every step, and every row stamped for there (runOnPool). The checks of
+ * the account's own GPU above (its provider, the pre-flight, its LoRAs) then don't apply.
  *
  * The owner's runs never come here: a route runs them as before.
  */
@@ -76,19 +86,67 @@ export function priceAsRun<T>(request: Request, fn: () => T): T {
   return asViewer(toolViewer(request), fn);
 }
 
-/** A refused run, kept as its parts so a repeat of the same request id gets its own copy of the answer. */
+/** A refused run, kept as its parts so a repeat of the same request id gets its own copy of the answer. `held`: refused after its hold was made. */
 class Refused {
   constructor(
-    readonly status: number,
-    readonly headers: [string, string][],
-    readonly text: string,
+    readonly answer: PressAnswer,
+    readonly held: boolean,
   ) {}
+}
+
+const asAnswer = async (r: Response): Promise<PressAnswer> => ({ status: r.status, headers: [...r.headers], text: await r.text() });
+const fromAnswer = (a: PressAnswer): Response => new Response(a.text, { status: a.status, headers: a.headers });
+
+/**
+ * The press of Run a tool's run belongs to (onceForAccount): its id for the billing service's reserve, so every resend
+ * of the press asks for the same hold (hosted-run.ts reservePool). Null: a run with no id from its page.
+ */
+const PRESS = new AsyncLocalStorage<{ pressId: string | null }>();
+
+/** How long a resend waits for its press to be answered by another server process, before it says it is starting. */
+const PRESS_WAIT_MS = 30_000;
+
+/** A resend whose press another server process is still starting, after PRESS_WAIT_MS. */
+const STARTING: PressAnswer = {
+  status: 409,
+  headers: [
+    ["content-type", "application/json"],
+    ["cache-control", "no-store"],
+    ["retry-after", "5"],
+  ],
+  text: JSON.stringify({ error: "This run is starting. It shows in your runs in a moment.", code: "press-starting" }),
+};
+
+/**
+ * A press kept in the database (tool-presses.ts), with hosted runs on: a resend that reaches another server process, or
+ * comes after a restart, gets the first answer (waiting for it while that process starts it), never a second run.
+ */
+async function keptPress(accountId: string, scope: string, clientId: string, attempt: (tries: number) => Promise<PressAnswer>): Promise<PressAnswer> {
+  const until = Date.now() + PRESS_WAIT_MS;
+  let claim = claimPress(accountId, scope, clientId);
+  while (claim.kind === "starting") {
+    if (Date.now() > until) return STARTING;
+    await new Promise((r) => setTimeout(r, 250));
+    claim = claimPress(accountId, scope, clientId);
+  }
+  if (claim.kind === "done") return claim.answer;
+  try {
+    const answer = await attempt(claim.tries);
+    answerPress(accountId, scope, clientId, answer);
+    return answer;
+  } catch (e) {
+    releasePress(accountId, scope, clientId, e instanceof Refused && e.held);
+    throw e;
+  }
 }
 
 /**
  * An account's tool run once per client request id (shorts-schemas.ts once): a repeat of the id (a second click that got
- * through, a retried POST) gets the first run, and never another account's. A refusal isn't kept: sent again (after the
- * account connects its GPU, say), the run is checked again. `ok` turns the started run into the route's answer.
+ * through, a retried POST) gets the first run, and never another account's. With hosted runs on, the press is kept in
+ * the database too (keptPress), so a repeat that reaches another server process gets it as well, and its run on this
+ * install's GPUs asks the billing service for one hold however often it is sent. A refusal isn't kept: sent again
+ * (after the account connects its GPU, say), the run is checked again; one refused after its hold was made (and given
+ * back) asks for a new hold then. `ok` turns the started run into the route's answer.
  */
 export async function onceForAccount<T>(
   account: Account,
@@ -97,26 +155,37 @@ export async function onceForAccount<T>(
   fn: () => Promise<AccountToolResult<T>>,
   ok: (r: { value: T; gpuWarning?: string }) => Response,
 ): Promise<Response> {
+  const attempt = async (tries: number): Promise<PressAnswer> => {
+    const out = await PRESS.run({ pressId: id ? toolPressId(scope, id, tries) : null }, fn);
+    if (out.ok) return asAnswer(ok(out));
+    throw new Refused(await asAnswer(out.response), !!out.held);
+  };
   try {
-    const r = await once(`${scope}:acct:${account.id}`, id, async () => {
-      const out = await fn();
-      if (!out.ok) throw new Refused(out.response.status, [...out.response.headers], await out.response.text());
-      return out;
-    });
-    return ok(r);
+    const answer = await once(`${scope}:acct:${account.id}`, id, () => (id && hostedRunsOn() ? keptPress(account.id, scope, id, attempt) : attempt(0)));
+    return fromAnswer(answer);
   } catch (e) {
-    if (e instanceof Refused) return new Response(e.text, { status: e.status, headers: e.headers });
+    if (e instanceof Refused) return fromAnswer(e.answer);
     throw e;
   }
 }
 
-/** An account's runs going now (queued or running), counted as runs: a run's jobs and steps share a batch. */
-export function activeAccountRuns(accountId: string): number {
-  const r = db()
-    .prepare("SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?")
-    .get(accountId) as { n: number };
-  return r.n;
+/** A page's id for a press of Run, as a tool's body carries it beside its own fields (`requestId`), or none. */
+export function requestIdOf(body: unknown): string | undefined {
+  const v = (body as { requestId?: unknown } | null)?.requestId;
+  return typeof v === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : undefined;
 }
+
+/** The header a page sends its id for a press of Run in, for a tool whose body has no field for it. */
+export const PRESS_HEADER = "x-request-id";
+
+/** A page's id for a press of Run, from the request's PRESS_HEADER, or none. */
+export const pressIdOf = (request: Request): string | undefined => requestIdOf({ requestId: request.headers.get(PRESS_HEADER) });
+
+/**
+ * An account's runs going now (queued or running), counted as runs: a run's jobs and steps share a batch, and a run let
+ * in whose rows are still being made counts too (pool-limits.ts accountActiveRuns).
+ */
+export const activeAccountRuns = (accountId: string): number => accountActiveRuns(accountId);
 
 /** A request body over what an account's run may weigh (its files are uploaded first): 413 before it is read. */
 export function bodyTooBig(request: Request): Response | null {
@@ -139,25 +208,92 @@ export interface ToolStep {
   deps?: number;
 }
 
-/** Where an account's tool run goes. Today always its own GPU or key ("own"); hosted runs add the install's GPUs ("pool"). */
-export type ToolPlace = { kind: "own" } | { kind: "pool" };
+/**
+ * Where an account's tool run goes: its own GPU or key ("own", as always), this install's GPUs ("pool", hosted runs: the
+ * whole run's decision, policy and price, hosted-run.ts decideToolPlace), or a refusal in the price check's words.
+ */
+export type ToolPlace = { kind: "own" } | ({ kind: "pool" } & ToolPoolRun) | { kind: "refuse"; refusal: Refusal };
 
 /**
  * Whether a run placed here may make a 3D model. A 3D model is finished on this server under the account's own limits
  * (model3d-finish.ts): allowed on the account's own GPU or key, never on this install's GPUs (hosted runs don't offer 3D yet).
  */
-export const model3dAllowed = (place: ToolPlace): boolean => place.kind === "own";
+export const model3dAllowed = (place: Pick<ToolPlace, "kind">): boolean => place.kind === "own";
 
 /**
- * Where this run goes. The one place a tool run's placement is decided: hosted runs (hosted-run.ts decidePlace, the
- * billing hold and runOnPool) hook in here for tools, as POST /api/generations does for the studios. Until then a tool
- * runs on the account's own GPU or key, whatever FUOBE_HOSTED_RUNS says (docs/public-signup.md: "Every other tool still
- * needs the account's own GPU").
+ * Where this run goes. The one place a tool run's placement is decided, as decidePlace decides a studio run's: with
+ * hosted runs off (FUOBE_HOSTED_RUNS unset), or asked for its own GPU, always the account's own GPU or key. On, every
+ * step goes through the same gate as a studio run (hosted-run.ts toolGate); runAccountTool then holds the run's price
+ * once and starts it inside runOnPool and its stamp.
  */
-export async function placeOf(account: Account, steps: ToolStep[]): Promise<ToolPlace> {
-  void account;
-  void steps;
-  return { kind: "own" };
+export async function placeOf(account: Account, steps: ToolStep[], wish?: PlaceWish): Promise<ToolPlace> {
+  return decideToolPlace(account, steps, wish);
+}
+
+/**
+ * A tool's price check (`?preview=1` or its estimate route) on this install's GPUs: `{ place: "pool", quote, line }` to
+ * add to the tool's own answer, or null when the run wouldn't go there (the tool prices it as today). `plan` gives the
+ * run's steps as the viewer's run plans them; a plan that can't be made prices nothing here (the tool says why).
+ */
+export async function toolPriceCheck(
+  request: Request,
+  plan: () => ToolStep[] | Promise<ToolStep[]>,
+  wish?: PlaceWish,
+): Promise<{ place: "pool"; quote: Quote; line: PoolLine } | null> {
+  const v = toolViewer(request);
+  if (v.kind === "owner") return null;
+  const account = v.kind === "account" ? v.account : null;
+  wish ??= headerWishes(request).place;
+  if (!poolMayTake(account, wish)) return null;
+  let steps: ToolStep[];
+  try {
+    steps = account ? await planAs(account, plan, wish) : await runOnPool(GUEST_PLAN, plan);
+  } catch {
+    return null;
+  }
+  const q = await toolPoolQuote(account, steps, wish, { addr: () => clientAddress(request) });
+  return q && { place: "pool", quote: q.quote, line: q.line };
+}
+
+/**
+ * What a tool's run carries beside the tool's own fields (hosted-run.ts readWishes): the place the client prefers and
+ * the price it showed before Run, from its body or, for a tool whose body has no field for them, its headers
+ * (RUN_PLACE_HEADER, RUN_SHOWN_HEADER). Read from a copy, before the route reads the body itself.
+ */
+export async function toolWishes(request: Request): Promise<{ place?: PlaceWish; shown?: { amount: number; priceVersion: string } | null }> {
+  const raw = await request
+    .clone()
+    .json()
+    .catch(() => null);
+  const { wish, shown } = readWishes(raw, request.headers);
+  return { ...(wish && { place: wish }), shown };
+}
+
+/**
+ * The place and price a run carries in its headers only (RUN_PLACE_HEADER, RUN_SHOWN_HEADER): what runAccountTool and
+ * a tool's price check read when the route passed none, so a tool that reads its body itself needs no change for them.
+ */
+export function headerWishes(request: Request): { place?: PlaceWish; shown: { amount: number; priceVersion: string } | null } {
+  const { wish, shown } = readWishes(null, request.headers);
+  return { ...(wish && { place: wish }), shown };
+}
+
+/**
+ * A tool's plan as the account's own run plans it (its GPU, its keys), as always. When that can't be made (no GPU or
+ * key of its own to plan it on) and the run could go to this install's GPUs, it is planned as a run there instead; the
+ * first plan's refusal stands when neither can be made.
+ */
+async function planAs(account: Account, plan: () => ToolStep[] | Promise<ToolStep[]>, wish: PlaceWish | undefined): Promise<ToolStep[]> {
+  try {
+    return await asAccount(account.id, plan);
+  } catch (e) {
+    if (!poolMayTake(account, wish)) throw e;
+    try {
+      return await runOnPool(account.id, plan);
+    } catch {
+      throw e;
+    }
+  }
 }
 
 export interface AccountToolRun<T> {
@@ -174,9 +310,25 @@ export interface AccountToolRun<T> {
   start: () => T | Promise<T>;
   /** `gpuCheck: "skip"` from the request (the pre-flight's "Run anyway"). */
   skipGpuCheck?: boolean;
+  /** The place the client prefers (hosted-run.ts readWishes): "own", "pool", or none. */
+  place?: PlaceWish;
+  /** The price the client showed before Run (hosted-run.ts readWishes). */
+  shown?: { amount: number; priceVersion: string } | null;
+  /**
+   * A run made only on this install's GPUs (hosted runs): wherever else it would go (the account's own GPU or key,
+   * hosted runs off), it is refused as a tool that isn't available here, as before.
+   */
+  poolOnly?: boolean;
+  /**
+   * The run as it is made on this install's GPUs, for a tool that spreads the outputs a person picks over separate jobs
+   * of one output each (the palette lock): no more than `cap` of them, the most a run there makes at once, as a studio
+   * run there is cut to it. Planned, placed and priced again as it is cut.
+   */
+  forPool?: (cap: number) => Pick<AccountToolRun<T>, "plan" | "start">;
 }
 
-export type AccountToolResult<T> = { ok: true; value: T; gpuWarning?: string } | { ok: false; response: Response };
+/** A tool's run: started, or refused (`held`: after its hold on this install's GPUs was made, which goes back). */
+export type AccountToolResult<T> = { ok: true; value: T; gpuWarning?: string } | { ok: false; response: Response; held?: boolean };
 
 type Planned = { step: ToolStep; p: ReturnType<typeof previewChained> };
 
@@ -222,9 +374,14 @@ function errorResponse(e: unknown): Response {
  * Check and start an account's tool run (see the header). The answer is the tool's own value, or the response that
  * refuses it. Nothing is queued unless every check passed; a refused run doesn't count against the account's hour.
  */
-export async function runAccountTool<T>(request: Request, account: Account, run: AccountToolRun<T>): Promise<AccountToolResult<T>> {
+export async function runAccountTool<T>(request: Request, account: Account, asked: AccountToolRun<T>): Promise<AccountToolResult<T>> {
   const id = account.id;
+  // The place and price the route didn't pass come from the request's headers (a tool that reads its body itself).
+  const sent = headerWishes(request);
+  const run: AccountToolRun<T> = { ...asked, place: asked.place ?? sent.place, shown: asked.shown ?? sent.shown };
   const no = (response: Response): AccountToolResult<T> => ({ ok: false, response });
+  // A run made only on this install's GPUs, that can't go there (hosted runs off, its own GPU first): as before.
+  if (run.poolOnly && !poolMayTake(account, run.place)) return no(ownGpuTool());
   if (!diskHasRoom()) return no(refuse(503, ACCOUNT_MESSAGES.diskLow));
   if (accountUsage(id).total >= accountTotalBytes(id)) return no(refuse(413, filesFullMessage(id)));
   if (activeAccountRuns(id) >= ACCOUNT_LIMITS.activeRuns) return no(refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" }));
@@ -241,23 +398,39 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
   if (problem) return back(refuse(problem.status, problem.error, { code: problem.code }));
   let steps: ToolStep[];
   try {
-    steps = await asAccount(id, run.plan);
+    steps = await planAs(account, run.plan, run.place);
   } catch (e) {
     return back(errorResponse(e));
   }
   if (!steps.length) return back(refuse(422, "Nothing to run yet."));
-  const place = await placeOf(account, steps);
+  const place = await placeOf(account, steps, run.place);
+  if (place.kind === "refuse") return back(refuse(place.refusal.status, place.refusal.body.error, place.refusal.body, place.refusal.headers));
+  if (run.poolOnly && place.kind !== "pool") return back(ownGpuTool());
+  if (place.kind === "pool" && run.forPool) {
+    // Cut to the most a run there makes at once, then planned and placed again as it will be made (there, or refused).
+    const cut = run.forPool(poolOutputsCap(place.policy));
+    let cutSteps: ToolStep[];
+    try {
+      cutSteps = await runOnPool(id, cut.plan);
+    } catch (e) {
+      return back(errorResponse(e));
+    }
+    if (!cutSteps.length) return back(refuse(422, "Nothing to run yet."));
+    const there = await placeOf(account, cutSteps, "pool");
+    if (there.kind === "refuse") return back(refuse(there.refusal.status, there.refusal.body.error, there.refusal.body, there.refusal.headers));
+    if (there.kind !== "pool") return back(ownGpuTool());
+    return startOnPool(request, account, { ...run, ...cut }, cutSteps, files, there, back);
+  }
+  if (place.kind === "pool") return startOnPool(request, account, run, steps, files, place, back);
   let gpuWarning: string | undefined;
   let kind: MediaKind = "video";
   let onKey = false;
   try {
     // Each step's provider must be one the account has; a 3D model only where model3dAllowed says.
     const planned: Planned[] = steps.map((s) => ({ step: s, p: asAccount(id, () => previewChained(s.request, s.deps ?? 0)) }));
-    if (place.kind === "own") {
-      for (const provider of new Set(planned.map((x) => x.p.route.provider))) {
-        const own = accountRun(id, provider, "submit");
-        if ("error" in own) return back(refusalResponse(own));
-      }
+    for (const provider of new Set(planned.map((x) => x.p.route.provider))) {
+      const own = accountRun(id, provider, "submit");
+      if ("error" in own) return back(refusalResponse(own));
     }
     if (!model3dAllowed(place) && planned.some(({ p }) => outputKind(p.op, p.model) === "model3d" && p.model.id !== ANY_ANGLE.buildModel)) return back(ownGpuTool());
     // GPU pre-flight on its own ComfyUI: a step sure to fail for something missing stops the run with the plan that
@@ -282,10 +455,7 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
     return back(errorResponse(e));
   }
   // The moderation service's check (none set: nothing is checked), on the run's words and its files.
-  const first = steps.find((s) => !s.deps) ?? steps[0];
-  const words = steps.map((s) => s.request.prompt?.trim()).filter(Boolean);
-  const checked: GenerationRequest = { ...first.request, prompt: [...new Set(words)].join("\n").slice(0, 8000), inputs: filesAsInputs(files) };
-  const mod = await moderateRun(account, checked, null, "own", { kind, place: onKey ? "own-key" : "own-gpu" });
+  const mod = await moderateRun(account, checkedRequest(steps, files), null, "own", { kind, place: onKey ? "own-key" : "own-gpu" });
   if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
   const stamp: RunStamp | null = mod.checkOutputs ? { checkOutputs: true } : null;
   // Counted again just before the run is stored, with nothing awaited in between.
@@ -296,4 +466,118 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
   } catch (e) {
     return back(errorResponse(e));
   }
+}
+
+/** What the moderation service checks of a tool's run: its words (every step's, once each) and its files. */
+function checkedRequest(steps: ToolStep[], files: string[]): GenerationRequest {
+  const first = steps.find((s) => !s.deps) ?? steps[0];
+  const words = steps.map((s) => s.request.prompt?.trim()).filter(Boolean);
+  return { ...first.request, prompt: [...new Set(words)].join("\n").slice(0, 8000), inputs: filesAsInputs(files) };
+}
+
+const isThenable = (v: unknown): v is PromiseLike<unknown> => !!v && typeof (v as { then?: unknown }).then === "function";
+
+/**
+ * A tool run on this install's GPUs (placeOf said "pool"): the policy's limits on runs there (never for light work
+ * only), the moderation service's check, one hold for the whole run priced from every step (none for light work: free),
+ * then the run made as the account's run there (runOnPool, every row stamped with its place and hold) and counted in
+ * the same transaction (admitRun). Every row it makes is checked again before anything is sent (madeRunProblem): against
+ * the policy, and against what the run was priced and held for (its jobs, its outputs at once, light work only). A row
+ * that doesn't match stops the whole run: its rows are stopped, and their reports close its hold (a run that made no
+ * row gives its hold back). Its own GPU's checks (the pre-flight, its LoRAs) don't apply here.
+ */
+async function startOnPool<T>(
+  request: Request,
+  account: Account,
+  run: AccountToolRun<T>,
+  steps: ToolStep[],
+  files: string[],
+  pool: Extract<ToolPlace, { kind: "pool" }>,
+  back: (response: Response) => AccountToolResult<T>,
+): Promise<AccountToolResult<T>> {
+  const id = account.id;
+  const addr = clientAddress(request);
+  const over = pool.light ? null : poolLimitRefusal(id, pool.policy, addr);
+  if (over) return back(refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) }));
+  const kind = outputKind(pool.main.planned.op, pool.main.planned.model);
+  const mod = await moderateRun(account, checkedRequest(steps, files), null, "pool", { kind, place: "pool" });
+  if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
+  let stamp: RunStamp;
+  if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
+  else {
+    // One hold per press of Run: every resend of the press asks for it by the same request id.
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, PRESS.getStore()?.pressId ?? null);
+    if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
+    stamp = held.stamp;
+  }
+  const release = () => {
+    if (stamp.hold) queueRelease(stamp.hold);
+  };
+  /** Refused from here on: after its hold was made, when one was (it goes back). */
+  const refused = (response: Response): AccountToolResult<T> => ({ ...back(response), ...(stamp.hold && { held: true }) });
+  const notOffered = (error: string) => refuse(403, error, { code: "not-offered" }, { [BILLING_HEADER]: "not-offered" });
+  /** What the start made: its value, its rows (they keep coming while an awaiting start runs) and its open admission. */
+  type Made = { value: T | Promise<T>; ids: string[]; start: () => void; open: string | null };
+  const now = Date.now();
+  let admitted: { ok: true; value: Made } | { ok: false; refusal: { status: number; error: string; code: string; retryAfterS?: number } };
+  try {
+    admitted = runOnPool(id, () =>
+      withRunStamp(stamp, () =>
+        admitRun({ accountId: id, pool: pool.light ? null : { policy: pool.policy, addr }, now }, (): Made => {
+          const made = captureRun(run.start);
+          // A tool that makes its rows as it goes (after an await) is checked once they are all made, below. Until then
+          // it counts as a run going (and in line) for every later request, from this same locked step: requests sent
+          // together can't all pass the limits while its rows aren't made yet.
+          if (isThenable(made.value)) return { ...made, open: openAdmission(id, !pool.light, now) };
+          const problem = madeRunProblem(pool, made.ids);
+          if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+          return { ...made, open: null };
+        }),
+      ),
+    );
+  } catch (e) {
+    release();
+    return refused(errorResponse(e));
+  }
+  if (!admitted.ok) {
+    release();
+    const r = admitted.refusal;
+    return refused(r.code === "not-offered" ? notOffered(r.error) : refuse(r.status, r.error, { code: r.code }, { "Retry-After": String(r.retryAfterS ?? 30) }));
+  }
+  const made = admitted.value;
+  /**
+   * Stop what was made (nothing of it was sent). Each stopped row's report closes the hold (billing-outbox.ts), so the
+   * hold goes back by itself only when no row was made.
+   */
+  const undo = () => {
+    for (const g of made.ids) void cancelGeneration(g);
+    if (!made.ids.length) release();
+  };
+  let value: T;
+  try {
+    value = await made.value;
+  } catch (e) {
+    undo();
+    return refused(errorResponse(e));
+  } finally {
+    // Its rows exist now and count for themselves (or none will).
+    if (made.open) closeAdmission(made.open);
+  }
+  if (isThenable(made.value)) {
+    const problem = madeRunProblem(pool, made.ids);
+    if (problem) {
+      undo();
+      return refused(notOffered(problem));
+    }
+  }
+  // A start that made nothing (a tool that kept its own error, say): nothing runs, so its hold goes back, and it is not
+  // one of the hour's runs.
+  if (!made.ids.length) {
+    release();
+    if (!pool.light) forgetAdmission(id, now);
+    unhit(`run:${id}`);
+    return { ok: true, value };
+  }
+  made.start();
+  return { ok: true, value };
 }

@@ -24,6 +24,7 @@ const { KatanaBody, planKatana } = await import("@/server/katana");
 const { videoLength } = await import("@/server/dub");
 const { resetRates } = await import("@/server/rate");
 const { proxy } = await import("@/proxy");
+const { isPriceCheck } = await import("@/lib/guest-access");
 const dubRoute = await import("@/app/api/dub/route");
 const audioRoute = await import("@/app/api/audio-tools/route");
 const { gpuState } = await import("@/server/account-gpu");
@@ -302,5 +303,24 @@ describe("H-2 / H-3: price checks are rate-limited per visitor", () => {
     expect(proxy(post("/api/dub?preview=1", account)).status).toBe(429);
     const owner = auth.createSession().value;
     for (let i = 0; i < 200; i++) expect(passed(proxy(post("/api/dub?preview=1", owner)))).toBe(true);
+  });
+
+  it("with hosted runs on, Cinema Studio's Generate price check counts against the same budget; its run is not a price check", async () => {
+    // With hosted runs off it prices nothing (the route says the run stays where it is): the request is the run it names.
+    expect(isPriceCheck("POST", "/api/cinema/projects/p1/generate", "?preview=1")).toBe(false);
+    expect(isPriceCheck("POST", "/api/cinema/projects/p1/generate", "?preview=1", true)).toBe(true);
+    expect(isPriceCheck("POST", "/api/cinema/projects/p1/generate", "", true)).toBe(false);
+    expect(isPriceCheck("POST", "/api/cinema/projects/p1/items/g1/retry", "?preview=1", true)).toBe(false);
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    try {
+      const account = auth.createSession(b).value;
+      for (let i = 0; i < 120; i++) expect(passed(proxy(post("/api/cinema/projects/p1/generate?preview=1", account))), `check ${i}`).toBe(true);
+      const r = proxy(post("/api/cinema/projects/p1/generate?preview=1", account));
+      expect(r.status).toBe(429);
+      expect(r.headers.get("retry-after")).toBeTruthy();
+      expect((await r.json()).error).toMatch(/Too many price checks/);
+    } finally {
+      delete process.env.FUOBE_HOSTED_RUNS;
+    }
   });
 });

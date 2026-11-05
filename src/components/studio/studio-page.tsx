@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
+import { OwnSetupChip } from "@/components/own-setup";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
@@ -490,10 +491,10 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   const [engine, setEngine, engineMode] = useEngine();
   // The engine is the browser's own: a link that names its model (Lipsync → Kandinsky) waits for it, so the page hydrates as rendered.
   const hydrated = useHydrated();
-  // A GPU-only step isn't offered while the install runs paid APIs only. A guest or an account sees none: each step
-  // opens a tool that runs on a self-hosted Fuobe only.
+  // A GPU-only step isn't offered while the install runs paid APIs only. A guest or an account sees the steps that run on
+  // its own setup, each with its label (src/lib/own-setup.ts); a step whose tool runs on a self-hosted Fuobe only stays out.
   const visitor = useLikelyVisitor();
-  const firstSteps = visitor ? undefined : config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
+  const firstSteps = config.firstSteps?.filter((f) => (!f.openOnly || engineMode !== "cloud") && (!visitor || !!f.ownSetup));
   const feed = useGenerations(config.feed);
   const bridge = useComposerBridge();
   const [dragging, setDragging] = useState(false);
@@ -599,6 +600,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
                       className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       {f.label}
+                      {visitor && <OwnSetupChip setup={f.ownSetup} />}
                       <ArrowRight className="size-3" />
                     </Link>
                     <span id={`first-step-${f.id}`} className="text-[12px] text-pretty text-muted-foreground">

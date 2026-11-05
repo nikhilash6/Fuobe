@@ -28,6 +28,7 @@ import type { Generation, GenerationRequest, ModelDef } from "@/lib/catalog/type
 import { fileAccount } from "./account-library";
 import { db } from "./db";
 import { offeredLoras } from "./model-access";
+import { ownSetupGate, requestOwnSetupItem } from "./own-setup-run";
 import { filesRel, storedMedia } from "./storage";
 import { tenant, tenantAccount } from "./tenant";
 
@@ -71,15 +72,25 @@ export function regenSwitchedOff(): string | undefined {
 }
 
 /**
- * Why a run can't start while Open-H3 Regenerate is held (REGEN_OFFERED: it hasn't run on a card that fits it yet), for
- * the owner and visitors alike: a Regenerate run however it is asked for (Upscale → Video, Edit video's Enhance, a Canvas
- * node, a skill, a studio's steps, the API), and MiniMax H3 at 2K on your GPU, whose takes it finishes. In plain words for
- * what was asked; undefined while it is offered, and for any other run.
+ * Why a run can't start while Open-H3 Regenerate is held on this studio's GPUs (REGEN_OFFERED: it hasn't run on a card
+ * that fits it yet): a Regenerate run however it is asked for (Upscale → Video, Edit video's Enhance, a Canvas node, a
+ * skill, a studio's steps, the API), and MiniMax H3 at 2K on your GPU, whose takes it finishes. The owner gets plain words
+ * for what was asked. An account runs it on its own GPU when that GPU has the memory (own-setup-run.ts), and otherwise
+ * gets "Connect your GPU" (thrown); never on this studio's GPUs. Undefined while it is offered, and for any other run.
  */
-export function regenHeld(req: Pick<GenerationRequest, "feature" | "modelId" | "params">): string | undefined {
-  if (REGEN_OFFERED) return undefined;
-  if (wantsH3TwoK(req.modelId, req.params?.resolution)) return REGEN_COPY.heldTwoK;
-  if (req.modelId !== REGEN_MODEL) return undefined;
+export function regenHeld(req: Pick<GenerationRequest, "feature" | "modelId" | "params" | "place">): string | undefined {
+  const twoK = wantsH3TwoK(req.modelId, req.params?.resolution);
+  const regen = twoK || req.modelId === REGEN_MODEL;
+  // An account (own-setup.ts): an item that needs a bigger card than most (Open-H3 Regenerate and MiniMax H3's 2K that
+  // finishes with it, Kandinsky 6.0 Pro) runs on its own GPU with the memory it needs, never on this studio's
+  // (ownSetupGate answers "Connect your GPU" otherwise). A guest's price check is priced as the open run.
+  const item = requestOwnSetupItem(req) ?? (!regen ? undefined : twoK ? "regenerate:h3-2k" : ENHANCE_FEATURES.has(req.feature) ? "regenerate:enhance" : REGEN_MODEL);
+  if (item && tenant()) {
+    ownSetupGate(item, req.place);
+    return undefined;
+  }
+  if (REGEN_OFFERED || !regen) return undefined;
+  if (twoK) return REGEN_COPY.heldTwoK;
   return ENHANCE_FEATURES.has(req.feature) ? REGEN_COPY.heldEnhance : REGEN_COPY.held;
 }
 

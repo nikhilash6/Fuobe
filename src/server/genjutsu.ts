@@ -64,6 +64,7 @@ import { llmText, llmTextBackend } from "./enhance";
 import { AccountRunError, ConnectComfyError, createGenerations, previewChained, previewGeneration } from "./generations";
 import { db } from "./db";
 import { genjutsuLive } from "./genjutsu-live";
+import { ownSetupItem } from "@/lib/own-setup";
 import { decodePng } from "./png";
 import { LOOK_IDS, paintKeyframe, type LookId, type PaintKeyframe } from "@/lib/openjutsu-graphs";
 import { localLabel } from "./llm";
@@ -121,9 +122,14 @@ export interface GenjutsuBody {
   finish?: FinishOptions;
 }
 
-/** Who is asking: the owner sees and runs every feature; others only what has opened (src/server/genjutsu-live.ts). */
+/**
+ * Who is asking: the owner sees and runs every feature; others what has opened (src/server/genjutsu-live.ts), and with
+ * `ownSetup` (an account's run on its own GPU, account-tool-run.ts, or a price check) also what runs on a visitor's own
+ * setup until it opens (src/lib/own-setup.ts).
+ */
 export interface GenjutsuViewer {
   owner: boolean;
+  ownSetup?: boolean;
 }
 
 const OWNER: GenjutsuViewer = { owner: true };
@@ -252,11 +258,14 @@ interface Planned {
   notes: string[];
 }
 
-/** What this viewer may use: everything for the owner; for a guest or an account, what has opened. */
+/**
+ * What this viewer may use: everything for the owner; for a guest or an account, what has opened, and on its own setup
+ * the features that run there until they open (never on this studio's GPU: an account's steps go to its own GPU).
+ */
 function openFor(viewer: GenjutsuViewer): FeatureCheck {
   if (viewer.owner) return ALL_FEATURES;
   const live = genjutsuLive();
-  return (f) => live[f];
+  return (f) => live[f] || (!!viewer.ownSetup && !!ownSetupItem(`genjutsu:${f}`));
 }
 
 async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: GenjutsuViewer }): Promise<Planned> {
@@ -471,12 +480,12 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
   }
   if (n > 1 && body.mode !== "character") {
     if (m.engine === "open" && m.window) {
-      notes.push(`${name} works on ${m.window.cap} frames at a time (${(m.window.cap / fps).toFixed(1)} s of this clip): it runs as ${n} windows, joined with the clip's own sound. Seams between windows aren't tested on a GPU yet`);
+      notes.push(`${name} works on ${m.window.cap} frames at a time (${(m.window.cap / fps).toFixed(1)} s of this clip): it runs as ${n} windows, joined with the clip's own sound`);
     } else if (fuobeLook) {
       notes.push(`${name} restyles ${m.engine === "open" ? "5 s" : m.window ? `${m.window.cap} frames (${(m.window.cap / fps).toFixed(1)} s of this clip)` : "up to 10 s"} at a time: the clip runs as ${n} segments, joined with its own sound`);
     } else {
       const limit = m.window ? `${m.window.cap} frames (${(m.window.cap / fps).toFixed(1)} s of this clip)` : `${m.maxSeconds} s`;
-      notes.push(`${name} takes up to ${limit} a call: the clip runs as ${n} pieces, joined with its own sound. Seams between pieces aren't tested yet`);
+      notes.push(`${name} takes up to ${limit} a call: the clip runs as ${n} pieces, joined with its own sound`);
     }
   }
   if (body.mode !== "restyle" && refs > m.refs.max) notes.push(m.refs.max === 1 ? `${name} uses your first reference image` : `${name} takes ${m.refs.max} references — your first ${m.refs.max} go`);

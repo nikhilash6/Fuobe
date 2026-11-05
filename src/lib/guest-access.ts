@@ -67,6 +67,7 @@ const EMPTY: Record<string, unknown> = {
   "/api/shares": { items: [], signIn: true },
   "/api/photodump": { packs: [] },
   "/api/photodump/packs": { packs: [] },
+  "/api/photodump/characters": { items: [] },
   "/api/generations/facets": NO_FACETS,
   // GPU pre-flight: a guest has no GPU (Connect your GPU), so no board and no chips.
   "/api/gpu/readiness": { connected: false, reason: "guest" },
@@ -101,15 +102,26 @@ export function guestRead(pathname: string): GuestRead {
  */
 const PREVIEWS = [/^\/api\/(generations|audio-tools|dub|katana|turnaround|fly-around|influencer|photodump|photodump\/fashion|photodump\/character)$/, /^\/api\/dub\/[^/]+\/voice$/];
 
+/**
+ * The run routes whose `?preview=1` prices a run on this install's GPUs only (with hosted runs off the route answers at
+ * once that the run stays where it is, and the proxy treats the request as the run it names): Cinema Studio's Generate,
+ * which plans a take in the account's own project (every step planned, nothing kept).
+ */
+const HOSTED_PREVIEWS = [/^\/api\/cinema\/projects\/[^/]+\/generate$/];
+
 /** The estimate routes (named: a dynamic segment called "estimate" on another route must not pass for one). */
 const ESTIMATES =
   /^\/api\/(ads|ads\/multiplier|assist\/skills\/[^/]+|content-factory|evolution|faceless|genjutsu|influencer|marketing|marketing\/click-to-ad|mixed-media|remove-object|restore|shorts|storyboards|turnaround)\/estimate$/;
 
-/** A POST that only plans and prices a run (an estimate route, or ?preview=1 where PREVIEWS honours it): free, and open to guests. */
-export function isPriceCheck(method: string, pathname: string, search: string): boolean {
+/**
+ * A POST that only plans and prices a run (an estimate route, or ?preview=1 where PREVIEWS honours it): free, and open to
+ * guests. `hosted`: hosted runs are on, so HOSTED_PREVIEWS count too.
+ */
+export function isPriceCheck(method: string, pathname: string, search: string, hosted = false): boolean {
   if (method !== "POST") return false;
   if (ESTIMATES.test(pathname)) return true;
-  return new URLSearchParams(search).get("preview") === "1" && PREVIEWS.some((r) => r.test(pathname));
+  if (new URLSearchParams(search).get("preview") !== "1") return false;
+  return PREVIEWS.some((r) => r.test(pathname)) || (hosted && HOSTED_PREVIEWS.some((r) => r.test(pathname)));
 }
 
 /**
@@ -174,8 +186,19 @@ export function accountOwnRead(pathname: string): boolean {
 /** An account's own canvases (src/app/api/account/canvases): the routes read and change its own boards only. */
 const ACCOUNT_CANVASES = /^\/api\/account\/canvases(\/[^/]+)?$/;
 
-/** The Library's counts and its Uploads (its stored files): each route answers an account with its own only. */
-const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets"]);
+/**
+ * The Library's counts, its Uploads (its stored files), a zip of its runs (the Library's Download, a result's
+ * Download all, Shorts' Download parts), its own dubs (src/server/dub.ts) and its own Photodump packs (GET /api/photodump,
+ * the same list as /api/photodump/packs): each route answers an account with its own only.
+ */
+const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip", "/api/dub", "/api/photodump"]);
+
+/**
+ * A signed-in account's zip of its own runs (/api/generations/zip; src/server/account-files.ts ACCOUNT_LIMITS): at most
+ * this many runs and this many bytes in one zip, one zip at a time. The Library sends at most this many.
+ */
+export const ACCOUNT_ZIP_MAX_RUNS = 200;
+export const ACCOUNT_ZIP_MAX_BYTES = 2 ** 30;
 
 /**
  * "Use the ComfyUI on this computer": the routes the person's own Fuobe tab runs their jobs through. Each takes whose
@@ -282,6 +305,27 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/image-to-3d$/,
   // Genjutsu's "Describe my character": the GPU describer on the account's own GPU.
   /^\/api\/genjutsu\/describe$/,
+  // Character Swap Studio's jobs on an account's own project (src/server/swap-studio-account.ts).
+  /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
+  // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
+  /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
+  // The photo apps: Photodump, Fashion Factory, Character Sheet, AI Influencer, and a retry of its own photo.
+  /^\/api\/(photodump(\/(fashion|character|retry))?|influencer)$/,
+  // Video tools: Remove object (a mask preview, and "Redo from here" on its own removal), Evolution (its direction is
+  // Fuobe's offline writer's), Mixed Media (a preview frame, and "Try again" on its own render), Turnaround video and
+  // Fly around (Image to 3D's "Film it photoreal"), and Katana (a retry or Run again of its own run).
+  /^\/api\/remove-object(\/(preview|reroll))?$/,
+  /^\/api\/evolution(\/direction)?$/,
+  /^\/api\/mixed-media(\/(preview|retry))?$/,
+  /^\/api\/(turnaround|fly-around)$/,
+  /^\/api\/katana(\/[^/]+\/retry)?$/,
+  // Audio's tools (Split soundtrack, Clean up dialogue, Remove dialogue, Edit speech, Loop, Join, Clean up voice), and
+  // Translate & dub: a dub, and voicing one language of the account's own dub (src/server/dub.ts).
+  /^\/api\/audio-tools$/,
+  /^\/api\/dub(\/[^/]+\/voice)?$/,
+  // Restore & colourise: its windows or pieces and their join on the account's own GPU or fal.ai key, with Fuobe's
+  // offline template for the words when none are given (the studio's AI helper stays the owner's: /api/restore/prompt).
+  /^\/api\/restore$/,
 ];
 
 /**
@@ -290,7 +334,35 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
  * A guest's change gets the sign-up card; its reads go by guestRead. A tool adds its routes here when it opens to
  * accounts.
  */
-export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [];
+export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
+  // Character Swap Studio: the list, a project, its prices, its decisions, and stopping its jobs.
+  /^\/api\/swap-studio\/projects(\/[^/]+(\/(decisions|estimate|stop|takes\/stop))?)?$/,
+  // Shorts Studio: its own sessions (start one, a new take, Enhance a take on its own GPU, stitch again, pick a take,
+  // rename, delete) and its own presets.
+  /^\/api\/shorts\/sessions(\/[^/]+(\/stitch|\/segments\/[^/]+(\/(primary|enhance))?)?)?$/,
+  /^\/api\/shorts\/presets(\/[^/]+)?$/,
+  // Cinema Studio: its projects, folders, takes, grid tiles and AI Director chat (the Director's built-in breakdown:
+  // no AI helper, GPU or key), and a ready film made as its own project (src/server/cinema.ts).
+  /^\/api\/cinema\/projects(\/[^/]+(\/(director|folders|items|folders\/[^/]+|items\/[^/]+\/tiles))?)?$/,
+  /^\/api\/starters\/cinema\.[^/]+$/,
+  // Photodump and Fashion Factory: its own packs and its own characters (src/server/photodump.ts).
+  /^\/api\/photodump\/(packs|characters)(\/[^/]+)?$/,
+  // Katana: its own runs (the list, one run, forgetting one), and how far its own Mixed Media render's frames are.
+  /^\/api\/katana(\/[^/]+)?$/,
+  /^\/api\/mixed-media\/progress$/,
+  // Translate & dub: one of its own dubs (open it, save its reviewed lines, forget it). Its list is ACCOUNT_LISTS', and
+  // starting one is a tool run (ACCOUNT_TOOL_RUNS), so its price check is counted as every other.
+  /^\/api\/dub\/[^/]+$/,
+  // Faceless Studio, the Explainer and Content Factory: their own channels, episodes, explainers and series, their topic
+  // ideas, documents and narrator samples, and their runs (renders, retries, changes, upscales, avatars, readings), each
+  // checked by the route on its own GPU or key (src/server/faceless.ts, content-factory.ts). "Generate in Claude" isn't
+  // here (it hands the brief to the studio's own MCP server), nor reading a link (the server never fetches a link for an
+  // account: it uploads the file or pastes the words). "Regenerate to 1080p" runs on the account's own GPU only.
+  /^\/api\/faceless\/(channels(\/[^/]+(\/avatar)?)?|episodes(\/[^/]+(\/(render|retry|rewrite|undo|upscale|regenerate|change))?)?|topics|voices\/preview)$/,
+  /^\/api\/explainer(\/document)?$/,
+  /^\/api\/content-factory\/series(\/[^/]+(\/(episodes|generate|read))?)?$/,
+  /^\/api\/starters\/faceless\.[^/]+$/,
+];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));
 
@@ -302,6 +374,17 @@ export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJEC
  */
 export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && (pathname === "/api/generations" || ACCOUNT_TOOL_RUNS.some((r) => r.test(pathname)));
+}
+
+/**
+ * Tool runs an account makes on this install's GPUs only (hosted runs on): the Image studio's palette lock (its images,
+ * then each recoloured to the palette, src/server/palettes.ts). On its own GPU or key the colours go in the prompt
+ * instead, so with hosted runs off these stay refused as a tool that isn't available here.
+ */
+const POOL_TOOL_RUNS: readonly RegExp[] = [/^\/api\/palettes\/lock$/];
+
+export function poolToolRun(method: string, pathname: string): boolean {
+  return method === "POST" && POOL_TOOL_RUNS.some((r) => r.test(pathname));
 }
 
 /** The code on an account's run refused because its runs going are at the limit: the next one may wait for a place and send again. */
@@ -317,6 +400,21 @@ export const PLACE_ASK_HEADER = "x-fuobe-place-ask";
 
 /** Fired when a run started from a toast or a card (not from a page's own button), so the lists show it. */
 export const RUNS_CHANGED_EVENT = "fuobe:runs-changed";
+
+/**
+ * Where a run's client would like it to go ("own" or "pool"), as a header: for a tool whose body has no field for it.
+ * A body's own `place` wins (src/server/hosted-run.ts readWishes).
+ */
+export const RUN_PLACE_HEADER = "x-fuobe-place";
+
+/**
+ * The price a run's client showed before Run, as a header (`{ amount, priceVersion }` as URI-encoded JSON): for a tool
+ * whose body has no field for it, and for a run sent again at a changed price. A body's own `shown` wins.
+ */
+export const RUN_SHOWN_HEADER = "x-fuobe-shown";
+
+/** A price shown, as RUN_SHOWN_HEADER carries it. */
+export const shownHeader = (s: { amount: number; priceVersion: string }): string => encodeURIComponent(JSON.stringify({ amount: s.amount, priceVersion: s.priceVersion }));
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";

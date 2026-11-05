@@ -47,6 +47,11 @@ const SMALL_PX = 320;
 const PUBLISHED_PX = 512;
 const AVIF_QUALITY = 62;
 const JPEG_QUALITY = 82;
+/** Each width's most bytes for a copy (tests/template-hd.test.ts holds them): a busy picture steps its quality down to fit. */
+const MAX_BYTES = { 320: 30_000, 640: 120_000, 1024: 260_000 };
+/** The lowest quality a copy steps down to, and the step. */
+const MIN_QUALITY = 60;
+const QUALITY_STEP = 4;
 /** How far (of 255) a copy may differ from the published poster, on average (from its mean): another frame is 10 and more. */
 const MATCH = 7;
 const STILLS = ["still.png", "still.jpg", "still.webp", "start.png", "start.jpg"];
@@ -74,6 +79,13 @@ const fileOf = (w, key, ext) => path.join(OUT_DIR, String(w), ...key.split("/").
 
 /** Every file an entry has, in a fixed order (its version is theirs). */
 const filesOf = (key, entry) => [...entry.w.flatMap((w) => [fileOf(w, key, "avif"), fileOf(w, key, "jpg")]), fileOf(SMALL_PX, key, "avif")];
+
+/** A copy at `quality`, or at a lower one (down to MIN_QUALITY) when it would be larger than its width's MAX_BYTES. */
+async function fitted(encode, quality, w) {
+  let buf = await encode(quality);
+  for (let q = quality - QUALITY_STEP; buf.length >= (MAX_BYTES[w] ?? Infinity) && q >= MIN_QUALITY; q -= QUALITY_STEP) buf = await encode(q);
+  return buf;
+}
 
 /** As gen-preset-hd.mjs: the mean difference of two pictures' 128x96 grey copies, each from its own mean brightness. */
 async function gap(a, b) {
@@ -151,12 +163,12 @@ async function make(key) {
         ok = false;
         break;
       }
-      made.set(fileOf(w, key, "avif"), await sharp(png).avif({ quality: AVIF_QUALITY, effort: 6 }).toBuffer());
-      made.set(fileOf(w, key, "jpg"), await sharp(png).jpeg({ quality: JPEG_QUALITY, mozjpeg: true }).toBuffer());
+      made.set(fileOf(w, key, "avif"), await fitted((q) => sharp(png).avif({ quality: q, effort: 6 }).toBuffer(), AVIF_QUALITY, w));
+      made.set(fileOf(w, key, "jpg"), await fitted((q) => sharp(png).jpeg({ quality: q, mozjpeg: true }).toBuffer(), JPEG_QUALITY, w));
       largest = png;
     }
     if (!ok) continue;
-    made.set(fileOf(SMALL_PX, key, "avif"), await sharp(largest).resize(SMALL_PX).avif({ quality: AVIF_QUALITY, effort: 6 }).toBuffer());
+    made.set(fileOf(SMALL_PX, key, "avif"), await fitted((q) => sharp(largest).resize(SMALL_PX).avif({ quality: q, effort: 6 }).toBuffer(), AVIF_QUALITY, SMALL_PX));
     for (const [file, buf] of made) {
       console.log(`  ${path.relative(PUBLIC, file).split(path.sep).join("/")}  ${(buf.length / 1024).toFixed(1)} KB`);
       if (DRY) continue;

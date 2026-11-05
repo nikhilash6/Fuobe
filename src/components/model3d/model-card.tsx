@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { uploadFile, useEngine, useHydrated, useIsOwner, useModelAccess } from "@/lib/api";
+import { uploadFile, useAskBeforeUpload, useEngine, useHydrated, useIsOwner, useModelAccess } from "@/lib/api";
 import { offered } from "@/lib/model-access";
 import { FINAL_3D, RETEXTURE_MODELS, animateSpinHref, animationName, finalBuildHref, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
 import { anyAngleHref } from "@/lib/catalog/any-angle";
@@ -26,6 +26,8 @@ import { recordableType, recordTurntable } from "./turntable";
 import { hasWebgl2, SplatViewer, useReducedMotion } from "./splat-viewer";
 import { FALLBACK_TEXT, hazeCutoffFor } from "@/lib/av/splat-view";
 import { TurnChips } from "./turn-chips";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
+import { useModel3dSetup } from "./own-setups";
 
 /**
  * Left out of the card's next steps: its own Animate the spin button is that step (and knows a turntable recorded
@@ -61,12 +63,15 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
 export function ModelCard({
   g,
   cloudAllowed,
+  keyInstead,
   refineAllowed = false,
   finalAllowed = false,
   onFinal,
 }: {
   g: Generation;
   cloudAllowed: boolean;
+  /** A visitor on open models only: Rig and Retexture run with its own fal.ai key, and say so. */
+  keyInstead?: boolean;
   refineAllowed?: boolean;
   /** TRELLIS.2 runs here and is switched on: an Idol 3D draft offers "Build the final with TRELLIS.2". */
   finalAllowed?: boolean;
@@ -93,6 +98,10 @@ export function ModelCard({
   const focusViewer = useRef(false);
   const hydrated = useHydrated();
   const owner = useIsOwner();
+  // A visitor's refine and final run on its own GPU: their labels until their graphs are validated on this studio's GPU.
+  const refineSetup = useModel3dSetup("refine");
+  const finalSetup = useModel3dSetup("final");
+  const press = useOwnSetupPress();
   const canRecord = hydrated && !!recordableType();
   // A splat opens in the splat viewer where the browser draws WebGL2 and the file isn't too big for it (it says so).
   const [splatNote, setSplatNote] = useState<string | null>(null);
@@ -139,8 +148,10 @@ export function ModelCard({
   const [filming, setFilming] = useState<number | null>(null);
   const pendingFilm = useRef(false);
   const photorealStand = engine === "open" ? "/api/files/placeholder.mp4" : undefined;
-  // Filmed by this studio's own worker (WorldCast), so the owner's only.
-  const photoreal = owner ? photorealBody(view, engine, photorealStand, drawn) : null;
+  // A signed-in account's is filmed on its own GPU or its own key (never the studio's WorldCast worker); a guest is asked
+  // to sign up first.
+  const photoreal = photorealBody(view, engine, photorealStand, drawn);
+  const askFirst = useAskBeforeUpload();
   const fly = useFlyAround(photoreal && !view.rigged && (view.glb || view.turntable) ? photoreal : null);
   // Retexture's cloud models, where this viewer may run one (an account's own key runs only the ones checked live).
   const access = useModelAccess();
@@ -227,6 +238,7 @@ export function ModelCard({
     setShow("3d");
   };
   const film = () => {
+    if (askFirst("run")) return;
     if (engine === "cloud" || !view.glb) {
       const body = photorealBody(view, engine, engine === "open" ? view.turntable : undefined, drawn);
       if (body) fly.run.mutate(body, { onSuccess: () => void toast.success("Filming the photoreal orbit — it shows up with your 3D models") });
@@ -236,7 +248,7 @@ export function ModelCard({
     pendingFilm.current = true;
     setShow("3d");
   };
-  const canFilm = owner && !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
+  const canFilm = !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
   const filmBusy = filming !== null || fly.run.isPending;
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
   // Draft then final (idol-6): an Idol 3D splat's picture, rebuilt as a textured mesh with TRELLIS.2.
@@ -463,8 +475,9 @@ export function ModelCard({
             </Button>
           )}
           {refinable && (
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRefining(true)}>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => press(refineSetup, () => setRefining(true))}>
               <Wand2 className="size-3.5" /> Refine this mesh
+              <OwnSetupChip setup={refineSetup} />
             </Button>
           )}
           {view.glb && !view.splat && g.op !== "splat" && !view.rigged && (
@@ -511,6 +524,7 @@ export function ModelCard({
             <Button asChild variant="outline" size="sm" className="rounded-full">
               <Link href={final} prefetch={false} onClick={() => view.photo && onFinal?.(view.photo)}>
                 <Box className="size-3.5" /> {FINAL_3D.label}
+                <OwnSetupChip setup={finalSetup} />
               </Link>
             </Button>
             <p className="text-[12px] text-muted-foreground">{FINAL_3D.note}</p>
@@ -527,8 +541,8 @@ export function ModelCard({
       </div>
       {refinable && refining && view.glb && refineFrom && <RefineDialog glb={view.glb} photo={refineFrom} open={refining} onOpenChange={setRefining} feature={g.feature} />}
       {printing && view.glb && <PrintDialog glb={view.glb} name={name} open={printing} onOpenChange={setPrinting} refined={refined} />}
-      {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
-      {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} />}
+      {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} keyInstead={keyInstead} />}
+      {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} keyInstead={keyInstead} />}
     </article>
   );
 }

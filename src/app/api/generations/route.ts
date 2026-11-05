@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, CONNECT_NEEDS_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, CONNECT_NEEDS_HEADER, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import { missingFilesMessage } from "@/lib/missing-files";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
 import { requestViewer, validToken } from "@/server/auth";
@@ -9,10 +9,6 @@ import { getSetting } from "@/server/settings";
 import { RUNS_ON_COMPUTER_NOTE } from "@/lib/relay";
 import { OPERATION_LABELS } from "@/lib/catalog/types";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
-import { directRunFeatures } from "@/lib/catalog/genjutsu";
-import { genjutsuLive } from "@/server/genjutsu-live";
-import { soundLive } from "@/server/sound-live";
-import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
@@ -86,18 +82,10 @@ export async function POST(request: Request) {
   const asked = relightTitle ? { ...sent, title: relightTitle } : sent;
   // Public sign-up: an account runs on its own ComfyUI or its own fal.ai or Replicate key, never the install's providers.
   // Without a key of its own it stays on the open engine; with one, the engine it asked for.
-  // Genjutsu's new makers open one by one (src/server/genjutsu-live.ts): sent here directly, a maker that hasn't opened
-  // runs for the owner only, as on the Genjutsu page.
-  if (viewer.kind !== "owner") {
-    // "Clean the voice first" opens to visitors once it has passed a real run (src/server/sound-live.ts).
-    if (wantsVoiceFirst(asked) && !soundLive()["clean-voice-first"]) return refuse(403, OWN_GPU_TOOL_MESSAGE, { code: "own-gpu-tool" });
-    const extra = asked.params?.extra?.openjutsu;
-    const needs = directRunFeatures(asked.modelId, extra && typeof extra === "object" ? (extra as Record<string, unknown>) : {});
-    if (needs) {
-      const live = genjutsuLive();
-      if (needs.some((f) => !live[f])) return refuse(403, OWN_GPU_TOOL_MESSAGE, { code: "own-gpu-tool" });
-    }
-  }
+  // Genjutsu's new makers and "Clean the voice first", until each passes on this studio's GPU, run on a visitor's own GPU
+  // or key only (src/lib/own-setup.ts), as on the Genjutsu page: an account's run goes there (accountRun answers Connect
+  // your GPU or Add your key when it has neither), a run on this install's GPUs is refused with the setup's label
+  // (hosted-run.ts poolGate), and a guest signs up first. Never this studio's own GPU for a visitor.
   let req = account ? { ...asked, account: account.id, engine: accountEngineMode(account.id) === "open" ? ("open" as const) : asked.engine } : { ...asked, account: undefined };
   const onOwn = <T,>(fn: () => T): T => (account ? asAccount(account.id, fn) : fn());
   // A visitor's price check: priced as it would run, as that visitor (an account: its own GPU and keys; a guest: the open
@@ -110,7 +98,7 @@ export async function POST(request: Request) {
     return refuse(403, r.error, { code: r.code, ...(r.provider && { provider: r.provider }) }, headers);
   };
   // Beside the request (never in it): the place the client prefers, and the price it showed (hosted runs, billing hook).
-  const { wish, shown } = readWishes(body);
+  const { wish, shown } = readWishes(body, request.headers);
   const refusedBy = (r: Refusal) => {
     if (account) unhit(`run:${account.id}`);
     return refuse(r.status, r.body.error, r.body, r.headers);
@@ -156,7 +144,9 @@ export async function POST(request: Request) {
       // quote (its words for Run) and where it would stand in line. Off, or a run on its own GPU or key: priced as before.
       // (The client's address is read only for a policy that counts runs per address.)
       const pool = viewer.kind !== "owner" ? await poolQuote(account, req, wish, { addr: () => clientAddress(request) }) : null;
-      if (pool) {
+      // A mode that runs on the visitor's own setup only has no plan here: its label, which Run opens.
+      if (pool && !pool.planned) return Response.json({ modelId: req.modelId, place: "pool", quote: pool.quote, line: pool.line });
+      if (pool?.planned) {
         const { model, ...p } = pool.planned;
         return Response.json({ ...p, modelId: model.id, modelName: model.name, engine: model.engine, kind: outputKind(p.op, model), opLabel: OPERATION_LABELS[p.op] ?? p.op, place: "pool", quote: pool.quote, line: pool.line });
       }
@@ -212,13 +202,9 @@ export async function POST(request: Request) {
           if (account) unhit(`run:${account.id}`);
           return refuse(422, ISOLATED_ON_COMPUTER, { code: "isolated-on-computer" });
         }
-        // A 3D model from someone else's ComfyUI is finished on this server (decimate, web GLB, turntable): accounts
-        // don't get Image to 3D until that finish runs under an account's own limits.
-        // (Any Angle's 3D view is a splat and its turntable: nothing to finish, so an account builds it on its own GPU.)
-        if (account && outputKind(planned.op, planned.model) === "model3d" && planned.model.id !== ANY_ANGLE.buildModel) {
-          unhit(`run:${account.id}`);
-          return Response.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403 });
-        }
+        // An account's 3D model (Image to 3D, Photo to 3D, Make it 3D) runs on its own GPU or key, and is finished on
+        // this server under the account's limits (model3d-finish.ts). This install's GPUs don't take 3D: decidePlace
+        // refuses it there, and createGenerations refuses a run stamped for them.
         const skip = (body as { gpuCheck?: unknown } | null)?.gpuCheck === "skip";
         const gate = await gateGeneration(gpuTargetFor(request, "read"), { request: req, route: planned.route, op: planned.op, modelId: planned.model.id, gpu: planned.gpu, h3: planned.h3, skip, actor: account?.id ?? "owner" });
         if (!gate.ok) {

@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { CompareSlider } from "./compare-slider";
 import { ACTION_ICONS, downloadUrl, SaveElementForm, useActionRunner } from "./result-actions";
+import { OwnSetupChip } from "@/components/own-setup";
 import { LayersStack, ModelViewer, TextReader, VideoFileCard } from "./result-media";
 import { ReviewSelect } from "@/components/library/review";
 import { PlaceholderChip } from "@/components/demo-mode";
@@ -253,6 +254,8 @@ export function Viewer({
     const icon = <Icon className={cn(a.id === "favorite" && g.favorite && "fill-current text-highlight")} />;
     const cls = cn(a.destructive && "text-destructive hover:text-destructive", opts.className);
     const variant = a.destructive ? "ghost" : (opts.variant ?? "secondary");
+    // An action that runs on the visitor's own setup (src/lib/own-setup.ts) says what it needs beside its name.
+    const setup = <OwnSetupChip setup={a.ownSetup} />;
     if (a.href && a.download !== undefined) {
       return (
         <Button key={a.id} asChild variant={variant} size="sm" className={cls}>
@@ -267,6 +270,7 @@ export function Viewer({
         <Button key={a.id} asChild variant={variant} size="sm" className={cls}>
           <Link href={a.href} prefetch={false}>
             {icon} {label}
+            {setup}
           </Link>
         </Button>
       );
@@ -298,6 +302,7 @@ export function Viewer({
         }}
       >
         {icon} {label}
+        {setup}
       </Button>
     );
   };

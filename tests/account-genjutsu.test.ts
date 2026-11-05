@@ -314,11 +314,25 @@ describe("an account runs Genjutsu on its own ComfyUI", () => {
     const other = await transcribeRoute.POST(json("/api/genjutsu/transcribe", "POST", { engine: "open", source: { url: clip, duration: 12 } }, "b"));
     expect(other.status).toBe(403);
     expect((await other.json()).code).toBe("input-not-yours");
+    // One press sent twice (the page's id in its header) is one transcription.
+    const press = () => {
+      const req = json("/api/genjutsu/transcribe", "POST", { engine: "open", source: { url: clip, duration: 12 } }, "a");
+      req.headers.set("x-request-id", "press-words-0001");
+      return transcribeRoute.POST(req);
+    };
+    const first = await press();
+    expect(first.status, await first.clone().text()).toBe(201);
+    const n = (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
+    const again = await press();
+    expect(((await again.json()) as { id: string }).id).toBe(((await first.json()) as { id: string }).id);
+    expect((db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n).toBe(n);
   });
 
-  it("From picture's describer stays closed to visitors until From picture opens; a first frame counts only for whoever made it", async () => {
+  it("From picture's describer runs on an account's own GPU before From picture opens here; a first frame counts only for whoever made it", async () => {
     const r = await sceneRoute.POST(json("/api/genjutsu/scene", "POST", { engine: "open", source: { url: clip }, range: { start: 0, end: 6 }, ownPerson: true }, "a"));
-    expect(r.status).toBe(422);
+    expect(r.status, await r.clone().text()).toBe(201);
+    // On its own ComfyUI, never the install's.
+    expect(fetched.filter((u) => !u.endsWith("/system_stats"))).toEqual([]);
     // A first frame the owner made is no account's; the account's own is its own.
     const frame = (account: string | null, url: string) => {
       const t = Date.now();

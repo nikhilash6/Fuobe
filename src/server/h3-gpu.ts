@@ -84,7 +84,7 @@ export function h3Gpu(endpoint: string, extra: Record<string, unknown>, has: (id
   const model = H3_TIER_MODEL[choice.tier];
   if (!isOffered(model, "open")) {
     if (asked !== choice.tier) return { gpuTier: "standard" };
-    throw new Error(tenantAccount() ? `${choice.label.replace(/ \(.*\)$/, "")} isn't available here. Pick 32 GB or more` : offReason(getModel(model)!));
+    throw new Error(tenantAccount() ? `Pick 32 GB or more for ${choice.label.replace(/ \(.*\)$/, "")}` : offReason(getModel(model)!));
   }
   // (Options → Decoder has become the file it loads by now: controlSets in src/lib/catalog/plan.ts.)
   const notes = [TIER_NOTES[choice.tier], ...(extra.quality === "best" ? [TIER_BEST_NOTE] : []), ...(extra.vae === SOL_VAE ? [TIER_DECODER_NOTE] : [])];

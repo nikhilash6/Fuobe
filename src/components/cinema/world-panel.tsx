@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useStatus } from "@/lib/api";
+import { useOwnSetupPress } from "@/components/own-setup";
 import { planCinema, type CinemaGenerateInput, type DirectorSettings } from "@/lib/catalog/cinema";
 import type { Engine } from "@/lib/catalog/types";
 import { placeholdersOn } from "@/lib/demo-mode";
@@ -120,7 +121,10 @@ export function WorldPanel(props: WorldPanelProps) {
   const setTurn = (k: number, patch: Partial<WorldTurn>) =>
     set((s) => (k === 0 ? { ...s, opening: { ...s.opening, ...patch } } : { ...s, turns: s.turns.map((t, i) => (i === k - 1 ? { ...t, ...patch } : t)) }));
 
-  const run = async (k: number) => {
+  // A visitor films on its own GPU: a guest gets the sign-up card, an account without one "Connect your GPU".
+  const press = useOwnSetupPress();
+  const run = (k: number) => void press("cinema:world", () => void film(k));
+  const film = async (k: number) => {
     const problem = engine !== "open" ? "World mode runs on your GPU (open source)" : worldProblem(tidy, k);
     if (problem) return toast.error(problem);
     setBusy(k);
@@ -133,11 +137,12 @@ export function WorldPanel(props: WorldPanelProps) {
       setBusy(null);
     }
   };
-  const redo = (k: number) => {
-    // A little before now: the take's time is the server's clock.
-    setRedoAt((r) => ({ ...r, [k]: Date.now() - 2000 }));
-    void run(k);
-  };
+  const redo = (k: number) =>
+    void press("cinema:world", () => {
+      // A little before now: the take's time is the server's clock.
+      setRedoAt((r) => ({ ...r, [k]: Date.now() - 2000 }));
+      void film(k);
+    });
   const exportFilm = async () => {
     if (!exported) return;
     setBusy("export");

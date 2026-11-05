@@ -1,8 +1,8 @@
 import { requestViewer } from "@/server/auth";
 import { recordExists } from "@/server/records";
 import { body, handle } from "@/server/shorts-schemas";
-import { previewTurnaround, TurnaroundBodySchema, turnaroundRun } from "@/server/turnaround";
-import { priceAs } from "@/server/visitor";
+import { planTurnaroundRun, previewTurnaround, TurnaroundBodySchema, turnaroundRun, turnaroundSteps } from "@/server/turnaround";
+import { poolPricedCheck } from "@/server/tool-runs";
 import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
@@ -23,7 +23,15 @@ async function post(request: Request) {
   });
 }
 
-/** A visitor (public sign-up) gets the price of its run on its own GPU, never a demo (src/server/visitor.ts). */
+/**
+ * Priced as the asker's run would go: an account's on its own GPU or key, a guest's on the open engine, never a demo;
+ * with its place, price and line on this install's GPUs when the run would go there (poolPricedCheck).
+ */
 export async function POST(request: Request) {
-  return priceAs(request, () => post(request));
+  return poolPricedCheck(request, () => post(request), (raw) => {
+    const input = TurnaroundBodySchema.parse(raw);
+    delete input.requestId;
+    if (input.elementId) throw new Error("Character not found");
+    return turnaroundSteps(planTurnaroundRun(turnaroundRun(input)));
+  });
 }

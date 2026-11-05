@@ -1,9 +1,11 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import type { CameraKey } from "@/lib/camera-path";
 import type { ExactOrbit } from "@/lib/exact-orbit";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import { COMPUTER_KICK_EVENT } from "@/lib/api";
 import { formatCost } from "@/lib/format";
 import { responseError, toastError } from "@/lib/refusals";
 
@@ -62,8 +64,11 @@ export function useFlyAround(body: FlyAroundBody | null) {
     staleTime: 15_000,
   });
   const run = useMutation({
-    mutationFn: (b: FlyAroundBody) => post<{ items: Generation[]; final: Generation }>("/api/fly-around", b),
+    // Each press carries its own id: a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount).
+    mutationFn: (b: FlyAroundBody) => post<{ items: Generation[]; final: Generation }>("/api/fly-around", { ...b, requestId: nanoid(16) }),
     onSuccess: () => {
+      // The tab that runs this person's jobs on the ComfyUI on this computer (an account's "Your GPU") asks for them at once.
+      window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
       void qc.invalidateQueries({ queryKey: ["generations"] });
       void qc.invalidateQueries({ queryKey: ["library-facets"] });
     },

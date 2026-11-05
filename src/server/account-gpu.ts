@@ -7,14 +7,14 @@ import { accountGpu, type Account, type AccountGpu } from "./auth";
 import type { OwnerGpuView } from "@/lib/connections";
 import { runnerFacts, type Principal } from "./computer/tasks";
 import { offeredSummary } from "./model-access";
-import { getModel, MODELS, PRESETS } from "@/lib/catalog";
+import { getModel, PRESETS } from "@/lib/catalog";
 import { operationOutput } from "@/lib/catalog/types";
-import { hostedUntestedSummary } from "@/lib/catalog/hosted-untested";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolReady } from "./hosted";
+import { poolOwnModels } from "./pool-own-setup";
 import { poolRulesOf, type PoolRules, type PresetModel } from "@/lib/pool-rules";
 
 /**
@@ -243,7 +243,9 @@ export async function visitorStatus(account: Account | null) {
     if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
     const card = p?.hosted && typeof p.cardText === "string" ? p.cardText.trim().slice(0, 40) : "";
     if (card) viewer.cardText = card;
-    const rules = p?.hosted && !gpu ? poolRulesOf(p, presetModels()) : undefined;
+    // What this studio's GPUs keep off, the open models they can't run right now among it: shown in the pickers with
+    // what the visitor needs to run them on its own setup.
+    const rules = p?.hosted && !gpu ? poolRulesOf(p, presetModels(), poolOwnModels()) : undefined;
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;
@@ -251,8 +253,9 @@ export async function visitorStatus(account: Account | null) {
     if (b) viewer.balance = b;
   }
   const configured = (id: string) => (id === "comfyui" ? (gpu ? !!live?.online : true) : isCloudProvider(id) && keys.includes(id));
-  // With keys: the hosted routes no live call has passed yet are left out too (they run for the owner only).
-  const access = keys.length ? hostedUntestedSummary(MODELS, offeredSummary()) : undefined;
+  // With keys: the paid models the owner switched off (a cloud route no live call has passed yet runs on the visitor's
+  // own key, labelled so: src/lib/own-setup.ts).
+  const access = keys.length ? offeredSummary() : undefined;
   return {
     providers: Object.fromEntries(Object.values(PROVIDERS).map((p) => [p.id, { label: p.id === "comfyui" ? "Your GPU" : p.label, configured: configured(p.id) }])),
     demoMode: "off",

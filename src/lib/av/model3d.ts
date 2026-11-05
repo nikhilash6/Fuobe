@@ -1,4 +1,5 @@
 import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
+import type { OwnSetup } from "@/lib/own-setup";
 import { PATH_FRAMES, keyAt } from "@/lib/camera-path";
 import { exactOrbitKeys, type ExactOrbit } from "@/lib/exact-orbit";
 
@@ -94,6 +95,22 @@ export const isIdolMesh = (id: string | null | undefined) => id === IDOL_MESH_MO
  * sides; the textured final is TRELLIS.2 from the same picture, an ordinary Image to 3D run (not an Idol substitute).
  */
 export const FINAL_3D = { model: "oss-trellis2", label: "Build the final with TRELLIS.2", note: "A textured, riggable .glb · 16 GB GPU" } as const;
+
+/**
+ * Image to 3D's extra steps that run on a visitor's own GPU, by the own-setup id each is labelled with
+ * (src/lib/own-setup.ts): Refine detail (Hi3D), the TRELLIS.2 final, Idol 3D's other sides and its spike trim. The page
+ * reads which still carry a label (ownSetupsNow) and the studio shows it next to each.
+ */
+export const MODEL3D_SETUPS = {
+  refine: "image-to-3d:hi3d-refine",
+  final: "image-to-3d:trellis-final",
+  sides: "image-to-3d:idol-other-sides",
+  clean: "image-to-3d:idol-clean",
+} as const;
+export type Model3dSetupKey = keyof typeof MODEL3D_SETUPS;
+
+/** Image to 3D's cloud models (Meshy, Tripo, SAM 3D Objects, Idol 3D in the cloud) for a visitor: its own fal.ai key. */
+export const MODEL3D_KEY: OwnSetup = { need: "key", provider: "fal" };
 
 /**
  * Where "Build the final with TRELLIS.2" goes from a finished Idol 3D result on the open engine: Image to 3D with

@@ -745,10 +745,10 @@ describe("a run's price facts", () => {
     const p = { ...billing.OPEN_POLICY, pool: { deny: ["oss-qwen-image-edit"] } };
     expect(hostedRun.stepsProblem(p, steps([["oss-z-image-turbo", "comfyui"]]))).toBeNull();
     expect(hostedRun.stepsProblem(p, steps([["oss-z-image-turbo", "comfyui"], ["oss-qwen-image-edit", "comfyui"]]))).not.toBeNull();
-    // A cloud step can't run here, and neither can a text step or one made in the browser: the run is refused before
-    // Run, never part way through.
+    // A cloud step can't run here, and neither can one made in the browser: the run is refused before Run, never part
+    // way through. (A text step runs on the install's AI helper: hosted-tool-runs.test.ts.)
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, steps([["oss-z-image-turbo", "comfyui"], ["fal-flux", "fal"]]))).not.toBeNull();
-    for (const provider of ["llm", "local", "mock"]) {
+    for (const provider of ["local", "mock"]) {
       expect(hostedRun.stepsProblem({ ...billing.OPEN_POLICY, pool: { allow: ["oss-z-image-turbo"] } }, steps([["oss-z-image-turbo", "comfyui"], ["some-step", provider]])), provider).toBe(hosted.HOSTED_WORDS.notOffered);
     }
     expect(hostedRun.pricedSteps(steps([["oss-z-image-turbo", "comfyui"], ["oss-z-image-turbo", "comfyui"]]))).toEqual([expect.objectContaining({ model: "oss-z-image-turbo", jobs: 2 })]);

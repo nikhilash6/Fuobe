@@ -235,7 +235,7 @@ describe("nav model: launcher", () => {
 
 describe("nav model: who sees what", () => {
   const ids = (k: ViewerKind | undefined) => new Set(entriesFor(k).map((e) => e.id));
-  const OWNER_ONLY = ["setting-cloud", "setting-comfyui", "setting-engine", "setting-loras", "setting-training", "setting-text-ai", "setting-assist-connectors", "setting-notifications", "setting-security", "setting-demo", "video-tools-restore"];
+  const OWNER_ONLY = ["setting-cloud", "setting-comfyui", "setting-engine", "setting-loras", "setting-training", "setting-text-ai", "setting-assist-connectors", "setting-notifications", "setting-security", "setting-demo"];
 
   it("keeps the install's settings and its own tools from guests and accounts", () => {
     for (const k of ["guest", "account", undefined] as const) for (const id of OWNER_ONLY) expect(ids(k).has(id), `${k} sees ${id}`).toBe(false);

@@ -334,11 +334,33 @@ describe("an account's run on the workers", () => {
     const before = (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n;
     const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" });
     expect(r.status, JSON.stringify(r.body)).toBe(403);
-    expect(r.body.code).toBe("not-offered");
+    // It runs on the account's own GPU instead: Run opens Connect your GPU.
+    expect(r.body.code).toBe("connect-gpu");
+    expect((r.body as { ownSetup?: unknown }).ownSetup).toMatchObject({ need: "gpu" });
     expect((db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n).toBe(before);
     // Its files are there again: the run goes in line.
     db().prepare("UPDATE relay_workers SET lanes_json = ? WHERE id = ?").run(JSON.stringify({ ...lanesNow, workflows }), w.id);
     expect((await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" })).status).toBe(201);
+  });
+
+  it("a model whose files no worker has: the price check says its label, and the status labels it in the pickers", async () => {
+    const { ownSetupLabel } = await import("@/lib/own-setup");
+    const { modelOwnSetup } = await import("@/lib/pool-rules");
+    const { visitorStatus } = await import("@/server/account-gpu");
+    const w = standInWorker();
+    const model = getModel("oss-z-image-turbo")!;
+    const endpoints = new Set(model.routes.filter((x) => x.provider === "comfyui").map((x) => x.endpoint));
+    const workflows = loadManifest().workflows.map((x) => x.id);
+    db().prepare("UPDATE relay_workers SET lanes_json = ? WHERE id = ?").run(JSON.stringify({ lanes: [], workflows: workflows.filter((x) => !endpoints.has(x)) }), w.id);
+    const r = await generationsRoute.POST(request("/api/generations?preview=1", { body: { feature: "image", modelId: model.id, prompt: "a lighthouse" } }));
+    const quote = ((await r.json()) as { quote?: { allowed: boolean; text: string; ownSetup?: { need: "gpu"; vramGb?: number } } }).quote;
+    expect(quote).toMatchObject({ allowed: false, ownSetup: { need: "gpu" } });
+    expect(quote?.text).toBe(ownSetupLabel(quote!.ownSetup!));
+    const pool = (await visitorStatus(auth.accountById(accountId)!)).viewer.pool;
+    expect(pool?.own?.[model.id]).toEqual(quote?.ownSetup);
+    expect(modelOwnSetup(pool, model)).toEqual(quote?.ownSetup);
+    // A model the workers hold has no label.
+    expect(pool?.own?.["oss-wan22-14b"]).toBeUndefined();
   });
 
   it("a file input in params.extra is one the run sent, never a name in the workers' folders", async () => {

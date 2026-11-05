@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer, toolWishes } from "@/server/account-tool-run";
 import { createStoryboardFilm, planStoryboardFilm, startStoryboardFilm, storyboardFilmSteps, type StoryboardFilmRun } from "@/server/storyboard";
 import { refusedRun } from "@/server/connect-refusal";
 
@@ -21,6 +21,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/storyboards
     const big = bodyTooBig(request);
     if (big) return big;
   }
+  const wishes = viewer.kind === "account" ? await toolWishes(request) : {};
   const parsed = Body.safeParse((await request.json().catch(() => ({}))) ?? {});
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
   const { id } = await ctx.params;
@@ -40,6 +41,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/storyboards
     () =>
       runAccountTool(request, viewer.account, {
         tool: "storyboard-film",
+        ...wishes,
         // Its frames are its own runs (planStoryboardFilm reads only its own); no other file goes in.
         files: [],
         plan: () => storyboardFilmSteps((run = planStoryboardFilm(id, { modelId: parsed.data.modelId }))),

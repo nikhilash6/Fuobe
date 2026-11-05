@@ -57,6 +57,7 @@ export function GuestPrompt() {
   const [needs, setNeeds] = useState<ConnectNeeds>("gpu");
   // Opened by a tool only a GPU runs: no key offers on this card.
   const [gpuOnly, setGpuOnly] = useState(false);
+  const [requirement, setRequirement] = useState<string | undefined>(undefined);
   const close = useCallback(() => {
     setOpen(false);
     setRetry(null);
@@ -116,6 +117,7 @@ export function GuestPrompt() {
       setLook(!!d.look);
       setNeeds(d.needs ?? "gpu");
       setGpuOnly(!!d.gpuOnly);
+      setRequirement(typeof d.requirement === "string" && d.requirement ? d.requirement : undefined);
     };
     window.addEventListener(GUEST_PROMPT_EVENT, guest);
     // A run started from a toast (not a page's own button): the lists show it.
@@ -168,6 +170,8 @@ export function GuestPrompt() {
                     <>{action === "connect" && !reason ? "Your runs go to the ComfyUI on your computer. It's free and private." : "Fuobe runs this on the ComfyUI on your computer. It's free and private."}</>
                   )}
                 </DialogDescription>
+                {/* What the item asked for needs (its own-setup label). */}
+                {requirement && <p className="text-[13px] font-medium text-brand-text">{requirement}</p>}
                 {/* Paid models run on the account's own key instead (Your keys), when the studio allows them. */}
                 {viewer?.kind === "account" && keysAllowed && !!viewer.keys?.length && (
                   <p className="text-[13px] text-muted-foreground">{`Or switch to Cloud to use your ${viewer.keys.map((k) => CLOUD_KEY[k].label).join(" or ")} key.`}</p>

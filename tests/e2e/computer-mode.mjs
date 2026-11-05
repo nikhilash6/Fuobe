@@ -448,7 +448,7 @@ try {
     const iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
     const { ctx, page } = await account("e2e-phone@example.com", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: iphone });
     await page.goto(`${SITE}/connect`, { waitUntil: "load" });
-    const phone = await until(() => page.getByText("Your phone can't run ComfyUI.").first().isVisible(), 30_000);
+    const phone = await until(() => page.getByText("A phone or tablet can't reach the ComfyUI on your computer from a website.").first().isVisible(), 30_000);
     check("a phone gets the link option, with why", !!phone && (await page.getByText(/public address/i).first().isVisible()));
     check("…and only the tunnel steps: nothing looks for a ComfyUI on the phone", !(await page.getByText(/No ComfyUI answered|may ask to let this site reach/).first().isVisible().catch(() => false)) && ctx.loopback.length === 0, ctx.loopback.slice(0, 3).join(" "));
     await page.screenshot({ path: path.join(shots, "6-phone.png") });
@@ -465,8 +465,12 @@ try {
     // Safari has no navigator.userAgentData (Chromium keeps its own under another user agent).
     await s.ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined }));
     await s.page.goto(`${SITE}/connect`, { waitUntil: "load" });
-    const sa = await until(() => s.page.getByText("Safari can't reach apps on this computer").first().isVisible(), 30_000);
+    const sa = await until(() => s.page.getByText("Safari doesn't let a website talk to programs on your Mac").first().isVisible(), 30_000);
     check("Safari gets the link option, with why", !!sa);
+    check(
+      "…the other browsers only as a last line, never \"open Fuobe in\"",
+      (await s.page.getByText("Chrome, Edge and Firefox allow this, so switching browser also works.").first().isVisible()) && !(await s.page.getByText(/open (Fuobe|fuobe\.com) in/i).first().isVisible().catch(() => false)),
+    );
     await s.ctx.close();
   }
 } catch (e) {

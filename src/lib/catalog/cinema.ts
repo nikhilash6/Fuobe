@@ -1420,13 +1420,13 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
       const tier = videoTier(tiers, res)!;
       params.resolution = tier;
       if (tier.toLowerCase() !== res.toLowerCase()) {
-        notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier} here` : `${model.name} renders at ${tier} here`);
+        notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier}` : `${model.name} renders at ${tier}`);
       }
     } else {
       const order = kind === "video" ? VIDEO_RESOLUTIONS : [...IMAGE_RESOLUTIONS, "0.5K", "1.5K", "720p", "1080p"];
       const below = tiers.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
       params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? tiers[0];
-      notes.push(`${model.name} renders up to ${params.resolution} here`);
+      notes.push(`${model.name} renders up to ${params.resolution}`);
     }
   }
   if (kind === "video" && model.engine === "open" && typeof params.resolution === "string" && params.resolution.toLowerCase() === "2k") notes.push(H3_2K_OPEN_NOTE);

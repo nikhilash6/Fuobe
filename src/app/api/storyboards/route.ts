@@ -1,4 +1,4 @@
-import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer, toolWishes } from "@/server/account-tool-run";
 import { createStoryboard, planStoryboardRun, startStoryboard, StoryboardBodySchema, storyboardSteps, type StoryboardRun } from "@/server/storyboard";
 import { refusedRun } from "@/server/connect-refusal";
 import { once } from "@/server/shorts-schemas";
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const big = bodyTooBig(request);
     if (big) return big;
   }
+  const wishes = viewer.kind === "account" ? await toolWishes(request) : {};
   const parsed = StoryboardBodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: parsed.error.issues.map((i) => i.message).join("; ") }, { status: 400 });
   const input = parsed.data;
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     () =>
       runAccountTool(request, viewer.account, {
         tool: "storyboard",
+        ...wishes,
         files: input.references ?? [],
         plan: async () => storyboardSteps((run = await planStoryboardRun(input, { owner: false }))),
         start: () => startStoryboard(run!),

@@ -1,4 +1,4 @@
-import type { Asset } from "@/lib/api";
+import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, type Asset, type ConnectGpuDetail } from "@/lib/api";
 import { KINETIC_UPLOAD_HEADER } from "@/lib/guest-access";
 import { responseError } from "@/lib/refusals";
 
@@ -35,8 +35,17 @@ export function postFileWithProgress(file: File, onProgress: (p: number) => void
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
       const body = xhr.response as { url?: string; name?: string; error?: string } | null;
-      if (xhr.status >= 200 && xhr.status < 300 && body?.url) resolve({ url: body.url, name: body.name });
-      else reject(new Error(body?.error ?? "That upload didn't go through. Please try again."));
+      if (xhr.status >= 200 && xhr.status < 300 && body?.url) return resolve({ url: body.url, name: body.name });
+      const err = new Error(body?.error ?? "That upload didn't go through. Please try again.");
+      // A guest's upload (401 x-fuobe-guest) or an account's with no GPU or key of its own (403 x-fuobe-connect-gpu):
+      // the card that sets it up opens, as for a fetch (watchGuestRefusals), and the error says it's shown.
+      const guest = xhr.status === 401 && xhr.getResponseHeader("x-fuobe-guest") === "1";
+      const gpu = xhr.status === 403 && xhr.getResponseHeader("x-fuobe-connect-gpu") === "1";
+      if ((guest || gpu) && typeof window !== "undefined" && refusalCard(guest ? "guest" : "gpu", window.location)) {
+        window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(guest ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT, { detail: { action: "upload" } }));
+        Object.assign(err, { refusalShown: true });
+      }
+      reject(err);
     };
     xhr.onerror = () => reject(new Error("Upload failed — check your connection"));
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));

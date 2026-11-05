@@ -242,7 +242,13 @@ describe("what this install's GPUs keep off, in the status", () => {
     auth.setAccountGpu(a, null);
     billing.resetBillingCache();
     fake.policy = { ...FAKE_POLICY };
-    expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
+    // A policy that keeps nothing off: only the open models these GPUs can't run right now are named, with the GPU of
+    // its own that runs each.
+    const left = (await visitorStatus(auth.accountById(a)!)).viewer.pool;
+    expect(left?.allow).toBeUndefined();
+    expect(left?.deny).toBeUndefined();
+    expect(left?.kinds).toBeUndefined();
+    for (const o of Object.values(left?.own ?? {})) expect(o.need).toBe("gpu");
   });
 
   it("the preset cards' words are the billing service's, or Try free when runs here are free with no service", async () => {

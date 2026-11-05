@@ -447,6 +447,12 @@ export interface AssetRef {
   /** SQL that names the row, and the key that tells rows apart (default `id`; a Cinema take and its project are one project). */
   name?: string;
   key?: string;
+  /**
+   * The column naming the account a row belongs to (an account's own board or project). Such a row keeps only that
+   * account's own files: what a board names is checked when the file is read, not when the board is saved, and a
+   * project's free text is never checked, so a row naming the owner's or another account's file must never keep it.
+   */
+  account?: string;
 }
 
 /**
@@ -496,6 +502,12 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
   { table: "skills", cols: ["files_json"], what: "skill", key: "name", name: "title" },
+  // An account's own boards and projects (public sign-up): a board's pages (its nodes' pictures and clips), and a
+  // project's data (a Shorts session or preset, a Cinema project, a Character Swap project…) and its list line (a
+  // short's final video, a swap's character picture). `key` is set so an owner's dry run never deletes these rows
+  // (skill-runs.ts STUDIO_TABLES). `account` lets a row keep only its own account's files.
+  { table: "account_canvases", cols: ["pages_json"], what: "account canvas", key: "id", name: "name", account: "account_id" },
+  { table: "account_projects", cols: ["data_json", "summary_json"], what: "account project", key: "id", name: "name", account: "account_id" },
 ];
 
 /**
@@ -509,6 +521,7 @@ export const ASSET_FREE: Record<string, string> = {
   "gpu_snapshots.report_json": "readiness built from that inventory",
   "generations.external_meta_json": "the provider's job handles",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
+  "tool_presses.answer_json": "a copy of the answer one press of a tool's Run got, for a resend of it: its runs' own rows keep their files",
   "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
   "admin_tokens.scopes_json": "an admin token's scope names",
   "admin_audit.detail_json": "small facts about an admin action: counts, ids and names, never a file's URL",
@@ -562,14 +575,17 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.ceiling_json": "the most a worker's PC may run: lanes, workflow ids and sizes",
   "relay_workers.cpu_slot_json": "the kinds of finishing job a worker's CPU slot runs",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
+  "account_canvases.summary_json": "an account board's list line: node and page counts, and its outline (node types, places and short labels)",
 };
 
 /** The query that finds the rows of one ASSET_REFS table naming a file (@id), except the purged generation's own (@g). */
 export function assetRefSql(r: AssetRef): string {
   const where = r.cols.map((c) => `instr(COALESCE(${c}, ''), @id) > 0`).join(" OR ");
   const except = r.except ? ` AND ${r.except} != @g` : "";
+  // A row of the file's own account only (the owner's files have no account, so no account's row keeps them).
+  const own = r.account ? ` AND ${r.account} = (SELECT account_id FROM assets WHERE id = @id)` : "";
   const trashed = r.table === "generations" ? ", EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = generations.id) AS trashed" : "";
-  return `SELECT ${r.key ?? "id"} AS k, ${r.name ?? "NULL"} AS n${trashed} FROM ${r.table} WHERE (${where})${except} LIMIT @max`;
+  return `SELECT ${r.key ?? "id"} AS k, ${r.name ?? "NULL"} AS n${trashed} FROM ${r.table} WHERE (${where})${except}${own} LIMIT @max`;
 }
 
 /**

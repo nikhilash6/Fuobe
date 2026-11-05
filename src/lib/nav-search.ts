@@ -112,7 +112,7 @@ export const INTENTS: readonly Intent[] = [
   {
     id: "restore",
     triggers: ["restore", "restoration", "old photo", "old picture", "damaged", "scratched", "faded", "colorize", "colourise", "colorise", "colourize", "black and white"],
-    targets: ["app-restore-photo", "app-colorize", "upscale", "video-tools"],
+    targets: ["app-restore-photo", "app-colorize", "video-tools-restore", "upscale", "video-tools"],
   },
   { id: "logo", triggers: ["logo", "wordmark", "lettering", "typography", "font", "signage"], targets: ["image", "app-text-edit", "ads"] },
   {

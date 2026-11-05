@@ -4,8 +4,8 @@ import { useEngineMode, useHydrated, useStatus } from "@/lib/api";
 import { tryFreeFor, type PoolRules } from "@/lib/pool-rules";
 
 /**
- * What this studio's GPUs keep off for this viewer (hosted runs on, no GPU of its own): pickers leave it out
- * (src/lib/pool-rules.ts). Undefined when nothing is kept off, with hosted runs off, or for a viewer with its own GPU.
+ * What this studio's GPUs keep off for this viewer (hosted runs on, no GPU of its own): pickers show it with its
+ * own-setup label (src/lib/pool-rules.ts), and Run opens that setup. Undefined when nothing is kept off, with hosted runs off, or for a viewer with its own GPU.
  */
 export function usePoolRules(): PoolRules | undefined {
   const v = useStatus().data?.viewer;

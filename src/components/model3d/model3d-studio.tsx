@@ -18,12 +18,13 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { HandoffImage } from "@/components/nav/next-steps";
 import { ExampleRow } from "@/components/studio/example-row";
-import { useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { useEngine, useGenerations, useHydrated, useIsOwner, useModelAccess, useStatus } from "@/lib/api";
 import {
   FINAL_3D,
   IDOL_QUALITIES,
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
+  MODEL3D_KEY,
   MODEL3D_FILM_FEATURE,
   MODEL3D_MODES,
   MODELS_3D,
@@ -51,6 +52,8 @@ import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types"
 import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
+import { Model3dSetupsProvider, useModel3dSetup, type Model3dSetups } from "./own-setups";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
@@ -123,6 +126,8 @@ function IdolSettings({
 }) {
   // Only the owner reads what trimming needs on the ComfyUI (it's theirs to set up).
   const owner = useIsOwner();
+  // A visitor's trim runs on its own GPU: what that needs, until the trim's graph is validated here.
+  const cleanSetup = useModel3dSetup("clean");
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const move = (from: number, by: number) => {
     const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
@@ -174,9 +179,14 @@ function IdolSettings({
           </summary>
           <div className="flex items-center justify-between gap-3 pt-3">
             <div className="min-w-0">
-              <Label htmlFor="m3d-idol-trim" className="text-[13px] font-normal">
-                Trim spikes
-              </Label>
+              {/* A visitor's run is on its own GPU: what that needs (the owner reads the line below instead). On a phone the
+                  chip wraps under the name, flush with it. */}
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <Label htmlFor="m3d-idol-trim" className="text-[13px] font-normal">
+                  Trim spikes
+                </Label>
+                <OwnSetupChip setup={cleanSetup} />
+              </div>
               <p id="m3d-idol-trim-hint" className="mt-0.5 text-[12px] text-muted-foreground">
                 Drops the thin, needle-like bits around the edges of the 3D file.
               </p>
@@ -239,12 +249,23 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
  * Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate.
  * examples: "See what it makes" (studioExamples("image-to-3d"), from the page), where the models go until there is one.
  */
-export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
+export function Model3dStudio({ setups = {}, ...props }: { info: Record<string, Model3dInfo>; setups?: Model3dSetups; examples?: ExampleRowData | null }) {
+  return (
+    <Model3dSetupsProvider value={setups}>
+      <Model3dStudioBody {...props} />
+    </Model3dSetupsProvider>
+  );
+}
+
+function Model3dStudioBody({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
   const [engine, setEngine, engineMode] = useEngine();
   // An account makes its models on its own GPU or key (POST /api/image-to-3d); a guest gets the sign-up card when it
-  // uploads or runs. The extras that need this studio's own setup (Refine detail, the TRELLIS.2 final) stay the owner's.
-  const visitor = useLikelyVisitor();
+  // uploads or runs. The extras (Refine detail, the TRELLIS.2 final, Idol 3D's other sides) show to everyone, marked
+  // with what they run on until their graphs are validated on this studio's GPU (MODEL3D_SETUPS).
   const owner = useIsOwner();
+  const refineSetup = useModel3dSetup("refine");
+  const cleanSetup = useModel3dSetup("clean");
+  const press = useOwnSetupPress();
   const access = useModelAccess();
   const create = useCreate3d();
   const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", "app:app-photo-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
@@ -350,13 +371,26 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
   const preview = useRunPreview(engineKnown ? priced : null);
   const price = priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
-  // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
-  const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  // A guest, or an account without a key, on open models only: the cloud models run with its own fal.ai key, labelled,
+  // and a press opens the step that sets it up (own-setup.ts).
+  const visitorView = useStatus().data?.viewer;
+  const keyInstead = !cloudAllowed && !!visitorView && visitorView.paidAllowed !== false;
+  // Those models, after the open ones in the picker.
+  const paidChoices = keyInstead ? MODELS_3D[mode].cloud : [];
+  // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on (a visitor's
+  // runs on its own GPU, its label beside the switch).
+  const refineAllowed = engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
   // "Build the final with TRELLIS.2" on an Idol 3D result: while TRELLIS.2 runs here and is switched on.
-  const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
+  const finalAllowed = engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
+  // A run with a step on the visitor's own GPU: a guest gets the sign-up card, an account without a GPU "Connect your GPU".
+  const needs = refining !== null ? refineSetup : idolSplat && engine === "open" && idolTrim ? cleanSetup : null;
   const go = () => {
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
+    if (needs) return void press(needs, start);
+    start();
+  };
+  const start = () => {
     create.mutate(withRefine(model3dRequest(input), engine, refining), {
       onSuccess: () =>
         toast.success(
@@ -487,6 +521,12 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                     Use the cloud
                   </Button>
                 )}
+                {keyInstead && (
+                  <Button size="sm" className="rounded-full" onClick={() => press(MODEL3D_KEY)}>
+                    Use the cloud
+                    <OwnSetupChip setup={MODEL3D_KEY} className="bg-primary-foreground/15 text-primary-foreground" />
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" className="rounded-full" onClick={() => setMode("image")}>
                   From an image
                 </Button>
@@ -498,7 +538,14 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                 <Label htmlFor="m3d-model" className="sr-only">
                   Model
                 </Label>
-                <Select value={modelId} onValueChange={(v) => setPicked((p) => ({ ...p, [`${mode}:${engine}`]: v }))}>
+                <Select
+                  value={modelId}
+                  onValueChange={(v) => {
+                    // A paid model a visitor runs with its own key: the step that sets it up (the pick stays).
+                    if (v.startsWith(PAID_3D)) return void press(MODEL3D_KEY);
+                    setPicked((p) => ({ ...p, [`${mode}:${engine}`]: v }));
+                  }}
+                >
                   <SelectTrigger id="m3d-model" className="h-9 w-full rounded-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -508,6 +555,13 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                         {info[m.id]?.name ?? m.id}
                       </SelectItem>
                     ))}
+                    {keyInstead &&
+                      paidChoices.map((m) => (
+                        <SelectItem key={m.id} value={`${PAID_3D}${m.id}`}>
+                          {info[m.id]?.name ?? m.id}
+                          <OwnSetupChip setup={MODEL3D_KEY} />
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
                 <p className="text-[12px] text-muted-foreground">{modelNote(choices.find((m) => m.id === modelId)?.note, owner)}</p>
@@ -566,7 +620,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
+              <ResultCard key={g.id} g={g} cloudAllowed={cloudAllowed} keyInstead={keyInstead} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
             ))}
           </div>
         )}
@@ -574,6 +628,9 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
     </ToolShell>
   );
 }
+
+/** A paid model's value in the picker (it never becomes the pick: choosing it opens the step that sets up a key). */
+const PAID_3D = "paid:";
 
 /**
  * A model's note under the picker. This studio renders the turntable of a model made on its own GPU; anyone else's
@@ -595,12 +652,14 @@ function retryOf(g: Generation): GenerationRequest {
 function ResultCard({
   g,
   cloudAllowed,
+  keyInstead,
   refineAllowed,
   finalAllowed,
   onFinal,
 }: {
   g: Generation;
   cloudAllowed: boolean;
+  keyInstead: boolean;
   refineAllowed: boolean;
   finalAllowed: boolean;
   onFinal: (photo: string) => void;
@@ -609,7 +668,7 @@ function ResultCard({
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
+  return <ModelCard g={g} cloudAllowed={cloudAllowed} keyInstead={keyInstead} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */
