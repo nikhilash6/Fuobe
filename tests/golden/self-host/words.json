@@ -1,0 +1,692 @@
+{
+  "place": {
+    "owner open": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open priced": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open priced hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open gpu": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open gpu hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open gpu priced": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner open gpu priced hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "owner cloud": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud priced": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "≈ $0.04 · cloud",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud priced hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "≈ $0.04 · cloud",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud gpu": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud gpu hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud gpu priced": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "≈ $0.04 · cloud",
+      "model": "Z-Image Turbo"
+    },
+    "owner cloud gpu priced hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed by the provider to your key.",
+      "send": "≈ $0.04 · cloud",
+      "model": "Z-Image Turbo"
+    },
+    "owner browser": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser priced": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser priced hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser gpu": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser gpu hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser gpu priced": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "owner browser gpu priced hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account open": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Connect your GPU to run it.",
+      "send": "Free · connect your GPU first",
+      "needs": "gpu"
+    },
+    "account open hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Connect your GPU to run it.",
+      "send": "Free · connect your GPU first",
+      "needs": "gpu"
+    },
+    "account open priced": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Connect your GPU to run it.",
+      "send": "Free · connect your GPU first",
+      "needs": "gpu"
+    },
+    "account open priced hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Connect your GPU to run it.",
+      "send": "Free · connect your GPU first",
+      "needs": "gpu"
+    },
+    "account open gpu": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "account open gpu hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "account open gpu priced": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "account open gpu priced hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free.",
+      "send": "Free · your GPU"
+    },
+    "account cloud": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: add your key in Settings → Your keys.",
+      "send": "add your key",
+      "needs": "key",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: add your key in Settings → Your keys.",
+      "send": "add your key",
+      "needs": "key",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud priced": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: add your key in Settings → Your keys.",
+      "send": "≈ $0.04 · add your key",
+      "needs": "key",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud priced hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: add your key in Settings → Your keys.",
+      "send": "≈ $0.04 · add your key",
+      "needs": "key",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud gpu": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed to your fal.ai account.",
+      "send": "",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud gpu hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: add your key in Settings → Your keys.",
+      "send": "add your key",
+      "needs": "key",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud gpu priced": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Estimated cost, billed to your fal.ai account.",
+      "send": "≈ $0.04 · cloud",
+      "model": "Z-Image Turbo"
+    },
+    "account cloud gpu priced hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: add your key in Settings → Your keys.",
+      "send": "≈ $0.04 · add your key",
+      "needs": "key",
+      "model": "Z-Image Turbo"
+    },
+    "account browser": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser priced": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser priced hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser gpu": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser gpu hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser gpu priced": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "account browser gpu priced hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest open": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open priced": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open priced hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open gpu": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open gpu hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open gpu priced": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest open gpu priced hosted-off": {
+      "where": "gpu",
+      "label": "Your GPU",
+      "price": "Free",
+      "title": "Runs on your GPU",
+      "tip": "Runs on your own GPU with Z-Image Turbo. Free. Create a free account and connect your GPU to run it.",
+      "send": "Free · your GPU, after sign-up",
+      "needs": "signup"
+    },
+    "guest cloud": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud priced": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "≈ $0.04 · cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud priced hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "≈ $0.04 · cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud gpu": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud gpu hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud gpu priced": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "≈ $0.04 · cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest cloud gpu priced hosted-off": {
+      "where": "cloud",
+      "label": "Z-Image Turbo",
+      "price": "≈ $0.04",
+      "title": "Runs in the cloud",
+      "tip": "Runs in the cloud with Z-Image Turbo. Billed to your own fal.ai or Replicate account: create a free account and add your key to run it.",
+      "send": "≈ $0.04 · cloud, after sign-up",
+      "needs": "signup",
+      "model": "Z-Image Turbo"
+    },
+    "guest browser": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser priced": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser priced hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser gpu": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser gpu hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser gpu priced": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    },
+    "guest browser gpu priced hosted-off": {
+      "where": "browser",
+      "label": "Your browser",
+      "price": "Free",
+      "title": "Runs in your browser",
+      "tip": "It plays as you type, instantly and free. No model and no GPU are used.",
+      "send": "Free · in your browser"
+    }
+  },
+  "tips": {
+    "no key": {
+      "locked": {
+        "text": "Open source",
+        "tip": "Runs on your own GPU. Add a fal.ai or Replicate key to use paid models.",
+        "href": "/settings#your-keys",
+        "addKey": true
+      }
+    },
+    "a key": {
+      "tips": {
+        "cloud": "Paid models, billed to your fal.ai account",
+        "open": "Open models on your own GPU. Connect it first"
+      }
+    },
+    "a key and a GPU": {
+      "tips": {
+        "cloud": "Paid models, billed to your fal.ai and Replicate accounts",
+        "open": "Open models on your own GPU"
+      }
+    },
+    "open only": {
+      "locked": {
+        "text": "Open source",
+        "tip": "Runs on your own GPU.",
+        "href": "/settings#your-gpu"
+      }
+    },
+    "guest": null
+  },
+  "again": {
+    "open": " on your GPU",
+    "cloud": " · ≈ $0.42",
+    "placeholders": ""
+  },
+  "accountLimits": {
+    "imageTooBig": "That picture is over 25 MB. Save it smaller, then try again.",
+    "imageTooManyPixels": "That picture is over 40 megapixels. Save it smaller, then try again.",
+    "audioTooBig": "That sound file is over 50 MB. Trim it, then try again.",
+    "videoTooBig": "That clip is over 95 MB. Trim it or lower its quality, then try again.",
+    "fileTooBig": "That file is over 95 MB. Make it smaller, then try again.",
+    "wrongType": "Fuobe takes PNG, JPEG or WebP pictures, MP4, MOV, WebM, MKV or AVI clips, and MP3, WAV, OGG, FLAC or M4A sound.",
+    "uploadsFull": "You've used your 1 GB for uploads. Older uploads clear after 14 days, or delete some to make room now.",
+    "filesFull": "Your files have reached 3 GB. Delete some runs to make room.",
+    "uploadRate": "That's a lot of uploads at once. Try again in a few minutes.",
+    "uploadsBusy": "Lots of uploads right now. Try again in a moment.",
+    "uploadStalled": "The upload stopped arriving. Check your connection, then try again.",
+    "diskLow": "Uploads are paused for a moment. Please try again shortly.",
+    "activeRuns": "You have 4 runs going. Start the next one when one finishes.",
+    "runRate": "That's a lot of runs this hour. Try again later.",
+    "finishRate": "That's a lot of finished pictures this hour. Try again later.",
+    "finishBusy": "Your last pictures are still being saved. Try again in a moment.",
+    "outputsCapped": "Each run makes up to 4 results.",
+    "bodyTooBig": "That's too large to send. Try a smaller file.",
+    "gpuChecks": "Give it a minute, then check again.",
+    "probeRate": "Too many clip checks at once. Wait a moment, then try again.",
+    "reloadToUpload": "Reload the page, then upload again.",
+    "lengthNeeded": "That upload didn't go through. Please try again.",
+    "zipTooMany": "Download up to 200 at a time.",
+    "zipTooBig": "That's over 1 GB. Download fewer items at a time.",
+    "zipBusy": "Your last download is still going. Try again when it finishes."
+  }
+}
