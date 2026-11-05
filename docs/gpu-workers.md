@@ -19,8 +19,10 @@ README says how to install it and exactly what a trusted studio can do. It adds 
 **Direct mode.** ComfyUI turns away every other website. Fuobe Connect lets in only the studios that you trust. Each
 studio is an exact https origin, and the default is `https://fuobe.com` with `https://www.fuobe.com`. You can name your
 own studios, or `none`, in ComfyUI's settings or with `FUOBE_CONNECT_ORIGINS`. A trusted studio reaches the ComfyUI
-only at `127.0.0.1`, `::1` or `localhost`. Fuobe Connect checks each of its requests in Python, whatever the studio's
-page checked:
+only at `127.0.0.1`, `::1` or `localhost` (a network address too with `FUOBE_CONNECT_LAN=1`), never under another name
+that leads to the computer. Fuobe Connect turns away every other request of a trusted studio itself, even when ComfyUI
+runs with `--enable-cors-header` naming that studio, so with the pack the studio doesn't need that setting. Fuobe
+Connect checks each request it lets through in Python, whatever the studio's page checked:
 
 - a workflow runs only when every node type is on the list the pack ships (`fuobe_connect/allowed_nodes.json`, written
   by `node scripts/connect-nodes.mjs` from the same sources as the worker's list) or on the person's own list, and:
@@ -34,14 +36,18 @@ page checked:
     the studio's own graphs feed that way (`loose` and `links` in `allowed_nodes.json`). ComfyUI checks a dropdown's
     value against its list only when the graph writes it. Inside ComfyUI the pack also reads these kinds from every
     node class;
+  - a link names its node's output with a whole number from 0, as the studio's graphs write it. ComfyUI also takes
+    `true`, `false`, a number with a point or `-1` as an output; the pack sees those as links too, and refuses them;
   - `VHS_VideoCombine` takes only a plain format name and plain-word settings (they go into ffmpeg's arguments), and
     a link only for its pictures, sound, batch, VAE and frame rate;
   - every loader reads a Fuobe input (`fuobe_<id>.<ext>`), and no node gets a JSON object except a 3D view's entries;
 - an upload goes only into the input folder, under a Fuobe input name, as a picture, clip, sound, 3D scene, array or
   subtitle file (never `.json`, `.txt`, `.csv` or a file of no known type);
-- the studio sees, cancels, stops and downloads only its own prompts and their results; the queue shows other prompts
+- the studio sees, cancels, stops and downloads only its own prompts and their results; a prompt is its own only once
+  ComfyUI took it, never under an id that ComfyUI already holds in its queue or history; the queue shows other prompts
   only as places in the line, the node list hides the names of the person's input files, and the model lists leave
-  out `custom_nodes` and `configs`.
+  out `custom_nodes` and `configs`. ComfyUI itself sends the live messages of a prompt queued without a client id to
+  every open socket, the studio's too.
 
 When a graph builder starts giving one of those inputs a new value, add its form to `PATH_INPUTS` and ship it with the
 next Fuobe Connect release (the pack's `tests/test_graph.py` runs every workflow in `workflows/comfyui` through the

@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import sys
+import types
 import unittest
 import uuid
 
@@ -21,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from comfy_stack import COMFY, Comfy, build_app  # noqa: E402
 from fuobe_connect import plugin  # noqa: E402
-from fuobe_connect.middleware import MARKER, Studios, make_middleware  # noqa: E402
+from fuobe_connect.middleware import MARKER, Studios, comfy_held, make_middleware  # noqa: E402
 from fuobe_connect.origins import allowed, normalise, parse_list, same_host, studio, trusted_origins  # noqa: E402
 
 PORT = int(os.environ.get("FUOBE_CONNECT_TEST_PORT", "3360"))
@@ -97,9 +98,31 @@ def with_connect(trusted=trusted_origins(None, None), cors_flag=None, comfy=None
     plugin._state.clear()
     plugin._state["store"] = FakeStore()
     routes = [("GET", "/fuobe/connect", plugin.status), ("POST", "/fuobe/connect/studios", plugin.set_studios)]
-    studios = Studios(lambda: NODES)
+    comfy = comfy or Comfy()
+    # The stand-in answers like ComfyUI's PromptQueue, which the plugin hands to Studios inside ComfyUI.
+    studios = Studios(lambda: NODES, comfy_held(lambda: comfy))
     app, source = build_app(cors_flag, make_middleware(lambda: trusted, cors_flag, studios, lan), routes, comfy)
     return app, source
+
+
+def comfy_prompt_queue():
+    """ComfyUI's own PromptQueue class, read from COMFYUI_DIR's execution.py (that class alone: nothing else of ComfyUI
+    is imported). None without COMFYUI_DIR."""
+    folder = os.environ.get("COMFYUI_DIR")
+    if not folder:
+        return None
+    import ast
+    import copy
+    import heapq
+    import threading
+    import typing
+
+    with open(os.path.join(folder, "execution.py"), encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    picked = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "PromptQueue"]
+    ns = {"threading": threading, "heapq": heapq, "copy": copy, "MAXIMUM_HISTORY_SIZE": 10000, **{k: getattr(typing, k) for k in typing.__all__ if hasattr(typing, k)}}
+    exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/execution.py", "exec"), ns)
+    return ns["PromptQueue"]
 
 
 def run(coro):
@@ -367,6 +390,118 @@ class DirectModeTest(unittest.TestCase):
 
         run(go())
 
+    def test_prompt_id_of_yours_cant_be_taken(self):
+        """ComfyUI takes a new prompt under any id, one it already holds too. A studio that learned the id of a prompt of
+        yours (ComfyUI sends the progress of a prompt queued without a client id to every socket) can't make it its own."""
+
+        async def go():
+            comfy = Comfy()
+            done, running, waiting = (str(uuid.uuid4()) for _ in range(3))
+            yours = {"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI", "images": ["2", 0]}}}
+            comfy.entry(done, yours, [{"filename": "ComfyUI_00042_.png", "subfolder": "", "type": "output"}])
+            comfy.queue_running = [[1, running, yours, {}, ["1"]]]
+            comfy.queue_pending = [[2, waiting, yours, {}, ["1"]]]
+            app, _ = with_connect(comfy=comfy)
+            claim = {"9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "fuobe/gen123abc", "images": ["8", 0]}}}
+            async with Server(app) as s:
+                for pid in (done, running, waiting):
+                    status, h, data = await s.json("POST", "/prompt", body={"prompt": claim, "prompt_id": pid, "client_id": "fuobe-abcdefgh"})
+                    self.assertEqual((status, h.get("Access-Control-Allow-Origin")), (400, FUOBE), pid)
+                    self.assertEqual(data["error"]["type"], "fuobe_connect_refused")
+                self.assertEqual(comfy.posts, [])
+                status, _, data = await s.json("GET", f"/history/{done}")
+                self.assertEqual((status, data), (200, {}))
+                status, _, _ = await s.req("GET", "/view?filename=ComfyUI_00042_.png&subfolder=&type=output", browser(FUOBE))
+                self.assertEqual(status, 403)
+                status, _, _ = await s.json("GET", f"/api/jobs/{done}")
+                self.assertEqual(status, 404)
+                status, _, _ = await s.json("POST", "/interrupt", body={"prompt_id": running})
+                self.assertEqual(status, 403)
+                for path in ("/queue", "/history"):
+                    status, _, _ = await s.json("POST", path, body={"delete": [waiting]})
+                    self.assertEqual(status, 403, path)
+                status, _, _ = await s.json("POST", f"/api/jobs/{waiting}/cancel", body={})
+                self.assertEqual(status, 403)
+                status, _, data = await s.json("GET", "/queue")
+                self.assertEqual((data["queue_running"], data["queue_pending"]), ([[1, None, None, {}, []]], [[2, None, None, {}, []]]))
+
+        run(go())
+
+    def test_prompt_is_the_studios_once_comfyui_took_it(self):
+        """A prompt that ComfyUI refused never becomes the studio's, so a later prompt under that id isn't either."""
+
+        async def go():
+            comfy = Comfy()
+            app, _ = with_connect(comfy=comfy)
+            async with Server(app) as s:
+                pid = str(uuid.uuid4())
+                comfy.refuse = (400, {"error": {"type": "prompt_outputs_failed_validation"}})
+                status, _, _ = await s.json("POST", "/prompt", body={"prompt": graph(), "prompt_id": pid})
+                self.assertEqual(status, 400)
+                comfy.refuse = None
+                comfy.entry(pid, {"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI"}}}, [{"filename": "ComfyUI_00007_.png", "subfolder": "", "type": "output"}])
+                status, _, data = await s.json("GET", f"/history/{pid}")
+                self.assertEqual(data, {})
+                status, _, _ = await s.json("POST", "/interrupt", body={"prompt_id": pid})
+                self.assertEqual(status, 403)
+                # The id ComfyUI took is the studio's, and it can't be sent again.
+                mine = str(uuid.uuid4())
+                status, _, _ = await s.json("POST", "/prompt", body={"prompt": graph(), "prompt_id": mine})
+                self.assertEqual(status, 200)
+                status, _, _ = await s.json("POST", "/interrupt", body={"prompt_id": mine})
+                self.assertEqual(status, 200)
+                status, _, _ = await s.json("POST", "/prompt", body={"prompt": graph(), "prompt_id": mine})
+                self.assertEqual(status, 400)
+
+        run(go())
+
+    def test_prompt_id_check_that_fails_refuses(self):
+        def broken(pid):
+            raise RuntimeError("no queue")
+
+        studios = Studios(lambda: NODES, broken)
+        answer = studios._prompt({"prompt": graph(), "prompt_id": str(uuid.uuid4())})
+        self.assertEqual(answer.status, 503)
+        self.assertEqual(len(studios.prompts), 0)
+
+    def test_held_reads_comfyuis_queue(self):
+        """comfy_held against ComfyUI's own PromptQueue (with COMFYUI_DIR), else against the stand-in."""
+        cls = comfy_prompt_queue()
+        if cls is None:
+            comfy = Comfy()
+            held = comfy_held(lambda: comfy)
+            comfy.queue_pending = [[0, "a", {}, {}, []]]
+            self.assertTrue(held("a"))
+            comfy.queue_running, comfy.queue_pending = comfy.queue_pending, []
+            self.assertTrue(held("a"))
+            comfy.queue_running = []
+            comfy.entry("a", {})
+            self.assertTrue(held("a"))
+            self.assertFalse(held("b"))
+        else:
+            q = cls(types.SimpleNamespace(queue_updated=lambda: None))
+            held = comfy_held(lambda: q)
+            self.assertFalse(held("a"))
+            q.put((0, "a", {}, {}, [], {}))
+            self.assertTrue(held("a"))
+            _, i = q.get()
+            self.assertTrue(held("a"))
+            q.task_done(i, {"outputs": {}, "meta": {}}, None)
+            self.assertEqual(q.get_tasks_remaining(), 0)
+            self.assertTrue(held("a"))
+            self.assertFalse(held("b"))
+
+        # An older ComfyUI: get_history without map_function, and no get_current_queue_volatile.
+        class Older:
+            def get_history(self, prompt_id=None, max_items=None, offset=-1):
+                return {"c": {}} if prompt_id == "c" else {}
+
+            def get_current_queue(self):
+                return [[0, "d", {}, {}, []]], [[1, "e", {}, {}, []]]
+
+        older = comfy_held(Older)
+        self.assertEqual([older(x) for x in "cdef"], [True, True, True, False])
+
     def test_older_comfyui_names_the_prompt(self):
         async def go():
             comfy = Comfy(mint_ids=True)
@@ -410,7 +545,7 @@ class DirectModeTest(unittest.TestCase):
                 # A simple GET that Chrome preflights only for Private Network Access.
                 status, h, _ = await s.req("OPTIONS", "/system_stats", browser(FUOBE, **{"Access-Control-Request-Method": "GET", "Access-Control-Request-Private-Network": "true"}))
                 self.assertEqual((status, h.get("Access-Control-Allow-Private-Network")), (204, "true"))
-                # A header a run never sends: no preflight answer from Fuobe Connect, so ComfyUI's check refuses it.
+                # A header a run never sends: Fuobe Connect refuses the preflight.
                 status, h, _ = await s.req("OPTIONS", "/prompt", browser(FUOBE, **{"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "x-custom"}))
                 self.assertEqual(status, 403)
                 self.assertNotIn("Access-Control-Allow-Origin", h)
@@ -561,6 +696,57 @@ class WithCorsFlagTest(unittest.TestCase):
                 self.assertEqual(status, 403)
 
         run(go())
+
+    def test_flag_naming_a_studio_gives_it_nothing_more(self):
+        """--enable-cors-header <a trusted studio> switches ComfyUI's own check off for that site. The studio still gets
+        only the checked paths, and only at this computer's own address (or a network address with FUOBE_CONNECT_LAN=1),
+        never under a name that points at this computer."""
+
+        def form(name, kind):
+            f = aiohttp.FormData()
+            f.add_field("image", b"data", filename=name, content_type="image/png")
+            f.add_field("type", kind)
+            return f
+
+        async def go(flag, lan):
+            comfy = Comfy()
+            app, _ = with_connect(cors_flag=flag, comfy=comfy, lan=lan)
+            async with Server(app) as s:
+                unlisted = {"1": {"class_type": "SomeUnlistedNode", "inputs": {"path": "C:/Windows/x"}}}
+                for host in (f"127.0.0.1:{PORT}", f"localhost:{PORT}", f"127.0.0.1.nip.io:{PORT}", f"localtest.me:{PORT}"):
+                    for method, path in [
+                        ("POST", "/v2/manager/queue/install"),
+                        ("POST", "/api/v2/manager/queue/install"),
+                        ("GET", "/userdata/comfy.settings.json"),
+                        ("POST", "/settings/Comfy.Server.LaunchArgs"),
+                        ("POST", "/upload/mask"),
+                        ("GET", "/internal/logs"),
+                    ]:
+                        status, h, _ = await s.req(method, path, browser(FUOBE, Host=host, **{"Content-Type": "application/json"}), data=b"{}" if method == "POST" else None)
+                        self.assertEqual(status, 403, (flag, lan, host, path))
+                        self.assertNotIn("Access-Control-Allow-Origin", h)
+                    status, h, _ = await s.req("OPTIONS", "/v2/manager/queue/install", browser(FUOBE, Host=host, **{"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type"}))
+                    self.assertEqual(status, 403, (flag, lan, host))
+                    self.assertNotIn("Access-Control-Allow-Origin", h)
+                    # The paths a run needs: checked here, or (this computer under another name) refused.
+                    checked = lan or host.startswith(("127.0.0.1:", "localhost:"))
+                    status, h, _ = await s.req("POST", "/prompt", browser(FUOBE, Host=host, **{"Content-Type": "application/json"}), data=prompt_body(unlisted))
+                    self.assertEqual(status, 400 if checked else 403, (flag, lan, host))
+                    async with s.session.post(BASE + "/upload/image", data=form("my_photo.png", "output"), headers=browser(FUOBE, Host=host)) as res:
+                        self.assertEqual(res.status, 403, (flag, lan, host))
+                        self.assertEqual(res.headers.get("Access-Control-Allow-Origin"), FUOBE if checked else None)
+                    status, h, _ = await s.req("GET", "/system_stats", browser(FUOBE, Host=host))
+                    self.assertEqual((status, h.get("Access-Control-Allow-Origin")), (200, FUOBE) if checked else (403, None), (flag, lan, host))
+                self.assertEqual((comfy.posts, comfy.uploads), ([], []))
+                status, _, _ = await s.req("POST", "/prompt", browser(FUOBE, **{"Content-Type": "application/json"}), data=prompt_body())
+                self.assertEqual(status, 200)
+
+        for flag in (FUOBE, "https://www.fuobe.com", "*"):
+            for lan in (False, True):
+                run(go(flag, lan))
+        with self.assertLogs(level="WARNING") as logs:
+            with_connect(cors_flag=FUOBE)
+        self.assertTrue(any("isn't needed for that studio" in line for line in logs.output), logs.output)
 
     def test_flag_that_isnt_an_origin(self):
         """--enable-cors-header with a value that isn't a full origin: a sandboxed page ("null") stays out."""

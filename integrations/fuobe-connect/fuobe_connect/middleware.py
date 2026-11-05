@@ -8,17 +8,21 @@ is 127.0.0.1, ::1 or localhost) for a path a Fuobe run needs (origins.allowed). 
 - checks what the request asks for, here in Python, whatever the studio's own page checked (Studios.check): a prompt
   runs only with the node types this pack ships (graph.py) and reads only files Fuobe sent; an upload goes only into
   the input folder under a name Fuobe gives (fuobe_<id>.<ext>); a studio may take off, cancel, read or download only
-  the prompts it queued and their results;
+  the prompts it queued and their results. A prompt counts as the studio's only once ComfyUI took it, and never under
+  an id that ComfyUI already holds (in its queue or its history: someone else's prompt);
 - passes the request on without its Origin and Sec-Fetch-Site headers, so ComfyUI's own check sees what it sees for a
   program on this computer, and adds Access-Control-Allow-Origin for that origin to the answer;
 - shows the studio only its own prompts in the queue, the history and the job list, and never the names of the files
   in your input folder (Studios.answer).
 
-Every other request goes on untouched, so ComfyUI's own check still turns away every other website.
+Any other request from a trusted studio (another path, another Host, a preflight a run never sends) is turned away
+here, so a studio never reaches ComfyUI unchecked, whatever ComfyUI's start options say. Every other request goes on
+untouched, so ComfyUI's own check still turns away every other website.
 
 When ComfyUI was started with --enable-cors-header (which switches its own check off), the middleware also does what
-Fuobe's guard does: a request from a web page gets in only when the page is ComfyUI's own, the origin the setting
-names, or a trusted studio. With "--enable-cors-header *" (every site, the person's choice) it adds no check.
+Fuobe's guard does: a request from any other web page gets in only when the page is ComfyUI's own or the origin the
+setting names. A trusted studio still gets only the checked paths above, even when the setting names it. With
+"--enable-cors-header *" (every site, the person's choice) it adds no check for other websites.
 
 Pure aiohttp: the tests load it with ComfyUI's own middleware and nothing else.
 """
@@ -113,8 +117,12 @@ class Studios:
 
     KEEP = 4096
 
-    def __init__(self, nodes: Callable[[], Iterable[str]] | None = None):
+    def __init__(self, nodes: Callable[[], Iterable[str]] | None = None, held: Callable[[str], bool] | None = None):
+        """`held(prompt_id)`: ComfyUI already has a prompt with this id, in its queue or its history (comfy_held, inside
+        ComfyUI). ComfyUI takes any new prompt under an id it already holds, so a studio that learned the id of a
+        prompt of yours (from the live socket) could otherwise claim it."""
         self.nodes = nodes or (lambda: frozenset())
+        self.held = held
         self.prompts: OrderedDict[str, None] = OrderedDict()
         self.files: OrderedDict[tuple, None] = OrderedDict()
 
@@ -197,7 +205,16 @@ class Studios:
             return _refuse(REASONS[why], 400)
         if self.own(pid):
             return _refuse("That prompt id is taken", 400)
-        self.add_prompt(pid)
+        if self.held is not None:
+            try:
+                taken = bool(self.held(pid))
+            except Exception:
+                logging.exception("[Fuobe Connect] Couldn't read ComfyUI's queue and history")
+                return _refuse("Fuobe Connect couldn't check this prompt's id against ComfyUI's queue. Update Fuobe Connect in ComfyUI-Manager, then retry.", 503)
+            if taken:
+                _note("a trusted studio: it sent the id of a prompt that ComfyUI already holds")
+                return _refuse("That prompt id is taken", 400)
+        # The prompt becomes the studio's in answer(), once ComfyUI took it.
         return None
 
     async def _upload(self, request: web.Request) -> web.Response | None:
@@ -225,7 +242,7 @@ class Studios:
         p = _bare(request.path)
         if request.method == "POST":
             if p == "/prompt":
-                # An older ComfyUI names the prompt itself: that id is the studio's too.
+                # The id ComfyUI took the prompt under (the one the studio sent, or one an older ComfyUI chose).
                 try:
                     pid = json.loads(response.body).get("prompt_id")
                 except Exception:
@@ -290,6 +307,25 @@ class Studios:
         return out
 
 
+def comfy_held(prompt_queue: Callable[[], object]) -> Callable[[str], bool]:
+    """Studios' `held`, from ComfyUI's own PromptQueue (`prompt_queue()` returns it): the id is in its history, or a
+    prompt with it runs or waits."""
+
+    def held(pid: str) -> bool:
+        q = prompt_queue()
+        try:
+            found = q.get_history(prompt_id=pid, map_function=lambda entry: True)
+        except TypeError:  # a ComfyUI without map_function
+            found = q.get_history(prompt_id=pid)
+        if found:
+            return True
+        current = getattr(q, "get_current_queue_volatile", None) or q.get_current_queue
+        running, pending = current()
+        return any(isinstance(item, (list, tuple)) and len(item) > 1 and item[1] == pid for item in [*running, *pending])
+
+    return held
+
+
 def _hide_inputs(info):
     """/object_info without the names of the files in your input folder (a loader's list keeps only Fuobe's own)."""
     if not isinstance(info, dict):
@@ -326,6 +362,15 @@ def make_middleware(trusted: Callable[[], Iterable[str]], cors_flag: str | None 
     guard_on = bool(flag) and flag != "*"
     if guard_on and flag_origin is None:
         logging.warning("[Fuobe Connect] --enable-cors-header %r isn't a website's address (like http://localhost:3000), so only ComfyUI's own page and the trusted studios get in.", flag[:80])
+    try:
+        named = flag_origin is not None and flag_origin in set(trusted())
+    except Exception:
+        named = False
+    if named:
+        logging.warning(
+            "[Fuobe Connect] --enable-cors-header %s isn't needed for that studio: Fuobe Connect lets it use this ComfyUI on this computer (at a network address too with FUOBE_CONNECT_LAN=1), with its checks. The setting gives it nothing more.",
+            flag_origin,
+        )
     studios = studios or Studios()
 
     @web.middleware
@@ -333,29 +378,33 @@ def make_middleware(trusted: Callable[[], Iterable[str]], cors_flag: str | None 
         raw = request.headers.get("Origin")
         if raw is not None:
             origin = normalise(raw)
-            here = lan or is_loopback(host_name(request.headers.get("Host")))
-            if origin and here and origin in set(trusted()):
-                if request.method == "OPTIONS":
-                    answer = preflight(request, origin)
-                    if answer is not None:
-                        return answer
-                elif allowed(request.method, request.path, request.query_string):
-                    headers = request.headers.copy()
-                    headers.popall("Origin", None)
-                    headers.popall("Sec-Fetch-Site", None)
-                    headers[MARKER] = origin
-                    # One clone, read here and handed on: ComfyUI's handler reads the same body.
-                    clone = request.clone(headers=headers)
-                    response = await studios.check(clone)
-                    if response is None:
-                        response = await studios.answer(clone, await _pass(clone, handler))
-                    if isinstance(response, web.StreamResponse) and not response.prepared:
-                        response.headers.update(_cors_headers(origin))
-                    return response
-                # A trusted site asking for anything else is any other website: ComfyUI decides (and turns it away).
-            if guard_on and (origin is None or origin != flag_origin) and not same_host(raw, request.headers.get("Host")):
-                if not (origin and origin in set(trusted())):
-                    _note(raw[:120])
+            host = request.headers.get("Host")
+            # A trusted studio, unless the page is ComfyUI's own (a studio listed at ComfyUI's own address).
+            if origin and origin in set(trusted()) and not same_host(raw, host):
+                if lan or is_loopback(host_name(host)):
+                    if request.method == "OPTIONS":
+                        answer = preflight(request, origin)
+                        if answer is not None:
+                            return answer
+                    elif allowed(request.method, request.path, request.query_string):
+                        headers = request.headers.copy()
+                        headers.popall("Origin", None)
+                        headers.popall("Sec-Fetch-Site", None)
+                        headers[MARKER] = origin
+                        # One clone, read here and handed on: ComfyUI's handler reads the same body.
+                        clone = request.clone(headers=headers)
+                        response = await studios.check(clone)
+                        if response is None:
+                            response = await studios.answer(clone, await _pass(clone, handler))
+                        if isinstance(response, web.StreamResponse) and not response.prepared:
+                            response.headers.update(_cors_headers(origin))
+                        return response
+                # Anything else a trusted studio asks for (another path, a preflight a run never sends, or this ComfyUI
+                # under another name or a network address) never reaches ComfyUI unchecked, even when
+                # --enable-cors-header names that studio and ComfyUI's own check is off.
+                return web.Response(status=403)
+            if guard_on and (origin is None or origin != flag_origin) and not same_host(raw, host):
+                _note(raw[:120])
                 return web.Response(status=403)
         elif guard_on and request.headers.get("Sec-Fetch-Site", "").lower() in ("cross-site", "same-site"):
             _note("another website")

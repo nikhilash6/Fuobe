@@ -27,7 +27,7 @@ PACK = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 sys.path.insert(0, PACK)
 
-from comfy_stack import build_app  # noqa: E402
+from comfy_stack import COMFY, build_app  # noqa: E402
 from fuobe_connect import plugin  # noqa: E402
 from fuobe_connect.store import access_list  # noqa: E402
 
@@ -231,7 +231,8 @@ class FakeStudio:
 def load_pack(user_dir: str):
     """ComfyUI's view of the world, as much of it as Fuobe Connect reads, then the pack itself."""
     app, _ = build_app()
-    instance = types.SimpleNamespace(app=app, routes=web.RouteTableDef())
+    # The stand-in's queue and history answer like ComfyUI's PromptQueue.
+    instance = types.SimpleNamespace(app=app, routes=web.RouteTableDef(), prompt_queue=app[COMFY])
     server = types.ModuleType("server")
     server.PromptServer = types.SimpleNamespace(instance=instance)
     folder_paths = types.ModuleType("folder_paths")
@@ -270,6 +271,12 @@ class PluginTest(unittest.TestCase):
         paths = {(r.method, r.path) for r in instance.routes}
         for p in [("GET", "/fuobe/connect"), ("POST", "/fuobe/connect/pair"), ("POST", "/fuobe/connect/jobs")]:
             self.assertIn(p, paths)
+        # A studio's prompt id is checked against ComfyUI's own queue and history.
+        studios = sys.modules["fuobe_connect_pack.fuobe_connect.plugin"]._state["studios"]
+        instance.prompt_queue.entry("0f0e0d0c-0000-4000-8000-000000000001", {})
+        instance.prompt_queue.queue_pending = [[1, "0f0e0d0c-0000-4000-8000-000000000002", {}, {}, []]]
+        self.assertEqual([studios.held(f"0f0e0d0c-0000-4000-8000-00000000000{i}") for i in (1, 2, 3)], [True, True, False])
+        instance.prompt_queue.queue_pending = []
         instance.app.add_routes(instance.routes)
         studio = FakeStudio()
         file = os.path.join(user_dir, "fuobe-connect.json")

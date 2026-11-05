@@ -198,10 +198,12 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
 
   // Connected: what this ComfyUI has (once), and again every 45 s while it needs a model download.
   const checkedFor = useRef<string | null>(null);
+  // Only stable values here: a new recheck on every render would start the 45 s timer over each time.
+  const startCheck = check.start;
   const recheck = useCallback(async () => {
-    if (way === "address") await check.start();
+    if (way === "address") await startCheck();
     else if (probe.port && probe.host) await checkHere(qc, probe.port, probe.host).catch(() => {});
-  }, [way, check, probe.port, probe.host, qc]);
+  }, [way, startCheck, probe.port, probe.host, qc]);
   useEffect(() => {
     if (!connected) return;
     const key = `${way}:${saved}`;

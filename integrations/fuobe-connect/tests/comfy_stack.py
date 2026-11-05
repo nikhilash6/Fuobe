@@ -110,7 +110,8 @@ def comfy_middleware() -> dict:
 
 
 class Comfy:
-    """What the stand-in ComfyUI keeps: its queue, its history, and what it was sent."""
+    """What the stand-in ComfyUI keeps: its queue, its history, and what it was sent. It also answers like ComfyUI's
+    PromptQueue (get_history, get_current_queue_volatile), the way Fuobe Connect reads it inside ComfyUI."""
 
     def __init__(self, mint_ids: bool = False):
         self.mint_ids = mint_ids
@@ -120,6 +121,19 @@ class Comfy:
         self.posts: list = []
         self.uploads: list = []
         self.number = 0
+        # A /prompt answer of ComfyUI's own (status, body) instead of taking the prompt, for example a 400.
+        self.refuse: tuple | None = None
+
+    def get_history(self, prompt_id=None, max_items=None, offset=-1, map_function=None):
+        if prompt_id is None:
+            return dict(self.history)
+        if prompt_id not in self.history:
+            return {}
+        e = self.history[prompt_id]
+        return {prompt_id: map_function(e) if map_function else json.loads(json.dumps(e))}
+
+    def get_current_queue_volatile(self):
+        return list(self.queue_running), list(self.queue_pending)
 
     def entry(self, pid: str, prompt: dict, files: list | None = None) -> dict:
         self.number += 1
@@ -152,6 +166,8 @@ def build_app(cors_flag: str | None = None, fuobe_connect=None, extra_routes=Non
     @routes.post("/prompt")
     async def prompt(request):
         body = await request.json()
+        if c.refuse is not None:
+            return web.json_response(c.refuse[1], status=c.refuse[0])
         pid = str(uuid.uuid4()) if c.mint_ids or not body.get("prompt_id") else body.get("prompt_id")
         c.posts.append(body)
         if isinstance(body.get("prompt"), dict):
