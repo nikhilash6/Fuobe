@@ -8,6 +8,7 @@ import glob
 import json
 import os
 import re
+import struct
 import sys
 import tempfile
 import unittest
@@ -1069,6 +1070,18 @@ class PackageTest(unittest.TestCase):
         with open(os.path.join(PACK, ".comfyignore"), encoding="utf-8") as f:
             ignored = f.read().split()
         self.assertIn("tests/", ignored)
+        self.assertIn("assets/", ignored)
+
+    def test_registry_icon(self):
+        """The Registry shows the icon from this repository: a square PNG of at most 400 x 400."""
+        with open(os.path.join(PACK, "pyproject.toml"), encoding="utf-8") as f:
+            url = re.search(r'^Icon = "([^"]+)"', f.read(), re.M).group(1)
+        prefix = "https://raw.githubusercontent.com/workingprototype/ComfyUI-Fuobe-Connect/main/"
+        self.assertTrue(url.startswith(prefix), url)
+        with open(os.path.join(PACK, *url[len(prefix):].split("/")), "rb") as f:
+            head = f.read(24)
+        self.assertEqual(head[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", head[16:24]), (400, 400))
 
 
 if __name__ == "__main__":

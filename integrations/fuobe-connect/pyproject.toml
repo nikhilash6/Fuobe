@@ -9,12 +9,16 @@ dependencies = []
 classifiers = ["Operating System :: OS Independent"]
 
 [project.urls]
+Homepage = "https://fuobe.com"
 Repository = "https://github.com/workingprototype/ComfyUI-Fuobe-Connect"
 Documentation = "https://github.com/workingprototype/ComfyUI-Fuobe-Connect#readme"
-"Bug Tracker" = "https://github.com/workingprototype/ComfyUI-Fuobe-Connect/issues"
+Issues = "https://github.com/workingprototype/ComfyUI-Fuobe-Connect/issues"
 
+# Read by the Comfy Registry (https://registry.comfy.org), which ComfyUI-Manager searches.
 [tool.comfy]
 PublisherId = "workingprototype"
 DisplayName = "Fuobe Connect"
+# 400 x 400 PNG in this repository; .comfyignore keeps it out of the published pack.
+Icon = "https://raw.githubusercontent.com/workingprototype/ComfyUI-Fuobe-Connect/main/assets/icon.png"
 requires-comfyui = ">=0.3.0"
 includes = []
