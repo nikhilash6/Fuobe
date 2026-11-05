@@ -6,11 +6,11 @@ import type { InputSlot, Preset, PresetOption, PresetRoute } from "./types";
 
 /*
  * One-click "Apps". Most are an edit model plus a carefully written instruction —
- * exactly how Higgsfield builds them on Nano Banana / Seedream. The open-source route
+ * exactly how the parity studio builds them on Nano Banana / Seedream. The open-source route
  * runs the same instruction on Qwen-Image 2.1 (or a dedicated ComfyUI workflow; apps whose
  * LoRA was trained on Qwen-Image-Edit 2509 or 2511 name that model).
  * Video apps animate the photo with an image-to-video model and a template prompt
- * (Higgsfield's "viral_transform_video" templates work the same way).
+ * (the parity studio's "viral_transform_video" templates work the same way).
  */
 
 const EDIT_CLOUD = "nano-banana-pro";
@@ -323,7 +323,7 @@ export const APPS: Preset[] = [
     badges: ["top"],
     // The cloud model turns its rotate / tilt / zoom settings into the Multiple-Angles LoRA's own words; the open
     // route runs that LoRA on Qwen-Image-Edit 2511 with the same words ("<sks> front-left quarter view …"). Fuobe Angles
-    // (the next app, O11) is Higgsfield Angles' 2509 recipe; it replaces this default only when the angles eval suite
+    // (the next app, O11) is the 2509 Angles recipe from the parity research; it replaces this default only when the angles eval suite
     // (scripts/eval/cases/angles.json) promotes it.
     options: [
       angleOption("angle", "Angle", "horizontal_angle", [
@@ -371,7 +371,7 @@ export const APPS: Preset[] = [
     icon: "Rotate3d",
     hue: 205,
     badges: ["new", "beta"],
-    // Fuobe Angles (O11): Higgsfield Angles' recipe, Qwen-Image-Edit 2509 + dx8152's Multiple-angles LoRA on both engines, next
+    // Fuobe Angles (O11): the Angles recipe from the parity research, Qwen-Image-Edit 2509 + dx8152's Multiple-angles LoRA on both engines, next
     // to the Angles app's 2511 route (which stays the default until the angles eval suite promotes this one). The choices set
     // the hosted route's own fields (rotate −90…90°, positive = left; vertical −1 above … 1 below; move forward 0–10; a
     // wide-angle lens); on the GPU they become the LoRA's words (src/lib/catalog/open-tools.ts). The default turns it.
@@ -1987,7 +1987,7 @@ export const APPS: Preset[] = [
       "Create an exploded knolling layout of everything in the image: each object, garment and accessory separated and neatly arranged on a clean light background, each with a small label naming it. Keep every item's exact design, colors and logos.",
     parity: "Makes one image of your picture's parts, each one labeled.",
   }),
-  // Higgsfield's Virality Predictor (a brain-response model) is the /virality page: a labelled heuristic hook
+  // The parity studio's Virality Predictor (a brain-response model) is the /virality page: a labelled heuristic hook
   // analysis. This app is the "make a stronger opening frame" step it links to.
   app({
     name: "Hook Frame",

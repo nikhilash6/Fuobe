@@ -1,5 +1,5 @@
 /**
- * Layers studio (Higgsfield Layers): the layer document, its geometry, the downloads and the edit
+ * Layers studio (Layers parity): the layer document, its geometry, the downloads and the edit
  * history. Pure, so the editor, the server and the tests share it; no catalog import (the editor gets
  * model names and prices from its page).
  *
@@ -256,7 +256,7 @@ export const TOOL_MODELS: Record<LayerTool, { cloud: string[]; open: string[] }>
   // Both open graphs grow the canvas themselves from the pads. Krea 2 Inpaint isn't offered here: its graph scales the
   // picture to about 1 MP and redraws all of it, and it needs the Ostris Edit add-on.
   expand: { cloud: ["nano-banana-pro"], open: ["oss-qwen-image-21", "oss-flux-fill"] },
-  // Nano Banana Pro sees the painted area tinted red (Higgsfield's nano_banana_pro_inpaint); the others take the mask itself
+  // Nano Banana Pro sees the painted area tinted red (the parity studio's nano_banana_pro_inpaint); the others take the mask itself
   // (Bria FIBO 2's edit keeps a single picture's own shape).
   inpaint: { cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-flux-fill"] },
   // The retouch looks; Detail runs on {@link ENHANCE_DETAIL_MODELS}.
@@ -267,7 +267,7 @@ export const TOOL_MODELS: Record<LayerTool, { cloud: string[]; open: string[] }>
 };
 
 // ---------------------------------------------------------------------------
-// Enhancer (Higgsfield's skin-enhancer, plus the upscalers' detail pass)
+// Enhancer (the parity studio's skin-enhancer, plus the upscalers' detail pass)
 
 export type EnhanceLook = "skin" | "glow" | "sharpen" | "detail";
 
@@ -1153,7 +1153,7 @@ export function elementDraft(node: Pick<LayerNode, "name" | "z" | "prompt">): { 
 }
 
 // ---------------------------------------------------------------------------
-// Decomposition states (Higgsfield's copy)
+// Decomposition states (the researched copy)
 
 export type DecomposeState = "setting-up" | "submitting" | "processing" | "stalled" | "ready" | "failed" | "decomposed";
 

@@ -37,7 +37,7 @@
       "children": [
         "Create Video (model selector)",
         "/ai/video?model=<id>",
-        "Higgsfield DoP presets (?model=standard&presetMotionId=<uuid>)",
+        "DoP presets (?model=standard&presetMotionId=<uuid>)",
         "Motion Control (Kling 2.6 / 3.0)",
         "Edit Video",
         "Extend",
@@ -78,10 +78,10 @@
     },
     {
       "section": "API",
-      "path": "/higgsfield-api",
+      "path": "/{studio}-api",
       "children": [
-        "open.higgsfield.ai / console.higgsfield.ai (keys, playground, billing)",
-        "docs.higgsfield.ai"
+        "{studio-service} / {studio-console} (keys, playground, billing)",
+        "{studio-docs}"
       ]
     },
     {
@@ -91,7 +91,7 @@
         "Motion Transfer",
         "Object Swap",
         "Restyle (Styles)",
-        "Presets (/higgsfield-genjutsu-presets)",
+        "Presets (/{studio}-genjutsu-presets)",
         "Community"
       ]
     },
@@ -169,7 +169,7 @@
         "Projects & subfolders",
         "Version selector 2.0–4.0",
         "Director's Panel",
-        "AI Director chat (Mr. Higgs)",
+        "AI Director chat ({assistant-name})",
         "Canvas integration",
         "Contest projects"
       ]
@@ -178,7 +178,7 @@
       "section": "Contests",
       "path": "/contests",
       "children": [
-        "Higgsfield Global Film Festival",
+        "Global Film Festival",
         "App contest",
         "Submissions feeds",
         "Audience Choice voting"
@@ -404,8 +404,8 @@
     {
       "id": "soul-image",
       "section": "Image",
-      "name": "Higgsfield Soul family (Soul, Soul 2.0, Soul Cinema 1.5)",
-      "description": "Higgsfield's own fashion/culture-native photo models. Soul = preset-driven; Soul 2.0 = presets + Moodboards + Soul HEX + Soul ID + reference image; Soul Cinema = cinematic film-grade look (no presets).",
+      "name": "Soul family (Soul, Soul 2.0, Soul Cinema 1.5)",
+      "description": "The studio's own fashion/culture-native photo models. Soul = preset-driven; Soul 2.0 = presets + Moodboards + Soul HEX + Soul ID + reference image; Soul Cinema = cinematic film-grade look (no presets).",
       "uxFlow": [
         "Image → Soul 2.0",
         "Pick a preset (categories: General, TikTok Core, Instagram Aesthetics, Beauty, Mood, Camera Photo, Graphic Art) or a Moodboard",
@@ -512,7 +512,7 @@
     {
       "id": "popcorn",
       "section": "Image",
-      "name": "Higgsfield Popcorn (storyboards) + Instadump",
+      "name": "Popcorn (storyboards) + Instadump",
       "description": "Consistent multi-frame sequences (up to 8 frames) with persistent identity/lighting; Manual, Auto and Instadump modes; extract frames from videos; export to video models.",
       "uxFlow": [
         "Image → Popcorn",
@@ -533,7 +533,7 @@
       },
       "outputs": "image sequence",
       "models": [
-        "Popcorn (Higgsfield)"
+        "Popcorn (the studio)"
       ],
       "credits": "Shown on Generate",
       "confidence": "high"
@@ -630,7 +630,7 @@
       "settings": {},
       "outputs": "layered image",
       "models": [
-        "Higgsfield Layers (unknown backbone)"
+        "Layers (unknown backbone)"
       ],
       "credits": "unknown",
       "confidence": "high"
@@ -920,7 +920,7 @@
         "Gemini Omni Flash",
         "HappyHorse",
         "FLUX.3 Video",
-        "Higgsfield DoP"
+        "DoP"
       ],
       "credits": "Per generation shown on button; Seedance 2.5: 24 cr (480p 8s) / 52 (720p 8s) / 72 (1080p 8s); Seedance 2.0 720p 8s = 36",
       "confidence": "high"
@@ -928,10 +928,10 @@
     {
       "id": "dop-presets",
       "section": "Motions",
-      "name": "Higgsfield DoP image-to-video with motion presets (+ Mix)",
-      "description": "Higgsfield's native cinematography model: one keyframe + preset (camera move or VFX). Presets organized in categories; 'Mix' combines two presets with per-preset strength.",
+      "name": "DoP image-to-video with motion presets (+ Mix)",
+      "description": "The studio's native cinematography model: one keyframe + preset (camera move or VFX). Presets organized in categories; 'Mix' combines two presets with per-preset strength.",
       "uxFlow": [
-        "Video → Create Video → model 'Higgsfield Standard' (DoP Lite/Turbo/Standard)",
+        "Video → Create Video → model 'Standard' (DoP Lite/Turbo/Standard)",
         "Upload keyframe or 'generate it'",
         "Browse presets: Effects, Basic Camera Control, Epic Camera Control, Catch the Pulse, New, Trending, Top Choice; search",
         "Optional Mix: pick a second preset; strengths per preset (e.g. 0.85 / 0.5)",
@@ -955,7 +955,7 @@
       },
       "outputs": "video",
       "models": [
-        "Higgsfield DoP (Lite, Turbo, Standard)"
+        "DoP (Lite, Turbo, Standard)"
       ],
       "credits": "unknown (historically single-digit credits per clip)",
       "confidence": "high"
@@ -1080,7 +1080,7 @@
     {
       "id": "genjutsu",
       "section": "Video",
-      "name": "Higgsfield Genjutsu (Motion Transfer / Object Swap / Restyle)",
+      "name": "Genjutsu (Motion Transfer / Object Swap / Restyle)",
       "description": "Keep a video's motion/camera/timing and rebuild cast/location (Motion Transfer), change only what you describe (Object Swap), or redraw the whole clip in a style (Restyle). 30+ presets; batch runs.",
       "uxFlow": [
         "Video → model selector → Genjutsu (or /genjutsu)",
@@ -1104,7 +1104,7 @@
       },
       "outputs": "video",
       "models": [
-        "Higgsfield Genjutsu (hf_mult_motion_control / replace_object / restyle)"
+        "Genjutsu (hf_mult_motion_control / replace_object / restyle)"
       ],
       "credits": "API $0.318/s list ($0.159 promo)",
       "confidence": "high"
@@ -1263,7 +1263,7 @@
       },
       "outputs": "video",
       "models": [
-        "Higgsfield Reframe"
+        "Reframe"
       ],
       "credits": "unknown",
       "confidence": "high"
@@ -1310,7 +1310,7 @@
       "settings": {},
       "outputs": "video",
       "models": [
-        "Higgsfield color (cinematic video editor)"
+        "The studio's color (cinematic video editor)"
       ],
       "credits": "unknown",
       "confidence": "high"
@@ -1442,7 +1442,7 @@
       },
       "outputs": "video",
       "models": [
-        "Effects backbone varies (Kling/Seedance/Higgsfield)"
+        "Effects backbone varies (Kling/Seedance/{studio})"
       ],
       "credits": "e.g. Agamemnon 720p 9:16 = 67.5 credits",
       "confidence": "high"
@@ -1466,12 +1466,12 @@
         "voice"
       ],
       "settings": {
-        "models": "Veo 3.1, Kling 2.6 Lipsync, Wan 2.5 Speak, Kling Avatars 2.0, Higgsfield Speak 2.0, Infinite Talk, Kling Lipsync (v2v), Sync Lipsync 3 (v2v, up to 4K)",
+        "models": "Veo 3.1, Kling 2.6 Lipsync, Wan 2.5 Speak, Kling Avatars 2.0, Speak 2.0, Infinite Talk, Kling Lipsync (v2v), Sync Lipsync 3 (v2v, up to 4K)",
         "relaxMode": "Unlimited Relax for Infinite Talk Basic"
       },
       "outputs": "video",
       "models": [
-        "Higgsfield Speak 2.0",
+        "Speak 2.0",
         "Veo 3.1",
         "Kling 2.6 Lipsync",
         "Kling Avatars 2.0",
@@ -1621,7 +1621,7 @@
     {
       "id": "apps-hub",
       "section": "Apps",
-      "name": "Higgsfield Apps (one-click templates)",
+      "name": "Apps (one-click templates)",
       "description": "~90 single-purpose tools grouped in categories; each app page = description, upload slot(s), generation type, cost on Generate button, examples, 'Explore more apps'.",
       "uxFlow": [
         "Apps → choose category/app",
@@ -1848,7 +1848,7 @@
       },
       "outputs": "any",
       "models": [
-        "LLMs + all Higgsfield models"
+        "LLMs + all of the studio's models"
       ],
       "credits": "Credits per step (text + generations); Free Mode LLM free",
       "confidence": "high"
@@ -1856,7 +1856,7 @@
     {
       "id": "assist-legacy",
       "section": "Assist",
-      "name": "Higgsfield Assist / Chat (legacy)",
+      "name": "Assist / Chat (legacy)",
       "description": "2025 chat assistant; /chat and /ai-assist now render Supercomputer.",
       "uxFlow": [
         "/chat → Supercomputer"
@@ -1875,10 +1875,10 @@
     {
       "id": "mcp",
       "section": "Assist",
-      "name": "Higgsfield MCP / ChatGPT plugin / CLI + Skills",
+      "name": "The studio's MCP / ChatGPT plugin / CLI + Skills",
       "description": "Generate from Claude, ChatGPT (Dots), Grok Bot, Cursor, Codex; CLI skills (generate, soul, product-photoshoot); always uses credits.",
       "uxFlow": [
-        "Connect https://mcp.higgsfield.ai/mcp in Claude",
+        "Connect {studio-service}/mcp in Claude",
         "Ask for image/video/character/audio",
         "Upload refs via in-chat widget",
         "Results in chat + Assets"
@@ -1887,7 +1887,7 @@
         "chat"
       ],
       "settings": {
-        "cli": "npx skills add higgsfield-ai/skills; higgsfield auth login"
+        "cli": "npx skills add {studio}/skills; {studio} auth login"
       },
       "outputs": "any",
       "models": [
@@ -1915,7 +1915,7 @@
       },
       "outputs": "video",
       "models": [
-        "Higgsfield models via MCP"
+        "The studio's models via MCP"
       ],
       "credits": "credits",
       "confidence": "high"
@@ -2054,7 +2054,7 @@
       "id": "plugins",
       "section": "Other",
       "name": "Plugins (Photoshop, Figma/FigJam, Blender, After Effects, DaVinci Resolve, Minecraft)",
-      "description": "Run Higgsfield tools inside creative apps; AI Motion Designer agent builds After Effects comps via GPT.",
+      "description": "Run the studio's tools inside creative apps; AI Motion Designer agent builds After Effects comps via GPT.",
       "uxFlow": [
         "Install plugin",
         "Log in",
@@ -2072,7 +2072,7 @@
     {
       "id": "games-3d",
       "section": "Other",
-      "name": "Higgsfield Games & 3D Jutsu",
+      "name": "Games & 3D Jutsu",
       "description": "Prompt-to-browser-game builder (Games marketplace, remix) and AI-native editable 3D scene workspace (objects, layout, lighting, cameras, animation → video).",
       "uxFlow": [
         "Supercomputer → describe game / open 3D Jutsu",
@@ -2087,7 +2087,7 @@
       "models": [
         "GPT-6 Astra",
         "Claude Fable",
-        "Higgsfield models",
+        "The studio's models",
         "image_to_3d"
       ],
       "credits": "cost estimate shown before build",
@@ -2285,8 +2285,8 @@
       "notes": "'Google's standard generation model'"
     },
     {
-      "name": "Higgsfield Soul (v1)",
-      "vendor": "Higgsfield",
+      "name": "Soul (v1)",
+      "vendor": "The studio",
       "capabilities": [
         "t2i",
         "preset",
@@ -2310,11 +2310,11 @@
         "other": "50+ aesthetic presets; avatar/character"
       },
       "credits": "API $0.0938/image",
-      "notes": "Higgsfield's first high-aesthetic photo model"
+      "notes": "The studio's first high-aesthetic photo model"
     },
     {
-      "name": "Higgsfield Soul 2.0",
-      "vendor": "Higgsfield",
+      "name": "Soul 2.0",
+      "vendor": "The studio",
       "capabilities": [
         "t2i",
         "i2i",
@@ -2344,8 +2344,8 @@
       "notes": "'Most aesthetic model'"
     },
     {
-      "name": "Higgsfield Soul Cinema 1.5",
-      "vendor": "Higgsfield",
+      "name": "Soul Cinema 1.5",
+      "vendor": "The studio",
       "capabilities": [
         "t2i",
         "i2i",
@@ -3001,7 +3001,7 @@
     },
     {
       "name": "Marketing Studio Image",
-      "vendor": "Higgsfield (GPT Image 2.5 based)",
+      "vendor": "The studio (GPT Image 2.5 based)",
       "capabilities": [
         "t2i",
         "i2i",
@@ -3033,7 +3033,7 @@
     },
     {
       "name": "Image Auto",
-      "vendor": "Higgsfield router",
+      "vendor": "The studio's router",
       "capabilities": [
         "t2i"
       ],
@@ -3061,8 +3061,8 @@
       "notes": "low confidence on exact behavior"
     },
     {
-      "name": "Higgsfield Popcorn",
-      "vendor": "Higgsfield",
+      "name": "Popcorn",
+      "vendor": "The studio",
       "capabilities": [
         "t2i",
         "i2i",
@@ -3091,7 +3091,7 @@
     },
     {
       "name": "Cinema Studio image (Soul Cast / Soul Location / grid / 3D recomposition)",
-      "vendor": "Higgsfield",
+      "vendor": "The studio",
       "capabilities": [
         "t2i",
         "character",
@@ -4205,8 +4205,8 @@
       "notes": "deprecated"
     },
     {
-      "name": "Higgsfield DoP (Lite / Turbo / Standard)",
-      "vendor": "Higgsfield",
+      "name": "DoP (Lite / Turbo / Standard)",
+      "vendor": "The studio",
       "capabilities": [
         "i2v",
         "motion-preset",
@@ -4226,11 +4226,11 @@
         "other": "Preset library + Mix; steps; seed; 81 frames"
       },
       "credits": "unknown",
-      "notes": "Shown as 'Higgsfield Standard' in selector"
+      "notes": "Shown as 'Standard' in selector"
     },
     {
-      "name": "Higgsfield Genjutsu",
-      "vendor": "Higgsfield",
+      "name": "Genjutsu",
+      "vendor": "The studio",
       "capabilities": [
         "motion-transfer",
         "object-swap",
@@ -4255,7 +4255,7 @@
     },
     {
       "name": "Cinema Studio 4.0 Video",
-      "vendor": "Higgsfield (Seedance 2.5)",
+      "vendor": "The studio (Seedance 2.5)",
       "capabilities": [
         "t2v",
         "reference",
@@ -4286,7 +4286,7 @@
     },
     {
       "name": "Marketing Studio Video",
-      "vendor": "Higgsfield",
+      "vendor": "The studio",
       "capabilities": [
         "product-to-video",
         "avatar",
@@ -4311,7 +4311,7 @@
       "notes": ""
     },
     {
-      "name": "Kling Avatars 2.0 / Higgsfield Speak 2.0 / Infinite Talk / Sync Lipsync 3 / Kling Lipsync",
+      "name": "Kling Avatars 2.0 / Speak 2.0 / Infinite Talk / Sync Lipsync 3 / Kling Lipsync",
       "vendor": "various",
       "capabilities": [
         "lipsync",
@@ -4659,7 +4659,7 @@
       "id": "commercial-faces",
       "name": "Commercial Faces",
       "category": "Face & Identity",
-      "description": "Monetize/licence your face: generate ad-ready spokesperson identity (Higgsfield Earn)",
+      "description": "Monetize/licence your face: generate ad-ready spokesperson identity (Earn)",
       "inputs": [
         "Add your selfie",
         "Your Photo"
@@ -4775,7 +4775,7 @@
       "id": "billboard",
       "name": "Billboard Ad",
       "category": "Ads & Products",
-      "description": "Billboard Ad AI effect — place your product on a giant outdoor cityscape billboard with cinematic video animation. Create your ad free on Higgsfield.",
+      "description": "Billboard Ad AI effect — place your product on a giant outdoor cityscape billboard with cinematic video animation. Create your ad free on the studio.",
       "inputs": [
         "Upload Image"
       ],
@@ -4831,7 +4831,7 @@
       "id": "asmr-add-on",
       "name": "ASMR Add-On",
       "category": "Ads & Products",
-      "description": "ASMR Add-On AI tool — place any product into a professional ASMR scene with your character. Subtle, effective video ads. Generate free on Higgsfield.",
+      "description": "ASMR Add-On AI tool — place any product into a professional ASMR scene with your character. Subtle, effective video ads. Generate free on the studio.",
       "inputs": [
         "Upload a product image",
         "Upload character image"
@@ -4874,7 +4874,7 @@
       "id": "chameleon",
       "name": "Chameleon",
       "category": "Ads & Products",
-      "description": "Chameleon AI video effect — dynamic color-shifting transformation that adapts your photo into a vivid, eye-catching visual. Generate free on Higgsfield.",
+      "description": "Chameleon AI video effect — dynamic color-shifting transformation that adapts your photo into a vivid, eye-catching visual. Generate free on the studio.",
       "inputs": [
         "Upload product image or drag & drop"
       ],
@@ -5173,7 +5173,7 @@
       "id": "brick-cube",
       "name": "Brick Cube",
       "category": "Games & Characters",
-      "description": "Brick Cube AI effect — transform your photo into a playful toy-style 3D block figure. Vibrant, collectible, and fun. Generate yours free on Higgsfield.",
+      "description": "Brick Cube AI effect — transform your photo into a playful toy-style 3D block figure. Vibrant, collectible, and fun. Generate yours free on the studio.",
       "inputs": [
         "Upload Image"
       ],
@@ -5329,7 +5329,7 @@
       "id": "idol",
       "name": "Idol",
       "category": "Trending Templates",
-      "description": "AI K-Pop idol video effect — transform any photo into a dazzling pop star performance with stage lights and dynamic outfits. Generate free on Higgsfield.",
+      "description": "AI K-Pop idol video effect — transform any photo into a dazzling pop star performance with stage lights and dynamic outfits. Generate free on the studio.",
       "inputs": [
         "Upload Image"
       ],
@@ -5385,7 +5385,7 @@
       "id": "roller-coaster",
       "name": "Roller Coaster",
       "category": "Trending Templates",
-      "description": "Roller Coaster AI video effect — place yourself on a wild theme park ride in a cinematic video. Fun, viral, and shareable. Generate free on Higgsfield.",
+      "description": "Roller Coaster AI video effect — place yourself on a wild theme park ride in a cinematic video. Fun, viral, and shareable. Generate free on the studio.",
       "inputs": [
         "Upload Image"
       ],
@@ -5441,7 +5441,7 @@
       "id": "j-poster",
       "name": "J-Poster",
       "category": "Trending Templates",
-      "description": "J-Poster AI effect — turn your photo into a Japanese-style poster with bold typography and anime-inspired aesthetics. Create yours free on Higgsfield.",
+      "description": "J-Poster AI effect — turn your photo into a Japanese-style poster with bold typography and anime-inspired aesthetics. Create yours free on the studio.",
       "inputs": [
         "Upload Image"
       ],
@@ -5455,7 +5455,7 @@
       "id": "mascot",
       "name": "Mascot",
       "category": "Trending Templates",
-      "description": "AI mascot generator — turn your photo into a fun brand mascot character. Perfect for marketing and viral social content. Generate free on Higgsfield.",
+      "description": "AI mascot generator — turn your photo into a fun brand mascot character. Perfect for marketing and viral social content. Generate free on the studio.",
       "inputs": [
         "Upload Image"
       ],
@@ -5676,17 +5676,17 @@
     {
       "name": "General",
       "category": "Camera Control (Basic/Epic)",
-      "description": "A balanced, all-purpose camera style with natural movement and clean framing. Works well for any scene, offering a neutral look without dramatic effects. [preset families: higgsfield]"
+      "description": "A balanced, all-purpose camera style with natural movement and clean framing. Works well for any scene, offering a neutral look without dramatic effects. [preset families: {studio}]"
     },
     {
       "name": "Eyes In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera close to the subject’s eyes, creating an intense and emotional connection with the viewer [preset families: higgsfield, wan2_5_video]"
+      "description": "Moves the camera close to the subject’s eyes, creating an intense and emotional connection with the viewer [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Bullet Time",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Freezes or slows down the action while the camera moves around the subject. Creates a dramatic, cinematic effect often seen in action or sci-fi scenes. [preset families: higgsfield, wan2_5_video]"
+      "description": "Freezes or slows down the action while the camera moves around the subject. Creates a dramatic, cinematic effect often seen in action or sci-fi scenes. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Aerial Pullback",
@@ -5696,7 +5696,7 @@
     {
       "name": "Arc Left",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The camera curves gracefully around the subject to the left, adding a sense of movement, focus, and cinematic style. Ideal for emotional build-up or visual flair. [preset families: higgsfield]"
+      "description": "The camera curves gracefully around the subject to the left, adding a sense of movement, focus, and cinematic style. Ideal for emotional build-up or visual flair. [preset families: {studio}]"
     },
     {
       "name": "BTS",
@@ -5706,82 +5706,82 @@
     {
       "name": "Buckle Up",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Low angle shot from beneath, as if filmed through a transparent glass floor, revealing the person’s figure and soles, creating a dynamic, voyeuristic perspective. [preset families: higgsfield]"
+      "description": "Low angle shot from beneath, as if filmed through a transparent glass floor, revealing the person’s figure and soles, creating a dynamic, voyeuristic perspective. [preset families: {studio}]"
     },
     {
       "name": "Car Chasing",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Follows fast-moving cars with dynamic camera angles to create thrilling, high-speed chase scenes. Ideal for action-packed sequences and cinematic intensity. [preset families: higgsfield]"
+      "description": "Follows fast-moving cars with dynamic camera angles to create thrilling, high-speed chase scenes. Ideal for action-packed sequences and cinematic intensity. [preset families: {studio}]"
     },
     {
       "name": "Car Grip",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Attaches the camera to a car, capturing dynamic driving shots with smooth motion. Perfect for action scenes or showing movement from the vehicle’s perspective. [preset families: higgsfield, wan2_5_video]"
+      "description": "Attaches the camera to a car, capturing dynamic driving shots with smooth motion. Perfect for action scenes or showing movement from the vehicle’s perspective. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Crane Down",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Gently lowers the camera from above to the subject, creating a dramatic or revealing entrance. Perfect for introductions, transitions, or emotional emphasis. [preset families: higgsfield]"
+      "description": "Gently lowers the camera from above to the subject, creating a dramatic or revealing entrance. Perfect for introductions, transitions, or emotional emphasis. [preset families: {studio}]"
     },
     {
       "name": "Crane Over The Head",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The camera rises smoothly above the subject using a crane, revealing the surroundings or adding drama. Perfect for epic moments or scene transitions. [preset families: higgsfield]"
+      "description": "The camera rises smoothly above the subject using a crane, revealing the surroundings or adding drama. Perfect for epic moments or scene transitions. [preset families: {studio}]"
     },
     {
       "name": "Crane Up",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Lifts the camera smoothly upward using a crane, revealing the scene below or creating an epic rising shot. Great for transitions, reveals, or emotional build-up. [preset families: higgsfield]"
+      "description": "Lifts the camera smoothly upward using a crane, revealing the scene below or creating an epic rising shot. Great for transitions, reveals, or emotional build-up. [preset families: {studio}]"
     },
     {
       "name": "Crash Zoom In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Quickly zooms into the subject to create a dramatic, intense effect. Perfect for highlighting reactions or adding sudden focus in your video. [preset families: higgsfield]"
+      "description": "Quickly zooms into the subject to create a dramatic, intense effect. Perfect for highlighting reactions or adding sudden focus in your video. [preset families: {studio}]"
     },
     {
       "name": "Crash Zoom Out",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Rapidly zooms out from the subject to reveal the full scene or create a sense of surprise, urgency, or comic effect. Great for dramatic reveals. [preset families: higgsfield]"
+      "description": "Rapidly zooms out from the subject to reveal the full scene or create a sense of surprise, urgency, or comic effect. Great for dramatic reveals. [preset families: {studio}]"
     },
     {
       "name": "Dolly In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera smoothly toward the subject, drawing viewers closer and building focus or emotion. Ideal for intense or intimate moments. [preset families: higgsfield, wan2_5_video]"
+      "description": "Moves the camera smoothly toward the subject, drawing viewers closer and building focus or emotion. Ideal for intense or intimate moments. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Dolly Left",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera smoothly to the left, following or revealing the scene. Perfect for tracking shots, transitions, or adding visual interest. [preset families: higgsfield, wan2_5_video]"
+      "description": "Moves the camera smoothly to the left, following or revealing the scene. Perfect for tracking shots, transitions, or adding visual interest. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Dolly Out",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Pulls the camera smoothly away from the subject, revealing more of the scene. Great for emotional distance, dramatic exits, or cinematic reveals. [preset families: higgsfield, wan2_5_video]"
+      "description": "Pulls the camera smoothly away from the subject, revealing more of the scene. Great for emotional distance, dramatic exits, or cinematic reveals. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Dolly Right",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera smoothly to the right alongside the subject or scene. Great for tracking motion, revealing space, or adding cinematic flow. [preset families: higgsfield, wan2_5_video]"
+      "description": "Moves the camera smoothly to the right alongside the subject or scene. Great for tracking motion, revealing space, or adding cinematic flow. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Dolly Zoom In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera forward while zooming out, warping perspective and creating a dramatic, unsettling effect. Great for shock, realization, or tension. [preset families: higgsfield]"
+      "description": "Moves the camera forward while zooming out, warping perspective and creating a dramatic, unsettling effect. Great for shock, realization, or tension. [preset families: {studio}]"
     },
     {
       "name": "Dolly Zoom Out",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera backward while zooming in, distorting perspective to heighten emotion or suspense. Perfect for dramatic reveals or intense moments. [preset families: higgsfield]"
+      "description": "Moves the camera backward while zooming in, distorting perspective to heighten emotion or suspense. Perfect for dramatic reveals or intense moments. [preset families: {studio}]"
     },
     {
       "name": "Double Dolly",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Both the camera and subject move together on dollies, keeping the subject perfectly still in frame while the background shifts. Creates a surreal, floating effect often used in music videos and dreamlike scenes. [preset families: higgsfield]"
+      "description": "Both the camera and subject move together on dollies, keeping the subject perfectly still in frame while the background shifts. Creates a surreal, floating effect often used in music videos and dreamlike scenes. [preset families: {studio}]"
     },
     {
       "name": "Dutch Angle",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Tilts the camera to create a slanted horizon, adding tension, unease, or a stylized look. Perfect for thrillers, dream sequences, or edgy vibes. [preset families: higgsfield]"
+      "description": "Tilts the camera to create a slanted horizon, adding tension, unease, or a stylized look. Perfect for thrillers, dream sequences, or edgy vibes. [preset families: {studio}]"
     },
     {
       "name": "Eating Zoom",
@@ -5791,7 +5791,7 @@
     {
       "name": "Fisheye",
       "category": "Camera Control (Basic/Epic)",
-      "description": "A wide, distorted lens look that curves the edges of the frame, making everything appear rounded and exaggerated. Adds a fun, surreal, or edgy vibe to the shot. [preset families: higgsfield]"
+      "description": "A wide, distorted lens look that curves the edges of the frame, making everything appear rounded and exaggerated. Adds a fun, surreal, or edgy vibe to the shot. [preset families: {studio}]"
     },
     {
       "name": "Flying Cam Transition",
@@ -5801,27 +5801,27 @@
     {
       "name": "Focus Change",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Shifts the focus from one subject to another in the same shot, guiding the viewer’s attention. Great for storytelling, reveals, or emotional emphasis. [preset families: higgsfield]"
+      "description": "Shifts the focus from one subject to another in the same shot, guiding the viewer’s attention. Great for storytelling, reveals, or emotional emphasis. [preset families: {studio}]"
     },
     {
       "name": "FPV Drone",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Captures fast, fluid shots with a first-person view drone, flying through tight spaces and dynamic paths. Ideal for thrilling, immersive, and cinematic footage. [preset families: higgsfield]"
+      "description": "Captures fast, fluid shots with a first-person view drone, flying through tight spaces and dynamic paths. Ideal for thrilling, immersive, and cinematic footage. [preset families: {studio}]"
     },
     {
       "name": "Glam",
       "category": "Camera Control (Basic/Epic)",
-      "description": "A high-speed camera moves smoothly around the subject, creating epic, slow-motion shots full of glamour and impact [preset families: higgsfield]"
+      "description": "A high-speed camera moves smoothly around the subject, creating epic, slow-motion shots full of glamour and impact [preset families: {studio}]"
     },
     {
       "name": "Handheld",
       "category": "Camera Control (Basic/Epic)",
-      "description": " Mimics natural, shaky camera movement for a raw and realistic feel. Great for intense scenes, vlogs, or making viewers feel like they're in the moment. [preset families: higgsfield, wan2_5_video]"
+      "description": " Mimics natural, shaky camera movement for a raw and realistic feel. Great for intense scenes, vlogs, or making viewers feel like they're in the moment. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Head Tracking",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Keeps the camera locked to the subject’s head movement, making the background shift while the face stays centered. Ideal for immersive, POV-like effects. [preset families: higgsfield]"
+      "description": "Keeps the camera locked to the subject’s head movement, making the background shift while the face stays centered. Ideal for immersive, POV-like effects. [preset families: {studio}]"
     },
     {
       "name": "Hero Cam",
@@ -5831,12 +5831,12 @@
     {
       "name": "Hyperlapse",
       "category": "Camera Control (Basic/Epic)",
-      "description": "A moving timelapse where the camera travels through space over time, creating a fast, fluid journey. Perfect for dynamic cityscapes, travel scenes, or visual storytelling. [preset families: higgsfield]"
+      "description": "A moving timelapse where the camera travels through space over time, creating a fast, fluid journey. Perfect for dynamic cityscapes, travel scenes, or visual storytelling. [preset families: {studio}]"
     },
     {
       "name": "Incline",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The subject moves or stands on a steep angle, as if the entire world is tilted. Creates tension, imbalance, or a surreal, gravity-defying visual effect. [preset families: higgsfield]"
+      "description": "The subject moves or stands on a steep angle, as if the entire world is tilted. Creates tension, imbalance, or a surreal, gravity-defying visual effect. [preset families: {studio}]"
     },
     {
       "name": "Jib down",
@@ -5851,27 +5851,27 @@
     {
       "name": "Lazy Susan",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Rotates the camera smoothly around a still subject, like it's on a turntable. Great for stylish product shots or dramatic character reveals. [preset families: higgsfield]"
+      "description": "Rotates the camera smoothly around a still subject, like it's on a turntable. Great for stylish product shots or dramatic character reveals. [preset families: {studio}]"
     },
     {
       "name": "Low Shutter",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Creates motion blur by lowering the shutter speed, giving your video a dreamy, streaky, or intense action look. Perfect for stylized or high-energy scenes. [preset families: higgsfield]"
+      "description": "Creates motion blur by lowering the shutter speed, giving your video a dreamy, streaky, or intense action look. Perfect for stylized or high-energy scenes. [preset families: {studio}]"
     },
     {
       "name": "Mouth In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Zooms swiftly into the character’s mouth for a fun, quirky, or surreal transition. Ideal for adding humor or exaggerating expressions. [preset families: higgsfield, wan2_5_video]"
+      "description": "Zooms swiftly into the character’s mouth for a fun, quirky, or surreal transition. Ideal for adding humor or exaggerating expressions. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Object POV",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Shows the scene from the object’s point of view, making viewers feel like they're seeing through its \"eyes.\" Great for immersive, creative storytelling. [preset families: higgsfield]"
+      "description": "Shows the scene from the object’s point of view, making viewers feel like they're seeing through its \"eyes.\" Great for immersive, creative storytelling. [preset families: {studio}]"
     },
     {
       "name": "Overhead",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The camera is positioned above the subject, smoothly tracking their movement. Great for showing layout, movement, or creating a stylized, cinematic look. [preset families: higgsfield]"
+      "description": "The camera is positioned above the subject, smoothly tracking their movement. Great for showing layout, movement, or creating a stylized, cinematic look. [preset families: {studio}]"
     },
     {
       "name": "Pan Left",
@@ -5901,47 +5901,47 @@
     {
       "name": "Robo Arm",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Uses a high-speed robotic camera to create fast, precise, and cinematic movements. Ideal for smooth motion shots, product reveals, or dynamic transitions. [preset families: higgsfield]"
+      "description": "Uses a high-speed robotic camera to create fast, precise, and cinematic movements. Ideal for smooth motion shots, product reveals, or dynamic transitions. [preset families: {studio}]"
     },
     {
       "name": "Snorricam",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The movement captures the rhythm of the actor’s steps, creating a disorienting, visceral effect that emphasizes tension or distress’ [preset families: higgsfield]"
+      "description": "The movement captures the rhythm of the actor’s steps, creating a disorienting, visceral effect that emphasizes tension or distress’ [preset families: {studio}]"
     },
     {
       "name": "Static",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The camera remains completely still, with no motion or shake. Clean, neutral, and steady—ideal for dialogue scenes or minimalist aesthetics. [preset families: higgsfield, wan2_5_video]"
+      "description": "The camera remains completely still, with no motion or shake. Clean, neutral, and steady—ideal for dialogue scenes or minimalist aesthetics. [preset families: {studio}, wan2_5_video]"
     },
     {
       "name": "Super Dolly In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Smoothly moves the camera straight toward the subject for a focused, cinematic effect. Great for building tension, emotion, or spotlighting key moments. [preset families: higgsfield]"
+      "description": "Smoothly moves the camera straight toward the subject for a focused, cinematic effect. Great for building tension, emotion, or spotlighting key moments. [preset families: {studio}]"
     },
     {
       "name": "Super Dolly Out",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Smoothly pulls the camera away from the subject, revealing more of the scene. Perfect for dramatic exits, emotional distance, or scene transitions. [preset families: higgsfield]"
+      "description": "Smoothly pulls the camera away from the subject, revealing more of the scene. Perfect for dramatic exits, emotional distance, or scene transitions. [preset families: {studio}]"
     },
     {
       "name": "Through Object In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera inward through an object to focus on the subject behind it. Perfect for creative reveals and smooth, immersive transitions. [preset families: higgsfield, minimax, wan2_5_video]"
+      "description": "Moves the camera inward through an object to focus on the subject behind it. Perfect for creative reveals and smooth, immersive transitions. [preset families: {studio}, minimax, wan2_5_video]"
     },
     {
       "name": "Through Object Out",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera outward through an object, revealing the scene behind it. Creates a smooth, creative transition and adds depth to your storytelling. [preset families: higgsfield, minimax, wan2_5_video]"
+      "description": "Moves the camera outward through an object, revealing the scene behind it. Creates a smooth, creative transition and adds depth to your storytelling. [preset families: {studio}, minimax, wan2_5_video]"
     },
     {
       "name": "Tilt Down",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Rotates the camera angle downward, revealing what’s below or shifting focus. Great for dramatic reveals, transitions, or guiding the viewer’s eye. [preset families: higgsfield]"
+      "description": "Rotates the camera angle downward, revealing what’s below or shifting focus. Great for dramatic reveals, transitions, or guiding the viewer’s eye. [preset families: {studio}]"
     },
     {
       "name": "Tilt up",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Moves the camera upward to reveal something or make the subject feel powerful, grand, or important [preset families: higgsfield]"
+      "description": "Moves the camera upward to reveal something or make the subject feel powerful, grand, or important [preset families: {studio}]"
     },
     {
       "name": "Timelapse Glam",
@@ -5951,157 +5951,157 @@
     {
       "name": "Timelapse Human",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Speeds up human motion while the environment stays natural, showing quick movements like walking, dressing, or dancing. Adds energy, urgency, or a surreal, fast-forwarded feel. [preset families: higgsfield, minimax]"
+      "description": "Speeds up human motion while the environment stays natural, showing quick movements like walking, dressing, or dancing. Adds energy, urgency, or a surreal, fast-forwarded feel. [preset families: {studio}, minimax]"
     },
     {
       "name": "Timelapse Landscape",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Captures the rapid movement of natural elements like clouds, sunlight, or crowds over time. Creates a majestic, dreamlike view of changing landscapes and passing moments. [preset families: higgsfield, minimax]"
+      "description": "Captures the rapid movement of natural elements like clouds, sunlight, or crowds over time. Creates a majestic, dreamlike view of changing landscapes and passing moments. [preset families: {studio}, minimax]"
     },
     {
       "name": "Whip Pan",
       "category": "Camera Control (Basic/Epic)",
-      "description": "A fast camera pan that blurs the scene, used to transition between shots or add energy and speed. Great for action, comedy, or sudden scene changes. [preset families: higgsfield]"
+      "description": "A fast camera pan that blurs the scene, used to transition between shots or add energy and speed. Great for action, comedy, or sudden scene changes. [preset families: {studio}]"
     },
     {
       "name": "Wiggle",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Combines slight shaky “wiggle” motion with a smooth zoom or pan to reveal the subject. Adds playful energy and keeps the shot dynamic and engaging, perfect for stylish intros or creative reveals. [preset families: higgsfield]"
+      "description": "Combines slight shaky “wiggle” motion with a smooth zoom or pan to reveal the subject. Adds playful energy and keeps the shot dynamic and engaging, perfect for stylish intros or creative reveals. [preset families: {studio}]"
     },
     {
       "name": "YoYo Zoom",
       "category": "Camera Control (Basic/Epic)",
-      "description": "A rapid in-and-out zoom motion that mimics the snap of a yoyo—fast, playful, and punchy. Adds energy, tension, or comic effect to your scene. [preset families: higgsfield]"
+      "description": "A rapid in-and-out zoom motion that mimics the snap of a yoyo—fast, playful, and punchy. Adds energy, tension, or comic effect to your scene. [preset families: {studio}]"
     },
     {
       "name": "360 Orbit",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The camera smoothly circles all the way around the subject, creating a dynamic, immersive view. Perfect for dramatic reveals, showcasing outfits, or adding visual energy. [preset families: higgsfield]"
+      "description": "The camera smoothly circles all the way around the subject, creating a dynamic, immersive view. Perfect for dramatic reveals, showcasing outfits, or adding visual energy. [preset families: {studio}]"
     },
     {
       "name": "Zoom In",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Gradually moves closer to the subject, building focus, tension, or emotional intensity [preset families: higgsfield]"
+      "description": "Gradually moves closer to the subject, building focus, tension, or emotional intensity [preset families: {studio}]"
     },
     {
       "name": "Zoom Out",
       "category": "Camera Control (Basic/Epic)",
-      "description": "Gradually pulls back to reveal more of the scene, creating distance, suspense, or a sense of isolation [preset families: higgsfield]"
+      "description": "Gradually pulls back to reveal more of the scene, creating distance, suspense, or a sense of isolation [preset families: {studio}]"
     },
     {
       "name": "Arc Right",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The camera circles gently to the right around the subject, creating dynamic depth and flow. Perfect for adding elegance or cinematic intensity to a scene. [preset families: higgsfield]"
+      "description": "The camera circles gently to the right around the subject, creating dynamic depth and flow. Perfect for adding elegance or cinematic intensity to a scene. [preset families: {studio}]"
     },
     {
       "name": "3D Rotation",
       "category": "Camera Control (Basic/Epic)",
-      "description": "The subject or product spins smoothly in place, showing a full 360° view. Clean, centered, and perfect for showcasing design, fashion, or product details in a modern way. [preset families: higgsfield]"
+      "description": "The subject or product spins smoothly in place, showing a full 360° view. Clean, centered, and perfect for showcasing design, fashion, or product details in a modern way. [preset families: {studio}]"
     },
     {
       "name": "Earth Zoom Out",
       "category": "Camera / Movement",
-      "description": "The camera pulls back rapidly from the subject to reveal their city, then the continent, and finally the entire Earth. Epic and cinematic—perfect for transitions, scale, or storytelling. [preset families: higgsfield]"
+      "description": "The camera pulls back rapidly from the subject to reveal their city, then the continent, and finally the entire Earth. Epic and cinematic—perfect for transitions, scale, or storytelling. [preset families: {studio}]"
     },
     {
       "name": "Action Run",
       "category": "Camera / Movement",
-      "description": "Follows the subject in fast-paced motion, often with shaky cam and dynamic angles. Perfect for chase scenes, high-energy moments, or intense action shots. [preset families: higgsfield]"
+      "description": "Follows the subject in fast-paced motion, often with shaky cam and dynamic angles. Perfect for chase scenes, high-energy moments, or intense action shots. [preset families: {studio}]"
     },
     {
       "name": "Catwalk",
       "category": "Camera / Movement",
-      "description": "Tracks a confident runway walk with smooth camera motion and fashion-forward energy. Sleek and stylish, like a high-fashion show moment. [preset families: higgsfield]"
+      "description": "Tracks a confident runway walk with smooth camera motion and fashion-forward energy. Sleek and stylish, like a high-fashion show moment. [preset families: {studio}]"
     },
     {
       "name": "Downhill POV",
       "category": "Camera / Movement",
-      "description": "Simulates a fast, first-person ride down a slope with tight turns and bumps. Feels immersive, thrilling, and adrenaline-packed. [preset families: higgsfield]"
+      "description": "Simulates a fast, first-person ride down a slope with tight turns and bumps. Feels immersive, thrilling, and adrenaline-packed. [preset families: {studio}]"
     },
     {
       "name": "Flying",
       "category": "Camera / Movement",
-      "description": "Simulates a smooth, gliding flight through the scene, like soaring with a drone. Perfect for epic reveals, dynamic transitions, or creating a sense of freedom and flow. [preset families: higgsfield]"
+      "description": "Simulates a smooth, gliding flight through the scene, like soaring with a drone. Perfect for epic reveals, dynamic transitions, or creating a sense of freedom and flow. [preset families: {studio}]"
     },
     {
       "name": "Rap Flex",
       "category": "Camera / Movement",
-      "description": "Mimics iconic camera moves from rap music videos—smooth slides, low angles, and slow zooms. Perfect for giving your video a bold, confident, star-like vibe. [preset families: higgsfield]"
+      "description": "Mimics iconic camera moves from rap music videos—smooth slides, low angles, and slow zooms. Perfect for giving your video a bold, confident, star-like vibe. [preset families: {studio}]"
     },
     {
       "name": "Roll Transition",
       "category": "Camera / Movement",
-      "description": "The scene spins forward like a rolling wheel, smoothly transitioning from the start frame to the end frame. Clean, dynamic, and perfect for stylish edits or seamless scene changes. [preset families: higgsfield]"
+      "description": "The scene spins forward like a rolling wheel, smoothly transitioning from the start frame to the end frame. Clean, dynamic, and perfect for stylish edits or seamless scene changes. [preset families: {studio}]"
     },
     {
       "name": "Baseball Kick",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Captures the moment of a powerful baseball-style kick, with fast leg motion and dramatic impact. Perfect for action or stylized sports edits. [preset families: higgsfield]"
+      "description": "Captures the moment of a powerful baseball-style kick, with fast leg motion and dramatic impact. Perfect for action or stylized sports edits. [preset families: {studio}]"
     },
     {
       "name": "Basketball Dunks",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Captures the high-energy motion of a person jumping and slamming a basketball into the hoop. Powerful, athletic, and dramatic—perfect for sports or hype edits. [preset families: higgsfield]"
+      "description": "Captures the high-energy motion of a person jumping and slamming a basketball into the hoop. Powerful, athletic, and dramatic—perfect for sports or hype edits. [preset families: {studio}]"
     },
     {
       "name": "Boxing",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Follows the quick jabs, hooks, and head movement of a boxer. Intense, up-close, and rhythmic—ideal for training montages or fight scenes. [preset families: higgsfield]"
+      "description": "Follows the quick jabs, hooks, and head movement of a boxer. Intense, up-close, and rhythmic—ideal for training montages or fight scenes. [preset families: {studio}]"
     },
     {
       "name": "Face Punch",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Captures the sharp, explosive moment of a punch to the face. High impact, raw energy—perfect for action, fight, or intense close-up shots. [preset families: higgsfield]"
+      "description": "Captures the sharp, explosive moment of a punch to the face. High impact, raw energy—perfect for action, fight, or intense close-up shots. [preset families: {studio}]"
     },
     {
       "name": "Kiss",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Captures the intimate moment of a kiss with soft focus, slow motion, or dramatic angles. Evokes emotion, romance, and connection between characters. [preset families: higgsfield]"
+      "description": "Captures the intimate moment of a kiss with soft focus, slow motion, or dramatic angles. Evokes emotion, romance, and connection between characters. [preset families: {studio}]"
     },
     {
       "name": "Moonwalk Left",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "The classic gliding move performed while moving left, with the body facing forward. Timeless, smooth, and packed with cool retro style. [preset families: higgsfield]"
+      "description": "The classic gliding move performed while moving left, with the body facing forward. Timeless, smooth, and packed with cool retro style. [preset families: {studio}]"
     },
     {
       "name": "Moonwalk Right",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "A smooth, gliding backward walk while facing forward, moving to the right. Iconic, stylish, and full of retro energy—perfect for dance or character flair. [preset families: higgsfield]"
+      "description": "A smooth, gliding backward walk while facing forward, moving to the right. Iconic, stylish, and full of retro energy—perfect for dance or character flair. [preset families: {studio}]"
     },
     {
       "name": "Skate Cruise",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Smooth, relaxed riding without tricks—just pushing and gliding through the streets. Feels calm, effortless, and stylish. Perfect for chill, aesthetic edits or street vibes. [preset families: higgsfield]"
+      "description": "Smooth, relaxed riding without tricks—just pushing and gliding through the streets. Feels calm, effortless, and stylish. Perfect for chill, aesthetic edits or street vibes. [preset families: {studio}]"
     },
     {
       "name": "Skateboard Glide",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Smooth, flowing motion as the board rolls effortlessly. Relaxed and stylish, perfect for cruising scenes or aesthetic edits. [preset families: higgsfield]"
+      "description": "Smooth, flowing motion as the board rolls effortlessly. Relaxed and stylish, perfect for cruising scenes or aesthetic edits. [preset families: {studio}]"
     },
     {
       "name": "Skateboard Ollie",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "The classic jump where the rider and board lift off the ground without using hands. Clean, stylish, and the foundation of almost every trick. [preset families: higgsfield]"
+      "description": "The classic jump where the rider and board lift off the ground without using hands. Clean, stylish, and the foundation of almost every trick. [preset families: {studio}]"
     },
     {
       "name": "Ski Carving",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Shows a skier making clean, fast turns on the slope. Dynamic, smooth, and elegant—ideal for scenic mountain action. [preset families: higgsfield]"
+      "description": "Shows a skier making clean, fast turns on the slope. Dynamic, smooth, and elegant—ideal for scenic mountain action. [preset families: {studio}]"
     },
     {
       "name": "Ski Powder",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Captures a skier cutting through deep snow with soft, explosive bursts. Dreamy and powerful, with a sense of freedom. [preset families: higgsfield]"
+      "description": "Captures a skier cutting through deep snow with soft, explosive bursts. Dreamy and powerful, with a sense of freedom. [preset families: {studio}]"
     },
     {
       "name": "Snowboard Carving",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Highlights deep, controlled turns on a snowboard, with snow spraying out as the board slices the slope. Stylish and precise. [preset families: higgsfield]"
+      "description": "Highlights deep, controlled turns on a snowboard, with snow spraying out as the board slices the slope. Stylish and precise. [preset families: {studio}]"
     },
     {
       "name": "Snowboard Powder",
       "category": "Action / Sports (Catch the Pulse)",
-      "description": "Follows a snowboarder floating through fresh powder with wide turns and big sprays. Feels smooth, wild, and free. [preset families: higgsfield]"
+      "description": "Follows a snowboarder floating through fresh powder with wide turns and big sprays. Feels smooth, wild, and free. [preset families: {studio}]"
     },
     {
       "name": "POV",
@@ -6243,217 +6243,217 @@
     {
       "name": "Agent Reveal",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject jerks or shakes their head as their face and body glitch and morph into a sharp-suited agent figure. Fast, surreal, and powerful—perfect for sudden identity shifts or secret transformations. [families: higgsfield]"
+      "description": "The subject jerks or shakes their head as their face and body glitch and morph into a sharp-suited agent figure. Fast, surreal, and powerful—perfect for sudden identity shifts or secret transformations. [families: {studio}]"
     },
     {
       "name": "Angel Wings",
       "category": "DoP VFX presets (Effects)",
-      "description": "Wings spreading open behind person shoulders. [families: higgsfield]"
+      "description": "Wings spreading open behind person shoulders. [families: {studio}]"
     },
     {
       "name": "Black Tears",
       "category": "DoP VFX presets (Effects)",
-      "description": "Thick, dark liquid streams from the subject’s eyes, creating a haunting, emotional, or supernatural effect. Perfect for horror, sorrowful moments, or eerie visual storytelling. [families: higgsfield]"
+      "description": "Thick, dark liquid streams from the subject’s eyes, creating a haunting, emotional, or supernatural effect. Perfect for horror, sorrowful moments, or eerie visual storytelling. [families: {studio}]"
     },
     {
       "name": "Bloom Mouth",
       "category": "DoP VFX presets (Effects)",
-      "description": "Person open mouth, petals or flower instead of tongue. [families: higgsfield]"
+      "description": "Person open mouth, petals or flower instead of tongue. [families: {studio}]"
     },
     {
       "name": "Building Explosion",
       "category": "DoP VFX presets (Effects)",
-      "description": "A building erupts in a massive blast, sending debris flying. Creates a powerful moment perfect for action scenes [families: higgsfield]"
+      "description": "A building erupts in a massive blast, sending debris flying. Creates a powerful moment perfect for action scenes [families: {studio}]"
     },
     {
       "name": "Car Explosion",
       "category": "DoP VFX presets (Effects)",
-      "description": "A car bursts into flames and debris, creating a powerful, high-impact shot full of action and intensity [families: higgsfield]"
+      "description": "A car bursts into flames and debris, creating a powerful, high-impact shot full of action and intensity [families: {studio}]"
     },
     {
       "name": "Clone Explosion",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject instantly splits into multiple identical versions that burst outward in all directions. A bold, surreal effect perfect for showcasing speed, chaos, or supernatural duplication. [families: higgsfield]"
+      "description": "The subject instantly splits into multiple identical versions that burst outward in all directions. A bold, surreal effect perfect for showcasing speed, chaos, or supernatural duplication. [families: {studio}]"
     },
     {
       "name": "Datamosh",
       "category": "DoP VFX presets (Effects)",
-      "description": "A glitchy visual effect where pixels bleed, smear, and blend between frames, creating distorted transitions. Chaotic, trippy, and perfect for edgy, experimental, or digital glitch aesthetics. [families: higgsfield]"
+      "description": "A glitchy visual effect where pixels bleed, smear, and blend between frames, creating distorted transitions. Chaotic, trippy, and perfect for edgy, experimental, or digital glitch aesthetics. [families: {studio}]"
     },
     {
       "name": "Diamond",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s body transforms into a sparkling, faceted diamond—hard, reflective, and radiant. A stunning visual effect perfect for showing strength, elegance, or magical metamorphosis. [families: higgsfield]"
+      "description": "The subject’s body transforms into a sparkling, faceted diamond—hard, reflective, and radiant. A stunning visual effect perfect for showing strength, elegance, or magical metamorphosis. [families: {studio}]"
     },
     {
       "name": "Dirty Lens",
       "category": "DoP VFX presets (Effects)",
-      "description": "Simulates a camera lens with smudges, dust, or water drops for a raw, gritty look. Great for adding realism, mood, or a behind-the-scenes feel. [families: higgsfield]"
+      "description": "Simulates a camera lens with smudges, dust, or water drops for a raw, gritty look. Great for adding realism, mood, or a behind-the-scenes feel. [families: {studio}]"
     },
     {
       "name": "Disintegration",
       "category": "DoP VFX presets (Effects)",
-      "description": "A visual effect where the subject breaks apart into particles or dust, creating a surreal, emotional, or epic moment [families: higgsfield]"
+      "description": "A visual effect where the subject breaks apart into particles or dust, creating a surreal, emotional, or epic moment [families: {studio}]"
     },
     {
       "name": "Duplicate",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject splits into multiple identical copies that appear side by side or in sequence. Creates a surreal, sci-fi, or fast-motion effect—great for showing speed, confusion, or supernatural power. [families: higgsfield]"
+      "description": "The subject splits into multiple identical copies that appear side by side or in sequence. Creates a surreal, sci-fi, or fast-motion effect—great for showing speed, confusion, or supernatural power. [families: {studio}]"
     },
     {
       "name": "Fire Breathe",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject exhales a burst of flames from their mouth, lighting up the scene with intense heat and motion. Bold and fierce—perfect for fantasy, action, or supernatural power moments. [families: higgsfield]"
+      "description": "The subject exhales a burst of flames from their mouth, lighting up the scene with intense heat and motion. Bold and fierce—perfect for fantasy, action, or supernatural power moments. [families: {studio}]"
     },
     {
       "name": "Floating Fish",
       "category": "DoP VFX presets (Effects)",
-      "description": "Light blue fish swims in from outside the frame and floats gracefully around her, moving gently through the air as if drifting in invisible water. [families: higgsfield]"
+      "description": "Light blue fish swims in from outside the frame and floats gracefully around her, moving gently through the air as if drifting in invisible water. [families: {studio}]"
     },
     {
       "name": "Flood",
       "category": "DoP VFX presets (Effects)",
-      "description": "The water is the moving force — it spreads, rises, and dominates the space. [families: higgsfield]"
+      "description": "The water is the moving force — it spreads, rises, and dominates the space. [families: {studio}]"
     },
     {
       "name": "Floral Eyes",
       "category": "DoP VFX presets (Effects)",
-      "description": "An enchanting transformation where vibrant flowers blossom from the subject’s face, merging nature with identity. [families: higgsfield]"
+      "description": "An enchanting transformation where vibrant flowers blossom from the subject’s face, merging nature with identity. [families: {studio}]"
     },
     {
       "name": "Freezing",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject slowly turns to ice—skin frosts over, breath becomes visible, and motion stops. Cold, dramatic, and perfect for supernatural, winter, or time-stopping effects. [families: higgsfield]"
+      "description": "The subject slowly turns to ice—skin frosts over, breath becomes visible, and motion stops. Cold, dramatic, and perfect for supernatural, winter, or time-stopping effects. [families: {studio}]"
     },
     {
       "name": "Garden Bloom",
       "category": "DoP VFX presets (Effects)",
-      "description": "A lush visual effect where the entire body becomes enveloped in blooming flowers and greenery, as if nature reclaims the subject. [families: higgsfield]"
+      "description": "A lush visual effect where the entire body becomes enveloped in blooming flowers and greenery, as if nature reclaims the subject. [families: {studio}]"
     },
     {
       "name": "Glowing Fish",
       "category": "DoP VFX presets (Effects)",
-      "description": "Bioluminescent fish swim gracefully around the subject, casting soft, radiant light. Dreamlike, magical, and perfect for underwater, fantasy, or surreal scenes. [families: higgsfield]"
+      "description": "Bioluminescent fish swim gracefully around the subject, casting soft, radiant light. Dreamlike, magical, and perfect for underwater, fantasy, or surreal scenes. [families: {studio}]"
     },
     {
       "name": "Glowshift",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject is surrounded by a soft, magical light as their form shifts into someone else. Smooth and mystical—perfect for illusions, disguises, or magical transformations. [families: higgsfield]"
+      "description": "The subject is surrounded by a soft, magical light as their form shifts into someone else. Smooth and mystical—perfect for illusions, disguises, or magical transformations. [families: {studio}]"
     },
     {
       "name": "Head Explosion",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s head bursts in a dramatic blast of particles, fire, or surreal effects. Shocking, intense, and perfect for horror, dark comedy, or mind-blowing moments. [families: higgsfield]"
+      "description": "The subject’s head bursts in a dramatic blast of particles, fire, or surreal effects. Shocking, intense, and perfect for horror, dark comedy, or mind-blowing moments. [families: {studio}]"
     },
     {
       "name": "Head Off",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s head detaches and floats or vanishes while the body remains standing. Surreal, eerie, or humorous—perfect for fantasy, glitch, or dreamlike visuals. [families: higgsfield]"
+      "description": "The subject’s head detaches and floats or vanishes while the body remains standing. Surreal, eerie, or humorous—perfect for fantasy, glitch, or dreamlike visuals. [families: {studio}]"
     },
     {
       "name": "Innerlight",
       "category": "DoP VFX presets (Effects)",
-      "description": "A radiant glow builds from within the subject, shining through their skin and eyes. Feels spiritual, powerful, or magical—perfect for transformations, awakenings, or emotional peaks. [families: higgsfield]"
+      "description": "A radiant glow builds from within the subject, shining through their skin and eyes. Feels spiritual, powerful, or magical—perfect for transformations, awakenings, or emotional peaks. [families: {studio}]"
     },
     {
       "name": "Invisible",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject vanishes completely—no body, no clothing—leaving only their movement or impact behind. Feels ghostly, surreal, and perfect for sci-fi, stealth, or supernatural edits. [families: higgsfield]"
+      "description": "The subject vanishes completely—no body, no clothing—leaving only their movement or impact behind. Feels ghostly, surreal, and perfect for sci-fi, stealth, or supernatural edits. [families: {studio}]"
     },
     {
       "name": "Jelly Drift",
       "category": "DoP VFX presets (Effects)",
-      "description": "Three translucent glowing jellyfish float into the frame behind her, moving elegantly through the air. The woman interacts gently with the jellyfish. [families: higgsfield]"
+      "description": "Three translucent glowing jellyfish float into the frame behind her, moving elegantly through the air. The woman interacts gently with the jellyfish. [families: {studio}]"
     },
     {
       "name": "Lens Crack",
       "category": "DoP VFX presets (Effects)",
-      "description": "Simulates a cracked camera lens with visible fractures and light distortion. Adds a raw, damaged, or chaotic feel—perfect for action, horror, or glitchy edits. [families: higgsfield]"
+      "description": "Simulates a cracked camera lens with visible fractures and light distortion. Adds a raw, damaged, or chaotic feel—perfect for action, horror, or glitchy edits. [families: {studio}]"
     },
     {
       "name": "Lens Flare",
       "category": "DoP VFX presets (Effects)",
-      "description": "Light hits the lens, creating bright streaks or spots. Adds a dreamy, cinematic, or dramatic feel to your shots [families: higgsfield]"
+      "description": "Light hits the lens, creating bright streaks or spots. Adds a dreamy, cinematic, or dramatic feel to your shots [families: {studio}]"
     },
     {
       "name": "Levitation",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject floats or rises smoothly off the ground, defying gravity. Creates a dreamy, magical, or surreal atmosphere perfect for fantasy or artistic visuals. [families: higgsfield]"
+      "description": "The subject floats or rises smoothly off the ground, defying gravity. Creates a dreamy, magical, or surreal atmosphere perfect for fantasy or artistic visuals. [families: {studio}]"
     },
     {
       "name": "Medusa Gorgona",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s body slowly hardens and cracks as skin turns to cold, gray stone—freezing in place like a living statue. A dramatic, mythical transformation perfect for fantasy or curse effects. [families: higgsfield]"
+      "description": "The subject’s body slowly hardens and cracks as skin turns to cold, gray stone—freezing in place like a living statue. A dramatic, mythical transformation perfect for fantasy or curse effects. [families: {studio}]"
     },
     {
       "name": "Melting",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject visibly softens and melts under intense heat—skin, clothes, or objects start to drip and distort. Evokes extreme temperature, tension, or surreal discomfort. [families: higgsfield]"
+      "description": "The subject visibly softens and melts under intense heat—skin, clothes, or objects start to drip and distort. Evokes extreme temperature, tension, or surreal discomfort. [families: {studio}]"
     },
     {
       "name": "Morphskin",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s body morphs in real time—skin ripples, textures shift, and their form transforms into a new identity. Smooth, fluid, and perfect for shapeshifter or disguise effects. [families: higgsfield]"
+      "description": "The subject’s body morphs in real time—skin ripples, textures shift, and their form transforms into a new identity. Smooth, fluid, and perfect for shapeshifter or disguise effects. [families: {studio}]"
     },
     {
       "name": "Paint Splash",
       "category": "DoP VFX presets (Effects)",
-      "description": "The object or subject transforms into a burst of liquid paint—splattering outward in colorful, fluid motion. Surreal and expressive, ideal for artistic transitions or dramatic visual effects. [families: higgsfield]"
+      "description": "The object or subject transforms into a burst of liquid paint—splattering outward in colorful, fluid motion. Surreal and expressive, ideal for artistic transitions or dramatic visual effects. [families: {studio}]"
     },
     {
       "name": "Paparazzi",
       "category": "DoP VFX presets (Effects)",
-      "description": "Flashes burst rapidly around the subject, simulating a crowd of cameras snapping photos. Glamorous, chaotic, or overwhelming—perfect for celebrity, fashion, or red carpet vibes. [families: higgsfield]"
+      "description": "Flashes burst rapidly around the subject, simulating a crowd of cameras snapping photos. Glamorous, chaotic, or overwhelming—perfect for celebrity, fashion, or red carpet vibes. [families: {studio}]"
     },
     {
       "name": "Powder Explosion",
       "category": "DoP VFX presets (Effects)",
-      "description": "A burst of colorful or dusty powder erupts around the subject, filling the frame with texture and motion. Perfect for dramatic entrances, dance shots, or high-impact visual flair. [families: higgsfield]"
+      "description": "A burst of colorful or dusty powder erupts around the subject, filling the frame with texture and motion. Perfect for dramatic entrances, dance shots, or high-impact visual flair. [families: {studio}]"
     },
     {
       "name": "Push To Glass",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject is forcefully pushed against an invisible glass surface—face and body squash and distort on impact. Intense, dramatic, and perfect for adding tension or comedic exaggeration. [families: higgsfield]"
+      "description": "The subject is forcefully pushed against an invisible glass surface—face and body squash and distort on impact. Intense, dramatic, and perfect for adding tension or comedic exaggeration. [families: {studio}]"
     },
     {
       "name": "Sand Storm",
       "category": "DoP VFX presets (Effects)",
-      "description": "A powerful blast of sand sweeps through the scene, partially or fully engulfing the subject. Dust swirls, visibility drops—ideal for desert chaos, dramatic reveals, or elemental visuals. [families: higgsfield]"
+      "description": "A powerful blast of sand sweeps through the scene, partially or fully engulfing the subject. Dust swirls, visibility drops—ideal for desert chaos, dramatic reveals, or elemental visuals. [families: {studio}]"
     },
     {
       "name": "Set on Fire",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject bursts into flames in an instant, engulfed by intense fire. Dramatic and powerful—perfect for action scenes, supernatural moments, or explosive visuals. [families: higgsfield]"
+      "description": "The subject bursts into flames in an instant, engulfed by intense fire. Dramatic and powerful—perfect for action scenes, supernatural moments, or explosive visuals. [families: {studio}]"
     },
     {
       "name": "Skin Surge",
       "category": "DoP VFX presets (Effects)",
-      "description": "Objects like hands, flowers, or surreal forms emerge smoothly from the subject’s skin, as if breaking through a living surface. Organic, eerie, or poetic—perfect for fantasy, horror, or dreamlike visuals. [families: higgsfield]"
+      "description": "Objects like hands, flowers, or surreal forms emerge smoothly from the subject’s skin, as if breaking through a living surface. Organic, eerie, or poetic—perfect for fantasy, horror, or dreamlike visuals. [families: {studio}]"
     },
     {
       "name": "Soul Jump",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s soul visibly leaves the body—floating or leaping outward in a surreal, dreamlike motion. Perfect for magical, spiritual, or out-of-body visuals. [families: higgsfield]"
+      "description": "The subject’s soul visibly leaves the body—floating or leaping outward in a surreal, dreamlike motion. Perfect for magical, spiritual, or out-of-body visuals. [families: {studio}]"
     },
     {
       "name": "Tentacles",
       "category": "DoP VFX presets (Effects)",
-      "description": "A surreal VFX effect where tentacles emerge from a person’s eyes, twisting and moving as if alive. Adds a creepy, otherworldly vibe perfect for horror or sci-fi scenes. [families: higgsfield]"
+      "description": "A surreal VFX effect where tentacles emerge from a person’s eyes, twisting and moving as if alive. Adds a creepy, otherworldly vibe perfect for horror or sci-fi scenes. [families: {studio}]"
     },
     {
       "name": "Thunder God",
       "category": "DoP VFX presets (Effects)",
-      "description": "Eyes glow with intense, electric energy while lightning flickers around the subject. Evokes divine power, rage, or transformation—perfect for epic, supernatural moments. [families: higgsfield]"
+      "description": "Eyes glow with intense, electric energy while lightning flickers around the subject. Evokes divine power, rage, or transformation—perfect for epic, supernatural moments. [families: {studio}]"
     },
     {
       "name": "Turning Metal",
       "category": "DoP VFX presets (Effects)",
-      "description": "The subject’s skin and body slowly transform into reflective, metallic surfaces—like silver, gold, or chrome. Feels powerful, surreal, and perfect for sci-fi or high-fashion edits. [families: higgsfield]"
+      "description": "The subject’s skin and body slowly transform into reflective, metallic surfaces—like silver, gold, or chrome. Feels powerful, surreal, and perfect for sci-fi or high-fashion edits. [families: {studio}]"
     },
     {
       "name": "Wind to Face",
       "category": "DoP VFX presets (Effects)",
-      "description": "Intense wind blasts the subject with extreme force—hair whips, clothes thrash, and the body leans into the pressure. Creates a dramatic, chaotic, or high-impact visual moment. [families: higgsfield]"
+      "description": "Intense wind blasts the subject with extreme force—hair whips, clothes thrash, and the body leans into the pressure. Creates a dramatic, chaotic, or high-impact visual moment. [families: {studio}]"
     },
     {
       "name": "Aquarium",
@@ -7627,7 +7627,7 @@
       },
       {
         "name": "Starter",
-        "priceUsdMonthly": "15 (Higgsfield blog) – 19 (3rd-party)",
+        "priceUsdMonthly": "15 (the studio's blog) – 19 (3rd-party)",
         "credits": "200–270",
         "notes": "Entry plan; no Seedance 2.5, no 7-day All Unlimited; credit-only access to selected models. Prices conflict between sources."
       },
@@ -7677,7 +7677,7 @@
     "notes": "Credits: shown on Generate button before confirming; subscription credits reset each cycle (annual every 30 days), no rollover; spend order subscription → soonest-expiring (packs/promo/auto-refill, 90-day validity). Reference rate ≈ 20 credits per $1 (~$0.05/credit; UI shows 'from $0.06'/'from $0.08'). Credit packs: 100, 200, 500, 1,000, 2,000, 4,000 or 5,000–25,000 adjustable; Auto-Refill; Concurrency Boost packs +4/+8/+12/+16 with separate Boost Credits; gifts. Failed generations auto-refund. Unlimited: model-specific, web-only (not MCP/CLI/Canvas/Supercomputer/Apps/Studios), standard queue, 1 concurrent per format; Unlimited Models Marketplace (1/3/7/14-day bundles from ~$5–7 per model; All Models 1 day $99, 3 days $250, 7 days $1,035). Refunds within 7 days if no credits used (≤6% fee). Paid plans: commercial rights, no visible watermark. Known costs: Seedance 2.5 480p/720p/1080p 8 s = 24/52/72 credits; Seedance 2.0 720p 8 s = 36; Nano Banana 2 = 2/image; Apps 1–26 credits; Effects 2.0 ≈ 67.5; Supercomputer storage 2.5 credits/GB/month."
   },
   "api": {
-    "baseUrl": "https://api.higgsfield.ai",
+    "baseUrl": "{studio-api}",
     "endpoints": [
       "Auth header: Authorization: Key {API_KEY_ID}:{API_KEY_SECRET}; optional Idempotency-Key; webhook via ?hf_webhook=<https url>",
       "GET /requests/{request_id}/status",
@@ -7685,14 +7685,14 @@
       "POST /estimate/{endpoint_id} → {credits, usd}",
       "POST /files/generate-upload-url → {public_url, upload_url, upload_headers}",
       "POST /v1/custom-references (Soul ID training: name, model_version v1|v2|cinema, input_images[1–100])",
-      "POST /higgsfield-ai/soul/standard",
-      "POST /higgsfield-ai/soul/v2/standard",
-      "POST /higgsfield-ai/soul/cinema",
-      "POST /higgsfield/genjutsu/motion-transfer/v1.0",
-      "POST /higgsfield/genjutsu/object-swap/v1.0",
-      "POST /higgsfield/genjutsu/restyle/v1.0 (GET .../restyle/v1.0/presets)",
-      "POST /higgsfield/cinema-studio/4.0",
-      "POST /higgsfield/ads-studio/v1.0",
+      "POST /{studio}/soul/standard",
+      "POST /{studio}/soul/v2/standard",
+      "POST /{studio}/soul/cinema",
+      "POST /{studio}/genjutsu/motion-transfer/v1.0",
+      "POST /{studio}/genjutsu/object-swap/v1.0",
+      "POST /{studio}/genjutsu/restyle/v1.0 (GET .../restyle/v1.0/presets)",
+      "POST /{studio}/cinema-studio/4.0",
+      "POST /{studio}/ads-studio/v1.0",
       "POST /marketing-studio/image | /marketing-studio/image/flare | /marketing-studio/image/sunburst (GET /marketing-studio/image/presets)",
       "POST /bytedance/seedance-2.5/{text-to-video|image-to-video|reference-to-video|video-edit|video-extend}",
       "POST /bytedance/seedance-2.0/{text-to-video|image-to-video|reference-to-video}",
@@ -7721,6 +7721,6 @@
       "POST /alibaba/qwen-image-3/{text-to-image|edit}",
       "POST /z-image/turbo"
     ],
-    "notes": "Higgsfield API launched Sep 16 2026 (open.higgsfield.ai / console.higgsfield.ai; docs.higgsfield.ai; OpenAPI v2.0.0 at /docs/openapi.json). Separate prepaid USD balance (min top-up $5, funds expire after 1 year), pay per successful generation (failed/nsfw refunded), video priced per second, images per image, DoP per generation; 50+ models, catalog of 84 endpoints (17 image, 67 video). Async lifecycle: queued → in_progress → completed|failed|nsfw|canceled; outputs retained ≥7 days; concurrency limit per account (20 concurrent after key creation; 400 error when exceeded). SDKs: pip install higgsfield-client; npm @higgsfield/client (subscribe/submit/upload). Drop-in for fal/Replicate keys. Cashback program (Oct 2026). Example list prices/s: Seedance 2.5 $0.2057, Seedance 2.0 $0.1407, Genjutsu $0.318, Cinema Studio 4.0 $0.2057, Kling 3.0 $0.084, MiniMax H3 $0.13, Wan 3.0 $0.05, Wan 3.0 Prime $0.068, Happy Horse $0.14, PixVerse 6 $0.115, LTX 2.5 $0.09/$0.12, Grok Video 1.5 $0.08, Kling 2.6 $0.07, Kling 2.5 $0.042, Hailuo 2.3 $0.0467; images: Soul 2 $0.0032, Soul Standard $0.0938, Marketing Studio Image $0.0126, Grok Image 2.0 $0.04, Ideogram 4.0 $0.03, Recraft 4.1 $0.035, Qwen Image 3 $0.04, Z-Image Turbo $0.015, AI Influencer sheet $0.05. Legacy: cloud.higgsfield.ai (older DoP/Soul API) now resolves to the same console app. Separate from MCP (https://mcp.higgsfield.ai/mcp) and CLI skills which use plan credits."
+    "notes": "The studio's API launched Sep 16 2026 ({studio-service} / {studio-console}; {studio-docs}; OpenAPI v2.0.0 at /docs/openapi.json). Separate prepaid USD balance (min top-up $5, funds expire after 1 year), pay per successful generation (failed/nsfw refunded), video priced per second, images per image, DoP per generation; 50+ models, catalog of 84 endpoints (17 image, 67 video). Async lifecycle: queued → in_progress → completed|failed|nsfw|canceled; outputs retained ≥7 days; concurrency limit per account (20 concurrent after key creation; 400 error when exceeded). SDKs: pip install studio-client; npm {studio-npm}/client (subscribe/submit/upload). Drop-in for fal/Replicate keys. Cashback program (Oct 2026). Example list prices/s: Seedance 2.5 $0.2057, Seedance 2.0 $0.1407, Genjutsu $0.318, Cinema Studio 4.0 $0.2057, Kling 3.0 $0.084, MiniMax H3 $0.13, Wan 3.0 $0.05, Wan 3.0 Prime $0.068, Happy Horse $0.14, PixVerse 6 $0.115, LTX 2.5 $0.09/$0.12, Grok Video 1.5 $0.08, Kling 2.6 $0.07, Kling 2.5 $0.042, Hailuo 2.3 $0.0467; images: Soul 2 $0.0032, Soul Standard $0.0938, Marketing Studio Image $0.0126, Grok Image 2.0 $0.04, Ideogram 4.0 $0.03, Recraft 4.1 $0.035, Qwen Image 3 $0.04, Z-Image Turbo $0.015, AI Influencer sheet $0.05. Legacy: {studio-service} (older DoP/Soul API) now resolves to the same console app. Separate from MCP ({studio-service}/mcp) and CLI skills which use plan credits."
   }
 }

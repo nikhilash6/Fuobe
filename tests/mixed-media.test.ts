@@ -51,7 +51,7 @@ const input = (over: Partial<MixedPlanInput> = {}): MixedPlanInput => ({
 });
 
 describe("Mixed Media presets", () => {
-  it("has Higgsfield's 33 presets, each with its own settings and an intensity", () => {
+  it("has the parity studio's 33 presets, each with its own settings and an intensity", () => {
     expect(MIXED_PRESETS).toHaveLength(33);
     expect(new Set(MIXED_PRESETS.map((p) => p.id)).size).toBe(33);
     for (const p of MIXED_PRESETS) {

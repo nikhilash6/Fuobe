@@ -329,7 +329,7 @@ export type VideoFormat = "h264" | "h265_10bit" | "prores_422_hq" | "prores_4444
  */
 export type MatteOutput = "cutout" | "matte" | "foreground";
 
-/** Depth map colour maps, in Higgsfield's order (grayscale first: every depth model draws it). */
+/** Depth map colour maps, in the parity research's order (grayscale first: every depth model draws it). */
 export const COLORMAPS = ["grayscale", "turbo", "inferno", "magma", "viridis"] as const;
 
 /** A point on a picture in its own pixels (the first frame of a video). Negative points mark what to keep. */
@@ -1239,7 +1239,7 @@ export interface GenerationRequest {
   presetOptions?: Record<string, string>;
   /** Motions/effects: how strongly the preset applies (0–1, default 1). */
   presetStrength?: number;
-  /** Higgsfield's Mix: a second motion or effect on top of the first, with its own strength. */
+  /** The parity studio's Mix: a second motion or effect on top of the first, with its own strength. */
   mix?: { presetId: string; strength: number };
   /** LoRAs added by @element mentions (trained identities, server-side), or a recipe's LoRAs sent by the evaluation harness. */
   loras?: LoraRef[];

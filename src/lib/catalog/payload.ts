@@ -582,7 +582,7 @@ export function guessKind(url: string, contentType?: string, hint?: string): Med
 }
 
 /**
- * Keys of a response that are request lifecycle links or ids, never results: Higgsfield's RequestStatus
+ * Keys of a response that are request lifecycle links or ids, never results: the retired provider's RequestStatus
  * carries status_url and cancel_url next to the media, fal's queue receipts carry response_url.
  */
 const LIFECYCLE_KEYS = new Set(["status_url", "cancel_url", "response_url", "logs_url", "webhook_url", "request_id"]);
@@ -951,7 +951,7 @@ function frameOutputs(response: unknown): ExtractedOutput[] {
 /**
  * SDR to HDR: a playable HDR file (Topaz) is the result. LTX-2.3 HDR answers with a ZIP of 16-bit EXR
  * frames and an SDR preview: the preview is the result and the EXR archive rides along as a link
- * (meta.artifacts.exr), as Higgsfield's extra files do.
+ * (meta.artifacts.exr), as the retired provider's extra files did.
  */
 function hdrOutputs(response: unknown): ExtractedOutput[] {
   const r = body(response);

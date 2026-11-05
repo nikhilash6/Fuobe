@@ -51,7 +51,7 @@ The only new default weight is OvisOCR3 (1.71 GB). Optional extras:
 
 ## a. Text detection for Layers: `ocr-lines-qwen35`
 
-Higgsfield's Layers "Edit text" first finds the text lines, then lets the user retype them. Fuobe's open engine had no OCR, so the user typed the lines. The route must return lines and boxes as JSON text.
+The parity studio's Layers "Edit text" first finds the text lines, then lets the user retype them. Fuobe's open engine had no OCR, so the user typed the lines. The route must return lines and boxes as JSON text.
 
 **Candidates compared**
 
@@ -155,7 +155,7 @@ CreateVideo(source fps, the window's sound via TrimAudioDuration) → SaveVideo
   * `maskPrompt` = what to replace; `image` = the new object, product or character (best cut out on white with `bg-remove-birefnet`); `prompt` describes the result.
 * **`video-insert-wan-vace`**: a painted region held for every frame (`RepeatImageBatch` of the mask) with a reference image. It suits a static or slow camera. Without SAM, `WanVaceToVideo` would pad a one-frame mask with 1 = generate for the other frames, which would regenerate the whole clip. The repeat prevents that.
 
-| Higgsfield Genjutsu mode | Open workflow id | Status |
+| Genjutsu mode | Open workflow id | Status |
 |---|---|---|
 | Motion Transfer | `wan-animate2` (Wan Animate 2, template `video_wan_animate2` 2026-08-07, Apache-2.0) | exists, validated |
 | Object Swap | **`video-swap-wan-vace`** (new) | validated |
@@ -331,7 +331,7 @@ No round-4 file had an open graph for **Cinema Studio's "Create 3D scene"** (STA
 - **Bindings:** `image`, `checkpoint`, `resolutionLevel`, `fovX`, `decimation`, `filenamePrefix`. Bind `decimation` 2 for phones (about 4× fewer triangles, *inferred*).
 
 **`image-to-splat-triposplat`** is the official template `3d_triposplat_image_to_gaussian_splat` (2026-06-02) with the UI-only live-preview patch removed and an H.264 orbit video.
-- **Use:** subject or product splats for Higgsfield's 3D Angles and 3D Jutsu props, and a splat alternative to TRELLIS.2 product spins.
+- **Use:** subject or product splats for the parity studio's 3D Angles and 3D Jutsu props, and a splat alternative to TRELLIS.2 product spins.
 - **Server-side views:** `RenderSplat` takes a `CreateCameraInfo` camera (`orbit` yaw / pitch / distance, or `look_at` position and target, plus `fov`), so a view chosen in the browser can also be rendered on the server.
 - **Bindings:** `image`, `cutout` (false = use the image's alpha), `numGaussians` (core allows up to 1,048,576), `steps`, `cfg`, `seed`, `splatFormat` (ply / ksplat / spz), `orbitFrames`, `filenamePrefix`.
 
@@ -342,7 +342,7 @@ No round-4 file had an open graph for **Cinema Studio's "Create 3D scene"** (STA
 - **Output:** a JSON style brief with format, hook, pacing, shots, visual and animation style, narration, music, captions and 5 topic ideas. The instruction forbids copying the reference's people, logos or exact words.
 - **Unverified:** whether Gemma 4 E4B takes 30 s of audio in one call.
 
-**FPS Boost to Higgsfield's exact targets** (24 / 30 / 60 / 90 / 120 fps). Core `FrameInterpolate` takes an integer `multiplier` from 2 to 16. Interpolate by *m*, then keep every *n*-th frame (`VHS_SelectEveryNthImage`), so that source × *m* / *n* = target:
+**FPS Boost to the parity studio's exact targets** (24 / 30 / 60 / 90 / 120 fps). Core `FrameInterpolate` takes an integer `multiplier` from 2 to 16. Interpolate by *m*, then keep every *n*-th frame (`VHS_SelectEveryNthImage`), so that source × *m* / *n* = target:
 
 | From → to | 30 | 60 | 90 | 120 |
 |---|---|---|---|---|
@@ -352,7 +352,7 @@ No round-4 file had an open graph for **Cinema Studio's "Create 3D scene"** (STA
 
 This is not built or timed. RIFE runs once per in-between frame, so m 15 costs about 7× m 2 *(inferred)*.
 
-**Depth colour maps (G14).** The installed `VideoDepthAnythingOutput` offers only `gray` and `inferno`, and `MoGeRender` offers `depth` and `depth_colored`. Higgsfield's Turbo, Magma and Viridis need a LUT step, which was not researched.
+**Depth colour maps (G14).** The installed `VideoDepthAnythingOutput` offers only `gray` and `inferno`, and `MoGeRender` offers `depth` and `depth_colored`. The parity studio's Turbo, Magma and Viridis need a LUT step, which was not researched.
 
 **Sources (2026-10-22):**
 - live `/object_info` (ComfyUI `fc04da91`) and `comfy_extras/nodes_textgen.py`, `comfy/text_encoders/gemma4.py`

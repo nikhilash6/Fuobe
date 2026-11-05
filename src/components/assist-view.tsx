@@ -26,6 +26,7 @@ import { StarterSection, useStarters } from "@/components/starters/starter-secti
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { useAssistActions, useAssistThread, useEngine } from "@/lib/api";
 import { ASSIST_SUGGESTIONS, assistDraft, modeLabel, threadModeChoice, type AssistAvailability, type AssistModeChoice, type AssistProject, type AssistThread, type SkillSummary } from "@/lib/assist";
+import { showableOutputs } from "@/lib/av/idol-camera-still";
 import type { Generation } from "@/lib/catalog/types";
 import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
@@ -135,7 +136,8 @@ export function AssistView({ starters: given = [], fills: givenFills = {} }: { s
     () =>
       (thread?.items ?? []).flatMap((i) => (i.role === "generations" ? i.ids : [])).flatMap((gid) => {
         const g = all.get(gid);
-        return g?.status === "succeeded" ? g.outputs.map((_, k) => ({ g, i: k })) : [];
+        // The Viewer's arrows skip what the chat doesn't tile (a clean Idol splat's camera still).
+        return g?.status === "succeeded" ? showableOutputs(g).map((k) => ({ g, i: k })) : [];
       }),
     [thread?.items, all],
   );

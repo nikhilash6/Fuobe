@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cardStrip, type Palette } from "@/lib/catalog/palettes";
 import { cn } from "@/lib/utils";
 
-/** Equal stripes of a palette's colours (background first, as on Higgsfield's cards). */
+/** Equal stripes of a palette's colours (background first, as on the parity studio's cards). */
 export function Strip({ colors, className }: { colors: string[]; className?: string }) {
   return (
     <span aria-hidden className={cn("flex overflow-hidden", className)}>

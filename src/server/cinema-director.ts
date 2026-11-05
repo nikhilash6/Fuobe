@@ -25,7 +25,7 @@ import { llmText } from "./enhance";
 /**
  * The AI Director: turns an idea or a script into shots with Director settings, camera moves and
  * prompts. It only proposes — every shot card has "Load into prompt bar" and nothing is generated
- * until the user presses Generate (Higgsfield's rule). Uses the configured LLM (Claude or a local model)
+ * until the user presses Generate (the parity studio's rule). Uses the configured LLM (Claude or a local model)
  * and falls back to an offline breakdown so it always answers.
  */
 

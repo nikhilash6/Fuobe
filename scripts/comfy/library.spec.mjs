@@ -3149,7 +3149,7 @@ export const SPEC = [
     license: 'CC-BY-NC-4.0 (Video-Depth-Anything-Large weights: non-commercial)',
     autoDownloads: ['LoadVideoDepthAnythingModel downloads depth-anything/Video-Depth-Anything-Large video_depth_anything_vitl.pth (about 1.5 GB) into models/videodepthanything on first run'],
     notes:
-      'video-depth-vda-small with the Large model: the model Higgsfield\'s Depth Map runs. Its weights are CC-BY-NC-4.0: the licence is information (Settings → Models & licences ' +
+      'video-depth-vda-small with the Large model: the model the parity studio\'s Depth Map runs. Its weights are CC-BY-NC-4.0: the licence is information (Settings → Models & licences ' +
       'lists it as Non-commercial with a switch), the Depth map defaults stay VDA-Small (Apache-2.0) on the GPU. Same graph otherwise: gray or inferno, side by side through the lazy switch, audio dropped.',
   },
   {
@@ -3384,7 +3384,7 @@ export const SPEC = [
     license: 'Apache-2.0 (DiffSynth-Studio Qwen-Image-Layered-Control)',
     notes:
       'Template image_qwen_image_layered_control. prompt names the element(s) to separate ("guitar", "the headline text"); numLayers 2 gives [rest, element] back to front. ' +
-      'Higgsfield Layers "Separate layer" / click-to-extract. 40.9 GB bf16 download, cast to fp8_e4m3fn at load.',
+      'The parity studio\'s Layers "Separate layer" / click-to-extract. 40.9 GB bf16 download, cast to fp8_e4m3fn at load.',
   },
 
   // ---- Moodboards: style reference -----------------------------------------
@@ -3494,7 +3494,7 @@ export const SPEC = [
     license: 'Apache-2.0 (Z-Image Turbo)',
     notes:
       'Fuobe Soul\'s edit route (Soul 2.0 image-to-image): the picture scaled to Soul\'s tier (megapixels 1 = 720p, 2 = 1080p) on the 16-pixel grid, VAE-encoded, then the Soul sampler ' +
-      '(8 steps, cfg 1, res_multistep, shift 3) at denoise = strength (0.6 like fal\'s z-image/turbo/image-to-image; about 0.17 would be Higgsfield\'s refiner pass). ' +
+      '(8 steps, cfg 1, res_multistep, shift 3) at denoise = strength (0.6 like fal\'s z-image/turbo/image-to-image; about 0.17 would be the parity studio\'s refiner pass). ' +
       'The look\'s LoRAs are injected after the UNETLoader (LoraLoaderModelOnly), as on z-image-turbo-t2i. The result keeps the picture\'s shape.',
   },
 
@@ -4286,7 +4286,7 @@ export const SPEC = [
     vramGb: 16,
     license: 'Apache-2.0 (Z-Image Turbo, Z-Image-Turbo-Fun-Controlnet-Union)',
     notes:
-      'Higgsfield Mixed Media: frames sampled at 4/8/10/12/24 fps (force_rate), each frame restyled with the preset prompt, re-assembled at the same fps with the source audio. ' +
+      'The parity studio\'s Mixed Media: frames sampled at 4/8/10/12/24 fps (force_rate), each frame restyled with the preset prompt, re-assembled at the same fps with the source audio. ' +
       'VHS_BatchManager re-queues the prompt every framesPerBatch frames so VRAM stays flat: the provider follows the re-queued prompts (same filename prefix) and collects the final video. ' +
       'Fixed batch noise = less flicker. denoise 0.55-0.8 trades fidelity for style; canny keeps outlines.',
   },
@@ -4858,7 +4858,7 @@ export const SPEC = [
     license: 'Apache-2.0 (Z-Image Turbo)',
     notes:
       'gridPrompt defaults to a contact-sheet sentence for the chosen columns x rows ({columns}, {rows}, {count} are filled by the provider). ' +
-      'Higgsfield "full grid from a single prompt": one generation, then KJNodes ImageGridtoBatch cuts the sheet into columns x rows tiles (row-major). gridPrompt is chosen by the app per size/type ' +
+      'The parity studio\'s "full grid from a single prompt": one generation, then KJNodes ImageGridtoBatch cuts the sheet into columns x rows tiles (row-major). gridPrompt is chosen by the app per size/type ' +
       '(freeform, zooms, shots); next/prev shots continue from a tile with storyboard-qwen-edit-2509-next-scene. Outputs: the sheet first, then the tiles.',
   },
   {
@@ -5867,7 +5867,7 @@ export const SPEC = [
     vramGb: 2,
     license: 'RIFE 4.26 and FILM weights from Comfy-Org/frame_interpolation (MIT / Apache-2.0); VideoHelperSuite (GPL-3.0 code) for Select Every Nth',
     notes:
-      'Higgsfield\'s FPS Boost targets (24 / 30 / 60 / 90 / 120 fps) and slow motion on the open engine. The provider picks m (multiplier, 2-16) and n (every) from the clip\'s own frame rate (its header) so that ' +
+      'The parity studio\'s FPS Boost targets (24 / 30 / 60 / 90 / 120 fps) and slow motion on the open engine. The provider picks m (multiplier, 2-16) and n (every) from the clip\'s own frame rate (its header) so that ' +
       'source fps x m / n = target x slowdown (24 -> 30 m5 n4, 24 -> 60 m5 n2, 24 -> 90 m15 n4, 24 -> 120 m5, 30 -> 60 m2, 60 -> 90 m3 n2, 60 -> 120 m2; a target the source rate is a whole multiple of (60 -> 30: m1 n2) only drops frames, ' +
       'and then the provider links FrameInterpolate out; other lower targets still interpolate (30 -> 24: m4 n5)). The output fps is computed in the graph from the decoded frame rate (source fps x m / (n x slowdown)); m and n need the header\'s rate, so the provider refuses a clip without one rather than guess. ' +
       'The last frame is held once more before interpolating, so the clip keeps its length (N frames become N x m + 1, about one output frame longer than the source) instead of losing a source frame. ' +
@@ -6060,7 +6060,7 @@ export const SPEC = [
     vramGb: 0,
     license: 'n/a (no model; ComfyUI core)',
     notes:
-      'params.format exr of the sdr-to-hdr operation (Higgsfield\'s "EXR 16-bit: uncompressed frame sequence for compositing"). The same ImageSDRToHDR expansion as video-sdr-to-hdr; SaveImageAdvanced writes each ' +
+      'params.format exr of the sdr-to-hdr operation (the parity studio\'s "EXR 16-bit: uncompressed frame sequence for compositing"). The same ImageSDRToHDR expansion as video-sdr-to-hdr; SaveImageAdvanced writes each ' +
       'frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip\'s sound as ' +
       'the result to watch (role preview); Fuobe zips the frames (role frames) and attaches the zip to it. Decodes the whole clip: RAM grows with the length (Fuobe refuses a clip too long for the memory it has). ' +
       'Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC.',

@@ -31,7 +31,7 @@ import type { PropHandle, SceneEngine, SceneInfo } from "./scene-engine";
 import { AddPropDialog, MakingWatch, PropsPanel, propName } from "./scene-props";
 
 /**
- * The full-screen 3D scene viewer (Higgsfield's "3D Scene", higgsfield-delta-4.md §4.4): fly with W A S D Q E
+ * The full-screen 3D scene viewer (the parity studio's "3D Scene", parity-delta-4.md §4.4): fly with W A S D Q E
  * (Shift faster), drag to look, scroll or pinch to move, two fingers to slide; a full-frame lens (18–300 mm),
  * an aperture that previews the depth of field, the project's frame ratios, and Capture, which renders the
  * frame to a PNG, uploads it and queues the recomposition as a new take next to the scene.

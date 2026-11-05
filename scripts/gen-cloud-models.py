@@ -496,7 +496,7 @@ model("kling-o3", "Kling O3 Omni", "Kuaishou", "kling", "video",
       "One model for text, image, reference and video edits",
       [("t2v", "fal-ai/kling-video/o3/pro/text-to-video"), ("i2v", "fal-ai/kling-video/o3/pro/image-to-video", "fal", "+flf2v"),
        ("ref2v", "fal-ai/kling-video/o3/pro/reference-to-video"), ("v2v", "fal-ai/kling-video/o3/pro/video-to-video/edit"),
-       # Higgsfield's Remove Object page runs exactly this edit with a removal prompt (research part 4 §3); swaps and
+       # The parity studio's Remove Object page runs exactly this edit with a removal prompt (research part 4 §3); swaps and
        # inserts name @Image1 in the prompt. Same endpoint, so the studios can list Kling O3 under those tools.
        ("remove-object", "fal-ai/kling-video/o3/pro/video-to-video/edit"), ("video-swap", "fal-ai/kling-video/o3/pro/video-to-video/edit"),
        ("video-insert", "fal-ai/kling-video/o3/pro/video-to-video/edit")],
@@ -884,7 +884,7 @@ model("fuobe-restore", "Fuobe Restore", "Fuobe Original", "fuobe-restore", "vide
       defaults={"aspectRatio": "4:3", "resolution": "720p"}, frame_step=8)
 # ----- Originals (O11): the rebranded open tools and Speak on hosted open weights (research studios[angles].original,
 # studios[speak].original). Fuobe Angles is fal's LoRA-gallery route of Qwen-Image-Edit 2509 with dx8152's Multiple-angles
-# LoRA: Higgsfield Angles' controls are its fields (rotate −90…90°, positive = left; vertical −1…1, −1 = bird's-eye;
+# LoRA: Angles' controls are its fields (rotate −90…90°, positive = left; vertical −1…1, −1 = bird's-eye;
 # move forward 0–10; a wide-angle lens), at the LoRA scale and steps the research gives; it takes no words.
 ANGLES_O = next(s for s in ORIGINALS["studios"] if s["id"] == "angles")["original"]
 model("fuobe-angles", "Fuobe Angles", "Fuobe Original", "fuobe-angles", "image",
@@ -973,7 +973,7 @@ model("runway-aleph-2", "Runway Aleph 2", "Runway", "runway", "video",
 model("kling-o3-4k-edit", "Kling O3 4K Edit", "Kuaishou", "kling", "video",
       "Kling O3 video edits rendered in native 4K, keeps the original audio",
       [("v2v", "fal-ai/kling-video/o3/4k/video-to-video/edit"),
-       # "Need more detail? Run Kling 3.0 Omni Edit in 4K mode" (Higgsfield's Remove Object page).
+       # "Need more detail? Run Kling 3.0 Omni Edit in 4K mode" (the parity studio's Remove Object page).
        ("remove-object", "fal-ai/kling-video/o3/4k/video-to-video/edit"), ("video-swap", "fal-ai/kling-video/o3/4k/video-to-video/edit"),
        ("video-insert", "fal-ai/kling-video/o3/4k/video-to-video/edit")], badges=["4k"], pricing=("second", 0.42))
 model("grok-imagine-video-edit", "Grok Imagine Video Edit", "xAI", "grok", "video",
@@ -1010,10 +1010,10 @@ model("seedvr-image", "SeedVR2 Upscale", "ByteDance Seed", "seedvr", "image", "O
       [("upscale-image", "fal-ai/seedvr/upscale/image")])
 model("recraft-crisp", "Recraft Crisp Upscale", "Recraft", "recraft", "image", "Clean, crisp upscale for design work",
       [("upscale-image", "fal-ai/recraft/upscale/crisp")])
-# Higgsfield's four video upscalers (higgsfield-delta-4.md §4.3), each with the options its API takes.
+# The parity studio's four video upscalers (parity-delta-4.md §4.3), each with the options its API takes.
 # Topaz Video: the precision models (Proteus by default, Artemis / Iris for faces, Rhea for 4K+, Gaia for animation,
 # Theia for fine detail), Original / 1080p / 1440p / 4K (a factor of the clip's size), frame rate Original / 24 / 30 / 60
-# (the API's 16-60; Higgsfield's 120 is FPS Boost's) and the enhancement sliders. H.264 so it plays in every browser.
+# (the API's 16-60; the parity studio's 120 is FPS Boost's) and the enhancement sliders. H.264 so it plays in every browser.
 model("topaz-video", "Topaz Video", "Topaz Labs", "topaz", "video", "Enhance and upscale low- to medium-quality footage, up to 4K and 60 fps",
       [("upscale-video", "topaz/upscale/video/precision")], badges=["4k"],
       pricing=("second", 0.02, "1080p at 30 fps; 720p $0.01/s, above 1080p $0.06/s; 60 fps doubles", {"byResolution": {"1080p": 0.02, "1440p": 0.06, "4K": 0.06}, "factors": [{"param": "targetFps", "values": {"60": 2}}]}),
@@ -1040,7 +1040,7 @@ model("bytedance-video-upscale", "ByteDance Upscale", "ByteDance", "bytedance-up
       defaults={"resolution": "1080p", "targetFps": 30}, fps_targets=[30, 60],
       controls=[("enhancement_preset", "Preset", {"general": "Common", "ugc": "UGC (social clips)", "short_series": "Short series", "aigc": "AI-generated video", "old_film": "Old film"}),
                 ("enhancement_tier", "Model version"), ("fidelity", "Fidelity"), ("bit_depth", "Bit depth")])
-# FLUX.3 Upscale: Precise (source-faithful, Higgsfield's default) or Creative detail, guided by an optional prompt; 1.5-3x of the clip.
+# FLUX.3 Upscale: Precise (source-faithful, the parity studio's default) or Creative detail, guided by an optional prompt; 1.5-3x of the clip.
 model("flux-video-upscale", "FLUX.3 Upscale", "Black Forest Labs", "flux", "video", "Preserve the original or creatively enhance detail (MP4, up to 20 s)",
       [("upscale-video", "blackforestlabs/flux-video-upscale")], badges=["new"],
       pricing=("second", 0.15, "2K, precise; 1080p $0.084/s, 4K $0.33/s; Creative about 1.4x", {"byResolution": {"1080p": 0.084, "1440p": 0.15, "4K": 0.33}, "factors": [{"param": "creativity", "values": {"1": 1.4}}]}),
@@ -1066,7 +1066,7 @@ model("chatterbox-cloud", "Chatterbox (hosted)", "Resemble AI", "chatterbox", "a
       [("tts", "fal-ai/chatterbox/text-to-speech")], pricing=("request", 0.025, "per 1k chars"))
 model("index-tts-2-cloud", "IndexTTS-2 (hosted)", "Bilibili", "index-tts", "audio", "Zero-shot cloning with emotion control",
       [("tts", "fal-ai/index-tts-2/text-to-speech")], pricing=("second", 0.002))
-# Higgsfield's Audio model selector also lists Inworld and MiniMax Speech (research part 3 / part 2).
+# The parity studio's Audio model selector also lists Inworld and MiniMax Speech (research part 3 / part 2).
 model("inworld-tts", "Inworld TTS 1.5 Max", "Inworld", "inworld", "audio", "Natural narration, great value — 113 voices in 15 languages",
       [("tts", "fal-ai/inworld-tts")], badges=["fast"], pricing=("request", 0.01, "per 1k chars"), defaults={"voice": "Craig (en)"})
 model("minimax-speech-2-8", "MiniMax Speech 2.8 HD", "MiniMax", "minimax-speech", "audio", "Expressive multilingual speech with emotion control",
@@ -1083,7 +1083,7 @@ model("heygen-translate-fast", "HeyGen Translate Speed", "HeyGen", "heygen", "vi
       [("dub", "fal-ai/heygen/v2/translate/speed")], badges=["fast"], pricing=("second", 0.05))
 model("elevenlabs-dubbing", "ElevenLabs Dubbing", "ElevenLabs", "elevenlabs", "video", "Dub video or audio while keeping each speaker's voice",
       [("dub", "fal-ai/elevenlabs/dubbing")], pricing=("minute", 0.6))
-# Sound effects and music (research part 3): Mirelo and Sonilo are the jobs Higgsfield's Audio runs.
+# Sound effects and music (research part 3): Mirelo and Sonilo are the jobs the parity studio's Audio runs.
 model("mirelo-sfx-2", "Mirelo SFX 2.0", "Mirelo", "mirelo", "audio", "Layered, cinematic sound effects for a clip or a prompt, up to 10 minutes",
       [("sfx", "mirelo-ai/sfx2.0/text-to-audio")], badges=["top", "new"], defaults={"duration": 5}, options={"durations": [2, 5, 10, 30, 60]},
       pricing=("second", 0.01, "intro price until 2026-12-13, then $0.015"))
@@ -1182,7 +1182,7 @@ model("bria-green-screen", "Bria green screen", "Bria", "bria", "video", "Keys g
       fixed={"output_container_and_codec": "webm_vp9"}, sliders=[("spill_suppression", "Spill cleanup", 0.1)],
       options={"matteOutputs": ["cutout"], "greenScreen": True})
 model("depth-anything-video-cloud", "Video Depth Anything (hosted)", "ByteDance", "depth-anything", "video", "Stable depth maps for every frame",
-      # The colour map follows params.colormap (Higgsfield's Depth Map picker); grayscale unless asked. Side by side
+      # The colour map follows params.colormap (the parity studio's Depth Map picker); grayscale unless asked. Side by side
       # puts the original clip next to the map.
       [("depth-video", "fal-ai/depth-anything-video", "fal", {"keys": {"colormap": "colormap", "sideBySide": "side_by_side"}})], pricing=("second", 0.04),
       fixed={"model": "VDA-Base"}, api_defaults={"colormap": "grayscale"})
@@ -1197,7 +1197,7 @@ model("mirelo-sfx-2-video", "Mirelo SFX 2.0 for video", "Mirelo", "mirelo", "vid
       [("v2a", "mirelo-ai/sfx2.0/video-to-video")], badges=["top", "new"], pricing=("second", 0.01, "intro price until 2026-12-13, then $0.015"),
       api_defaults={"duration": 600})
 
-# ----- Image tools: layers, text layers, cut-outs, vectors (research part 3; Higgsfield Layers)
+# ----- Image tools: layers, text layers, cut-outs, vectors (research part 3; Layers)
 model("seedream-5-layers", "Seedream 5.0 Layers", "ByteDance", "seedream", "image",
       "Splits a picture into a background and up to 16 named, positioned layers",
       [("layers", "bytedance/seedream/v5/pro/layerize")], badges=["top", "new"], defaults={"resolution": "auto"},
@@ -1335,7 +1335,7 @@ model("wan-22-vace-inpaint", "Wan 2.2 VACE Fun Inpaint (hosted)", "Alibaba Wan",
                {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
       api_defaults={"match_input_num_frames": True, "match_input_frames_per_second": True},
       options={"requires": {"mask": True, "msg": "Paint the area to change on the first frame"}})
-# The mask maker for the erase and swap chains, and Remove background's "keep what you name" on the cloud (Higgsfield
+# The mask maker for the erase and swap chains, and Remove background's "keep what you name" on the cloud (the parity studio
 # runs SAM 3 video there): what you name or click becomes a black-and-white mask video (apply_mask off; whether the
 # matte is clean black and white is unverified without a run). fal can't cut out by words, so it makes the mask only.
 model("sam-3-1-video-mask", "SAM 3.1 video mask", "Meta", "sam", "video",
@@ -1375,14 +1375,14 @@ model("h3-max-recast", "MiniMax H3 Max Recast", "MiniMax", "hailuo", "video",
       pricing=("second", 0.3, "768p; 1080p $0.45/s; references free; 5–30 s, no shot over 15 s", {"byResolution": {"768p": 0.3, "1080p": 0.45}}),
       defaults={"resolution": "768p"})
 
-# ----- FPS boost, slow motion and SDR to HDR (Higgsfield's Upscale tools)
+# ----- FPS boost, slow motion and SDR to HDR (the parity studio's Upscale tools)
 model("topaz-fps-boost", "Topaz FPS Boost", "Topaz Labs", "topaz", "video",
       "Smooth frame interpolation to 16–120 fps, or up to 8× slow motion",
       [("interpolate", "topaz/interpolate/video")], badges=["new"],
       pricing=("second", 0.03, "1080p 30→60 fps with Apollo or Chronos; 4K $0.06; Aion $0.05 / $0.17; slow motion bills the whole output", {"factors": [{"param": "model", "values": {"Aion": 1.67}}]}),
       # H.265 unless asked: H.264 plays in every browser.
       api_defaults={"H264_output": True}, controls=[("model", "Model")],
-      # Higgsfield's FPS Boost chips (60 by default) and slow motion (the API takes 1-8).
+      # The parity studio's FPS Boost chips (60 by default) and slow motion (the API takes 1-8).
       fps_targets=[24, 30, 60, 90, 120], defaults={"targetFps": 60}, options={"slowdowns": [1, 2, 4, 8]})
 # Doubles the frame rate (one new frame per pair) at the clip's own speed; its fps field only applies with
 # use_calculated_fps off, so a target frame rate is not sent.
@@ -1898,9 +1898,9 @@ def part4_slots(op, kf, inputs, m, opts, fmap):
         fmap["frameInterval"] = kf["frameInterval"]
     if "colormap" in kf and op == "depth-video":
         fmap["colormap"] = kf["colormap"]
-        # The picker offers the API's own maps (Higgsfield's Depth Map: Grayscale, Turbo, Inferno, Magma, Viridis).
+        # The picker offers the API's own maps (the parity studio's Depth Map: Grayscale, Turbo, Inferno, Magma, Viridis).
         opts["colormaps"] = union(opts.get("colormaps", []), [str(v) for v in enum_of(inputs, kf["colormap"])])
-    # Depth maps beside the original clip, and Remove background's alpha mask (Higgsfield's Video tools options).
+    # Depth maps beside the original clip, and Remove background's alpha mask (the parity studio's Video tools options).
     if "sideBySide" in kf and op == "depth-video" and (inputs.get(kf["sideBySide"]) or {}).get("type") == "boolean":
         fmap["sideBySide"] = kf["sideBySide"]
         opts["sideBySide"] = True

@@ -1,4 +1,4 @@
-# Fuobe research #2: open-weight ComfyUI approaches for the remaining Higgsfield gaps
+# Fuobe research #2: open-weight ComfyUI approaches for the parity studio's remaining gaps
 
 _As of 2026-10-16. Machine-readable companion: [`comfyui-oss-2.json`](comfyui-oss-2.json), which has the full API-format graphs, bindings, live `/object_info` node specs, model URLs and sizes, and validation results. This file builds on [`comfyui-oss.md`](comfyui-oss.md) (capability rankings) and [`comfyui-workflow-library.md`](comfyui-workflow-library.md) (the existing workflow library)._
 

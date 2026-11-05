@@ -281,7 +281,7 @@ ts = (
     f"export const LORA_LIBRARY_AS_OF = {json.dumps(AS_OF)};\n\n"
     "/** Every LoRA the Originals use: Soul looks (group \"look\"), motion / effect LoRAs and the adapters a recipe always loads, one entry per local file. */\n"
     f"export const LORA_LIBRARY: LoraEntry[] = {json.dumps(library, indent=2, ensure_ascii=False)};\n\n"
-    "/** Motion and effect presets (Higgsfield's generic names) → their LoRA keys in LORA_LIBRARY, with the research's status. */\n"
+    "/** Motion and effect presets (the parity studio's generic names) → their LoRA keys in LORA_LIBRARY, with the research's status. */\n"
     f"export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = {json.dumps(motions, indent=2, ensure_ascii=False)};\n\n"
     "/** Fuobe's own LoRAs not trained yet (research fuobeTrainedLoras; scripts/train/): no preset uses one until its file is published. */\n"
     f"export const PLANNED_LORAS: PlannedLora[] = {json.dumps(planned, indent=2, ensure_ascii=False)};\n\n"

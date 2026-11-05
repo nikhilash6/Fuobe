@@ -159,7 +159,9 @@ describe("the guide", () => {
       // Every command of the install, and nothing else: a command line starts with a program, never a dash or a sentence.
       expect(commands(step2(g.text)).filter((l) => !/^ {3}(- |[A-Z][a-z]+ )/.test(l)), os).toEqual(expected[os]);
       expect(g.text).toContain(`Fuobe Connect is a ComfyUI add-on (a custom node pack) from ${REPO} .`);
-      expect(g.text).toContain("ComfyUI-Manager's search may not list Fuobe Connect yet.");
+      expect(g.text).toContain("Install it with git or with the download below. ComfyUI-Manager's search can show Fuobe Connect too, but it may offer no version to install.");
+      // ComfyUI-Manager installs it under the Registry's id.
+      expect(g.text).toContain("a folder named ComfyUI-Fuobe-Connect, or fuobe-connect (ComfyUI-Manager's install).");
       expect(g.text).toContain("Install via Git URL");
       expect(g.text).toContain(`6. Install only Fuobe Connect, from ${REPO} . Do not install other custom nodes.`);
       expect(g.text).toContain("2. This way needs no new ComfyUI setting. Do not add --enable-cors-header. Never use --listen.");

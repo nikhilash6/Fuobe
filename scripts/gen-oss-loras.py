@@ -4,7 +4,7 @@ Generate src/lib/catalog/oss-loras.generated.ts: the preset → LoRA map v2 of F
 effects, build plan O4), from two research files:
 
 - docs/research/comfyui-oss.json "loras" (round 1): Wan 2.1 / 2.2 I2V LoRAs matched to presets by their
-  higgsfieldEquivalent column and their own short name ("Remade-AI Squish" → "squish"). Keyed by the bare
+  parityEquivalent column and their own short name ("Remade-AI Squish" → "squish"). Keyed by the bare
   slug, as before.
 - docs/research/fuobe-originals-recipes-5.json "motionsEffects" (§7.2–7.4): the rows whose status makes a LoRA
   a default (add-lora, replace, relight-route, weak-candidate, and local-only, which runs on the user's GPU
@@ -63,7 +63,7 @@ for l in ROUND1_LORAS:
         continue
     licence = (l.get("license") or "").strip()
     commercial = licence in COMMERCIAL
-    eq = l.get("higgsfieldEquivalent") or ""
+    eq = l.get("parityEquivalent") or ""
     names = [re.sub(r"\(.*?\)", "", n).strip() for n in re.split(r"/|,", eq)]
     names = [n for n in names if n and n != "-"]
     # Also index by the LoRA's own short name ("Remade-AI Squish" → "squish").

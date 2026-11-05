@@ -31,7 +31,7 @@ describe("studio pickers and defaults", () => {
     expect(image).toEqual(expect.arrayContaining(["nano-banana-pro", "recraft-4-1-pro", "ideogram-3", "oss-z-image-turbo"]));
   });
 
-  it("Audio studios open on the models Higgsfield uses", () => {
+  it("Audio studios open on the models the parity studio uses", () => {
     expect(SFX_STUDIO.defaultModels.cloud).toBe("mirelo-sfx-2");
     expect(MUSIC_STUDIO.defaultModels.cloud).toBe("sonilo-music");
     expect(FOLEY_STUDIO.defaultModels.cloud).toBe("mirelo-sfx-2-video");

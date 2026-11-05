@@ -4622,127 +4622,127 @@ export const DOP_RECIPES: Record<string, DopRecipe> = {
   "effect-aquarium": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-attack-of-clones": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-beach-ride": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-boiling-point": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-clothes-rain": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-color-rain": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-cotton-cloud": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-dream-date": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-drunk-master": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-fairies-around": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-firework": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-giant-grab": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-group-photo": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-helicopter-escape": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-live-concert": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-look-boom": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-mystification": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-northern-lights": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-oni-mask": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-pizza-fall": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-pool-jump": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-spirit-animal": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-tattoo-animation": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-train-rush": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-turning-monkey": {
     "kind": "effect",
     "status": "prompt-only",
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "notes": "Viral templates; the parity studio's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
   },
   "effect-ballet": {
     "kind": "effect",

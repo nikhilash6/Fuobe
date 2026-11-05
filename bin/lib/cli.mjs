@@ -86,7 +86,7 @@ export async function main(argv, io) {
     print(VERSION);
     return EXIT.ok;
   }
-  // `fuobe auth login` (Higgsfield's spelling) is `fuobe login`.
+  // `fuobe auth login` (another CLI's spelling) is `fuobe login`.
   if (name === "auth") name = rest.shift() ?? "status";
   name = ALIASES[name] ?? name;
   const cmd = COMMANDS[name];

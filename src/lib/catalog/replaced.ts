@@ -1,6 +1,6 @@
 /**
- * What replaced each retired model, look and training target when Fuobe stopped calling Higgsfield's API (build plan O7,
- * docs/research/fuobe-originals-recipes-5.md, "What replaces each Higgsfield model when the provider is removed").
+ * What replaced each retired model, look and training target when Fuobe stopped calling the retired provider's API (build plan O7,
+ * docs/research/fuobe-originals-recipes-5.md, "What replaces each parity-studio model when the provider is removed").
  *
  * One way only: an id stored before the switch — a past generation's Reuse, a saved Cinema or Canvas project, an Assist
  * plan, a Genjutsu setup code, a Katana job, a moodboard pick, a training — resolves here to the model that does the job
@@ -10,7 +10,7 @@
  * Soul's old style ids resolve to Fuobe looks through lookCard() (each look keeps the id it replaces, never sent);
  * Genjutsu's old looks are dropped (a Soul look or your own images replace them).
  *
- * Pure and browser-safe (cards only, no recipes); shared by the browser and the server. tests/no-higgsfield.test.ts checks every target exists.
+ * Pure and browser-safe (cards only, no recipes); shared by the browser and the server. tests/retired-provider.test.ts checks every target exists.
  */
 import { lookCard } from "./soul-cards";
 import type { Operation } from "./types";
@@ -48,12 +48,12 @@ export interface Replacement {
 
 /** Retired model id → the model that replaced it. */
 export const REPLACED_BY: Readonly<Record<string, Replacement>> = {
-  "soul-1": { id: "fuobe-soul", was: "Soul (Higgsfield)", note: "Soul now runs as Fuobe Soul, with Soul's 106 looks on open weights", original: true },
-  "soul-2": { id: "fuobe-soul", was: "Soul 2.0 (Higgsfield)", note: "Soul 2.0 now runs as Fuobe Soul, with Soul 2.0's 33 looks on open weights", original: true },
-  "soul-cinema": { id: "fuobe-soul-cinema", was: "Soul Cinema (Higgsfield)", note: "Soul Cinema now runs as Fuobe Soul Cinema on open weights", original: true },
+  "soul-1": { id: "fuobe-soul", was: "Soul (earlier version)", note: "Soul now runs as Fuobe Soul, with Soul's 106 looks on open weights", original: true },
+  "soul-2": { id: "fuobe-soul", was: "Soul 2.0 (earlier version)", note: "Soul 2.0 now runs as Fuobe Soul, with Soul 2.0's 33 looks on open weights", original: true },
+  "soul-cinema": { id: "fuobe-soul-cinema", was: "Soul Cinema (earlier version)", note: "Soul Cinema now runs as Fuobe Soul Cinema on open weights", original: true },
   "cinema-studio-4": {
     id: "fuobe-cinema",
-    was: "Cinema Studio 4.0 (Higgsfield)",
+    was: "Cinema Studio 4.0 (earlier version)",
     note: "Cinema Studio's clips now run on Fuobe Cinema",
     original: true,
     director: true,
@@ -62,28 +62,28 @@ export const REPLACED_BY: Readonly<Record<string, Replacement>> = {
     withReferences: "ref2v",
     ops: { ref2v: { id: "seedance-2-5", note: "Cinema Studio's reference takes now run on Seedance 2.5 (Fuobe Cinema takes no references yet)" } },
   },
-  "genjutsu-motion-transfer": { id: "fuobe-genjutsu-motion", was: "Genjutsu Motion Transfer (Higgsfield)", note: "Motion transfer now runs on Fuobe Genjutsu (Wan Animate)", original: true },
-  "genjutsu-lite-motion-transfer": { id: "fuobe-genjutsu-motion-lite", was: "Genjutsu Lite Motion Transfer (Higgsfield)", note: "Motion transfer Lite now runs on Fuobe Genjutsu Lite", original: true },
+  "genjutsu-motion-transfer": { id: "fuobe-genjutsu-motion", was: "Genjutsu Motion Transfer (earlier version)", note: "Motion transfer now runs on Fuobe Genjutsu (Wan Animate)", original: true },
+  "genjutsu-lite-motion-transfer": { id: "fuobe-genjutsu-motion-lite", was: "Genjutsu Lite Motion Transfer (earlier version)", note: "Motion transfer Lite now runs on Fuobe Genjutsu Lite", original: true },
   // Its v2v and video-swap routes were the same endpoint.
-  "genjutsu-object-swap": { id: "fuobe-genjutsu-swap", was: "Genjutsu Object Swap (Higgsfield)", note: "Object swap now runs on Fuobe Genjutsu (SAM 3.1 + Wan VACE)", original: true, ops: { v2v: { op: "video-swap" } } },
-  "genjutsu-lite-object-swap": { id: "fuobe-genjutsu-swap-lite", was: "Genjutsu Lite Object Swap (Higgsfield)", note: "Object swap Lite now runs on Fuobe Genjutsu Lite", original: true },
-  "genjutsu-restyle": { id: "fuobe-genjutsu-restyle", was: "Genjutsu Restyle (Higgsfield)", note: "Restyle now runs on Fuobe Genjutsu with a Fuobe look", original: true },
+  "genjutsu-object-swap": { id: "fuobe-genjutsu-swap", was: "Genjutsu Object Swap (earlier version)", note: "Object swap now runs on Fuobe Genjutsu (SAM 3.1 + Wan VACE)", original: true, ops: { v2v: { op: "video-swap" } } },
+  "genjutsu-lite-object-swap": { id: "fuobe-genjutsu-swap-lite", was: "Genjutsu Lite Object Swap (earlier version)", note: "Object swap Lite now runs on Fuobe Genjutsu Lite", original: true },
+  "genjutsu-restyle": { id: "fuobe-genjutsu-restyle", was: "Genjutsu Restyle (earlier version)", note: "Restyle now runs on Fuobe Genjutsu with a Fuobe look", original: true },
   // Marketing Studio Image's Original (O10): Qwen-Image-Edit 2511 with Fuobe's format templates on both engines.
-  "marketing-studio-image": { id: "fuobe-marketing-image", was: "Marketing Studio Image (Higgsfield)", note: "Marketing images now run on Fuobe Marketing Image (Qwen-Image-Edit 2511) with Fuobe's format prompts", original: true },
+  "marketing-studio-image": { id: "fuobe-marketing-image", was: "Marketing Studio Image (earlier version)", note: "Marketing images now run on Fuobe Marketing Image (Qwen-Image-Edit 2511) with Fuobe's format prompts", original: true },
   // Ads Studio's one-shot ad became Fuobe's Ads pipeline (copy, then a visual, composited in the browser); a single run reuses its visual model.
-  "ads-studio": { id: "fuobe-marketing-image", was: "Ads Studio (Higgsfield)", note: "Ads now come from Fuobe's Ads pipeline: written copy, a Fuobe Marketing Image visual and your fonts", original: true },
+  "ads-studio": { id: "fuobe-marketing-image", was: "Ads Studio (earlier version)", note: "Ads now come from Fuobe's Ads pipeline: written copy, a Fuobe Marketing Image visual and your fonts", original: true },
   // The AI Influencer sheet runs on Fuobe Soul (O10), as the builder's does: the Realistic look, a wide sheet.
-  "ai-influencer": { id: "fuobe-soul", was: "AI Influencer (Higgsfield)", note: "The AI Influencer sheet now runs on Fuobe Soul (the Soul Cast sheet on your GPU)", original: true },
+  "ai-influencer": { id: "fuobe-soul", was: "AI Influencer (earlier version)", note: "The AI Influencer sheet now runs on Fuobe Soul (the Soul Cast sheet on your GPU)", original: true },
 };
 
-/** Retired training targets (Higgsfield Soul ID) → the trainer that makes a Fuobe Soul ID from the same photos. */
+/** Retired training targets (the retired provider's Soul ID) → the trainer that makes a Fuobe Soul ID from the same photos. */
 export const TRAINING_REPLACED_BY: Readonly<Record<string, Replacement>> = {
-  "soul-id-v2": { id: "fal-z-image", was: "Soul ID for Soul 2.0 (Higgsfield)", note: "Train the character again for Fuobe Soul on the same photos" },
-  "soul-id-cinema": { id: "fal-z-image", was: "Soul ID for Soul Cinema (Higgsfield)", note: "Train the character again for Fuobe Soul on the same photos" },
+  "soul-id-v2": { id: "fal-z-image", was: "Soul ID for Soul 2.0 (earlier version)", note: "Train the character again for Fuobe Soul on the same photos" },
+  "soul-id-cinema": { id: "fal-z-image", was: "Soul ID for Soul Cinema (earlier version)", note: "Train the character again for Fuobe Soul on the same photos" },
 };
 
 /**
- * Operations of current partner models that only the retired provider ran (build plan, "What replaces each Higgsfield
+ * Operations of current partner models that only the retired provider ran (build plan, "What replaces each parity-studio
  * model": the lost ops) → the model that does them now.
  */
 export const OPS_REPLACED_BY: Readonly<Record<string, Partial<Record<Operation, OpReplacement>>>> = {

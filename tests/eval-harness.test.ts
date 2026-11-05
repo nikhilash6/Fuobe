@@ -1023,7 +1023,7 @@ describe("runEval as a library", () => {
     expect(runner.lorasMissing(jobs, null)).toBeNull();
   });
 
-  it("sends the shipped Soul Original the look's Fuobe id, never a Higgsfield one", () => {
+  it("sends the shipped Soul Original the look's Fuobe id, never a legacy one", () => {
     const { expandJobs } = plan;
     const jobs = expandJobs(cases.loadSuite("soul"), { engine: "open", looks: ["v1-general"], variants: ["original"], prompts: 1 });
     expect(jobs[0].request).toMatchObject({ modelId: "fuobe-soul", presetId: "v1-general", engine: "open" });

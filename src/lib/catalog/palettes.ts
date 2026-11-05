@@ -1,12 +1,12 @@
 /**
- * Colour signatures (Higgsfield's Soul HEX) and the Image studio's style signature: a saved palette
+ * Colour signatures (the parity studio's Soul HEX) and the Image studio's style signature: a saved palette
  * and/or a moodboard picked in the composer, and how each model gets them.
  *
  * Pure and catalog-free (the composer runs it in the browser; the server tests it): models are
  * passed in, and what only the server knows (which models take a palette field, their background
  * field) arrives as `SignatureCaps` from GET /api/palettes.
  *
- * Routing (docs/research/higgsfield-image-studios.md §4, §5):
+ * Routing (docs/research/parity-image-studios.md §4, §5):
  * - Palette → models with a palette field (Recraft V4.1 / Pro / Styles: ≤10 colours, Ideogram 3.0):
  *   `params.palette` (+ the background colour in its own field); every other model: the hex list written into
  *   the prompt (Fuobe Cinema too: a built-in palette's slug is no longer sent anywhere). Open
@@ -14,7 +14,7 @@
  *   a swatch); other open models can add a palette-transfer post-step (oss-palette-image, chained).
  * - Moodboard → curated: a Fuobe Soul look (Soul 2.0's 33, Soul's 106; src/lib/catalog/soul-cards.ts). On a model
  *   that takes looks (Fuobe Soul, Soul HD: options.looks) it is the look itself (presetId: its words and its LoRAs);
- *   on every other model its words. Picks saved with Higgsfield's old style ids still find their look.
+ *   on every other model its words. Picks saved with legacy style ids still find their look.
  *   Personal: cloud = the board's Recraft style id (Recraft models) or its most representative images
  *   as style references (Nano Banana Pro and other multi-reference models); open = the board's collages
  *   on Krea 2 Style Reference (or the style-reference model picked), or its trained style LoRA
@@ -57,7 +57,7 @@ export const MAX_SOURCE_IMAGES = 20;
 export const NAME_MAX = 60;
 export const HEX_RE = /^#[0-9a-f]{6}$/i;
 
-/** The manual editor's starting palette (Higgsfield's defaults). */
+/** The manual editor's starting palette (the researched defaults). */
 export const MANUAL_DEFAULT = { colors: ["#FFFFFF", "#D1FE17", "#1C1E20"], background: "#53C546" } as const;
 
 /** "#abc", "abcdef", " #ABCDEF " → "#ABCDEF"; anything else → null. */
@@ -149,7 +149,7 @@ export function rng(seed = 1): () => number {
   };
 }
 
-/** Higgsfield's "Random palettes": `n` rows of 2–12 uniformly random colours each (shown trimmed to 6). */
+/** The parity studio's "Random palettes": `n` rows of 2–12 uniformly random colours each (shown trimmed to 6). */
 export function randomPalettes(rand: () => number = Math.random, n = 4): string[][] {
   return Array.from({ length: n }, () => {
     const len = 2 + Math.floor(rand() * 11);
@@ -510,7 +510,7 @@ export function applySignature(req: GenerationRequest, sig: Signature | undefine
   if (mb) {
     if (mb.kind === "personal" && mb.status !== "complete") return { request: req, modelId: req.modelId, notes: [], blocker: mb.status === "failed" ? "This moodboard failed to build — retry it on the Moodboards page" : NOT_READY };
     if (mb.kind === "curated") {
-      // A look picked before the Originals carries Higgsfield's old id: it reads as its Fuobe look.
+      // A look picked before the Originals carries its legacy style id: it reads as its Fuobe look.
       const card = lookCard(mb.id);
       const look = card ? { ...mb, id: card.id, name: card.name, description: card.description } : mb;
       if (model.options.looks && card) r = { ...r, presetId: card.id };

@@ -1,6 +1,6 @@
 {
  "asOf": "2026-10-16",
- "generatedFrom": "fal.ai OpenAPI queue schemas (https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=...), fal llms.txt pages (pricing), fal Platform API catalog (https://api.fal.ai/v1/models), replicate.com model pages (embedded OpenAPI + billingConfig), docs.higgsfield.ai, hedra.com docs, docs.dev.runwayml.com",
+ "generatedFrom": "fal.ai OpenAPI queue schemas (https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=...), fal llms.txt pages (pricing), fal Platform API catalog (https://api.fal.ai/v1/models), replicate.com model pages (embedded OpenAPI + billingConfig), {studio-docs}, hedra.com docs, docs.dev.runwayml.com",
  "conventions": {
   "operation": "t2i|i2i|edit|t2v|i2v|flf2v|ref2v|v2v|lipsync|avatar|upscale-image|upscale-video|tts|sfx|music|v2a|bg-remove|face-swap (Replicate multi-mode models use \"+\"-joined ops)",
   "status": "active = listed in fal catalog; deprecated = fal catalog status deprecated; unlisted = schema served but hidden from catalog; removed = schema no longer served; retired-upstream = vendor shut the model down",
@@ -65,19 +65,19 @@
     "https://replicate.com/docs/topics/predictions/lifecycle"
    ]
   },
-  "higgsfield": {
-   "auth": "Authorization: Key {api_key_id}:{api_key_secret} (keys from console.higgsfield.ai). Optional Idempotency-Key header on submit.",
-   "submit": "POST https://api.higgsfield.ai/{model_endpoint_id} with the model input as raw JSON -> {\"status\":\"queued\",\"request_id\",\"status_url\",\"cancel_url\"}",
-   "status": "GET https://api.higgsfield.ai/requests/{request_id}/status -> {\"status\":\"queued\"|\"in_progress\"|\"completed\"|\"failed\"|\"nsfw\"|\"canceled\",\"request_id\",\"error\",\"images\":[{\"url\"}],\"video\":{\"url\"},\"audio\":{\"url\"},\"audios\":[...]}; poll 2 s growing to 10 s with jitter",
-   "cancel": "POST https://api.higgsfield.ai/requests/{request_id}/cancel (only while queued)",
-   "upload": "POST https://api.higgsfield.ai/files/generate-upload-url {\"content_type\":\"image/jpeg\"} -> {\"public_url\",\"upload_url\",\"content_type\",\"upload_headers\"}; PUT bytes to upload_url with every upload_headers header (no API credentials); use public_url. Upload URL expires in 1 h. Types: image/jpeg|jpg|png|webp|gif, audio/wav|x-wav, video/mp4.",
+  "parity": {
+   "auth": "Authorization: Key {api_key_id}:{api_key_secret} (keys from {studio-console}). Optional Idempotency-Key header on submit.",
+   "submit": "POST {studio-api}/{model_endpoint_id} with the model input as raw JSON -> {\"status\":\"queued\",\"request_id\",\"status_url\",\"cancel_url\"}",
+   "status": "GET {studio-api}/requests/{request_id}/status -> {\"status\":\"queued\"|\"in_progress\"|\"completed\"|\"failed\"|\"nsfw\"|\"canceled\",\"request_id\",\"error\",\"images\":[{\"url\"}],\"video\":{\"url\"},\"audio\":{\"url\"},\"audios\":[...]}; poll 2 s growing to 10 s with jitter",
+   "cancel": "POST {studio-api}/requests/{request_id}/cancel (only while queued)",
+   "upload": "POST {studio-api}/files/generate-upload-url {\"content_type\":\"image/jpeg\"} -> {\"public_url\",\"upload_url\",\"content_type\",\"upload_headers\"}; PUT bytes to upload_url with every upload_headers header (no API credentials); use public_url. Upload URL expires in 1 h. Types: image/jpeg|jpg|png|webp|gif, audio/wav|x-wav, video/mp4.",
    "retention": "Outputs available for at least 7 days.",
    "catalog": "84 entries (17 image, 67 video) incl. third-party Seedance 2/2.5, Kling 2.5/2.6/3/O3/Omni, Wan 2.6/2.7/3, MiniMax H3, Hailuo 2.3, LTX 2.5, PixVerse V6, Grok, Recraft, Qwen Image 3, Ideogram 4, Z-Image Turbo; first-party SOUL, SOUL V2, SOUL Cinema, Soul ID, Cinema Studio 4.0, Genjutsu motion transfer.",
    "sources": [
-    "https://docs.higgsfield.ai/docs/llms.txt",
-    "https://docs.higgsfield.ai/docs/concepts/requests.md",
-    "https://docs.higgsfield.ai/docs/concepts/file-uploads.md",
-    "https://docs.higgsfield.ai/docs/concepts/polling.md"
+    "{studio-docs}/docs/llms.txt",
+    "{studio-docs}/docs/concepts/requests.md",
+    "{studio-docs}/docs/concepts/file-uploads.md",
+    "{studio-docs}/docs/concepts/polling.md"
    ]
   }
  },
@@ -48540,12 +48540,12 @@
    "apiUrl": "https://api.replicate.com/v1/models/kwaivgi/kling-avatar/predictions"
   },
   {
-   "family": "higgsfield-soul",
-   "model": "Higgsfield SOUL (standard)",
-   "vendor": "Higgsfield",
+   "family": "studio-soul",
+   "model": "SOUL (standard)",
+   "vendor": "The parity studio",
    "operation": "t2i",
    "provider": "vendor",
-   "endpoint": "POST https://api.higgsfield.ai/higgsfield-ai/soul/standard",
+   "endpoint": "POST {studio-api}/{studio}/soul/standard",
    "status": "active",
    "inputs": {
     "prompt": {
@@ -48638,19 +48638,19 @@
     "numOutputs": "batch_size"
    },
    "output": "images[].url (poll status_url until status=completed)",
-   "price": "Credits; see console.higgsfield.ai (not on docs page)",
+   "price": "Credits; see {studio-console} (not on docs page)",
    "verified": true,
-   "statusNote": "docs.higgsfield.ai model page is authoritative; the supplementary /docs/openapi.json shows an older shape (num_images, resolution 2K/4K) - do not use it.",
+   "statusNote": "{studio-docs} model page is authoritative; the supplementary /docs/openapi.json shows an older shape (num_images, resolution 2K/4K) - do not use it.",
    "auth": "Authorization: Key {api_key_id}:{api_key_secret}",
-   "sourceUrl": "https://docs.higgsfield.ai/docs/models/soul-standard/generate.md"
+   "sourceUrl": "{studio-docs}/docs/models/soul-standard/generate.md"
   },
   {
-   "family": "higgsfield-soul",
-   "model": "Higgsfield SOUL V2",
-   "vendor": "Higgsfield",
+   "family": "studio-soul",
+   "model": "SOUL V2",
+   "vendor": "The parity studio",
    "operation": "t2i",
    "provider": "vendor",
-   "endpoint": "POST https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard",
+   "endpoint": "POST {studio-api}/{studio}/soul/v2/standard",
    "status": "active",
    "inputs": {
     "prompt": {
@@ -48736,18 +48736,18 @@
     "numOutputs": "batch_size"
    },
    "output": "images[].url",
-   "price": "Credits; see console.higgsfield.ai",
+   "price": "Credits; see {studio-console}",
    "verified": true,
    "auth": "Authorization: Key {api_key_id}:{api_key_secret}",
-   "sourceUrl": "https://docs.higgsfield.ai/docs/models/soul-2/generate.md"
+   "sourceUrl": "{studio-docs}/docs/models/soul-2/generate.md"
   },
   {
-   "family": "higgsfield-soul",
-   "model": "Higgsfield SOUL Cinema",
-   "vendor": "Higgsfield",
+   "family": "studio-soul",
+   "model": "SOUL Cinema",
+   "vendor": "The parity studio",
    "operation": "t2i",
    "provider": "vendor",
-   "endpoint": "POST https://api.higgsfield.ai/higgsfield-ai/soul/cinema",
+   "endpoint": "POST {studio-api}/{studio}/soul/cinema",
    "status": "active",
    "inputs": {
     "prompt": {
@@ -48821,18 +48821,18 @@
     "numOutputs": "batch_size"
    },
    "output": "images[].url",
-   "price": "Credits; see console.higgsfield.ai",
+   "price": "Credits; see {studio-console}",
    "verified": true,
    "auth": "Authorization: Key {api_key_id}:{api_key_secret}",
-   "sourceUrl": "https://docs.higgsfield.ai/docs/models/soul-cinema/generate.md"
+   "sourceUrl": "{studio-docs}/docs/models/soul-cinema/generate.md"
   },
   {
-   "family": "higgsfield-cinema",
-   "model": "Higgsfield Cinema Studio 4.0",
-   "vendor": "Higgsfield",
+   "family": "studio-cinema",
+   "model": "Cinema Studio 4.0",
+   "vendor": "The parity studio",
    "operation": "t2v+ref2v",
    "provider": "vendor",
-   "endpoint": "POST https://api.higgsfield.ai/higgsfield/cinema-studio/4.0",
+   "endpoint": "POST {studio-api}/{studio}/cinema-studio/4.0",
    "status": "active",
    "inputs": {
     "prompt": {
@@ -49029,15 +49029,15 @@
     "generateAudio": "generate_audio"
    },
    "output": "video.url",
-   "price": "Credits; see console.higgsfield.ai",
+   "price": "Credits; see {studio-console}",
    "verified": true,
    "auth": "Authorization: Key {api_key_id}:{api_key_secret}",
-   "sourceUrl": "https://docs.higgsfield.ai/docs/models/cinema-studio-4/generate.md"
+   "sourceUrl": "{studio-docs}/docs/models/cinema-studio-4/generate.md"
   },
   {
-   "family": "higgsfield-dop",
-   "model": "Higgsfield DoP (image-to-video with motion presets)",
-   "vendor": "Higgsfield",
+   "family": "studio-dop",
+   "model": "DoP (image-to-video with motion presets)",
+   "vendor": "The parity studio",
    "operation": "i2v",
    "provider": "vendor",
    "endpoint": null,
@@ -49046,8 +49046,8 @@
    "output": null,
    "price": null,
    "verified": false,
-   "statusNote": "DoP is NOT in the docs.higgsfield.ai API catalog (84 entries checked 2026-10-16: Soul/Soul V2/Soul Cinema/Soul ID, Cinema Studio 4.0, Genjutsu + third-party models). Only a third-party host (WaveSpeed: POST https://api.wavespeed.ai/api/v3/higgsfield/dop/image-to-video with prompt, image, motions[], options e.g. \"dop-turbo\") was found; schema not verified.",
-   "sourceUrl": "https://docs.higgsfield.ai/docs/models.md"
+   "statusNote": "DoP is NOT in the {studio-docs} API catalog (84 entries checked 2026-10-16: Soul/Soul V2/Soul Cinema/Soul ID, Cinema Studio 4.0, Genjutsu + third-party models). Only a third-party host (WaveSpeed: POST https://api.wavespeed.ai/api/v3/{studio}/dop/image-to-video with prompt, image, motions[], options e.g. \"dop-turbo\") was found; schema not verified.",
+   "sourceUrl": "{studio-docs}/docs/models.md"
   },
   {
    "family": "hedra",

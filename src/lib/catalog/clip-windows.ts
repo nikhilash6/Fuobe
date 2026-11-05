@@ -12,7 +12,7 @@ const SOURCE_SECONDS: Record<string, { min?: number; max?: number }> = {
   "happy-horse-video-edit": { min: 3, max: 15 },
   "runway-aleph-2": { min: 2, max: 30 },
   "wan-2-7": { min: 2, max: 10 },
-  // Higgsfield feeds Gemini Omni Flash ≤10 s segments.
+  // The parity studio feeds Gemini Omni Flash ≤10 s segments.
   "gemini-omni-flash": { max: 10 },
   // fal's H3 Max relight: "up to 15 seconds", resampled to 24 fps and trimmed to 17n+5 frames, "at least 56 frames (about 2.33 seconds)".
   "minimax-h3-max-relight": { min: 2.4, max: 15 },

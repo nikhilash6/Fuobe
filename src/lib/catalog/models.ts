@@ -1280,7 +1280,7 @@ const open: ModelDef[] = [
     // VideoDepthAnythingOutput draws gray or inferno only; turbo, magma and viridis are the cloud's.
     options: { colormaps: ["grayscale", "inferno"], sideBySide: true },
   }),
-  // Higgsfield's Depth Map runs Video Depth Anything Large (build plan O11). Its weights are CC-BY-NC-4.0: the licence is
+  // The parity studio's Depth Map runs Video Depth Anything Large (build plan O11). Its weights are CC-BY-NC-4.0: the licence is
   // information (Settings → Models & licences lists it as Non-commercial, with a switch); the Depth map's default stays Small.
   o({
     id: "oss-video-depth-vda-large",
@@ -2920,7 +2920,7 @@ const originals: ModelDef[] = [
     // 21:9 is a crop of the 16:9 picture, made after generation (research §4.5).
     options: { ...SOUL_OPTIONS, aspectRatios: [...SOUL_ASPECTS, CINEMA_CROP] },
   }),
-  // Fuobe DoP (O4): camera motions, Mix and effects (src/lib/catalog/dop.ts maps each preset to its LoRAs). Higgsfield's
+  // Fuobe DoP (O4): camera motions, Mix and effects (src/lib/catalog/dop.ts maps each preset to its LoRAs). The parity studio's
   // DoP makes 3 or 5 s clips from a start frame; "auto" keeps the picture's shape.
   {
     ...original({
@@ -3003,7 +3003,7 @@ const originals: ModelDef[] = [
     // Wan 2.2 Lightning: 3 or 5 s, three shapes, 480p or 720p, no sound; several shots render one clip each, then join.
     engineOptions: { open: { durations: [3, 5], aspectRatios: VID_AR, resolutions: ["480p", "720p"], audio: false, multiShot: CONCAT_SHOTS } },
   },
-  // Fuobe Genjutsu (O5): Higgsfield's Genjutsu rebuilt on open weights, one model per mode on both engines, and Lite as the
+  // Fuobe Genjutsu (O5): the parity studio's Genjutsu rebuilt on open weights, one model per mode on both engines, and Lite as the
   // cheaper, faster tier of the same Original (src/lib/catalog/genjutsu.ts plans the pieces, masks, looks and sound).
   original({
     id: "fuobe-genjutsu-motion",
@@ -3041,7 +3041,7 @@ const originals: ModelDef[] = [
     tagline: "Every frame takes a Fuobe look, motion and framing kept · Wan 2.2 Fun VACE free on your GPU (24 GB), or hosted on fal",
     options: { seed: true, negativePrompt: true, resolutions: ["480p", "720p"], maxImages: 4 },
   }),
-  // Fuobe Evolution (O13): Higgsfield Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
+  // Fuobe Evolution (O13): Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
   // frame and the sound; Video tools → Evolution is its studio). Wan 2.2 Fun VACE on both engines: the graph on your GPU,
   // fal's hosted depth route in the cloud (since 2026-10-30; LTX-2.3 before). The change intensity is
   // the denoise the GPU graph starts from; fal's route has no such field, so in the cloud the change shapes only the
@@ -3084,7 +3084,7 @@ const originals: ModelDef[] = [
     tagline: "The person in your clip becomes your character · MiniMax H3 free on your GPU (48 GB+ advised), or hosted on fal",
     options: { seed: true, resolutions: ["480p", "768p"], maxImages: 2 },
   }),
-  // Marketing Studio Image and Fashion Factory's try-on (O10): Higgsfield's GPT Image 2.5 templates and Nano Banana outfit
+  // Marketing Studio Image and Fashion Factory's try-on (O10): the parity studio's GPT Image 2.5 templates and Nano Banana outfit
   // steps rebuilt on Apache-2.0 open weights (docs/research/fuobe-originals-recipes-5.json studios[marketing]).
   {
     ...original({
@@ -3121,7 +3121,7 @@ const originals: ModelDef[] = [
       },
     }),
   },
-  // Fuobe Mixed Media (O9): Higgsfield's Mixed Media rebuilt on Z-Image Turbo + its Fun ControlNet, every frame drawn
+  // Fuobe Mixed Media (O9): the parity studio's Mixed Media rebuilt on Z-Image Turbo + its Fun ControlNet, every frame drawn
   // again in the look (its LoRA from the research's looks map) at one seed. On your GPU the whole selection is one
   // per-frame job (v2v); in the cloud src/lib/catalog/mixed-media.ts fans the frame route out over every frame and puts
   // them back together. "edit" is one frame in the look on both engines: the preview, Smooth's first frame and DoP's
@@ -3152,7 +3152,7 @@ const originals: ModelDef[] = [
     // The GPU graph follows a restyled first frame it can't make itself (fal's route runs without one, on the words).
     engineOptions: { open: { requires: { images: 1, msg: "Add the clip's first frame in the new look: Wan 2.2 Fun VACE carries it through every frame" } } },
   },
-  // Fuobe Angles (O11): Higgsfield Angles' recipe, Qwen-Image-Edit 2509 with dx8152's Multiple-angles LoRA. The camera is the
+  // Fuobe Angles (O11): the Angles recipe from the parity research, Qwen-Image-Edit 2509 with dx8152's Multiple-angles LoRA. The camera is the
   // hosted route's own fields on both engines (rotate −90…90°, positive = left; tilt −1…1; move forward 0–10; a wide-angle lens in
   // the Angles app); on the GPU src/lib/catalog/open-tools.ts turns them into the LoRA's words. Words of your own are the GPU's
   // only (fal's route has no prompt field).
@@ -3166,7 +3166,7 @@ const originals: ModelDef[] = [
     // The GPU graph loads the LoRA itself; as the recipe's LoRA it is downloaded before a run and has a switch in Settings.
     engineOptions: { open: { ...(ANGLES_LORA && { loras: [ANGLES_LORA] }) }, cloud: { promptless: true } },
   },
-  // Fuobe Speak (O11): InfiniteTalk. On the GPU, Higgsfield's Infinite Talk settings on kijai's wrapper graph (FusioniX in place of
+  // Fuobe Speak (O11): InfiniteTalk. On the GPU, the parity studio's Infinite Talk settings on kijai's wrapper graph (FusioniX in place of
   // the lightx2v distill LoRA, 15 motion frames, 25 steps, shift 10, text and audio guidance 5, colour match): about ten times the
   // fast pass's time (InfiniteTalk Long). In the cloud, fal's InfiniteTalk, which takes none of those knobs. As long as the voice.
   {

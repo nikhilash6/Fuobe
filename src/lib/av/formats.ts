@@ -1,7 +1,7 @@
 import type { VideoFormat } from "@/lib/catalog/types";
 
 /**
- * How each output format reads in the composer (Higgsfield's SDR to HDR copy for the three it offers),
+ * How each output format reads in the composer (the parity studio's SDR to HDR copy for the three it offers),
  * and the file it makes. Pure data, client and server.
  */
 export const FORMAT_INFO: Record<VideoFormat, { label: string; short: string; hint: string; ext: string }> = {

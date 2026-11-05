@@ -1,6 +1,6 @@
 /**
  * Assist: a chat agent that plans a shoot, picks models, shows the cost, asks before spending
- * and then runs the generations (Higgsfield's "Supercomputer"). Shared by the server loop and the UI.
+ * and then runs the generations (the parity studio's "Supercomputer"). Shared by the server loop and the UI.
  *
  * Besides the chat itself this holds the pure parts of Skills (SKILL.md parsing and validation,
  * `/name` invocation), Memory (categories, import parsing) and the context the agent is given

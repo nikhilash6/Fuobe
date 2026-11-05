@@ -2,7 +2,7 @@
   "$schema": "./case.schema.json",
   "suite": "speak",
   "title": "Fuobe Speak · talking portraits",
-  "description": "A portrait and a voice track you supply (local/speak/portrait.png of a consenting person, local/speak/voice.wav, 5–15 s of clear speech). Measures lip-sync (a mouth-motion / audio-envelope proxy; SyncNet when you install it, see the README), temporal consistency and identity against the portrait. Fuobe Speak (O11) is InfiniteTalk with Higgsfield's Infinite Talk settings on the GPU (FusioniX, 15 motion frames, 25 steps, shift 10, guidance 5 / 5) and fal's InfiniteTalk in the cloud; the s2v variant is Fuobe Speak · Motion (Wan 2.2 S2V, a Speak v1-like route). The fast InfiniteTalk graphs stay the baseline until this suite promotes the recipe.",
+  "description": "A portrait and a voice track you supply (local/speak/portrait.png of a consenting person, local/speak/voice.wav, 5–15 s of clear speech). Measures lip-sync (a mouth-motion / audio-envelope proxy; SyncNet when you install it, see the README), temporal consistency and identity against the portrait. Fuobe Speak (O11) is InfiniteTalk with the parity studio's Infinite Talk settings on the GPU (FusioniX, 15 motion frames, 25 steps, shift 10, guidance 5 / 5) and fal's InfiniteTalk in the cloud; the s2v variant is Fuobe Speak · Motion (Wan 2.2 S2V, a Speak v1-like route). The fast InfiniteTalk graphs stay the baseline until this suite promotes the recipe.",
   "original": "fuobe-speak",
   "kind": "video",
   "targets": {

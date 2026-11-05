@@ -1,14 +1,16 @@
-# Higgsfield delta, round 4 (since the round-3 inventory)
+# The studio's delta, round 4 (since the round-3 inventory)
 
-_As of 2026-10-22. Machine-readable twin: [`higgsfield-delta-4.json`](higgsfield-delta-4.json). This updates [`higgsfield-inventory.md`](higgsfield-inventory.md) (as of 2026-10-16), [`higgsfield-studios.md`](higgsfield-studios.md), [`higgsfield-image-studios.md`](higgsfield-image-studios.md) and [`higgsfield-marketing-agents.md`](higgsfield-marketing-agents.md), and is measured against [`../STATUS.md`](../STATUS.md) §2 (round 3)._
+_In this file, "the studio" means the closed AI image and video studio that this research measures Fuobe against._
+
+_As of 2026-10-22. Machine-readable twin: [`parity-delta-4.json`](parity-delta-4.json). This updates [`parity-inventory.md`](parity-inventory.md) (as of 2026-10-16), [`parity-studios.md`](parity-studios.md), [`parity-image-studios.md`](parity-image-studios.md) and [`parity-marketing-agents.md`](parity-marketing-agents.md), and is measured against [`../STATUS.md`](../STATUS.md) §2 (round 3)._
 
 **How this was researched (all on 2026-10-22).** Logged-in screens were not observed. The findings come from:
 
 1. The changelog RSS (`/creator-hub/changelog/rss.xml`, 131 entries, last build 2026-10-21 23:14 UTC) and the blog, creator-hub and apps sitemaps.
-2. The production web bundle: build `1a2c0e3d`, 8,521 JS chunks crawled from `assets.higgsfield.ai/tanstack/assets/` (round 3 read build `868a8dba`). Option lists, defaults, validators and job payloads are read straight from code.
+2. The production web bundle: build `1a2c0e3d`, 8,521 JS chunks crawled from `{studio-assets}/tanstack/assets/` (round 3 read build `868a8dba`). Option lists, defaults, validators and job payloads are read straight from code.
 3. The per-route i18n catalogs (`/_i18n/routes/en/delta.<hash>.json`). Each current catalog was diffed against the round-3 hash of the same route to find new UI copy.
-4. Public endpoints that answer without a login: `fnf.higgsfield.ai/job-sets/costs` (61 credit-cost rows), `fnf.higgsfield.ai/subscriptions/plans` (41 plan rows), `canvas-worker.higgsfield.ai/api/templates`, `open.higgsfield.ai/pricing`.
-5. Higgsfield's open-source CLI and skills repos on GitHub (`higgsfield-ai/cli` at `fd21e7c`, 2026-10-17; `higgsfield-ai/skills` at `f83af0b`, v0.13.0), the CLI blog post (2026-10-19), four Community help articles, the PR Newswire release of 2026-10-19.
+4. Public endpoints that answer without a login: `{studio-service}/job-sets/costs` (61 credit-cost rows), `{studio-service}/subscriptions/plans` (41 plan rows), `{studio-service}/api/templates`, `{studio-service}/pricing`.
+5. The studio's open-source CLI and skills repos on GitHub (`{studio}/cli` at `fd21e7c`, 2026-10-17; `{studio}/skills` at `f83af0b`, v0.13.0), the CLI blog post (2026-10-19), four Community help articles, the PR Newswire release of 2026-10-19.
 6. For the Fuobe routes: fal's model search and OpenAPI files, and Hugging Face model cards.
 
 Anything reasoned from code rather than seen in the app is marked *(inferred)*. Anything not confirmed is marked **unverified**. Every source is listed at the end with its URL.
@@ -19,12 +21,12 @@ Anything reasoned from code rather than seen in the app is marked *(inferred)*. 
 
 - **Eight changelog entries are newer than the inventory:** Kling 4.0 (Oct 21), Chinese UI (Oct 20), Genjutsu Lite (Oct 19), 3D Angles in the ChatGPT plugin (Oct 19), an Iman Gadzhi Discord contest and an Academy course (Oct 16), a new FLUX 3 Video Upscaler build and the public Community page (Oct 15).
 - **New in the top navigation: "Content Factory" (`/content-factory`, internal name "What If").** It makes faceless short-video series from a trending reference. It runs in Claude through the MCP, or "here".
-- **Unannounced studios are in the bundle.** These are **3D Jutsu** as a desktop web studio (live at `/3d-jutsu`), **Higgsfield Evolution** (a gated test model), **Tube / Reels Studio** (avatar reels), **AI Host** (YouTube avatar channels, returns 404) and a standalone **Video Editor** (404).
+- **Unannounced studios are in the bundle.** These are **3D Jutsu** as a desktop web studio (live at `/3d-jutsu`), **Evolution** (a gated test model), **Tube / Reels Studio** (avatar reels), **AI Host** (YouTube avatar channels, returns 404) and a standalone **Video Editor** (404).
 - **Video remove-object is real and priced, but on the web it is prompt editing.** The "Remove Object from Video" page sends users to Edit Video with **Kling 3.0 Omni Edit**. Separately, `remove_object` / `swap_object` jobs exist server-side at 3 / 4.5 / 12 credits per second plus 3.5 credits per frame edit. No web screen uses them, so they serve agents *(inferred)*.
 - **The whole Upscale / video-tools menu is now readable from code.** It has 8 tools: Edit Video, Extend, Reframe, Upscale (4 models), Remove Background, SDR to HDR, FPS Boost and Depth Map, with every option, default and limit. That closes most of STATUS's 🟡 "Upscale video" row.
 - **Cinema Studio's 3D scene is a Gaussian splat.** The image becomes a splat (3 credits), shown in a WebGL splat viewer with WASD fly controls and a focal-length / aperture / aspect panel. A **Capture** of the current view is then re-rendered by an image model (recomposition, 2 credits). The same tech now powers **3D Angles** in ChatGPT and **3D Jutsu**.
 - **AI Influencer's builder is fully specified in code.** There are 19 categories and 3 human tiers (Average / Bold / Extreme). There are 6 creature types (insect, frog, cat, dog, rodent, bird) with 5–10 species each. The code also gives every option with its swatch hex, the slot rules, two conflict rules and the exact Shuffle weights.
-- **Higgsfield has an open-source CLI (MIT) and an 8-skill repo.** The CLI's model catalog adds 3D jobs (text-to-3D, multi-image-to-3D, rigging with animation presets, SAM 3D objects), "OpenAI Hazel" (the internal job family behind GPT Image 2 / 2.5) and TTS engines (`cozy_voice`, `vibe_voice`, `seed_speech`).
+- **The studio has an open-source CLI (MIT) and an 8-skill repo.** The CLI's model catalog adds 3D jobs (text-to-3D, multi-image-to-3D, rigging with animation presets, SAM 3D objects), "OpenAI Hazel" (the internal job family behind GPT Image 2 / 2.5) and TTS engines (`cozy_voice`, `vibe_voice`, `seed_speech`).
 - **Community is now public.** It has Shots, Open Projects (With prompts or Prompts hidden), Blog posts, rating points and achievements, and Grants of up to 200,000 credits. Sharing has project-level "comment" and "reuse/duplicate" access, and Genjutsu setups can be shared by code.
 - **Plan prices are now verified** from the public plans endpoint (Starter $15 / 200 credits, Pro $29 / 600, Plus $49 / 1,000, Ultra $129 / 3,000 and more). They are recorded in §5.
 - **New paid routes for Fuobe's ⬜ rows exist on fal.** These are `topaz/interpolate/video`, `topaz/sdr-to-hdr/video`, `tripo3d/triposplat`, `fal-ai/sam-3/3d-objects`, `fal-ai/meshy/rigging` and `tripo3d/h3.1/text-to-3d`. `kling/v4/*` (Kling 4.0) is listed (2026-10-16), but it is **not callable yet**: every page says "Kling 4.0 is available in the playground and fal Agent. API access is coming soon." *(critic check 2026-10-22, see §8)*. **New open routes:** TripoSplat (MIT; native ComfyUI core nodes since template 2026-06-02), MoGe 2 / 3 whole-scene meshes (MIT, core nodes), UniRig (MIT), and the LTX-2.5 IC-LoRA SDR-to-HDR (LTX community licence). DiffuEraser is not a clean open route: its default pipeline needs ProPainter weights (S-Lab licence, non-commercial).
@@ -43,8 +45,8 @@ Anything reasoned from code rather than seen in the app is marked *(inferred)*. 
 | 2026-10-19 | **3D Angles** (ChatGPT plugin) | A photo, video or text becomes a 3D scene you reshoot. Lenses 24–300 mm, apertures f/1.4–f/16, 8 frame formats from 1:1 to 21:9. WASD to move, drag to rotate, scroll to zoom. Output is a photo or a video up to 30 s, and "draft videos let you check the camera move". Pick GPT-6 Astra first | no |
 | 2026-10-16 | Iman Gadzhi Discord contest | $50,000 in 10 × $5,000 prizes; entries close 2026-10-24 | n/a (marketing) |
 | 2026-10-16 | Academy course "AI Creation: First Steps" | Intro plus 7 lessons (1 h 42 min) with PDFs. Homework uses your generations from the last 3 days. LinkedIn certificate | n/a |
-| 2026-10-15 | **FLUX 3 Video Upscaler update** | A new build replaced the old one in Upscale: sharper, faster and fewer credits. "Currently available only on Higgsfield" | no |
-| 2026-10-15 | **Higgsfield Community** | Public page with no login: Discovery (Featured Creators), Projects, Shots, Creators, Contests, Originals. Featured after 30 likes or via Grants. Grants of up to 200,000 credits for an Open Project with a video ≥ 1 min | partly (Community existed; public page, Grants terms, ratings are new) |
+| 2026-10-15 | **FLUX 3 Video Upscaler update** | A new build replaced the old one in Upscale: sharper, faster and fewer credits. "Currently available only on the studio" | no |
+| 2026-10-15 | **The studio's Community** | Public page with no login: Discovery (Featured Creators), Projects, Shots, Creators, Contests, Originals. Featured after 30 likes or via Grants. Grants of up to 200,000 credits for an Open Project with a video ≥ 1 min | partly (Community existed; public page, Grants terms, ratings are new) |
 | 2026-10-13 | Unlimited Wan 3.0 for 7 days, 60% off on the API | Until 2026-10-31; plans from Pro up | yes |
 | 2026-10-08 | Katana | — | yes |
 
@@ -53,32 +55,32 @@ Anything reasoned from code rather than seen in the app is marked *(inferred)*. 
 | Item | Evidence | Status |
 |---|---|---|
 | **Content Factory** (`/content-factory`, nav label "Content Factory · New", nav id "What If") | Header nav on every page; i18n delta `1a03ac397b`; chunks `x-gpkaootj6Z-tim.js` (`POST /what-if/compose`), `IAi1M8IkobQfft7U.js` | Live (§4.9) |
-| **3D Jutsu web studio** (`/3d-jutsu`, `/3d-jutsu/$projectId`) | Page title "3D Jutsu • Higgsfield"; delta `7dcfabc5a5` | Live, desktop only (§4.10) |
-| **Higgsfield Evolution** (`hf_evolution`) | Video strings ("Upload a video and let Higgsfield Evolution take it further…"); cost row 7 credits/s at 720p; payload in `Np-SNe-7mCPEWBa9.js` | Gated: "TEST MODEL; VISIBLE ONLY FOR USERS WITH HIGGSFIELD AI/COM EMAIL" and "not available for this account" (§4.11) |
-| **Tube / Reels Studio** (`/tube`) | Title "Tube \| Higgsfield"; delta `be14edcb07`: "Create reels starring your avatar", "Write what the presenter says", "Use an uploaded audio as the voice", source video 10–120 s; job constant `TUBE_FACELESS_VIDEO = youtube_faceless_video` | Route renders. Not linked from nav **(unverified whether usable)** |
+| **3D Jutsu web studio** (`/3d-jutsu`, `/3d-jutsu/$projectId`) | Page title "3D Jutsu • the studio"; delta `7dcfabc5a5` | Live, desktop only (§4.10) |
+| **Evolution** (`hf_evolution`) | Video strings ("Upload a video and let Evolution take it further…"); cost row 7 credits/s at 720p; payload in `Np-SNe-7mCPEWBa9.js` | Gated: "TEST MODEL; VISIBLE ONLY FOR USERS WITH STUDIO AI/COM EMAIL" and "not available for this account" (§4.11) |
+| **Tube / Reels Studio** (`/tube`) | Title "Tube \| The studio"; delta `be14edcb07`: "Create reels starring your avatar", "Write what the presenter says", "Use an uploaded audio as the voice", source video 10–120 s; job constant `TUBE_FACELESS_VIDEO = youtube_faceless_video` | Route renders. Not linked from nav **(unverified whether usable)** |
 | **AI Host** (`/ai-host`, `/ai-host_/channels`, `/ai-host_/channel/$id`) | Delta `f60d5e91ef`: "Create your video host", "Set up avatar, voice & location", "Connect to YouTube", "Up to 20 minutes", topic genres, "Adjust in built-in editor & publish". Cost row `ai_host_video` 3.3 / 7.7 / 17.6 credits/s | Returns HTTP 404: unreleased |
 | **Video Editor** (`/video-editor`) | Delta `ce33b42258`: "Use a remote project as this editor's storage?" (an editor that an agent session can attach to) | Returns 404: unreleased |
 | **Seedance 2.0 4K free gens** (`/seedance-4k`) | Title "Seedance 2.0 in 4K free gens" | Promo page |
 | **ElevenLabs Video to Music** (`elevenlabs_video_to_music`) | Cost row: `music_v1`, `music_v2` at 4 credits/min, `music_v2_5` at 9 credits/min | Priced. The screen was not found **(unverified)** |
 | **Supercomputer Scheduled Tasks** | PR Newswire 2026-10-19: "Scheduled Tasks: automated runs, such as daily ad variations, weekly competitor scans, and recurring content calendars." Also "up to 100 UGC and ad variants per product in minutes", new AI Employees (Product Photographer, Motion Designer, Cartoon Animator, Podcast Producer) | Announced. UI strings not found in the web bundle **(unverified)** |
 | **Custom MCP connector** in Supercomputer | Strings "Custom MCP connector (HTTP header)", "Custom MCP connector added" | Live *(inferred)* |
-| **Telegram bot** | `/higgsfield-telegram-intro`: "Your AI team for research, creative production, and recurring tasks - right inside Telegram". The MCP page now has tabs ChatGPT, Claude, Claude Code, Telegram, CLI, Other and names OpenClaw, Hermes Agent, NemoClaw | Live |
-| **Higgsfield CLI** (MIT) | `github.com/higgsfield-ai/cli`; blog 2026-10-19 | Live (§4.12) |
+| **Telegram bot** | `/{studio}-telegram-intro`: "Your AI team for research, creative production, and recurring tasks - right inside Telegram". The MCP page now has tabs ChatGPT, Claude, Claude Code, Telegram, CLI, Other and names OpenClaw, Hermes Agent, NemoClaw | Live |
+| **The studio's CLI** (MIT) | `{studio-github}/cli`; blog 2026-10-19 | Live (§4.12) |
 | **Cinema Studio picks up Kling 4.0 and Genjutsu** | Cinema delta adds the Kling 4.0 limits, "Motion video", "Background control / Background source", "Scene reference", Genjutsu Lite strings, and contest-project lock copy ("Contest projects are read-only while the jury is reviewing") | Live |
-| **Creator profile upgrades** | Profile delta: "Member since", "Creators' rating points", "Copy Discord username", "Add your location", "credits spent" counter, "Higgsfield Selected", "No weekly challenge right now" | Live |
+| **Creator profile upgrades** | Profile delta: "Member since", "Creators' rating points", "Copy Discord username", "Add your location", "credits spent" counter, "Selected", "No weekly challenge right now" | Live |
 | **Credit-pack promos in Supercomputer** | "+N% bonus credits", "This is the lowest price this offer will ever be", "With limited-offer promocode" | Monetisation only |
 | **Pricing perks** | "Genjutsu Lite" free-generation row; "Nano Banana Pro, Nano Banana 2 & Kling 3.0 Unlimited"; "Unlimited until November 30"; "SOC 2-aligned controls"; "Unlimited members & Dedicated capacity" | Live |
 
-**No new Apps:** the apps sitemap has 100 URLs. The 8 not in the inventory's 94 are category pages (`video-editing`, `trending-templates`, `games-characters`, `face-identity`, `extras`, `enhance-style`, `camera-motion`, `ads-products`). **No new camera motions, effects or Mixed Media presets:** the sitemaps still list 229 motion pages and 33 Mixed Media presets. **No new Canvas templates:** the same 5 still come from `canvas-worker.higgsfield.ai/api/templates`.
+**No new Apps:** the apps sitemap has 100 URLs. The 8 not in the inventory's 94 are category pages (`video-editing`, `trending-templates`, `games-characters`, `face-identity`, `extras`, `enhance-style`, `camera-motion`, `ads-products`). **No new camera motions, effects or Mixed Media presets:** the sitemaps still list 229 motion pages and 33 Mixed Media presets. **No new Canvas templates:** the same 5 still come from `{studio-service}/api/templates`.
 
 ### 2.3 New or newly named models
 
-| Model | Vendor | Kind | Where on Higgsfield | fal | Replicate |
+| Model | Vendor | Kind | Where on the studio | fal | Replicate |
 |---|---|---|---|---|---|
 | **Kling 4.0** (`kling4_0`) | Kuaishou | video: text, image/keyframes, references, edit | `/ai/video?model=kling4_0`, `/kling-4-0-intro`, Cinema Studio | **listed, playground-only**: `kling/v4/text-to-video`, `kling/v4/image-to-video`, `kling/v4/reference-to-video`, `kling/v4/video-to-video/edit` (listed 2026-10-16; "API access is coming soon" on 2026-10-22) | no (2026-10-22: `kwaivgi` lists up to v3) |
 | Kling 4.0 Flash | Kuaishou | video drafts, 720p, ≤ 20 s | landing page only; no `kling4_0_flash` id in the bundle | not found | no |
-| **Higgsfield Genjutsu Lite** (`hf_mult_motion_control_flash`, `hf_mult_replace_object_flash`) | Higgsfield | video-to-video | `/ai/video?model=genjutsu-lite`; API `genjutsu-light/{motion-transfer,object-swap}/v1.0` | no | no |
-| **Higgsfield Evolution** (`hf_evolution`) | Higgsfield | video-to-video ("evolve" a clip) | gated test model | no | no |
+| **Genjutsu Lite** (`hf_mult_motion_control_flash`, `hf_mult_replace_object_flash`) | The studio | video-to-video | `/ai/video?model=genjutsu-lite`; API `genjutsu-light/{motion-transfer,object-swap}/v1.0` | no | no |
+| **Evolution** (`hf_evolution`) | The studio | video-to-video ("evolve" a clip) | gated test model | no | no |
 | FLUX 3 Video Upscaler (new build, Oct 15) | Black Forest Labs | video upscale | Upscale → FLUX.3 Upscale | `blackforestlabs/flux-video-upscale` (listed 2026-08-20; whether it serves the new build is **unverified**) | no |
 | "OpenAI Hazel" (`openai_hazel`, `openai_hazel_mini`) | OpenAI | image | internal job family behind GPT Image 2 / 2.5 / `imagegen_2_0`; listed as its own id in the CLI (AR 1:1, 3:2, 2:3, auto; quality low/medium/high; ≤ 16 refs) | n/a | n/a |
 | Text to 3D (`tripo_3d`) | Tripo *(inferred from name and params)* | 3D | CLI only | `tripo3d/h3.1/text-to-3d` | — |
@@ -93,19 +95,19 @@ Anything reasoned from code rather than seen in the app is marked *(inferred)*. 
 
 ## 3. Prioritized gap table
 
-P0 = a core creative feature a Higgsfield user would miss at once; P3 = nice to have. Effort: S ≤ 2 days, M ≤ 1 week, L ≤ 3 weeks, XL more. "STATUS" is `docs/STATUS.md` §2 (round 3).
+P0 = a core creative feature a studio user would miss at once; P3 = nice to have. Effort: S ≤ 2 days, M ≤ 1 week, L ≤ 3 weeks, XL more. "STATUS" is `docs/STATUS.md` §2 (round 3).
 
 | ID | Pri | Effort | Area | Gap | Fuobe now (STATUS) | Cloud route | Open route |
 |---|---|---|---|---|---|---|---|
-| G01 | **P0** | M | Video tools | **Remove object / erase from video** (prompt-driven, plus a mask option) | ⬜ "Remove object ⬜ (Edit video with a prompt is the closest)" | Kling O3 edit with the removal prompt (Higgsfield's own route, already in the catalog; 3–15 s); `bria/video/erase/prompt` (≤ 5 s per call, `auto_trim`) and `bria/video/erase/mask`; `fal-ai/ltx-2.3-quality/clean-plate` (people only) | SAM 3.1 text mask → Wan 2.1 VACE inpaint (`video-inpaint-wan-vace` in comfyui-oss-4, with the Apache lightx2v LoRA, not the template's CC-BY-NC CausVid) or VOID (`video-erase-void`). Not DiffuEraser: its default pipeline needs ProPainter weights (S-Lab, non-commercial) |
-| G02 | **P0** | S (when the API opens) | Models | **Kling 4.0**: references (≤ 10 img, ≤ 5 video, ≤ 7 elements, ≤ 15 total), up to 10 keyframes, edit, 3–30 s | not in catalog | **Blocked:** fal `kling/v4/*` is playground-only ("API access is coming soon", 2026-10-22); not on Replicate or Higgsfield's API. Callable now for the keyframes mode: `blackforestlabs/flux-3-max/keyframes-to-video` (1–10 keyframes) | LTX-2.5 with core `LTXVAddGuide` (one per keyframe, `frame_idx`); Wan 2.2 FLF chained per keyframe pair (template `templates-6-key-frames`) |
+| G01 | **P0** | M | Video tools | **Remove object / erase from video** (prompt-driven, plus a mask option) | ⬜ "Remove object ⬜ (Edit video with a prompt is the closest)" | Kling O3 edit with the removal prompt (the studio's own route, already in the catalog; 3–15 s); `bria/video/erase/prompt` (≤ 5 s per call, `auto_trim`) and `bria/video/erase/mask`; `fal-ai/ltx-2.3-quality/clean-plate` (people only) | SAM 3.1 text mask → Wan 2.1 VACE inpaint (`video-inpaint-wan-vace` in comfyui-oss-4, with the Apache lightx2v LoRA, not the template's CC-BY-NC CausVid) or VOID (`video-erase-void`). Not DiffuEraser: its default pipeline needs ProPainter weights (S-Lab, non-commercial) |
+| G02 | **P0** | S (when the API opens) | Models | **Kling 4.0**: references (≤ 10 img, ≤ 5 video, ≤ 7 elements, ≤ 15 total), up to 10 keyframes, edit, 3–30 s | not in catalog | **Blocked:** fal `kling/v4/*` is playground-only ("API access is coming soon", 2026-10-22); not on Replicate or the studio's API. Callable now for the keyframes mode: `blackforestlabs/flux-3-max/keyframes-to-video` (1–10 keyframes) | LTX-2.5 with core `LTXVAddGuide` (one per keyframe, `frame_idx`); Wan 2.2 FLF chained per keyframe pair (template `templates-6-key-frames`) |
 | G03 | P1 | M | Upscale | **FPS Boost, SDR→HDR, pro codecs, and the full upscaler option sets** | 🟡 "Upscaling only. FPS boost, SDR→HDR and ProRes / EXR output ⬜" | `topaz/interpolate/video`; `topaz/sdr-to-hdr/video` (HDR10 H.265 or ProRes 422); `blackforestlabs/flux-video-upscale`; `topaz/upscale/video/*`; codecs through the fal FFmpeg tools | RIFE / GIMM-VFI / FILM; LTX-2.5 IC-LoRA SDR-to-HDR; VHS Video Combine ProRes / H.265 10-bit; EXR frame sequence |
-| G04 | P1 | M | Genjutsu | **Genjutsu as a user flow on the open engine, plus Genjutsu Lite** | 🟢 cloud · ⬜ open | Higgsfield `genjutsu/*` and `genjutsu-light/*`; fallbacks Kling 4.0 edit, Kling 3.0 Motion Control | Wan Animate 2 (motion transfer / recast); SAM 3.1 mask + Wan 2.2 Fun VACE (object swap); the Shorts restyle chain (restyle) |
+| G04 | P1 | M | Genjutsu | **Genjutsu as a user flow on the open engine, plus Genjutsu Lite** | 🟢 cloud · ⬜ open | The studio `genjutsu/*` and `genjutsu-light/*`; fallbacks Kling 4.0 edit, Kling 3.0 Motion Control | Wan Animate 2 (motion transfer / recast); SAM 3.1 mask + Wan 2.2 Fun VACE (object swap); the Shorts restyle chain (restyle) |
 | G05 | P1 | L | Cinema Studio | **3D scene + recomposition** (and 3D Angles camera reshoot) | ⬜ | Whole scene: `fal-ai/marigold-v2` depth → browser point cloud, or World Labs Marble (separate key) → capture → Nano Banana Pro / Qwen 2511 multiple-angles re-render. `tripo3d/triposplat` and `fal-ai/sam-3/3d-objects` rebuild the subject / objects only (background removed). Video: camera path → keyframes → FLUX 3 Max keyframes / Seedance 2.5 | Whole scene: `scene-mesh-moge` (core MoGe 2 → textured GLB; **ran on CPU**, see comfyui-oss-4 §i) → browser viewer → Qwen-Image-Edit 2511 (+ Multiple-Angles LoRA) re-render. Subject: `image-to-splat-triposplat` (core TripoSplat nodes, validated) |
-| G06 | P1 | M | Characters | **AI Influencer game-style builder** (19 categories, 3 tiers, 6 creature types) | 🟡 "game-style builder … is not reproduced" | Higgsfield `ai_influencer` sheet (key), else Nano Banana Pro / Seedream 5.0 with the compiled prompt | Soul Cast sheet workflow (Z-Image Turbo) with the compiled prompt; Qwen-Image-Edit 2511 for "Add your face" |
+| G06 | P1 | M | Characters | **AI Influencer game-style builder** (19 categories, 3 tiers, 6 creature types) | 🟡 "game-style builder … is not reproduced" | The studio `ai_influencer` sheet (key), else Nano Banana Pro / Seedream 5.0 with the compiled prompt | Soul Cast sheet workflow (Z-Image Turbo) with the compiled prompt; Qwen-Image-Edit 2511 for "Add your face" |
 | G07 | P1 | M | Studios | **Content Factory** (faceless series from a trending reference, run here or in Claude) | Faceless Studio 🟢 has no trend reference, link import or series | Fuobe Faceless pipeline; Claude reads the reference's frames and transcript | Same pipeline; the reference is read by Gemma 4 E4B (frames + sound in one core `TextGenerate` call, `reference-brief-gemma4`, validated) or Ollama Qwen3-VL. Core ComfyUI's Qwen3.5 encoder ignores a `video` input in v0.41 |
 | G08 | P1 | L | Canvas | **Canvas extras**: pages, tables, comments, drawing and shapes, groups, folder node, Change Voice, Translate and Clone Voice nodes, the Video Concatenator editor | 🟡 "pages, tables, comments, drawing and shapes, Change Voice / Translate nodes and multiplayer aren't built" | Change Voice → ElevenLabs Voice Changer; Translate → the dub chain; Concatenator → fal FFmpeg compose | Chatterbox VC; the open dub chain; ComfyUI concat |
-| G09 | P2 | M | Mixed Media | **Per-frame cloud pipeline** (Higgsfield charges 2 credits per output frame) | 🟡 cloud ("a video-to-video restyle, not … per-frame") | Extract frames at the target fps → per-frame Nano Banana 2 / Seedream 5.0 Flash edit → `fal-ai/ffmpeg-api/images-to-video` → mux audio | Existing Z-Image per-frame route (🟢) |
+| G09 | P2 | M | Mixed Media | **Per-frame cloud pipeline** (the studio charges 2 credits per output frame) | 🟡 cloud ("a video-to-video restyle, not … per-frame") | Extract frames at the target fps → per-frame Nano Banana 2 / Seedream 5.0 Flash edit → `fal-ai/ffmpeg-api/images-to-video` → mux audio | Existing Z-Image per-frame route (🟢) |
 | G10 | P2 | M | Library | **Assets library**: nested folders, pins, review status, projects, share access | ✅ base; "Missing: nested folders, pins, review status, projects" | n/a | n/a |
 | G11 | P2 | L | Platform | **Share links and Community feed** (Shots, Open Projects, profiles, recreate) | ⬜ | n/a | n/a |
 | G12 | P2 | S | Platform | **Browser notifications when a job finishes** | ⬜ | n/a | n/a |
@@ -115,7 +117,7 @@ P0 = a core creative feature a Higgsfield user would miss at once; P3 = nice to 
 | G16 | P2 | XL | Studios | **3D Jutsu** (agent-built 3D set → cameras, lights, motion → "Export to Seedance") | ⬜ (STATUS lists 3D Jutsu under Platform ⬜) | Claude writes a scene JSON → three.js editor → depth / pose / first-frame render → Seedance 2.5 or Kling 4.0 | Ollama scene JSON → same editor → Wan 2.2 Fun Control (depth) / VACE |
 | G17 | P2 | M | Agents | **Scheduled tasks** in the agent (daily ad variations, weekly scans) | ⬜ | Claude via Assist plus a server scheduler | Ollama via Assist plus the scheduler |
 | G18 | P3 | M | Platform | **Content checks**: face/IP eligibility, NSFW flags, rights confirmation, biometric consent | ⬜ | provider NSFW flags; optional cloud moderation | browser face detector; an open NSFW classifier |
-| G19 | P3 | S | Video | **Higgsfield Evolution** (gated test model) | ⬜ | Kling 4.0 edit / Gemini Omni Flash edit with an intensity-scaled prompt | Wan 2.2 Fun VACE restyle, denoise from the intensity |
+| G19 | P3 | S | Video | **Evolution** (gated test model) | ⬜ | Kling 4.0 edit / Gemini Omni Flash edit with an intensity-scaled prompt | Wan 2.2 Fun VACE restyle, denoise from the intensity |
 | G20 | P3 | M | Agents | **Telegram bot** and other agent surfaces (OpenClaw, Hermes, NemoClaw) | MCP ✅ | Assist on Claude behind a Telegram webhook | Assist on Ollama behind the same webhook |
 | G21 | P3 | L | Platform | **Chinese (and es / ja / ko / de) UI** | English only *(inferred; no i18n layer found in `src/`)* | n/a | n/a |
 | G22 | P3 | — | Studios | **Tube / Reels Studio, AI Host, standalone Video Editor** (all unreleased) | ⬜ | track only | track only |
@@ -126,7 +128,7 @@ P0 = a core creative feature a Higgsfield user would miss at once; P3 = nice to 
 
 ### 4.1 G01 · Remove object from video
 
-**Where Higgsfield puts it.** The landing page `/remove-object-from-video` (title "Remove Object from Video - Erase People & Clutter with AI") shows a mock composer: **Prompt · Kling 3.0 Omni Edit · 1:1 · Remove Object**. Its buttons open `https://higgsfield.ai/ai/video/edit`. So on the web, erase is **Edit Video with a removal prompt**. The page also covers person, watermark, text, logo, vehicle, wire and crew removal.
+**Where the studio puts it.** The landing page `/remove-object-from-video` (title "Remove Object from Video - Erase People & Clutter with AI") shows a mock composer: **Prompt · Kling 3.0 Omni Edit · 1:1 · Remove Object**. Its buttons open `{studio-site}/ai/video/edit`. So on the web, erase is **Edit Video with a removal prompt**. The page also covers person, watermark, text, logo, vehicle, wire and crew removal.
 
 **Copy worth reusing:**
 - "Describe what to erase and AI Video Object Remover wipes people, wires, your own watermarks, and distractions from your footage, then fills the gap frame by frame."
@@ -194,7 +196,7 @@ P0 = a core creative feature a Higgsfield user would miss at once; P3 = nice to 
 **Fuobe build:**
 - Make `/genjutsu` a studio with the three mode tabs, the 4–30 s trimmer, ≤ 10 reference slots (≤ 8 for a custom Restyle look), 480/720/1080p, and batch 1–4.
 - Add "Lite" as a cheaper model choice inside motion transfer and object swap.
-- **Cloud:** the Higgsfield Genjutsu and Genjutsu Light endpoints with a key. Without a key, use Kling 4.0 edit (swap character, product or background), Kling 3.0 Motion Control (motion transfer), and the Shorts restyle models (restyle).
+- **Cloud:** the Genjutsu and Genjutsu Light endpoints with a key. Without a key, use Kling 4.0 edit (swap character, product or background), Kling 3.0 Motion Control (motion transfer), and the Shorts restyle models (restyle).
 - **Open:**
   - Motion transfer: Wan Animate 2 (already in Motion Control).
   - Object swap: SAM 3.1 mask of the named object → Wan 2.2 Fun VACE inpaint with the reference image.
@@ -208,7 +210,7 @@ P0 = a core creative feature a Higgsfield user would miss at once; P3 = nice to 
 |---|---|---|---|---|---|
 | Edit Video | "Make targeted changes" | opens the video edit mode | current edit model | — | per model |
 | Extend | — | — | — | — | per model |
-| Reframe | "Resize and reposition for any format" | Aspect ratio 9:16 (**default**), 3:4, 1:1, 4:3, 16:9, 21:9 · Quality 480p, **720p**, 1080p | Higgsfield Reframe | "Video is too long. Please upload a video up to 5 minutes." (300 s) | 3 / 4.5 / 12 per s + 3 images × 1 credit |
+| Reframe | "Resize and reposition for any format" | Aspect ratio 9:16 (**default**), 3:4, 1:1, 4:3, 16:9, 21:9 · Quality 480p, **720p**, 1080p | Reframe | "Video is too long. Please upload a video up to 5 minutes." (300 s) | 3 / 4.5 / 12 per s + 3 images × 1 credit |
 | Upscale | "Increase resolution and sharpen details" | four models, below | — | — | — |
 | Remove Background | "Remove background or make a mask from video" | **Prompt** (required): "Describe which elements should be removed or saved" · Output format: **Cutout video** / Alpha mask | SAM 3 video (`sam_3_video`) | ≤ 200 MB, MP4/MOV | 0.225 credits/s at 24 fps reference |
 | SDR to HDR (New) | "Convert SDR footage to HDR" | Output format: **H.265 10-bit** ("Higher fidelity at a similar size, with less playback support than H.264."), ProRes 10-bit ("Editing friendly intermediate codec. Much larger files."), EXR 16-bit ("Uncompressed frame sequence for compositing. Largest files.") | Topaz Hyperion 2.5 | ≤ 60 s, ≤ 100 MB, MP4/MOV; width and height must be multiples of 4 | 2.6 credits/s up to 1080p, 5.2 at 2K/4K (estimate) |
@@ -340,14 +342,14 @@ Video mode: record two to ten camera keyframes, render each as a capture, re-ren
 - Build never shuffles to Curvy. It skips Ultra Muscular in Average. It avoids Heavy with Tall heights or Tiny waist.
 - Facial hair is "Clean" unless the gender is male or trans man.
 
-Option previews are WebP tiles (`static.higgsfield.ai/ai-influencer/option-previews/2026-10-0x/…`). Some options have colour or outfit "trait variants" (e.g. `suits_black_B`).
+Option previews are WebP tiles (``). Some options have colour or outfit "trait variants" (e.g. `suits_black_B`).
 
 **Credits:** the server quotes `ai_influencer_sheet` (no fixed web price found). The API lists the AI Influencer sheet at $0.05 (round 3). Motion: `ai_influencer_motion_control` 3 / 7 / 20 credits/s, Lite 1 / 2 / 4.
 
 **Fuobe build:**
 - Replace the "From a description" path with this builder. It is a pure UI plus a prompt compiler: each option maps to a short English phrase, and the tier adds a style clause ("realistic", "bold caricature", "extreme caricature", "anthropomorphic {species}").
 - Output: a white-background portrait plus full body, as now.
-- **Cloud:** Higgsfield AI Influencer with a key, otherwise Nano Banana Pro or Seedream 5.0.
+- **Cloud:** the studio Influencer with a key, otherwise Nano Banana Pro or Seedream 5.0.
 - **Open:** the Soul Cast sheet workflow (Z-Image Turbo). "Add your face" runs Qwen-Image-Edit 2511 with the user's photo.
 - Hand-offs: "Use in Genjutsu" and "Create 3D scene".
 
@@ -356,7 +358,7 @@ Option previews are WebP tiles (`static.higgsfield.ai/ai-influencer/option-previ
 **Screen:**
 - Tabs: Explore, My generations, Presets, My presets.
 - Composer:
-  - **Generate with:** "Generate in Claude" (default; "Need to connect Higgsfield MCP") or **Generate here**.
+  - **Generate with:** "Generate in Claude" (default; "Need to connect the studio's MCP") or **Generate here**.
   - **Add reference:** "Add images or videos", or "Add TikTok or Instagram link"; "Change reference", "Select from presets".
   - Prompt "Make a video about…". Rotating examples: "What if cars could fly", "What if cats ruled the world", "What if the Moon had a city", "What if dinosaurs never went extinct", "What if gravity switched off for a day".
   - **Length** (default **30 sec**; strings for 1, 2, 3, 4 and 5 min).
@@ -387,7 +389,7 @@ Option previews are WebP tiles (`static.higgsfield.ai/ai-influencer/option-previ
 **Round 3 recorded** the toolbar (Select V, Pan H, Draw D, Eraser E, Sticky Note N, Shapes R, Text T, Reaction ⇧S, Comment C, Table ⇧T, Page, Search ⌘F, Add node) and the node menu.
 
 **New from code:**
-- **Table** is behind the feature flag `canvas_table_v1`, so Higgsfield itself is still rolling it out.
+- **Table** is behind the feature flag `canvas_table_v1`, so the studio itself is still rolling it out.
 - **Groups**: nodes dropped inside a group are re-parented to it, and groups are excluded from layout. There is also a **Folder** node that puts a library folder on the board.
 - **Comments** have reactions, resolve and vote (`/comments/{id}/reactions|resolve|vote`).
 - **Video Concatenator** (`video_assemble`) is a built-in editor:
@@ -410,7 +412,7 @@ Option previews are WebP tiles (`static.higgsfield.ai/ai-influencer/option-previ
 
 ### 4.8 G09 · Mixed Media per-frame cloud pipeline
 
-Higgsfield's numbers are unchanged: **floor(seconds × fps) × 2 credits** (× 4 at 4K), 4 / 8 / 10 / 12 / 24 fps (default 8), with a preview frame. The API is still `POST /chains/mixed-media` and `/chains/mixed-media-preview`.
+The studio's numbers are unchanged: **floor(seconds × fps) × 2 credits** (× 4 at 4K), 4 / 8 / 10 / 12 / 24 fps (default 8), with a preview frame. The API is still `POST /chains/mixed-media` and `/chains/mixed-media-preview`.
 
 **Fuobe cloud chain:**
 1. Trim the clip.
@@ -424,7 +426,7 @@ This needs the per-index chain slot that STATUS §3 already names. Above 200 fra
 ### 4.9 G10, G11 · Assets library, sharing and Community
 
 **Assets** (round 3 has the full list: nested folders, colours, pins, credit limits, review statuses In progress #029dfe / Needs review #fe7802 / Approved #d1fe17 / Rejected #ef4444, projects with members and Trash). New in this round:
-- Project link access levels: "Anyone with a Higgsfield account can comment on assets in this project", "Anyone with a Higgsfield account can reuse and duplicate this project", and "Sign in or sign up to reuse".
+- Project link access levels: "Anyone with a studio account can comment on assets in this project", "Anyone with a studio account can reuse and duplicate this project", and "Sign in or sign up to reuse".
 - Public **share page** `/share/$id` titled "Shared Asset", with "Generated with {model}", Recreate, Modify and Share.
 
 **Community** (help articles dated 2026-10-08, published 2026-10-15):
@@ -433,13 +435,13 @@ This needs the per-index chain slot that STATUS §3 already names. Above 200 fra
   - **Open Projects** hold the result, the project brief, the folders and assets, the models used, and optionally the prompts.
   - **Blog posts** are write-ups.
 - **Publish wizard** (4 steps):
-  1. **Details**: title, description, public link `higgsfield.ai/@username/projects/project-name`, co-authors, tags.
+  1. **Details**: title, description, public link `{studio-site}/@username/projects/project-name`, co-authors, tags.
   2. **Assets**: Feature (one video or image on top), Series (episodes in order, can grow), or Carousel.
   3. **Cover** (optional; the first asset otherwise).
   4. **Access**: **With prompts** or **Prompts hidden**. Recreate is unavailable when prompts are hidden.
   - Then Open preview → Publish. Unpublish removes the work from Community and the profile.
 - **Feeds:**
-  - Discovery: Higgsfield Selected projects, featured creators, a Grants banner, festival entries, Originals.
+  - Discovery: Selected projects, featured creators, a Grants banner, festival entries, Originals.
   - Projects: search; sort Default, Newest, Oldest, Most liked, Most viewed; filter All, Contest, Non-contest, My Favorites.
   - Shots: filter images, videos, favourites.
   - Creators.
@@ -469,7 +471,7 @@ Ratings, grants and contests are out of scope.
 ### 4.10 G16 · 3D Jutsu web studio
 
 **Strings** (delta `7dcfabc5a5`):
-- "Higgsfield 3D Jutsu", "My scenes", "Shared with you", "Create blank scene", "Untitled 3D Jutsu".
+- "the studio's 3D Jutsu", "My scenes", "Shared with you", "Create blank scene", "Untitled 3D Jutsu".
 - Prompt: "Prompt your 3D scene" / "Describe the scene you want to block out..."; "Scene brief for the AI agent"; "Add attachments".
 - Steps:
   1. **Build the set**: "Describe it. Props, layout and light arrive as objects you can grab, not a picture".
@@ -485,10 +487,10 @@ Ratings, grants and contests are out of scope.
 - An agent that emits a scene JSON (Claude or Ollama).
 - Export renders a guide video (depth plus a flat-shaded pass) and a first frame → **cloud** Seedance 2.5 / Kling 4.0 reference-to-video, **open** Wan 2.2 Fun Control (depth) or VACE.
 
-### 4.11 G19 · Higgsfield Evolution (gated)
+### 4.11 G19 · Evolution (gated)
 
 **Copy:**
-- "Upload a video and let Higgsfield Evolution take it further. A new setting, a new atmosphere, a whole new level of production — imagined for you."
+- "Upload a video and let Evolution take it further. A new setting, a new atmosphere, a whole new level of production — imagined for you."
 - "Evolve an existing video with a new setting and atmosphere", "Reimagine your video in one click", "Absolute cinema in one click".
 
 **Payload:** `{model:"hf_evolution", resolution, change_intensity, creative_direction, reference_element_ids, medias:[video, …images]}`. The source is 4–30 s ("Video duration must be between 4 and 30 seconds"). Intensity labels: Low / Mid / High ("Changes effort"). Price: **7 credits/s at 720p**.
@@ -497,13 +499,13 @@ Ratings, grants and contests are out of scope.
 
 ### 4.12 G13 · CLI, skills and plugins
 
-**Higgsfield CLI** (`higgsfield`, alias `higgs`, MIT, v1.1.26 on 2026-10-16):
+**The studio's CLI** (`{studio}`, alias `{short-name}`, MIT, v1.1.26 on 2026-10-16):
 
 - **Install:**
-  - `curl -fsSL https://raw.githubusercontent.com/higgsfield-ai/cli/main/install.sh | sh`
-  - `brew install higgsfield-ai/tap/higgsfield`
-  - `npm install -g @higgsfield/cli`
-- **Sign in:** `higgsfield auth login`. A browser device flow ("Device authorized" → "Successfully authenticated"); no API key; a short-lived token in a local credentials file. Also `auth token` and `auth logout`. It needs a paid plan and uses plan credits (Unlimited and free generations do not apply).
+  - `curl -fsSL https://raw.githubusercontent.com/{studio}/cli/main/install.sh | sh`
+  - `brew install {studio}/tap/{studio}`
+  - `npm install -g {studio-npm}/cli`
+- **Sign in:** `{studio} auth login`. A browser device flow ("Device authorized" → "Successfully authenticated"); no API key; a short-lived token in a local credentials file. Also `auth token` and `auth logout`. It needs a paid plan and uses plan credits (Unlimited and free generations do not apply).
 - **Commands:**
   - `account status|transactions`; `workspace list|select|unset`
   - `model list|get <id>`
@@ -516,12 +518,12 @@ Ratings, grants and contests are out of scope.
 - **Output:** `--json` returns `id`, `job_type`, `status`, `result_url`, `params` and `medias`.
 - **Catalog:** `model list` returned 107 entries on 2026-10-16. Example prices: Nano Banana Pro image 2 credits; Seedance 2.5 5 s at 1080p 80 credits, 15 with `--draft true`.
 
-**Skills repo** (`higgsfield-ai/skills` v0.13.0, MIT):
-- **8 skills:** higgsfield-generate, -soul-id, -product-photoshoot (10 modes), -brandkit, -marketplace-cards, -websites, -video-explainer, -youtube-thumbnail.
+**Skills repo** (`{studio}/skills` v0.13.0, MIT):
+- **8 skills:** studio-generate, -soul-id, -product-photoshoot (10 modes), -brandkit, -marketplace-cards, -websites, -video-explainer, -youtube-thumbnail.
 - **Installs:**
-  - `npx skills add higgsfield-ai/skills`
-  - `gh skill install higgsfield-ai/skills` (GitHub CLI 2.90+)
-  - Claude Code `/plugin marketplace add higgsfield-ai/skills` then `/plugin install higgsfield@higgsfield`
+  - `npx skills add {studio}/skills`
+  - `gh skill install {studio}/skills` (GitHub CLI 2.90+)
+  - Claude Code `/plugin marketplace add {studio}/skills` then `/plugin install {studio}@{studio}`
   - `./setup`
 - Manifests for `.claude-plugin`, `.cursor-plugin` and `.codex-plugin`.
 
@@ -568,7 +570,7 @@ The web app asks for **browser notification permission** and uses a service work
 
 ## 5. Pricing and plans (now verified)
 
-From `fnf.higgsfield.ai/subscriptions/plans` (41 rows). Prices are monthly USD; credits per month; "promo" is the current first-period price.
+From `{studio-service}/subscriptions/plans` (41 rows). Prices are monthly USD; credits per month; "promo" is the current first-period price.
 
 | Plan | Monthly | Annual (per month) | Credits |
 |---|---|---|---|
@@ -598,7 +600,7 @@ Fuobe has no billing, so none of this is a build item. The cost table in the JSO
 
 | Topic | Source A | Source B | Note |
 |---|---|---|---|
-| Genjutsu Lite source length | Changelog 2026-10-19 and API price page: 4–15 s | Web code `GENJUTSU_FLASH_VIDEO_DURATION_MAX = 30`; landing "Up to 30s" | The web client allows 30 s today; the API is 15 s. Copy the code (4–30 s) for the web flow and 15 s for the Higgsfield API route |
+| Genjutsu Lite source length | Changelog 2026-10-19 and API price page: 4–15 s | Web code `GENJUTSU_FLASH_VIDEO_DURATION_MAX = 30`; landing "Up to 30s" | The web client allows 30 s today; the API is 15 s. Copy the code (4–30 s) for the web flow and 15 s for the studio's API route |
 | Kling 4.0 resolution | Changelog: 720p or 1080p; web code and cost table 720p / 1080p; fal 720p / 1080p | Intro page: "720p, 1080p and 4K, with 10-bit HDR at 1080p and 4K" | 4K/HDR is not exposed anywhere callable (**unverified**) |
 | Kling 4.0 Flash | Intro page: 720p, ≤ 20 s drafts | No job id in the bundle, no fal endpoint | Treat as not yet available |
 | Kling 4.0 reference split | Web: ≤ 10 images, ≤ 5 videos, ≤ 7 elements, ≤ 15 total | Changelog: "up to 15, including images, up to 5 videos, a voice reference, and Elements" | fal: images ≤ 10, elements ≤ 7, videos 3–30 s each and 30 s combined |
@@ -617,26 +619,26 @@ Fuobe has no billing, so none of this is a build item. The cost table in the JSO
 
 All accessed 2026-10-22.
 
-**Higgsfield, primary:**
-- Changelog and RSS: https://higgsfield.ai/creator-hub/changelog · https://higgsfield.ai/creator-hub/changelog/rss.xml
-- Sitemaps: https://higgsfield.ai/sitemap.xml, `sitemap-marketing.xml`, `blog/sitemap.xml`, `creator-hub/sitemap.xml`, `apps/sitemap.xml`, `motion/sitemap.xml`, `mixed-media-presets/sitemap.xml`
+**The studio, primary:**
+- Changelog and RSS: {studio-site}/creator-hub/changelog · {studio-site}/creator-hub/changelog/rss.xml
+- Sitemaps: {studio-site}/sitemap.xml, `sitemap-marketing.xml`, `blog/sitemap.xml`, `creator-hub/sitemap.xml`, `apps/sitemap.xml`, `motion/sitemap.xml`, `mixed-media-presets/sitemap.xml`
 - Pages:
-  - Studios and tools: https://higgsfield.ai/content-factory · https://higgsfield.ai/3d-jutsu · https://higgsfield.ai/tube · https://higgsfield.ai/genjutsu · https://higgsfield.ai/upscale · https://higgsfield.ai/canvas · https://higgsfield.ai/ai-influencer-studio · https://higgsfield.ai/generate · https://higgsfield.ai/katana · https://higgsfield.ai/supercomputer
-  - Models and landings: https://higgsfield.ai/kling-4-0-intro · https://higgsfield.ai/ai/video?model=kling4_0 · https://higgsfield.ai/ai/video?model=genjutsu-lite · https://higgsfield.ai/remove-object-from-video · https://higgsfield.ai/remove-text-from-video · https://higgsfield.ai/ai-video-upscaler
-  - Community and agents: https://higgsfield.ai/community · https://higgsfield.ai/community/projects · https://higgsfield.ai/grants · https://higgsfield.ai/mcp · https://higgsfield.ai/higgsfield-telegram-intro
-  - Other: https://higgsfield.ai/pricing · https://higgsfield.ai/seedance-4k · https://higgsfield.ai/ai-host (404) · https://higgsfield.ai/video-editor (404)
-- Blog: https://higgsfield.ai/blog/higgsfield-cli (2026-10-19) · https://higgsfield.ai/blog/kling-4-0-on-higgsfield · https://higgsfield.ai/blog/higgsfield-community
-- Help Center: https://higgsfield.ai/creator-hub/help-center/community/what-is-higgsfield-community · …/how-do-projects-work · …/how-do-i-set-up-my-profile · …/how-do-achievements-work
-- i18n catalogs: `https://higgsfield.ai/_i18n/routes/en/` + `root.b95621da89.json` (round 3: `root.bc60caf0b1.json`).
+  - Studios and tools: {studio-site}/content-factory · {studio-site}/3d-jutsu · {studio-site}/tube · {studio-site}/genjutsu · {studio-site}/upscale · {studio-site}/canvas · {studio-site}/ai-influencer-studio · {studio-site}/generate · {studio-site}/katana · {studio-site}/supercomputer
+  - Models and landings: {studio-site}/kling-4-0-intro · {studio-site}/ai/video?model=kling4_0 · {studio-site}/ai/video?model=genjutsu-lite · {studio-site}/remove-object-from-video · {studio-site}/remove-text-from-video · {studio-site}/ai-video-upscaler
+  - Community and agents: {studio-site}/community · {studio-site}/community/projects · {studio-site}/grants · {studio-site}/mcp · {studio-site}/{studio}-telegram-intro
+  - Other: {studio-site}/pricing · {studio-site}/seedance-4k · {studio-site}/ai-host (404) · {studio-site}/video-editor (404)
+- Blog: {studio-site}/blog/{studio}-cli (2026-10-19) · {studio-site}/blog/kling-4-0-on-studio · {studio-site}/blog/{studio}-community
+- Help Center: {studio-site}/creator-hub/help-center/community/what-is-studio-community · …/how-do-projects-work · …/how-do-i-set-up-my-profile · …/how-do-achievements-work
+- i18n catalogs: `{studio-site}/_i18n/routes/en/` + `root.b95621da89.json` (round 3: `root.bc60caf0b1.json`).
   - Route deltas: content factory `delta.1a03ac397b.json`; video `delta.5ff33475c7.json` (round 3 `8ad0aabf5d`); cinema `delta.848ff74f21.json` (round 3 `844d2f759c`); influencer `delta.7768a306c3.json` (round 3 `b0a00c06e4`); image `delta.cb85bd0b24.json` (round 3 `c616e10bb4`); supercomputer `delta.019333be97.json` / `delta.b649a46681.json` (round 3 `69dd988e26` / `af18bbbe09`).
   - More deltas: upscale `delta.68b8b60d8a.json`, `delta.a66a632268.json`; canvas `delta.deac944ca9.json`, `delta.9da790fc59.json`; asset `delta.d3149d6b9e.json`; share `delta.8ca1955d6f.json`; community `delta.068096c6a4.json`, `delta.c7f59d0eb6.json`, `delta.a2a1b4a69d.json`, `delta.420b75d259.json`; profile `delta.c9f6265210.json`; tube `delta.be14edcb07.json`; 3D Jutsu `delta.7dcfabc5a5.json`; AI Host `delta.f60d5e91ef.json`; video editor `delta.ce33b42258.json`; pricing `delta.bc98432178.json` (round 3 `555e66bb72`).
-- JS bundle, build `1a2c0e3d`: `https://assets.higgsfield.ai/tanstack/assets/1a2c0e3d-<chunk>.js`. Key chunks:
+- JS bundle, build `1a2c0e3d`: `{studio-assets}/tanstack/assets/1a2c0e3d-<chunk>.js`. Key chunks:
   - `u4o7Rr346PKw3TXg` (influencer builder), `Bh59qW_F0DwHRugi` (3D scene modal), `s7Pc_VTly7scVxim` and `GGFDdVa-GgAotcya` (3D jobs), `EvLnfWQS4p8iriJV` (image overlay actions)
   - `9V5-hD4mNN4X33gE` (video tools and upscalers), `T-Hnf94InL7NwIEp` (Genjutsu jobs), `kyySz4K-SM_G0oa_` and `Np-SNe-7mCPEWBa9` (Evolution)
   - `NBuk9-F63Vyq6c55` (Kling 4.0 limits), `x-gpkaootj6Z-tim` and `IAi1M8IkobQfft7U` (Content Factory), `jIYobq3OomjhNFdy`, `ji1GMNpGvOMH68Oh`, `HrFy7mSg0hjd3iiN`, `c8v6u2Y_SCqdNS2h` (Canvas), `vUcYzaGvDsE7doZR` (notifications), `jXL767d7v2eIimh8` and `wgsUE24IS31KGQqK` (image job map)
-- Public endpoints: https://fnf.higgsfield.ai/job-sets/costs (version `183a390e…`) · https://fnf.higgsfield.ai/subscriptions/plans · https://canvas-worker.higgsfield.ai/api/templates · https://open.higgsfield.ai/pricing · https://docs.higgsfield.ai/docs/llms.txt · https://docs.higgsfield.ai/docs/openapi.json
-- GitHub: https://github.com/higgsfield-ai/cli (commit `fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2`, 2026-10-17; README.md, MODELS.md, LICENSE MIT) · https://github.com/higgsfield-ai/skills (commit `f83af0bc1d937c8119099a11f8ebbf5e6fb99819`, VERSION 0.13.0)
-- Press: https://www.prnewswire.com/news-releases/higgsfield-turns-any-product-page-into-a-finished-ad-campaign-302911758.html (2026-10-19)
+- Public endpoints: {studio-service}/job-sets/costs (version `183a390e…`) · {studio-service}/subscriptions/plans · {studio-service}/api/templates · {studio-service}/pricing · {studio-docs}/docs/llms.txt · {studio-docs}/docs/openapi.json
+- GitHub: {studio-github}/cli (commit `fd21e7cb550b5835cc00c6b4abfea0c02fe77ff2`, 2026-10-17; README.md, MODELS.md, LICENSE MIT) · {studio-github}/skills (commit `f83af0bc1d937c8119099a11f8ebbf5e6fb99819`, VERSION 0.13.0)
+- Press: https://www.prnewswire.com/news-releases/{studio}-turns-any-product-page-into-a-finished-ad-campaign-302911758.html (2026-10-19)
 
 **Routes for Fuobe:**
 - fal model search: `https://fal.ai/api/models?keywords=…`
@@ -658,8 +660,8 @@ Facts in this file were re-checked against primary sources by the round-4 comple
 | `tripo3d/triposplat` inputs (G05) | fal OpenAPI | Correct as written (`num_inference_steps` 1–50 default 20, `guidance_scale` 0–10 default 3, `num_gaussians` 32,768–262,144, `output_format` ply / splat). **Scope corrected:** subject only (see §4.4) |
 | `bria/video/erase/prompt` (G01) | fal OpenAPI | Correct: `video_url` "duration must be less than 5s", `auto_trim` default true, `preserve_audio` default true, 11 `output_container_and_codec` values, default `mp4_h264` |
 | `topaz/interpolate/video`, `topaz/sdr-to-hdr/video` (G03) | fal OpenAPI | Correct. Both also take `enable_safety_checker` (default true). SDR→HDR `prores` is ProRes **422 HQ** |
-| `fal-ai/sam-3/3d-objects` | fal OpenAPI | Outputs `gaussian_splat`, `model_glb`, `individual_splats`, `individual_glbs`, `metadata`, `artifacts_zip`. `prompt` defaults to `"car"`; `export_textured_glb` defaults to **false** on fal (the Higgsfield CLI's `sam_3_3d` defaults it to true) |
-| Genjutsu Light on the API | `https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/object-swap/v1.0/llms.txt` | `image_urls` 1–8 (the web flow allows 10), `duration` computed from the source and capped at 15 s, $0.05 / $0.10 / $0.20 per second; billable seconds include reference-video length |
+| `fal-ai/sam-3/3d-objects` | fal OpenAPI | Outputs `gaussian_splat`, `model_glb`, `individual_splats`, `individual_glbs`, `metadata`, `artifacts_zip`. `prompt` defaults to `"car"`; `export_textured_glb` defaults to **false** on fal (the studio's CLI's `sam_3_3d` defaults it to true) |
+| Genjutsu Light on the API | `{studio-dashboard}/models/{studio}/genjutsu-light/object-swap/v1.0/llms.txt` | `image_urls` 1–8 (the web flow allows 10), `duration` computed from the source and capped at 15 s, $0.05 / $0.10 / $0.20 per second; billable seconds include reference-video length |
 | DiffuEraser is an Apache-2.0 open route (G01) | https://github.com/lixiaowen-xw/DiffuEraser README | **Corrected:** ProPainter (S-Lab, non-commercial) is its prior model and its weights are in the download list |
 | "TripoSplat has no ComfyUI node" (G05) | live `/object_info` of ComfyUI v0.41 (`fc04da91`) and the installed templates package | **Corrected:** native core nodes and an official template exist; MoGe 2 / 3 core nodes build a whole-scene mesh (ran here) |
 | Open EXR export needs a third-party node (G03) | comfyui-oss-4 `video-export-exr` | **Corrected:** core `SaveImageAdvanced` writes EXR |

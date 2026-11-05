@@ -106,7 +106,7 @@ describe("Cinema API", () => {
     const res = await generateRoute.POST(json("POST", { input: { ...VIDEO, settings: { genre: "noir", focal: "50mm" } }, folderId: folder.id }), params({ id: p.id }));
     expect(res.status).toBe(201);
     const { items, plan } = await res.json();
-    // Fuobe Cinema (LTX-2.3 in the cloud) with the Director compiled into the prompt; no Higgsfield anywhere.
+    // Fuobe Cinema (LTX-2.3 in the cloud) with the Director compiled into the prompt; no retired provider anywhere.
     expect(plan.modelId).toBe("fuobe-cinema");
     expect(items).toHaveLength(1);
     const g = gens.getGeneration(items[0].id)!;

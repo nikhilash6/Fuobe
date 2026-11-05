@@ -512,7 +512,7 @@ describe("round 4: helper steps, pins, review, nested folders, where a file is u
     expect(folderTree(tree).map(({ folder: f, depth }) => `${f.id}${depth}`)).toEqual(["a0", "b1", "c2", "d1", "e0"]);
   });
 
-  it("refuses folder moves that would loop or nest too deep, in Higgsfield's words", () => {
+  it("refuses folder moves that would loop or nest too deep, in the parity research's words", () => {
     expect(folderMoveError(tree, "a", "a")).toBe("Cannot move into itself");
     expect(folderMoveError(tree, "a", "c")).toBe("Cannot move into a subfolder");
     expect(folderMoveError(tree, "a", "b")).toBe("Cannot move into a subfolder");

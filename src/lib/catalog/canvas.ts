@@ -1,5 +1,5 @@
 /**
- * Canvas (Higgsfield Canvas parity): node-graph workflows. A canvas is a board of nodes wired
+ * Canvas (Canvas parity): node-graph workflows. A canvas is a board of nodes wired
  * with typed edges (text, image, video, audio, element). Generator nodes (any catalog model,
  * plus utilities such as Join clips or Upscale) become generations; edges become chained
  * inputs (`dependsOn` + `request.chain`), which the runner already resolves.
@@ -454,7 +454,7 @@ export function nodeOps(n: Pick<CanvasNode, "type" | "data">, model?: ModelDef):
 }
 
 /**
- * Video Concatenator (Higgsfield's video_assemble): up to 50 clips, each trimmed and muted on its own, framed
+ * Video Concatenator (the parity studio's video_assemble): up to 50 clips, each trimmed and muted on its own, framed
  * to one of 8 aspect ratios at 30 fps. Clips over 512 MB are refused. The node's model names its engine: the
  * cloud cuts with trim-video, frames with scale-video, mutes with a −70 dB level and joins with merge-videos;
  * the open engine cuts, frames, retimes and mutes each clip in one CPU step (video-fit-clip) and joins them
@@ -2002,7 +2002,7 @@ function storedOp(graph: CanvasGraph, n: CanvasNode): Operation | undefined {
 }
 
 /**
- * A node saved on a model (or a model's operation) Fuobe retired when it stopped calling Higgsfield (replaced.ts)
+ * A node saved on a model (or a model's operation) Fuobe retired in build plan O7 (replaced.ts)
  * moves to the one that does it now, keeping the settings it offers. A board picks a node's engine itself (nodeEngine
  * follows the install's engine mode first), so an Original keeps the cloud, where the retired model ran with your key.
  */
@@ -2606,9 +2606,9 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Effects 2.0 chains (build plan O13): Higgsfield's "Prompt based" effect chains as Fuobe templates. A photo goes
+// Effects 2.0 chains (build plan O13): the parity studio's "Prompt based" effect chains as Fuobe templates. A photo goes
 // through an image edit that sets the scene, then Fuobe DoP animates it with the effect's words (research
-// higgsfield-originals-5.md §3.8: an image edit, then image to video). Both steps are open weights on both engines:
+// parity-originals-5.md §3.8: an image edit, then image to video). Both steps are open weights on both engines:
 // Qwen-Image 2.1 Turbo on your GPU (Qwen-Image-Edit 2511 hosted on fal) and Fuobe DoP (Wan 2.2 14B on your GPU, or hosted on fal).
 // The edit prompts are Fuobe's own words; the motion is the effect's own prompt from the effects catalog.
 

@@ -16,7 +16,7 @@ const Body = z.object({
   requestId: RequestId,
 });
 
-/** What's wrong with a body, in Higgsfield's words where it has them. */
+/** What's wrong with a body, in the parity research's words where it has them. */
 function bodyError(issues: z.core.$ZodIssue[]): string {
   const at = (key: string) => issues.some((i) => i.path[0] === key);
   if (at("engine")) return "Pick Cloud or Open source";

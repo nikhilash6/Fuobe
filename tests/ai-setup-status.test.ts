@@ -138,7 +138,7 @@ describe("the steps and the next step", () => {
     ["on the processor, a PyTorch without CUDA", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", cpu: true }, {}, "cpu-only", "run_nvidia_gpu.bat"],
     ["a GPU too small", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", modelWhy: "small" }, {}, "no-model-fits", "Your keys"],
     ["a model needs more than a download", { comfy: "found", cors: "exact", guard: "guard", connected: true, model: "none", modelWhy: "setup" }, {}, "model-setup", "Update ComfyUI"],
-    ["connect: not installed yet", { way: "connect", comfy: "unreadable", port: 8188 }, {}, "install-connect", "ComfyUI-Manager's search may not list Fuobe Connect yet. Clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect into custom_nodes"],
+    ["connect: not installed yet", { way: "connect", comfy: "unreadable", port: 8188 }, {}, "install-connect", "Clone https://github.com/workingprototype/ComfyUI-Fuobe-Connect into custom_nodes, or use the download in guide Step 2. ComfyUI-Manager's search may offer no version of Fuobe Connect to install."],
     ["connect: ComfyUI didn't load it", { way: "connect", comfy: "unreadable", port: 8000, restarted: true }, {}, "connect-not-loaded", "curl.exe -s http://127.0.0.1:8000/fuobe/connect"],
     ["connect: installed, connecting", { way: "connect", comfy: "found", port: 8188, guard: "connect" }, {}, "connecting"],
     ["connect: --listen", { way: "connect", comfy: "found", port: 8188, guard: "connect", listen: true }, {}, "remove-listen"],

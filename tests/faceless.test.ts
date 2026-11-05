@@ -65,7 +65,7 @@ import {
   type TimedText,
 } from "@/lib/catalog/faceless";
 
-const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/higgsfield-marketing-agents.json"), "utf8"));
+const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/parity-marketing-agents.json"), "utf8"));
 
 const block = (i: number, words = 20, seconds?: number): ScriptBlock => {
   const narration = Array.from({ length: words }, (_, w) => `w${i}x${w}`).join(" ");
@@ -78,7 +78,7 @@ const graphFor = (s: Partial<EpisodeSettings>, blocks: ScriptBlock[], extra: Par
 };
 
 describe("research data", () => {
-  it("has the 12 Faceless styles and the 22 Explainer styles in Higgsfield's order", () => {
+  it("has the 12 Faceless styles and the 22 Explainer styles in the parity research's order", () => {
     const names = (ids: string[]) => ids.map((id) => getStyle(id).name);
     expect(names(FACELESS_STYLE_IDS)).toEqual(research.faceless.styles.map((s: { name: string }) => s.name));
     expect(names(EXPLAINER_STYLE_IDS)).toEqual(research.explainer.styles);

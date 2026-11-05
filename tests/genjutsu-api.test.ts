@@ -5,6 +5,7 @@ import http from "node:http";
 import { CLOUD_NO_LORA } from "@/lib/catalog/character-swap";
 import { CLOUD_CLICK_PROBLEM } from "@/lib/catalog/genjutsu";
 import type { Generation } from "@/lib/catalog/types";
+import { mentionsRetiredName } from "./helpers/retired-name.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
@@ -69,12 +70,12 @@ const src = { duration: 12, fps: 16, width: 1280, height: 720, hasAudio: true };
 const body = (over: Record<string, unknown> = {}) => ({ engine: "cloud", mode: "motion", references: [hero], source: { url: clip, name: "dance.mp4" }, ...over });
 
 describe("Genjutsu: estimates", () => {
-  it("no keys: the Original's Lite tier, run as a demo; no Higgsfield anywhere", async () => {
+  it("no keys: the Original's Lite tier, run as a demo; no retired provider anywhere", async () => {
     const res = await estimateRoute.POST(json(body({ source: { url: clip, ...src } })));
     expect(res.status).toBe(200);
     const e = await res.json();
     expect(e).toMatchObject({ modelId: "fuobe-genjutsu-motion-lite", source: "original", tier: "standard", quality: "480p", pieces: 1, seconds: 12, demo: true });
-    expect(e.higgsfield).toBeUndefined();
+    expect(Object.keys(e).filter((k) => mentionsRetiredName(k))).toEqual([]);
   });
 
   describe("with keys (estimates submit nothing, so the prices are the routes' own)", () => {

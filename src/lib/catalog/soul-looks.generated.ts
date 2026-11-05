@@ -1638,7 +1638,7 @@ export const SOUL_LOOK_CATEGORIES: Record<"v1" | "v2", string[]> = {
 };
 
 /**
- * Higgsfield's old style ids → Fuobe look ids, one way: a request, a moodboard pick or a Reuse saved before the
+ * Legacy style ids → Fuobe look ids, one way: a request, a moodboard pick or a Reuse saved before the
  * Originals still finds its look. Nothing sends these ids anywhere.
  */
 export const SOUL_LEGACY_IDS: Record<string, string> = {

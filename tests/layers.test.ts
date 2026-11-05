@@ -95,7 +95,7 @@ const doc = (nodes: LayerNode[], w = 400, h = 300): LayerDoc => ({ v: 1, width: 
 const close = (a: number[], b: number[], digits = 6) => a.forEach((v, i) => expect(v).toBeCloseTo(b[i], digits));
 
 describe("zip naming", () => {
-  it("slugs names the way Higgsfield names layer files", () => {
+  it("slugs names the way the parity studio names layer files", () => {
     expect(slugify("Hero Shot / v2!")).toBe("hero-shot-v2");
     expect(slugify("  --Café Crème--  ")).toBe("cafe-creme");
     expect(slugify("x".repeat(60))).toHaveLength(48);

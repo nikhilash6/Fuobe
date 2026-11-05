@@ -1,175 +1,175 @@
 {
  "asOf": "2026-10-17",
- "method": "Logged-in screens were not observed directly. Everything below comes from Higgsfield's production JS bundles (job schemas, validators, defaults), its i18n catalogs (UI copy), public preset/cost API endpoints that answer without a login, the public API docs, official blog/help/changelog pages. Items marked inferred are reasoned from code or copy, not seen.",
+ "method": "Logged-in screens were not observed directly. Everything below comes from the studio's production JS bundles (job schemas, validators, defaults), its i18n catalogs (UI copy), public preset/cost API endpoints that answer without a login, the public API docs, official blog/help/changelog pages. Items marked inferred are reasoned from code or copy, not seen.",
  "sources": [
   {
    "id": "i18n-cinema",
-   "url": "https://higgsfield.ai/_i18n/routes/en/delta.844d2f759c.json",
+   "url": "{studio-site}/_i18n/routes/en/delta.844d2f759c.json",
    "what": "Logged-in UI copy for the /generate (Cinema Studio) route, 3,035 strings"
   },
   {
    "id": "i18n-all",
-   "url": "https://higgsfield.ai/_i18n/en.dd219392ea.json",
+   "url": "{studio-site}/_i18n/en.dd219392ea.json",
    "what": "Full English catalog, 36,878 strings (mapped to JS chunks by message id)"
   },
   {
    "id": "i18n-root",
-   "url": "https://higgsfield.ai/_i18n/routes/en/root.bc60caf0b1.json",
+   "url": "{studio-site}/_i18n/routes/en/root.bc60caf0b1.json",
    "what": "Shared shell strings"
   },
   {
    "id": "bundles",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/",
+   "url": "{studio-assets}/tanstack/assets/",
    "what": "Production JS (build 3c4a1afe, 8,020 chunks crawled from /generate): job schemas, validators, defaults, enums, API paths"
   },
   {
    "id": "bundle-cs4-video",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-1pB6N7_Z46K3CZVe.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-1pB6N7_Z46K3CZVe.js",
    "what": "cinematic_studio_video_4_0 and seedance_2_5 job schemas (limits, defaults, validation messages)"
   },
   {
    "id": "bundle-cs-image",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-sJ73_ufwWlhS3dP4.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-sJ73_ufwWlhS3dP4.js",
    "what": "cinematic_studio_image, _image_grid, soul_cast, soul_location, soul_cinema_studio schemas and credit formulas"
   },
   {
    "id": "bundle-cs4-form",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-5sNAcX_DA99zsqQM.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-5sNAcX_DA99zsqQM.js",
    "what": "Cinema Studio form + Director's Panel UI (palette editor, lighting rig, film setup)"
   },
   {
    "id": "bundle-cs4-store",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-sL8TiMfKKCdPPjmu.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-sL8TiMfKKCdPPjmu.js",
    "what": "CS 4.0 form store hf:video-cinematic-studio-4-0-store:v1"
   },
   {
    "id": "bundle-emotion",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-zdCIKyDu_IHnJPfy.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-zdCIKyDu_IHnJPfy.js",
    "what": "Emotion Wheel data: 8 families x 3 intensities with prompt fragments and colours"
   },
   {
    "id": "bundle-moves",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-N0VQtH1jhD7jdAst.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-N0VQtH1jhD7jdAst.js",
    "what": "# camera-move token format <<<movement:{id}>>>"
   },
   {
    "id": "bundle-cast",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-MfeEHS6ki1EhfWtd.js",
    "what": "Soul Cast builder option lists and defaults"
   },
   {
    "id": "bundle-shorts",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-pqMVxHi15Zj2ouyx.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-pqMVxHi15Zj2ouyx.js",
    "what": "Shorts Studio (reels_studio) upload validator, /reels/generate payload, cost estimate"
   },
   {
    "id": "bundle-shorts-store",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-59aolFqmKz3cUs8F.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-59aolFqmKz3cUs8F.js",
    "what": "Shorts Studio form store, languages, sessions/stitch API"
   },
   {
    "id": "bundle-mixed",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-D1SuLrWXFHF4GStX.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-D1SuLrWXFHF4GStX.js",
    "what": "Mixed Media form: fps presets, resolution, credits per frame, preset param_configs, /chains/mixed-media payload"
   },
   {
    "id": "bundle-popcorn",
-   "url": "https://assets.higgsfield.ai/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js",
+   "url": "{studio-assets}/tanstack/assets/868a8dba-OFQUBjDTeudk4pba.js",
    "what": "Popcorn + Instadump flow and /keyframes/v3/photo-dump-pack payload"
   },
   {
    "id": "api-palettes",
-   "url": "https://fnf.higgsfield.ai/color-presets/with-presets?size=100",
+   "url": "{studio-service}/color-presets/with-presets?size=100",
    "what": "50 CS 4.0 colour palettes with 12 hex colours each (public, no login)"
   },
   {
    "id": "api-lighting",
-   "url": "https://fnf.higgsfield.ai/lighting-presets/with-presets?size=100",
+   "url": "{studio-service}/lighting-presets/with-presets?size=100",
    "what": "7 lighting presets with preview videos (public)"
   },
   {
    "id": "api-reels",
-   "url": "https://fnf.higgsfield.ai/reels/presets?size=50",
+   "url": "{studio-service}/reels/presets?size=50",
    "what": "44 Shorts Studio presets (public)"
   },
   {
    "id": "api-packs",
-   "url": "https://fnf.higgsfield.ai/photo-dump/packs",
+   "url": "{studio-service}/photo-dump/packs",
    "what": "Instadump packs (public)"
   },
   {
    "id": "api-costs",
-   "url": "https://fnf.higgsfield.ai/job-sets/costs",
+   "url": "{studio-service}/job-sets/costs",
    "what": "Per-second credit costs per job type (public)"
   },
   {
    "id": "mm-sitemap",
-   "url": "https://higgsfield.ai/mixed-media-presets/sitemap.xml",
+   "url": "{studio-site}/mixed-media-presets/sitemap.xml",
    "what": "33 Mixed Media preset pages (SSR name + description)"
   },
   {
    "id": "docs-cs4",
-   "url": "https://dash.higgsfield.ai/models/higgsfield/cinema-studio/4.0/llms.txt",
+   "url": "{studio-dashboard}/models/{studio}/cinema-studio/4.0/llms.txt",
    "what": "Public API schema of Cinema Studio 4.0 (enums incl. 33 camera moves, 50 palettes) and token pricing"
   },
   {
    "id": "blog-cs4",
-   "url": "https://higgsfield.ai/blog/cinema-studio-4-0",
+   "url": "{studio-site}/blog/cinema-studio-4-0",
    "what": "Official CS 4.0 guide: every Genre/Era/Tempo/Camera/Lens/Aperture/Lighting option explained, Emotion Wheel, team features"
   },
   {
    "id": "blog-built",
-   "url": "https://higgsfield.ai/blog/how-we-built-cinema-studio",
+   "url": "{studio-site}/blog/how-we-built-cinema-studio",
    "what": "History 1.0 to 3.5; AI Director became Supercomputer"
   },
   {
    "id": "blog-cs35",
-   "url": "https://higgsfield.ai/blog/cinema-studio-3.5-full-tutorial",
+   "url": "{studio-site}/blog/cinema-studio-3.5-full-tutorial",
    "what": "CS 3.5 settings reference (palettes, MoveSet styles, cameras, lenses, focal lengths)"
   },
   {
    "id": "blog-cs20",
-   "url": "https://higgsfield.ai/blog/cinema-studio-guide",
+   "url": "{studio-site}/blog/cinema-studio-guide",
    "what": "CS 2.0 image mode: 3D Scene, 2x2/3x3/4x4 grid, multi-shot up to 6 shots"
   },
   {
    "id": "blog-soulcast",
-   "url": "https://higgsfield.ai/blog/soul-cast-ai-filmmaking",
+   "url": "{studio-site}/blog/soul-cast-ai-filmmaking",
    "what": "Soul Cast fields"
   },
   {
    "id": "blog-instadump",
-   "url": "https://higgsfield.ai/blog/Create-Ai-Photoshoots-With-Instadump",
+   "url": "{studio-site}/blog/Create-Ai-Photoshoots-With-Instadump",
    "what": "Instadump flow (2025 version)"
   },
   {
    "id": "landing-cs",
-   "url": "https://higgsfield.ai/cinematic-video-generator",
-   "what": "CS 4.0 landing: Mr. Higgs personal assistant, # tags, 50 references, era scrub, FAQ"
+   "url": "{studio-site}/cinematic-video-generator",
+   "what": "CS 4.0 landing: {assistant-name} personal assistant, # tags, 50 references, era scrub, FAQ"
   },
   {
    "id": "landing-mm",
-   "url": "https://higgsfield.ai/mixed-media-intro",
+   "url": "{studio-site}/mixed-media-intro",
    "what": "Mixed Media landing (4-step flow, 40+ looks claim, 10-second scenes)"
   },
   {
    "id": "help-cs",
-   "url": "https://higgsfield.ai/creator-hub/help-center/tools/how-do-i-use-cinema-studio",
+   "url": "{studio-site}/creator-hub/help-center/tools/how-do-i-use-cinema-studio",
    "what": "Help: all CS versions, Director's Panel, video modes, upload limits"
   },
   {
    "id": "help-popcorn",
-   "url": "https://higgsfield.ai/creator-hub/help-center/ai-models/how-do-i-use-popcorn",
+   "url": "{studio-site}/creator-hub/help-center/ai-models/how-do-i-use-popcorn",
    "what": "Help: Popcorn modes, Instadump 3-step flow, aspect ratios"
   },
   {
    "id": "help-projects",
-   "url": "https://higgsfield.ai/creator-hub/help-center/community/how-do-projects-work",
+   "url": "{studio-site}/creator-hub/help-center/community/how-do-projects-work",
    "what": "Help: Open Projects, project brief, publishing steps"
   },
   {
    "id": "changelog",
-   "url": "https://higgsfield.ai/creator-hub/changelog",
+   "url": "{studio-site}/creator-hub/changelog",
    "what": "Release notes: CS workspace (Jun 7), Shorts Studio (Jun 30), CS 4.0 (Aug 12), Relight/Color Palette standalone (Aug 21)"
   }
  ],
@@ -268,7 +268,7 @@
     ],
     "permissions": "Per-role permission matrix with per-member overrides ('An override always wins over the role default'); actions: generate content, download content, like content, create elements, create/edit/move/copy/delete folders, pin projects, invite members, change member roles, add admins, remove members, revoke invites, view member usage, publish projects, change project access",
     "invites": "Invite by email (up to 10 at a time, comma/space separated) or invite link; access requests with Approve/Decline",
-    "publishing": "Publish project to Community: Details (title, description, public link higgsfield.ai/@username/projects/name, co-authors, tags) → Assets (Feature / Series / Carousel) → Cover → Access (With prompts / Prompts hidden); content check; 'Project is in review'"
+    "publishing": "Publish project to Community: Details (title, description, public link {studio-site}/@username/projects/name, co-authors, tags) → Assets (Feature / Series / Carousel) → Cover → Access (With prompts / Prompts hidden); content check; 'Project is in review'"
    },
    "folders": {
     "features": [
@@ -372,7 +372,7 @@
     },
     {
      "region": "Side panel (split view)",
-     "content": "AI Director chat (Mr. Higgs), Canvas, or Project brief"
+     "content": "AI Director chat ({assistant-name}), Canvas, or Project brief"
     }
    ],
    "confidence": "inferred from component strings and class names"
@@ -809,7 +809,7 @@
        "#69483b"
       ],
       "backgroundColor": "#69483b",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/abbce116-ac86-4d35-84d9-b0adff031962.webp"
+      "preview": null
      },
      {
       "name": "Twilight Fable",
@@ -830,7 +830,7 @@
        "#764019"
       ],
       "backgroundColor": "#764019",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/7104bc8d-f658-414e-b5c5-a34b87c7dfae.webp"
+      "preview": null
      },
      {
       "name": "Back Row Kissing Seats",
@@ -851,7 +851,7 @@
        "#881913"
       ],
       "backgroundColor": "#881913",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5b59386f-4fe9-48c2-9723-d98783458ccf.webp"
+      "preview": null
      },
      {
       "name": "On the Other Side of the Porthole",
@@ -872,7 +872,7 @@
        "#b82d1c"
       ],
       "backgroundColor": "#b82d1c",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/74e3315e-c581-47d8-bd42-89f67993ca55.webp"
+      "preview": null
      },
      {
       "name": "The Emerald Ambush",
@@ -893,7 +893,7 @@
        "#1d481b"
       ],
       "backgroundColor": "#1d481b",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/269a3671-1c7f-4f8f-900d-cf1192cbdcc1.webp"
+      "preview": null
      },
      {
       "name": "Highway Standoff",
@@ -914,7 +914,7 @@
        "#0f1c79"
       ],
       "backgroundColor": "#0f1c79",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/dfa8708a-adbf-4375-a3df-768f4465e6a8.webp"
+      "preview": null
      },
      {
       "name": "The Faded Fresco",
@@ -935,7 +935,7 @@
        "#b8b592"
       ],
       "backgroundColor": "#b8b592",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/3a1a5e27-f010-490e-b88d-84a480e2d440.webp"
+      "preview": null
      },
      {
       "name": "Oil & Ochre",
@@ -956,7 +956,7 @@
        "#8d7941"
       ],
       "backgroundColor": "#8d7941",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/8d5f2cc0-959e-44ac-a4a8-89803cb4ffe8.webp"
+      "preview": null
      },
      {
       "name": "The Mountain Convent",
@@ -977,7 +977,7 @@
        "#942417"
       ],
       "backgroundColor": "#942417",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/db7fd459-9518-43de-8f75-25d57c8cf783.webp"
+      "preview": null
      },
      {
       "name": "Ghost in the Code",
@@ -998,7 +998,7 @@
        "#638a63"
       ],
       "backgroundColor": "#638a63",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5a3f634a-3a49-47b8-a3df-438f42b9ee5e.webp"
+      "preview": null
      },
      {
       "name": "Pink Velvet",
@@ -1019,7 +1019,7 @@
        "#9f140b"
       ],
       "backgroundColor": "#9f140b",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5353b968-27ea-4f7d-a218-391a3ddabafd.webp"
+      "preview": null
      },
      {
       "name": "Two Days to the Horizon",
@@ -1040,7 +1040,7 @@
        "#988357"
       ],
       "backgroundColor": "#988357",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/0cec6501-eabd-4705-99ed-f5e18d40f553.webp"
+      "preview": null
      },
      {
       "name": "Industrial Fog",
@@ -1061,7 +1061,7 @@
        "#561b11"
       ],
       "backgroundColor": "#561b11",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/37cb0b27-ebd2-410a-8ca3-ef3fa29ce9f7.webp"
+      "preview": null
      },
      {
       "name": "Stairs Go Up",
@@ -1082,7 +1082,7 @@
        "#814f21"
       ],
       "backgroundColor": "#814f21",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/4ba81239-256f-481e-a08c-cabf39f67a58.webp"
+      "preview": null
      },
      {
       "name": "Field Post",
@@ -1103,7 +1103,7 @@
        "#0a5a0e"
       ],
       "backgroundColor": "#0a5a0e",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5cd8b81f-1513-4818-a3e6-a25962051900.webp"
+      "preview": null
      },
      {
       "name": "Home Is the Next Gas Station",
@@ -1124,7 +1124,7 @@
        "#20345c"
       ],
       "backgroundColor": "#20345c",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/501cc86b-9d4c-47f3-aafc-a776b81ed705.webp"
+      "preview": null
      },
      {
       "name": "Glossy Flesh",
@@ -1145,7 +1145,7 @@
        "#8b2926"
       ],
       "backgroundColor": "#8b2926",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/073ad22b-dc27-4f1f-98cc-acf72a597aed.webp"
+      "preview": null
      },
      {
       "name": "The Crimson Ballet",
@@ -1166,7 +1166,7 @@
        "#d20c25"
       ],
       "backgroundColor": "#d20c25",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/ac8c3167-88ab-42ec-a0f4-ed867fa51903.webp"
+      "preview": null
      },
      {
       "name": "Neon Rain at Midnight",
@@ -1187,7 +1187,7 @@
        "#446bc7"
       ],
       "backgroundColor": "#446bc7",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/34a5d30a-2a78-499c-a508-945639e43876.webp"
+      "preview": null
      },
      {
       "name": "The Morning After Rain",
@@ -1208,7 +1208,7 @@
        "#255e54"
       ],
       "backgroundColor": "#255e54",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/fb85bdb0-3f50-4851-ba03-dfc14af15afe.webp"
+      "preview": null
      },
      {
       "name": "The Iron Borough",
@@ -1229,7 +1229,7 @@
        "#b02610"
       ],
       "backgroundColor": "#b02610",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/bca2f827-575d-445a-9759-e3fbe534f11c.webp"
+      "preview": null
      },
      {
       "name": "The Ground",
@@ -1250,7 +1250,7 @@
        "#688ad2"
       ],
       "backgroundColor": "#688ad2",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/ca2aa394-3bc5-40f8-9ba4-98fa03062454.webp"
+      "preview": null
      },
      {
       "name": "The Investigation",
@@ -1271,7 +1271,7 @@
        "#2a7c8e"
       ],
       "backgroundColor": "#2a7c8e",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/191a57bc-a4ce-4efe-af8d-5d01c9fd87ab.webp"
+      "preview": null
      },
      {
       "name": "Turquoise Mirage",
@@ -1292,7 +1292,7 @@
        "#0d8b06"
       ],
       "backgroundColor": "#0d8b06",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/d98f2171-6d51-42d1-9c49-4ce0c6bda59f.webp"
+      "preview": null
      },
      {
       "name": "A Dream in Color",
@@ -1313,7 +1313,7 @@
        "#cb9336"
       ],
       "backgroundColor": "#cb9336",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/eecd43cb-bb64-4c97-b321-d65a20799984.webp"
+      "preview": null
      },
      {
       "name": "Breakfast on Schedule",
@@ -1334,7 +1334,7 @@
        "#533115"
       ],
       "backgroundColor": "#533115",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/b25f124a-9d9a-4089-af35-310dbb6c3499.webp"
+      "preview": null
      },
      {
       "name": "Favela Gold",
@@ -1355,7 +1355,7 @@
        "#d3ac74"
       ],
       "backgroundColor": "#d3ac74",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/7d84b77a-6f4d-46e6-b03c-f7d0b4011d56.webp"
+      "preview": null
      },
      {
       "name": "A Hotel for One",
@@ -1376,7 +1376,7 @@
        "#101821"
       ],
       "backgroundColor": "#101821",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/da660656-b056-4cce-ab47-fc7d10c82717.webp"
+      "preview": null
      },
      {
       "name": "After Dark",
@@ -1397,7 +1397,7 @@
        "#1d1885"
       ],
       "backgroundColor": "#1d1885",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/2b79ccd9-9d52-48db-858a-5dc6c40949fd.webp"
+      "preview": null
      },
      {
       "name": "Crimson Vigi",
@@ -1418,7 +1418,7 @@
        "#c72f1f"
       ],
       "backgroundColor": "#c72f1f",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/ac138053-fb87-45bf-b439-a03b395e6c01.webp"
+      "preview": null
      },
      {
       "name": "The Neighbors Saw Everything",
@@ -1439,7 +1439,7 @@
        "#5b3b29"
       ],
       "backgroundColor": "#5b3b29",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/8a61aef3-dfb8-4350-b345-9b3e34df3258.webp"
+      "preview": null
      },
      {
       "name": "The Grey Channel",
@@ -1460,7 +1460,7 @@
        "#cecfa5"
       ],
       "backgroundColor": "#cecfa5",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/fd113bb2-7a8d-4d97-b911-345ca3725fcf.webp"
+      "preview": null
      },
      {
       "name": "Mirage at Noon",
@@ -1481,7 +1481,7 @@
        "#954924"
       ],
       "backgroundColor": "#954924",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/719dd469-2359-44f9-939a-253449b08b3a.webp"
+      "preview": null
      },
      {
       "name": "Bubblegum Boulevard",
@@ -1502,7 +1502,7 @@
        "#aa637e"
       ],
       "backgroundColor": "#aa637e",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/c4e8a13c-b592-4380-9063-0ac5ab1d42df.webp"
+      "preview": null
      },
      {
       "name": "Yellow Room",
@@ -1523,7 +1523,7 @@
        "#ebd41a"
       ],
       "backgroundColor": "#ebd41a",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/601447d6-50c3-484f-89ac-0ea903da700b.webp"
+      "preview": null
      },
      {
       "name": "The Earth Keeps Things, Reluctantly",
@@ -1544,7 +1544,7 @@
        "#282a48"
       ],
       "backgroundColor": "#282a48",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/060c55ca-4d90-46b5-adf0-2b09393818b1.webp"
+      "preview": null
      },
      {
       "name": "Tropic Fever Dream",
@@ -1565,7 +1565,7 @@
        "#8d4f28"
       ],
       "backgroundColor": "#8d4f28",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/49f43893-8596-4128-baec-fc5a97d38c13.webp"
+      "preview": null
      },
      {
       "name": "Bioluminescent Night",
@@ -1586,7 +1586,7 @@
        "#564abb"
       ],
       "backgroundColor": "#564abb",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/a9cced71-101f-4087-a2e8-fa46751c93cf.webp"
+      "preview": null
      },
      {
       "name": "Don't Turn It Off, I'm Watching",
@@ -1607,7 +1607,7 @@
        "#0c1640"
       ],
       "backgroundColor": "#0c1640",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/c2777a88-e03d-4d16-976e-71653df883d0.webp"
+      "preview": null
      },
      {
       "name": "The Silk Curtain Falls",
@@ -1628,7 +1628,7 @@
        "#672a0e"
       ],
       "backgroundColor": "#672a0e",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/e07c6bdc-2aa8-4f33-89e1-7649967fb433.webp"
+      "preview": null
      },
      {
       "name": "The Butterfly",
@@ -1649,7 +1649,7 @@
        "#771c1e"
       ],
       "backgroundColor": "#771c1e",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/82415e51-078f-4768-ab7d-d1d419f1481a.webp"
+      "preview": null
      },
      {
       "name": "Playtime",
@@ -1670,7 +1670,7 @@
        "#725738"
       ],
       "backgroundColor": "#725738",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/a7ad4990-2fd2-49a3-8bc2-34121cbfbd65.webp"
+      "preview": null
      },
      {
       "name": "Wallpaper Romance",
@@ -1691,7 +1691,7 @@
        "#883063"
       ],
       "backgroundColor": "#883063",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/6da58732-b68e-482b-b3cb-047b9d74bb18.webp"
+      "preview": null
      },
      {
       "name": "Overtime",
@@ -1712,7 +1712,7 @@
        "#866b22"
       ],
       "backgroundColor": "#866b22",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/3a35c32e-eb66-42c8-a0d3-61d74c080b80.webp"
+      "preview": null
      },
      {
       "name": "The Way Home Is Longer",
@@ -1733,7 +1733,7 @@
        "#6c93f4"
       ],
       "backgroundColor": "#6c93f4",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/07dfe24f-02f0-4d60-ab97-3c868cff6224.webp"
+      "preview": null
      },
      {
       "name": "Everyone Speaks in Whispers",
@@ -1754,7 +1754,7 @@
        "#865517"
       ],
       "backgroundColor": "#865517",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/72fb06de-7e63-4a4e-9a12-adf7975cd37c.webp"
+      "preview": null
      },
      {
       "name": "Runaway Summer",
@@ -1775,7 +1775,7 @@
        "#be1205"
       ],
       "backgroundColor": "#be1205",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/5e34c2ee-9c27-478c-acc7-cebffebccd22.webp"
+      "preview": null
      },
      {
       "name": "Amber Wasteland",
@@ -1796,7 +1796,7 @@
        "#bf6909"
       ],
       "backgroundColor": "#bf6909",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/eaf40a03-fa08-4751-a529-ffbe3d070b9d.webp"
+      "preview": null
      },
      {
       "name": "The Circus",
@@ -1817,7 +1817,7 @@
        "#b70204"
       ],
       "backgroundColor": "#b70204",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/d1422d51-c566-449c-b015-e8f073bb4c25.webp"
+      "preview": null
      },
      {
       "name": "Gasoline Sunset",
@@ -1838,7 +1838,7 @@
        "#b36521"
       ],
       "backgroundColor": "#b36521",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_color_presets/29e586cb-7476-4506-94fd-c12c3ea22e59.webp"
+      "preview": null
      }
     ],
     "listUi": "16:9 cards (preview image + gradient strip of the hex colours), pin/unpin, sort Name (A–Z), search ('No palettes found'), Auto = none",
@@ -1865,7 +1865,7 @@
       "apiSlug": "silhouette",
       "id": "e53687bf-e62f-43d6-b4d0-ccd212032e29",
       "description": "Backlights the subject into a dark outline against a bright background",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/436a4b98-59e2-42ef-bbfd-6afa9b2d086a.mp4"
+      "preview": null
      },
      {
       "name": "Practicals",
@@ -1873,7 +1873,7 @@
       "apiSlug": "practicals",
       "id": "9e685d3e-0ad9-41cf-ac2e-b487e46a10af",
       "description": "Lights the scene only from visible in-frame sources (lamps, candles, signage)",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/430248d6-d196-4644-9acd-5bd971df502a.mp4"
+      "preview": null
      },
      {
       "name": "Window",
@@ -1881,7 +1881,7 @@
       "apiSlug": "window",
       "id": "10801b06-8c4b-4e75-a88e-526a8c884f5d",
       "description": "Single directional daylight source through a window; architecture decides light and shadow",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/ae22f7b5-e044-4f96-bcd9-b87cc677a569.mp4"
+      "preview": null
      },
      {
       "name": "Overhead fall",
@@ -1889,7 +1889,7 @@
       "apiSlug": "overhead-fall",
       "id": "829c3a53-295f-4a2f-81b4-646ac517e319",
       "description": "Soft source from above and behind: light on crown and shoulders, eyes in shadow",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/c8c80362-5f11-4bbc-88f9-61e4277c575a.mp4"
+      "preview": null
      },
      {
       "name": "Contre jour",
@@ -1897,7 +1897,7 @@
       "apiSlug": "contre-jour",
       "id": "6533b7c7-98c8-48d1-be13-ca83794e6940",
       "description": "Shooting into the light, like Silhouette but with more spill and flare",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/f55691e6-714c-4c83-b51f-f3b1eb920b27.mp4"
+      "preview": null
      },
      {
       "name": "Soft cross",
@@ -1905,7 +1905,7 @@
       "apiSlug": "soft-cross",
       "id": "c605f1f3-defe-4ceb-b006-59c0d370880f",
       "description": "Two soft sources crossing at an angle; half the face in light, smooth transition",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/9f754037-bd34-4ce2-8c4f-4489bc280c46.mp4"
+      "preview": null
      },
      {
       "name": "Auto",
@@ -1913,7 +1913,7 @@
       "apiSlug": null,
       "id": "72e9a3da-c8e0-4fe7-ab5d-4eecb46e81cf",
       "description": "Lets the model choose the lighting from scene context",
-      "preview": "https://cdn.higgsfield.ai/cinema_studio_40_creative_controls/72232455-c7bf-4613-ab29-b77e8ab47c56.mp4"
+      "preview": null
      }
     ],
     "custom": {
@@ -2205,7 +2205,7 @@
    "v3_0": "Duration 4–15 s, Single shot / Multi-shot Auto / Multi-shot Manual ('Smart' / 'Custom Multishot'), up to 9 references, 3 videos, 3 audios",
    "v2_x": "Up to 6 shots, multi_prompt [{prompt ≤512 chars, duration, speedramp, preset_id}], total 3–15 s, speed ramps Linear/Auto/Flash In/Flash Out/Slow-mo/Bullet Time/Impact/Ramp Up/Hero Moment"
   },
-  "renderAndStitch": "Each generation is one finished clip (cuts included). There is no timeline editor in Cinema Studio itself: clips live in project folders; continuity comes from Extend, Elements and the shared Director settings; final assembly happens outside (Higgsfield Edit / Canvas / export). The only timeline UI is the reference-video trimmer. (inferred from the absence of any NLE strings in the CS bundles)",
+  "renderAndStitch": "Each generation is one finished clip (cuts included). There is no timeline editor in Cinema Studio itself: clips live in project folders; continuity comes from Extend, Elements and the shared Director settings; final assembly happens outside (Edit / Canvas / export). The only timeline UI is the reference-video trimmer. (inferred from the absence of any NLE strings in the CS bundles)",
   "imageMode": {
    "cinematicImage": {
     "job": "cinematic_studio_image",
@@ -2606,7 +2606,7 @@
    "folders": "element folders (/v2/element-folders) with pin, bulk move/duplicate/delete"
   },
   "aiDirector": {
-   "name": "AI Director, branded 'Mr. Higgs' (Personal Assistant) on the CS 4.0 landing; same agent family as Supercomputer",
+   "name": "AI Director, branded '{assistant-name}' (Personal Assistant) on the CS 4.0 landing; same agent family as Supercomputer",
    "placement": "Chat tab in the split view next to the generation feed; 'Project chats' list",
    "input": "Ask AI Director anything. Type / for skills, @ for elements",
    "attachments": "Add references, Attach file, 'Get from prompt box'",
@@ -3398,8 +3398,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/4b4f39a7-042a-46a3-9e7c-acf9ea8cc70b.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/801615ee-e768-4e15-b751-335e53dc4d5f.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Green Contrast",
@@ -3407,8 +3407,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/c12a7632-017b-46a0-8b68-89fd818b5d66.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/f5767ef4-fb42-4e7d-a830-410226e5aaab.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Urban Serenity",
@@ -3416,8 +3416,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/13d9ab98-997e-4ed2-a92e-065f92efa434.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/a5c2054e-1a72-45e5-a664-5ec90043aa2e.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Warm Glow",
@@ -3425,8 +3425,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/fe1700c9-e56f-46f5-bc94-ac4d08975cb1.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/4dae7f31-4992-499f-b125-ea0d0648b115.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Yellow Frame",
@@ -3434,8 +3434,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/ab167ed9-6a10-4514-8745-dcf52db87284.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/8d607731-02df-47f9-907f-7113890338e3.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Monochrome Vibes",
@@ -3443,26 +3443,26 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/2d303c75-e17b-4210-b6af-6d3847c133ce.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/684be132-d8ec-4a94-8241-9263e25e2302.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Claymation",
     "id": "a1914fcf-5b8c-4cab-9c21-6bb6c4f3e41a",
     "source": "preset",
     "description": "Stop-motion clay animation with a handmade, tactile feel",
-    "descriptionSource": "Higgsfield copy (Shorts Maker page)",
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/b7af3fa7-167c-4ea7-b3da-69449062a43b.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/49ab7faf-1694-497a-b731-cb7a2d0173c4.webp"
+    "descriptionSource": "The studio's copy (Shorts Maker page)",
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Marker Scribble",
     "id": "00bad4fb-334d-4166-920b-00f7e43e4a8d",
     "source": "preset",
     "description": "Hand-drawn marker doodles and loose scribbled overlays",
-    "descriptionSource": "Higgsfield copy (Shorts Maker page)",
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/4468670e-1bce-434a-bc71-8a74a6310f12.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/e0fbdfc3-9d8a-405a-93d2-391625c2fd9c.webp"
+    "descriptionSource": "The studio's copy (Shorts Maker page)",
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Sticker Type",
@@ -3470,8 +3470,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/110e4fe4-5739-412e-875f-463972862e47.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/957ac18b-28bc-4e85-86cc-e307c61a5449.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Blue Comic",
@@ -3479,8 +3479,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/6fb6d834-ebbb-42c7-b792-3569dd3334d9.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/0b7a7a37-47a6-4389-b18a-85813ac7d9b7.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Red Graffiti",
@@ -3488,8 +3488,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/0c7cb036-ec9e-4ca4-9bd1-492e06892c9b.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/6bf08f01-d01d-489d-94ab-7c41b9e3691a.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Watercolor",
@@ -3497,8 +3497,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/50ff8c85-97cd-449a-856e-2a03e2f7f563.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/a9f61c78-217e-4f23-a76f-5ba89a958f7f.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Pencil Sketch",
@@ -3506,8 +3506,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/cda31448-32aa-4792-92dc-3ee603037f80.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/3192e1f5-bc4c-4b16-8d7b-577d2f6c8517.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Desktop",
@@ -3515,8 +3515,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/fcf00b8f-0fd5-467f-9f57-24bc083f191b.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/c6f52f4e-7b93-49d1-9f3c-8df0b9b7d3bf.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Acid Green",
@@ -3524,8 +3524,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/fa382c69-dabf-4495-951d-92de7bf43dba.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/2e73fcc5-9e3b-4356-a506-7896a126ba36.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Balloon Type",
@@ -3533,8 +3533,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/89e02a08-af30-4753-9241-e2c35e3ad46e.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/fad55747-1e4b-41a4-9025-bab846d3a859.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Blueprint",
@@ -3542,8 +3542,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/7e863439-96e3-4eb5-83f1-58b6e86bfb53.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/735a0fec-5fbd-4d4f-bbea-e668f9678dd3.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Bold Caption",
@@ -3551,8 +3551,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/cf4f9927-0cd1-49bb-bfed-d13ef3825a11.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/c3ebf064-719f-413c-843f-eb5dc476a650.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Bounding Box",
@@ -3560,8 +3560,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/c4265d8e-a2cf-4e3b-8984-b35cec8166af.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/994899e4-b19f-4dbe-9954-fde73f41aab7.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Circuit",
@@ -3569,8 +3569,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/2281f89a-066e-45ed-ac18-5d95fe08e44a.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/09ea8319-9a3b-4b08-aeec-62c742253388.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Comic Burst",
@@ -3578,8 +3578,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/a2826d45-5b27-487b-86df-7bad6a161061.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/a4b62824-428c-4072-af8e-84c98254af9d.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Comic Pop",
@@ -3587,8 +3587,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/d6714a54-d1a4-45fe-964f-ea012e851bfd.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/87e0d337-30be-42c2-9d5a-65916ec4f204.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Pink Wash",
@@ -3596,8 +3596,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/9d2dca52-9349-465a-b9db-ba41c3c0cff6.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/72aab82e-f42d-4414-accb-71513c73c27c.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Gold Stars",
@@ -3605,8 +3605,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/7b115462-c29b-4e35-aa94-4c1343940cd0.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/25f63f30-7a71-4461-af73-ed5c11efba2d.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Graffiti",
@@ -3614,8 +3614,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/57801423-33a0-4888-a3e0-c345ccc8806d.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/bbcc57d4-8bda-4d05-ade5-f828bfbf6425.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Green Doodle",
@@ -3623,8 +3623,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/89a98819-aa67-4ec8-9354-b4ebb0e5a37d.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/e338a07d-949f-403f-83d1-985ad0a20597.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Green Pop",
@@ -3632,8 +3632,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/b1fc85fb-c98a-4339-913a-6648d7aa5a87.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/9ae2ed82-ba3a-403d-8e72-407e6c2021ce.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Heart Pop",
@@ -3641,8 +3641,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/6f709a9d-470c-4fe5-9a9e-205047c968ee.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/ac05d43d-6d90-41ac-95de-46a382413314.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Kinetic Type",
@@ -3650,8 +3650,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/8949596a-6762-4599-ada9-0a841aba410b.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/c44b26a0-f7bc-429d-88a0-eb02aea8b70b.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Liquid Chrome",
@@ -3659,8 +3659,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/f944bfdd-96a0-4337-83cd-1a7cd19d6de5.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/4192bae2-4b07-48f0-a0f4-058003279bb6.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Mascot",
@@ -3668,8 +3668,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/10b94098-f029-4a9d-903c-bcb6488bf024.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/52c07ef3-42f0-456e-8c1c-cfbf8897d545.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Neon Pop",
@@ -3677,8 +3677,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/41455531-bb3a-4a60-8033-7bc1d1d6193c.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/db8c35d6-7f44-47d1-af7b-b3c9d34fd684.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Neon Type",
@@ -3686,8 +3686,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/0f4113e4-0e5f-4ace-b658-d2038ab2e567.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/5dc1c587-16e7-416d-8484-232a3954b88a.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Patterned",
@@ -3695,8 +3695,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/514b645e-f17d-4b3d-bec0-852483df7fbc.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/313bf6c4-ed77-4f4e-a96c-3dde0ed13f87.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Pink Pop",
@@ -3704,8 +3704,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/1948e7d2-d764-4ed2-a41c-9371ef40b0d7.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/57786b23-19c9-4bd6-b650-4b9f5daddb07.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Pink Scribble",
@@ -3713,26 +3713,26 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/d111b325-182a-48db-ae9b-d85b44c3f2d1.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/fada291a-9e29-427f-9152-dd5fb6d0d772.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Polka Pop",
     "id": "c54ec3d8-12c1-4b08-bc21-a4850f49a9af",
     "source": "preset",
     "description": "Playful polka dots and pop-art color blocking",
-    "descriptionSource": "Higgsfield copy (Shorts Maker page)",
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/8c0af29c-5234-42b2-9c3a-ebf6442fcc69.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/5ce2c7fd-6a58-4347-b7b6-248954f3db01.webp"
+    "descriptionSource": "The studio's copy (Shorts Maker page)",
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Retro Collage",
     "id": "45d49116-3f32-4c22-b878-7b5790724310",
     "source": "preset",
     "description": "Vintage cut-paper textures and grainy print colors",
-    "descriptionSource": "Higgsfield copy (Shorts Maker page)",
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/03e7d1b5-e02e-47be-b97d-bea1bfa65d07.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/4b825772-5087-4763-b59d-9e2157fd7c9f.webp"
+    "descriptionSource": "The studio's copy (Shorts Maker page)",
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Stacked Type",
@@ -3740,8 +3740,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/f1417caa-9014-4f81-9b71-ca5d2102f1f3.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/f00d5544-1a99-4b94-ac89-ba529fcb9908.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Star Comic",
@@ -3749,8 +3749,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/75336ae2-e934-4ef9-b532-9e91df3a5f5b.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/d690c4ee-1dc1-47ef-82c4-93995ab4d248.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Street Art",
@@ -3758,8 +3758,8 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/6eaa3447-4df5-4c11-bacd-a3374df9fb50.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/90517cb5-743a-41fc-8e0b-485b77deb4bf.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Vintage Paper",
@@ -3767,17 +3767,17 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/c74a0ef1-3b2b-4ba0-8788-68a2ee3fbde8.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/5a9d933c-aeac-4af7-9991-7ae637f66ada.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Yellow Burst",
     "id": "61a18bae-ddc6-404e-8285-159c8408e97e",
     "source": "preset",
     "description": "Bold graphic bursts on a punchy yellow backdrop",
-    "descriptionSource": "Higgsfield copy (Shorts Maker page)",
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/8c41b28e-8763-4cb9-a025-68690bd714f8.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/b54bebec-f134-43fd-91e5-56e12f525f65.webp"
+    "descriptionSource": "The studio's copy (Shorts Maker page)",
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    },
    {
     "name": "Yellow Doodle",
@@ -3785,11 +3785,11 @@
     "source": "preset",
     "description": null,
     "descriptionSource": null,
-    "thumbnailVideo": "https://cdn.higgsfield.ai/reels_preset_thumbnail/8d581399-4454-4c64-a1e7-63c547e2d1cd.mp4",
-    "thumbnailImage": "https://cdn.higgsfield.ai/reels_preset_thumbnail/27f1031f-87f9-4628-9506-9bbb005347e3.webp"
+    "thumbnailVideo": null,
+    "thumbnailImage": null
    }
   ],
-  "presetDescriptionsNote": "The public preset API returns only names and preview videos; descriptions exist for 5 presets in Higgsfield's own copy. The rest are visual-only (inferred look from the name).",
+  "presetDescriptionsNote": "The public preset API returns only names and preview videos; descriptions exist for 5 presets in the studio's own copy. The rest are visual-only (inferred look from the name).",
   "supercomputer": "Same engine exposed as the 'Shorts Maker' AI employee and the reels_studio_create tool (approval card shows preset, aspect ratio, resolution, source video)"
  },
  "mixedMedia": {
@@ -3860,199 +3860,199 @@
     "name": "Layer mixed media",
     "description": "Stacked mixed-media composition",
     "id": "6ff15c8c-de78-459e-af32-e7a1266dc075",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/6ff15c8c-de78-459e-af32-e7a1266dc075"
+    "page": "{studio-site}/mixed-media-presets/preset/6ff15c8c-de78-459e-af32-e7a1266dc075"
    },
    {
     "name": "Sketch",
     "description": "Hand-drawn textured linework",
     "id": "6377b231-5cea-4259-8a6b-0314728c1982",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/6377b231-5cea-4259-8a6b-0314728c1982"
+    "page": "{studio-site}/mixed-media-presets/preset/6377b231-5cea-4259-8a6b-0314728c1982"
    },
    {
     "name": "Canvas",
     "description": "Hand-drawn canvas-style artwork",
     "id": "1a722581-6ba0-48b2-b990-a177a3f26cc8",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/1a722581-6ba0-48b2-b990-a177a3f26cc8"
+    "page": "{studio-site}/mixed-media-presets/preset/1a722581-6ba0-48b2-b990-a177a3f26cc8"
    },
    {
     "name": "Flash comic",
     "description": "High-energy comic visuals",
     "id": "3fbd5057-50e1-4d1d-9a6f-8655836711b8",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/3fbd5057-50e1-4d1d-9a6f-8655836711b8"
+    "page": "{studio-site}/mixed-media-presets/preset/3fbd5057-50e1-4d1d-9a6f-8655836711b8"
    },
    {
     "name": "Overexposed",
     "description": "Extreme light exposure effect",
     "id": "1c79bffd-0839-42c3-90ab-2cd7e6ff4619",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/1c79bffd-0839-42c3-90ab-2cd7e6ff4619"
+    "page": "{studio-site}/mixed-media-presets/preset/1c79bffd-0839-42c3-90ab-2cd7e6ff4619"
    },
    {
     "name": "Paper",
     "description": "Handcrafted paper texture",
     "id": "f63bf420-f98a-44e6-ba54-3f7eaa599d40",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/f63bf420-f98a-44e6-ba54-3f7eaa599d40"
+    "page": "{studio-site}/mixed-media-presets/preset/f63bf420-f98a-44e6-ba54-3f7eaa599d40"
    },
    {
     "name": "Noir",
     "description": "Cinematic noir lighting",
     "id": "c92d1f34-8bc3-410a-99c4-4b8f387140ec",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/c92d1f34-8bc3-410a-99c4-4b8f387140ec"
+    "page": "{studio-site}/mixed-media-presets/preset/c92d1f34-8bc3-410a-99c4-4b8f387140ec"
    },
    {
     "name": "Particles",
     "description": "Luminous particles in motion",
     "id": "386ebb9d-643f-4108-a12f-3f867f18fb36",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/386ebb9d-643f-4108-a12f-3f867f18fb36"
+    "page": "{studio-site}/mixed-media-presets/preset/386ebb9d-643f-4108-a12f-3f867f18fb36"
    },
    {
     "name": "Hand paint",
     "description": "Freeform hand-painted brushwork",
     "id": "ad8401a0-39a2-4c95-b65e-1634d41378ab",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/ad8401a0-39a2-4c95-b65e-1634d41378ab"
+    "page": "{studio-site}/mixed-media-presets/preset/ad8401a0-39a2-4c95-b65e-1634d41378ab"
    },
    {
     "name": "Toxic",
     "description": "Radioactive neon color blast",
     "id": "fd3ca94d-6c3d-443f-970b-a4e8dd7338da",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/fd3ca94d-6c3d-443f-970b-a4e8dd7338da"
+    "page": "{studio-site}/mixed-media-presets/preset/fd3ca94d-6c3d-443f-970b-a4e8dd7338da"
    },
    {
     "name": "Tracking",
     "description": "Dynamic object tracking lines",
     "id": "9fa35d36-e5f4-4488-9068-8813bd232a22",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/9fa35d36-e5f4-4488-9068-8813bd232a22"
+    "page": "{studio-site}/mixed-media-presets/preset/9fa35d36-e5f4-4488-9068-8813bd232a22"
    },
    {
     "name": "Ultraviolet",
     "description": "Neon ultraviolet glow effect",
     "id": "c9682e42-9891-4118-86bb-f8cf79c84055",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/c9682e42-9891-4118-86bb-f8cf79c84055"
+    "page": "{studio-site}/mixed-media-presets/preset/c9682e42-9891-4118-86bb-f8cf79c84055"
    },
    {
     "name": "Windows",
     "description": "Overlapping digital interface windows",
     "id": "4f7a1589-c604-44e5-b0ec-bc87d3929906",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/4f7a1589-c604-44e5-b0ec-bc87d3929906"
+    "page": "{studio-site}/mixed-media-presets/preset/4f7a1589-c604-44e5-b0ec-bc87d3929906"
    },
    {
     "name": "Acid",
     "description": "Psychedelic neon color distortion",
     "id": "b501a54d-7c2a-42f8-a47d-484cbdace0a6",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/b501a54d-7c2a-42f8-a47d-484cbdace0a6"
+    "page": "{studio-site}/mixed-media-presets/preset/b501a54d-7c2a-42f8-a47d-484cbdace0a6"
    },
    {
     "name": "Palette",
     "description": "Hand-painted color composition",
     "id": "15b97a49-9912-4a58-8424-b4ef1c302a05",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/15b97a49-9912-4a58-8424-b4ef1c302a05"
+    "page": "{studio-site}/mixed-media-presets/preset/15b97a49-9912-4a58-8424-b4ef1c302a05"
    },
    {
     "name": "Comic",
     "description": "Graphic illustrated comic look",
     "id": "94cd1315-c820-4314-806d-f1b0936e8a46",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/94cd1315-c820-4314-806d-f1b0936e8a46"
+    "page": "{studio-site}/mixed-media-presets/preset/94cd1315-c820-4314-806d-f1b0936e8a46"
    },
    {
     "name": "Akrill",
     "description": "Layered acrylic color blocks",
     "id": "73f9e01d-eb92-41d6-9119-53cc2686ecfa",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/73f9e01d-eb92-41d6-9119-53cc2686ecfa"
+    "page": "{studio-site}/mixed-media-presets/preset/73f9e01d-eb92-41d6-9119-53cc2686ecfa"
    },
    {
     "name": "Two color",
     "description": "High-contrast two-tone style",
     "id": "ac3612ce-b1c9-4034-a04b-b46732c2d7a3",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/ac3612ce-b1c9-4034-a04b-b46732c2d7a3"
+    "page": "{studio-site}/mixed-media-presets/preset/ac3612ce-b1c9-4034-a04b-b46732c2d7a3"
    },
    {
     "name": "Multiverse",
     "description": "Layered reality collision effect",
     "id": "c38c2630-3986-4e28-858f-596fd254e5e9",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/c38c2630-3986-4e28-858f-596fd254e5e9"
+    "page": "{studio-site}/mixed-media-presets/preset/c38c2630-3986-4e28-858f-596fd254e5e9"
    },
    {
     "name": "Fragments",
     "description": "Layered abstract visual fragments",
     "id": "525fc0d7-abf1-49e5-a3e6-2f97eb50973c",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/525fc0d7-abf1-49e5-a3e6-2f97eb50973c"
+    "page": "{studio-site}/mixed-media-presets/preset/525fc0d7-abf1-49e5-a3e6-2f97eb50973c"
    },
    {
     "name": "Origami",
     "description": "Crisp origami-style geometr",
     "id": "8c88dac7-0314-40b4-b611-5dcd3fda004d",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/8c88dac7-0314-40b4-b611-5dcd3fda004d"
+    "page": "{studio-site}/mixed-media-presets/preset/8c88dac7-0314-40b4-b611-5dcd3fda004d"
    },
    {
     "name": "Random Glow",
     "description": "random glow",
     "id": "f1706661-007e-424b-8734-b755d602d580",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/f1706661-007e-424b-8734-b755d602d580"
+    "page": "{studio-site}/mixed-media-presets/preset/f1706661-007e-424b-8734-b755d602d580"
    },
    {
     "name": "Vintage",
     "description": "Hand-inked illustrated style",
     "id": "ee12f76c-ed17-4471-bf2e-52bda1bcae64",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/ee12f76c-ed17-4471-bf2e-52bda1bcae64"
+    "page": "{studio-site}/mixed-media-presets/preset/ee12f76c-ed17-4471-bf2e-52bda1bcae64"
    },
    {
     "name": "Cannabis",
     "description": "Smoky psychedelic poster look",
     "id": "c90cd302-d409-48fd-8643-36c34d7798e4",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/c90cd302-d409-48fd-8643-36c34d7798e4"
+    "page": "{studio-site}/mixed-media-presets/preset/c90cd302-d409-48fd-8643-36c34d7798e4"
    },
    {
     "name": "Bubbles",
     "description": "Dreamy soap bubble texture",
     "id": "dacdca94-27b2-417a-bc8c-6d4168e6109a",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/dacdca94-27b2-417a-bc8c-6d4168e6109a"
+    "page": "{studio-site}/mixed-media-presets/preset/dacdca94-27b2-417a-bc8c-6d4168e6109a"
    },
    {
     "name": "Magazine",
     "description": "Printed magazine visual look",
     "id": "963c3300-8967-4880-b078-c956de4c1e12",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/963c3300-8967-4880-b078-c956de4c1e12"
+    "page": "{studio-site}/mixed-media-presets/preset/963c3300-8967-4880-b078-c956de4c1e12"
    },
    {
     "name": "Cold vision",
     "description": "Cold neon shadow lighting",
     "id": "d6ebc1b1-55b0-4379-8276-b46d47d8b056",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/d6ebc1b1-55b0-4379-8276-b46d47d8b056"
+    "page": "{studio-site}/mixed-media-presets/preset/d6ebc1b1-55b0-4379-8276-b46d47d8b056"
    },
    {
     "name": "Modern",
     "description": "Clean geometric minimalism",
     "id": "9196d356-1406-43ef-bc68-cb26e7eaf507",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/9196d356-1406-43ef-bc68-cb26e7eaf507"
+    "page": "{studio-site}/mixed-media-presets/preset/9196d356-1406-43ef-bc68-cb26e7eaf507"
    },
    {
     "name": "LSD",
     "description": "Hallucinogenic color waves",
     "id": "c2b241c5-5239-4465-869f-fef60a06822e",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/c2b241c5-5239-4465-869f-fef60a06822e"
+    "page": "{studio-site}/mixed-media-presets/preset/c2b241c5-5239-4465-869f-fef60a06822e"
    },
    {
     "name": "Broken mirror",
     "description": "Broken glass reflection effect",
     "id": "5d89951e-ac83-4c7f-ac47-4d8db50c835e",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/5d89951e-ac83-4c7f-ac47-4d8db50c835e"
+    "page": "{studio-site}/mixed-media-presets/preset/5d89951e-ac83-4c7f-ac47-4d8db50c835e"
    },
    {
     "name": "Lava",
     "description": "Liquid lava color motion",
     "id": "bb33da96-918c-4754-ba55-6d0dcbaf5173",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/bb33da96-918c-4754-ba55-6d0dcbaf5173"
+    "page": "{studio-site}/mixed-media-presets/preset/bb33da96-918c-4754-ba55-6d0dcbaf5173"
    },
    {
     "name": "Marble",
     "description": "Sculpted marble visual style",
     "id": "ff617894-b1bc-4931-85b3-1e5b159d2106",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/ff617894-b1bc-4931-85b3-1e5b159d2106"
+    "page": "{studio-site}/mixed-media-presets/preset/ff617894-b1bc-4931-85b3-1e5b159d2106"
    },
    {
     "name": "Ocean",
     "description": "Liquid sea color overlay",
     "id": "19115d24-276e-4222-a23f-39cc23d9a326",
-    "page": "https://higgsfield.ai/mixed-media-presets/preset/19115d24-276e-4222-a23f-39cc23d9a326"
+    "page": "{studio-site}/mixed-media-presets/preset/19115d24-276e-4222-a23f-39cc23d9a326"
    }
   ],
   "presetCountNote": "33 presets in the sitemap and in the app's i18n name map; marketing copy says '40+'"
@@ -4086,55 +4086,35 @@
     "id": "2f6029e9-16f0-474e-9ae3-917b5d2de60d",
     "author": null,
     "referencePhotos": 9,
-    "sampleImages": [
-     "https://cdn.higgsfield.ai/card/400c0ff5-a3c9-444d-98af-d9a9acd05ecb.webp",
-     "https://cdn.higgsfield.ai/card/d53d42bc-3bdd-46cd-8582-8200700fd8f8.webp",
-     "https://cdn.higgsfield.ai/card/bfec247a-b69d-439f-a548-313dbe320d69.webp"
-    ]
+    "sampleImages": []
    },
    {
     "name": "Aura farming",
     "id": "f3c76708-107e-4444-8918-72b25560e415",
     "author": "neonfluke",
     "referencePhotos": 14,
-    "sampleImages": [
-     "https://cdn.higgsfield.ai/card/1d4a2edd-4516-4e33-ad4c-ca1698f1530d.webp",
-     "https://cdn.higgsfield.ai/card/f6e2b183-1b28-49ad-b776-fc9e3ba0c121.webp",
-     "https://cdn.higgsfield.ai/card/3ba89513-5002-4732-9535-219fe75e065b.webp"
-    ]
+    "sampleImages": []
    },
    {
     "name": "Looksmaxing",
     "id": "cb271bcc-81cb-482b-ac9f-47547a534779",
     "author": "wispomatic",
     "referencePhotos": 15,
-    "sampleImages": [
-     "https://cdn.higgsfield.ai/card/319e6565-9c15-4c7d-8ffe-c165ae65b421.webp",
-     "https://cdn.higgsfield.ai/card/4fc146b6-7407-4931-8dfa-55461f049932.webp",
-     "https://cdn.higgsfield.ai/card/111619ce-0bed-456e-a2b2-8a4be269a195.webp"
-    ]
+    "sampleImages": []
    },
    {
     "name": "2000s nostalgia",
     "id": "0c7bcb83-64c6-48f9-ad18-4924b7d93868",
     "author": "trunxel",
     "referencePhotos": 15,
-    "sampleImages": [
-     "https://cdn.higgsfield.ai/card/050e875b-eebd-4e42-8c12-77fc09270ebe.webp",
-     "https://cdn.higgsfield.ai/card/a53c1ec1-ad00-4a09-b9be-577871766400.webp",
-     "https://cdn.higgsfield.ai/card/3d5b2c79-b315-4877-83dd-da5d65047f8c.webp"
-    ]
+    "sampleImages": []
    },
    {
     "name": "Editorial shots",
     "id": "e32f5a1f-febf-4edf-9fb3-678f1092ecf5",
     "author": "lostsignal",
     "referencePhotos": 15,
-    "sampleImages": [
-     "https://cdn.higgsfield.ai/card/22abf985-803f-4035-9ece-a044ce68bb0c.webp",
-     "https://cdn.higgsfield.ai/card/3bf0960a-9ef8-4752-be6c-5daf1763adb6.webp",
-     "https://cdn.higgsfield.ai/card/0c4fb01f-69d0-4c45-91ce-f143e1df078f.webp"
-    ]
+    "sampleImages": []
    }
   ],
   "tips": [

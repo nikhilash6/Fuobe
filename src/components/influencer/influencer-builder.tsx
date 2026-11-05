@@ -115,9 +115,9 @@ function RunInfo({ preview, loading, blocker }: { preview?: RunPreview & { steps
 }
 
 /**
- * /influencer: the AI Influencer builder, game-style (after Higgsfield's). Pick a character type (three
+ * /influencer: the AI Influencer builder, game-style (after the parity studio's). Pick a character type (three
  * human tiers, six creature types), then options in 18 categories, or Shuffle; conflicts are refused in
- * Higgsfield's words. A live summary, a Direction, a face or reference photo and up to three
+ * the parity research's words. A live summary, a Direction, a face or reference photo and up to three
  * clothing references, then one character sheet to save as a character.
  */
 export function InfluencerBuilder() {

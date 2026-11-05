@@ -129,7 +129,7 @@ export const MATTE_OUTPUT_LABELS: Record<MatteOutput, string> = { cutout: "Cutou
 export const colormapLabel = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
 /**
- * What a Remove background or Depth map model can't make, said under its picker (Higgsfield offers five colour
+ * What a Remove background or Depth map model can't make, said under its picker (the parity studio offers five colour
  * maps and both outputs on one model; here they depend on the model and the engine).
  */
 export function videoToolNote(model: Pick<ModelDef, "name" | "engine" | "options">, what: "matte" | "colormap"): string | null {

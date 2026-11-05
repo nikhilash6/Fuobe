@@ -12,6 +12,7 @@ import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
+import { idolCameraStills, showableOutputs } from "./av/idol-camera-still";
 import { canEnhance, canRerender, ENHANCE_LABEL, REGEN_OFFERED, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 import { exportsCleanly } from "./av/keying";
@@ -473,12 +474,22 @@ export function textOf(o: Pick<OutputFile, "text" | "meta">): string {
  * its preview, not a result of its own, and so is a splat beside the GLB made from it.
  */
 export function shownOutputs(g: Pick<Generation, "kind" | "outputs">): number[] {
-  const all = g.outputs.map((_, i) => i);
+  // A clean Idol splat's camera still is never a tile (src/lib/av/idol-camera-still.ts).
+  const all = showableOutputs(g);
   if (g.kind !== "model3d") return all;
   // A splat that came beside the GLB made from it (Photo to 3D) is one of the GLB's downloads, not a tile of its own.
   const mesh = g.outputs.some((o) => o.kind === "model3d" && !o.meta?.role);
   const own = all.filter((i) => g.outputs[i].kind === "model3d" && !(mesh && g.outputs[i].meta?.role === "splat"));
   return own.length ? own : all;
+}
+
+/**
+ * The outputs a share link or published page shows of a result (src/server/shares.ts lists its pieces with this): a 3D
+ * result shows its own files (the turntable plays, the model and its other files download), all but a clean Idol
+ * splat's camera still, which is never a piece, a cover or a link preview; any other result, what feeds show.
+ */
+export function sharedOutputs(g: Pick<Generation, "kind" | "outputs">): number[] {
+  return g.kind === "model3d" ? showableOutputs(g) : shownOutputs(g);
 }
 
 /** A layer's name and stacking order (meta.name / meta.z, or meta.layer.{name,z}). */
@@ -523,12 +534,17 @@ export function editOnlyFormat(g: Partial<Pick<Generation, "op" | "request">> | 
   return undefined;
 }
 
-/** A 3D model's still and turntable: meta.poster / meta.preview, meta.video / meta.turntable, or a sibling output. */
+/**
+ * A 3D model's still and turntable: meta.poster / meta.preview, meta.video / meta.turntable, or a sibling output. Never
+ * a clean Idol splat's camera still (src/lib/av/idol-camera-still.ts): such a splat has no still unless one was made of
+ * its orbit, and its orbit stands in.
+ */
 export function modelPreview(g: Pick<Generation, "outputs">, o: OutputFile): { poster?: string; video?: string } {
   const m = (o.meta ?? {}) as Record<string, unknown>;
-  const str = (...keys: string[]) => keys.map((k) => m[k]).find((v): v is string => typeof v === "string" && v.length > 0);
+  const cameraStills = idolCameraStills(g);
+  const str = (...keys: string[]) => keys.map((k) => m[k]).find((v): v is string => typeof v === "string" && v.length > 0 && !cameraStills.has(v));
   return {
-    poster: str("poster", "preview", "thumbnail", "image") ?? g.outputs.find((x) => x.kind === "image")?.url,
+    poster: str("poster", "preview", "thumbnail", "image") ?? g.outputs.find((x) => x.kind === "image" && !cameraStills.has(x.url))?.url,
     video: str("video", "turntable") ?? g.outputs.find((x) => x.kind === "video")?.url,
   };
 }

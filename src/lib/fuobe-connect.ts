@@ -13,12 +13,14 @@ export const FUOBE_CONNECT_PUBLISHED: boolean = true;
 
 export const FUOBE_CONNECT = {
   name: "Fuobe Connect",
-  /** What to type in ComfyUI-Manager's Custom Nodes Manager (it finds it once the Comfy Registry lists it). */
+  /** What to type in ComfyUI-Manager's Custom Nodes Manager, which installs it from the Comfy Registry. */
   search: "Fuobe Connect",
   /** Its page, for "Install via Git URL", and for a git clone in ComfyUI's custom_nodes folder. */
   gitUrl: "https://github.com/workingprototype/ComfyUI-Fuobe-Connect",
   /** Its folder in custom_nodes. */
   folder: "ComfyUI-Fuobe-Connect",
+  /** Its folder in custom_nodes when ComfyUI-Manager installed it from the Comfy Registry (the Registry's id). */
+  registryFolder: "fuobe-connect",
   /** The main branch as a download, for a computer with no git (.zip or .tar.gz after it). */
   archive: "https://github.com/workingprototype/ComfyUI-Fuobe-Connect/archive/refs/heads/main",
   /** The studios it trusts when the person names none. */

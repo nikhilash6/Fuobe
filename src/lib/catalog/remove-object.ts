@@ -1,6 +1,6 @@
 /**
  * Video tools → Remove object: say what goes by typing it ("the coffee cup"), clicking it on the first
- * frame, or painting over it. Higgsfield runs this as Edit Video with a removal prompt on Kling O3 Omni;
+ * frame, or painting over it. The parity studio runs this as Edit Video with a removal prompt on Kling O3 Omni;
  * Fuobe adds Bria's clicked / masked eraser, VOID for shadows and reflections, and the open engine's
  * SAM 3.1 + Wan 2.1 VACE (or VOID) graphs.
  *
@@ -8,7 +8,7 @@
  * 197 frames per window), so longer clips are cut into pieces, erased and joined, and the clip's own sound
  * is put back. Pure module (erasers per engine and mode, pieces and windows, prompts, the pipeline's steps),
  * shared by the page, the server (src/server/remove-object.ts) and the tests.
- * Research: docs/research/higgsfield-delta-4.md §4.1, paid-model-apis-4.md §3 and §10, comfyui-oss-4.md §b.
+ * Research: docs/research/parity-delta-4.md §4.1, paid-model-apis-4.md §3 and §10, comfyui-oss-4.md §b.
  */
 import { h3Canvas } from "./character-swap";
 import { joinGroups, type PlanStep } from "./shorts";
@@ -42,7 +42,7 @@ export const REMOVE_MODES: { id: RemoveMode; label: string; hint: string }[] = [
   { id: "paint", label: "Paint it", hint: "Brush over it on the first frame" },
 ];
 
-/** Higgsfield's two example prompts (verbatim) and two short ones. */
+/** The parity studio's two example prompts (verbatim) and two short ones. */
 export const REMOVE_EXAMPLES: { label: string; prompt: string }[] = [
   { label: "The coffee cup", prompt: "Remove the coffee cup from her hands and fix her fingers so they're just resting naturally, keep everything else the same." },
   {
@@ -314,7 +314,7 @@ export function targetPhrase(text: string): string {
 }
 
 /**
- * Kling O3's edit prompt: Higgsfield's "Remove {X} from @Video1, keep everything else the same" for a
+ * Kling O3's edit prompt: the parity studio's "Remove {X} from @Video1, keep everything else the same" for a
  * named object; an instruction the user wrote ("Remove the cup and fix her fingers…") is kept, pointed at
  * @Video1 and told to leave the rest alone.
  */

@@ -77,7 +77,7 @@ const toPalette = (r: Row): Palette => ({
   createdAt: r.created_at,
 });
 
-/** The built-ins as rows: Cinema Studio's 12 colours, the 12th also the background (Higgsfield's shape). */
+/** The built-ins as rows: Cinema Studio's 12 colours, the 12th also the background (the parity studio's shape). */
 export function builtinPalettes(): Omit<Palette, "createdAt">[] {
   return CINEMA_PALETTES.map((p) => {
     const colors = p.hex.map((h) => normalizeHex(h)!);

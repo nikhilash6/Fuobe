@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef, ModelRoute } from "@/lib/catalog/types";
 import { tempDir } from "./helpers/temp-dir";
 
-// Fuobe Mixed Media and Fuobe Shorts (build plan O9): Higgsfield's Mixed Media and Shorts as Originals on both engines.
+// Fuobe Mixed Media and Fuobe Shorts (build plan O9): the parity studio's Mixed Media and Shorts as Originals on both engines.
 // Frames are floor(seconds × fps) and priced per frame; the cloud fans the Original's frame route out over every frame
 // (no lanes: one seed, the look's LoRA) and splits clips above 200 frames; Smooth and Shorts run the Wan 2.2 Fun VACE
 // pass from a restyled first frame; the fal payloads come from the research's FieldMaps; DoP's 32 Mixed Media effects

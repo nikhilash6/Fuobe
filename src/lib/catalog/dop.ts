@@ -1,5 +1,5 @@
 /**
- * Fuobe DoP (build plan O4): Higgsfield's DoP camera motions, its Mix and its effects as one Original on both
+ * Fuobe DoP (build plan O4): the parity studio's DoP camera motions, its Mix and its effects as one Original on both
  * engines, rebuilt from open weights and LoRAs. Pure logic, no I/O: from the preset → LoRA map v2
  * (oss-loras.generated.ts, research §7) to each preset's open and cloud routes.
  *

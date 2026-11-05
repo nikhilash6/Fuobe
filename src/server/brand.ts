@@ -28,7 +28,7 @@ import { normalizeWebsite } from "@/lib/website";
  * reads what's machine-readable (OpenGraph, JSON-LD Organization/Product, Shopify /products.json,
  * CSS colour variables, font families, logo, hero images) and an LLM (llmText: Claude, else a local model)
  * writes the soft fields (tagline, overview, tone, values, audience…). With no LLM, rule-based
- * heuristics fill them, so a kit always comes back. Progress uses Higgsfield's 14 labels.
+ * heuristics fill them, so a kit always comes back. Progress uses the parity studio's 14 labels.
  */
 
 // ---------------------------------------------------------------------------

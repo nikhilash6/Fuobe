@@ -1,16 +1,18 @@
-# Higgsfield marketing studios, agents and the Assets library
+# The studio's marketing studios, agents and the Assets library
 
-_As of 2026-10-17. Machine-readable twin: [`higgsfield-marketing-agents.json`](higgsfield-marketing-agents.json) (all 1,074 Marketing Studio templates, hooks, settings, presets, skills, node types and payloads). This deepens §2.6 and §2.7 of [`higgsfield-inventory.md`](higgsfield-inventory.md). Cinema Studio, Shorts Studio and Mixed Media are in [`higgsfield-studios.md`](higgsfield-studios.md)._
+_In this file, "the studio" means the closed AI image and video studio that this research measures Fuobe against._
 
-Covered: **Marketing Studio**, **Ads Studio**, **Ad Multiplier**, **Click to Ad / Link to Video Ad**, **Faceless Studio**, **Higgsfield Explainer**, **Canvas**, **Katana**, **Virality Predictor**, the **Assets library**, and Supercomputer's **Skills**, **Projects** and **Memory**.
+_As of 2026-10-17. Machine-readable twin: [`parity-marketing-agents.json`](parity-marketing-agents.json) (all 1,074 Marketing Studio templates, hooks, settings, presets, skills, node types and payloads). This deepens §2.6 and §2.7 of [`parity-inventory.md`](parity-inventory.md). Cinema Studio, Shorts Studio and Mixed Media are in [`parity-studios.md`](parity-studios.md)._
+
+Covered: **Marketing Studio**, **Ads Studio**, **Ad Multiplier**, **Click to Ad / Link to Video Ad**, **Faceless Studio**, **Explainer**, **Canvas**, **Katana**, **Virality Predictor**, the **Assets library**, and Supercomputer's **Skills**, **Projects** and **Memory**.
 
 **How this was researched.** Logged-in screens were not observed. Instead:
 
 1. **Public CMS endpoints** that answer without a login. They hold the full Marketing Studio catalog and template feed, the UGC hooks and settings, the Faceless, Explainer, Katana and legacy Click-to-Ad preset lists, the Canvas templates, the Supercomputer skills catalog, a Virality Predictor demo analysis and the credit formulas.
 2. **Server-rendered state.** TanStack Query state is dehydrated into the SSR HTML of `/marketing-studio`, `/faceless-studio` and `/asset`. A small literal parser read it; no page code was run.
-3. **Production JS.** Build `868a8dba`, the same 8,020 chunks as `higgsfield-studios.md`. The chunks give the job payload builders, validators, limits, enums and menu definitions.
+3. **Production JS.** Build `868a8dba`, the same 8,020 chunks as `parity-studios.md`. The chunks give the job payload builders, validators, limits, enums and menu definitions.
 4. **i18n catalogs.** Route deltas, plus the full English catalog mapped to chunks by message id. They give the UI copy.
-5. **Docs and pages.** Help Center, Changelog, blog posts, landing and skill pages. A web search for third-party coverage turned up little beyond Higgsfield's own pages.
+5. **Docs and pages.** Help Center, Changelog, blog posts, landing and skill pages. A web search for third-party coverage turned up little beyond the studio's own pages.
 
 Statements reasoned from code or copy, rather than seen, are marked *(inferred)*. Every URL is in [Sources](#sources) and in the JSON `sources` block.
 
@@ -36,9 +38,9 @@ Statements reasoned from code or copy, rather than seen, are marked *(inferred)*
 | | |
 |---|---|
 | Routes | `/marketing-studio` (`?tool=url-to-ad`, `?tool=ad-reference`, `?tool=app-video`, `?category=…`), `/marketing-studio/preset/{slug}-{id}`, `/marketing-studio/p/{id}`, `/marketing-studio/generations`, `/favorites`, `/projects`; public `/marketing-studio-community`; landing `/marketing-studio-intro`. `/apps/link-to-video-ad` and `/app/link-to-video-ad` redirect to `?tool=url-to-ad` |
-| Data | `GET cms.higgsfield.ai/marketing-studio-v2/catalog?lang=en&show_hidden=…`; `GET …/categories/{slug}/presets?size=&cursor=&show_hidden=` (the slug is ignored server-side; the client filters); `GET …/motion-presets?size=100`; hooks/settings `GET fnf…/marketing-studio/setup/{hooks,settings}`; brand kits, products, avatars, ad references and cost quote are authenticated `fnf` endpoints (§1.7–1.10) |
+| Data | `GET {studio-cms}/marketing-studio-v2/catalog?lang=en&show_hidden=…`; `GET …/categories/{slug}/presets?size=&cursor=&show_hidden=` (the slug is ignored server-side; the client filters); `GET …/motion-presets?size=100`; hooks/settings `GET fnf…/marketing-studio/setup/{hooks,settings}`; brand kits, products, avatars, ad references and cost quote are authenticated `fnf` endpoints (§1.7–1.10) |
 | Job set types | `marketing_studio_2_image` (types `product_shots`, `product_shots_people`, `ads`, `poster`, `marketplace`) and `marketing_studio_v2_video` (types `ugc`, `video_mode`, `2d_motion`, `hypermotion`, `mixed_media`, `saas_motion`, `product_link`, `ad_reference`, `app_video`) |
-| Models | Images: "MS Image" (public API `/marketing-studio/image` 2.0 Alpha, `/image/flare` = GPT Image 2.5 Flare, `/image/sunburst`; already in Fuobe as `marketing-studio-image`). Product motion: "Higgsfield Motion" (blog). UGC: Seedance 2 *(inferred from the UGC skill page)* |
+| Models | Images: "MS Image" (public API `/marketing-studio/image` 2.0 Alpha, `/image/flare` = GPT Image 2.5 Flare, `/image/sunburst`; already in Fuobe as `marketing-studio-image`). Product motion: "Motion" (blog). UGC: Seedance 2 *(inferred from the UGC skill page)* |
 | History | Before Aug 18, 2026 it was prompt-first with 9 formats (the legacy `video_mode` styles below). Since then it is template-first |
 
 ### 1.2 Layout
@@ -288,7 +290,7 @@ Amber Ladder, Amber Orbs, Badge Orbit, Blob Cradle, Blush Browser, Blush Gloss S
 
 | Tool | Flow and copy | Request |
 |---|---|---|
-| **Product Link** (Click to Ad) | **"Make a video ad in one click"**: "Drop a product link, get an ad ready for TikTok, Reels, and Shorts. No filming, no editing, no brief." → product link, or "Or select your product" → **"Choose a style and start"**: "Pick what looks right for your product." → **Generate Video**. Badge: "TikTok Symphony and Higgsfield". Errors: "Select a product or enter a product URL", "Enter a valid website link to generate", "{0} has no images" | `type: product_link`, `{style_id?, product_id or product_url, duration 4–30, resolution, aspect_ratio, batch_size}` |
+| **Product Link** (Click to Ad) | **"Make a video ad in one click"**: "Drop a product link, get an ad ready for TikTok, Reels, and Shorts. No filming, no editing, no brief." → product link, or "Or select your product" → **"Choose a style and start"**: "Pick what looks right for your product." → **Generate Video**. Badge: "TikTok Symphony and the studio". Errors: "Select a product or enter a product URL", "Enter a valid website link to generate", "{0} has no images" | `type: product_link`, `{style_id?, product_id or product_url, duration 4–30, resolution, aspect_ratio, batch_size}` |
 | **Ad Reference** | **"Get inspiration from viral ads"**: "Paste a viral ad and turn it into your own — same hook, same energy, now selling your product." → Reference Ad Video (Upload your video / Choose from uploads or generations) → **Trim**: "Select up to 15 seconds for cloning" → "Analysing…" → **Review and Edit Script**, a scene list with time, title and description → Product, Avatar → Duration, Quality, Aspect ratio, Batch Size → Generate Video. Errors: "Analyse a video first", "The ad is still being analysed…", "This ad can be used as a concept only, not as a video" | `POST /marketing-studio/ad-references` (analysis returns `original_concept` / `adapted_concept`); `type: ad_reference`, `{ad_reference_id, product_id?, avatar_id?, include_reference_video:false, …}` |
 | **App video** | "App video isn't available yet" (behind a flag). Input: a web product (app URL plus screenshots, `/marketing-studio/webproducts`), device Mobile or Desktop, prompt, avatar | `type: app_video`, `{web_product_id, device, prompt (required), avatars?}` |
 
@@ -364,7 +366,7 @@ Duplicates: "«{0}» is already among this brand's products." → *Create anyway
 
 ## 2. Ads Studio
 
-Launched Sep 30, 2026. Routes: `/ads-studio` (home), `/ads-studio/all` (brand shelf), `/ads-studio/b/{brandId}`, `/ads-studio/brand-research[/{brandId}]`, `/ads-studio/ad-multiplier`; landing `/ads-studio-intro`. Job set types: `ads_studio_creative` (params `brand_id`, `product_id`, `run_id`) and `ads_studio_edit` (`version_id`). Backend service: `fnf-ai-cmo` *(inferred from the API gateway list)*. The public API equivalent, `POST /higgsfield/ads-studio/v1.0`, is already in Fuobe as `ads-studio`.
+Launched Sep 30, 2026. Routes: `/ads-studio` (home), `/ads-studio/all` (brand shelf), `/ads-studio/b/{brandId}`, `/ads-studio/brand-research[/{brandId}]`, `/ads-studio/ad-multiplier`; landing `/ads-studio-intro`. Job set types: `ads_studio_creative` (params `brand_id`, `product_id`, `run_id`) and `ads_studio_edit` (`version_id`). Backend service: `fnf-ai-cmo` *(inferred from the API gateway list)*. The public API equivalent, `POST /{studio}/ads-studio/v1.0`, is already in Fuobe as `ads-studio`.
 
 **Home copy:** "Create performing static ads" · "Fresh ads for any product, anytime" · "On-brand ads for every product at scale" · "Every ad is shaped by market insights" · "Variations for each product in 1:1, 4:5, and 9:16, with headlines and CTAs" · "Start with tools" (Try ad multiplier · "Recreate ad with your products, characters").
 
@@ -430,7 +432,7 @@ Standalone since Aug 20, 2026; before that it was a Supercomputer skill. The age
 |---|---|
 | Routes | `/faceless-studio` (home), `/faceless-studio/new`, `/faceless-studio/channels` ("My channels"), `/faceless-studio/channel/{id}` |
 | Job | `youtube_faceless_video` (`POST /jobs/v2/youtube_faceless_video`, idempotency key per channel). Pipeline models per the skill pages: **Gemini Omni Flash** video → narration → "Montage and adding subtitles" |
-| Home | **"Create your Faceless channel"**. Genre tabs *Education · History · Kids · Storytelling*. Prompt "Channel idea" with examples (Channel about survival in the wild / the rise and fall of empires / ancient civilizations / daily history facts / famous heists and scams / songs for kids). **Reference** (YouTube link) · **Upload script** · **Next** · "Or create with Higgsfield MCP". Showcase "Made by Higgsfield" (9 episodes, e.g. *The Raven Who Stole the Light*, *POV: 17th Century Factory Worker*) |
+| Home | **"Create your Faceless channel"**. Genre tabs *Education · History · Kids · Storytelling*. Prompt "Channel idea" with examples (Channel about survival in the wild / the rise and fall of empires / ancient civilizations / daily history facts / famous heists and scams / songs for kids). **Reference** (YouTube link) · **Upload script** · **Next** · "Or create with the studio's MCP". Showcase "Made by the studio" (9 episodes, e.g. *The Raven Who Stole the Light*, *POV: 17th Century Factory Worker*) |
 | Genres | Education "Explain how something works" · History "Retell what actually happened" · Kids "Bright, simple, and safe" · Storytelling "Carry one story to its end" |
 | Step 1 | Channel idea and category ("Pick category"). The channel name and avatar are generated ("Generating channel name"; Rename channel / Change channel avatar) |
 | Step 2 | **"Choose topic of the first episode"**: "Writing topic suggestions…"; tick one or press *Generate new topic suggestions*; or type "What is the first episode about?" (≤5,000 characters). Landing: "Hot right now, built in — the studio tracks which niches are climbing" |
@@ -468,7 +470,7 @@ The changelog said "8 presets, from Stickman Cartoon to Studio 3D"; the live lis
 
 ---
 
-## 6. Higgsfield Explainer
+## 6. Explainer
 
 The standalone app launched Jul 2, 2026; the skill came a day earlier.
 
@@ -476,7 +478,7 @@ The standalone app launched Jul 2, 2026; the skill came a day earlier.
 |---|---|
 | Route | `/explainer` (landings `/explainer-intro`, `/ai-explainer-video-maker`) |
 | Job | `video_explainer` (`POST /jobs/v2/video_explainer`). Concept: one voiceover over several stylized **10-second blocks** in one visual style; animated only, no photorealism |
-| Layout | A form card titled **HIGGSFIELD EXPLAINER**: preset card + *Change*, prompt, sources, then a row of Aspect / Duration / Voice / Subtitles and **Generate**. A History grid (Show all / Liked, search). A presets drawer. "How it works": **Choose Preset** → **Attach a file or just prompt** → **Download your result** |
+| Layout | A form card titled **STUDIO EXPLAINER**: preset card + *Change*, prompt, sources, then a row of Aspect / Duration / Voice / Subtitles and **Generate**. A History grid (Show all / Liked, search). A presets drawer. "How it works": **Choose Preset** → **Attach a file or just prompt** → **Download your result** |
 | Prompt | "What should the video explain?", "Type a topic, or attach files below", e.g. "Explain how dinosaurs went extinct, for kids". ≤5,000 characters |
 | Sources | Up to **3** per video: files (images or documents) or a link ("Paste a link – article, page"). At most **14** reference images and files |
 | Aspect | Horizontal 16:9 / Vertical 9:16 |
@@ -494,7 +496,7 @@ The standalone app launched Jul 2, 2026; the skill came a day earlier.
 
 | | |
 |---|---|
-| Routes | `/canvas` (list), `/canvas/{id}`, `/canvas/templates/{templateId}`, `/canvas/{id}/embed`. The board syncs in real time through `canvas-worker.higgsfield.ai` |
+| Routes | `/canvas` (list), `/canvas/{id}`, `/canvas/templates/{templateId}`, `/canvas/{id}/embed`. The board syncs in real time through `{studio-service}` |
 | List page | "Generate stunning media with AI Canvas" / "Make images, videos, and ideas in one place". Tabs **All Canvases · Templates · Quick Start**. Search canvases. Card: preview, "Last edited {n}m/h/d ago" or "Never edited", "• Shared". Menu: Rename, Duplicate ("Copy of {name}"), Delete project |
 | Empty board | **"BUILD FREELY. AUTOMATE VISUALLY."** — "Double or right click anywhere to create a node and start generating." — *Create your first node* |
 | Toolbar | Select (V) · Pan (H) · Draw (D) · Eraser (E) · Sticky Note (N) · Shapes (R) · Text (T) · Reaction (Shift+S) · Comment (C) · Table (Shift+T) · Page · Search (⌘F) · **Add node** |
@@ -530,14 +532,14 @@ The standalone app launched Jul 2, 2026; the skill came a day earlier.
 
 Launched Oct 8, 2026; blog Oct 12.
 
-Katana is a **Claude skill** that rebuilds a reference edit with your characters, products or clothing through Higgsfield MCP. `higgsfield.ai/katana` prepares the brief and hands it to Claude.
+Katana is a **Claude skill** that rebuilds a reference edit with your characters, products or clothing through the studio's MCP. `{studio-site}/katana` prepares the brief and hands it to Claude.
 
 | | |
 |---|---|
 | Page | Hero "Recreate the edit. Make it yours" / "Powered by Claude Motion". Tabs: Katana presets / Community presets / Explore. How it works: Recreate an edit → Add your content → Make more versions → Create directly in Claude |
 | Form | **Add a reference video** ("Upload the edit you want to recreate"; trimmer) · **Add your characters** ("Also you can add other details (optional)"; up to 5 photos per the blog; preset schemas allow 1–10 images) · **Instructions (optional)** toggle ("Describe anything the model should pay attention to when recreating this video"; ≤2,000 characters) → **Send & Generate in Claude**. When the prompt is too long for a link: "Copy this prompt and paste it into a new Claude chat" |
-| In Claude | `/katana` opens the catalog, `/katana/<preset>` runs one, or a plain request. Files attached in Claude are not passed through, so Katana opens a Higgsfield upload window; direct media links work, profile links don't |
-| Presets | Categories **Personalized edits · Style transfer · Motion transfer**, sources Higgsfield and Community. Live API: 101 community presets (79 personalized edits, 18 style transfer, 4 motion transfer), each with `input_schema {media.images: uuid[1..10], slot_values.prompt ≤2000}`. Launch copy said **Aura Farming, Motion, Clipping**; the hero still reads "Aura-farming machine by Higgsfield & Claude Opus 5.5" |
+| In Claude | `/katana` opens the catalog, `/katana/<preset>` runs one, or a plain request. Files attached in Claude are not passed through, so Katana opens a studio upload window; direct media links work, profile links don't |
+| Presets | Categories **Personalized edits · Style transfer · Motion transfer**, sources the studio and Community. Live API: 101 community presets (79 personalized edits, 18 style transfer, 4 motion transfer), each with `input_schema {media.images: uuid[1..10], slot_values.prompt ≤2000}`. Launch copy said **Aura Farming, Motion, Clipping**; the hero still reads "Aura-farming machine by the studio & Claude Opus 5.5" |
 | Publish preset | A 3–30 s video for the motion, up to 40 images, and a prompt that mentions them with @. It goes live after an automatic check and can be reported (8 reasons) |
 | Output | MP4 with the reference's duration, aspect ratio and frame rate. The reference soundtrack is kept unless asked otherwise. The result shows in the chat and in Assets. Job type `katana` (retry and rerun supported) |
 | Cost | Plan credits. Claude shows the exact cost before each generation; corrections may add more |
@@ -572,7 +574,7 @@ Katana is a **Claude skill** that rebuilds a reference edit with your characters
 | language_frontotemporal | Language Network (Language) | Activation | lateral temporal (\|x\| ≥ 39, −55 ≤ y ≤ 10, z ≤ 5) or inferior frontal (\|x\| ≥ 15, y ≥ 35, z ≤ 0) |
 | default_mode | Focus Drift | **Lower better** (inverted) | medial: \|x\| ≤ 18 and (y ≤ −45 or y ≥ 25) |
 
-**Open model.** Meta's **TRIBE v2** (`facebook/tribev2`, CC BY-NC 4.0, March 2026) predicts fMRI responses to video, audio and text on the **fsaverage5** mesh. It is built from V-JEPA2, Wav2Vec-BERT and Llama-3.2-3B. The fsaverage bases and the "modeled brains" wording strongly suggest Higgsfield runs TRIBE v2 or a derivative *(inferred)*.
+**Open model.** Meta's **TRIBE v2** (`facebook/tribev2`, CC BY-NC 4.0, March 2026) predicts fMRI responses to video, audio and text on the **fsaverage5** mesh. It is built from V-JEPA2, Wav2Vec-BERT and Llama-3.2-3B. The fsaverage bases and the "modeled brains" wording strongly suggest the studio runs TRIBE v2 or a derivative *(inferred)*.
 
 ---
 
@@ -581,7 +583,7 @@ Katana is a **Claude skill** that rebuilds a reference edit with your characters
 | | |
 |---|---|
 | Routes | `/asset/all` (default), `/asset/projects`, `/asset/elements`, `/asset/sub-workspaces`. The same library components power the Cinema Studio, Marketing Studio and Ads Studio feeds |
-| Sections | All · Image · Video · Audio · Shorts Studio · Higgsfield Explainer · Marketing Studio · Characters · Lipsync · Uploads · Liked (My favorites) · Elements |
+| Sections | All · Image · Video · Audio · Shorts Studio · Explainer · Marketing Studio · Characters · Lipsync · Uploads · Liked (My favorites) · Elements |
 | Projects | New project · Find project.. · Sort · Pin · Hide/Unhide (Undo toast) · Edit project limit (credit cap) · Members · Transfer ownership · Leave · Delete |
 | Folders | Nested ("Scenes, versions, deliverables"). Each has a colour, a pin, a manual drag order and a credit limit ("Folders with a credit limit can't be moved"). Actions: Duplicate · Move to / Copy to (incl. "Create new folder and transfer files") · Share with roles · Delete (contents move to the parent; restricted folders' contents go to Trash) |
 | Folder colours | Cyan #5DDCEB · Slate #CBD5E1 · **Lime #D1FE17 (default)** · Violet #A78BFA · Purple #C084FC · Pink #F472B6 · Yellow #FDE047 (body gradient end colours) |
@@ -602,7 +604,7 @@ Katana is a **Claude skill** that rebuilds a reference edit with your characters
 
 ### Skills
 
-- **Tabs.** Built-in / Skills by Higgsfield · Made by community · My skills · Learned (built by Supercomputer from your chats) · Trending.
+- **Tabs.** Built-in / Skills by the studio · Made by community · My skills · Learned (built by Supercomputer from your chats) · Trending.
 - **Create.** "Create skill" ("Save a reusable prompt or workflow"), or upload a `.zip` or `.skill` file. The upload is validated against SKILL.md ("Check SKILL.md and try again").
 - **Use.** Call with `/name` or let the agent pick it automatically. Skills also run through MCP in Claude and the ChatGPT plugin.
 - **API.** `fnf-skills-marketplace /api/v1/skills/{builtin,community,personal}`, with `/install` and `/publish`.
@@ -625,7 +627,7 @@ Katana is a **Claude skill** that rebuilds a reference edit with your characters
 | Amazon Listing Designer | "Product cards that sell" (main image, secondary images, A+ modules) |
 | Marketing Studio Cards | "Posters, Meta ads and listing cards from one product photo" (321 layouts) |
 | Video Motion Graphics Editor | add animated graphics to footage; reusable style guides |
-| Video Editing | "Native video editing with editable layouts and motion choreography" (Higgsedit) |
+| Video Editing | "Native video editing with editable layouts and motion choreography" ({studio-edit}) |
 | Video Montage | concat, music, subtitles, post-processing |
 | YouTube Script | six genres, hooks, timestamps, production cues |
 | Character Sheet | "Cast a character, lock the wardrobe, and get a verified front/back/portrait reference sheet" |
@@ -662,7 +664,7 @@ Projects arrived in Supercomputer on Aug 23, 2026.
 
 | Studio | Fuobe now | Gap |
 |---|---|---|
-| Marketing Studio | Higgsfield `marketing-studio-image` model with a live template picker (image only); prompt apps Ad Creative, Packshot, Poster, Product Placement… | No categories or formats, no product, avatar, hook or setting slots, no brand kit, no video formats, no tools |
+| Marketing Studio | The studio `marketing-studio-image` model with a live template picker (image only); prompt apps Ad Creative, Packshot, Poster, Product Placement… | No categories or formats, no product, avatar, hook or setting slots, no brand kit, no video formats, no tools |
 | Ads Studio | `ads-studio` model (batch ≤4) | No brand research, products, per-product batches, 3 aspect variants, grid or chat |
 | Ad Multiplier | — | Not built |
 | Click to Ad / Link to Video Ad | Two apps with parity notes (photo → one creative or one clip) | No URL import, product kit, styles, script or voice |
@@ -685,7 +687,7 @@ The order follows reuse: the brand kit and products feed four studios, and the f
      - colours from CSS custom properties plus k-means over a screenshot;
      - fonts from Google Fonts links, `@font-face` and `font-family`;
      - an LLM fills description, tagline, selling points, aesthetics, tone words, audience, competitors and language: Claude, Ollama, or a rule-based fallback, as in Assist.
-   - Reuse Higgsfield's 14 progress labels as rotating step text. No image model is needed, so this works the same in open and paid modes.
+   - Reuse the studio's 14 progress labels as rotating step text. No image model is needed, so this works the same in open and paid modes.
 2. **Assets library extras (M).**
    - Projects and nested folders with the 7 colour swatches, pins and drag order.
    - Drag-and-drop into folders.
@@ -698,7 +700,7 @@ The order follows reuse: the brand kit and products feed four studios, and the f
    - `/marketing`: sidebar (Home, My generations, Favorites, Tools: Product Link and Ad Reference, Projects), hero, the 7 category tabs with All/Images/Videos, and the template masonry.
    - A template opens the composer: Image/Video mode, Product, Avatar, Reference, Website link, hook & setting, settings from capabilities, brand kit, Recreate.
    - Ship **Fuobe's own template set**: names, prompts and preview media written per format; the 9 hooks and 14 settings can be reused as prompt mechanics.
-   - On the Higgsfield provider, pass the real `preset_id` / `style_id`.
+   - On the studio's provider, pass the real `preset_id` / `style_id`.
    - Cloud route:
      - images: `marketing-studio/image`;
      - UGC video: Seedance 2.5 reference-to-video, `fal-ai/creatify/aurora`, `veed/fabric-1.0` or `bytedance/omnihuman/v2`;
@@ -719,14 +721,14 @@ The order follows reuse: the brand kit and products feed four studios, and the f
    8. join.
    - Channels store the style, voice, aspect and subtitles.
    - The timeline editor regenerates single blocks.
-   - Cloud video per block: `google/gemini-omni-flash/image-to-video`, which is what Higgsfield's skill uses.
+   - Cloud video per block: `google/gemini-omni-flash/image-to-video`, which is what the studio's skill uses.
 5. **Ads Studio (M)** on top of steps 1 and 3.
    - Per-product stepper (1–20); one chained job per ad, with the LLM picking an angle per selling point.
    - One base render, then 1:1, 4:5 and 9:16 by outpainting (`flux1-fill-outpaint`).
    - Headline, CTA and logo composited in code with the brand fonts, so the text is always exact.
    - A creative grid with Split by products.
    - A brand chat that reuses Assist with an `@product` mention.
-   - Cloud alternative: `higgsfield/ads-studio/v1.0`.
+   - Cloud alternative: `{studio}/ads-studio/v1.0`.
 6. **Ad Multiplier + Click to Ad (M + S).**
    - Ad Multiplier: cloud `bytedance/seedance-2.5/video-edit`, `fal-ai/kling-video/o3/pro/video-to-video/edit` or `google/gemini-omni-flash/v1.1/edit`. Open `wan-animate2` (replace) or `wan21-vace-14b-ref2v` with the reference as control.
    - Hook/CTA only: a new 2–4 s clip from the first or last frame, joined with `fal-ai/ffmpeg-api/merge-videos` or `video-concat-*`, keeping the original audio.
@@ -742,7 +744,7 @@ The order follows reuse: the brand kit and products feed four studios, and the f
    - Detect cuts → for each shot, swap the subject on a keyframe (`qwen-image-edit-2511-multi`) → regenerate the shot with the reference as motion control (`wan-animate2` / `wan22-fun-control-14b`; cloud: Kling O3 video edit or Genjutsu motion transfer) → join at the original cut times over the original audio.
    - Expose it as an Assist/MCP tool too.
 10. **Canvas (XL).**
-    - An `@xyflow/react` board with Higgsfield's node set; typed edges (text, image, video, audio); Run node and Run all map to `depends_on` chained jobs, which Fuobe already resolves.
+    - An `@xyflow/react` board with the studio's node set; typed edges (text, image, video, audio); Run node and Run all map to `depends_on` chained jobs, which Fuobe already resolves.
     - Compare = several generator nodes on one prompt; graph JSON autosaved in SQLite; the 5 template graphs.
     - On the open engine, offer "Open in ComfyUI".
 
@@ -766,21 +768,21 @@ The order follows reuse: the brand kit and products feed four studios, and the f
 
 ## Sources
 
-- [cms-ms-catalog](https://cms.higgsfield.ai/marketing-studio-v2/catalog?lang=en&show_hidden=true): Marketing Studio catalog (public)
-- [cms-ms-presets](https://cms.higgsfield.ai/marketing-studio-v2/categories/all/presets?lang=en&size=100&show_hidden=true): template feed (1,051 + 23)
-- [cms-ms-motion](https://cms.higgsfield.ai/marketing-studio-v2/motion-presets?size=100&lang=en): 189 motion presets
-- [ms-hooks](https://fnf.higgsfield.ai/marketing-studio/setup/hooks?size=100) · [ms-settings](https://fnf.higgsfield.ai/marketing-studio/setup/settings?size=100): UGC hooks and settings
-- [jobset-costs](https://fnf.higgsfield.ai/job-sets/costs): credit formulas
-- [ssr-ms](https://higgsfield.ai/marketing-studio) · [ssr-preset](https://higgsfield.ai/marketing-studio/preset/chilled-can-5c8a57f4-8339-5570-bb75-c68c722890a8): SSR state
-- JS chunks (all under https://assets.higgsfield.ai/tanstack/assets/): `868a8dba-HrPpX2Z25lsGHHPE.js` (MS job builder), `-_sAjwlOAfgDNjIk7.js` (composer + brand kit), `-jnemIIPjFSHsJOOY.js` (pickers), `-WG1l7l12hCNTnbVQ.js` (brand kit API), `-ZR77k_MDIiqa3935.js` (avatars), `-0DHgVhpScXBwFI58.js` (products), `-fM5DdOBsiAlzhaUz.js` (Ad Reference), `-SxM5P82T9QHkMm5M.js` (card labels), `-7h1Df-OAEetZ_z0r.js` (image brief), `-pbQ9WmNgiQZBhvRT.js` (legacy Click to Ad), `-D9EH9H3Dl0E1Grdw.js` (Product Link), `-S3vdxlu9GiLgM5d3.js` / `-PcgZXp5ba7u_SgQi.js` / `-dsa6a_c1vKBX3GTN.js` / `-muraYnPthgOgiVRM.js` / `-IdJcfzprNc-Hzlk6.js` (Ads Studio), `-beLzbU6k3MvPbAcQ.js` / `-gK7Cc8qH_p8J_Smy.js` / `-ThxlCyZ2-Aa6KUV_.js` (Ad Multiplier), `-1wCNe24UZu77Z-mQ.js` (Faceless), `-o-qoGFciKLzFangv.js` (Explainer), `-XnFFagQC9hawzxYn.js` / `-aPCdbQG2cOi_5z1l.js` / `-N82Z9TAX1HZ62EL_.js` / `-skyMRlqA-8DGa0mK.js` (Canvas), `-idD1W7tdBOxBghQd.js` (Katana), `-QiG6GqtY7TxT2d92.js` (Virality), `-DdAahq08eWjyRY60.js` / `-pSSLZEsJkWUi-jqB.js` / `-jYgMWIBtaRXy3o0B.js` / `-kcZvfX_gVt3p1JRv.js` / `-7SGN54ci2SJXtGtQ.js` / `-5LdaRF4WMWWP609Q.js` / `-3A3TVgs4eEAoMI8x.js` (Assets), `-xXTm4FdSirfTxaEH.js` / `-GIA1maB7Xfur-ziW.js` (Supercomputer)
-- i18n route catalogs: [Ads Studio](https://higgsfield.ai/_i18n/routes/en/delta.dd2a6b343b.json) (+ 031379e71d, ce8bca0c31, cdaa83a29a, 1e835229ee), [Ad Multiplier](https://higgsfield.ai/_i18n/routes/en/delta.d8e3335000.json), [Marketing Studio](https://higgsfield.ai/_i18n/routes/en/delta.4f354ef2d2.json) (+ bc38d67bd9), [Faceless new](https://higgsfield.ai/_i18n/routes/en/delta.777abdc67e.json) (+ 8d342fd469, 9f73f3a192, d7e0ccc2e3), [Explainer](https://higgsfield.ai/_i18n/routes/en/delta.679beafcf4.json), [Canvas](https://higgsfield.ai/_i18n/routes/en/delta.35573f8047.json) (+ deac944ca9, 11b4ef0918), [Katana](https://higgsfield.ai/_i18n/routes/en/delta.c75c4d6203.json) (+ 2bd60c6c7b, 0e21d9f5aa), [Asset](https://higgsfield.ai/_i18n/routes/en/delta.d3149d6b9e.json), [Supercomputer memory](https://higgsfield.ai/_i18n/routes/en/delta.6de6ab9195.json), [skills](https://higgsfield.ai/_i18n/routes/en/delta.dd78dbe5ba.json), [projects](https://higgsfield.ai/_i18n/routes/en/delta.48ed4ca8d8.json), [link-to-video-ad](https://higgsfield.ai/_i18n/routes/en/delta.5445bcbb74.json)
-- [cms-faceless](https://cms.higgsfield.ai/youtube-faceless-presets?size=100&lang=en) · [ssr-faceless](https://higgsfield.ai/faceless-studio) · [cms-explainer](https://cms.higgsfield.ai/video-explainer-presets?lang=en&size=100&show_hidden=true) · [cms-link-presets](https://cms.higgsfield.ai/link-to-ad-presets?lang=en&size=100&show_hidden=true)
-- [canvas-templates](https://canvas-worker.higgsfield.ai/api/templates?limit=100&offset=0) · [katana-api](https://fnf-api-gw.higgsfield.ai/fnf-cms-api/katana-presets?lang=en&limit=100) · [katana-categories](https://fnf-api-gw.higgsfield.ai/fnf-cms-api/katana-categories?lang=en&limit=50)
-- [hook-demo](https://higgsfield.ai/api/hook-predictor/demo-analysis) · [TRIBE v2](https://huggingface.co/facebook/tribev2)
-- [skills-builtin](https://fnf-api-gw.higgsfield.ai/fnf-skills-marketplace/api/v1/skills/builtin) · [skills-community](https://fnf-api-gw.higgsfield.ai/fnf-skills-marketplace/api/v1/skills/community?limit=100)
-- Help: [Marketing Studio](https://higgsfield.ai/creator-hub/help-center/tools/how-do-i-use-marketing-studio-to-create-video-ads), [Supercomputer](https://higgsfield.ai/creator-hub/help-center/tools/how-do-i-use-supercomputer), [Canvas](https://higgsfield.ai/creator-hub/help-center/tools/how-do-i-use-canvas), [Community projects](https://higgsfield.ai/creator-hub/help-center/community/how-do-projects-work)
-- Blog: [New Marketing Studio](https://higgsfield.ai/blog/new-marketing-studio-higgsfield), [Ads Studio](https://higgsfield.ai/blog/higgsfield-ads-studio), [Katana](https://higgsfield.ai/blog/higgsfield-katana), [UGC videos](https://higgsfield.ai/blog/how-to-make-ai-ugc-videos)
-- Landings: [marketing-studio-intro](https://higgsfield.ai/marketing-studio-intro), [ads-studio-intro](https://higgsfield.ai/ads-studio-intro), [faceless-studio-intro](https://higgsfield.ai/faceless-studio-intro), [explainer-intro](https://higgsfield.ai/explainer-intro), [virality-predictor](https://higgsfield.ai/apps/virality-predictor), [ad-multiplier](https://higgsfield.ai/ad-multiplier)
-- Skill pages: [/skills/faceless](https://higgsfield.ai/skills/faceless), [/skills/ugc](https://higgsfield.ai/skills/ugc), [/skills/ad-multiplier](https://higgsfield.ai/skills/ad-multiplier), [/skills/editorial-motion-graphics](https://higgsfield.ai/skills/editorial-motion-graphics), [/mcp/katana](https://higgsfield.ai/mcp/katana), [/mcp/faceless-paper-diorama](https://higgsfield.ai/mcp/faceless-paper-diorama), [/mcp/faceless-hand-drawn](https://higgsfield.ai/mcp/faceless-hand-drawn), [/mcp/faceless-pastel-flat-2d](https://higgsfield.ai/mcp/faceless-pastel-flat-2d), [/mcp/faceless-mannequin](https://higgsfield.ai/mcp/faceless-mannequin), [/mcp/faceless-fairy-tale-myth](https://higgsfield.ai/mcp/faceless-fairy-tale-myth), [/mcp/stickman-explainer](https://higgsfield.ai/mcp/stickman-explainer)
-- [Changelog](https://higgsfield.ai/creator-hub/changelog)
-- Third party: [ecom-tools.de review](https://ecom-tools.de/en/higgsfield-review/), [developersdigest walkthrough](https://www.developersdigest.tech/tutorials/kp1nnNqhM7g). Little independent coverage exists; most claims come from Higgsfield
+- [cms-ms-catalog]({studio-cms}/marketing-studio-v2/catalog?lang=en&show_hidden=true): Marketing Studio catalog (public)
+- [cms-ms-presets]({studio-cms}/marketing-studio-v2/categories/all/presets?lang=en&size=100&show_hidden=true): template feed (1,051 + 23)
+- [cms-ms-motion]({studio-cms}/marketing-studio-v2/motion-presets?size=100&lang=en): 189 motion presets
+- [ms-hooks]({studio-service}/marketing-studio/setup/hooks?size=100) · [ms-settings]({studio-service}/marketing-studio/setup/settings?size=100): UGC hooks and settings
+- [jobset-costs]({studio-service}/job-sets/costs): credit formulas
+- [ssr-ms]({studio-site}/marketing-studio) · [ssr-preset]({studio-site}/marketing-studio/preset/chilled-can-5c8a57f4-8339-5570-bb75-c68c722890a8): SSR state
+- JS chunks (all under {studio-assets}/tanstack/assets/): `868a8dba-HrPpX2Z25lsGHHPE.js` (MS job builder), `-_sAjwlOAfgDNjIk7.js` (composer + brand kit), `-jnemIIPjFSHsJOOY.js` (pickers), `-WG1l7l12hCNTnbVQ.js` (brand kit API), `-ZR77k_MDIiqa3935.js` (avatars), `-0DHgVhpScXBwFI58.js` (products), `-fM5DdOBsiAlzhaUz.js` (Ad Reference), `-SxM5P82T9QHkMm5M.js` (card labels), `-7h1Df-OAEetZ_z0r.js` (image brief), `-pbQ9WmNgiQZBhvRT.js` (legacy Click to Ad), `-D9EH9H3Dl0E1Grdw.js` (Product Link), `-S3vdxlu9GiLgM5d3.js` / `-PcgZXp5ba7u_SgQi.js` / `-dsa6a_c1vKBX3GTN.js` / `-muraYnPthgOgiVRM.js` / `-IdJcfzprNc-Hzlk6.js` (Ads Studio), `-beLzbU6k3MvPbAcQ.js` / `-gK7Cc8qH_p8J_Smy.js` / `-ThxlCyZ2-Aa6KUV_.js` (Ad Multiplier), `-1wCNe24UZu77Z-mQ.js` (Faceless), `-o-qoGFciKLzFangv.js` (Explainer), `-XnFFagQC9hawzxYn.js` / `-aPCdbQG2cOi_5z1l.js` / `-N82Z9TAX1HZ62EL_.js` / `-skyMRlqA-8DGa0mK.js` (Canvas), `-idD1W7tdBOxBghQd.js` (Katana), `-QiG6GqtY7TxT2d92.js` (Virality), `-DdAahq08eWjyRY60.js` / `-pSSLZEsJkWUi-jqB.js` / `-jYgMWIBtaRXy3o0B.js` / `-kcZvfX_gVt3p1JRv.js` / `-7SGN54ci2SJXtGtQ.js` / `-5LdaRF4WMWWP609Q.js` / `-3A3TVgs4eEAoMI8x.js` (Assets), `-xXTm4FdSirfTxaEH.js` / `-GIA1maB7Xfur-ziW.js` (Supercomputer)
+- i18n route catalogs: [Ads Studio]({studio-site}/_i18n/routes/en/delta.dd2a6b343b.json) (+ 031379e71d, ce8bca0c31, cdaa83a29a, 1e835229ee), [Ad Multiplier]({studio-site}/_i18n/routes/en/delta.d8e3335000.json), [Marketing Studio]({studio-site}/_i18n/routes/en/delta.4f354ef2d2.json) (+ bc38d67bd9), [Faceless new]({studio-site}/_i18n/routes/en/delta.777abdc67e.json) (+ 8d342fd469, 9f73f3a192, d7e0ccc2e3), [Explainer]({studio-site}/_i18n/routes/en/delta.679beafcf4.json), [Canvas]({studio-site}/_i18n/routes/en/delta.35573f8047.json) (+ deac944ca9, 11b4ef0918), [Katana]({studio-site}/_i18n/routes/en/delta.c75c4d6203.json) (+ 2bd60c6c7b, 0e21d9f5aa), [Asset]({studio-site}/_i18n/routes/en/delta.d3149d6b9e.json), [Supercomputer memory]({studio-site}/_i18n/routes/en/delta.6de6ab9195.json), [skills]({studio-site}/_i18n/routes/en/delta.dd78dbe5ba.json), [projects]({studio-site}/_i18n/routes/en/delta.48ed4ca8d8.json), [link-to-video-ad]({studio-site}/_i18n/routes/en/delta.5445bcbb74.json)
+- [cms-faceless]({studio-cms}/youtube-faceless-presets?size=100&lang=en) · [ssr-faceless]({studio-site}/faceless-studio) · [cms-explainer]({studio-cms}/video-explainer-presets?lang=en&size=100&show_hidden=true) · [cms-link-presets]({studio-cms}/link-to-ad-presets?lang=en&size=100&show_hidden=true)
+- [canvas-templates]({studio-service}/api/templates?limit=100&offset=0) · [katana-api]({studio-api}/fnf-cms-api/katana-presets?lang=en&limit=100) · [katana-categories]({studio-api}/fnf-cms-api/katana-categories?lang=en&limit=50)
+- [hook-demo]({studio-site}/api/hook-predictor/demo-analysis) · [TRIBE v2](https://huggingface.co/facebook/tribev2)
+- [skills-builtin]({studio-api}/fnf-skills-marketplace/api/v1/skills/builtin) · [skills-community]({studio-api}/fnf-skills-marketplace/api/v1/skills/community?limit=100)
+- Help: [Marketing Studio]({studio-site}/creator-hub/help-center/tools/how-do-i-use-marketing-studio-to-create-video-ads), [Supercomputer]({studio-site}/creator-hub/help-center/tools/how-do-i-use-supercomputer), [Canvas]({studio-site}/creator-hub/help-center/tools/how-do-i-use-canvas), [Community projects]({studio-site}/creator-hub/help-center/community/how-do-projects-work)
+- Blog: [New Marketing Studio]({studio-site}/blog/new-marketing-studio-studio), [Ads Studio]({studio-site}/blog/{studio}-ads-studio), [Katana]({studio-site}/blog/{studio}-katana), [UGC videos]({studio-site}/blog/how-to-make-ai-ugc-videos)
+- Landings: [marketing-studio-intro]({studio-site}/marketing-studio-intro), [ads-studio-intro]({studio-site}/ads-studio-intro), [faceless-studio-intro]({studio-site}/faceless-studio-intro), [explainer-intro]({studio-site}/explainer-intro), [virality-predictor]({studio-site}/apps/virality-predictor), [ad-multiplier]({studio-site}/ad-multiplier)
+- Skill pages: [/skills/faceless]({studio-site}/skills/faceless), [/skills/ugc]({studio-site}/skills/ugc), [/skills/ad-multiplier]({studio-site}/skills/ad-multiplier), [/skills/editorial-motion-graphics]({studio-site}/skills/editorial-motion-graphics), [/mcp/katana]({studio-site}/mcp/katana), [/mcp/faceless-paper-diorama]({studio-site}/mcp/faceless-paper-diorama), [/mcp/faceless-hand-drawn]({studio-site}/mcp/faceless-hand-drawn), [/mcp/faceless-pastel-flat-2d]({studio-site}/mcp/faceless-pastel-flat-2d), [/mcp/faceless-mannequin]({studio-site}/mcp/faceless-mannequin), [/mcp/faceless-fairy-tale-myth]({studio-site}/mcp/faceless-fairy-tale-myth), [/mcp/stickman-explainer]({studio-site}/mcp/stickman-explainer)
+- [Changelog]({studio-site}/creator-hub/changelog)
+- Third party: [ecom-tools.de review](https://ecom-tools.de/en/{studio}-review/), [developersdigest walkthrough](https://www.developersdigest.tech/tutorials/kp1nnNqhM7g). Little independent coverage exists; most claims come from the studio

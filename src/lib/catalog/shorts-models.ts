@@ -49,7 +49,7 @@ export function reframes(modelId: string, engine?: Engine): boolean {
 /** How long a clip each restyle model takes (./clip-windows): a cut outside it is paid for and then refused by the provider. */
 export { sourceSeconds };
 
-/** The cloud model's 720p setting, when it has one (Higgsfield renders Shorts at 720p). */
+/** The cloud model's 720p setting, when it has one (the parity studio renders Shorts at 720p). */
 export function resolutionFor(modelId: string, engine?: Engine): string | undefined {
   const m = view(modelId, engine);
   return m?.engine === "cloud" && m.options.resolutions?.includes("720p") ? "720p" : undefined;

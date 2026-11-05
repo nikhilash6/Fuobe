@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mentionsRetiredName } from "./helpers/retired-name.mjs";
 import { APPS, EFFECTS, getModel, getPreset, modelsFor, MODELS, MOTIONS } from "@/lib/catalog";
 import type { InputSlot, ModelDef } from "@/lib/catalog/types";
 import {
@@ -425,7 +426,8 @@ describe("an app page's hero", () => {
   it("says what you get: the notes stay in Details, a missing engine is said", () => {
     for (const id of ["app-similarity-score", "app-angles", "app-rap-god", "app-video-background-remover", "app-gtai", "app-shots", "app-clipcut"]) {
       const p = getPreset(id)!;
-      expect(appStudio(p).subtitle ?? "", id).not.toMatch(/Higgsfield|Approximation|silent|LoRA/);
+      expect(appStudio(p).subtitle ?? "", id).not.toMatch(/parity studio|Approximation|silent|LoRA/);
+      expect(mentionsRetiredName(appStudio(p).subtitle ?? ""), id).toBe(false);
     }
     const cloudOnly = getPreset("app-similarity-score")!;
     expect(appStudio({ ...cloudOnly, open: null }).subtitle).toBe("Cloud only for now");
@@ -434,7 +436,8 @@ describe("an app page's hero", () => {
 
   it("Details says what Fuobe makes, naming no other product and no developer notes", () => {
     for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) {
-      expect(p.parity ?? "", p.id).not.toMatch(/Higgsfield|Approximation|Not reproducible|Not yet measured|evaluation suite|\.safetensors|Kling 2\.5 \/ Wan 2\.2/i);
+      expect(mentionsRetiredName(p.parity ?? ""), p.id).toBe(false);
+      expect(p.parity ?? "", p.id).not.toMatch(/parity studio|Approximation|Not reproducible|Not yet measured|evaluation suite|\.safetensors|Kling 2\.5 \/ Wan 2\.2/i);
       // No LoRA file names, research notes or GPU sizes and licences of a route in brackets.
       expect(p.parity ?? "", p.id).not.toMatch(/_\d+_epochs|\[wan|already in the map|research holds|civitai|evaluated|White_to_Scene|\(\d+ GB GPU/i);
       // Each note is whole sentences.

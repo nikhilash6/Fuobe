@@ -10,7 +10,7 @@ import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from 
  * Faceless Studio and the Explainer: the data and the pure planning shared by the browser (wizard,
  * script review, timeline editor) and the server (src/server/faceless.ts).
  *
- * Research: docs/research/higgsfield-marketing-agents.json → faceless (4 genres, 12 styles, 1–5 min,
+ * Research: docs/research/parity-marketing-agents.json → faceless (4 genres, 12 styles, 1–5 min,
  * Fully animated / Frame by frame, 16:9 / 9:16, ≤3 style references, ≤5,000-character topics, ≤12,000-character
  * scripts, 10-second blocks) and → explainer (22 styles, Auto / 20 s … 10 min / Manual 15–600 s, ≤3 sources).
  * tests/faceless.test.ts checks the copies against the JSON. The style prompts are Fuobe's own words.
@@ -21,7 +21,7 @@ import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from 
  *
  * - still: a picture per block in the episode's style (Nano Banana Pro / Qwen-Image 2.1; with style
  *   references Nano Banana Pro edit / Krea 2 Style Reference).
- * - clip: the still animated (Gemini Omni Flash, Higgsfield's engine, MiniMax H3 or Seedance 2.5 / MiniMax H3 or
+ * - clip: the still animated (Gemini Omni Flash, the parity studio's engine, MiniMax H3 or Seedance 2.5 / MiniMax H3 or
  *   Wan 2.2 Lightning). Clips that carry their own sound (MiniMax H3) lose it in the mix: the narration and the
  *   music take its place (the open join keeps the picture only; oss-mux lays the new soundtrack on).
  *   Frame by frame keeps the still and moves the camera slowly over it with no video model: a real Ken Burns
@@ -324,7 +324,7 @@ export const STYLES: VisualStyle[] = [
   ),
 ];
 
-/** Faceless Studio's 12 styles, in Higgsfield's order. */
+/** Faceless Studio's 12 styles, in the parity research's order. */
 export const FACELESS_STYLE_IDS = [
   "editorial-motion-graphics",
   "stickman-cartoon",
@@ -340,7 +340,7 @@ export const FACELESS_STYLE_IDS = [
   "pastel-flat-2d",
 ];
 
-/** The Explainer's 22 styles, in Higgsfield's order. */
+/** The Explainer's 22 styles, in the parity research's order. */
 export const EXPLAINER_STYLE_IDS = STYLES.map((s) => s.id);
 
 export const getStyle = (id: string | null | undefined): VisualStyle => STYLES.find((s) => s.id === id) ?? STYLES[0];
@@ -368,7 +368,7 @@ export const EXPLAINER_MAX = 600;
 /** "Auto" aims for this, the script decides. */
 export const AUTO_SECONDS = 60;
 
-/** Higgsfield charges per started 10-second block. */
+/** The parity studio charges per started 10-second block. */
 export const BLOCK_SECONDS = 10;
 export const MIN_BLOCK = 3;
 
@@ -2089,7 +2089,7 @@ export function defaultSettings(engine: Engine, genre: GenreInfo, o: { explainer
     animation: "animated",
     aspect: "16:9",
     subtitles: true,
-    // A music bed is on by default, as on Higgsfield (both engines mix it under the voice).
+    // A music bed is on by default, as in the parity research (both engines mix it under the voice).
     music: true,
     styleId: genre.style,
     styleRefs: [],

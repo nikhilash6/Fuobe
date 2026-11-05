@@ -1,17 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+import { mentionsRetiredName } from "./helpers/retired-name.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Build plan O7: Fuobe calls no Higgsfield API. This file fails when a code path names that provider again (its id,
- * key, endpoints, settings, env vars or copy that offers it), when a retired model comes back into the catalog, or
- * when an id stored before the switch no longer resolves to the model that replaced it. It scans whole folders, so a
- * branch merged later (an Originals package, a studio) is caught too. Research files under docs/research/ stay as
- * research and are not scanned; this file is the one test that names the provider.
+ * Build plan O7: Fuobe stopped calling a retired cloud provider. This file fails when a retired model comes back into
+ * the catalog or code, when the catalog, a setting or a connection test offers that provider again, or when an id
+ * stored before the switch no longer resolves to the model that replaced it. Rows stored then name the provider by
+ * an id Fuobe no longer has; the fixtures below use "old-provider", which goes the same way. The provider's name
+ * itself is checked everywhere by tests/neutral-names.test.ts.
  */
 
-const dir = tempDir("fuobe-no-hf-");
+/** A provider id Fuobe doesn't have, as rows stored before the switch carry one. */
+const OLD_PROVIDER = "old-provider";
+
+const dir = tempDir("fuobe-retired-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -63,78 +67,21 @@ async function runUntil(done: () => boolean) {
 const ROOT = path.resolve(__dirname, "..");
 
 // ---------------------------------------------------------------------------
-// The guard: no code path names the provider
-
-/**
- * Where code and shipped content live, and the README's setup steps (docs/ holds the research, which stays). The
- * unmerged round-4 docs branches (claude/fuobe-r4-batch-4, claude/fuobe-r4-docs-3, origin/main) still add README lines
- * offering a Higgsfield key and generating "Higgsfield models and presets": merging one fails here until they go.
- */
-const SCANNED = ["src", "scripts", "bin", "skills", "workflows", "package.json", "README.md"];
-const TEXT = /\.(ts|tsx|mts|js|mjs|cjs|py|json|md|sh|bat|ps1|css|html|txt|yml|yaml)$/;
-
-/**
- * Files that must name it, and why. Nothing else may: add a line here only for history that has to read the old
- * name (a migration, the table of what replaced what), never for a route, a key or a model that runs.
- */
-const ALLOWED: Record<string, string> = {
-  "src/server/db.ts": "the O7 migration deletes the retired key and rewrites stored values that name the provider",
-  "src/lib/catalog/replaced.ts": "what each retired model was called, for history",
-};
-
-/**
- * The README's upgrade notes are dated history ("Soul ID no longer trains on Higgsfield (PR #12)"): only that section
- * may name it. Everything else in the README (setup, keys, env vars, the stack) is scanned like code.
- */
-const HISTORY_SECTIONS: Record<string, string> = { "README.md": "### Upgrading from an earlier version" };
-
-/** A file's lines, with a history section blanked (HISTORY_SECTIONS): it ends at the next heading of its level or above. */
-function scannedLines(f: string, text: string): string[] {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  const heading = HISTORY_SECTIONS[f];
-  const at = heading ? lines.indexOf(heading) : -1;
-  if (at < 0) return lines;
-  const level = heading.indexOf(" ");
-  const next = lines.findIndex((l, i) => i > at && /^#{1,6} /.test(l) && l.indexOf(" ") <= level);
-  const end = next < 0 ? lines.length : next;
-  return lines.map((l, i) => (i > at && i < end ? "" : l));
-}
-
-/** Research files and research record fields keep their names: reading research is not calling the provider. */
-const RESEARCH_NAMES = /higgsfield-[a-z0-9-]+\.(md|json)|higgsfieldEquivalent/g;
-
-const RULES: [string, RegExp][] = [
-  // An id, key, endpoint, URL, import or settings key: always lowercase in code.
-  ["names the provider in code (an id, key, endpoint, URL or import)", /higgsfield/],
-  ["names a Higgsfield env var or constant", /HIGGSFIELD|\bHF_(API_)?(KEY|SECRET)\b/],
-  // Copy that offers the provider: "Higgsfield key", "connect Higgsfield", "runs on Higgsfield", "Higgsfield Ads Studio"…
-  [
-    "offers the provider in copy",
-    // ("as on Higgsfield" and "Higgsfield's old style ids" are comparisons and history, not an offer.)
-    /higgsfield (api|key|account|balance|route|provider|credit|console)|(needs|with|connect|add|set) (a |an |your )?higgsfield(?!'s)\b|(?<!as )\b(on|via|through) higgsfield\b|higgsfield's (api|own models?|route|key)|higgsfield (soul|cinema studio|ads studio|marketing studio)|higgsfield (models and )?presets\b/i,
-  ],
-  // An identifier in any case: HiggsfieldProvider, viaHiggsfield, HIGGSFIELD_… (the env rule) — never history.
-  ["names the provider in an identifier", /[A-Za-z0-9_$]Higgsfield|Higgsfield[A-Z0-9_$]/],
-  // A choice, label or route named after it: { value: "Higgsfield" }, label: "Higgsfield first", provider: "Higgsfield".
-  ["offers the provider as a value or label", /\b(label|value|provider|vendor|name|title|placeholder|engine|route)\s*:\s*["'`][^"'`]*\bhiggsfield\b/i],
-  // Copy that says something runs on it: "Runs with Higgsfield's Soul", "rendered by Higgsfield", "Uses Higgsfield to render"
-  // ("uses Higgsfield's labels" is a comparison).
-  ["says something runs on the provider", /\b(runs? (with|on)|ran (with|on)|made (with|on|by)|rendered (with|on|by)|renders (with|on)|powered by|goes to|sent to|calls?)\s+higgsfield\b|\b(uses?|using)\s+higgsfield\b(?!'s)/i],
-];
+// No retired id in code (the studio's name itself is checked by tests/neutral-names.test.ts)
 
 /** A retired model or training id in code (a stored one resolves through replaced.ts; nothing else names it). */
 const RETIRED_IDS = new RegExp(`["'\`](${[...Object.keys(REPLACED_BY), ...Object.keys(TRAINING_REPLACED_BY)].join("|")})["'\`]`);
 const RETIRED_ID_ALLOWED = new Set(["src/lib/catalog/replaced.ts", "src/server/db.ts"]);
+const CODE = /\.(ts|tsx|mts|js|mjs|cjs)$/;
 
 function walk(p: string, out: string[]) {
   const full = path.join(ROOT, p);
   if (!fs.existsSync(full)) return;
-  const st = fs.statSync(full);
   const posix = p.replace(/\\/g, "/");
   // The worker's built parts are copies of scanned sources (scripts/build-worker.mjs), and never committed.
   if (posix === "bin/lib/worker/dist") return;
-  if (st.isFile()) {
-    if (TEXT.test(posix)) out.push(posix);
+  if (fs.statSync(full).isFile()) {
+    if (CODE.test(posix)) out.push(posix);
     return;
   }
   for (const name of fs.readdirSync(full)) {
@@ -143,52 +90,18 @@ function walk(p: string, out: string[]) {
   }
 }
 
-describe("no code path names the Higgsfield provider", () => {
+describe("retired ids in code", () => {
   const files: string[] = [];
-  for (const p of SCANNED) walk(p, files);
+  for (const p of ["src", "bin"]) walk(p, files);
 
-  it("scans every source, script, skill and workflow file", () => {
+  it("scans every source file", () => {
     expect(files.length).toBeGreaterThan(500);
     expect(files).toContain("src/server/providers/index.ts");
   });
 
-  it("finds no provider id, key, endpoint, env var or copy that offers it outside the allowed history", () => {
-    const hits: string[] = [];
-    for (const f of files) {
-      if (ALLOWED[f]) continue;
-      const lines = scannedLines(f, fs.readFileSync(path.join(ROOT, f), "utf8"));
-      lines.forEach((line, i) => {
-        const text = line.replace(RESEARCH_NAMES, "");
-        for (const [why, re] of RULES) if (re.test(text)) hits.push(`${f}:${i + 1} ${why}: ${line.trim().slice(0, 140)}`);
-      });
-    }
-    expect(hits).toEqual([]);
-  });
-
-  it("catches what a later branch could bring back: identifiers, labels, copy and README key rows", () => {
-    const probes = [
-      "export const HiggsfieldProvider = createAdapter();",
-      "const viaHiggsfield = route.provider === x;",
-      'label: "Higgsfield",',
-      '{ value: "Higgsfield", label: "Higgsfield first" }',
-      `note: "Runs with Higgsfield's Soul model"`,
-      "toast('Uses Higgsfield to render the ad')",
-      "| A Higgsfield key | `HIGGSFIELD_API_KEY` | Soul 2.0 |",
-      "pnpm gen:catalog # regenerate cloud models, Higgsfield models and presets, LoRA map",
-    ];
-    for (const p of probes) expect(RULES.some(([, re]) => re.test(p.replace(RESEARCH_NAMES, ""))), p).toBe(true);
-    // The README's upgrade notes are history; the rest of it is scanned (a key row there is caught).
-    const readme = ["## Quick start", "| A Higgsfield key | `HIGGSFIELD_API_KEY` |", "### Upgrading from an earlier version", "- Soul ID no longer trains on Higgsfield (PR #12).", "### Setting up", "Runs on Higgsfield"].join("\n");
-    expect(scannedLines("README.md", readme)).toEqual(["## Quick start", "| A Higgsfield key | `HIGGSFIELD_API_KEY` |", "### Upgrading from an earlier version", "", "### Setting up", "Runs on Higgsfield"]);
-    expect(fs.readFileSync(path.join(ROOT, "README.md"), "utf8").replace(/\r\n/g, "\n").split("\n")).toContain(HISTORY_SECTIONS["README.md"]);
-    // History and comparisons stay allowed.
-    for (const ok of ["Higgsfield's pogo example names four things to remove", "the way Higgsfield names layer files", "a 1:1 alternative to Higgsfield", "Higgsfield is never called", "Progress uses Higgsfield's 14 labels"])
-      expect(RULES.some(([, re]) => re.test(ok)), ok).toBe(false);
-  });
-
   it("names no retired model or training id in code: stored ones resolve through replaced.ts", () => {
     const hits: string[] = [];
-    for (const f of files.filter((x) => /^(src|bin)\//.test(x) && !RETIRED_ID_ALLOWED.has(x))) {
+    for (const f of files.filter((x) => !RETIRED_ID_ALLOWED.has(x))) {
       fs.readFileSync(path.join(ROOT, f), "utf8")
         .split("\n")
         .forEach((line, i) => RETIRED_IDS.test(line) && hits.push(`${f}:${i + 1}: ${line.trim().slice(0, 140)}`));
@@ -196,15 +109,8 @@ describe("no code path names the Higgsfield provider", () => {
     expect(hits).toEqual([]);
     expect(RETIRED_IDS.test('if (draft.modelId !== "soul-2") return null;')).toBe(true);
   });
-
-  it("has no file named after it", () => {
-    expect(files.filter((f) => /higgsfield/i.test(path.basename(f)))).toEqual([]);
-  });
-
-  it("keeps the allowed history short and real", () => {
-    for (const f of Object.keys(ALLOWED)) expect(fs.readFileSync(path.join(ROOT, f), "utf8"), f).toMatch(/higgsfield/i);
-  });
 });
+
 
 // ---------------------------------------------------------------------------
 // The catalog, the providers and the settings
@@ -213,20 +119,20 @@ describe("the catalog and the providers run without it", () => {
   const KNOWN = new Set(["fal", "replicate", "comfyui", "mock", "local", "llm", "openai", "google", "worldcast"]);
 
   it("routes every model to a provider Fuobe has", () => {
-    const odd = MODELS.flatMap((m) => m.routes.filter((r) => !KNOWN.has(r.provider) || /higgsfield/i.test(r.endpoint)).map((r) => `${m.id}: ${r.provider} ${r.endpoint}`));
+    const odd = MODELS.flatMap((m) => m.routes.filter((r) => !KNOWN.has(r.provider) || mentionsRetiredName(r.endpoint)).map((r) => `${m.id}: ${r.provider} ${r.endpoint}`));
     expect(odd).toEqual([]);
     expect(Object.keys(PROVIDERS).sort()).toEqual([...KNOWN].sort());
   });
 
   it("has no setting, connection test or env var for it", () => {
-    const named = Object.entries(SETTINGS).filter(([name, def]) => /higgsfield|^hf/i.test(`${name} ${def.key} ${"env" in def ? def.env : ""}`));
+    const named = Object.entries(SETTINGS).filter(([name, def]) => mentionsRetiredName(`${name} ${def.key} ${"env" in def ? def.env : ""}`));
     expect(named).toEqual([]);
-    expect(Object.keys(PROVIDER_SETTINGS)).not.toContain("higgsfield");
+    expect(Object.keys(PROVIDER_SETTINGS).filter((id) => !KNOWN.has(id) && mentionsRetiredName(id))).toEqual([]);
     expect(SETTINGS.cloudProvider.options).toEqual(["auto", "fal", "replicate"]);
   });
 
   it("fails a job stored under a provider Fuobe no longer has, with a way forward, instead of throwing", async () => {
-    const gone = provider("higgsfield" as never);
+    const gone = provider(OLD_PROVIDER as never);
     expect(gone.isConfigured()).toBe(false);
     const ctx = { externalId: "x", meta: {}, route: { op: "t2i" as const, provider: "fal" as const, endpoint: "x" }, model: getModel("nano-banana-pro")!, createdAt: 0 };
     await expect(gone.poll(ctx)).resolves.toEqual({ state: "failed", error: RETIRED_PROVIDER_ERROR });
@@ -427,21 +333,21 @@ describe("stored ids resolve where they are read", () => {
     const sheet = storedRow({
       feature: "character-sheet",
       model: "soul-2",
-      provider: "higgsfield",
+      provider: OLD_PROVIDER,
       op: "t2i",
       status: "failed",
       request: { feature: "character-sheet", modelId: "soul-2", op: "t2i", prompt: "a sheet", params: { aspectRatio: "16:9", extra: { style_id: "x" } } },
     });
     const [again] = retryPhoto(sheet);
     expect(again).toMatchObject({ modelId: "fuobe-soul", feature: "character-sheet", request: { modelId: "fuobe-soul" } });
-    const app = storedRow({ feature: "app:app-ai-influencer", model: "ai-influencer", provider: "higgsfield", op: "t2i", status: "canceled", request: { feature: "app:app-ai-influencer", modelId: "ai-influencer", op: "t2i", prompt: "a character" } });
+    const app = storedRow({ feature: "app:app-ai-influencer", model: "ai-influencer", provider: OLD_PROVIDER, op: "t2i", status: "canceled", request: { feature: "app:app-ai-influencer", modelId: "ai-influencer", op: "t2i", prompt: "a character" } });
     expect(retryPhoto(app)[0]).toMatchObject({ modelId: "fuobe-soul" });
   });
 
   it("fails a job still running on a retired model with the way forward, not 'no longer exists'", async () => {
     const running = { feature: "image", op: "t2i", status: "running", externalId: "job-1", request: { feature: "image", modelId: "x", prompt: "an old run" } };
-    const soul = storedRow({ ...running, model: "soul-2", provider: "higgsfield" });
-    const partner = storedRow({ ...running, model: "nano-banana-pro", provider: "higgsfield" });
+    const soul = storedRow({ ...running, model: "soul-2", provider: OLD_PROVIDER });
+    const partner = storedRow({ ...running, model: "nano-banana-pro", provider: OLD_PROVIDER });
     const gone = storedRow({ ...running, model: "old-model", provider: "fal" });
     await runUntil(() => [soul, partner, gone].every((id) => getGeneration(id)?.status === "failed"));
     expect(getGeneration(soul)).toMatchObject({ status: "failed", error: RETIRED_PROVIDER_ERROR });
@@ -452,7 +358,7 @@ describe("stored ids resolve where they are read", () => {
   it("starts a step that was waiting on a retired model on its replacement", async () => {
     const still = saveFile({ data: Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(2_000, 7)]), contentType: "image/png", name: "still.png", source: "upload" }).url;
     const first = storedRow({ feature: "image", model: "nano-banana-pro", provider: "mock", op: "t2i", status: "succeeded", externalId: "done", outputs: [{ url: still, kind: "image" }], request: { feature: "image", modelId: "nano-banana-pro", prompt: "a still" } });
-    const step = storedRow({ feature: "image", model: "soul-2", provider: "higgsfield", op: "edit", status: "queued", dependsOn: first, request: { feature: "image", modelId: "soul-2", op: "edit", prompt: "restyle it", chainFrom: "first" } });
+    const step = storedRow({ feature: "image", model: "soul-2", provider: OLD_PROVIDER, op: "edit", status: "queued", dependsOn: first, request: { feature: "image", modelId: "soul-2", op: "edit", prompt: "restyle it", chainFrom: "first" } });
     await runUntil(() => getGeneration(step)?.status !== "queued");
     const g = getGeneration(step)!;
     expect(g.error ?? null).toBeNull();
@@ -474,8 +380,8 @@ describe("stored ids resolve where they are read", () => {
     const id = items[0].id;
     // As a row stored before the switch reads: the retired model and provider, a finished output.
     db()
-      .prepare("UPDATE generations SET model_id = 'soul-2', provider = 'higgsfield', status = 'succeeded', outputs_json = ? WHERE id = ?")
-      .run(JSON.stringify([{ url: "/api/files/old.png", kind: "image" }]), id);
+      .prepare("UPDATE generations SET model_id = 'soul-2', provider = ?, status = 'succeeded', outputs_json = ? WHERE id = ?")
+      .run(OLD_PROVIDER, JSON.stringify([{ url: "/api/files/old.png", kind: "image" }]), id);
     const g = getGeneration(id)!;
     expect(g).toMatchObject({ modelId: "soul-2", modelName: REPLACED_BY["soul-2"].was, status: "succeeded" });
     expect(g.outputs).toHaveLength(1);
@@ -543,23 +449,30 @@ describe("the O7 migration", () => {
   it("deletes the retired key, resets the provider choice and marks the ads drawn whole as baked", () => {
     const d = db();
     // The O7 migration by its content (later migrations follow it, and some of them can't run twice).
-    const last = MIGRATIONS.findIndex((m) => m.includes("DELETE FROM settings WHERE key = 'higgsfield.key'"));
+    const last = MIGRATIONS.findIndex((m) => m.includes("UPDATE ad_batches SET route = 'baked'"));
     expect(last).toBeGreaterThan(0);
+    // The provider id as the migration reads it: the one it names, or, where it lists what stays valid instead, any id
+    // Fuobe doesn't have.
+    const old = /key = '([a-z0-9-]+)\.key'/.exec(MIGRATIONS[last])?.[1] ?? OLD_PROVIDER;
+    const meta1 = JSON.stringify({ engine: "cloud", modelId: "ads-studio", route: old, ratio: "9:16" });
     // An install from before: rows the migration rewrites, then the migration runs again on the next open.
-    d.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('higgsfield.key', 'id:secret'), ('cloud.provider', 'higgsfield')").run();
-    d.prepare("INSERT INTO ad_batches (id, brand_id, engine, route, model_id, created_at) VALUES ('b1', 'br', 'cloud', 'higgsfield', 'ads-studio', 1), ('b2', 'br', 'cloud', 'fuobe', 'nano-banana-pro', 2)").run();
+    d.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, 'id:secret'), ('cloud.provider', ?), ('fal.key', 'fal-live')").run(`${old}.key`, old);
+    d.prepare("INSERT INTO ad_batches (id, brand_id, engine, route, model_id, created_at) VALUES ('b1', 'br', 'cloud', ?, 'ads-studio', 1), ('b2', 'br', 'cloud', 'fuobe', 'nano-banana-pro', 2)").run(old);
     d.prepare(
       `INSERT INTO ad_creatives (id, batch_id, brand_id, position, status, meta_json, created_at, updated_at) VALUES
-       ('c1', 'b1', 'br', 0, 'queued', '{"engine":"cloud","modelId":"ads-studio","route":"higgsfield","ratio":"9:16"}', 1, 1),
+       ('c1', 'b1', 'br', 0, 'queued', ?, 1, 1),
        ('c2', 'b2', 'br', 0, 'queued', '{"engine":"cloud","modelId":"nano-banana-pro","route":"fuobe"}', 2, 2),
        ('c3', 'b2', 'br', 1, 'failed', 'not json', 3, 3)`,
-    ).run();
+    ).run(meta1);
     d.prepare("DELETE FROM _migrations WHERE id = ?").run(last);
     d.close();
     globalThis.__fuobeDb = undefined;
 
     const again = db();
-    expect(again.prepare("SELECT value FROM settings WHERE key = 'higgsfield.key'").get()).toBeUndefined();
+    expect(again.prepare("SELECT value FROM settings WHERE key = ?").get(`${old}.key`)).toBeUndefined();
+    // A key Fuobe still reads stays.
+    expect(again.prepare("SELECT value FROM settings WHERE key = 'fal.key'").get()).toEqual({ value: "fal-live" });
+    expect(again.prepare("SELECT value FROM settings WHERE key = 'cloud.provider'").get()).toEqual({ value: "auto" });
     expect(getSetting("cloudProvider")).toBe("auto");
     expect(again.prepare("SELECT route FROM ad_batches ORDER BY id").all()).toEqual([{ route: "baked" }, { route: "fuobe" }]);
     const meta = (id: string) => (again.prepare("SELECT meta_json FROM ad_creatives WHERE id = ?").get(id) as { meta_json: string }).meta_json;

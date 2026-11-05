@@ -44,6 +44,16 @@ const SIZES: Record<string, number> = {
   "diffusion_models/flux3-image-klein-base-bf16.safetensors": 11076957072,
   "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors": 6724090780,
 };
+/** Their SHA-256 (the LFS oids at feef60b0, read 2026-11-06 with access to the gated repo). */
+const SHA256: Record<string, string> = {
+  "diffusion_models/flux3-image-klein-int8-convrot.safetensors": "847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2",
+  "diffusion_models/flux3-image-klein-nvfp4.safetensors": "15d421e2558443fcf83ba46f3cd884d9d181c2c7a0a7bdcd2974af234a2d4f5c",
+  "diffusion_models/flux3-image-klein-bf16.safetensors": "c3e9813cdd049c831c836b2e9db61150e49a93fc1a4c63b256494642fee0bd7c",
+  "diffusion_models/flux3-image-klein-base-int8-convrot.safetensors": "8949ecfc1bf3871b08be02cf43ec7276a4914e1a86eade6b5eb8f4204426bc92",
+  "diffusion_models/flux3-image-klein-base-nvfp4.safetensors": "f99714a57ada7b7f39ebb7d916a1b842324c8ec483943816f5b3ea5c062b08a9",
+  "diffusion_models/flux3-image-klein-base-bf16.safetensors": "5c921759dc03663dbb67df11d8e3d317d2d5b893b31b969c95dc77ebf861b19c",
+  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors": "e5d85a7421d197bf5a12474511936ecabce19a833252f16e9310a983194a4458",
+};
 
 async function prepare(id: string, input: GenInput, op: Operation, loras?: LoraRef[]) {
   const uploads: string[] = [];
@@ -117,7 +127,7 @@ describe("FLUX 3 Image Klein's ComfyUI graphs", () => {
     expect(e["11"].inputs.image).toEqual(["31", 0]);
   });
 
-  it("pins BFL's gated repack at feef60b0 with its sizes and SHA-256; the shared encoder and VAE download without a token", () => {
+  it("pins BFL's gated repack at feef60b0 with its sizes; the shared encoder and VAE download without a token", () => {
     for (const id of ["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora"]) {
       const files = Object.fromEntries(entry(id).models.map((m) => [m.file, m]));
       expect(files["qwen3vl_4b_int8_convrot.safetensors"]).toMatchObject({ folder: "text_encoders", sizeGb: 4.86 });
@@ -132,7 +142,7 @@ describe("FLUX 3 Image Klein's ComfyUI graphs", () => {
     const base = Object.fromEntries(entry("flux3-klein-base-t2i-lora").models.map((m) => [m.file, m]));
     expect(base["flux3-image-klein-base-int8-convrot.safetensors"]).toMatchObject({ sizeGb: 5.81, gated: true });
     for (const [file, bytes] of Object.entries(SIZES)) {
-      expect(pins[`${REPO}/${file}`], file).toEqual({ revision: "feef60b0aaf63a4773ace96636ebbcf43b881312", sizeBytes: bytes, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      expect(pins[`${REPO}/${file}`], file).toEqual({ revision: "feef60b0aaf63a4773ace96636ebbcf43b881312", sizeBytes: bytes, sha256: SHA256[file] });
     }
     // Every Klein file in the manifest points at the pinned revision.
     for (const id of ["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora"]) {

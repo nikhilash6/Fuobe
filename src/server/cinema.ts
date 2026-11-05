@@ -512,7 +512,7 @@ export function updateFolder(projectId: string, id: string, patch: { name?: stri
   return toFolder(folderRow(id)!);
 }
 
-/** Deleting a folder moves its takes and subfolders up to its parent (as Higgsfield does). */
+/** Deleting a folder moves its takes and subfolders up to its parent (as the parity studio does). */
 export function deleteFolder(projectId: string, id: string): void {
   requireProject(projectId);
   const cur = folderRow(id);

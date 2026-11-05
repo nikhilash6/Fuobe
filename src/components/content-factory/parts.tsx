@@ -30,7 +30,7 @@ import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { claudePrompt, type SeriesAsk } from "./hooks";
 
-/** The research's pricing line (Higgsfield settles the cost once the video is made; Fuobe's providers do too). */
+/** The research's pricing line (the parity studio settles the cost once the video is made; Fuobe's providers do too). */
 export const PRICE_NOTE = "Final cost depends on video complexity and is settled once your video is generated. It may be slightly higher or lower than shown.";
 
 async function copy(text: string, what: string) {

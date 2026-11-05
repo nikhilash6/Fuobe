@@ -35,7 +35,7 @@
    "id": "tts-clone",
    "title": "Text-to-speech with zero-shot voice cloning from a reference clip",
    "gap": 1,
-   "higgsfield": "UGC voiceover / Speak / Lipsync Studio voice (ElevenLabs-style TTS)",
+   "parity": "UGC voiceover / Speak / Lipsync Studio voice (ElevenLabs-style TTS)",
    "summary": "Chatterbox Multilingual (MIT, 23 languages, official Comfy community templates audio-chatterbox_tts_multilingual) is the default; IndexTTS-2 is the quality pick for emotion and timing (bilibili license, free below 100M MAU / RMB 1B revenue). Output AUDIO feeds infinitetalk-native / wan22-s2v / ltx IA2V directly.",
    "recommended": {
     "name": "Chatterbox Multilingual (FL_ChatterboxMultilingualTTS) - zero-shot clone, 23 languages",
@@ -582,7 +582,7 @@
    "id": "tts-dialogue",
    "title": "Multi-speaker dialogue TTS with per-speaker cloned voices",
    "gap": 1,
-   "higgsfield": "UGC two-person ads / podcast-style voiceovers",
+   "parity": "UGC two-person ads / podcast-style voiceovers",
    "summary": "FL_ChatterboxDialogTTS (MIT, official template audio-chatterbox_tts_dialog, up to 4 speakers, English model) is the commercially clean default; VibeVoice 1.5B/7B gives the most natural long-form turn-taking (90 min, 4 speakers) but Microsoft's card limits it to research use.",
    "recommended": {
     "name": "Chatterbox Dialog (FL_ChatterboxDialogTTS) - SPEAKER A..D script, one reference clip per speaker",
@@ -1190,7 +1190,7 @@
    "id": "voice-change",
    "title": "Voice conversion (speech-to-speech) to a target voice",
    "gap": 2,
-   "higgsfield": "Voice changer / dub in another voice",
+   "parity": "Voice changer / dub in another voice",
    "summary": "Chatterbox VC (MIT, official template audio-chatterbox_vc) is zero-shot from a short target clip and keeps timing. Seed-VC has better timbre similarity and a singing model but is GPL-3.0 and its ComfyUI pack is stale; RVC needs a per-voice trained model.",
    "recommended": {
     "name": "Chatterbox VC (FL_ChatterboxVC) - zero-shot",
@@ -1559,7 +1559,7 @@
    "id": "video-extend",
    "title": "Video extend (continue an existing clip)",
    "gap": 3,
-   "higgsfield": "Extend video / continue generation",
+   "parity": "Extend video / continue generation",
    "summary": "Best commercially clean option: Wan 2.2 Fun VACE A14B continuation - the last N frames of the clip are passed as known VACE frames (mask 0) and the rest is generated (mask 1), then KJNodes ImageBatchExtendWithOverlap cross-fades the overlap. SVI 2.0 Pro (Wan 2.2 I2V + SVI LoRAs, MIT) is the long-form pick with less drift over many chunks; Wan 2.2 I2V with a multi-frame start_image is the zero-new-model fallback.",
    "recommended": {
     "name": "Wan 2.2 Fun VACE A14B context-frame continuation (+ lightx2v 4-step) with overlap blend",
@@ -4947,7 +4947,7 @@
    "id": "video-reframe",
    "title": "Video reframe / outpaint to a new aspect ratio",
    "gap": 4,
-   "higgsfield": "Reframe / aspect-ratio extend (vertical <-> horizontal)",
+   "parity": "Reframe / aspect-ratio extend (vertical <-> horizontal)",
    "summary": "Wan VACE outpainting (official template video_wan_vace_outpainting) pads every frame with ImagePadForOutpaint and lets VACE fill the padded area. Recommended: same graph on Wan 2.2 Fun VACE A14B for quality; the template-exact Wan 2.1 VACE 14B variant reuses the library's VACE files.",
    "recommended": {
     "name": "Wan 2.2 Fun VACE A14B outpainting (ImagePadForOutpaint mask per frame)",
@@ -7132,7 +7132,7 @@
    "id": "relight",
    "title": "Image relight (prompted lighting or copy light from a reference)",
    "gap": 5,
-   "higgsfield": "Relight / lighting presets",
+   "parity": "Relight / lighting presets",
    "summary": "Qwen-Image-Edit-2509 + Relight LoRA (official template image_qwen_image_edit_2509_relight, Apache-2.0) = library workflow qwen-image-edit-2509 + one LoraLoaderModelOnly + the trigger prefix. Light-Migration LoRA copies lighting from a second image. IC-Light v2 (FLUX) weights were never released; IC-Light v1 (SD1.5) remains a lightweight legacy option.",
    "recommended": {
     "name": "Qwen-Image-Edit-2509 + Relight LoRA (+ Lightning 4-step)",
@@ -8796,7 +8796,7 @@
    "id": "video-relight",
    "title": "Video relight (consistent lighting change across a clip)",
    "gap": 5,
-   "higgsfield": "Relight for video",
+   "parity": "Relight for video",
    "summary": "Bernini-R (ByteDance, Apache-2.0, Wan 2.2 A14B fine-tune, native core node BerniniConditioning, official template video_bernini_r_video_editing) edits a source video from an instruction while keeping motion - the only open, native option for prompted video relighting. Wan Animate / SCAIL-2 relight LoRAs only apply inside character replacement.",
    "recommended": {
     "name": "Bernini-R video edit (BerniniConditioning, lightx2v 6-step)",
@@ -9733,7 +9733,7 @@
    "id": "draw-to-video",
    "title": "Draw-to-video / trajectory-controlled image-to-video",
    "gap": 6,
-   "higgsfield": "Draw-to-Video / Motion paths",
+   "parity": "Draw-to-Video / Motion paths",
    "summary": "Wan-Move (Apache-2.0, native core nodes since 0.5.0, template video_wanmove_480p) takes dense point tracks (one point per frame, pixel coords) - the user's strokes map 1:1. ATI (native WanTrackToVideo, template video_wan_ati) is the older Bytedance alternative with 121-point tracks.",
    "recommended": {
     "name": "Wan-Move 14B 480p (WanMoveTracksFromCoords -> WanMoveTrackToVideo) + lightx2v",
@@ -11439,7 +11439,7 @@
    "id": "multi-shot",
    "title": "Multi-shot / multi-scene video",
    "gap": 7,
-   "higgsfield": "Popcorn -> video, multi-shot sequences, Kling 3 multishot equivalents",
+   "parity": "Popcorn -> video, multi-shot sequences, Kling 3 multishot equivalents",
    "summary": "LTX-2.5 generates native multishot clips (connected cuts holding identity, lighting and voice) - Fuobe already ships ltx25-t2v / ltx25-i2v, so this is a prompt-format feature, not a new graph. Commercially clean path: storyboard keyframes (storyboard capability) -> one Wan 2.2 I2V/FLF2V job per shot -> concat graph below. HoloCine is CC-BY-NC-SA and has no ComfyUI integration in WanVideoWrapper@088128b.",
    "recommended": {
     "name": "LTX-2.5 native multishot (existing library workflows ltx25-t2v / ltx25-i2v)",
@@ -11873,7 +11873,7 @@
    "id": "character-lora",
    "title": "Character LoRA training (Soul ID parity)",
    "gap": 8,
-   "higgsfield": "Soul ID (train a character from ~20 photos)",
+   "parity": "Soul ID (train a character from ~20 photos)",
    "summary": "Run ostris/ai-toolkit headless as a training worker: one YAML job per character (Z-Image Turbo with the training adapter for fast photoreal stills; Qwen-Image-2512 or FLUX 3 Klein base for prompt adherence; Wan 2.2 T2V A14B for video identity). ComfyUI core TrainLoraNode works for small runs but has no bucketing/caption tooling parity.",
    "recommended": {
     "name": "ostris/ai-toolkit (CLI run.py or UI job API) - Z-Image Turbo character LoRA",
@@ -12879,7 +12879,7 @@
    "id": "storyboard",
    "title": "Storyboard / consistent image sequence (Popcorn parity)",
    "gap": 9,
-   "higgsfield": "Popcorn (consistent multi-frame storyboards from references)",
+   "parity": "Popcorn (consistent multi-frame storyboards from references)",
    "summary": "Chain Qwen-Image-Edit-2509 + next-scene LoRA v2 (MIT): panel N = edit(panel N-1, 'Next Scene: <camera/story beat>') with the character reference as image2 for identity. For 'N panels from references' without chaining, use the library's qwen-image-edit-2511-multi (Apache) or flux2-dev-multiref (NC).",
    "recommended": {
     "name": "Qwen-Image-Edit-2509 + next-scene LoRA v2 chained (previous panel + character reference)",
@@ -13746,7 +13746,7 @@
    "id": "video-bg-remove",
    "title": "Video background removal / alpha matte",
    "gap": 10,
-   "higgsfield": "Remove background (video), green-screen",
+   "parity": "Remove background (video), green-screen",
    "summary": "Core RemoveBackground + BiRefNet (MIT) processes IMAGE batches frame by frame (verified: comfy/bg_removal_model.py loops over the batch), JoinImageWithAlpha builds RGBA and core SaveWEBM writes VP9 yuva420p with real transparency. For 'remove everything except <object>' use SAM 3.1 video tracking (core SAM3_VideoTrack, text-prompted, temporally consistent).",
    "recommended": {
     "name": "BiRefNet per-frame matte (core RemoveBackground) -> RGBA WebM (VP9 alpha) + matte MP4",
@@ -14484,7 +14484,7 @@
    "id": "video-depth",
    "title": "Video depth estimation",
    "gap": 10,
-   "higgsfield": "(internal) depth for relight/VFX/control",
+   "parity": "(internal) depth for relight/VFX/control",
    "summary": "Core Depth Anything 3 (DA3 mono large, Apache-2.0, template utility_depth_anything3_video_depth_estimation) is native and sharp but per-frame; Video Depth Anything Small (Apache-2.0) via yuvraj108c pack is temporally consistent (Large is CC-BY-NC).",
    "recommended": {
     "name": "Depth Anything 3 mono-large (core LoadDA3Model -> DA3Inference -> DA3Render)",
@@ -15107,7 +15107,7 @@
    "id": "palette",
    "title": "Color palette control (Soul HEX parity)",
    "gap": 11,
-   "higgsfield": "Soul HEX / color palette presets",
+   "parity": "Soul HEX / color palette presets",
    "summary": "Two layers: (1) generation - FLUX.2 understands hex codes in prompts (BFL prompting guide: 'FLUX.2 supports precise color matching using hex codes'), so palette presets become prompt text on flux2-dev-t2i (NC) or FLUX.2 klein (Apache, inferred to share the behaviour); (2) deterministic lock - core ColorTransfer (reinhard_lab | mkl_lab | histogram) maps any generated image or video onto a palette swatch image rendered client-side.",
    "recommended": {
     "name": "Palette lock: core ColorTransfer against a client-rendered swatch (post-process any image/video)",

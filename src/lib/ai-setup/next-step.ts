@@ -98,7 +98,7 @@ const ADD_STUDIO = "Fuobe Connect trusts https://fuobe.com by itself, not this s
 
 /** Fuobe Connect isn't in ComfyUI yet: where it comes from. */
 const installHow = (site: string): string[] => [
-  `ComfyUI-Manager's search may not list Fuobe Connect yet. Clone ${FUOBE_CONNECT.gitUrl} into custom_nodes, or use the download in guide Step 2.`,
+  `Clone ${FUOBE_CONNECT.gitUrl} into custom_nodes, or use the download in guide Step 2. ComfyUI-Manager's search may offer no version of Fuobe Connect to install.`,
   ...(trustedByDefault(site) ? [] : [ADD_STUDIO]),
 ];
 

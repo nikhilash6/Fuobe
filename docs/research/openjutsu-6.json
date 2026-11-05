@@ -8,7 +8,7 @@
   "licence": "MIT (Comfy Org 2026)",
   "app": "Next.js 16 + React 19, @comfyorg/sdk 0.5.0, Node >= 22.6",
   "hub": "https://comfy.org/hub/apps/openjutsu/",
-  "competition": "https://comfy.org/open-source-higgsfield/ (Openjutsu is its 'Swap a character in a video' prompt; entries close 2026-10-30)",
+  "competition": "https://comfy.org/open-source-{studio}/ (Openjutsu is its 'Swap a character in a video' prompt; entries close 2026-10-30)",
   "limits": {
    "partSeconds": [
     5,
@@ -2107,7 +2107,7 @@
   "https://fal.ai/models/minimax/h3/reference-to-video/lora/llms.txt ; https://fal.ai/models/minimax/h3-max/recast/llms.txt",
   "https://replicate.com/minimax/h3",
   "https://platform.minimax.io/docs/api-reference/video-generation-v2-create.md ; https://platform.minimax.io/docs/pricing/overview.md",
-  "https://comfy.org/pricing.md ; https://comfy.org/platform.md ; https://comfy.org/minimax/license/ ; https://comfy.org/open-source-higgsfield/",
+  "https://comfy.org/pricing.md ; https://comfy.org/platform.md ; https://comfy.org/minimax/license/ ; https://comfy.org/open-source-{studio}/",
   "https://docs.comfy.org/development/comfy-router/models.md ; …/models/minimax/minimax-h3/code.md ; …/models/fal/h3-max/code.md ; …/models/openai/gpt-image-2-5-sunburst/code.md ; …/comfy-router/billing.md",
   "https://docs.comfy.org/development/serverless/overview.md ; https://docs.comfy.org/api-reference/v2/overview.md ; https://docs.comfy.org/development/api-development/sdks-design.md ; https://platform.comfy.org/llms.txt",
   "https://registry.npmjs.org/@comfyorg/sdk (0.5.0)"

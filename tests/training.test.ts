@@ -46,7 +46,7 @@ describe("Fuobe Soul ID targets (build plan O3)", () => {
     expect(triggerFor("Al")).toBe("alfz");
   });
 
-  it("has no Higgsfield target: every one trains on fal or the user's GPU", () => {
+  it("has no retired training target: every one trains on fal or the user's GPU", () => {
     expect(TRAINING_TARGETS.map((t) => t.provider).every((p) => p === "fal" || p === "ai-toolkit")).toBe(true);
     expect(TRAINING_TARGETS.map((t) => t.id)).not.toContain("soul-id-v2");
     expect(TRAINING_TARGETS.map((t) => t.id)).not.toContain("soul-id-cinema");
@@ -146,7 +146,7 @@ describe("Fuobe Soul ID targets (build plan O3)", () => {
     expect(needsConsent("style")).toBe(false);
   });
 
-  it("follows Higgsfield's photo rules: 5 to start, 20+ recommended, 80 at most", () => {
+  it("follows the researched photo rules: 5 to start, 20+ recommended, 80 at most", () => {
     expect(photosBlocker(4, "Maya")).toMatch(/at least 5 photos of Maya/);
     expect(photosBlocker(5)).toBeNull();
     expect(photosBlocker(81)).toMatch(/up to 80/);
@@ -314,7 +314,7 @@ describe("a Soul ID on every model of its family, on both engines", () => {
     expect(identityFor([gpu, cloud], cloudSoul)).toBe(cloud);
   });
 
-  it("never uses a demo training or a Higgsfield Soul ID", () => {
+  it("never uses a demo training or a Soul ID", () => {
     expect(identityFor([lora({ demo: true, url: "x" })], cloudSoul)).toBeUndefined();
     expect(identityFor([{ engine: "cloud", modelId: "fuobe-soul", file: "", trigger: "", referenceId: "ref" }], cloudSoul)).toBeUndefined();
     // What Assist reports as trained: only LoRAs some run can use.
