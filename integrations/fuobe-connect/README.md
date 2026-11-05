@@ -117,8 +117,10 @@ with no Fuobe tab open. It opens no port. The token belongs to you alone, so ano
 Pairing works only with a studio you trust, or with `https://fuobe.com`. Every job gets the same checks as in direct
 mode, before it reaches ComfyUI. The job's inputs leave the input folder when the job is done.
 
-The **Connect to Fuobe** window shows the studio, the account that approved the code (when the studio says), and the
-last jobs with their node types and times. **Pause jobs** stops this computer from taking new jobs. **Disconnect** tells
+The **Connect to Fuobe** window shows the studio, the account that approved the code (masked, for example
+`a•••@example.com`, when the studio says), and the last jobs with their node types and times. Fuobe doesn't fill in
+the code from a link: you type the code that your own ComfyUI shows, so a link that someone sends you can't connect
+their ComfyUI to your account. **Pause jobs** stops this computer from taking new jobs. **Disconnect** tells
 the studio to forget this computer first. If the studio can't be reached, Fuobe Connect keeps trying every minute, and
 you can also remove the computer in Fuobe's settings.
 

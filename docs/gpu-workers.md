@@ -66,15 +66,17 @@ Connect get a refusal that asks them to update it.
 
 1. In ComfyUI, open **Extensions → Connect to Fuobe**. On a PC with no screen, start ComfyUI with
    `FUOBE_CONNECT_PAIR=1`. Fuobe Connect asks the studio for a short code: `POST /api/gpu/pair/start`.
-2. The person opens `/connect?code=…`, signs in, checks the computer's name and GPU, and approves the code:
-   `POST /api/gpu/pair`. A code is valid for 10 minutes and works only once.
+2. The person opens `/connect?pair=1`, signs in, types the code that their own ComfyUI shows, checks the computer's
+   name and GPU, and approves the code: `POST /api/gpu/pair`. A code is valid for 10 minutes and works only once. The
+   page never fills in a code from its link, so a link that someone else sends can't pair their ComfyUI with the
+   person's account in one click.
 3. Fuobe Connect polls with a secret that only it knows: `POST /api/gpu/pair/poll`. After the approval, its next poll
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 
 The token acts only as that person's own computer. The ComfyUI gets that person's jobs, and nobody else's. The jobs
 run with no Fuobe tab open. Fuobe Connect pairs only with a studio the person trusts (or `https://fuobe.com`), and
-checks every job as in direct mode before ComfyUI sees it. If the poll answer names the approving account, ComfyUI
-shows it. The person can pause jobs in ComfyUI. The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
+checks every job as in direct mode before ComfyUI sees it. The approved poll answer names the approving account,
+masked (`a•••@example.com`, or "the studio's owner"), and ComfyUI shows it. The person can pause jobs in ComfyUI. The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
 or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected token gets 401 at its next call.
 
 ## Workers (the owner's shared GPUs)
