@@ -1,0 +1,126 @@
+{
+  "stiletto": {
+    "id": "hzJTGNinhPE0",
+    "feature": "image-to-3d",
+    "modelId": "oss-idol",
+    "engine": "open",
+    "provider": "comfyui",
+    "op": "splat",
+    "kind": "model3d",
+    "status": "succeeded",
+    "request": {
+      "feature": "image-to-3d",
+      "modelId": "oss-idol",
+      "op": "splat",
+      "inputs": {
+        "images": [
+          "/api/files/uploads/2026-11-05/nzAx_9c4G8Kr.png"
+        ]
+      },
+      "params": {
+        "extra": {
+          "steps": 50,
+          "sampler": "euler",
+          "cfg": 4,
+          "numGaussians": 262144,
+          "photoCrop": true
+        }
+      }
+    },
+    "outputs": [
+      {
+        "url": "/api/files/outputs/2026-11-05/W2hvric_edOe.spz",
+        "kind": "model3d",
+        "contentType": "model/x-spz",
+        "assetId": "W2hvric_edOe",
+        "meta": {
+          "role": "splat",
+          "format": "spz",
+          "pruned": true,
+          "kept": 221589
+        }
+      },
+      {
+        "url": "/api/files/outputs/2026-11-05/fo5mACABrV5i.mp4",
+        "kind": "video",
+        "contentType": "video/mp4",
+        "assetId": "fo5mACABrV5i",
+        "meta": {
+          "role": "turntable"
+        }
+      },
+      {
+        "url": "/api/files/outputs/2026-11-05/iP603nS-DIwR.png",
+        "kind": "image",
+        "contentType": "image/png",
+        "assetId": "iP603nS-DIwR",
+        "meta": {
+          "role": "preview",
+          "seed": 32612220243737
+        }
+      }
+    ]
+  },
+  "headphones": {
+    "id": "EWH371cOxLSK",
+    "feature": "image-to-3d",
+    "modelId": "oss-idol",
+    "engine": "open",
+    "provider": "comfyui",
+    "op": "splat",
+    "kind": "model3d",
+    "status": "succeeded",
+    "request": {
+      "feature": "image-to-3d",
+      "modelId": "oss-idol",
+      "op": "splat",
+      "inputs": {
+        "images": [
+          "/api/files/uploads/2026-11-05/TY6KAuTdq2C1.png"
+        ]
+      },
+      "params": {
+        "extra": {
+          "steps": 50,
+          "sampler": "euler",
+          "cfg": 4,
+          "numGaussians": 262144,
+          "photoCrop": true
+        }
+      }
+    },
+    "outputs": [
+      {
+        "url": "/api/files/outputs/2026-11-05/wD7xdgItvMEZ.spz",
+        "kind": "model3d",
+        "contentType": "model/x-spz",
+        "assetId": "wD7xdgItvMEZ",
+        "meta": {
+          "role": "splat",
+          "format": "spz",
+          "pruned": true,
+          "kept": 239798
+        }
+      },
+      {
+        "url": "/api/files/outputs/2026-11-05/_j_l8eHOmh_m.mp4",
+        "kind": "video",
+        "contentType": "video/mp4",
+        "assetId": "_j_l8eHOmh_m",
+        "meta": {
+          "role": "turntable"
+        }
+      },
+      {
+        "url": "/api/files/outputs/2026-11-05/81aIcaK8E4Z9.png",
+        "kind": "image",
+        "contentType": "image/png",
+        "assetId": "81aIcaK8E4Z9",
+        "meta": {
+          "role": "preview",
+          "seed": 246725838011961
+        }
+      }
+    ]
+  }
+}
