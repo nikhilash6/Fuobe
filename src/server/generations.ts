@@ -1,4 +1,5 @@
 import "server-only";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
@@ -71,10 +72,28 @@ import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
-import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
+import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, ownLink, probeComfy, relayFile, troubleError, type OwnGpu } from "./providers/comfyui";
 import { accountById, accountGpu, gpuLink, type AccountGpu } from "./auth";
-import { accountEngineMode, accountKey, paidAllowed } from "./account-keys";
-import { addKeyMessage, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
+import { accountEngineMode, accountKey, accountProviders, paidAllowed } from "./account-keys";
+import { addKeyMessage, CLOUD_PROVIDERS, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
+import { cachedGpuState, GpuError, noteGpuState, testGpu } from "./account-gpu";
+import { presetRoutes } from "@/lib/catalog/preset-recipe-routes";
+import {
+  backoffMs,
+  diagnoseGpu,
+  diagnoseGpuJob,
+  diagnoseKey,
+  resultExpired,
+  retryPlan,
+  troubleOf,
+  waitingWords,
+  withKeyAction,
+  type Diagnosis,
+  type GpuFailure,
+  type KeyStage,
+  type RunTrouble,
+  type TroubleAction,
+} from "@/lib/diagnose";
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
 import { generationAccount } from "./account-library";
@@ -201,6 +220,7 @@ export function toGeneration(r: Row): Generation {
     pinnedAt: r.pinned_at ?? null,
     review: isReviewStatus(r.review) ? r.review : null,
     ...(r.status === "failed" && r.fix_json && { fix: parseFix(r.fix_json) }),
+    ...(r.status === "failed" && r.fix_json && parseTrouble(r.fix_json)),
     // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
     ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
@@ -221,10 +241,21 @@ function poolQueue(id: string): { queue: { place: number; etaSeconds: number | n
 
 function parseFix(json: string): GenerationFix | null {
   try {
-    const f = JSON.parse(json) as GenerationFix;
+    const { trouble: _trouble, ...f } = JSON.parse(json) as GenerationFix & { trouble?: unknown };
+    void _trouble;
     return f && typeof f.code === "string" && Array.isArray(f.items) ? f : null;
   } catch {
     return null;
+  }
+}
+
+/** What an account's GPU or key ran into (fix_json `trouble`), as the Generation field. */
+function parseTrouble(json: string): { trouble: RunTrouble } | Record<string, never> {
+  try {
+    const t = (JSON.parse(json) as { trouble?: RunTrouble }).trouble;
+    return t && typeof t.cause === "string" && Array.isArray(t.actions) ? { trouble: t } : {};
+  } catch {
+    return {};
   }
 }
 
@@ -451,7 +482,8 @@ export const ASSET_REFS: AssetRef[] = [
  */
 export const ASSET_FREE: Record<string, string> = {
   "generations.provider_input_json": "what a provider was sent: its own upload URLs or file names, never ours",
-  "generations.fix_json": "what a failed ComfyUI run was missing: model file names, node classes and packs",
+  "generations.fix_json":
+    "what a failed ComfyUI run was missing (model file names, node classes and packs), and what an account's GPU or key ran into: a cause, a details line and its buttons' links",
   "gpu_snapshots.inventory_json": "what a GPU's ComfyUI has (class names, model file names and sizes), never a Fuobe file",
   "gpu_snapshots.report_json": "readiness built from that inventory",
   "generations.external_meta_json": "the provider's job handles",
@@ -1798,13 +1830,322 @@ async function submitNow(
   index: number,
 ): Promise<void> {
   submitting().add(id);
-  /** Why the run failed, once it has: its files still waiting to be sent are not sent. */
-  let failed: { error: unknown } | undefined;
   // MiniMax H3's 2K hand-off, decided here, on the ComfyUI this run goes to.
   if (providerId === "comfyui") {
     const extra = latentHandOff(plan.params.extra, req.account);
     if (extra !== plan.params.extra) plan = { ...plan, params: { ...plan.params, extra } };
   }
+  // An account's run on its own GPU or key (not on this install's GPUs): a passing problem (a GPU that is off or starting
+  // up, a busy or down provider) is waited out within a budget, the tile saying what it waits for; anything else fails
+  // in plain words, with what helps (src/lib/diagnose.ts). The owner's runs and runs on this install's GPUs fail at once,
+  // in their own words, as before.
+  const account = req.account && req.place !== "pool" ? req.account : undefined;
+  const link = account && providerId === "comfyui" ? gpuLink(accountGpu(account)) : null;
+  const started = Date.now();
+  let tries = 0;
+  let rechecked = false;
+  try {
+    for (;;) {
+      let error: unknown;
+      // The first try reads the GPU's last status check (never asked again here): one that is off waits at once,
+      // instead of sending files to an address that answers nothing.
+      const known = link && tries === 0 ? cachedGpuState(account!, link.url) : undefined;
+      if (known && !known.online && known.trouble?.retryable) error = troubleError(known.trouble);
+      else {
+        try {
+          await handOver(id, route, providerId, plan, req, index);
+          if (link && statusOf(id) !== "failed") noteHandedOver(account!, link.url);
+          return;
+        } catch (e) {
+          error = e;
+        }
+      }
+      const status = statusOf(id);
+      // A cancel during the hand-over stays a cancel.
+      if (!status || status === "canceled") return;
+      let trouble = account ? accountTrouble(error, account, providerId, "submit", req) : undefined;
+      const heal = trouble?.retryable ? retryPlan(trouble.cause) : null;
+      if (heal && trouble) {
+        tries++;
+        const wait = backoffMs(tries, heal, trouble.retryAfterMs) * SELF_HEAL.scale;
+        if (Date.now() - started + wait <= heal.budgetMs * SELF_HEAL.scale) {
+          if (link) noteGpuState(account!, link.url, false, { trouble: asStatus(error, trouble, link) });
+          update(id, { status: "queued", message: waitingWords(trouble, isCloudProvider(providerId) ? providerId : undefined) });
+          if (!(await pause(id, wait))) return;
+          // The account moved its GPU meanwhile (another address, or this computer): this run was planned for the old one.
+          if (link && gpuLink(accountGpu(account!))?.url !== link.url) {
+            failRun(id, error, diagnoseGpuJob({ kind: "moved" }, { kind: "link", url: link.url }), req.account);
+            return;
+          }
+          continue;
+        }
+        // Out of time: a GPU that seemed off is asked once more before the run fails (it may be back by now).
+        if (link && !rechecked) {
+          rechecked = true;
+          const again = await recheckGpu(account!, link);
+          if (again === "online") continue;
+          trouble = { ...again, actions: withKeyOffer(again.actions, account!, req) };
+        }
+      }
+      failRun(id, error, trouble, req.account);
+      return;
+    }
+  } finally {
+    submitting().delete(id);
+  }
+}
+
+/** Self-healing's clock: tests make it faster (0.001: a 30-minute wait takes 1.8 s). */
+export const SELF_HEAL = { scale: 1 };
+
+/** Wait `ms`, looking every second whether the run was cancelled (false: it was, or it was deleted). */
+async function pause(id: string, ms: number): Promise<boolean> {
+  const end = Date.now() + ms;
+  for (;;) {
+    const left = end - Date.now();
+    if (left <= 0) return true;
+    await new Promise((r) => setTimeout(r, Math.min(1000, left)));
+    const s = statusOf(id);
+    if (!s || s === "canceled") return false;
+  }
+}
+
+/** A failed run in its words: an account's plain sentence (the owner's own detail as before), with what helps and "Fix it". */
+function failRun(id: string, e: unknown, trouble: Diagnosis | undefined, account: string | undefined): void {
+  const fix = (e as { fix?: GenerationFix }).fix;
+  const kept = keptFix(fix, trouble);
+  // What the GPU was missing (a model, a node class) is kept, so the tile offers "Fix it", and its GPU check counts as stale.
+  update(id, { status: "failed", error: trouble?.words ?? (e as Error).message, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+  if (fix) markStale(account ? `acct:${account}` : "install");
+}
+
+/** generations.fix_json: what the GPU was missing (GenerationFix) and, for an account, what its GPU or key ran into. */
+const keptFix = (fix: GenerationFix | undefined, trouble: Diagnosis | undefined): string | undefined =>
+  fix || trouble ? JSON.stringify({ ...(fix ?? {}), ...(trouble && { trouble: troubleOf(trouble) }) }) : undefined;
+
+/** A network failure (no answer at all) as its words, or undefined for any other error. */
+function networkReason(e: unknown): string | undefined {
+  const err = e as { message?: unknown; cause?: { code?: unknown } } | null;
+  const code = typeof err?.cause?.code === "string" ? err.cause.code : undefined;
+  const msg = String(err?.message ?? "");
+  if (!code && !/fetch failed|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|UND_ERR/i.test(msg)) return undefined;
+  return [msg, code && !msg.includes(code) ? code : undefined].filter(Boolean).join(" ");
+}
+
+/** Another key of the account that runs the same model (Replicate for fal.ai, or the other way round). */
+function otherKeyFor(account: string, p: CloudProvider, modelId: string | undefined): CloudProvider | undefined {
+  const m = modelId ? getModel(modelId) : undefined;
+  return m ? accountProviders(account).find((k) => k !== p && m.routes.some((r) => r.provider === k)) : undefined;
+}
+
+/**
+ * The cloud version of a run on the account's GPU that one of its keys runs: a preset's first cloud route, or the same
+ * Fuobe Original on the cloud engine. Null without a key that serves it, or when the studio is open-source only.
+ */
+export function cloudTwin(req: Pick<GenerationRequest, "presetId" | "modelId">, account: string): { modelId: string; provider: CloudProvider; op?: string } | null {
+  if (!paidAllowed()) return null;
+  const keys = accountProviders(account);
+  if (!keys.length) return null;
+  const has = (id: string) => !!getModel(id);
+  const preset = req.presetId ? getPreset(req.presetId) : undefined;
+  const asked = getModel(req.modelId);
+  const routes: { modelId: string; op?: string }[] = preset ? presetRoutes(preset as Parameters<typeof presetRoutes>[0], "cloud", has) : asked && dualEngine(asked) ? [{ modelId: asked.id }] : [];
+  for (const { modelId: id, op } of routes) {
+    const m = getModel(id);
+    if (!m) continue;
+    const cloud = dualEngine(m) ? onEngine(m, "cloud") : m;
+    if (cloud.engine === "open") continue;
+    const p = CLOUD_PROVIDERS.find((k) => keys.includes(k) && cloud.routes.some((r) => r.provider === k));
+    // Another model: its operation there goes with it (the same model keeps the run's own).
+    if (p) return { modelId: id, provider: p, ...(op && id !== req.modelId && { op }) };
+  }
+  return null;
+}
+
+/** A GPU trouble's buttons, with "Run with your … key" when one of the account's keys runs this tool's cloud version. */
+function withKeyOffer(actions: TroubleAction[], account: string, req: Pick<GenerationRequest, "presetId" | "modelId">): TroubleAction[] {
+  if (actions.some((a) => a.kind === "run-with-key")) return actions;
+  const twin = cloudTwin(req, account);
+  return twin ? [...actions, withKeyAction(twin.provider, twin.modelId, twin.op)] : actions;
+}
+
+/**
+ * What an account's run ran into, as diagnose.ts reads it: its own GPU's words (comfyui.ts troubleError), or its key's
+ * provider's status and words. Undefined for anything else (a request's own problem, already in plain words).
+ */
+function accountTrouble(e: unknown, account: string, providerId: string, stage: KeyStage, req?: Pick<GenerationRequest, "presetId" | "modelId">): Diagnosis | undefined {
+  const own = (e as { trouble?: Diagnosis } | null)?.trouble;
+  if (own) return providerId === "comfyui" && req && own.cause.startsWith("gpu-") ? { ...own, actions: withKeyOffer(own.actions, account, req) } : own;
+  if (!isCloudProvider(providerId)) return undefined;
+  const ctx = { provider: providerId, other: otherKeyFor(account, providerId, req?.modelId) };
+  const message = String((e as Error | null)?.message ?? "");
+  // No key to send (removed, or one this server can't open any more): its own words, and where to add one.
+  if (message === addKeyMessage(providerId) || message === keyRemovedMessage(providerId)) {
+    return { cause: "key-rejected", words: message, actions: [{ kind: "key-settings", label: "Add your key", target: "/settings#your-keys" }], retryable: false };
+  }
+  const status = (e as { status?: unknown } | null)?.status;
+  // The provider's own words (provider-keys.ts accountKeyError keeps them, without the key) tell a refused key from a
+  // model the key may not run.
+  const said = (e as { said?: unknown } | null)?.said;
+  if (typeof status === "number" && status > 0) return diagnoseKey({ stage, status, text: typeof said === "string" ? said : message }, ctx);
+  const net = networkReason(e);
+  return net ? diagnoseKey({ stage, error: net }, ctx) : undefined;
+}
+
+/** A short, stable name for the address a run was sent to (kept with the run, never the address itself). */
+const addressKey = (url: string) => crypto.createHash("sha256").update(url.replace(/\/+$/, "")).digest("hex").slice(0, 16);
+
+/** A run reached the account's GPU: the status strip and the next run take it as online (without asking it). */
+function noteHandedOver(account: string, url: string): void {
+  const known = cachedGpuState(account, url);
+  if (known && !known.online) noteGpuState(account, url, true);
+}
+
+/** The account's GPU asked once more, before a run that couldn't reach it fails: "online", or why not (the run's words). */
+async function recheckGpu(account: string, link: { url: string; token?: string }): Promise<"online" | Diagnosis> {
+  const place = { kind: "link" as const, url: link.url, hasToken: !!link.token };
+  try {
+    const { url: _moved, ...info } = await testGpu(link, { timeoutMs: 8000, stage: "status" });
+    void _moved;
+    noteGpuState(account, link.url, true, { info });
+    return "online";
+  } catch (e) {
+    // The status strip keeps the check's words; the run says the same in a run's words.
+    const f: GpuFailure = (e instanceof GpuError && e.failure) || { stage: "status", error: (e as Error).message };
+    noteGpuState(account, link.url, false, { trouble: e instanceof GpuError && !e.failure ? e.trouble : diagnoseGpu(f, place) });
+    return e instanceof GpuError && !e.failure ? e.trouble : diagnoseGpu({ ...f, stage: "poll" }, place);
+  }
+}
+
+/** A run's GPU trouble as the status strip says it (in a check's words) when what came back is known; else as it is. */
+function asStatus(error: unknown, trouble: Diagnosis, link: { url: string; token?: string }): Diagnosis {
+  const f = (error as { failure?: GpuFailure } | null)?.failure;
+  return f ? diagnoseGpu({ ...f, stage: "status" }, { kind: "link", url: link.url, hasToken: !!link.token }) : trouble;
+}
+
+declare global {
+  /** Account runs whose polls keep failing: since when, how many in a row, and when to ask again (self-healing). */
+  var __fuobePollHeals: Map<string, { first: number; n: number; next: number }> | undefined;
+  /** Account runs already sent again once after their GPU restarted and lost them. */
+  var __fuobeResent: Set<string> | undefined;
+}
+const pollHeals = () => (globalThis.__fuobePollHeals ??= new Map());
+/** A run its GPU lost, sent again (diagnose.ts diagnoseGpuJob "lost"). */
+const RESENT_WORDS = "Your GPU restarted, so we sent this run again";
+const resentRuns = () => (globalThis.__fuobeResent ??= new Set());
+
+/** What a poll can't wait out: a key refused, credit gone, no access; a GPU that wants a password or a sign-in. */
+const FINAL_AT_POLL: ReadonlySet<string> = new Set(["key-rejected", "key-balance", "key-permission", "gpu-password", "gpu-password-wrong", "gpu-sign-in", "address-local"]);
+
+/** How long an account's run's polls may keep failing before it stops: its own GPU, or its key's provider. */
+const POLL_HEAL_MS = { comfyui: 15 * 60_000, cloud: 10 * 60_000 };
+/** Polls that fail in a row before the tile says it is waiting. */
+const POLL_MISSES_SAID = 3;
+
+/**
+ * A run its GPU lost (ComfyUI restarted): sent again once, planned as it was (inputs uploaded again). False when it
+ * can't be (sent again before, or its plan doesn't go to the same place any more).
+ */
+function resend(r: Row, account: string, words: string): boolean {
+  if (resentRuns().has(r.id)) return false;
+  try {
+    const stored = JSON.parse(r.request_json) as GenerationRequest;
+    const p = asAccount(account, () => prepare(stored));
+    if (p.providerId !== r.provider) return false;
+    resentRuns().add(r.id);
+    if (resentRuns().size > 5000) resentRuns().delete(resentRuns().values().next().value!);
+    db().transaction(() => {
+      update(r.id, { external_id: null, external_meta_json: null, status: "queued", progress: null, message: words });
+      db().prepare("DELETE FROM generation_runs WHERE id = ?").run(r.id);
+    })();
+    submitting().add(r.id);
+    void submit(r.id, p.route, p.providerId, p.plan, p.req, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * An account's poll that failed: a key that won't work (refused, no credit, no access) fails the run at once; a passing
+ * problem (its GPU off, its provider busy) is asked again with a growing wait, the tile saying so, until the budget is
+ * spent: then its GPU is asked once more, and the run fails in plain words. True when the poll was handled here.
+ */
+async function healPoll(r: Row, ctx: PollContext, account: string, pollError: unknown): Promise<boolean> {
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  const d = accountTrouble(pollError, account, r.provider, "poll", stored);
+  const cancel = () =>
+    adapterFor(r.provider, account)
+      .cancel?.(ctx)
+      .catch(() => {});
+  if (d && !d.retryable && FINAL_AT_POLL.has(d.cause)) {
+    await cancel();
+    pollHeals().delete(r.id);
+    failRun(r.id, pollError, d, account);
+    return true;
+  }
+  if (!d) return false;
+  const now = Date.now();
+  const h = pollHeals().get(r.id) ?? { first: now, n: 0, next: 0 };
+  h.n++;
+  h.next = now + backoffMs(h.n, { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 }, d.retryAfterMs) * SELF_HEAL.scale;
+  pollHeals().set(r.id, h);
+  const budget = (r.provider === "comfyui" ? POLL_HEAL_MS.comfyui : POLL_HEAL_MS.cloud) * SELF_HEAL.scale;
+  if (now - h.first >= budget) {
+    const link = r.provider === "comfyui" ? gpuLink(accountGpu(account)) : null;
+    // Its GPU asked once more: back, it is polled again at once (and collected, or found lost and sent again).
+    if (link && (await recheckGpu(account, link)) === "online") {
+      pollHeals().delete(r.id);
+      return true;
+    }
+    await cancel();
+    pollHeals().delete(r.id);
+    const minutes = Math.max(1, Math.round((now - h.first) / 60_000));
+    const end = link ? diagnoseGpuJob({ kind: "gone", minutes }, { kind: "link", url: link.url }) : d;
+    failRun(r.id, pollError, { ...end, actions: link ? withKeyOffer(end.actions, account, stored) : end.actions }, account);
+    return true;
+  }
+  if (h.n >= POLL_MISSES_SAID) {
+    const words = r.provider === "comfyui" ? "Your GPU stopped answering. Waiting for it to come back" : waitingWords(d, isCloudProvider(r.provider) ? r.provider : undefined);
+    if (r.message !== words) update(r.id, { message: words });
+  }
+  return true;
+}
+
+/** Copy one result of an account's run, trying again a few times when the copy breaks off (a passing network problem). */
+async function persistWithRetry(o: RichOutput, id: string): Promise<OutputFile> {
+  for (let n = 1; ; n++) {
+    try {
+      return await persistOutput(o, id);
+    } catch (e) {
+      const msg = (e as Error).message ?? "";
+      const passing =
+        !(e instanceof AccountFilesFull) && !/^The answer was over/.test(msg) && msg !== ACCOUNT_MESSAGES.diskLow && (/^download (5\d\d|429|408)$/.test(msg) || e instanceof RemoteFetchError || !!networkReason(e));
+      if (!passing || n >= 3) throw e;
+      await new Promise((r) => setTimeout(r, [2_000, 5_000][n - 1] * SELF_HEAL.scale));
+    }
+  }
+}
+
+/** Why an account's result couldn't be saved, in its words: too big, an expired link, or a GPU that stopped answering. */
+function saveTrouble(e: unknown, provider: string): Diagnosis | undefined {
+  const msg = (e as Error).message ?? "";
+  if (msg === ACCOUNT_MESSAGES.diskLow) return undefined;
+  // (An account's saved address is in scope for its runs on its keys too: only a run on its GPU was copied from there.)
+  const link = provider === "comfyui" ? ownLink() : null;
+  const over = /^The answer was over (.+)$/.exec(msg)?.[1];
+  if (link) return diagnoseGpuJob({ kind: "save", ...(over && { over }) }, link);
+  if (isCloudProvider(provider) && /^download (403|404|410)$/.test(msg)) return resultExpired();
+  return undefined;
+}
+
+/**
+ * Hand a run over to its provider once: its files, then the job. Throws what went wrong (submitNow decides whether to wait
+ * and try again, or to fail the run).
+ */
+async function handOver(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number): Promise<void> {
+  /** Why the run failed, once it has: its files still waiting to be sent are not sent. */
+  let failed: { error: unknown } | undefined;
   try {
     // An account's run on its own ComfyUI and keys only (asAccount): outside it, nothing is sent.
     const adapter = adapterFor(providerId, req.account);
@@ -2100,24 +2441,22 @@ async function submitNow(
       if (status) update(id, { external_id: res.externalId, external_meta_json: JSON.stringify(res.meta ?? {}), message: null });
       return;
     }
+    // An account's link: which address the job went to (its name, never the address), so a run whose account moved to
+    // another address meanwhile says so instead of asking the new one about it.
+    const sentTo = req.account && req.place !== "pool" && providerId === "comfyui" ? ownLink()?.url : undefined;
     db().transaction(() => {
       update(id, {
         external_id: res.externalId,
-        external_meta_json: JSON.stringify(res.meta ?? {}),
+        external_meta_json: JSON.stringify({ ...(res.meta ?? {}), ...(sentTo && { sentTo: addressKey(sentTo) }) }),
         provider_input_json: res.payload ? JSON.stringify(res.payload).slice(0, 200_000) : null,
-        message: "Queued",
+        // A run sent again after its GPU lost it says so until its GPU reports on it.
+        message: resentRuns().has(id) ? RESENT_WORDS : "Queued",
       });
       recordSubmission(id, now);
     })();
   } catch (e) {
     failed ??= { error: e };
-    // A cancel during the hand-over stays a cancel. What the GPU was missing (a model, a node class) is kept, so the
-    // tile offers "Fix it", and the account's GPU check counts as stale.
-    const fix = (e as { fix?: GenerationFix }).fix;
-    if (statusOf(id) !== "canceled") update(id, { status: "failed", error: (e as Error).message, completed_at: Date.now(), message: null, ...(fix && { fix_json: JSON.stringify(fix) }) });
-    if (fix) markStale(req.account ? `acct:${req.account}` : "install");
-  } finally {
-    submitting().delete(id);
+    throw e;
   }
 }
 
@@ -2331,11 +2670,27 @@ async function pollOne(r: Row): Promise<void> {
   let res: PollResult | undefined;
   let pollError: unknown;
   const account = accountOf(r);
+  // An account's own GPU or key (not this install's GPUs): its polls heal (healPoll), and its failures say what helps.
+  const own = account && !poolOf(r) ? account : undefined;
+  if (own && r.provider === "comfyui" && typeof ctx.meta.sentTo === "string") {
+    // Sent to a link the account has since replaced with another: the new one knows nothing of it.
+    const now = gpuLink(accountGpu(own));
+    if (now && addressKey(now.url) !== ctx.meta.sentTo) {
+      pollHeals().delete(r.id);
+      return failRun(r.id, new Error("moved"), diagnoseGpuJob({ kind: "moved" }, { kind: "link", url: now.url }), own);
+    }
+  }
+  // A poll that failed a moment ago waits its turn (a growing wait), instead of asking every 1.5 s.
+  const healing = own ? pollHeals().get(r.id) : undefined;
+  if (healing && Date.now() < healing.next) return;
   try {
     res = await adapterFor(r.provider, account).poll(ctx);
   } catch (e) {
     pollError = e;
   }
+  if (own && pollError && (await healPoll(r, ctx, own, pollError))) {
+    if (statusOf(r.id) !== "queued" && statusOf(r.id) !== "running") return;
+  } else if (own && !pollError) pollHeals().delete(r.id);
   // An account's job waits at most 30 minutes in its own ComfyUI's queue (or its provider's).
   const stored = JSON.parse(r.request_json) as GenerationRequest;
   const onPool = !!account && stored.place === "pool";
@@ -2373,14 +2728,31 @@ async function pollOne(r: Row): Promise<void> {
       });
       return;
     }
-    if (!res) throw pollError;
+    if (!res) {
+      // An account's poll that healPoll took (waiting with a growing wait): nothing more to do this turn.
+      if (own && pollHeals().has(r.id)) return;
+      throw pollError;
+    }
     if (startsNow) db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now(), r.id);
     update(r.id, { status: res.state, progress: res.progress ?? r.progress, message: res.message ?? null });
     return;
   }
   if (res.state === "failed") {
+    // Its GPU restarted and lost the job: an account's run is sent again once, as a computer's tab does.
+    if (own && res.lost && resend(r, own, RESENT_WORDS)) return;
+    // An account's run: its own GPU's words (comfyui.ts), or its key's provider's read plainly; the provider's own words
+    // go in the details line. The owner's runs keep the provider's words.
+    const trouble =
+      res.trouble ??
+      (own && isCloudProvider(r.provider)
+        ? diagnoseKey(
+            { stage: "poll", failed: true, text: res.error, canceled: r.provider === "replicate" && /^(canceled|aborted)$/i.test(res.error.trim()) },
+            { provider: r.provider, other: otherKeyFor(own, r.provider, r.model_id) },
+          )
+        : undefined);
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
-    update(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
+    const kept = keptFix(res.fix, own ? trouble : undefined);
+    update(r.id, { status: "failed", error: (own && trouble?.words) || res.error, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
     if (res.fix) markStale(account ? `acct:${account}` : "install");
     return;
   }
@@ -2427,7 +2799,8 @@ async function pollOne(r: Row): Promise<void> {
   } else {
     for (const o of keepMatte(res.outputs as RichOutput[], matte)) {
       try {
-        outputs.push(await persistOutput(o, r.id));
+        // An account's own GPU or key: a copy that breaks off is tried again a few times (the result is made, and paid).
+        outputs.push(await (own ? persistWithRetry(o, r.id) : persistOutput(o, r.id)));
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
@@ -2436,8 +2809,11 @@ async function pollOne(r: Row): Promise<void> {
             const left = rest.url ? scratchOutputFile(rest.url) : null;
             if (left) fs.rmSync(left, { force: true });
           }
-          const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
-          update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
+          // Its own GPU or key: why, and what helps (a file over the cap, an expired link, a GPU that went away).
+          const trouble = own && !(e instanceof AccountFilesFull) ? saveTrouble(e, r.provider) : undefined;
+          const why = e instanceof AccountFilesFull ? e.message : (trouble?.words ?? "We couldn't save this result. Press Retry.");
+          const kept = keptFix(undefined, trouble);
+          update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
           return;
         }
         outputs.push({ url: o.url, kind: o.kind ?? r.kind, ...inlineText(o.text, o.meta), ...(o.draftId ? { draftId: o.draftId } : {}) });

@@ -104,7 +104,7 @@ import { probeAvi } from "../avi-probe";
 import { probeWebm } from "../webm-probe";
 import { adoptFile, contentTypeFor, readRef, saveFile, scratchDir } from "../storage";
 import { CONNECT_GPU_MESSAGE } from "@/lib/guest-access";
-import { discardBody, fetchPublic, RemoteFetchError } from "../remote-fetch";
+import { discardBody, fetchPublic, peekText, RemoteFetchError } from "../remote-fetch";
 import { zipToFile } from "../zip";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "../account-files";
 import { accountSend } from "../account-send";
@@ -112,6 +112,7 @@ import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
 import { isOutOfMemory } from "@/lib/gpu/fix-codes";
+import { diagnoseGpu, diagnoseGpuJob, diagnoseRefusal, type Diagnosis, type GpuFailure, type GpuStage } from "@/lib/diagnose";
 import { makingWords, META_BATCH_HISTORY, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
 import type { GenerationFix } from "@/lib/catalog/types";
 import {
@@ -123,6 +124,7 @@ import {
   receivedFile,
   receivedOf,
   refusalOf,
+  pairedRunner,
   requestStop,
   resultOf,
   runnerFacts,
@@ -342,7 +344,49 @@ function authHeaders(worker: ComfyWorker = "main"): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker = "main"): Promise<Response> {
+/** An account's saved address in scope (its own GPU at a web address), as diagnose.ts reads it; null anywhere else. */
+export function ownLink(): { kind: "link"; url: string; hasToken: boolean } | null {
+  const own = ownGpu();
+  return own && own.kind !== "computer" && own.url ? { kind: "link", url: own.url, hasToken: !!own.token } : null;
+}
+
+/** Which step of a run asked the account's GPU, by path. */
+const stageOf = (p: string): GpuStage => {
+  const at = p.split("?")[0];
+  return at.startsWith("/upload/") ? "upload" : at === "/prompt" ? "prompt" : at.startsWith("/view") ? "result" : at === "/system_stats" ? "status" : "poll";
+};
+
+/**
+ * An account's GPU that didn't answer as ComfyUI: the run's error in plain words, with what helps (`trouble`), which the
+ * runner keeps with the run (generations.ts) and uses to wait out a GPU that is off or starting up. `failure`: what came
+ * back, so the status strip can say the same in its own words.
+ */
+export function troubleError(d: Diagnosis, status?: number, failure?: GpuFailure): ProviderError & { trouble: Diagnosis; failure?: GpuFailure } {
+  return Object.assign(new ProviderError(d.words, status), { trouble: d, ...(failure && { failure }) });
+}
+
+/** What came back from an account's link, read for the person (diagnose.ts), as the run's error. */
+const gpuTrouble = (f: GpuFailure, place: Parameters<typeof diagnoseGpu>[1]) => troubleError(diagnoseGpu(f, place), f.status, f);
+
+/** An answer from an account's link that isn't what was asked: read for the person (its body's first KB, for details). */
+async function linkAnswer(res: Response, f: Omit<GpuFailure, "status" | "body" | "contentType" | "location" | "retryAfterS">, link: NonNullable<ReturnType<typeof ownLink>>): Promise<ProviderError> {
+  // The start of an error page only, briefly: a body that never ends can't hold the run (its connection is let go).
+  const body = res.status >= 300 && res.status < 400 ? "" : await peekText(res);
+  discardBody(res);
+  return gpuTrouble(
+    {
+      ...f,
+      status: res.status,
+      body,
+      contentType: res.headers.get("content-type") ?? undefined,
+      location: res.headers.get("location") ?? undefined,
+      retryAfterS: Number(res.headers.get("retry-after")) || undefined,
+    },
+    link,
+  );
+}
+
+async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker = "main", o: { bytes?: number } = {}): Promise<Response> {
   // A ComfyUI on someone's own computer is never called from here: not the install's, not a link (every caller in that
   // scope goes through its task instead; this is the last guard).
   if (computerScope()) throw new ProviderError(ON_COMPUTER_ONLY);
@@ -351,9 +395,10 @@ async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker
     // A visitor without a GPU of its own (a price check): nothing to reach, and never the install's.
     if (!base) throw new ProviderError(CONNECT_GPU_MESSAGE);
     try {
-      return await fetchPublic(`${base}${p}`, { ...init, headers: { ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, ...ownGpuLimits(p) });
+      return await fetchPublic(`${base}${p}`, { ...init, headers: { "ngrok-skip-browser-warning": "1", ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, ...ownGpuLimits(p) });
     } catch (e) {
-      throw new ProviderError(`Can't reach your ComfyUI at ${base} (${(e as Error).message}). Is it running, and is its tunnel up?`);
+      // The account's words (a stopped pod, a GPU that doesn't answer…); the reason itself goes in the details line.
+      throw gpuTrouble({ stage: stageOf(p), error: (e as Error).message, bytes: o.bytes }, ownLink() ?? { kind: "link", url: base });
     }
   }
   if (worker === "isolated" && !base) {
@@ -395,13 +440,18 @@ const reasonOf = (text: string) => (/^\s*</.test(text) ? "" : text.trim().slice(
 async function comfyJson<T>(p: string, worker: ComfyWorker = "main"): Promise<T> {
   const res = await comfyFetch(p, {}, worker);
   const path = p.split("?")[0];
+  const link = ownLink();
   if (!res.ok) {
+    // An account's link: what the answer means for the person (a stopped pod, a GPU starting up), not its status code.
+    if (link) throw await linkAnswer(res, { stage: stageOf(p) }, link);
     discardBody(res);
     throw worker === "isolated" ? isolatedAnswer(path, res.status) : new ProviderError(`ComfyUI ${path} answered HTTP ${res.status}`, res.status);
   }
+  const text = await res.text().catch(() => "");
   try {
-    return (await res.json()) as T;
+    return JSON.parse(text) as T;
   } catch {
+    if (link) throw gpuTrouble({ stage: stageOf(p), status: res.status, body: text.slice(0, 4096), contentType: res.headers.get("content-type") ?? undefined }, link);
     throw worker === "isolated" ? isolatedAnswer(path) : new ProviderError(`ComfyUI ${path} sent something that isn't JSON (a proxy error page?)`);
   }
 }
@@ -2281,7 +2331,13 @@ export function latentGone(body: PromptRefusalBody, manifest: Pick<ManifestWorkf
  * A /prompt refusal in words, with what was missing as a code its failed tile turns into "Fix it" (the GPU pre-flight's
  * guided fix). The same for the server's own ComfyUI, a link, and one on someone's computer (its tab reports the answer).
  */
-export function promptRefusal(body: PromptRefusalBody, status: number, manifest: ManifestWorkflow, loras: { file: string; url?: string }[], worker: ComfyWorker = "main"): { message?: string; fix?: ReturnType<typeof fixFromPromptError> } {
+export function promptRefusal(
+  body: PromptRefusalBody,
+  status: number,
+  manifest: ManifestWorkflow,
+  loras: { file: string; url?: string }[],
+  worker: ComfyWorker = "main",
+): { message?: string; fix?: ReturnType<typeof fixFromPromptError>; details?: string; plain?: true } {
   // The index names the pack a missing class comes from, so the message names that pack, not every pack the workflow uses.
   let packOf: (cls: string) => string | undefined = () => undefined;
   try {
@@ -2309,13 +2365,27 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
         : undefined;
   // A LoRA it lacks: point at its model card (a civitai download URL answers 401 without the key) and the LoRA folder setting.
   // A 2K finish whose draft's saved latent is gone (someone's computer: its tab reports the refusal): plain words, no file.
-  if (latentGone(body, manifest)) return { message: REGEN_COPY.latentGone };
+  if (latentGone(body, manifest)) return { message: REGEN_COPY.latentGone, plain: true };
   const loraModels = loras.map((l) => ({ file: l.file, folder: "loras", url: loraByFile(l.file)?.page ?? (l.url && !needsToken(l.url) ? l.url : undefined) }));
   let detail = body.node_errors && Object.keys(body.node_errors as object).length ? explainComfyError(body.node_errors, { ...manifest, models: [...manifest.models, ...loraModels] }) : (missingPack ?? (typeof body.error?.message === "string" ? body.error.message.slice(0, 1024) : undefined));
   // (Settings → LoRAs is the owner's page, for the server's own ComfyUI: an account's, or one on a computer, gets its LoRAs by hand.)
   if (detail && !ownGpu() && !computerScope() && loraModels.some((l) => detail!.includes(`"${l.file}"`))) detail = `${detail}\nSet the LoRA folder in Settings → LoRAs and Fuobe downloads LoRAs before a run`;
   void status;
-  return { message: detail, ...(fix && { fix }) };
+  // An account's own GPU (a link or this computer): what is missing in plain words, with "Fix it"; ComfyUI's own words
+  // (and the file's folder and download) go in the details line.
+  if (ownGpu() && fix && (fix.code === "comfy_missing_node" || fix.code === "comfy_missing_model") && missingPack !== REGEN_COPY.missingVisitor && missingPack !== RTX_MISSING.visitor) {
+    const first = fix.items[0];
+    const name = fix.code === "comfy_missing_node" ? (first?.pack ?? first?.class) : first?.file;
+    if (name) {
+      const words =
+        fix.code === "comfy_missing_node"
+          ? `Your ComfyUI needs one add-on for this: ${name}. Press Fix it to add it.`
+          : `Your ComfyUI needs one more file for this: ${name}. Press Fix it to see how to add it.`;
+      return { message: words, fix, plain: true, ...(detail && detail !== words && { details: detail.replace(/\s*\(see scripts\/comfy\/README\.md\)/, "") }) };
+    }
+  }
+  const plain = !!detail && (detail === REGEN_COPY.missingVisitor || detail === RTX_MISSING.visitor);
+  return { message: detail, ...(fix && { fix }), ...(plain && { plain: true as const }) };
 }
 
 /** The NVIDIA RTX Video graphs (their pack is installed only on an NVIDIA RTX host). */
@@ -2447,7 +2517,10 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   form.append("image", new Blob([new Uint8Array(data)], { type: contentType }), `fuobe_${nanoid(8)}.${ext}`);
   form.append("type", "input");
   form.append("overwrite", "true");
-  const res = await comfyFetch("/upload/image", { method: "POST", body: form }, worker);
+  const res = await comfyFetch("/upload/image", { method: "POST", body: form }, worker, { bytes: data.length });
+  // An account's link: its answer read for the person (a stopped pod, the address's own size limit…).
+  const link = ownLink();
+  if (link && !res.ok) throw await linkAnswer(res, { stage: "upload", bytes: data.length }, link);
   if (res.status === 413) {
     discardBody(res);
     // ComfyUI's own limit (--max-upload-size, 100 MB unless it was started with more).
@@ -2458,7 +2531,16 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
     const text = (await res.text().catch(() => "")).slice(0, 500);
     throw worker === "isolated" ? isolatedAnswer("an upload", res.status, reasonOf(text)) : new ProviderError(`ComfyUI upload failed: ${res.status} ${text}`);
   }
-  const j = (await res.json()) as { name: string; subfolder?: string };
+  let j: { name: string; subfolder?: string };
+  if (link) {
+    // A web page instead of ComfyUI's answer (a proxy's or a tunnel's page): said as such, never a parser's words.
+    const text = await res.text().catch(() => "");
+    try {
+      j = JSON.parse(text);
+    } catch {
+      throw gpuTrouble({ stage: "upload", status: res.status, body: text.slice(0, 4096), contentType: res.headers.get("content-type") ?? undefined }, link);
+    }
+  } else j = (await res.json()) as { name: string; subfolder?: string };
   const uploaded = j.subfolder ? `${j.subfolder}/${j.name}` : j.name;
   // Remember a clip's / track's header facts (length, size, fps, audio) for prepareWorkflow.
   rememberSent(uploaded, data, contentType, name);
@@ -2616,16 +2698,27 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   // Sent, and the computer's tab stopped answering (closed, asleep): not a run that looks alive for half an hour.
   const r = t.state === "waiting" || t.pools ? null : runnerFacts(principal);
   const away = !t.pools && t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
-  const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : away ? RELAY_WORDS.computerAway : undefined;
+  // A ComfyUI paired with a code runs the jobs itself (no Fuobe tab): one that is off is waited for in its own words.
+  const paired = !t.pools && pairedRunner(principal);
+  const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : away ? (paired ? RELAY_WORDS.pairedAway : RELAY_WORDS.computerAway) : undefined;
+  const waitedTooLong = paired ? RELAY_WORDS.pairedWaitedTooLong(waitMs) : RELAY_WORDS.waitedTooLong(waitMs);
   switch (t.state) {
     case "waiting": {
       // The computer's tab is open, but its ComfyUI is closed or runs without Fuobe's setting: say that, not "open Fuobe".
       const f = runnerFacts(principal);
-      const message = f?.online ? RELAY_WORDS.starting : f?.comfy === "no-setting" ? RELAY_WORDS.comfyNoSetting : f?.comfy === "down" ? RELAY_WORDS.comfyDown : RELAY_WORDS.noComputer;
-      return { state: "queued", message, timeoutError: RELAY_WORDS.waitedTooLong(waitMs) };
+      const message = f?.online
+        ? RELAY_WORDS.starting
+        : f?.comfy === "no-setting"
+          ? RELAY_WORDS.comfyNoSetting
+          : f?.comfy === "down"
+            ? RELAY_WORDS.comfyDown
+            : paired
+              ? RELAY_WORDS.pairedAway
+              : RELAY_WORDS.noComputer;
+      return { state: "queued", message, timeoutError: waitedTooLong };
     }
     case "sending":
-      return { state: "queued", message: down ?? (t.note === "resent" ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: RELAY_WORDS.waitedTooLong(waitMs), ...(sentAt && { sentAt }) };
+      return { state: "queued", message: down ?? (t.note === "resent" ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: waitedTooLong, ...(sentAt && { sentAt }) };
     case "queued":
       return { state: "queued", message: down ?? queueWords(p?.position), ...(sentAt && { sentAt }) };
     case "running": {
@@ -2742,7 +2835,11 @@ export const comfyProvider: ProviderAdapter = {
       },
       worker,
     );
-    const body = (await res.json().catch(() => ({}))) as PromptRefusalBody & { prompt_id?: string };
+    const answer = await res.text().catch(() => "");
+    let body: PromptRefusalBody & { prompt_id?: string } = {};
+    try {
+      body = (JSON.parse(answer) ?? {}) as typeof body;
+    } catch {}
     // A 2K finish whose draft's latent isn't on this ComfyUI any more (its output folder was cleaned): the draft's clip,
     // chained into the same run, is redrawn instead.
     if (!res.ok && latentGone(body, manifest) && typeof input.extra?.latentFrom === "string") {
@@ -2755,6 +2852,16 @@ export const comfyProvider: ProviderAdapter = {
       if (manifest.id === IDOL_WORKFLOWS.clean || manifest.id === IDOL_VIEWS_WORKFLOW) forgetComfyClass(IDOL_PACK_CLASS, worker);
       const refusal = promptRefusal(body, res.status, manifest, input.loras ?? [], worker);
       if (!refusal.message && !res.ok && worker === "isolated") throw isolatedAnswer("the prompt", res.status);
+      // An account's link: no words from ComfyUI (a stopped pod's or a proxy's page) is read for what it means; ComfyUI's
+      // own refusal is said plainly, its words in the details line.
+      const link = ownLink();
+      if (link) {
+        if (!refusal.message) throw gpuTrouble({ stage: "prompt", status: res.status, body: answer.slice(0, 4096), contentType: res.headers.get("content-type") ?? undefined }, link);
+        const d: Diagnosis = refusal.plain
+          ? { cause: "gpu-refused", words: refusal.message, ...(refusal.details && { details: refusal.details }), actions: [{ kind: "retry", label: "Retry" }], retryable: false }
+          : diagnoseRefusal(refusal.message);
+        throw Object.assign(troubleError(d, res.status), refusal.fix ? { fix: refusal.fix } : {});
+      }
       throw Object.assign(new ProviderError(refusal.message ?? `ComfyUI /prompt failed (${res.status})`, res.status), refusal.fix ? { fix: refusal.fix } : {});
     }
     if (!PROMPT_ID.test(body.prompt_id)) {
@@ -2784,6 +2891,19 @@ export const comfyProvider: ProviderAdapter = {
       if (manifest && CONTEXT_LOOP_IDS.has(manifest.id) && typeof meta.generationId === "string") void deleteRunFolder(runName(meta.generationId), worker);
       if (entry.status?.status_str === "error") {
         forget(externalId);
+        const link = ownLink();
+        if (link) {
+          // An account's link: stopped there, out of memory, or an add-on's exception, said plainly (its words go in details).
+          const err = executionError(entry);
+          const said = explainExecutionError(err, manifest);
+          const interrupted = !err && entry.status?.messages?.some(([type]) => type === "execution_interrupted");
+          const d = interrupted
+            ? diagnoseGpuJob({ kind: "interrupted" }, link)
+            : err && said !== `${err.node_type}: ${(err.exception_message ?? "").trim()}`
+              ? { cause: "gpu-job-error" as const, words: said, actions: [{ kind: "retry" as const, label: "Retry" }], retryable: false }
+              : diagnoseGpuJob({ kind: "error", nodeType: err?.node_type, message: err?.exception_message }, link);
+          return { state: "failed" as const, error: d.words, trouble: d };
+        }
         return { state: "failed" as const, error: explainExecutionError(executionError(entry), manifest) };
       }
       let outputs = collectOutputs(entry, manifest, baseUrl(worker), authHeaders(worker));
@@ -2827,8 +2947,14 @@ export const comfyProvider: ProviderAdapter = {
       const misses = globalThis.__fuobeComfyMisses ?? (globalThis.__fuobeComfyMisses = new Map());
       const n = (misses.get(externalId) ?? 0) + 1;
       misses.set(externalId, n);
-      if (n < 3) return { state: "running", message: "Checking on ComfyUI" };
+      const link = ownLink();
+      if (n < 3) return { state: "running", message: link ? "Checking on your GPU" : "Checking on ComfyUI" };
       forget(externalId);
+      // An account's link: the runner may send it once more (generations.ts), as a computer's tab does.
+      if (link) {
+        const d = diagnoseGpuJob({ kind: "lost" }, link);
+        return { state: "failed", error: d.words, trouble: d, lost: true };
+      }
       return { state: "failed", error: "ComfyUI restarted and lost this run. Press Retry." };
     }
     globalThis.__fuobeComfyMisses?.delete(externalId);

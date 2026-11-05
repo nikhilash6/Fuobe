@@ -49,6 +49,11 @@ export interface FakeComfyOptions {
   graph?: boolean;
   /** Every job answers a clip, a picture, a sound (a WAV) and a text (`text`, or "Done."): a chained tool's steps each take their kind. */
   mixed?: boolean;
+  /**
+   * Answers a request before anything else when it returns one (a GPU that is off, starting up, behind a password or a
+   * web page): its status, body and content type. Undefined: the request goes on as usual.
+   */
+  answer?: (method: string, path: string) => { status: number; body?: string; contentType?: string } | undefined;
 }
 
 /** A tiny but real WAV (mono, 16-bit, 8 kHz, 0.1 s of silence). */
@@ -199,6 +204,11 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         res.end(JSON.stringify(value));
       };
       const p = url.pathname;
+      const said = opts.answer?.(entry.method, p);
+      if (said) {
+        res.writeHead(said.status, { "content-type": said.contentType ?? "text/html" });
+        return res.end(said.body ?? "");
+      }
       if (p === "/system_stats") return json(200, { system: { comfyui_version: "0.3.fake", ram_total: 64 * 2 ** 30 }, devices: [{ name: "Fake GPU", vram_total: 24 * 2 ** 30 }] });
       if (p === "/models/loras") return json(200, opts.loras ?? []);
       if (p === "/object_info") return json(200, {});

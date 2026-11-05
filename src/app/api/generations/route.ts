@@ -5,6 +5,7 @@ import { ADD_KEY_HEADER } from "@/lib/your-keys";
 import { requestViewer, validToken } from "@/server/auth";
 import { accountEngineMode } from "@/server/account-keys";
 import { computerScope, ISOLATED_ON_COMPUTER, workerFor } from "@/server/providers/comfyui";
+import { ISOLATED_ON_GPU } from "@/lib/diagnose";
 import { getSetting } from "@/server/settings";
 import { RUNS_ON_COMPUTER_NOTE } from "@/lib/relay";
 import { OPERATION_LABELS } from "@/lib/catalog/types";
@@ -218,6 +219,11 @@ export async function POST(request: Request) {
         if (planned.route.provider === "comfyui" && workerFor(planned.route.endpoint) === "isolated" && onOwn(() => computerScope())) {
           if (account) unhit(`run:${account.id}`);
           return refuse(422, ISOLATED_ON_COMPUTER, { code: "isolated-on-computer" });
+        }
+        // The same on an account's own GPU at a web address: one ComfyUI, where the second one these graphs need isn't.
+        if (account && planned.route.provider === "comfyui" && workerFor(planned.route.endpoint) === "isolated") {
+          unhit(`run:${account.id}`);
+          return refuse(422, ISOLATED_ON_GPU, { code: "isolated-on-gpu" });
         }
         // An account's 3D model (Image to 3D, Photo to 3D, Make it 3D) runs on its own GPU or key, and is finished on
         // this server under the account's limits (model3d-finish.ts). This install's GPUs don't take 3D: decidePlace
