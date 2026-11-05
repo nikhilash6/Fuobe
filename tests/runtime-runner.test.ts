@@ -182,6 +182,55 @@ describe("restarts (S7)", () => {
   });
 });
 
+describe("two app processes on one database (a deploy's overlap)", () => {
+  /** Another app process, which said a moment ago (or `agoMs` ago) that it still runs. */
+  const otherApp = (token: string, agoMs = 0) =>
+    db().prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET seen_at = excluded.seen_at").run(token, Date.now() - 60_000, Date.now() - agoMs);
+  /** That process is sending this run to its provider right now. */
+  const sendingThere = (id: string, token: string) => db().prepare("INSERT INTO submit_turns (id, held_by, held_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET held_by = excluded.held_by").run(id, token, Date.now());
+  const turnOf = (id: string) => (db().prepare("SELECT held_by FROM submit_turns WHERE id = ?").get(id) as { held_by: string } | undefined)?.held_by ?? null;
+
+  it("a chain's next step the other process is sending is left to it; once that process goes quiet, this one sends it, once", async () => {
+    gens.ensureRunner();
+    const first = image("the step before");
+    expect((await settle(first.id)).status).toBe("succeeded");
+    otherApp("app-sending");
+    const [step] = gens.createGenerations({ feature: "t", modelId: "nano-banana-2", op: "edit", prompt: "Ink" }, { dependsOn: first.id });
+    // (Before this process's runner turns again: it looks at the step only with the next turn.)
+    sendingThere(step.id, "app-sending");
+    await sleep(3_500);
+    expect(row(step.id)).toMatchObject({ status: "queued", external_id: null });
+    // It was killed part way (20 s with no word from it): this process sends the step.
+    otherApp("app-sending", gens.QUIET_MS + 1000);
+    expect((await settle(step.id)).status).toBe("succeeded");
+    expect(turnOf(step.id), "the turn goes once it is sent").toBeNull();
+  });
+
+  it("a run the other process is still sending isn't failed as stopped before it started; one whose sender went quiet is", async () => {
+    gens.ensureRunner();
+    const insert = (id: string) =>
+      db()
+        .prepare(
+          `INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at)
+           VALUES (?, 'image', 'nano-banana-pro', 'cloud', 'fal', 't2i', 'image', 'queued', '{"feature":"image","modelId":"nano-banana-pro"}', '[]', ?, ?)`,
+        )
+        .run(id, Date.now() - 5 * 60_000, Date.now() - 5 * 60_000);
+    otherApp("app-uploading");
+    otherApp("app-killed", gens.QUIET_MS + 1000);
+    insert("sent-elsewhere-1");
+    sendingThere("sent-elsewhere-1", "app-uploading");
+    insert("cut-off-2");
+    sendingThere("cut-off-2", "app-killed");
+    await until(() => row("cut-off-2").status === "failed", 5000);
+    expect(row("cut-off-2").error).toBe("This run stopped before it started. Press Retry.");
+    await sleep(1700);
+    expect(row("sent-elsewhere-1").status).toBe("queued");
+    // That process stops part way too: the run is failed at the next sweep.
+    otherApp("app-uploading", gens.QUIET_MS + 1000);
+    await until(() => row("sent-elsewhere-1").status === "failed", 5000);
+  });
+});
+
 describe("cancel while submitting (S13)", () => {
   it("cancels the provider's job when it lands, and keeps the row canceled", async () => {
     const real = mockProvider.submit;

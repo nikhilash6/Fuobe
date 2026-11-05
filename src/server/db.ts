@@ -1027,13 +1027,20 @@ const RUNNER_COLUMNS: [string, string, string][] = [
 
 /**
  * Each app process on this database, by the name its turns carry, and when it last said it still runs (generations.ts
- * keepBeating). A turn whose process went quiet is free before it runs out. Made here rather than as a numbered
+ * keepBeating). A turn whose process went quiet is free before it runs out. submit_turns: the app process handing a run
+ * to its provider right now (generations.ts takeSubmitTurn), so that two processes (a deploy's overlap) never both send
+ * a chain's next step, and neither fails a run the other is still sending. Made here rather than as a numbered
  * migration, so branches that add migrations never clash over its place.
  */
 const RUNNER_TABLES = `CREATE TABLE IF NOT EXISTS app_processes (
     token TEXT PRIMARY KEY,
     started_at INTEGER NOT NULL,
     seen_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS submit_turns (
+    id TEXT PRIMARY KEY,
+    held_by TEXT NOT NULL,
+    held_at INTEGER NOT NULL
   );`;
 
 /** Columns of the relay tables that came later: [table, column, type]. */

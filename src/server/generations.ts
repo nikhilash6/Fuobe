@@ -1542,11 +1542,18 @@ function chainMode(p: { demo: boolean; plan: { model: { name: string } }; route:
 const DEP_IDS = "json_each(CASE WHEN substr(g.depends_on, 1, 1) = '[' AND json_valid(g.depends_on) THEN g.depends_on ELSE json_array(g.depends_on) END) d";
 
 /**
+ * SQL: another app process that still runs is handing the run in `table` to its provider right now (takeSubmitTurn).
+ * Named parameters: @me (this process's name) and @quiet (since when a process that still runs has said so).
+ */
+const SENT_ELSEWHERE = (table: string) =>
+  `EXISTS (SELECT 1 FROM submit_turns s JOIN app_processes p ON p.token = s.held_by WHERE s.id = ${table}.id AND s.held_by != @me AND p.seen_at >= @quiet)`;
+
+/**
  * Waiting steps that can move: none of their dependencies is still queued or running (so they launch), or one
  * failed, was canceled or is gone (so they fail now, not after the others finish). A per-frame render keeps
  * hundreds of steps waiting for its lanes, and a plain "oldest 50 waiting" would hold every chain started after
  * it until its backlog drained. The steps this process is handing to a provider right now are still "queued":
- * the limit makes room for them.
+ * the limit makes room for them. A step another app process is handing over is left to it.
  */
 const READY_DEPENDENTS = `SELECT g.* FROM generations g
   WHERE g.status = 'queued' AND g.external_id IS NULL AND g.depends_on IS NOT NULL
@@ -1554,7 +1561,8 @@ const READY_DEPENDENTS = `SELECT g.* FROM generations g
       NOT EXISTS (SELECT 1 FROM ${DEP_IDS} JOIN generations dep ON dep.id = d.value WHERE dep.status IN ('queued', 'running'))
       OR EXISTS (SELECT 1 FROM ${DEP_IDS} LEFT JOIN generations dep ON dep.id = d.value WHERE dep.id IS NULL OR dep.status IN ('failed', 'canceled'))
     )
-  ORDER BY g.created_at ASC LIMIT ?`;
+    AND NOT ${SENT_ELSEWHERE("g")}
+  ORDER BY g.created_at ASC LIMIT @limit`;
 
 /** The error a waiting step gets when an input failed (framesProgress tells these from a step's own failure). */
 export const waitedOnFailure = (frame?: boolean) => `${frame ? "The previous frame" : "An earlier step"} didn't finish`;
@@ -1621,7 +1629,9 @@ export const COMFY_WAIT = { ms: 60_000 };
 
 /** Launch dependent jobs whose inputs finished; fail the ones whose inputs failed. Never waits for an upload. */
 async function advanceDependents(): Promise<void> {
-  const rows = db().prepare(READY_DEPENDENTS).all(50 + submitting().size) as Row[];
+  const rows = db()
+    .prepare(READY_DEPENDENTS)
+    .all({ limit: 50 + submitting().size, me: runnerToken(), quiet: Date.now() - QUIET_MS }) as Row[];
   // A forced look at ComfyUI, at most one a sweep, for the steps that found it not answering.
   let lookedAgain: Promise<boolean> | undefined;
   for (const r of rows) {
@@ -1661,6 +1671,9 @@ async function advanceDependents(): Promise<void> {
       fail(`${earlier} ${short}`);
       continue;
     }
+    // Every app process looks at the same waiting steps (a deploy runs two for a moment): only the one that takes the
+    // step's turn sends it, so it is sent once.
+    if (!takeSubmitTurn(r.id, { waiting: true })) continue;
     submitting().add(r.id);
     let handedOff = false;
     // An account's step reads its inputs, and is planned, as its run was: as that account, on its own ComfyUI and its own
@@ -1746,7 +1759,7 @@ async function advanceDependents(): Promise<void> {
     } catch (e) {
       fail((e as Error).message);
     } finally {
-      if (!handedOff) submitting().delete(r.id);
+      if (!handedOff) handOverEnds(r.id);
     }
   }
 }
@@ -1984,7 +1997,7 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
     // (A run is checked against the same table before it is made: hosted-run.ts stepsProblem.)
     if (!poolRunsProvider(providerId)) {
       update(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
-      submitting().delete(id);
+      handOverEnds(id);
       return Promise.resolve();
     }
     return runOnPool(req.account, () => withRunStamp(stampOf(req), () => submitNow(id, route, providerId, plan, req, index)));
@@ -1993,7 +2006,7 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   if ("error" in own) {
     update(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
     // A chained step advanceDependents marked as being handed over isn't any more.
-    submitting().delete(id);
+    handOverEnds(id);
     return Promise.resolve();
   }
   return own.run(() => submitNow(id, route, providerId, plan, req, index));
@@ -2010,6 +2023,11 @@ async function submitNow(
   req: GenerationRequest,
   index: number,
 ): Promise<void> {
+  // Another app process that still runs is handing this run over right now: it is left to that process.
+  if (!takeSubmitTurn(id)) {
+    submitting().delete(id);
+    return;
+  }
   submitting().add(id);
   // MiniMax H3's 2K hand-off, decided here, on the ComfyUI this run goes to.
   if (providerId === "comfyui") {
@@ -2072,7 +2090,7 @@ async function submitNow(
       return;
     }
   } finally {
-    submitting().delete(id);
+    handOverEnds(id);
   }
 }
 
@@ -2237,9 +2255,12 @@ function resend(r: Row, account: string, words: string): boolean {
     resentRuns().add(r.id);
     if (resentRuns().size > 5000) resentRuns().delete(resentRuns().values().next().value!);
     // (Only while the run still goes: one another app process saved or ended meanwhile is left as it is.)
+    // (It takes its turn to be sent in the same step: a chain's step waiting to be sent again is never sent by another
+    // app process too.)
     const again = db().transaction((): boolean => {
       if (!updateLive(r.id, { external_id: null, external_meta_json: null, status: "queued", progress: null, message: words })) return false;
       db().prepare("DELETE FROM generation_runs WHERE id = ?").run(r.id);
+      noteSubmitTurn(r.id);
       return true;
     })();
     if (!again) return true;
@@ -2727,11 +2748,18 @@ function startRunner(): void {
   resumeTurntables();
 }
 
-/** Jobs that never got an external id (the server died mid-submit) can't be recovered. Runs every tick. */
+/**
+ * Jobs that never got an external id (the server died mid-submit) can't be recovered. Runs every tick. One another app
+ * process that still runs is sending (a deploy's overlap: an account's files waiting their turn to go) is left to it.
+ */
 function sweepInterrupted(): void {
+  const now = Date.now();
   const rows = db()
-    .prepare("SELECT id FROM generations WHERE status IN ('queued','running') AND external_id IS NULL AND depends_on IS NULL AND created_at < ?")
-    .all(Date.now() - STALE_SUBMIT_MS) as Pick<Row, "id">[];
+    .prepare(
+      `SELECT g.id FROM generations g WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before
+         AND NOT ${SENT_ELSEWHERE("g")}`,
+    )
+    .all({ before: now - STALE_SUBMIT_MS, me: runnerToken(), quiet: now - QUIET_MS }) as Pick<Row, "id">[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
@@ -3186,6 +3214,8 @@ function keepBeating(): void {
   try {
     beat(now);
     db().prepare("DELETE FROM app_processes WHERE seen_at < ?").run(now - FORGET_MS);
+    // Turns to send a run that a process forgotten here held (it stopped part way): nobody holds them.
+    db().prepare("DELETE FROM submit_turns WHERE held_by NOT IN (SELECT token FROM app_processes)").run();
   } catch (e) {
     console.warn(`[generations] app process: ${(e as Error).message}`);
   }
@@ -3208,6 +3238,7 @@ function giveTurnsBack(): void {
     const me = runnerToken();
     d.transaction(() => {
       d.prepare("UPDATE generation_runs SET finish_by = NULL, finish_until = NULL WHERE finish_by = ? AND finish_until >= ?").run(me, Date.now());
+      d.prepare("DELETE FROM submit_turns WHERE held_by = ?").run(me);
       d.prepare("DELETE FROM app_processes WHERE token = ?").run(me);
     })();
   } catch {
@@ -3241,6 +3272,53 @@ export function claimFinish(id: string, now = Date.now()): boolean {
       );
     })
     .immediate();
+}
+
+/**
+ * Take this app process's turn to hand a run to its provider: only when no other app process that still runs holds it
+ * (one quiet for 20 s, or gone, holds nothing any more). `waiting`: only while the run still waits to be sent (queued,
+ * with no job at its provider yet), as a chain's next step is, which every app process looks at (advanceDependents).
+ * Two processes on one database (a deploy's overlap) never both send a run, and neither fails one the other is still
+ * sending (sweepInterrupted). handOverEnds gives the turn back.
+ */
+function takeSubmitTurn(id: string, o: { waiting?: boolean } = {}, now = Date.now()): boolean {
+  keepBeating();
+  const d = db();
+  return d
+    .transaction((): boolean => {
+      if (o.waiting) {
+        const g = d.prepare("SELECT status, external_id FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id"> | undefined;
+        if (!g || g.status !== "queued" || g.external_id) return false;
+      }
+      return (
+        d
+          .prepare(
+            `INSERT INTO submit_turns (id, held_by, held_at) VALUES (@id, @me, @now)
+             ON CONFLICT(id) DO UPDATE SET held_by = excluded.held_by, held_at = excluded.held_at
+             WHERE submit_turns.held_by = @me OR NOT EXISTS (SELECT 1 FROM app_processes p WHERE p.token = submit_turns.held_by AND p.seen_at >= @quiet)`,
+          )
+          .run({ id, me: runnerToken(), now, quiet: now - QUIET_MS }).changes > 0
+      );
+    })
+    .immediate();
+}
+
+/** This app process holds the turn to send a run (inside a step that made the run wait to be sent again). */
+function noteSubmitTurn(id: string): void {
+  keepBeating();
+  db()
+    .prepare("INSERT INTO submit_turns (id, held_by, held_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET held_by = excluded.held_by, held_at = excluded.held_at")
+    .run(id, runnerToken(), Date.now());
+}
+
+/** This app process has sent the run, or stopped trying: it is no longer being handed over here, and its turn goes. */
+function handOverEnds(id: string): void {
+  submitting().delete(id);
+  try {
+    db().prepare("DELETE FROM submit_turns WHERE id = ? AND held_by = ?").run(id, runnerToken());
+  } catch {
+    // A closed database: the turn is free once this process has been quiet for 20 s.
+  }
 }
 
 /** Start (or keep running) the 3D finish of a job whose outputs are stored; it marks the job done when it ends. */

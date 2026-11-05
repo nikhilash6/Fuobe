@@ -58,7 +58,9 @@ const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
-const { cancelGeneration, getGeneration, ensureRunner, QUIET_MS, updateLive } = await import("@/server/generations");
+const { cancelGeneration, createGenerations, getGeneration, ensureRunner, QUIET_MS, updateLive } = await import("@/server/generations");
+const { runOnPool } = await import("@/server/hosted");
+const { stampOf, withRunStamp } = await import("@/server/run-stamp");
 const pool = await import("@/server/computer/pool");
 const { catalogVersion } = await import("@/server/computer/catalog-version");
 const tasks = await import("@/server/computer/tasks");
@@ -1589,6 +1591,33 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     expect(watch.seen.filter((s) => s.where === "other process").map((s) => s.status)).toContain("succeeded");
     // The other process refuses the run to another account's session too.
     await expect(app2.generation(id, b1)).rejects.toThrow(/answered 403/);
+  });
+
+  it("a chain's next step both processes find ready at once is sent once: one job for it on the workers, run once", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const d = driver(w);
+    await workAll(d);
+    expect((await ended(id)).status).toBe("succeeded");
+    // The run's next step, made as its run's steps are (as the account, on this install's GPUs, with the run's stamp):
+    // its input, the first step's picture, is ready for both processes.
+    const first = JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(id) as { request_json: string }).request_json);
+    const [step] = runOnPool(A, () => withRunStamp(stampOf(first), () => createGenerations({ feature: "image", modelId: "oss-selftest-image", op: "edit", prompt: "invert it", chainFrom: "first" }, { dependsOn: id })));
+    const sent = () => (db().prepare("SELECT external_id FROM generations WHERE id = ?").get(step.id) as { external_id: string | null }).external_id;
+    const jobs = () => db().prepare("SELECT id FROM relay_tasks WHERE generation_id = ?").all(step.id).length;
+    // Both runners turn at the same moment.
+    await Promise.all([tick(), app2.tick()]);
+    for (let i = 0; i < 200 && !sent(); i++) await sleep(25);
+    expect(sent(), "sent by the first turn of one of them").toBeTruthy();
+    // (A second hand-over, were there one, lands in the moments after.)
+    await sleep(1500);
+    await Promise.all([tick(), app2.tick()]);
+    expect(jobs(), "its jobs on the workers").toBe(1);
+    await workAll(d);
+    expect((await ended(step.id)).status).toBe("succeeded");
+    expect(jobs()).toBe(1);
+    const ran = db().prepare("SELECT COUNT(*) AS n FROM worker_jobs WHERE generation_id = ? AND event = 'finished'").get(step.id) as { n: number };
+    expect(ran.n, "the workers ran it once").toBe(1);
   });
 
   it("a step and a preview picture the worker reports to the other process are seen here too: a refresh, both sessions, the list and the other process show the same step", async () => {
