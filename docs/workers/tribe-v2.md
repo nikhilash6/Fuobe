@@ -1,6 +1,6 @@
 # TRIBE v2 worker (optional, non-commercial)
 
-Higgsfield's Virality Predictor returns a per-second engagement curve, a peak, a hook score for the first
+The parity studio's Virality Predictor returns a per-second engagement curve, a peak, a hook score for the first
 3 seconds and five cortical regions on the fsaverage mesh. That output matches Meta's open brain-encoding
 model **TRIBE v2** (`facebook/tribev2`). Fuobe does not bundle it, and no cloud provider hosts it. The
 `/virality` page shows Fuobe's labelled heuristic hook check and never shows a score.
@@ -15,7 +15,7 @@ This page describes the worker Fuobe would call if you run TRIBE v2 yourself.
   is gated on Hugging Face. Accept Meta's licence on the model page and give the worker a Hugging Face
   token that has access.
 - The scores are predictive proxies of modelled brain responses. They are not view forecasts or clinical
-  measures. Higgsfield shows the same disclaimer.
+  measures. The parity studio shows the same disclaimer.
 
 ## Worker contract
 

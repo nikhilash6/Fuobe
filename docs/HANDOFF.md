@@ -57,7 +57,7 @@ Written on 2026-10-30, when PR #15 wrapped up the work so far, and revised the s
 
 The owner's own words on engines, SAM Audio, accounts and the PR #14 calls are in [`handoff/owner-decisions.json`](handoff/owner-decisions.json). The first two rules below have been the product direction since round 4, and every build prompt carries them. Every brief in the queue already carries the rules that apply to it:
 
-- **No Higgsfield API, keys or models.** Fuobe Originals rebuild Higgsfield's own products from open-weight models plus LoRAs. Higgsfield's client code is used only as facts about behaviour; its code, prompts and media are never copied.
+- **No retired-provider API, keys or models.** Fuobe Originals rebuild the parity studio's in-house products from open-weight models plus LoRAs. The parity research is used only as facts about behaviour; the studio's code, prompts and media are never copied. Never write the parity studio's name in the repo, in a commit or in a PR: say "the parity studio" (`tests/neutral-names.test.ts` fails on the name).
 - **Licences are information, not gates.** Build every model: paid, proprietary, open, closed and non-commercial. Record each licence as data. The admin turns models on or off in Settings → Models & licences.
 - **Each engine does all it can** (the owner, 10-30): "whatever is possible in cloud only in cloud, whatever possible in local can work on local… If we can do lora only in local, then we do that on local, not remove it from both."
   - The cloud only uses models that are hosted, with no substitute model, and only what the hosted endpoint supports.
