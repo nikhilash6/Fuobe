@@ -103,6 +103,12 @@ and Run opens that setup (Connect your GPU, or Add your key) instead of staying 
 403, `code: "connect-gpu"` or `"add-key"`. `GET /api/status` lists the open models these GPUs can't run right now
 (`viewer.pool.own`), so the pickers can label them.
 
+For a visitor with no GPU of its own, the pickers never leave out what these GPUs keep off. The model picker, the preset
+galleries and the camera motion, effect and Mix pickers show each such item with its label ("Runs on your own GPU ·
+48 GB", "Use your own fal.ai key"). A preset card says the `cardText` ("Try free") only when these GPUs run it. An app's
+own tool says the label in its place chip, and its Run opens the setup too. "Connect your GPU" says the label under
+its title.
+
 A run made only of CPU work is free and never counted. Fuobe asks the service for no quote and no hold, and the run
 counts against none of the policy's limits. For now it still waits in the same line on this install's GPUs as GPU work.
 It does not run on the install's own CPU yet.

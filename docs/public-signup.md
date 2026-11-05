@@ -293,8 +293,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   your GPU, Character Swap's Sharpen and its 1080p / 2K / 4K on your GPU; and Kandinsky 6.0 Pro) show to everyone,
   marked "Runs on your own GPU · 48 GB" (Kandinsky Pro's choice says about 80 GB). An account runs them on its own GPU
   only, when that GPU has the memory (`src/server/own-setup-run.ts`); otherwise it gets "Connect your GPU" (`connect-gpu`).
-  Cinema's exact orbit is marked "Runs on your own GPU · 48 GB or fal.ai key". Faceless's "Regenerate to 1080p" is
-  left out of an account's episodes: its route is not one of an account's tool runs.
+  Cinema's and the Video studio's exact orbit are marked "Runs on your own GPU · 48 GB or fal.ai key". Faceless's
+  "Regenerate to 1080p" shows on an account's finished open-source episodes with its label, and runs on its own GPU.
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
@@ -312,8 +312,9 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   MiniMax H3 Motion transfer) show to everyone, marked with what they run on ("Runs on your own GPU · 24 GB",
   `src/lib/own-setup.ts`). An account runs them on its own GPU; without one it gets "Connect your GPU"
   (`connect-gpu`). The mark leaves by itself once the feature's graphs are validated and its pass is recorded in
-  `workflows/comfyui/gpu-tested.json` (`genjutsuLive`; "Clean the voice first", in Genjutsu and Character Swap
-  Studio, works the same way through `soundLive`). Cinema Studio's World mode carries the same mark
+  `workflows/comfyui/gpu-tested.json` (`genjutsuLive`; "Clean the voice first", in Genjutsu, Character Swap Studio,
+  the studios and Captions, works the same way through `soundLive`). The same holds when these makers are sent
+  straight to `POST /api/generations`. Cinema Studio's World mode carries the same mark
   until its graph is validated (`src/server/own-setup-live.ts`), and Image to 3D's "Trim spikes" says what it runs on.
 - **Storyboard.** An account makes boards the same way (`POST /api/storyboards`), and the film of a board
   (`POST /api/storyboards/<id>/film`). Every frame, shot and join is a run of its own on the account's ComfyUI, or on
@@ -422,8 +423,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   script for review, a channel and a series made from a preset need no GPU or key. The server never fetches a link for
   it: a channel's YouTube reference is kept as the link, and an explainer's link source and a series' TikTok or
   Instagram link are the owner's (it attaches the file or uploads the clip). "Generate in Claude" (the studio's own MCP
-  server) and "Regenerate to 1080p" (held with Open-H3 Regenerate) aren't offered to it (403 `own-gpu-tool`). A guest
-  gets the sign-up card.
+  server) isn't offered to it (403 `own-gpu-tool`). "Regenerate to 1080p" runs on its own GPU when that GPU has the
+  memory, after the same checks as a render. A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
