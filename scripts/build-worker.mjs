@@ -27,7 +27,13 @@ function main(argv) {
   fs.mkdirSync(out, { recursive: true });
   // The stamp goes first and comes back last, so parts left half written never pass for a whole build.
   fs.rmSync(path.join(out, STAMP_FILE), { force: true });
-  for (const [name, text] of Object.entries(files)) if (name !== STAMP_FILE) fs.writeFileSync(path.join(out, name), text);
+  // The composer's folder is made again whole: a file it no longer has never stays.
+  fs.rmSync(path.join(out, "compose"), { recursive: true, force: true });
+  for (const [name, text] of Object.entries(files)) {
+    if (name === STAMP_FILE) continue;
+    fs.mkdirSync(path.dirname(path.join(out, name)), { recursive: true });
+    fs.writeFileSync(path.join(out, name), text);
+  }
   fs.writeFileSync(path.join(out, STAMP_FILE), files[STAMP_FILE]);
   console.log(`${summary} -> ${path.relative(ROOT, out) || out}`);
 }

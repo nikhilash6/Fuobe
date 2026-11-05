@@ -5,12 +5,13 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { composerFiles } from "./composer-files.mjs";
 
 /** The file the build writes the stamp into, in dist/. */
 export const STAMP_FILE = "build-stamp.json";
 
 /** The code that turns the catalog into the worker's parts. */
-const BUILD_CODE = ["scripts/build-worker.mjs", "scripts/lib/worker-build.mjs", "scripts/lib/worker-catalog.mjs", "scripts/lib/catalog-checks.mjs", "bin/lib/worker/rules.mjs", "bin/lib/worker/stamp.mjs"];
+const BUILD_CODE = ["scripts/build-worker.mjs", "scripts/lib/worker-build.mjs", "scripts/lib/worker-catalog.mjs", "scripts/lib/catalog-checks.mjs", "bin/lib/worker/rules.mjs", "bin/lib/worker/stamp.mjs", "bin/lib/worker/composer-files.mjs"];
 
 /** Every source file of the studio's graph builders and job runner (src/lib and src/server, .ts and .tsx). */
 export function builderSources(root) {
@@ -18,13 +19,23 @@ export function builderSources(root) {
   return [...walk(path.join(root, "src/lib")), ...walk(path.join(root, "src/server"))];
 }
 
+/** The composer's files outside src/lib and src/server (it imports a few), or none in a checkout without the composer. */
+function composerExtras(root) {
+  try {
+    return composerFiles(root).filter((f) => !f.startsWith("src/lib/") && !f.startsWith("src/server/"));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Every file the parts are built from, as [its name in the stamp, its path]: the studio's sources (the job runner, and
- * the graph builders the node allowlist reads), the build's own code, and every .json of the catalog's folder.
+ * the graph builders the node allowlist reads), the composer's other files, the build's own code, and every .json of
+ * the catalog's folder.
  */
 export function stampFiles(root, catalogDir = path.join(root, "workflows/comfyui")) {
   const rel = (f) => path.relative(root, f).split(path.sep).join("/");
-  const files = [...builderSources(root).map((f) => [rel(f), f]), ...BUILD_CODE.map((f) => [f, path.join(root, f)])];
+  const files = [...builderSources(root).map((f) => [rel(f), f]), ...composerExtras(root).map((f) => [f, path.join(root, f)]), ...BUILD_CODE.map((f) => [f, path.join(root, f)])];
   for (const f of fs.readdirSync(catalogDir).filter((x) => x.endsWith(".json"))) files.push([`workflows/comfyui/${f}`, path.join(catalogDir, f)]);
   return files.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }

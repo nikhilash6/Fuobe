@@ -175,6 +175,8 @@ export interface ComposedPrompt {
   workflow: ComfyWorkflow;
   meta: Record<string, unknown>;
   size: ComposedSize;
+  /** The params.extra keys it dropped: an account's file input this run didn't send (a job ticket leaves them out too). */
+  dropped: string[];
 }
 
 /**
@@ -1126,8 +1128,13 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
   }
   // An account's run on this install's GPUs never names a file there itself: a file input in params.extra is one this
   // run sent (a media ref, uploaded above), else it is dropped (it could name another run's file in the same folder).
+  const dropped: string[] = [];
   if (ctx.accountOnInstall) {
-    for (const k of mediaKeys(manifest, workflow)) if (k in extra && !sentHere.has(k)) delete extra[k];
+    for (const k of mediaKeys(manifest, workflow)) {
+      if (!(k in extra) || sentHere.has(k)) continue;
+      delete extra[k];
+      dropped.push(k);
+    }
   }
   // Idol 3D: "It's a photo" is the clean graph's "real" crop (the core graph's photo switch), then the pack's pruning.
   if (manifest.id === IDOL_WORKFLOWS.core || manifest.id === IDOL_WORKFLOWS.clean || manifest.id === IDOL_VIEWS_WORKFLOW) {
@@ -1369,6 +1376,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     manifest,
     workflow: wf,
     size: jobSize(values, input, ctx.media),
+    dropped,
     // The seed the graph drew with (one Fuobe picked when none was asked): its pictures keep it, so Edit layout redraws the same one.
     meta: {
       workflowId: manifest.id,

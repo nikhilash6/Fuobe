@@ -328,6 +328,9 @@ describe("the worker build", () => {
     expect(perRunTextInputs(fake({ voice: "narrator", steps: 4 }, ["voice", "steps"], "OtherNode"), defs, { inputs: {} })).toEqual(["OtherNode.voice"]);
   });
 
+  /** Every file a build wrote, with its path inside the build (the composer's are in a folder of their own). */
+  const allFiles = (dir: string): string[] => (fs.readdirSync(dir, { recursive: true }) as string[]).map((f) => f.split(path.sep).join("/")).filter((f) => fs.statSync(path.join(dir, f)).isFile()).sort();
+
   it("from the command line it builds however the script is reached, a linked folder included", () => {
     const link = path.join(tempDir("fuobe-worker-link-"), "repo");
     fs.symlinkSync(root, link, process.platform === "win32" ? "junction" : "dir");
@@ -336,8 +339,8 @@ describe("the worker build", () => {
       const r = spawnSync(process.execPath, [path.join(link, "scripts/build-worker.mjs"), "--out", out], { cwd: link, encoding: "utf8" });
       expect(r.status, r.stderr).toBe(0);
       expect(r.stdout).toMatch(/^worker: /);
-      expect(fs.readdirSync(out).sort()).toEqual(fs.readdirSync(first).sort());
-      for (const f of fs.readdirSync(out)) expect(fs.readFileSync(path.join(out, f), "utf8"), f).toBe(fs.readFileSync(path.join(first, f), "utf8"));
+      expect(allFiles(out)).toEqual(allFiles(first));
+      for (const f of allFiles(out)) expect(fs.readFileSync(path.join(out, f), "utf8"), f).toBe(fs.readFileSync(path.join(first, f), "utf8"));
     } finally {
       fs.unlinkSync(link);
     }
@@ -377,10 +380,10 @@ describe("the worker build", () => {
   }, 60_000);
 
   it("rebuilding gives no diff: two builds write the same files, and they match the catalog", () => {
-    const files = fs.readdirSync(first).sort();
-    expect(fs.readdirSync(second).sort()).toEqual(files);
+    const files = allFiles(first);
+    expect(allFiles(second)).toEqual(files);
     for (const f of files) expect(fs.readFileSync(path.join(second, f), "utf8"), f).toBe(fs.readFileSync(path.join(first, f), "utf8"));
-    expect(files).toEqual(expect.arrayContaining(["allowed-nodes.json", "input-rules.json", "file-pins.json", "computer-runner.mjs", "build-stamp.json"]));
+    expect(files).toEqual(expect.arrayContaining(["allowed-nodes.json", "input-rules.json", "file-pins.json", "computer-runner.mjs", "build-stamp.json", "catalog-version.json", "compose/lib/ticket-compose.mjs", "compose/lib/comfy-compose.mjs"]));
     // Stamped with this checkout, so a worker starts on these parts (and on no older ones).
     expect(built(first, "build-stamp.json")).toEqual({ built: "scripts/build-worker.mjs", stamp: buildStamp(root) });
     expect(distProblem(root, first)).toBeNull();
