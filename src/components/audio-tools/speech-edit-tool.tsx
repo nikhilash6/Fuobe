@@ -15,7 +15,7 @@ import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useHydrated } from "@/lib/api";
 import { clock } from "@/lib/av/audio-tools";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import type { Cue } from "@/lib/cues";
@@ -266,7 +266,9 @@ function EffectOptions({ effect, onChange }: { effect: SpeechEffect; onChange: (
 
 export function SpeechEditTool() {
   const [engine, setEngine, mode] = useEngine();
-  // A guest or an account: its own setup's label beside the title, and a press that asks for it first.
+  // A guest or an account: its own setup's label beside the title (after hydration, so it matches the server HTML),
+  // and a press that asks for it first.
+  const hydrated = useHydrated();
   const visitor = useOwnSetupViewer() !== null;
   const press = useOwnSetupPress();
   const create = useCreateGeneration();
@@ -392,7 +394,7 @@ export function SpeechEditTool() {
     <ToolShell title="Audio">
       {!source && (
         <ToolHero title="Edit speech" subtitle={SUBTITLE}>
-          {visitor && <OwnSetupChip setup={OWN_SETUP} short={false} className="mt-3" />}
+          {hydrated && visitor && <OwnSetupChip setup={OWN_SETUP} short={false} className="mt-3" />}
         </ToolHero>
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-6")}>
