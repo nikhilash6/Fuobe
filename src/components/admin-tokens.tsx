@@ -133,7 +133,7 @@ function CreateForm({ scopes, onMade, onCancel }: { scopes: AdminTokensAnswer["s
   const [expiry, setExpiry] = useState("90");
   const [busy, setBusy] = useState(false);
   const all = scopes.map((s) => s.id);
-  const same = (ids: string[]) => ids.length === picked.size && ids.every((s) => picked.has(s));
+  const same = (ids: readonly string[]) => ids.length === picked.size && ids.every((s) => picked.has(s));
   const create = async () => {
     setBusy(true);
     try {
