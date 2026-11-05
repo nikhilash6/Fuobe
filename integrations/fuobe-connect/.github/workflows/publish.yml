@@ -1,5 +1,6 @@
 # Publishes Fuobe Connect to the Comfy Registry when pyproject.toml changes on main (a new version), or by hand.
 # Needs the repository secret REGISTRY_ACCESS_TOKEN: a publishing key of the "workingprototype" Registry publisher.
+# Without that secret the job publishes nothing and says so.
 name: Publish to the Comfy Registry
 on:
   workflow_dispatch:
@@ -14,8 +15,14 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'workingprototype' }}
+    env:
+      HAS_KEY: ${{ secrets.REGISTRY_ACCESS_TOKEN != '' }}
     steps:
+      - name: No publishing key
+        if: ${{ env.HAS_KEY != 'true' }}
+        run: echo "::warning::The repository secret REGISTRY_ACCESS_TOKEN isn't set, so nothing was published."
       - name: Publish
+        if: ${{ env.HAS_KEY == 'true' }}
         uses: Comfy-Org/publish-node-action@7578cdb0c1410f2515e6f9b1443c6859cab94f05 # 1.0.1
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
