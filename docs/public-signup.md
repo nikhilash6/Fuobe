@@ -634,8 +634,12 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   file already sent is never sent twice. Its tile says what it waits for ("Your RunPod pod is off.
   Start it, and this run goes on by itself", "Waiting for your GPU to start up"), until when it
   waits, and the buttons that help (**Start your pod**, **Check my GPU**, **Run with your fal.ai
-  key**, which moves this run to the key: it stops waiting and the cloud run takes its place). The
-  Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
+  key**, which moves this run to the key: it stops waiting and the cloud run takes its place). A run
+  that made several jobs (a batch) moves as one: the press stops every job of it not handed over yet
+  and the cloud run makes their outputs, never the whole batch again; while it is on its way the
+  batch's other tiles don't offer the button, and a later press on one of them answers 409 "This run
+  has already started or stopped, so nothing new was run." (`replaces` beside the request names the
+  run). The Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
   GPU that is off 30 minutes, one starting up 10 minutes, and 40 minutes in all. Before the run
   fails, the GPU is asked once more. When the account saves a new address (or password) while a
   run waits, the run goes there; when it disconnects its GPU, the run stops and says so, with
@@ -647,15 +651,22 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   model refuses. A 403 that isn't about the key (a model the key may not run) says to pick another
   model; the key stays as it is. A wait is kept with the run (`external_meta_json`), and the server
   that waits renews its hold on it: after a restart, or when a deploy's new instance takes over,
-  the run goes on with what is left of its wait, on one instance only. Runs that wait for the GPU
-  count apart from the 4 runs at once (up to 4 more wait); a fifth waiting run answers 429 "You
-  have 4 runs waiting for your GPU. Cancel one, or run one with your key, to start another."
+  the run goes on with what is left of its wait, on one instance only. A server that is stopping
+  sends no more tries and lets go of its waiting runs at once, for the next instance. A try marks
+  the run just before it sends the job itself: a server cut off in the middle of that send leaves a
+  job the GPU or provider may already have, so the next instance doesn't send it again, and the run
+  fails with "This run was interrupted while it was being sent. Press Retry." A run planned for
+  another provider by then stops in plain words. Runs that wait for the GPU count apart from the 4
+  runs at once (up to 4 more wait); a fifth waiting run answers 429 "You have 4 runs waiting for
+  your GPU. Cancel one, or run one with your key, to start another." Runs that wait on a key (its
+  provider busy or down) count among the 4 runs at once.
 - **A paired ComfyUI.** A run for a ComfyUI paired with a code (Fuobe Connect) that is off says
   "Waiting for your paired ComfyUI. Start ComfyUI there (or start your pod), and this run goes on
   by itself." It doesn't ask for a Fuobe tab, because a paired ComfyUI needs none. A Fuobe tab
   that runs this computer's ComfyUI and is signed out says so, with **Log in**.
 - **While it runs.** A GPU or provider that stops answering mid-run is asked again with a growing
-  wait, and after 3 misses the tile says "Your GPU stopped answering. Waiting for it to come back".
+  wait (what it asked for in `Retry-After` up to 2 minutes, never past the run's own time), and
+  after 3 misses the tile says "Your GPU stopped answering. Waiting for it to come back".
   On the account's GPU it stops after 15 minutes in plain words. On a key the job is accepted (and
   paid), so it waits on until the run's own time limit; a call to fal.ai or Replicate that hangs is
   given up after 20 seconds (60 for a submit or a result) and asked again. A key refused or a
@@ -674,11 +685,17 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   your Replicate key** when the other key runs the same model (on that key, never back on fal.ai),
   **Pick another model** (it opens the studio's model picker), **Try one size smaller** after a
   run ran out of graphics memory or took too long, **Send a smaller copy** after a file was too big
-  for the address (`POST /api/generations/<id>/smaller` makes a smaller copy of the file as a new
-  file of the account's, and the run starts again with it), and **Retry**. A button that starts a
-  run stays pressed until it has, so a second click starts nothing. The Library's card shows the
-  same sentence with up to two of them (one in the list). The run keeps them in `trouble`
-  (`GET /api/generations/<id>`), next to `fix` for **Fix it**.
+  for the address (`POST /api/generations/<id>/smaller` makes a smaller copy of the run's biggest
+  picture or clip as a new file of the account's, and the run starts again with it), and **Retry**.
+  A copy is real work, so an account makes one at a time and the server two at once (429 "Smaller
+  copies are busy right now. Try again in a minute."), a clip's encode uses two cores, files that
+  are full say so before any work, and a run gets 3 copies an hour (12 for the account). When no
+  smaller copy can be made, the message offers **Try one size smaller** (or **Pick another model**).
+  A button that starts a run stays pressed until it has, so a second click starts nothing. The
+  Library's card shows the same sentence with up to two of them (one in the list), and they act
+  there too: **Pick another model** opens the run's studio with the run loaded and its model picker
+  open (`?reuse=<id>&pick=1`). The run keeps them in `trouble` (`GET /api/generations/<id>`), next
+  to `fix` for **Fix it**.
 - **For the owner.** Each wait, heal and failure of an account's run on its own GPU or key writes
   one JSON line to the server's log (`"evt":"own-run"`: the run, the account, the place, provider,
   model, stage, status or network code, the kind of address, the cause, the try and the time
