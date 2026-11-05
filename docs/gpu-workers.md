@@ -359,9 +359,9 @@ When every worker that could run an account's run is away right now (paused on t
 outside its hours, silent for over 2 minutes, or never connected), the price check says "Starting soon" and Run is
 off. When those workers go away between the price check and a press of Run, the press makes no run. Its answer is
 "Try again in a moment." (503, code `busy`), with no billing card, and the page asks the price check again, which now
-says "Starting soon". The price check asks again by itself, and Run comes back on once one of those workers is back. A worker that waits for local ComfyUI work to make room is
-not away: runs go in line for it. An account with its own GPU gets its run there instead, unless it asked for this
-install's GPUs.
+says "Starting soon". The price check asks again by itself, and Run comes back on once one of those workers is back.
+A worker that waits for local ComfyUI work to make room is not away: runs go in line for it. An account with its own
+GPU gets its run there instead, unless it asked for this install's GPUs.
 
 **The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
 its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,
