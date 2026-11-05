@@ -19,8 +19,8 @@ import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
 import { runOnPool } from "./hosted";
-import { decideToolPlace, GUEST_PLAN, moderateRun, poolMayTake, readWishes, reservePool, stepsProblem, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
-import { cancelGeneration, captureRun, stepsOf } from "./generations";
+import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, poolMayTake, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
+import { cancelGeneration, captureRun } from "./generations";
 import { AdmitRefused, admitRun, clientAddress, poolLimitRefusal } from "./pool-limits";
 import { hit, unhit } from "./rate";
 import { withRunStamp, type RunStamp } from "./run-stamp";
@@ -390,9 +390,10 @@ const isThenable = (v: unknown): v is PromiseLike<unknown> => !!v && typeof (v a
  * A tool run on this install's GPUs (placeOf said "pool"): the policy's limits on runs there (never for light work
  * only), the moderation service's check, one hold for the whole run priced from every step (none for light work: free),
  * then the run made as the account's run there (runOnPool, every row stamped with its place and hold) and counted in
- * the same transaction (admitRun). Every row it makes is checked against the policy again before anything is sent
- * (stepsProblem): a step the policy doesn't allow stops the whole run, its rows are stopped, and its hold goes back.
- * Its own GPU's checks (the pre-flight, its LoRAs) don't apply here.
+ * the same transaction (admitRun). Every row it makes is checked again before anything is sent (madeRunProblem): against
+ * the policy, and against what the run was priced and held for (its jobs, its outputs at once, light work only). A row
+ * that doesn't match stops the whole run: its rows are stopped, and its hold goes back. Its own GPU's checks (the
+ * pre-flight, its LoRAs) don't apply here.
  */
 async function startOnPool<T>(
   request: Request,
@@ -430,7 +431,7 @@ async function startOnPool<T>(
           const made = captureRun(run.start);
           // A tool that makes its rows as it goes (after an await) is checked once they are all made, below.
           if (!isThenable(made.value)) {
-            const problem = stepsProblem(pool.policy, stepsOf(made.ids));
+            const problem = madeRunProblem(pool, made.ids);
             if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
           }
           return made;
@@ -460,7 +461,7 @@ async function startOnPool<T>(
     return back(errorResponse(e));
   }
   if (isThenable(made.value)) {
-    const problem = stepsProblem(pool.policy, stepsOf(made.ids));
+    const problem = madeRunProblem(pool, made.ids);
     if (problem) {
       undo();
       return back(notOffered(problem));

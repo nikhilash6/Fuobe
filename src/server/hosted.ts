@@ -135,6 +135,16 @@ export const HOSTED_GUEST_WORDS = {
   inputs: "This kind of file can't be used here. Use a picture instead.",
 };
 
+/**
+ * A tool's run that asks for more pictures or clips at once than a run on this install's GPUs makes (the policy's cap per
+ * run): pick fewer. An account may also connect its own GPU, which has no such cap.
+ */
+export function outputsWords(cap: number, guest: boolean): string {
+  const most = cap === 1 ? "one at a time" : `up to ${cap} at a time`;
+  const pick = cap === 1 ? "Pick one" : `Pick ${cap} or fewer`;
+  return guest ? `Runs here make ${most}. ${pick}.` : `This studio's GPUs make ${most}. ${pick}, or connect your own GPU in Settings.`;
+}
+
 /** May this model (and app) run on this install's GPUs under this policy? */
 export function poolAllows(p: Pick<Policy, "pool">, modelId: string, presetId?: string | null): boolean {
   const m = p.pool ?? {};

@@ -25,10 +25,11 @@ import {
 } from "./billing";
 import { getModel } from "@/lib/catalog";
 import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER } from "@/lib/guest-access";
-import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, type PlannedStep } from "./generations";
+import { db } from "./db";
+import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, stepsOf, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, outputsWords, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -138,7 +139,7 @@ const ownSetupRefusal = (setup: OwnSetup): { kind: "refuse"; refusal: Refusal } 
 /** A gate's refusal as the run's answer: its words, with the own setup that would run it. */
 function gateRefusal(gate: GateRefusal): { kind: "refuse"; refusal: Refusal } {
   if (gate.reason === "ownSetup") return ownSetupRefusal(gate.setup ?? needsGpu());
-  const error = gateWords(gate.reason, false);
+  const error = gateText(gate, false);
   if (gate.reason === "model3d") return { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } };
   const r = notOffered(error);
   if (gate.setup) r.refusal.body.ownSetup = gate.setup;
@@ -217,6 +218,39 @@ export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
   return null;
 }
 
+/** How many outputs each row asks for (its request's numOutputs: a run split into one job per output keeps it on each). */
+function rowOutputs(ids: string[]): number[] {
+  const q = db().prepare("SELECT request_json FROM generations WHERE id = ?");
+  return ids.map((id) => {
+    const r = q.get(id) as { request_json: string } | undefined;
+    try {
+      const n = r ? Number((JSON.parse(r.request_json) as GenerationRequest).params?.numOutputs ?? 1) : 1;
+      return Number.isFinite(n) ? n : 1;
+    } catch {
+      return 1;
+    }
+  });
+}
+
+/**
+ * The rows a tool's run made on this install's GPUs, checked against what it was priced and held for, before anything
+ * of it is sent: every step one the policy allows there (stepsProblem); a run held as light work (free, never counted)
+ * that made light work only; no row asking for more outputs at once than a run there makes (poolOutputsCap); and no more
+ * jobs of any model and operation than were priced. Null when they match; otherwise its refusal's words. A tool whose
+ * start makes more than its plan said is stopped here, never run on a hold for less.
+ */
+export function madeRunProblem(run: { policy: Policy; steps: RunFacts["steps"]; light: boolean }, ids: string[]): string | null {
+  const made = stepsOf(ids);
+  const problem = stepsProblem(run.policy, made);
+  if (problem) return problem;
+  if (run.light) return lightRun(made) ? null : HOSTED_WORDS.notOffered;
+  const cap = poolOutputsCap(run.policy);
+  if (rowOutputs(ids).some((n) => n > cap)) return outputsWords(cap, false);
+  const held = new Map((run.steps ?? []).map((s) => [`${s.model} ${s.op ?? ""}`, s.jobs]));
+  for (const s of pricedSteps(made)) if (s.jobs > (held.get(`${s.model} ${s.op ?? ""}`) ?? 0)) return HOSTED_WORDS.notOffered;
+  return null;
+}
+
 /**
  * Is a run light work only: every step it makes a ComfyUI step that needs no model and no graphics memory (a filter, a
  * trim, a join, adding sound, a Ken Burns move)? Such a run is free and never counts against the policy's limits on runs
@@ -243,25 +277,29 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
 
 /**
  * Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, a model their card can't run,
- * LoRAs, a kind of file, or one that runs on the visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or
- * a workflow none of this install's GPUs can run right now: none holds its files, serves its lane, or has the memory).
+ * LoRAs, a kind of file, more outputs at once than a run there makes (`outputs`: a tool's run, which can't be cut down
+ * the way the studios' own runs are), or one that runs on the visitor's own setup only (`ownSetup`: a static item of
+ * own-setup.ts, or a workflow none of this install's GPUs can run right now: none holds its files, serves its lane, or
+ * has the memory).
  */
-export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "ownSetup";
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "outputs" | "ownSetup";
 
 /**
  * A gate's refusal: its reason, and the visitor's own setup that would run it (`setup`: always with "ownSetup"; with the
- * others, a GPU of its own, which runs what this install's GPUs don't take).
+ * others, a GPU of its own, which runs what this install's GPUs don't take). `cap`: with "outputs", the most a run there
+ * makes at once.
  */
-export type GateRefusal = { ok: false; reason: GateReason; setup?: OwnSetup };
+export type GateRefusal = { ok: false; reason: GateReason; setup?: OwnSetup; cap?: number };
 
 /** The words for a gate's reason: an account may connect its own GPU in Settings, a guest has nowhere to do that yet. */
-export function gateWords(reason: Exclude<GateReason, "ownSetup">, guest: boolean): string {
+export function gateWords(reason: Exclude<GateReason, "ownSetup" | "outputs">, guest: boolean): string {
   if (reason === "model3d") return OWN_GPU_TOOL_MESSAGE;
   return (guest ? HOSTED_GUEST_WORDS : HOSTED_WORDS)[reason];
 }
 
 /** A gate's refusal in words: the own setup's label (the same for a guest and an account), or the reason's words. */
-export const gateText = (gate: GateRefusal, guest: boolean): string => (gate.reason === "ownSetup" ? ownSetupLabel(gate.setup ?? needsGpu()) : gateWords(gate.reason, guest));
+export const gateText = (gate: GateRefusal, guest: boolean): string =>
+  gate.reason === "ownSetup" ? ownSetupLabel(gate.setup ?? needsGpu()) : gate.reason === "outputs" ? outputsWords(gate.cap ?? 1, guest) : gateWords(gate.reason, guest);
 
 /**
  * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
@@ -327,13 +365,18 @@ async function ownGpuOnline(accountId: string): Promise<boolean> {
   }
 }
 
+/** The most outputs one request makes on this install's GPUs: the studio's cap per run, and the policy's when lower. */
+export function poolOutputsCap(p: Pick<Policy, "limits"> | null): number {
+  const policyCap = p && p.limits.outputsPerRun > 0 ? [Math.floor(p.limits.outputsPerRun)] : [];
+  return Math.min(ACCOUNT_LIMITS.outputsPerRun, ...policyCap);
+}
+
 /**
- * A request as it runs on this install's GPUs: no more outputs than the studio's cap per run, and the policy's when lower
- * (`capped`: fewer than it asked). The price check and the run plan and price this same request.
+ * A request as it runs on this install's GPUs: no more outputs than poolOutputsCap (`capped`: fewer than it asked). The
+ * price check and the run plan and price this same request.
  */
 export function poolRequest(req: GenerationRequest, p: Pick<Policy, "limits"> | null): { req: GenerationRequest; capped: boolean } {
-  const policyCap = p && p.limits.outputsPerRun > 0 ? [Math.floor(p.limits.outputsPerRun)] : [];
-  const cap = Math.min(ACCOUNT_LIMITS.outputsPerRun, ...policyCap);
+  const cap = poolOutputsCap(p);
   if ((req.params?.numOutputs ?? 1) <= cap) return { req, capped: false };
   return { req: { ...req, params: { ...req.params, numOutputs: cap } }, capped: true };
 }
@@ -626,6 +669,10 @@ const asPlannedStep = (req: GenerationRequest, p: Planned, waits: boolean): Plan
  * "unplanned" when a step can't be planned on this install's GPUs (a cloud model, a request with something wrong: the
  * run goes where it goes today, which says what), or the first step's refusal; passed, the step the run is priced as
  * (its first ComfyUI step) and every row the run would make.
+ *
+ * A tool makes its own requests when it starts, so each step is planned and priced as it asks: one that asks for more
+ * outputs at once than a run there makes (poolOutputsCap) is refused ("outputs"), never priced as a smaller copy the run
+ * wouldn't use.
  */
 export function toolGate(
   p: Policy | null,
@@ -634,9 +681,10 @@ export function toolGate(
 ): "unplanned" | GateRefusal | { ok: true; main: ToolPoolRun["main"]; rows: PlannedStep[] } {
   let main: ToolPoolRun["main"] | null = null;
   const rows: PlannedStep[] = [];
+  const cap = poolOutputsCap(p);
   for (const step of steps) {
     const deps = step.deps ?? 0;
-    const { req } = poolRequest(step.request, p);
+    const req = step.request;
     let planned: Planned;
     try {
       planned = runOnPool(viewer, () => previewChained(req, deps));
@@ -651,6 +699,7 @@ export function toolGate(
     const gate = poolGate(p, planned, req, () => (deps ? [asPlannedStep(req, planned, true)] : poolSteps(viewer ?? GUEST_PLAN, req)));
     // A tool adds its LoRAs itself (a person adds none to it): said as a step that runs on an own GPU, not as extra LoRAs.
     if (!gate.ok) return gate.reason === "loras" ? { ok: false, reason: "notOffered", setup: gate.setup } : gate;
+    if ((req.params?.numOutputs ?? 1) > cap) return { ok: false, reason: "outputs", cap };
     rows.push(...(gate.steps ?? [asPlannedStep(req, planned, deps > 0)]));
     main ??= { req, planned };
   }

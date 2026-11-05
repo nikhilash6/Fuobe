@@ -91,9 +91,16 @@ A tool's run (Shorts, Cinema Studio, Storyboard, the apps, the palette lock and 
 through the same gate as a studio run: every step is checked, the run is priced once from every step, held once, and
 counted once. Its price check answers `{ place: "pool", quote, line }` beside the tool's own answer when the run would
 go to this install's GPUs, and the tool's own answer is then priced as a run there (so an account with no GPU of its
-own is priced, not asked to connect one). A tool whose body has no field for the place or the price shown reads them from the request's
-headers: `x-fuobe-place` (`own` or `pool`) and `x-fuobe-shown` (`{ amount, priceVersion }` as URI-encoded JSON). A
-field in the body wins.
+own is priced, not asked to connect one). A tool whose body has no field for the place or the price shown reads them
+from the request's headers: `x-fuobe-place` (`own` or `pool`) and `x-fuobe-shown` (`{ amount, priceVersion }` as
+URI-encoded JSON). A field in the body wins.
+
+A tool makes its own requests, so each of its steps is priced as it asks. A step that asks for more outputs at once
+than `outputsPerRun` allows (or Fuobe's own cap of 4) is refused before Run with words that say how many a run there
+makes. It is never priced as a smaller run. The studios' own runs are cut to the cap instead, and say so. Before
+anything of a tool's run is sent, Fuobe checks the rows its start made against what was priced and held: no more jobs
+of any model, no more outputs at once than the cap, and only CPU work for a run held as CPU work. A run whose rows
+don't match is stopped: its rows are canceled and its hold goes back (403, `code: "not-offered"`).
 
 Some models, modes and options run on a visitor's own setup only (`src/lib/own-setup.ts`), and so does a workflow that
 none of this install's GPUs can run right now (none holds its files, serves its kind of work, or has the memory it

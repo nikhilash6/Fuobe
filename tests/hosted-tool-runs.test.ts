@@ -187,6 +187,86 @@ describe("hosted runs on", () => {
     expect(hold?.released).toBe(true);
   });
 
+  it("a start that makes more jobs than its plan was priced and held for is stopped, and its hold goes back", async () => {
+    useBilling();
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const rows = stored("none").length;
+    const before = reserves();
+    const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, {
+      tool: "test",
+      files: [],
+      shown: { amount: fake.price.amount, priceVersion: fake.price.version },
+      plan: () => plan,
+      // Priced as one picture; the start makes two of the same model.
+      start: () => [...createGenerations(plan[0].request), ...createGenerations({ ...plan[0].request, prompt: "a fox at dusk" })],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.response.status).toBe(403);
+      expect(((await r.response.json()) as { code: string }).code).toBe("not-offered");
+    }
+    expect(reserves() - before).toBe(1);
+    expect((fake.calls_of("/v1/reserve").at(-1)!.body as { run: { steps: { jobs: number }[] } }).run.steps).toEqual([expect.objectContaining({ jobs: 1 })]);
+    expect(stored("none").length).toBe(rows);
+    await drainOutbox();
+    expect([...fake.holds.values()].at(-1)?.released).toBe(true);
+  });
+
+  it("a start whose row asks for more outputs at once than a run here makes is stopped, its hold given back", async () => {
+    useBilling();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), outputsPerRun: 1 } };
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const rows = stored("none").length;
+    const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, {
+      tool: "test",
+      files: [],
+      shown: { amount: fake.price.amount, priceVersion: fake.price.version },
+      plan: () => plan,
+      start: () => createGenerations({ ...plan[0].request, params: { numOutputs: 2 } }),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(((await r.response.json()) as { error: string }).error).toBe(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false));
+    expect(stored("none").length).toBe(rows);
+    await drainOutbox();
+    expect([...fake.holds.values()].at(-1)?.released).toBe(true);
+  });
+
+  it("a run planned as light work (free, never counted) whose start makes GPU work is stopped before anything is sent", async () => {
+    const light = [{ request: { feature: "video", modelId: "oss-ken-burns", op: "still-motion" as const, inputs: { images: ["/api/files/x.png"] }, params: { duration: 4 } } }];
+    const place = await toolRun.placeOf(auth.accountById(ids.none)!, light);
+    expect(place.kind).toBe("pool");
+    if (place.kind === "pool") expect(place.light).toBe(true);
+    const rows = stored("none").length;
+    const before = reserves();
+    const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, {
+      tool: "test",
+      files: [],
+      plan: () => light,
+      start: () => createGenerations({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" }),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.response.status).toBe(403);
+    expect(reserves()).toBe(before);
+    expect(stored("none").length).toBe(rows);
+  });
+
+  it("a tool's step that asks for more outputs than a run here makes is refused before Run, never priced smaller", async () => {
+    useBilling();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), outputsPerRun: 1 } };
+    const steps = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", params: { numOutputs: 4 } } }];
+    const words = hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false);
+    const quotes = fake.calls_of("/v1/quote").length;
+    const check = await toolRun.toolPriceCheck(json("/api/x?preview=1", "POST", {}, "none"), () => steps);
+    expect(check?.quote).toMatchObject({ allowed: false, code: "not-offered", text: words });
+    expect(fake.calls_of("/v1/quote").length).toBe(quotes);
+    const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);
+    expect(place.kind).toBe("refuse");
+    if (place.kind === "refuse") expect(place.refusal.body).toMatchObject({ error: words, code: "not-offered" });
+    // A guest's words name nothing it can't do yet; an account whose own GPU answers runs it there.
+    expect(hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, true)).not.toMatch(/Settings/);
+    expect(await toolRun.placeOf(auth.accountById(ids.gpu)!, steps)).toEqual({ kind: "own" });
+  });
+
   it("a 3D model stays on an account's own GPU: refused here in the tools' words", async () => {
     const steps = [{ request: { feature: "3d", modelId: "oss-pixal3d", op: "image-to-3d" as const, prompt: "", inputs: { images: ["/api/files/x.png"] } } }];
     const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);

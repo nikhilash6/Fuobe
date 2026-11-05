@@ -222,6 +222,31 @@ describe("Cinema Studio for an account with no GPU of its own", () => {
     expect(rows.every((q) => q.place === "pool" && !!q.hold)).toBe(true);
   });
 
+  it("a batch of 4 when a run here makes one at a time: said in the price check and on Run, nothing held or made", async () => {
+    hostedOn();
+    fake.policy = { ...fake.policy, limits: { ...(fake.policy.limits as object), outputsPerRun: 1 } };
+    const id = await project("none");
+    const four = { ...STILL, batch: 4 };
+    const words = hostedRun.gateText({ ok: false, reason: "outputs", cap: 1 }, false);
+    const check = await generateRoute.POST(json(`/api/cinema/projects/${id}/generate?preview=1`, "POST", { input: four }, "none"), params({ id }));
+    expect(check.status, await check.clone().text()).toBe(200);
+    expect(((await check.json()) as { quote?: { allowed: boolean; text: string } }).quote).toMatchObject({ allowed: false, text: words });
+    const before = reserves();
+    const since = Date.now();
+    const r = await generateRoute.POST(json(`/api/cinema/projects/${id}/generate`, "POST", { input: four }, "none", shownHeaders()), params({ id }));
+    expect(r.status, await r.clone().text()).toBe(403);
+    expect(((await r.json()) as { error: string }).error).toBe(words);
+    expect(reserves()).toBe(before);
+    expect(runsSince("none", since)).toEqual([]);
+    // One take at a time runs, priced and held for exactly what it makes.
+    const one = await send(() => generateRoute.POST(json(`/api/cinema/projects/${id}/generate`, "POST", { input: STILL }, "none", shownHeaders()), params({ id })));
+    expect(one.status, await one.clone().text()).toBe(201);
+    expect(reserves() - before).toBe(1);
+    const held = fake.calls_of("/v1/reserve").at(-1)!.body as { run: { jobs: number; outputsPerJob: number } };
+    expect(held.run).toMatchObject({ jobs: 1, outputsPerJob: 1 });
+    expect(runsSince("none", since)).toHaveLength(1);
+  });
+
   it("an account whose own GPU answers is priced and run there, as before", async () => {
     hostedOn();
     const id = await project("gpu");
