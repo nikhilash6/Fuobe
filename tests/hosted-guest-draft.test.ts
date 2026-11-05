@@ -141,6 +141,16 @@ describe("the run a guest pressed", () => {
     expect(step({ shown: null, quote: { allowed: true, amount: 0, text: "" } })).toBe("none");
   });
 
+  it("says in plain words what happened to it: on its way once made, or what Run waits for", () => {
+    expect(draftLib.PENDING_WORDS.made).toBe("You're in. Your run is on its way.");
+    expect(draftLib.PENDING_WORDS.lost).toBe("Add your file again, then press Generate.");
+    expect(draftLib.PENDING_WORDS.ask).toBe("Your draft is back. Press Generate to start.");
+    expect(draftLib.PENDING_WORDS.note("Free")).toBe("The price is now Free. Press Generate to start.");
+    // The composer says "on its way" only from the made run's answer, never at the start step itself.
+    const composer = fs.readFileSync(path.join(process.cwd(), "src/components/studio/composer.tsx"), "utf8");
+    expect(composer).toMatch(/onSuccess: \(\) => \{[^}]*signedUp && viewerInfo\?\.hosted\) setPriceNote\(PENDING_WORDS\.made\)/);
+  });
+
   it("never starts without a kept file that didn't come back, even in a slot the run could do without", () => {
     // When every run costs the same ("Free") and a reference photo or start frame is optional, only the lost file
     // stops it, and the person is asked to add it again.

@@ -434,6 +434,45 @@ describe("service blips (H3)", () => {
     }
   });
 
+  it("the owner's admin log says when runs have waited over 5 minutes for the service (counts only, one row for every app process); a wait for a time or a pause doesn't count", async () => {
+    const was = { ...billing.RESERVE_INLINE };
+    try {
+      billing.RESERVE_INLINE.ms = 100;
+      db().prepare("DELETE FROM admin_audit WHERE action = ?").run(release.SERVICE_WAIT_ACTION);
+      const said = () => db().prepare("SELECT actor, target, detail_json FROM admin_audit WHERE action = ?").all(release.SERVICE_WAIT_ACTION) as { actor: string; target: string | null; detail_json: string }[];
+      const a = account();
+      await check(a.cookie);
+      fake.down = "error";
+      const r = await press(a.cookie);
+      expect(r.body.held).toEqual({ reason: "service" });
+      const run = heldOf(idOf(r))!.run_id;
+      // Pressed six minutes ago, but waiting for a time (free generations that renew in an hour): not a quiet service.
+      db().prepare("UPDATE pool_holds SET pressed_at = ?, start_at = ? WHERE run_id = ?").run(Date.now() - 6 * 60_000, Date.now() + 60 * 60_000, run);
+      globalThis.__fuobeHoldServiceSaid = undefined;
+      await release.releaseHeldRuns();
+      expect(said()).toEqual([]);
+      // Waiting because the service said runs are paused (the owner's own switch): not counted either.
+      db().prepare("UPDATE pool_holds SET start_at = NULL, paused = 1 WHERE run_id = ?").run(run);
+      await release.releaseHeldRuns();
+      expect(said()).toEqual([]);
+      // Six minutes with no answer from the billing service: one row, counts only.
+      db().prepare("UPDATE pool_holds SET paused = 0, next_at = NULL WHERE run_id = ?").run(run);
+      await release.releaseHeldRuns();
+      const rows = said();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ actor: "system", target: null });
+      expect(JSON.parse(rows[0].detail_json)).toEqual({ waiting: 1, billing: 1, moderation: 0, oldestMin: 6 });
+      expect(rows[0].detail_json).not.toContain(a.id);
+      expect(rows[0].detail_json).not.toContain(IMAGE.prompt);
+      // A second app process says it in its own server log, but the admin log keeps the one row.
+      globalThis.__fuobeHoldServiceSaid = undefined;
+      await release.releaseHeldRuns();
+      expect(said()).toHaveLength(1);
+    } finally {
+      Object.assign(billing.RESERVE_INLINE, was);
+    }
+  });
+
   it("H3p: while the service says runs here are paused, a press is taken and waits ('starts when a GPU is free')", async () => {
     fake.refuse = { code: "paused", text: "Runs on our GPUs are paused for now. Your own GPU or key still works." };
     const a = account();

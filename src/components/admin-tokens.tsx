@@ -75,6 +75,7 @@ const ACTION_WORDS: Record<string, string> = {
   "worker.revoke": "Revoked a worker",
   "worker.revoke_all": "Revoked every worker",
   "worker.alert": "A worker's token was used from somewhere new",
+  "runs.waiting": "Runs waited over 5 minutes for the billing or moderation service",
   "queue.settings": "Changed the queue's settings",
   "settings.comfy_where": "Changed where ComfyUI runs",
   "runs.content": "Read an account's prompts and results",

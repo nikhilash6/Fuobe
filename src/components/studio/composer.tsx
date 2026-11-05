@@ -30,7 +30,7 @@ import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
 import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { HoldFilesCtx } from "@/lib/held-files";
-import { pendingStep } from "@/lib/guest-draft";
+import { PENDING_WORDS, pendingStep } from "@/lib/guest-draft";
 import { useGuestDraft } from "./guest-draft";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
@@ -911,8 +911,9 @@ export function Composer({ docked }: { docked: boolean }) {
 
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here). `withKey`: this run
   // only, on the cloud version that action names and the account's key (hosted runs on; see onRunWithKey). `once`: a
-  // place for this run only (hosted runs: "Run on Our GPUs", or the account's GPU for what only it runs).
-  const submit = (skip?: unknown, withKey?: TroubleAction, once?: "own" | "pool"): void => {
+  // place for this run only (hosted runs: "Run on Our GPUs", or the account's GPU for what only it runs). `signedUp`: the
+  // run a guest pressed, started by itself back from sign-up (its note says so once the run is made).
+  const submit = (skip?: unknown, withKey?: TroubleAction, once?: "own" | "pool", signedUp?: boolean): void => {
     const skipGpu = skip === true;
     setKeyChoice(false);
     if (exact) {
@@ -988,8 +989,12 @@ export function Composer({ docked }: { docked: boolean }) {
     const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withVoiceFirst;
     const body = { ...onKey, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
-      // Accepted: nothing to try again (a card opened later never starts this run a second time).
-      onSuccess: () => dropGpuRetry(),
+      // Accepted: nothing to try again (a card opened later never starts this run a second time). Back from sign-up, the
+      // line says the run is on its way (hosted runs: its tile shows "In line" too).
+      onSuccess: () => {
+        dropGpuRetry();
+        if (signedUp && viewerInfo?.hosted) setPriceNote(PENDING_WORDS.made);
+      },
       // Stopped by the GPU pre-flight, or refused with its own card: the guided fix or the card is open already, so no error toast on top.
       onError: (e) => void ((e as { gpuSetup?: boolean }).gpuSetup || toastError(e)),
     });
@@ -1218,10 +1223,10 @@ export function Composer({ docked }: { docked: boolean }) {
     const next = pendingStep({ settled: !settling && priceSettled, blocked: !!blocker, pool: poolPrice, shown: pendingRun.shown, quote: hostedQuote, lost: keptLost, same: pendingRun.same });
     if (next === "wait") return;
     clearPending();
-    if (next === "start") submitRef.current();
-    else if (next === "lost") setPriceNote("Add your file again, then press Generate.");
-    else if (next === "ask") setPriceNote("Your draft is back. Press Generate to start.");
-    else if (next === "note" && hostedQuote) setPriceNote(`The price is now ${hostedQuote.text}. Press Generate to start.`);
+    if (next === "start") submitRef.current(undefined, undefined, undefined, true);
+    else if (next === "lost") setPriceNote(PENDING_WORDS.lost);
+    else if (next === "ask") setPriceNote(PENDING_WORDS.ask);
+    else if (next === "note" && hostedQuote) setPriceNote(PENDING_WORDS.note(hostedQuote.text));
   }, [pendingRun, clearPending, settling, priceSettled, blocker, poolPrice, hostedQuote, keptLost]);
   const blockedSlot = blocker?.slot;
   useEffect(() => {

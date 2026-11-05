@@ -130,9 +130,11 @@ the values before and after), `token.create`, `token.revoke`,
 every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account
 every 10 minutes, the account as its target) and `file.view` (one row per reader and file every hour); refusals
 `scope.denied` and `rate.limited`; and the studio's own alerts `worker.alert` (actor `system`: a worker's token used
-from a new country, a new network, or two networks at once; [gpu-workers.md](gpu-workers.md#the-protocol)). The
-owner's other reads in the browser aren't logged. Rows go after a year. `actor` can be `system`, and the `actor` filter
-takes it.
+from a new country, a new network, or two networks at once; [gpu-workers.md](gpu-workers.md#the-protocol)) and
+`runs.waiting` (actor `system`, at most once every 5 minutes: runs on this install's GPUs that have waited longer than
+5 minutes for the billing or moderation service to answer, as counts only: `waiting`, `billing`, `moderation`,
+`oldestMin`). The owner's other reads in the browser aren't logged. Rows go after a year. `actor` can be `system`, and
+the `actor` filter takes it.
 
 A row is written once the change is made. If the server can't write it (a full disk, say), the change still stands and
 the server's own log notes the missing row.

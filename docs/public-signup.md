@@ -735,8 +735,9 @@ With it on:
   processes at once. Cancel works on a held run like on any other. A deleted account's holds go with it. Only a press
   past the cap on runs waiting is turned down: "You have 10 runs on the way. Add more when one is done." The owner
   reads the held runs by why they wait (counts only) in Settings → Workers ("Waiting to enter the line: 3 (oldest 12
-  min)") and in `GET /api/admin/queue` and `/api/admin/workers` (`held`). Runs waiting for the billing service longer
-  than 5 minutes are said in the server log. With a policy that has no `limits.held` (an older service), every limit
+  min)") and in `GET /api/admin/queue` and `/api/admin/workers` (`held`). Runs waiting longer than 5 minutes for the
+  billing or moderation service to answer are said in the server log and, at most once every 5 minutes, in the admin
+  log (`runs.waiting`, counts only). With a policy that has no `limits.held` (an older service), every limit
   refuses as before.
 - The account's usual limits apply: outputs per run and its space. Its runs at once (4) and per hour (60) count its
   runs on its own GPU or key and its light work (a join, a trim) only: its other runs on this install's GPUs meet the

@@ -37,17 +37,41 @@ export const holdBackoffMs = (tries: number): number => Math.min(30_000, 1000 * 
 /** After how long runs waiting for the billing service are said in the owner's log (the service can't say so itself). */
 export const SERVICE_WAIT_SAID_MS = 5 * 60_000;
 
+/** The admin log's action for runs that wait for the billing or moderation service to answer (actor "system"). */
+export const SERVICE_WAIT_ACTION = "runs.waiting";
+
 declare global {
   var __fuobeHoldServiceSaid: number | undefined;
 }
 
-/** The owner's log, at most every SERVICE_WAIT_SAID_MS: how many runs wait for the billing service (counts only). */
+/**
+ * The owner's logs, at most every SERVICE_WAIT_SAID_MS: how many runs have waited longer than that for the billing or
+ * moderation service to answer (counts only: no prompt, no account). The server log says it from each app process; the
+ * admin log keeps one row (SERVICE_WAIT_ACTION) for all of them. A run waiting for a time (free generations that renew)
+ * counts from that time, and one waiting because the service said runs are paused (the owner's own switch) doesn't count.
+ */
 function sayServiceWait(heads: HoldRow[], now: number): void {
-  const long = heads.filter((h) => (!h.reserved || !h.checked) && now - h.pressed_at > SERVICE_WAIT_SAID_MS);
+  const since = (h: HoldRow) => Math.max(h.pressed_at, h.start_at ?? 0);
+  const long = heads.filter((h) => (!h.reserved || !h.checked) && !h.paused && now - since(h) > SERVICE_WAIT_SAID_MS);
   if (!long.length || now - (globalThis.__fuobeHoldServiceSaid ?? 0) < SERVICE_WAIT_SAID_MS) return;
   globalThis.__fuobeHoldServiceSaid = now;
-  const oldest = Math.round((now - Math.min(...long.map((h) => h.pressed_at))) / 60_000);
-  console.warn(`[fuobe] runs waiting for the billing service: ${long.length} (oldest ${oldest} min)`);
+  const oldest = Math.round((now - Math.min(...long.map(since))) / 60_000);
+  const billing = long.filter((h) => !h.reserved).length;
+  const moderation = long.filter((h) => !h.checked).length;
+  console.warn(`[fuobe] runs waiting for the billing or moderation service: ${long.length} (oldest ${oldest} min)`);
+  try {
+    const d = db();
+    const said = d.prepare("SELECT 1 FROM admin_audit WHERE action = ? AND at > ? LIMIT 1").get(SERVICE_WAIT_ACTION, now - SERVICE_WAIT_SAID_MS);
+    if (!said) {
+      d.prepare("INSERT INTO admin_audit (at, actor, token_id, token_name, action, target, detail_json, status) VALUES (?, 'system', NULL, NULL, ?, NULL, ?, 200)").run(
+        now,
+        SERVICE_WAIT_ACTION,
+        JSON.stringify({ waiting: long.length, billing, moderation, oldestMin: oldest }),
+      );
+    }
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't write the admin log: ${(e as Error).message}`);
+  }
 }
 
 /**

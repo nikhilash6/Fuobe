@@ -193,6 +193,17 @@ export function restoredPrompt(link: string, saved: string, pressed: boolean): s
 }
 
 /**
+ * The line under the toolbar once back from sign-up, by what the run the guest pressed did (pendingStep): `made` only
+ * once its run was really made; the others while Run waits for a click.
+ */
+export const PENDING_WORDS = {
+  made: "You're in. Your run is on its way.",
+  lost: "Add your file again, then press Generate.",
+  ask: "Your draft is back. Press Generate to start.",
+  note: (price: string) => `The price is now ${price}. Press Generate to start.`,
+};
+
+/**
  * What the run a guest pressed does once back as an account:
  * - lost: one of its kept files didn't come back (gone from the browser, or its upload refused): it never starts without
  *   it, and the person is asked to add it again;
