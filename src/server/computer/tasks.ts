@@ -26,6 +26,7 @@ import {
 } from "@/lib/relay";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 import { runCeilingMs } from "../queue-settings";
+import { hostedRunsOn } from "../hosted-switch";
 
 /**
  * "Use the ComfyUI on this computer" (DESIGN.md): the server keeps each ComfyUI job of a run on someone's computer as a
@@ -518,10 +519,12 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
 const STILL_HELD = `state IN (${SENT_STATES.map((x) => `'${x}'`).join(",")}) AND lease_hash IS ?`;
 
 /**
- * Does this run show a preview picture while it works? Not when the moderation service asked to see its outputs before
- * they show (its stamp's `checkOutputs`): a preview would show what the check holds back.
+ * Does this run show a preview picture while it works? Only with hosted runs on (an install without them shows what it
+ * showed before), and not when the moderation service asked to see its outputs before they show (its stamp's
+ * `checkOutputs`): a preview would show what the check holds back.
  */
 export function previewShown(generationId: string): boolean {
+  if (!hostedRunsOn()) return false;
   const g = rdb().prepare("SELECT request_json FROM generations WHERE id = ?").get(generationId) as { request_json: string } | undefined;
   if (!g) return false;
   try {
@@ -533,6 +536,9 @@ export function previewShown(generationId: string): boolean {
 
 /** Is this a JPEG picture (its first bytes)? */
 const isJpeg = (b: Buffer) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+
+/** A preview picture that couldn't be kept is logged once per app process. */
+let previewWarned = false;
 
 /**
  * Keep a worker's preview picture of its job (a JPEG of at most 64 KB, sent as base64 with a "running" report), in
@@ -548,12 +554,12 @@ export function notePreview(t: Pick<TaskRow, "id" | "pools" | "preview" | "previ
   const data = Buffer.from(base64, "base64");
   if (data.length > PREVIEW_LIMITS.bytes || !isJpeg(data) || !previewShown(t.generation_id)) return false;
   const file = previewFile(t.id);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
   const part = `${file}.${process.pid}.part`;
-  fs.writeFileSync(part, data, { mode: 0o600 });
   const d = rdb();
   let kept = false;
   try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(part, data, { mode: 0o600 });
     // The row and the file change together: dropProgress in another process waits for this, then removes both.
     kept = d
       .transaction((): boolean => {
@@ -562,8 +568,18 @@ export function notePreview(t: Pick<TaskRow, "id" | "pools" | "preview" | "previ
         return changed;
       })
       .immediate();
+  } catch (e) {
+    // A picture that can't be kept (a full disk, a file a reader has open) is only a picture: the report it came with
+    // is taken all the same, and the next picture tries again.
+    if (!previewWarned) console.warn(`[fuobe] a preview picture couldn't be kept: ${(e as Error).message}`);
+    previewWarned = true;
+    kept = false;
   } finally {
-    if (!kept) fs.rmSync(part, { force: true });
+    if (!kept) {
+      try {
+        fs.rmSync(part, { force: true });
+      } catch {}
+    }
   }
   return kept;
 }
@@ -571,7 +587,10 @@ export function notePreview(t: Pick<TaskRow, "id" | "pools" | "preview" | "previ
 /** Forget a task's progress and its preview picture (it ended, or went back in line, or its ComfyUI starts it again). */
 export function dropProgress(id: string): void {
   rdb().prepare("UPDATE relay_tasks SET progress_json = NULL, preview_at = NULL WHERE id = ?").run(id);
-  fs.rmSync(previewFile(id), { force: true });
+  // (A picture a reader has open stays until the task's folder goes; nothing serves it once preview_at is gone.)
+  try {
+    fs.rmSync(previewFile(id), { force: true });
+  } catch {}
 }
 
 /**

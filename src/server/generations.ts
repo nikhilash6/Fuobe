@@ -106,6 +106,7 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
+import { hostedRunsOn } from "./hosted-switch";
 import { poolLane, queueOfGeneration } from "./computer/pool";
 import { runPreviewAt } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
@@ -242,7 +243,8 @@ function workerQueue(id: string): { queue: { place: number; etaSeconds: number |
 
 /** A run's latest preview picture from the workers, as the address its tile loads (it changes with each picture). */
 function livePreview(id: string): { preview: string } | Record<string, never> {
-  const at = runPreviewAt(id);
+  // (Only with hosted runs on: computer/tasks.ts previewShown.)
+  const at = hostedRunsOn() ? runPreviewAt(id) : null;
   return at ? { preview: `/api/generations/${encodeURIComponent(id)}/preview?at=${at}` } : {};
 }
 

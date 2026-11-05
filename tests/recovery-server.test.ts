@@ -751,9 +751,75 @@ describe("a run's preview picture while it works", () => {
     expect(previews.every((p) => p === undefined)).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
+
+  it("a picture the studio can't keep (its file is open elsewhere, or the disk is full) never fails the worker's report: the run goes on and its output arrives", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
+    const realRename = fs.renameSync.bind(fs);
+    const spy = vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+      if (String(to).endsWith("preview.jpg")) throw Object.assign(new Error("EPERM: operation not permitted, rename"), { code: "EPERM" });
+      return realRename(from, to);
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // What the task's folder holds while it runs: no picture kept, and nothing half-written left beside it.
+    const left: string[][] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      const dir = path.dirname(tasks.outputFile(taskOf(id)!.id, 0));
+      if (step === "running" && fs.existsSync(dir)) left.push(fs.readdirSync(dir).filter((f) => f.startsWith("preview")));
+    });
+    try {
+      await workAll(d);
+      expect(d.steps).toContain("running");
+      expect(spy.mock.calls.some(([, to]) => String(to).endsWith("preview.jpg")), "a picture was sent and couldn't be kept").toBe(true);
+      expect(left.length).toBeGreaterThan(0);
+      expect(left.flat()).toEqual([]);
+    } finally {
+      spy.mockRestore();
+      warn.mockRestore();
+    }
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
 });
 
 describe("the owner's own job on the workers", () => {
+  it("with hosted runs off, it shows no preview picture, as before: its worker is never asked for one, and one sent anyway is dropped", async () => {
+    delete process.env.FUOBE_HOSTED_RUNS;
+    delete process.env.FUOBE_BILLING_URL;
+    try {
+      const w = standInWorker();
+      const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+      const { id } = await pressRun(IMAGE, owner);
+      expect(taskOf(id)!.principal).toBe("owner");
+      comfy.inner.opts.steps = 6;
+      comfy.inner.opts.stepMs = 100;
+      const d = driver(w);
+      let n = 0;
+      d.previews(() => jpegBase64(++n));
+      const asked: number[] = [];
+      const shown: (string | undefined)[] = [];
+      d.onStep(async (step) => {
+        await tick();
+        if (step !== "running") return;
+        asked.push((d.runner as unknown as { previewed: Map<string, unknown> }).previewed.size);
+        shown.push(((await sessionRead(owner)(id)) as RunLike & { preview?: string }).preview);
+      });
+      await workAll(d);
+      expect(shown.length).toBeGreaterThan(0);
+      expect(asked.every((x) => x === 0), "the claim asks for no picture").toBe(true);
+      expect(shown.every((p) => p === undefined), "no picture shows").toBe(true);
+      expect(taskOf(id)!.preview_at).toBeNull();
+      await until(() => getGeneration(id)?.status === "succeeded");
+    } finally {
+      process.env.FUOBE_HOSTED_RUNS = "1";
+    }
+  });
+
   it("waiting, it carries its place in their line in the list as after a refresh", async () => {
     const w = standInWorker();
     const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
