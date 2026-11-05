@@ -275,6 +275,14 @@ describe("an account runs every photo app on its own ComfyUI", () => {
     const pack = (await r.json()) as { id: string };
     expect(store.getAccountProject(a, PACK_KIND, pack.id)).not.toBeNull();
     expect(((await (await packsRoute.GET(json("/api/photodump/packs", "GET", undefined, "a"))).json()) as { packs: { id: string }[] }).packs.map((p) => p.id)).toEqual([pack.id]);
+    // GET /api/photodump lists the same: the proxy lets the account's read through (never a guest's stand-in), and the
+    // route answers with its own packs; a guest still gets the empty list.
+    const list = viaProxy("/api/photodump", "GET", "a");
+    expect(passed(list)).toBe(true);
+    expect(list.headers.get(access.GUEST_HEADER)).toBeNull();
+    expect(((await (await photodumpRoute.GET(json("/api/photodump", "GET", undefined, "a"))).json()) as { packs: { id: string }[] }).packs.map((p) => p.id)).toEqual([pack.id]);
+    expect(await (await photodumpRoute.GET(json("/api/photodump", "GET", undefined, "b"))).json()).toEqual({ packs: [] });
+    expect(await viaProxy("/api/photodump").json()).toEqual({ packs: [] });
     const { gens } = await runsAsOwn(() => photodumpRoute.POST(json("/api/photodump", "POST", photodump({ packId: pack.id, selfie }), "a")), "a", a);
     expect(gens.length).toBe(1);
     expect(gens[0].request.inputs?.images).toContain(ref);
