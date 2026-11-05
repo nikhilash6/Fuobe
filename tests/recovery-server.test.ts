@@ -58,7 +58,7 @@ const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
-const { getGeneration, ensureRunner, QUIET_MS, updateLive } = await import("@/server/generations");
+const { cancelGeneration, getGeneration, ensureRunner, QUIET_MS, updateLive } = await import("@/server/generations");
 const pool = await import("@/server/computer/pool");
 const tasks = await import("@/server/computer/tasks");
 const billing = await import("@/server/billing");
@@ -1740,6 +1740,47 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await tick();
     expect(getGeneration(id)?.status).toBe("succeeded");
     expect(turnOf(id)).not.toBe(token);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a stop that lands after another process saved the result, while it waited for the workers, leaves the run saved: its file stays, and it settles once", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id, { "other process": there(id) });
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    expect(getGeneration(id)?.status).toBe("running");
+    // The stop (a press of Stop in another tab) asks the run's workers to drop it, and waits for their answer.
+    let asked!: () => void;
+    const reached = new Promise<void>((r) => (asked = r));
+    let answer!: () => void;
+    const answered = new Promise<void>((r) => (answer = r));
+    const realCancel = comfyProvider.cancel!;
+    const cancel = vi.spyOn(comfyProvider, "cancel").mockImplementation(async (ctx) => {
+      asked();
+      await answered;
+      return realCancel.call(comfyProvider, ctx);
+    });
+    try {
+      const stopping = cancelGeneration(id);
+      await reached;
+      // Meanwhile the other process saves the result.
+      await app2.tick();
+      expect(getGeneration(id)?.status).toBe("succeeded");
+      answer();
+      await stopping;
+    } finally {
+      answer();
+      cancel.mockRestore();
+    }
+    // The stop came too late: the run stays saved with its file, and its report is one settle, never a refund.
+    expect(getGeneration(id)?.status).toBe("succeeded");
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 

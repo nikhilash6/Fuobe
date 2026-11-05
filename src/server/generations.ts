@@ -3161,7 +3161,7 @@ export async function cancelGeneration(id: string): Promise<void> {
   // awaits, so it can't mark the job done in between.
   if ((JSON.parse(r.external_meta_json ?? "{}") as Record<string, unknown>).finishing) {
     stopModelFinish(id);
-    update(id, { status: "canceled", completed_at: Date.now(), message: null });
+    markCanceled(id);
     return;
   }
   const model = getModel(r.model_id);
@@ -3182,9 +3182,21 @@ export async function cancelGeneration(id: string): Promise<void> {
     else if ("run" in own) await own.run(cancel);
   }
   stopModelFinish(id);
-  update(id, { status: "canceled", completed_at: Date.now(), message: null });
+  // Saved meanwhile (here, or by another app process while the provider was asked to stop): it stays as it is.
+  if (!markCanceled(id)) return;
   // Steps waiting only to feed this one are dropped too (nothing was spent on them).
   dropUnused(depIds(r.depends_on));
+}
+
+/**
+ * End a run as canceled, only while it still goes (queued or running: a run held for its output check too). A run that
+ * was saved, failed or canceled since the cancel looked at it stays as it is, with its result and its report. A save
+ * still under way doesn't stop it: the cancel wins, and that save ends with nothing kept (updateLive). Returns whether
+ * the run was canceled.
+ */
+function markCanceled(id: string): boolean {
+  const now = Date.now();
+  return db().prepare("UPDATE generations SET status = 'canceled', completed_at = ?, message = NULL, updated_at = ? WHERE id = ? AND status IN ('queued', 'running')").run(now, now, id).changes > 0;
 }
 
 // ---------------------------------------------------------------------------
