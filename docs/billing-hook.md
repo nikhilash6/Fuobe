@@ -79,8 +79,7 @@ defaults where the request names none), or for a workflow sized by its input (an
 input's size, an upscale's times its factor, within the workflow's limits. It is null for sound, text and 3D.
 
 `steps` lists every step of the run that uses this install's GPUs, the run's own step first: a chain (a film of
-several shots, a picture and then a step on it, MiniMax H3 at 2K with its finish for each take) is priced once, with one
-quote and one hold, for one press of Run.
+several shots, a picture and then a step on it) is priced once, with one quote and one hold, for one press of Run.
 Steps of CPU work are left out: they cost nothing. The requirements index marks these `cpu`: no model file, no
 graphics memory and no card their nodes need, such as filters, trims, joins, adding sound and Ken Burns moves. A step
 whose nodes run on the card (RTX Video) is GPU work. A text step inside the run (a script, lyrics, a translation)
@@ -91,9 +90,18 @@ cloud model), or the run isn't offered here. It is refused before Run, never par
 A tool's run (Shorts, Cinema Studio, Storyboard, the apps, the palette lock and every other tool an account runs) goes
 through the same gate as a studio run: every step is checked, the run is priced once from every step, held once, and
 counted once. Its price check answers `{ place: "pool", quote, line }` beside the tool's own answer when the run would
-go to this install's GPUs. A tool whose body has no field for the place or the price shown reads them from the request's
+go to this install's GPUs, and the tool's own answer is then priced as a run there (so an account with no GPU of its
+own is priced, not asked to connect one). A tool whose body has no field for the place or the price shown reads them from the request's
 headers: `x-fuobe-place` (`own` or `pool`) and `x-fuobe-shown` (`{ amount, priceVersion }` as URI-encoded JSON). A
 field in the body wins.
+
+Some models, modes and options run on a visitor's own setup only (`src/lib/own-setup.ts`), and so does a workflow that
+none of this install's GPUs can run right now (none holds its files, serves its kind of work, or has the memory it
+needs). A run that asks for one, on any step, is refused before Run. The price check answers `allowed: false` with the
+label's words as `text` and the setup itself as `ownSetup` (`{ need: "gpu", vramGb? }` or `{ need: "key", provider }`),
+and Run opens that setup (Connect your GPU, or Add your key) instead of staying off. The run itself is refused with
+403, `code: "connect-gpu"` or `"add-key"`. `GET /api/status` lists the open models these GPUs can't run right now
+(`viewer.pool.own`), so the pickers can label them.
 
 A run made only of CPU work is free and never counted. Fuobe asks the service for no quote and no hold, and the run
 counts against none of the policy's limits. For now it still waits in the same line on this install's GPUs as GPU work.
