@@ -106,6 +106,8 @@ function standInWorker() {
   db()
     .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
     .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
+  // Connected: its worker program beat a moment ago.
+  db().prepare("UPDATE relay_workers SET seen_at = ?, paused_local = 0 WHERE id = ?").run(Date.now(), w.id);
   return w;
 }
 
@@ -221,6 +223,42 @@ describe("runs at once on this install's GPUs", () => {
     expect(poolRuns(a.id)).toBe(1);
   });
 
+  it("a run not made is noted in the same transaction: a limit, a refusal from inside, or an error, which is thrown again", () => {
+    const a = account();
+    const p = { limits: { activeRuns: 1, waiting: 0, runsPerHour: 0, outputsPerRun: 0, maxMegapixels: 0, maxSeconds: 0, keepDays: 0, spaceBytes: 0 } };
+    const insert = () =>
+      db()
+        .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'queued', ?, '[]', ?, ?)")
+        .run(`tx-${++n}`, JSON.stringify({ account: a.id, place: "pool" }), Date.now(), Date.now());
+    const noted: string[] = [];
+    const note = (why: { error: string } | Error) => {
+      noted.push(why instanceof Error ? `error: ${why.message}` : why.error);
+      db().prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(`test.noted.${a.id}.${noted.length}`, "1");
+    };
+    const kept = () => (db().prepare("SELECT COUNT(*) AS n FROM settings WHERE key LIKE ?").get(`test.noted.${a.id}.%`) as { n: number }).n;
+    // A refusal from inside: nothing make wrote is kept, the note is.
+    const r = limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, () => {
+      insert();
+      throw new limits.AdmitRefused({ status: 403, error: "no", code: "not-offered" });
+    });
+    expect(r.ok).toBe(false);
+    expect(poolRuns(a.id)).toBe(0);
+    // An error: thrown again once the note is kept.
+    expect(() =>
+      limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, () => {
+        insert();
+        throw new Error("rows failed");
+      }),
+    ).toThrow("rows failed");
+    expect(poolRuns(a.id)).toBe(0);
+    // A limit.
+    expect(limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, insert).ok).toBe(true);
+    expect(limits.admitRun({ accountId: a.id, pool: { policy: p, addr: null }, refused: note }, insert).ok).toBe(false);
+    expect(poolRuns(a.id)).toBe(1);
+    expect(noted).toEqual(["no", "error: rows failed", limits.POOL_LIMIT_WORDS.active(1)]);
+    expect(kept()).toBe(3);
+  });
+
   it("runs on the account's own GPU never count against the policy, and keep the studio's own limit of 4", async () => {
     withBilling({ limits: { activeRuns: 1, waiting: 0, runsPerHour: 0 } });
     const a = account({ gpu: "online" });
@@ -237,6 +275,27 @@ describe("runs at once on this install's GPUs", () => {
     // The studio's own 4 counts every run, as before.
     const fifth = await post(IMAGE, a.cookie);
     expect(fifth.status).toBe(429);
+  });
+
+  it("a press of Run is kept only for a run on this install's GPUs: on the account's own GPU each send makes its run, as before", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account({ gpu: "online" });
+    const kept = () => (db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(a.id) as { n: number }).n;
+    const own = { ...IMAGE, requestId: `own-${crypto.randomUUID()}` };
+    const first = await post(own, a.cookie);
+    const again = await post(own, a.cookie);
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    expect(again.status, JSON.stringify(again.body)).toBe(201);
+    expect(first.body.items![0].place).toBeUndefined();
+    expect(again.body.items![0].id).not.toBe(first.body.items![0].id);
+    expect(kept()).toBe(0);
+    // The same account's press on this install's GPUs is made once, however often it is sent.
+    const pool = { ...IMAGE, place: "pool", ...SHOWN, requestId: `pool-${crypto.randomUUID()}` };
+    const one = await post(pool, a.cookie);
+    const two = await post(pool, a.cookie);
+    expect(one.status, JSON.stringify(one.body)).toBe(201);
+    expect(two.body.items!.map((g) => g.id)).toEqual(one.body.items!.map((g) => g.id));
+    expect(kept()).toBe(1);
   });
 
   it("with a free install (no billing service) the policy's limits apply to runs there too", async () => {
@@ -820,6 +879,32 @@ describe("the price check before Run and the run itself", async () => {
     beatWith(worker, catalogVersion());
     expect((await hostedRun.poolQuote(acct, req, undefined))?.quote.allowed).toBe(true);
     expect(hosted.queueFacts(a.id, endpoint).workersOnline).toBe(1);
+  });
+
+  it("a chain whose later step only away workers could run is told it starts soon, though a worker for its first step is on", async () => {
+    const endpointOf = (id: string) => getModel(id)!.routes.find((r) => r.provider === "comfyui")!.endpoint;
+    const first = endpointOf("oss-z-image-turbo");
+    const later = endpointOf("oss-rtx-video-upscale");
+    const laterLane = pool.poolLane(later);
+    expect(pool.poolLane(first)).not.toBe(laterLane);
+    const lanes = allLanes(loadIndex(), sha).map((l) => l.lane);
+    // The worker that is on may run every lane but the later step's; the only one that may run that lane is away.
+    pool.patchWorker(worker.id, { allow: Object.fromEntries(lanes.filter((l) => l !== laterLane).map((l) => [l, { delayMs: 0 }])) });
+    const away = standInWorker();
+    pool.patchWorker(away.id, { allow: { [laterLane]: { delayMs: 0 } } });
+    db().prepare("UPDATE relay_workers SET paused_local = 1, local_why = 'gpu-busy:game.exe' WHERE id = ?").run(away.id);
+    const chain = [
+      { id: "s0", modelId: "oss-z-image-turbo", op: "t2i", provider: "comfyui", kind: "image", presetId: null, waits: false },
+      { id: "s1", modelId: "oss-rtx-video-upscale", op: "upscale-video", provider: "comfyui", kind: "video", presetId: null, waits: true },
+    ];
+    const planned = { route: { endpoint: first } };
+    expect(hostedRun.runAway(planned as never, [chain[0]])).toBe(false);
+    expect(hostedRun.runAway(planned as never, chain)).toBe(true);
+    // A step that isn't on this install's GPUs (a cloud step) is not looked at.
+    expect(hostedRun.runAway(planned as never, [chain[0], { ...chain[1], provider: "fal" }])).toBe(false);
+    // The away worker is back: the chain may be made.
+    db().prepare("UPDATE relay_workers SET paused_local = 0, local_why = NULL WHERE id = ?").run(away.id);
+    expect(hostedRun.runAway(planned as never, chain)).toBe(false);
   });
 
   it("a guest's price check plans every step of a chain too, and words its refusals for someone with no Settings yet", async () => {

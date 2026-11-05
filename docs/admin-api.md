@@ -111,8 +111,8 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/files/{path}` | `Range` works | the file; 404 for the owner's own files (held or not) and unknown paths |
 | `GET /api/admin/reports` | `limit` (1 to 500, default 100) | `{ items }`, newest first |
 | `GET /api/admin/queue` | | `{ lanes }` |
-| `GET /api/admin/queue/settings` | | `{ settings: { runCeilingS: { default, lanes }, ownerWaitLimitS, fairShare, pickAllowanceMs } }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
-| `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
+| `GET /api/admin/queue/settings` | | `{ settings: { runCeilingS: { default, lanes }, ownerWaitLimitS, fairShare, pickAllowanceMs, pausedBudgetS } }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
+| `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000), `pausedBudgetS` (seconds, 0 to 604800) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
 | `GET /api/admin/workers` | | `{ workers, lanes }` |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
 | `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |

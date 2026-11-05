@@ -21,11 +21,13 @@ import { GenerationRequestSchema } from "@/server/request-schema";
 import { gateGeneration, GPU_SETUP_HEADER } from "@/server/gpu/gate";
 import { gpuTargetFor } from "@/server/gpu/target";
 import { connectNeeds } from "@/server/connect-refusal";
-import { BILLING_HEADER } from "@/server/billing";
+import { BILLING_HEADER, BILLING_WAIT } from "@/server/billing";
 import { queueRelease } from "@/server/billing-outbox";
 import { runOnPool } from "@/server/hosted";
 import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
+import { hostedRunsOn } from "@/server/hosted-switch";
+import { endTry, notePressRun, pressPrior, pressRun, pressTries, pressTry, readPressId } from "@/server/run-requests";
 
 /**
  * List generations, newest first. Filters: kind / kinds, features (`x*` = prefix), models, statuses,
@@ -48,6 +50,27 @@ const BODY_TOO_BIG = "That request is over 4 MB. Upload pictures and clips first
 
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}, headers: Record<string, string> = {}) =>
   Response.json({ error, ...extra }, { status, headers: { "Cache-Control": "no-store", ...headers } });
+
+/** An answer as its parts: its status, body and headers. */
+interface Answer {
+  status: number;
+  body: { error: string; code?: string; provider?: string };
+  headers: Record<string, string>;
+}
+
+/** The answer to an account's run that can't go where it was planned: Connect your GPU, Add your key (the client opens either). */
+const accountRunAnswer = (r: AccountRunRefusal): Answer => ({
+  status: 403,
+  body: { error: r.error, code: r.code, ...(r.provider && { provider: r.provider }) },
+  headers: r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {},
+});
+
+/** The answer to a run the limits refuse as it is made (admitRun), or one with a step this install's GPUs don't take. */
+const limitAnswer = (r: AdmitRefused["refusal"]): Answer => ({
+  status: r.status,
+  body: { error: r.error, code: r.code },
+  headers: r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) },
+});
 
 /** Start a generation; `?preview=1` only says what it would run as (model, operation, jobs, outputs, cost). */
 export async function POST(request: Request) {
@@ -94,8 +117,8 @@ export async function POST(request: Request) {
   /** An account's run that can't go where it was planned: Connect your GPU, Add your key (the client opens either). */
   const refused = (r: AccountRunRefusal) => {
     if (account) unhit(`run:${account.id}`);
-    const headers: Record<string, string> = r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {};
-    return refuse(403, r.error, { code: r.code, ...(r.provider && { provider: r.provider }) }, headers);
+    const a = accountRunAnswer(r);
+    return refuse(a.status, a.body.error, a.body, a.headers);
   };
   // Beside the request (never in it): the place the client prefers, and the price it showed (hosted runs, billing hook).
   const { wish, shown } = readWishes(body, request.headers);
@@ -103,6 +126,14 @@ export async function POST(request: Request) {
     if (account) unhit(`run:${account.id}`);
     return refuse(r.status, r.body.error, r.body, r.headers);
   };
+  // With hosted runs on, an account's press of Run whose run goes to this install's GPUs is made once however often the
+  // page sends it (run-requests.ts): a resend gets the run the first one made. A run on its own GPU or key notes nothing.
+  const pressId = account && !preview && hostedRunsOn() ? readPressId(body) : null;
+  const madeAlready = (ids: string[]) => Response.json({ items: ids.map((id) => getGeneration(id)).filter((g) => !!g) }, { status: 201 });
+  if (account && pressId) {
+    const made = pressRun(account.id, pressId);
+    if (made) return madeAlready(made.ids);
+  }
   const notes: string[] = [];
   if (account && !preview) {
     // Room on the server, room in the account's files, and a fair share of runs.
@@ -160,6 +191,8 @@ export async function POST(request: Request) {
       if (decision.kind === "refuse") return refusedBy(decision.refusal);
     }
     const onPool = decision.kind === "pool" ? decision : null;
+    // The try of the press this send is, for a run on this install's GPUs only (run-requests.ts).
+    const poolTry = account && onPool && pressId ? pressTries(account.id, pressId) : null;
     // The client's address, kept only as a salted hash for the policy's hourly count per address (null: no trusted proxy).
     const addr = account && onPool ? clientAddress(request) : null;
     if (account && onPool) {
@@ -233,7 +266,7 @@ export async function POST(request: Request) {
         // Light work only (joins, trims): free, so nothing is set aside, and it counts against none of the policy's limits.
         stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
       } else if (onPool) {
-        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps);
+        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps, poolTry === null ? null : pressTry(account.id, pressId!, poolTry));
         if (!held.ok) return refusedBy(held.refusal);
         stamp = held.stamp;
       } else if (mod.checkOutputs) stamp = { checkOutputs: true };
@@ -249,20 +282,41 @@ export async function POST(request: Request) {
         // sent until they are kept.
         const pool = onPool;
         const admitted = inScope(() => {
-          const r = admitRun({ accountId: account.id, pool: pool && !pool.light ? { policy: pool.policy, addr } : null }, () => {
-            const run = captureRun(make);
-            const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
-            if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
-            return run;
-          });
+          const r = admitRun(
+            {
+              accountId: account.id,
+              pool: pool && !pool.light ? { policy: pool.policy, addr } : null,
+              // A send of this press that got here first made the run, or ended this try (its hold is going back):
+              // nothing is made twice, and nothing against a hold that went back.
+              ...(poolTry !== null && { prior: () => pressPrior(account.id, pressId!, poolTry) }),
+              // Refused after its hold was made: the hold goes back, so the press's next send is a new try with a hold
+              // of its own, never a run against this one. Noted in the same transaction, before any send can look.
+              ...(poolTry !== null && stamp?.hold && { refused: () => void endTry(account.id, pressId!, poolTry) }),
+            },
+            () => {
+              const run = captureRun(make);
+              const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
+              if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+              if (poolTry !== null) notePressRun(account.id, pressId!, poolTry, run.value.map((g) => g.id), stamp?.hold ?? null);
+              return run;
+            },
+          );
           if (r.ok) r.value.start();
           return r;
         });
+        if (!admitted.ok && "prior" in admitted) {
+          unhit(`run:${account.id}`);
+          const prior = admitted.prior;
+          // The service gives one try of a press one hold; a different one (a service that made a second) goes back, and
+          // so does the hold of a try another send ended.
+          if (stamp?.hold && (prior === "ended" || stamp.hold !== prior.hold)) queueRelease(stamp.hold);
+          return prior === "ended" ? refuse(503, BILLING_WAIT.run, { code: "paused" }, { [BILLING_HEADER]: "paused" }) : madeAlready(prior.ids);
+        }
         if (!admitted.ok) {
           unhit(`run:${account.id}`);
           if (stamp?.hold) queueRelease(stamp.hold);
-          const r = admitted.refusal;
-          return refuse(r.status, r.error, { code: r.code }, r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) });
+          const a = limitAnswer(admitted.refusal);
+          return refuse(a.status, a.body.error, a.body, a.headers);
         }
         items = admitted.value.value;
       } else items = make();

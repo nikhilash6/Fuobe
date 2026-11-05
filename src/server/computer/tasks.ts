@@ -8,6 +8,7 @@ import {
   DEVICE_ID,
   FACT_LIMITS,
   INPUT_NAME,
+  PREVIEW_LIMITS,
   RELAY_LIMITS,
   RELAY_TIMES,
   reportAllowed,
@@ -28,6 +29,7 @@ import type { FinishTicket } from "@/lib/finish-ticket";
 import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 import { runCeilingMs } from "../queue-settings";
+import { hostedRunsOn } from "../hosted-switch";
 
 /**
  * "Use the ComfyUI on this computer" (DESIGN.md): the server keeps each ComfyUI job of a run on someone's computer as a
@@ -54,10 +56,8 @@ const inputFile = (name: string) => path.join(relayDir(), "in", name);
 const taskDir = (id: string) => path.join(relayDir(), "tasks", id);
 export const outputFile = (id: string, n: number) => path.join(taskDir(id), `out-${n}`);
 
-declare global {
-  /** Live progress by task id (written on every step, so kept in memory, not in SQLite). */
-  var __fuobeRelayProgress: Map<string, Progress> | undefined;
-}
+/** A task's latest preview picture (a worker's JPEG while the job renders), in the task's folder. */
+const previewFile = (id: string) => path.join(taskDir(id), "preview.jpg");
 
 export interface Progress {
   value?: number;
@@ -65,19 +65,20 @@ export interface Progress {
   node?: string;
   nodesDone?: number;
   position?: number;
-  /** A worker's latest live preview (a JPEG as base64, src/lib/relay.ts PREVIEW_LIMITS), and when it came. */
-  preview?: string;
-  previewAt?: number;
   at: number;
 }
 
-const progressMap = () => (globalThis.__fuobeRelayProgress ??= new Map());
-export const taskProgress = (id: string): Progress | undefined => progressMap().get(id);
-/** A task's latest live preview from its worker: a JPEG (at most 64 KB) and when it came, or null. */
-export function taskPreview(id: string): { jpeg: Buffer; at: number } | null {
-  const p = progressMap().get(id);
-  return p?.preview ? { jpeg: Buffer.from(p.preview, "base64"), at: p.previewAt ?? p.at } : null;
-}
+/**
+ * A task's live progress, as its last report or beat said it. Kept in the database (relay_tasks.progress_json), not in
+ * one process's memory: a refresh, a second device and the other app process during a deploy all see the same step.
+ */
+export const taskProgress = (t: Pick<TaskRow, "progress_json">): Progress | undefined => json<Progress | undefined>(t.progress_json, undefined);
+
+/**
+ * A preview picture that comes a little before PREVIEW_LIMITS.everyMs is kept all the same (a worker's timer and the
+ * network's delay).
+ */
+const PREVIEW_SLACK_MS = 300;
 
 /** The relay's tables are made with the database (db.ts RELAY_TABLES). */
 const rdb = () => db();
@@ -127,6 +128,9 @@ export interface TaskRow {
   worker_id: string | null;
   /** Its class in the line: "paid", "free" (people's runs) or "owner" (the owner's own jobs, served last). NULL: from before classes, read as "owner" with no account and "free" with one. */
   class: string | null;
+  /** Its live progress as JSON (taskProgress), and when its latest preview picture came (null: none kept). */
+  progress_json: string | null;
+  preview_at: number | null;
   created_at: number;
   updated_at: number;
   claimed_at: number | null;
@@ -529,7 +533,7 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
     const t = typeof r?.task === "string" ? getTask(principal, r.task) : null;
     if (!t || t.device !== b.device || !(SENT_STATES as readonly string[]).includes(t.state)) continue;
     setTask(t.id, { device_seen_at: now });
-    noteProgress(t.id, r, now);
+    noteProgress(t.id, r, now, t.lease_hash);
   }
   for (const id of (b.stopped ?? []).slice(0, 64)) {
     const t = typeof id === "string" ? getTask(principal, id) : null;
@@ -544,14 +548,18 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
 
 /**
  * Does a worker's task show live previews: a task on the workers whose run asked for previews, that isn't a finishing
- * job, and whose results aren't checked before anyone sees them.
+ * job, and whose results aren't checked before anyone sees them (the task's stamp, and its run's: previewShown).
  */
-export function showsPreview(t: Pick<TaskRow, "pools" | "preview" | "finish_json" | "extra_json">): boolean {
-  return !!t.pools && !!t.preview && !t.finish_json && !json<{ checkOutputs?: boolean }>(t.extra_json, {}).checkOutputs;
+export function showsPreview(t: Pick<TaskRow, "pools" | "preview" | "finish_json" | "extra_json" | "generation_id">): boolean {
+  return !!t.pools && !!t.preview && !t.finish_json && !json<{ checkOutputs?: boolean }>(t.extra_json, {}).checkOutputs && previewShown(t.generation_id);
 }
 
-/** Keep a task's live progress. A preview is kept only from a progress report (`o.preview`), never from a beat. */
-export function noteProgress(id: string, r: Record<string, unknown>, now: number, o: { preview?: boolean } = {}) {
+/**
+ * Note a task's live progress (a report or a beat; never a preview: notePreview), over what it said before. Only while the task is still with the
+ * computer or worker that said it (`lease`: the lease it held then, as read with the task): a late report from an attempt
+ * another app process sent back in line, ended or gave to another worker meanwhile leaves nothing behind.
+ */
+export function noteProgress(id: string, r: Record<string, unknown>, now: number, lease: string | null) {
   const p: Progress = { at: now };
   for (const k of ["value", "max", "nodesDone", "position"] as const) {
     const v = nonNeg(r[k]);
@@ -559,11 +567,112 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   }
   const node = str(r.node, 64);
   if (node) p.node = node;
-  // A worker's live preview: a JPEG of at most 64 KB (previewOf); a larger one, or anything else, is dropped.
-  const preview = o.preview ? previewOf(r.preview) : undefined;
-  if (preview) Object.assign(p, { preview, previewAt: now });
-  progressMap().set(id, { ...progressMap().get(id), ...p });
+  const d = rdb();
+  d.transaction(() => {
+    const cur = d.prepare(`SELECT progress_json FROM relay_tasks WHERE id = ? AND ${STILL_HELD}`).get(id, lease) as Pick<TaskRow, "progress_json"> | undefined;
+    if (!cur) return;
+    d.prepare(`UPDATE relay_tasks SET progress_json = ? WHERE id = ? AND ${STILL_HELD}`).run(JSON.stringify({ ...taskProgress(cur), ...p }), id, lease);
+  }).immediate();
 }
+
+/** A task still sent to the computer or worker that holds the lease given (the query's last parameter). */
+const STILL_HELD = `state IN (${SENT_STATES.map((x) => `'${x}'`).join(",")}) AND lease_hash IS ?`;
+
+/**
+ * Does this run show a preview picture while it works? Only with hosted runs on (an install without them shows what it
+ * showed before), and not when the moderation service asked to see its outputs before they show (its stamp's
+ * `checkOutputs`): a preview would show what the check holds back.
+ */
+export function previewShown(generationId: string): boolean {
+  if (!hostedRunsOn()) return false;
+  const g = rdb().prepare("SELECT request_json FROM generations WHERE id = ?").get(generationId) as { request_json: string } | undefined;
+  if (!g) return false;
+  try {
+    return !(JSON.parse(g.request_json) as { checkOutputs?: boolean }).checkOutputs;
+  } catch {
+    return false;
+  }
+}
+
+
+/** A preview picture that couldn't be kept is logged once per app process. */
+let previewWarned = false;
+
+/**
+ * Keep a worker's preview picture of its job (a JPEG of at most 64 KB, sent as base64 with a "running" report), in
+ * place of the one before. One every 2 s at most: one that comes sooner is dropped, as is anything that isn't a JPEG
+ * or is too big. Only a worker's task keeps one, and only for a run that shows previews (previewShown); a person's own
+ * computer shows its own previews in its tab. Kept only while the attempt that sent it still holds the task: a picture
+ * that comes after another app process sent it back in line or ended it is dropped, and no file is left behind.
+ */
+export function notePreview(
+  t: Pick<TaskRow, "id" | "pools" | "preview" | "preview_at" | "lease_hash" | "generation_id" | "finish_json" | "extra_json">,
+  base64: unknown,
+  now = Date.now(),
+): boolean {
+  if (t.preview_at && now - t.preview_at < PREVIEW_LIMITS.everyMs - PREVIEW_SLACK_MS) return false;
+  // A JPEG of at most PREVIEW_LIMITS.maxBytes (previewOf); a larger one, or anything else, is dropped.
+  const jpeg = previewOf(base64);
+  if (!jpeg || !showsPreview(t)) return false;
+  const data = Buffer.from(jpeg, "base64");
+  const file = previewFile(t.id);
+  const part = `${file}.${process.pid}.part`;
+  const d = rdb();
+  let kept = false;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(part, data, { mode: 0o600 });
+    // The row and the file change together: dropProgress in another process waits for this, then removes both.
+    kept = d
+      .transaction((): boolean => {
+        const changed = d.prepare("UPDATE relay_tasks SET preview_at = ? WHERE id = ? AND state IN ('queued','running') AND lease_hash IS ?").run(now, t.id, t.lease_hash).changes > 0;
+        if (changed) fs.renameSync(part, file);
+        return changed;
+      })
+      .immediate();
+  } catch (e) {
+    // A picture that can't be kept (a full disk, a file a reader has open) is only a picture: the report it came with
+    // is taken all the same, and the next picture tries again.
+    if (!previewWarned) console.warn(`[fuobe] a preview picture couldn't be kept: ${(e as Error).message}`);
+    previewWarned = true;
+    kept = false;
+  } finally {
+    if (!kept) {
+      try {
+        fs.rmSync(part, { force: true });
+      } catch {}
+    }
+  }
+  return kept;
+}
+
+/** Forget a task's progress and its preview picture (it ended, or went back in line, or its ComfyUI starts it again). */
+export function dropProgress(id: string): void {
+  rdb().prepare("UPDATE relay_tasks SET progress_json = NULL, preview_at = NULL WHERE id = ?").run(id);
+  // (A picture a reader has open stays until the task's folder goes; nothing serves it once preview_at is gone.)
+  try {
+    fs.rmSync(previewFile(id), { force: true });
+  } catch {}
+}
+
+/**
+ * The latest preview picture of a run's job on the workers while it works, and when it came; null when there is none.
+ * The caller has checked that the run is the viewer's own.
+ */
+export function runPreview(generationId: string): { path: string; at: number } | null {
+  const t = previewTask(generationId);
+  if (!t) return null;
+  const file = previewFile(t.id);
+  return fs.existsSync(file) ? { path: file, at: t.preview_at } : null;
+}
+
+const previewTask = (generationId: string) =>
+  rdb()
+    .prepare("SELECT id, preview_at FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state IN ('queued','running') AND preview_at IS NOT NULL ORDER BY created_at DESC LIMIT 1")
+    .get(generationId) as { id: string; preview_at: number } | undefined;
+
+/** When a run's latest preview picture came (null: it has none now), for the address its tile loads it from. */
+export const runPreviewAt = (generationId: string): number | null => previewTask(generationId)?.preview_at ?? null;
 
 /**
  * A computer asks for work: first a task it took before and lost track of (a reload: not in `running`), then, when it is
@@ -605,7 +714,11 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
   // claim (the report "gone"). Across claims, only its requeues count (pool.ts MAX_ATTEMPTS). Its sending clock starts at
   // the claim.
   setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...(fresh && t.pools && { attempts: 0, sending_since: null }), ...fields });
-  if (fresh) rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+  if (fresh) {
+    rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+    // A new attempt: nothing of an earlier one shows (no step, no preview picture).
+    dropProgress(t.id);
+  }
   const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
   // An account's task for workers hands out its job ticket, never a graph (src/lib/job-ticket.ts).
   const ticket = t.ticket_json ? json<JobTicket | null>(t.ticket_json, null) : null;
@@ -671,7 +784,7 @@ export function endTask(id: string, state: "done" | "failed" | "canceled", field
   setTask(id, { state, finished_at: Date.now(), down_at: null, down_why: null, ...(stop && { stop }), ...fields });
   // A task a worker held ends: the workers' log says how.
   if (t?.pools && t.worker_id && (ACTIVE_STATES as readonly string[]).includes(t.state)) logWorkerJob(state, t, t.worker_id);
-  progressMap().delete(id);
+  dropProgress(id);
   for (const i of rdb().prepare("SELECT name FROM relay_inputs WHERE task_id = ?").all(id) as { name: string }[]) fs.rmSync(inputFile(i.name), { force: true });
   rdb().prepare("DELETE FROM relay_inputs WHERE task_id = ?").run(id);
 }
@@ -745,12 +858,14 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       return { ok: true };
     case "queued":
       setTask(t.id, seen);
-      noteProgress(t.id, { position: e.position }, now);
+      noteProgress(t.id, { position: e.position }, now, t.lease_hash);
       return { ok: true };
     case "running":
       setTask(t.id, { ...seen, state: "running", ...(!t.started_at && { started_at: now }), note: null });
-      // A live preview only from the attempt that holds the lease, for a run that shows them.
-      noteProgress(t.id, { ...e, position: undefined }, now, { preview: showsPreview(t) });
+      noteProgress(t.id, { ...e, position: undefined }, now, t.lease_hash);
+      // A worker's live preview of the job: the tile shows the latest one while the run works. Kept only from a progress
+      // report of the attempt that holds the lease, for a run that shows them (notePreview, showsPreview).
+      if (e.preview) notePreview({ ...(taskById(t.id) ?? t), lease_hash: t.lease_hash }, e.preview, now);
       return { ok: true };
     case "finished":
     case "passes": {
@@ -803,6 +918,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         // A worker's task sends its files again: its sending clock (pool.ts SENDING_MS) starts again from now. The
         // attempt's own deadline stays where its claim put it (pool.ts attemptDeadline).
         setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null, ...(t.pools && { sending_since: now }) });
+        dropProgress(t.id);
         rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
         return { ok: true };
       }
@@ -932,7 +1048,6 @@ function sweepPrincipal(principal?: Principal) {
 export function purgeComputer(principal: Principal): void {
   const d = rdb();
   for (const t of d.prepare("SELECT id FROM relay_tasks WHERE principal = ?").all(principal) as { id: string }[]) {
-    progressMap().delete(t.id);
     fs.rmSync(taskDir(t.id), { recursive: true, force: true });
   }
   for (const i of d.prepare("SELECT name FROM relay_inputs WHERE principal = ?").all(principal) as { name: string }[]) fs.rmSync(inputFile(i.name), { force: true });

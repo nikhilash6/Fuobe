@@ -38,7 +38,7 @@ const toolRun = await import("@/server/account-tool-run");
 const { createGenerations } = await import("@/server/generations");
 const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
 const { drainOutbox, queueReports } = await import("@/server/billing-outbox");
-const presses = await import("@/server/tool-presses");
+const presses = await import("@/server/run-requests");
 const pressRequestId = presses.reserveRequestId;
 
 let fake: FakeBilling;
@@ -124,7 +124,7 @@ describe("hosted runs off (the default): tool runs are as before", () => {
       );
     expect(await (await press()).json()).toEqual({ value: 1 });
     expect(await (await press()).json()).toEqual({ value: 1 });
-    expect(db().prepare("SELECT COUNT(*) AS n FROM tool_presses WHERE account = ?").get(account.id)).toEqual({ n: 0 });
+    expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(account.id)).toEqual({ n: 0 });
   });
 
   it("the seam answers its own GPU or key, whatever the steps", async () => {
@@ -305,7 +305,7 @@ describe("hosted runs on", () => {
     const good = await press(() => createGenerations(plan[0].request));
     expect(good.status, await good.clone().text()).toBe(201);
     const sent = fake.calls_of("/v1/reserve").slice(before).map((c) => (c.body as { requestId: string }).requestId);
-    expect(sent).toEqual([pressRequestId(account.id, "test-press\npress-tries-0001"), pressRequestId(account.id, "test-press\npress-tries-0001\n1")]);
+    expect(sent).toEqual([pressRequestId(account.id, "test-press\npress-tries-0001"), pressRequestId(account.id, "test-press\npress-tries-0001", 1)]);
     await drainOutbox();
     const holds = [...fake.holds.values()].filter((h) => sent.includes(h.requestId));
     expect(holds.map((h) => h.released)).toEqual([true, false]);
@@ -314,9 +314,35 @@ describe("hosted runs on", () => {
     expect(reserves() - before).toBe(2);
   });
 
+  it("a press whose run goes to the account's own GPU keeps nothing in the database, as with hosted runs off", async () => {
+    useBilling();
+    const account = auth.accountById(ids.gpu)!;
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    expect(await toolRun.placeOf(account, plan)).toEqual({ kind: "own" });
+    let called = 0;
+    const press = () =>
+      toolRun.onceForAccount(
+        account,
+        "test-own",
+        "press-own-00001",
+        async () => {
+          // Placed on its own GPU: never startOnPool, so the press is never claimed.
+          expect(await toolRun.placeOf(account, plan)).toEqual({ kind: "own" });
+          return { ok: true as const, value: ++called };
+        },
+        ({ value }) => Response.json({ value }, { status: 201 }),
+      );
+    const before = reserves();
+    expect(await (await press()).json()).toEqual({ value: 1 });
+    // Sent again in this server process: the first run, as before (shorts-schemas.ts once).
+    expect(await (await press()).json()).toEqual({ value: 1 });
+    expect(db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE account = ?").get(account.id)).toEqual({ n: 0 });
+    expect(reserves()).toBe(before);
+  });
+
   it("a resend while another server process starts the press waits for that answer and makes nothing", async () => {
     const account = auth.accountById(ids.none)!;
-    expect(presses.claimPress(account.id, "test-wait", "press-wait-0001").kind).toBe("claimed");
+    expect(presses.claimPress(account.id, presses.toolPressKey("test-wait", "press-wait-0001")).kind).toBe("claimed");
     let called = 0;
     const resend = toolRun.onceForAccount(
       account,
@@ -328,7 +354,7 @@ describe("hosted runs on", () => {
       },
       () => Response.json({ here: true }, { status: 201 }),
     );
-    setTimeout(() => presses.answerPress(account.id, "test-wait", "press-wait-0001", { status: 201, headers: [["content-type", "application/json"]], text: JSON.stringify({ elsewhere: true }) }), 300);
+    setTimeout(() => presses.answerPress(account.id, presses.toolPressKey("test-wait", "press-wait-0001"), { status: 201, headers: [["content-type", "application/json"]], text: JSON.stringify({ elsewhere: true }) }), 300);
     const r = await resend;
     expect(r.status).toBe(201);
     expect(await r.json()).toEqual({ elsewhere: true });

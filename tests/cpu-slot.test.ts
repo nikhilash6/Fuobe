@@ -9,7 +9,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { apiAs, loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -299,6 +299,11 @@ describe("live previews from a worker", () => {
   });
 
   it("the studio keeps a preview up to 64 KB and drops a larger one, keeping the progress", async () => {
+    // A preview picture shows only with hosted runs on (without them, a run shows what it showed before).
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    onTestFinished(() => {
+      delete process.env.FUOBE_HOSTED_RUNS;
+    });
     expect(previewOf(jpeg(PREVIEW_LIMITS.maxBytes).toString("base64"))).toBeDefined();
     expect(previewOf(jpeg(PREVIEW_LIMITS.maxBytes + 1).toString("base64"))).toBeUndefined();
     expect(previewOf(Buffer.from("89504e470d0a1a0a", "hex").toString("base64"))).toBeUndefined();
@@ -315,15 +320,15 @@ describe("live previews from a worker", () => {
     // Just over 64 KB: the report is kept, its preview dropped.
     const big = jpeg(PREVIEW_LIMITS.maxBytes + 1024).toString("base64");
     expect((await report({ event: "running", value: 2, max: 8, preview: big })).status).toBe(200);
-    expect(tasks.taskProgress(id)).toMatchObject({ value: 2, max: 8 });
-    expect(tasks.taskPreview(id)).toBeNull();
+    expect(tasks.taskProgress(tasks.taskById(id)!)).toMatchObject({ value: 2, max: 8 });
+    expect(keptPreview(id)).toBeNull();
     const ok = jpeg(30 * 1024);
     expect((await report({ event: "running", value: 3, max: 8, preview: ok.toString("base64") })).status).toBe(200);
-    expect(tasks.taskPreview(id)?.jpeg.equals(ok)).toBe(true);
-    expect(tasks.taskProgress(id)).toMatchObject({ value: 3, max: 8 });
+    expect(keptPreview(id)?.equals(ok)).toBe(true);
+    expect(tasks.taskProgress(tasks.taskById(id)!)).toMatchObject({ value: 3, max: 8 });
     // A beat never brings a preview.
     beat(w, { running: [id] });
-    expect(tasks.taskPreview(id)?.jpeg.equals(ok)).toBe(true);
+    expect(keptPreview(id)?.equals(ok)).toBe(true);
     // A progress report with no preview stays a few KB; one with a preview, under about 91 KB in all (a 64 KB JPEG as
     // base64 and a few KB more).
     expect((await report({ event: "running", value: 4, max: 8, node: "x".repeat(20 * 1024) })).status).toBe(413);
@@ -332,6 +337,13 @@ describe("live previews from a worker", () => {
     expect((await report({ event: "running", value: 6, max: 8, preview: jpeg(PREVIEW_LIMITS.maxBytes).toString("base64"), node: "x".repeat(8 * 1024) })).status).toBe(413);
   });
 });
+
+/** A run's preview picture as the studio keeps it (a file in its task's folder), or null. */
+function keptPreview(id: string): Buffer | null {
+  const t = tasks.taskById(id);
+  const p = t?.preview_at ? tasks.runPreview(t.generation_id) : null;
+  return p ? fs.readFileSync(p.path) : null;
+}
 
 describe("which runs show live previews", () => {
   it("a run whose results are checked first, a finishing job and a run with no previews never ask the worker for one", () => {

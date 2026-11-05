@@ -15,7 +15,7 @@ import { db } from "./db";
 import { handOversDone } from "./generations";
 import { deleteForever } from "./library";
 import { deleteAsset, scratchDir } from "./storage";
-import { forgetAccountPresses } from "./tool-presses";
+import { forgetAccountPresses } from "./run-requests";
 
 /**
  * Public sign-up: what an account keeps on this server goes in time. Its uploads after 14 days (even when a run still

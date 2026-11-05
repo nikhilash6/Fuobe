@@ -27,7 +27,7 @@ import { withRunStamp, type RunStamp } from "./run-stamp";
 import { once } from "./shorts-schemas";
 import { ShortsError } from "./shorts";
 import { hostedRunsOn } from "./hosted-switch";
-import { answerPress, claimPress, releasePress, toolPressId, type PressAnswer } from "./tool-presses";
+import { answerPress, claimPress, pressTry, releasePress, toolPressKey, toolPressSeen, type Press, type PressAnswer, type PressClaim } from "./run-requests";
 
 /**
  * A tool's run for a signed-in account (public sign-up): Genjutsu first, then the other tools that plan a run as a
@@ -98,10 +98,11 @@ const asAnswer = async (r: Response): Promise<PressAnswer> => ({ status: r.statu
 const fromAnswer = (a: PressAnswer): Response => new Response(a.text, { status: a.status, headers: a.headers });
 
 /**
- * The press of Run a tool's run belongs to (onceForAccount): its id for the billing service's reserve, so every resend
- * of the press asks for the same hold (hosted-run.ts reservePool). Null: a run with no id from its page.
+ * The press of Run a tool's run belongs to (onceForAccount), with hosted runs on: its account and key (run-requests.ts),
+ * and its try once startOnPool has claimed it for a run on this install's GPUs (`tries`). Null key: a run with no id
+ * from its page. A run on the account's own GPU or key never claims it, so nothing of it is kept.
  */
-const PRESS = new AsyncLocalStorage<{ pressId: string | null }>();
+const PRESS = new AsyncLocalStorage<{ accountId: string; key: string | null; tries: number | null }>();
 
 /** How long a resend waits for its press to be answered by another server process, before it says it is starting. */
 const PRESS_WAIT_MS = 30_000;
@@ -118,35 +119,30 @@ const STARTING: PressAnswer = {
 };
 
 /**
- * A press kept in the database (tool-presses.ts), with hosted runs on: a resend that reaches another server process, or
- * comes after a restart, gets the first answer (waiting for it while that process starts it), never a second run.
+ * A press of a tool's Run as another server process left it (run-requests.ts): its answer (waiting for it while that
+ * process starts it), STARTING when it is still being started after PRESS_WAIT_MS, or null when there is none to give.
+ * `look` reads it, or claims it for this call.
  */
-async function keptPress(accountId: string, scope: string, clientId: string, attempt: (tries: number) => Promise<PressAnswer>): Promise<PressAnswer> {
+async function awaitPress(look: () => PressClaim | null): Promise<Extract<PressClaim, { kind: "claimed" }> | PressAnswer | null> {
   const until = Date.now() + PRESS_WAIT_MS;
-  let claim = claimPress(accountId, scope, clientId);
-  while (claim.kind === "starting") {
+  let seen = look();
+  while (seen?.kind === "starting") {
     if (Date.now() > until) return STARTING;
     await new Promise((r) => setTimeout(r, 250));
-    claim = claimPress(accountId, scope, clientId);
+    seen = look();
   }
-  if (claim.kind === "done") return claim.answer;
-  try {
-    const answer = await attempt(claim.tries);
-    answerPress(accountId, scope, clientId, answer);
-    return answer;
-  } catch (e) {
-    releasePress(accountId, scope, clientId, e instanceof Refused && e.held);
-    throw e;
-  }
+  if (!seen) return null;
+  return seen.kind === "done" ? seen.answer : seen;
 }
 
 /**
  * An account's tool run once per client request id (shorts-schemas.ts once): a repeat of the id (a second click that got
- * through, a retried POST) gets the first run, and never another account's. With hosted runs on, the press is kept in
- * the database too (keptPress), so a repeat that reaches another server process gets it as well, and its run on this
- * install's GPUs asks the billing service for one hold however often it is sent. A refusal isn't kept: sent again
- * (after the account connects its GPU, say), the run is checked again; one refused after its hold was made (and given
- * back) asks for a new hold then. `ok` turns the started run into the route's answer.
+ * through, a retried POST) gets the first run, and never another account's. With hosted runs on, a press whose run goes
+ * to this install's GPUs is kept in the database too (run-requests.ts), so a repeat that reaches another server process
+ * gets it as well, and the run asks the billing service for one hold however often it is sent. A refusal isn't kept:
+ * sent again (after the account connects its GPU, say), the run is checked again; one refused after its hold was made
+ * (and given back) is a new try then, with a new hold. A run on the account's own GPU or key keeps nothing, as before.
+ * `ok` turns the started run into the route's answer.
  */
 export async function onceForAccount<T>(
   account: Account,
@@ -155,18 +151,49 @@ export async function onceForAccount<T>(
   fn: () => Promise<AccountToolResult<T>>,
   ok: (r: { value: T; gpuWarning?: string }) => Response,
 ): Promise<Response> {
-  const attempt = async (tries: number): Promise<PressAnswer> => {
-    const out = await PRESS.run({ pressId: id ? toolPressId(scope, id, tries) : null }, fn);
-    if (out.ok) return asAnswer(ok(out));
-    throw new Refused(await asAnswer(out.response), !!out.held);
+  const key = id && hostedRunsOn() ? toolPressKey(scope, id) : null;
+  const attempt = async (): Promise<PressAnswer> => {
+    // A press another server process answered (or is starting) is that answer.
+    const before = key ? await awaitPress(() => toolPressSeen(account.id, key)) : null;
+    // (Still starting there: said, and never kept as this press's answer here.)
+    if (before === STARTING) throw new Refused(STARTING, false);
+    if (before) return before as PressAnswer;
+    const press = { accountId: account.id, key, tries: null as number | null };
+    try {
+      const out = await PRESS.run(press, fn);
+      const answer = out.ok ? await asAnswer(ok(out)) : null;
+      if (key && press.tries !== null) {
+        if (answer) answerPress(account.id, key, answer);
+        else releasePress(account.id, key, press.tries, !out.ok && !!out.held);
+      }
+      if (answer) return answer;
+      throw new Refused(await asAnswer((out as Extract<AccountToolResult<T>, { ok: false }>).response), !out.ok && !!out.held);
+    } catch (e) {
+      if (key && press.tries !== null && !(e instanceof Refused)) releasePress(account.id, key, press.tries, false);
+      throw e;
+    }
   };
   try {
-    const answer = await once(`${scope}:acct:${account.id}`, id, () => (id && hostedRunsOn() ? keptPress(account.id, scope, id, attempt) : attempt(0)));
-    return fromAnswer(answer);
+    return fromAnswer(await once(`${scope}:acct:${account.id}`, id, attempt));
   } catch (e) {
     if (e instanceof Refused) return fromAnswer(e.answer);
     throw e;
   }
+}
+
+/**
+ * Claim the tool's press for its run on this install's GPUs (startOnPool), once that is where it goes: its try for the
+ * reserve, or the answer another server process gave it (or STARTING). Nothing to claim (no id, hosted runs off): null.
+ */
+async function claimToolPress(): Promise<{ press: Press } | { answer: PressAnswer } | null> {
+  const p = PRESS.getStore();
+  if (!p?.key) return null;
+  const { accountId, key } = p;
+  const got = await awaitPress(() => claimPress(accountId, key));
+  if (!got) return null;
+  if (!("kind" in got)) return { answer: got };
+  p.tries = got.tries;
+  return { press: pressTry(accountId, key, got.tries) };
 }
 
 /** A page's id for a press of Run, as a tool's body carries it beside its own fields (`requestId`), or none. */
@@ -502,11 +529,14 @@ async function startOnPool<T>(
   const kind = outputKind(pool.main.planned.op, pool.main.planned.model);
   const mod = await moderateRun(account, checkedRequest(steps, files), null, "pool", { kind, place: "pool" });
   if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
+  // The press of Run, kept from here (run-requests.ts): another server process may have started or answered it meanwhile.
+  const claim = await claimToolPress();
+  if (claim && "answer" in claim) return back(fromAnswer(claim.answer));
   let stamp: RunStamp;
   if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
   else {
-    // One hold per press of Run: every resend of the press asks for it by the same request id.
-    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, PRESS.getStore()?.pressId ?? null);
+    // One hold per try of a press of Run: every send of the try asks for it by the same request id.
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, claim?.press ?? null);
     if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
     stamp = held.stamp;
   }

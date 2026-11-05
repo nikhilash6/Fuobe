@@ -1558,7 +1558,7 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
 
 /** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */
 async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, unknown>, manifest: ManifestWorkflow | undefined, made: string | undefined): Promise<PollResult> {
-  const p = taskProgress(t.id);
+  const p = taskProgress(t);
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
   const sentAt = t.sent_at ?? undefined;
@@ -1693,8 +1693,10 @@ export const comfyProvider: ProviderAdapter = {
         ...(ticket && { ticket }),
         prefix: typeof meta.prefix === "string" ? meta.prefix : undefined,
         metaBatch,
-        preview: true,
-        // A run whose results are checked before anyone sees them sends no live previews from the workers.
+        // On the workers, a run whose outputs the moderation service sees first shows no preview while it works (its
+        // ComfyUI makes none). A person's own computer shows its own previews in its tab, as before.
+        preview: !(forPool && runStamp()?.checkOutputs),
+        // (The task keeps the stamp too: showsPreview never keeps a preview picture for such a run.)
         ...(forPool && runStamp()?.checkOutputs && { extra: { checkOutputs: true } }),
         workflowId: manifest.id,
         made: model?.kind,

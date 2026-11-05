@@ -5,7 +5,7 @@ import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
 import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
-import { lineFacts, poolLane, queueOfGeneration, workersCanRun } from "./computer/pool";
+import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun } from "./computer/pool";
 import { db } from "./db";
 import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
@@ -85,6 +85,18 @@ export function poolTakes(endpoint: string | undefined): boolean {
 }
 
 /**
+ * Are this install's GPUs all away for this endpoint now (on the workers: every worker that could run it paused, silent or
+ * outside its hours)? Then a run waits for nothing: the price check says "Starting soon" (Run is off), and a press of
+ * Run makes nothing. On this install's own ComfyUI: never.
+ */
+export function poolAway(endpoint: string | undefined): boolean {
+  if (!endpoint || !poolOnWorkers()) return false;
+  if (!endpoint.includes("{")) return workersAway(endpoint);
+  const picks = workflowPicks(endpoint);
+  return picks.length > 0 && picks.every((id) => workersAway(id));
+}
+
+/**
  * Can this install's GPUs take this workflow's job tickets now (an account's run there goes as one): on the workers, one
  * built for this studio's catalog that may run it (a workflow that picks its graph at run time: every graph it may
  * pick). After an update of the studio, a worker built from the catalog before takes them once it is updated too:
@@ -138,6 +150,8 @@ export const HOSTED_WORDS = {
   notHosted: "Runs on this studio's GPUs aren't open to this account. Connect your own GPU in Settings.",
   waitedTooLong: "This studio's GPUs were busy, so it didn't run. Not charged.",
   busy: "Busy right now. Try again in a little while.",
+  /** Every GPU that could run it is off for now: Run opens again by itself once one is back. */
+  startingSoon: "Starting soon",
 };
 
 /** The same refusals for a guest, who has no Settings to connect a GPU in yet. */

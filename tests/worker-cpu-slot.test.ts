@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { finishers } from "../bin/lib/worker/finish.mjs";
 import { previewArgs, previewShrinker, PREVIEW_MAX_BYTES } from "../bin/lib/worker/preview.mjs";
 import { workerFiles } from "../scripts/lib/worker-build.mjs";
@@ -565,8 +565,19 @@ describe("live previews from the worker", () => {
     return b;
   };
   const previews = (s: Studio, id: string) => s.reports.filter((r) => r.task === id && r.event === "running" && typeof r.preview === "string");
+  /** A run's preview picture as the studio keeps it (a file in its task's folder), or null. */
+  const keptPreview = (id: string): Buffer | null => {
+    const t = tasks.taskById(id);
+    const p = t?.preview_at ? tasks.runPreview(t.generation_id) : null;
+    return p ? fs.readFileSync(p.path) : null;
+  };
 
   it("sends its ComfyUI's preview as a small JPEG, at most one every 2 s, and the studio keeps it", async () => {
+    // A preview picture shows only with hosted runs on (without them, a run shows what it showed before).
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    onTestFinished(() => {
+      delete process.env.FUOBE_HOSTED_RUNS;
+    });
     const w = addWorker();
     const s = studio();
     const p = pc();
@@ -575,8 +586,8 @@ describe("live previews from the worker", () => {
     const asked: string[] = [];
     // Its ComfyUI's previews are PNGs: the worker makes each one again as a JPEG.
     start(w, s, p, { gpu: { steps: 12, stepMs: 400 }, shrinkPreview: async (b) => (asked.push(b.type), new Blob([small], { type: "image/jpeg" })) });
-    const got = await until(() => tasks.taskPreview(t.id), 30_000);
-    expect(got.jpeg.equals(small)).toBe(true);
+    const got = await until(() => keptPreview(t.id), 30_000);
+    expect(got.equals(small)).toBe(true);
     expect(asked[0]).toBe("image/png");
     expect((await ended(t.id)).state).toBe("done");
     const sent = previews(s, t.id);
@@ -586,6 +597,10 @@ describe("live previews from the worker", () => {
   });
 
   it("drops a preview over 64 KB, keeping the progress", async () => {
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    onTestFinished(() => {
+      delete process.env.FUOBE_HOSTED_RUNS;
+    });
     const w = addWorker();
     const s = studio();
     const p = pc();
@@ -594,7 +609,7 @@ describe("live previews from the worker", () => {
     expect((await ended(t.id)).state).toBe("done");
     expect(previews(s, t.id)).toEqual([]);
     expect(s.reports.some((r) => r.task === t.id && r.event === "running")).toBe(true);
-    expect(tasks.taskPreview(t.id)).toBeNull();
+    expect(keptPreview(t.id)).toBeNull();
   });
 
   it("sends none for a run that doesn't ask for previews", async () => {

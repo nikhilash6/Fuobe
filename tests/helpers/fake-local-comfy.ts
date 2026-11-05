@@ -72,6 +72,11 @@ export interface LocalComfyOptions {
    * execution_success.
    */
   oldLiveNodes?: boolean;
+  /**
+   * The preview picture each step sends on /ws to a prompt that asked for previews (default: a small PNG). `step`: the
+   * step it comes with (from 1), so each one can differ.
+   */
+  previewPicture?: (step: number) => { type: "image/png" | "image/jpeg"; data: Buffer };
   /** Nothing ever starts: prompts wait in the queue (a stuck ComfyUI). */
   stall?: boolean;
   /**
@@ -368,10 +373,11 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
         currentStep = step;
         event(job.clientId, "progress", { value: step, max: steps, prompt_id: job.id, node });
         if (job.preview) {
-          const meta = Buffer.from(JSON.stringify({ prompt_id: job.id, node_id: node, image_type: "image/png" }));
+          const picture = opts.previewPicture?.(step) ?? { type: "image/png", data: FAKE_PNG };
+          const meta = Buffer.from(JSON.stringify({ prompt_id: job.id, node_id: node, image_type: picture.type }));
           const len = Buffer.alloc(4);
           len.writeUInt32BE(meta.length);
-          send(job.clientId, Buffer.concat([Buffer.from([0, 0, 0, 4]), len, meta, FAKE_PNG]), true);
+          send(job.clientId, Buffer.concat([Buffer.from([0, 0, 0, 4]), len, meta, picture.data]), true);
         }
         timer = setTimeout(next, stepMs);
         return;

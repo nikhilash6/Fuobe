@@ -477,7 +477,8 @@ export class ComputerRunner {
       if (!p) return;
       // A preview goes only to the prompt's own client: this tab's job (a newer ComfyUI also names the prompt).
       const job = this.view.jobs.find((j) => j.phase === "running" && (!p.promptId || this.events.has(p.promptId)));
-      if (job) this.job({ id: job.taskId, generationId: job.generationId }, { preview: new Blob([p.data as BlobPart], { type: p.type }) });
+      if (!job) return;
+      this.job({ id: job.taskId, generationId: job.generationId }, { preview: new Blob([p.data as BlobPart], { type: p.type }) });
     };
   }
 

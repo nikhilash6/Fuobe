@@ -850,10 +850,13 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
 
 /**
  * The optional external services' tables (billing.ts, moderation.ts). billing_outbox: every settle, refund and release
- * the billing service must get, kept until it takes it (billing-outbox.ts). output_checks: each output of a run whose
- * outputs the moderation service sees first, and where its check is. reports_inbox: "Report this result" when no
- * moderation service is set, for the owner. Made here rather than as numbered migrations (other branches add those at
- * the same time). Safe to run on every start; empty and unread while no service is set.
+ * the billing service must get, kept until it takes it (billing-outbox.ts). run_requests: each press of Run an account
+ * made on this install's GPUs, by a key made from the page's id for it, with its try, the run it made (a studio run's
+ * rows and hold) or the answer it got (a tool's), and `starting` while a tool's press is being started; kept a day
+ * (run-requests.ts). output_checks: each output of a run whose outputs the moderation service sees first, and where its
+ * check is. reports_inbox: "Report this result" when no moderation service is set, for the owner. Made here rather than
+ * as numbered migrations (other branches add those at the same time). Safe to run on every start; empty and unread while
+ * no service is set.
  */
 export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
     key TEXT PRIMARY KEY,
@@ -888,6 +891,18 @@ export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
   );
   CREATE INDEX IF NOT EXISTS pool_admissions_account ON pool_admissions(account, at);
   CREATE INDEX IF NOT EXISTS pool_admissions_addr ON pool_admissions(addr, at);
+  CREATE TABLE IF NOT EXISTS run_requests (
+    account TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    tries INTEGER NOT NULL DEFAULT 0,
+    starting INTEGER NOT NULL DEFAULT 0,
+    ids_json TEXT,
+    hold_id TEXT,
+    answer_json TEXT,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (account, request_id)
+  );
+  CREATE INDEX IF NOT EXISTS run_requests_at ON run_requests(at);
   CREATE TABLE IF NOT EXISTS reports_inbox (
     id TEXT PRIMARY KEY,
     target_json TEXT NOT NULL,
@@ -992,7 +1007,34 @@ const HOOK_COLUMNS: [string, string, string][] = [
   ["assets", "held", "INTEGER NOT NULL DEFAULT 0"],
   // NULL, or "checking" (the tile says "Checking").
   ["generations", "stage", "TEXT"],
+  // A report one app process is sending now, until when: no other process sends it meanwhile (billing-outbox.ts).
+  ["billing_outbox", "sending_until", "INTEGER"],
+  ["billing_outbox", "sending_by", "TEXT"],
+  // A press of Run's try, and a tool's press being started or answered (run-requests.ts).
+  ["run_requests", "tries", "INTEGER NOT NULL DEFAULT 0"],
+  ["run_requests", "starting", "INTEGER NOT NULL DEFAULT 0"],
+  ["run_requests", "answer_json", "TEXT"],
 ];
+
+/**
+ * Columns the runner added to generation_runs: the app process that saves a finished run's results, and until when it
+ * holds that turn (generations.ts claimFinish). Two processes on one database (a deploy's overlap) never both save it.
+ */
+const RUNNER_COLUMNS: [string, string, string][] = [
+  ["generation_runs", "finish_by", "TEXT"],
+  ["generation_runs", "finish_until", "INTEGER"],
+];
+
+/**
+ * Each app process on this database, by the name its turns carry, and when it last said it still runs (generations.ts
+ * keepBeating). A turn whose process went quiet is free before it runs out. Made here rather than as a numbered
+ * migration, so branches that add migrations never clash over its place.
+ */
+const RUNNER_TABLES = `CREATE TABLE IF NOT EXISTS app_processes (
+    token TEXT PRIMARY KEY,
+    started_at INTEGER NOT NULL,
+    seen_at INTEGER NOT NULL
+  );`;
 
 /** Columns of the relay tables that came later: [table, column, type]. */
 const RELAY_COLUMNS: [string, string, string][] = [
@@ -1014,6 +1056,10 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "class", "TEXT"],
   // Since when a worker's task has been sending its files again on the same claim (NULL: since its claim).
   ["relay_tasks", "sending_since", "INTEGER"],
+  // A task's live progress (its step, its node, its place in its ComfyUI's queue) as JSON, and when its latest preview
+  // picture came (the picture is a file in the task's folder): kept in the database, so every app process sees them.
+  ["relay_tasks", "progress_json", "TEXT"],
+  ["relay_tasks", "preview_at", "INTEGER"],
   // A pool worker's next token (workers.ts offerNextToken) and where its token was used from (hashed networks).
   ["relay_workers", "next_token_hash", "TEXT"],
   ["relay_workers", "next_expires_at", "INTEGER"],
@@ -1123,15 +1169,15 @@ function open(): Database.Database {
   }
   // The optional billing and moderation services (billing.ts, moderation.ts): their tables and columns.
   db.exec(HOOK_TABLES);
-  for (const [table, column, type] of HOOK_COLUMNS) {
+  db.exec(RUNNER_TABLES);
+  for (const [table, column, type] of [...HOOK_COLUMNS, ...RUNNER_COLUMNS]) {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
     if (!has) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
   // Admin tokens and the admin API's log.
   db.exec(ADMIN_TABLES);
-  // A tool's press of Run, kept so a resend gets its first answer (tool-presses.ts), and the runs let in whose rows are
-  // still being made (pool-limits.ts openAdmission): not a numbered migration either.
-  db.exec(TOOL_PRESS_TABLES);
+  // The runs let in whose rows are still being made (pool-limits.ts openAdmission): not a numbered migration either.
+  db.exec(ADMISSION_TABLES);
   // Skills: the runs that wait across studios. A data folder that ran claude/fuobe-parity-4's earlier build of this
   // feature (its numbered migration at place 27, a skill_runs with no engine column and runs kept in another shape)
   // keeps that table under another name, so these runs start from an empty table. Nothing is deleted.
@@ -1176,22 +1222,10 @@ const ACCOUNT_CANVAS_TABLES = `CREATE TABLE IF NOT EXISTS account_canvases (
   CREATE INDEX IF NOT EXISTS account_canvases_account ON account_canvases(account_id, updated_at DESC);`;
 
 /**
- * Each press of a tool's Run an account made with hosted runs on (src/server/tool-presses.ts): by a key made from the
- * account, the tool and the page's id for the press, with the answer it got once it started (`starting` while it is
- * being started) and how many of its tries were refused after their hold was made. Kept a day. open_admissions: a run
- * let in whose rows are still being made (a tool's start that awaits before it makes them), counted until they exist.
+ * The runs let in whose rows are still being made (a tool's start that awaits before it makes them), counted until they
+ * exist (pool-limits.ts openAdmission).
  */
-const TOOL_PRESS_TABLES = `CREATE TABLE IF NOT EXISTS tool_presses (
-    account TEXT NOT NULL,
-    request_id TEXT NOT NULL,
-    answer_json TEXT,
-    tries INTEGER NOT NULL DEFAULT 0,
-    starting INTEGER NOT NULL DEFAULT 0,
-    at INTEGER NOT NULL,
-    PRIMARY KEY (account, request_id)
-  );
-  CREATE INDEX IF NOT EXISTS tool_presses_at ON tool_presses(at);
-  CREATE TABLE IF NOT EXISTS open_admissions (
+const ADMISSION_TABLES = `CREATE TABLE IF NOT EXISTS open_admissions (
     key TEXT PRIMARY KEY,
     account TEXT NOT NULL,
     pool INTEGER NOT NULL DEFAULT 0,

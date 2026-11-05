@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { useCreateGeneration, useGenerationActions, useStatus } from "@/lib/api";
+import { useCreateGeneration, useGenerationActions, useMakingPoolRuns, useStatus } from "@/lib/api";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
@@ -45,6 +45,26 @@ export function tileRatio(g: Generation): number {
   if (g.kind === "text") return 0.85;
   const ar = g.request.params?.aspectRatio ?? g.aspectRatio ?? undefined;
   return ratioValue(ar && ar !== "auto" ? ar : undefined, g.kind === "video" ? 16 / 9 : 1);
+}
+
+/**
+ * A run on this studio's GPUs between Run and its answer (the run is being made: a moment, or longer while the billing
+ * service is tried again): "In line", as the run's own tile says once it is made. It shows only after a moment, so a
+ * quick answer goes straight to the run's tile.
+ */
+export function MakingTile({ ratio }: { ratio: number }) {
+  return (
+    <div
+      className="relative h-full max-w-full animate-pending-in overflow-hidden rounded-xl bg-muted"
+      style={{ aspectRatio: ratio, animationDelay: "800ms" }}
+      data-run-state="in-line"
+    >
+      <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+      <div className="absolute inset-x-0 bottom-0 p-3">
+        <p className="shimmer-text animate-shimmer-text text-[13px] font-medium">{POOL_WORDS.inLine}</p>
+      </div>
+    </div>
+  );
 }
 
 export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
@@ -85,15 +105,17 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // The bar: the steps, or how much of the result has reached the studio.
   const bar = saving ? Math.round((local.job.phase === "done" ? 1 : (local.job.saved ?? 0)) * 100) : pct;
   const where = local ? (local.here ? "Keep this tab open" : "Running in another Fuobe tab") : null;
+  // A live frame: from the ComfyUI on this computer, or (Working on the workers) the latest preview picture.
+  const frame = local?.preview ?? (g.status === "running" ? g.preview : undefined);
   return (
     // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
     // otherwise make the tile wider than its column and spill over the next card.
     <div className="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style={{ aspectRatio: ratio }} data-run-state={pool ? (inLine ? "in-line" : "working") : undefined}>
       <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
-      {local?.preview && (
-        // eslint-disable-next-line @next/next/no-img-element -- a live frame from the person's own ComfyUI (a blob: address)
+      {frame && (
+        // eslint-disable-next-line @next/next/no-img-element -- a live frame (a blob: address, or the run's own preview picture)
         <img
-          src={local.preview}
+          src={frame}
           alt=""
           // Shown once a frame decodes (a frame that doesn't keeps the shimmer).
           onLoad={(e) => (e.currentTarget.style.opacity = "0.9")}
@@ -101,7 +123,7 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
           className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-300"
         />
       )}
-      <div className={cn("absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3", local?.preview && "bg-gradient-to-t from-background/85 to-transparent pt-8")}>
+      <div className={cn("absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3", frame && "bg-gradient-to-t from-background/85 to-transparent pt-8")}>
         <div className="min-w-0">
           <p title={label} className="shimmer-text animate-shimmer-text line-clamp-2 text-[13px] font-medium">
             {label}
@@ -461,6 +483,7 @@ export function Feed({
 }) {
   const [open, setOpen] = useState<{ id: string; index: number } | null>(null);
   const create = useCreateGeneration();
+  const making = useMakingPoolRuns();
   // Fuobe Soul results get their look's grade and overlay here, once.
   useSoulFinish(items);
   // Groups get stable callbacks that read the latest props through refs.
@@ -483,7 +506,16 @@ export function Feed({
     }),
     [openAt, hasReuse, aiTag],
   );
-  if (!items.length) return <>{empty}</>;
+  // Runs on this studio's GPUs being made now: newest first, above the runs already made.
+  const makingTiles = [...making].reverse().map((m, i) => {
+    const ar = m.request.params?.aspectRatio;
+    return (
+      <div key={`making-${m.at}-${i}`} className="h-56 max-w-full sm:h-64">
+        <MakingTile ratio={ratioValue(ar && ar !== "auto" ? ar : undefined, 1)} />
+      </div>
+    );
+  });
+  if (!items.length) return makingTiles.length ? <div className="flex flex-wrap gap-2">{makingTiles}</div> : <>{empty}</>;
   // The feed is newest first: the next steps go under the first finished result.
   const newest = items.find((g) => g.status === "succeeded")?.id;
   const flat = items.flatMap((g) => (g.status === "succeeded" ? (isLayered(g) ? [{ g, i: 0 }] : shownOutputs(g).map((i) => ({ g, i }))) : []));
@@ -491,6 +523,7 @@ export function Feed({
   return (
     <FeedCtx.Provider value={api}>
       <div className="space-y-9">
+        {makingTiles.length > 0 && <div className="flex flex-wrap gap-2">{makingTiles}</div>}
         {items.map((g, i) => (
           <GenerationGroup key={g.id} g={g} newest={g.id === newest} first={i === 0} />
         ))}

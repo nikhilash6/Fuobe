@@ -18,6 +18,8 @@ type Store = { read: () => OutputFile[] | null; write: (o: OutputFile[]) => void
 const finishes = new Map<string, { outputs: OutputFile[]; done: Done }>();
 const turntables = new Map<string, Store>();
 const stopped: string[] = [];
+/** What happens elsewhere at the moment a job's finish is told to stop (another app process finishing it). */
+const onStop = new Map<string, () => void>();
 vi.mock("@/server/model3d-finish", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/server/model3d-finish")>();
   return {
@@ -26,7 +28,10 @@ vi.mock("@/server/model3d-finish", async (importOriginal) => {
       if (!finishes.has(id)) finishes.set(id, { outputs, done: o.done });
     },
     startTurntable: (id: string, store: Store) => void turntables.set(id, store),
-    stopModelFinish: (id: string) => void stopped.push(id),
+    stopModelFinish: (id: string) => {
+      stopped.push(id);
+      onStop.get(id)?.();
+    },
   };
 });
 
@@ -164,5 +169,16 @@ describe("the runner and the 3D finish", () => {
     started.done(started.outputs);
     expect(gens.getGeneration("job-cancel")!.status).toBe("canceled");
     expect(turntables.has("job-cancel")).toBe(false);
+  });
+
+  it("a cancel that comes as the finish ends (in another app process) leaves the finished model as it is", async () => {
+    insertJob("job-done-meanwhile");
+    gens.ensureRunner();
+    const started = await until(() => finishes.get("job-done-meanwhile"));
+    // The finish ends between the cancel's look at the job and its change of it.
+    onStop.set("job-done-meanwhile", () => started.done(started.outputs));
+    await gens.cancelGeneration("job-done-meanwhile");
+    expect(gens.getGeneration("job-done-meanwhile")!.status).toBe("succeeded");
+    expect(turntables.has("job-done-meanwhile")).toBe(true);
   });
 });

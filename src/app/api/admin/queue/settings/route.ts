@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
 /**
  * Change them (owner only, or an admin token with queue:write): any of `{ runCeilingS: { default, lanes },
- * ownerWaitLimitS, fairShare, pickAllowanceMs }`. A given runCeilingS replaces the default and every lane's value. Each
+ * ownerWaitLimitS, fairShare, pickAllowanceMs, pausedBudgetS }`. A given runCeilingS replaces the default and every lane's value. Each
  * change is written to the admin log with the values before and after. It applies to new claims and clocks at once.
  */
 export async function PATCH(request: Request) {

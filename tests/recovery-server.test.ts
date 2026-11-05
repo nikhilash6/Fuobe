@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runnerByHand, startAppProcess, tick, type AppProcess } from "./helpers/app-process";
 import { apiAs, loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
 import { plainFailure, RunWatch, type RunLike } from "./helpers/run-watch";
+import { startFakeModeration } from "./helpers/fake-billing";
 import { FREE_RUNS_POLICY, startStandInBilling, type StandInBilling } from "./helpers/standin-billing";
 import { startStandInComfy, type StandInComfy } from "./helpers/standin-comfy";
 import { tempDir } from "./helpers/temp-dir";
@@ -49,23 +52,26 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 const auth = await import("@/server/auth");
 const generationsRoute = await import("@/app/api/generations/route");
 const oneRoute = await import("@/app/api/generations/[id]/route");
+const previewRoute = await import("@/app/api/generations/[id]/preview/route");
 const { proxy } = await import("@/proxy");
 const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
-const { getGeneration, ensureRunner } = await import("@/server/generations");
+const { cancelGeneration, getGeneration, ensureRunner, QUIET_MS, updateLive } = await import("@/server/generations");
 const pool = await import("@/server/computer/pool");
 const { catalogVersion } = await import("@/server/computer/catalog-version");
 const tasks = await import("@/server/computer/tasks");
 const billing = await import("@/server/billing");
 const outbox = await import("@/server/billing-outbox");
+const outputChecks = await import("@/server/output-checks");
 const qs = await import("@/server/queue-settings");
 const { comfyProvider, loadManifest } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { POOL_WORDS } = await import("@/lib/relay");
+const { HOSTED_WORDS } = await import("@/server/hosted");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 type TaskRow = import("@/server/computer/tasks").TaskRow;
@@ -127,10 +133,10 @@ beforeEach(async () => {
   process.env.FUOBE_BILLING_URL = svc.address;
   process.env.FUOBE_BILLING_TOKEN = svc.token;
   delete process.env.FUOBE_HOSTED_FREE;
-  Object.assign(svc, { priced: false, slowMs: 0, gather: null, maxWaitMs: 20 * MIN, holdLifeMs: 105 * MIN, policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) });
+  Object.assign(svc, { priced: false, slowMs: 0, slowPath: null, reserveStatus: null, gather: null, maxWaitMs: 20 * MIN, holdLifeMs: 105 * MIN, readTiming: true, policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) });
   await svc.start();
   await comfy.start();
-  comfy.inner.restart({ stall: false, failNext: undefined, loseNext: 0, steps: 4, stepMs: 20 });
+  comfy.inner.restart({ stall: false, failNext: undefined, loseNext: 0, steps: 4, stepMs: 20, previewPicture: undefined });
   settings();
   db().prepare("DELETE FROM relay_workers").run();
   db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE state IN ('waiting','sending','queued','running','collecting')").run();
@@ -145,8 +151,11 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // The studio's side
 
-/** A worker the owner added and resumed, allowed every lane (or `lanes`), able to run every workflow. */
-function standInWorker(name = "stand-in", o: { paused?: boolean; lanes?: string[] } = {}) {
+/**
+ * A worker the owner added and resumed, allowed every lane (or `lanes`), able to run every workflow, and connected (its
+ * worker program beat a moment ago: `connected` false, never).
+ */
+function standInWorker(name = "stand-in", o: { paused?: boolean; lanes?: string[]; connected?: boolean } = {}) {
   const w = pool.addWorker(name);
   const lanes = o.lanes ?? allLanes(loadIndex(), sha).map((l) => l.lane);
   pool.patchWorker(w.id, { paused: !!o.paused, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l, { delayMs: 0 }])), claimAfterMs: 0 });
@@ -154,6 +163,7 @@ function standInWorker(name = "stand-in", o: { paused?: boolean; lanes?: string[
   db()
     .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?")
     .run(JSON.stringify({ lanes, workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), catalogVersion(), w.id);
+  if (o.connected !== false) db().prepare("UPDATE relay_workers SET seen_at = ?, paused_local = 0 WHERE id = ?").run(Date.now(), w.id);
   return w;
 }
 
@@ -173,7 +183,7 @@ const request = (url: string, o: { method?: string; body?: unknown; cookie?: str
 /** Press Run (POST /api/generations) as a session. */
 async function run(body: Record<string, unknown>, cookie = a1) {
   const r = await generationsRoute.POST(request("/api/generations", { body, cookie }));
-  return { status: r.status, body: (await r.json()) as { items?: { id: string }[]; code?: string; error?: string } };
+  return { status: r.status, headers: r.headers, body: (await r.json()) as { items?: { id: string }[]; code?: string; error?: string } };
 }
 
 /** The price check before Run. */
@@ -194,6 +204,21 @@ async function browserGet(url: string, cookie: string, route: (req: Request) => 
 async function sessionGet(cookie: string, id: string): Promise<{ status: number; run: RunLike | null }> {
   const r = await browserGet(`/api/generations/${id}`, cookie, (req) => oneRoute.GET(req, { params: Promise.resolve({ id }) } as never));
   return { status: r.status, run: r.ok ? ((await r.json()) as RunLike) : null };
+}
+
+/** A small JPEG as a worker sends its preview picture (base64): its bytes start as a JPEG's, then `n` and filler. */
+const jpegBase64 = (n: number, size = 2000) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`preview ${n} `), Buffer.alloc(size, n % 251)]).toString("base64");
+
+/** GET a run's preview picture as a session's browser asks it: the response. */
+const previewGet = (cookie: string, url: string) => {
+  const id = /^\/api\/generations\/([^/]+)\/preview/.exec(url)![1];
+  return browserGet(url, cookie, (req) => previewRoute.GET(req, { params: Promise.resolve({ id }) } as never));
+};
+
+/** The picture's first bytes (hex) as the session gets it, or its status when it gets none. */
+async function previewOf(cookie: string, url: string): Promise<string> {
+  const r = await previewGet(cookie, url);
+  return r.ok ? Buffer.from(await r.arrayBuffer()).subarray(0, 12).toString("hex") : String(r.status);
 }
 
 /** A run as a session reads it (an answer that isn't OK throws: a person would see an error). */
@@ -472,9 +497,323 @@ describe("a refresh, a second session and the list see the same run", () => {
   });
 });
 
-describe("a press of Run sent twice (a network drop at submit)", () => {
-  it("makes a second run and a second hold today: the run route reads no request id from the page, so each press reserves under an id of its own", async () => {
+describe("a run's preview picture while it works", () => {
+  it("the Working tile gets the worker's latest picture, for the run's own account only and never kept by a cache; it goes when the run ends", async () => {
+    const w = standInWorker();
+    const { id, task } = await pressRun();
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 100;
+    const d = driver(w);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
+    const seen: { session?: string; list?: string; picture: string; headers: Record<string, string | null>; other: number; guest: number }[] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step !== "running" || seen.length) return;
+      const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+      if (!g.preview) return;
+      const listed = (await listRead(a1)(id)) as (RunLike & { preview?: string }) | null;
+      const r = await previewGet(a2, g.preview);
+      seen.push({
+        session: g.preview,
+        list: listed?.preview,
+        picture: Buffer.from(await r.arrayBuffer()).subarray(0, 3).toString("hex"),
+        headers: { type: r.headers.get("content-type"), cache: r.headers.get("cache-control"), sniff: r.headers.get("x-content-type-options") },
+        other: (await previewGet(b1, g.preview)).status,
+        guest: (await previewGet("", g.preview)).status,
+      });
+    });
+    await workAll(d);
+    expect(seen).toHaveLength(1);
+    const [s] = seen;
+    expect(s.session).toMatch(new RegExp(`^/api/generations/${id}/preview\\?at=\\d+$`));
+    expect(s.list, "the list carries it too").toBe(s.session);
+    expect(s.picture).toBe("ffd8ff");
+    expect(s.headers).toEqual({ type: "image/jpeg", cache: "private, no-store", sniff: "nosniff" });
+    expect(s.other, "another account").toBe(403);
+    expect(s.guest, "a guest").toBe(401);
+    // Ended: no picture is left, and its address answers nothing.
+    const g = (await expectOnce(id, watch, { prompts: 1, place: 1 })) as RunLike & { preview?: string };
+    expect(g.preview).toBeUndefined();
+    expect((await previewGet(a1, s.session!)).status).toBe(404);
+    expect(taskOf(id)!.preview_at).toBeNull();
+    expect(tasks.runPreview(id)).toBeNull();
+    expect(fs.existsSync(path.join(tasks.relayDir(), "tasks", task.id, "preview.jpg"))).toBe(false);
+  });
+
+  it("back in line, the run shows no picture of the attempt before", async () => {
+    clock();
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 100;
+    const d = driver(w);
+    d.previews(() => jpegBase64(1));
+    let had = "";
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step !== "running" || had) return;
+      had = ((await sessionRead(a1)(id)) as RunLike & { preview?: string }).preview ?? "";
+      if (!had) return;
+      d.pause("gpu-busy:game.exe");
+      await d.beat();
+    });
+    await workAll(d);
+    expect(had).toMatch(/\/preview\?at=/);
+    await tick();
+    const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+    expect(g).toMatchObject({ status: "queued", queue: { place: 1 } });
+    expect(g.preview).toBeUndefined();
+    expect((await previewGet(a1, had)).status).toBe(404);
+    d.pause(null);
+    d.previews(null);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { place: 1 });
+  });
+
+  it("a picture that isn't a JPEG, is over 64 KB or comes within 2 s of the last is dropped; a person's own computer keeps none", async () => {
     standInWorker();
+    const { id, task } = await pressRun();
+    db().prepare("UPDATE relay_tasks SET state = 'running', lease_hash = 'this-attempt' WHERE id = ?").run(task.id);
+    const now = Date.now();
+    const t = { ...taskOf(id)!, preview_at: null };
+    expect(tasks.notePreview(t, Buffer.from("not a picture").toString("base64"), now)).toBe(false);
+    expect(tasks.notePreview(t, jpegBase64(1, 70 * 1024), now)).toBe(false);
+    expect(tasks.notePreview(t, "%%%", now)).toBe(false);
+    expect(tasks.notePreview({ ...t, pools: null }, jpegBase64(1), now)).toBe(false);
+    expect(tasks.notePreview({ ...t, preview: 0 }, jpegBase64(1), now)).toBe(false);
+    expect(tasks.notePreview({ ...t, preview_at: now - 1000 }, jpegBase64(1), now)).toBe(false);
+    expect(tasks.notePreview({ ...t, preview_at: now - 2000 }, jpegBase64(1), now)).toBe(true);
+    tasks.dropProgress(t.id);
+  });
+
+  it("a step or a picture that comes after another app process sent the task back in line, or gave it to another attempt, leaves nothing behind", async () => {
+    standInWorker();
+    const { id, task } = await pressRun();
+    const folder = path.join(tasks.relayDir(), "tasks", task.id);
+    const left = () => (fs.existsSync(folder) ? fs.readdirSync(folder).filter((f) => f.startsWith("preview")) : []);
+    db().prepare("UPDATE relay_tasks SET state = 'running', lease_hash = 'first-attempt' WHERE id = ?").run(task.id);
+    const late = { ...taskOf(id)! };
+    const now = Date.now();
+    // The other process sent it back in line meanwhile.
+    db().prepare("UPDATE relay_tasks SET state = 'waiting', lease_hash = NULL WHERE id = ?").run(task.id);
+    tasks.noteProgress(task.id, { value: 3, max: 4 }, now, late.lease_hash);
+    expect(tasks.notePreview(late, jpegBase64(1), now)).toBe(false);
+    expect(taskOf(id)).toMatchObject({ progress_json: null, preview_at: null });
+    expect(left()).toEqual([]);
+    // Another worker took it again (a new lease): the first attempt's late report still leaves nothing.
+    db().prepare("UPDATE relay_tasks SET state = 'running', lease_hash = 'second-attempt' WHERE id = ?").run(task.id);
+    tasks.noteProgress(task.id, { value: 3, max: 4 }, now, late.lease_hash);
+    expect(tasks.notePreview(late, jpegBase64(1), now)).toBe(false);
+    expect(taskOf(id)).toMatchObject({ progress_json: null, preview_at: null });
+    expect(left()).toEqual([]);
+    // The attempt that holds it now is kept.
+    tasks.noteProgress(task.id, { value: 1, max: 4 }, now, "second-attempt");
+    expect(tasks.notePreview({ ...taskOf(id)! }, jpegBase64(2), now)).toBe(true);
+    expect(tasks.taskProgress(taskOf(id)!)).toMatchObject({ value: 1, max: 4 });
+    expect(left()).toEqual(["preview.jpg"]);
+    // Ended: both go.
+    tasks.endTask(task.id, "canceled");
+    expect(left()).toEqual([]);
+  });
+
+  it("a task a worker claims again shows nothing of the attempt before it until the new one reports", async () => {
+    const w = standInWorker();
+    const { id, task } = await pressRun();
+    const file = path.join(tasks.relayDir(), "tasks", task.id, "preview.jpg");
+    db()
+      .prepare("UPDATE relay_tasks SET state = 'waiting', lease_hash = NULL, worker_id = NULL, progress_json = ?, preview_at = ? WHERE id = ?")
+      .run(JSON.stringify({ value: 3, max: 4, at: Date.now() }), Date.now(), task.id);
+    // Left from an attempt before (a process that stopped part way never dropped it).
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, Buffer.from(jpegBase64(1), "base64"));
+    const d = driver(w);
+    let atClaim: { progress_json: string | null; preview_at: number | null; file: boolean } | null = null;
+    d.onStep((step) => {
+      if (step === "claim" && !atClaim) atClaim = { ...taskOf(id)!, file: fs.existsSync(file) };
+    });
+    await workAll(d);
+    expect(atClaim).toMatchObject({ progress_json: null, preview_at: null, file: false });
+    expect((await ended(id))?.status).toBe("succeeded");
+  });
+
+  it("a worker's preview pictures reach the Working tile: the latest shows, and the studio keeps at most one every 2 s", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 8;
+    comfy.inner.opts.stepMs = 600;
+    // The worker sends a picture with every progress report here (the worker program's own sender, which makes
+    // ComfyUI's pictures small JPEGs and sends one every 2 s at most, is checked in worker-cpu-slot.test.ts).
+    const d = driver(w);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
+    const kept: number[] = [];
+    const shown: string[] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step !== "running") return;
+      const at = taskOf(id)?.preview_at ?? null;
+      if (at !== null && at !== kept.at(-1)) kept.push(at);
+      const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+      if (g.preview) shown.push(Buffer.from(await (await previewGet(a1, g.preview)).arrayBuffer()).subarray(4, 12).toString("latin1"));
+    });
+    await workAll(d);
+    expect(kept.length, "pictures kept").toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < kept.length; i++) expect(kept[i] - kept[i - 1]).toBeGreaterThanOrEqual(1500);
+    expect(shown.length).toBeGreaterThan(0);
+    for (const s of shown) expect(s).toBe("preview ");
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a run whose outputs the moderation service sees first shows no preview while it works: no address, and the picture's address answers nothing", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    // An answer with no checkOutputs field: its outputs are checked first.
+    mod.run = { allowed: true };
+    try {
+      const w = standInWorker();
+      const { id, task } = await pressRun();
+      expect(taskOf(id)!.preview, "its ComfyUI is asked for no previews").toBe(0);
+      comfy.inner.opts.steps = 6;
+      comfy.inner.opts.stepMs = 300;
+      comfy.inner.opts.previewPicture = (step) => ({ type: "image/jpeg", data: Buffer.from(jpegBase64(step), "base64") });
+      const d = driver(w);
+      // A worker that sends a picture anyway.
+      d.previews(() => jpegBase64(1));
+      const looks: { preview?: string; route: number }[] = [];
+      d.onStep(async (step) => {
+        if (step !== "running") return;
+        const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+        looks.push({ preview: g.preview, route: (await previewGet(a1, `/api/generations/${id}/preview?at=1`)).status });
+      });
+      await workAll(d);
+      expect(looks.length).toBeGreaterThan(0);
+      expect(looks.every((l) => l.preview === undefined && l.route === 404), JSON.stringify(looks)).toBe(true);
+      expect(taskOf(id)!.preview_at).toBeNull();
+      expect(fs.existsSync(path.join(tasks.relayDir(), "tasks", task.id, "preview.jpg"))).toBe(false);
+      // Its result shows once the check passes.
+      await until(async () => (await tick(), getGeneration(id)?.status === "succeeded"));
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
+  });
+
+  it("a worker's report with a picture over 64 KB is taken without the picture, and the run goes on", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.previews(() => jpegBase64(1, 66 * 1024));
+    const previews: (string | undefined)[] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step === "running") previews.push(((await sessionRead(a1)(id)) as RunLike & { preview?: string }).preview);
+    });
+    await workAll(d);
+    expect(d.steps).toContain("running");
+    expect(previews.length).toBeGreaterThan(0);
+    expect(previews.every((p) => p === undefined)).toBe(true);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a picture the studio can't keep (its file is open elsewhere, or the disk is full) never fails the worker's report: the run goes on and its output arrives", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
+    const realRename = fs.renameSync.bind(fs);
+    const spy = vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+      if (String(to).endsWith("preview.jpg")) throw Object.assign(new Error("EPERM: operation not permitted, rename"), { code: "EPERM" });
+      return realRename(from, to);
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // What the task's folder holds while it runs: no picture kept, and nothing half-written left beside it.
+    const left: string[][] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      const dir = path.dirname(tasks.outputFile(taskOf(id)!.id, 0));
+      if (step === "running" && fs.existsSync(dir)) left.push(fs.readdirSync(dir).filter((f) => f.startsWith("preview")));
+    });
+    try {
+      await workAll(d);
+      expect(d.steps).toContain("running");
+      expect(spy.mock.calls.some(([, to]) => String(to).endsWith("preview.jpg")), "a picture was sent and couldn't be kept").toBe(true);
+      expect(left.length).toBeGreaterThan(0);
+      expect(left.flat()).toEqual([]);
+    } finally {
+      spy.mockRestore();
+      warn.mockRestore();
+    }
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+});
+
+describe("the owner's own job on the workers", () => {
+  it("with hosted runs off, it shows no preview picture, as before: its worker is never asked for one, and one sent anyway is dropped", async () => {
+    delete process.env.FUOBE_HOSTED_RUNS;
+    delete process.env.FUOBE_BILLING_URL;
+    try {
+      const w = standInWorker();
+      const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+      const { id } = await pressRun(IMAGE, owner);
+      expect(taskOf(id)!.principal).toBe("owner");
+      comfy.inner.opts.steps = 6;
+      comfy.inner.opts.stepMs = 100;
+      const d = driver(w);
+      let n = 0;
+      d.previews(() => jpegBase64(++n));
+      const asked: number[] = [];
+      const shown: (string | undefined)[] = [];
+      d.onStep(async (step) => {
+        await tick();
+        if (step !== "running") return;
+        asked.push(tasks.showsPreview(taskOf(id)!) ? 1 : 0);
+        shown.push(((await sessionRead(owner)(id)) as RunLike & { preview?: string }).preview);
+      });
+      await workAll(d);
+      expect(shown.length).toBeGreaterThan(0);
+      expect(asked.every((x) => x === 0), "the claim asks for no picture").toBe(true);
+      expect(shown.every((p) => p === undefined), "no picture shows").toBe(true);
+      expect(taskOf(id)!.preview_at).toBeNull();
+      await until(() => getGeneration(id)?.status === "succeeded");
+    } finally {
+      process.env.FUOBE_HOSTED_RUNS = "1";
+    }
+  });
+
+  it("waiting, it carries its place in their line in the list as after a refresh", async () => {
+    const w = standInWorker();
+    const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+    const theirs = await pressRun(IMAGE, b1);
+    const { id } = await pressRun(IMAGE, owner);
+    expect(taskOf(id)!.principal).toBe("owner");
+    const one = (await sessionRead(owner)(id)) as RunLike & { queue?: { place: number } };
+    const listed = (await listRead(owner)(id)) as (RunLike & { queue?: { place: number } }) | null;
+    // People's runs go first: the owner's job is second.
+    expect(one.queue?.place).toBe(2);
+    expect(listed?.queue).toEqual(one.queue);
+    const d = driver(w);
+    lookAtEveryStep(d, watchOf(theirs.id));
+    await workAll(d);
+    expect((await ended(id))?.status).toBe("succeeded");
+  });
+});
+
+describe("a press of Run sent twice (a network drop at submit)", () => {
+  it("makes one run and one hold: the resend gets the run the first send made", async () => {
+    const w = standInWorker();
     const holds = svc.holds.size;
     const rows = made();
     const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
@@ -483,12 +822,206 @@ describe("a press of Run sent twice (a network drop at submit)", () => {
     const again = await run(press);
     expect(first.status, JSON.stringify(first.body)).toBe(201);
     expect(again.status, JSON.stringify(again.body)).toBe(201);
-    expect(again.body.items![0].id).not.toBe(first.body.items![0].id);
-    expect(made() - rows, "runs made").toBe(2);
-    expect(svc.holds.size - holds, "holds made").toBe(2);
-    const ids = svc.callsOf("/v1/reserve").slice(-2).map((c) => (c.body as { requestId?: string }).requestId);
-    expect(new Set(ids).size).toBe(2);
+    const id = first.body.items![0].id;
+    expect(again.body.items!.map((g) => g.id)).toEqual(first.body.items!.map((g) => g.id));
+    expect(made() - rows, "runs made").toBe(1);
+    expect(svc.holds.size - holds, "holds made").toBe(1);
+    // The reserve names the press, as the account's own (never the page's id as it is).
+    const ids = svc.callsOf("/v1/reserve").slice(-1).map((c) => (c.body as { requestId?: string }).requestId);
+    expect(ids[0]).toMatch(/^r_[0-9a-f]{32}$/);
     expect(ids).not.toContain(press.requestId);
+    // Another account's press under the same page id is its own press.
+    const theirs = await run(press, b1);
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
+    expect(theirs.body.items![0].id).not.toBe(id);
+    expect(svc.holds.size - holds, "holds made").toBe(2);
+    const d = driver(w);
+    const watch = watchOf(id);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a resend that comes while the first send still waits for the billing service makes no second run or hold", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const holds = svc.holds.size;
+    const rows = made();
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    await svc.downFor(3000);
+    const first = run(press);
+    await sleep(1000);
+    // A proxy cut the first request short: the page sends the press again.
+    const again = run(press);
+    const [a, b] = await Promise.all([first, again]);
+    expect(a.status, JSON.stringify(a.body)).toBe(201);
+    expect(b.status, JSON.stringify(b.body)).toBe(201);
+    expect(b.body.items!.map((g) => g.id)).toEqual(a.body.items!.map((g) => g.id));
+    expect(made() - rows, "runs made").toBe(1);
+    expect(svc.holds.size - holds, "holds made").toBe(1);
+  });
+
+  it("a send that stops waiting for the billing service after a resend of the same press made its run leaves that run's hold alone", async () => {
+    const w = standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const was = { ...billing.RESERVE_RETRY };
+    // One try for the first send, then its whole wait is over.
+    Object.assign(billing.RESERVE_RETRY, { forMs: 3000, firstMs: 200 });
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    try {
+      // The service answers the first send's reserve only after the app stopped waiting for it.
+      Object.assign(svc, { slowMs: 2500, slowPath: "/v1/reserve" });
+      const reserves = svc.callsOf("/v1/reserve").length;
+      const first = run(press);
+      for (let i = 0; i < 200 && svc.callsOf("/v1/reserve").length === reserves; i++) await sleep(10);
+      expect(svc.callsOf("/v1/reserve").length, "the first send's reserve reached the service").toBe(reserves + 1);
+      // The page sends the press again, and the service answers that one at once: it makes the run.
+      Object.assign(svc, { slowMs: 0, slowPath: null });
+      const again = await run(press);
+      expect(again.status, JSON.stringify(again.body)).toBe(201);
+      const id = again.body.items![0].id;
+      // Only then does the first send stop waiting.
+      expect((await first).status).toBe(503);
+      expect(made() - rows, "runs made").toBe(1);
+      const hold = svc.holds.get(holdOf(id)!)!;
+      const requestId = hold.requestId;
+      expect(db().prepare("SELECT COUNT(*) AS n FROM billing_outbox WHERE key = ?").get(`release:request:${requestId}`)).toEqual({ n: 0 });
+      await outbox.drainOutbox(Date.now() + outbox.REQUEST_RELEASE_AFTER_MS + 1000);
+      expect(hold.released, "the run's hold stays open").toBe(false);
+      expect(svc.callsOf("/v1/release").some((c) => (c.body as { requestId?: string }).requestId === requestId)).toBe(false);
+      // The run finishes and settles against its own hold.
+      const watch = watchOf(id);
+      const d = driver(w);
+      lookAtEveryStep(d, watch);
+      await workAll(d);
+      await expectOnce(id, watch, { place: 1 });
+      expect(hold.released).toBe(false);
+    } finally {
+      Object.assign(billing.RESERVE_RETRY, was);
+    }
+  });
+
+  it("a press refused by the limits after its hold was made gives the hold back, and a resend of it is a new try with a hold of its own, never a run against that hold", async () => {
+    standInWorker();
+    (svc.policy as { limits: { activeRuns: number } }).limits.activeRuns = 1;
+    billing.resetBillingCache();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    // The first press's reserve is slow; meanwhile another press makes a run, so the first is over the limit once
+    // its hold is made.
+    Object.assign(svc, { slowMs: 800, slowPath: "/v1/reserve" });
+    const reserves = svc.callsOf("/v1/reserve").length;
+    const first = run(press);
+    for (let i = 0; i < 200 && svc.callsOf("/v1/reserve").length === reserves; i++) await sleep(10);
+    Object.assign(svc, { slowMs: 0, slowPath: null });
+    const other = await run({ ...IMAGE, requestId: `press-${crypto.randomUUID()}` });
+    expect(other.status, JSON.stringify(other.body)).toBe(201);
+    const a = await first;
+    expect(a.status, JSON.stringify(a.body)).toBe(429);
+    expect(made() - rows, "runs made").toBe(1);
+    const reserve = svc.callsOf("/v1/reserve").find((c, i) => i >= reserves && (c.body as { requestId?: string }).requestId !== undefined);
+    const requestId = (reserve!.body as { requestId: string }).requestId;
+    const hold = [...svc.holds.values()].find((h) => h.requestId === requestId)!;
+    for (let i = 0; i < 100 && !hold.released; i++) {
+      await outbox.sweepBilling();
+      await sleep(10);
+    }
+    expect(hold.released, "the refused press's hold goes back").toBe(true);
+    // The other run ends, so the limit lets the press through now; its answer was lost, and the page sends it again.
+    db().prepare("UPDATE generations SET status = 'canceled' WHERE id = ?").run(other.body.items![0].id);
+    const before = svc.callsOf("/v1/reserve").length;
+    const again = await run(press);
+    expect(again.status, JSON.stringify(again.body)).toBe(201);
+    const tried = svc.callsOf("/v1/reserve").slice(before).map((c) => (c.body as { requestId?: string }).requestId);
+    expect(tried.length, "one new reserve").toBe(1);
+    expect(tried[0], "under a request id of its own").not.toBe(requestId);
+    const runId = again.body.items![0].id;
+    expect(svc.holds.get(holdOf(runId)!)?.requestId).toBe(tried[0]);
+    expect(hold.released, "the first try's hold stays given back").toBe(true);
+    expect(made() - rows, "runs made").toBe(2);
+    // Sent once more: the run it made, with no new reserve.
+    const third = await run(press);
+    expect(third.body.items!.map((g) => g.id)).toEqual([runId]);
+    expect(svc.callsOf("/v1/reserve").length).toBe(before + 1);
+  });
+
+  it("with hosted runs off, a press id changes nothing: each request makes its run, as before", async () => {
+    delete process.env.FUOBE_HOSTED_RUNS;
+    delete process.env.FUOBE_BILLING_URL;
+    try {
+      standInWorker();
+      const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+      const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+      const first = await run(press, owner);
+      const again = await run(press, owner);
+      expect(first.status, JSON.stringify(first.body)).toBe(201);
+      expect(again.status, JSON.stringify(again.body)).toBe(201);
+      expect(again.body.items![0].id).not.toBe(first.body.items![0].id);
+      expect((db().prepare("SELECT COUNT(*) AS n FROM run_requests WHERE request_id = ?").get(press.requestId) as { n: number }).n).toBe(0);
+    } finally {
+      process.env.FUOBE_HOSTED_RUNS = "1";
+    }
+  });
+});
+
+describe("a reserve the billing service refuses or never answers", () => {
+  it("an answer that would be the same on every try (a refused request) is a refusal in plain words at once, not after the whole wait", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const reserves = svc.callsOf("/v1/reserve").length;
+    svc.reserveStatus = 401;
+    const t = Date.now();
+    const r = await run(IMAGE);
+    expect(r.status, JSON.stringify(r.body)).toBe(503);
+    expect(r.body.error).toBe(billing.BILLING_WAIT.run);
+    expect(Date.now() - t).toBeLessThan(5000);
+    expect(svc.callsOf("/v1/reserve").length - reserves, "tries").toBe(1);
+    expect(made()).toBe(rows);
+    // Nothing was held there, so nothing is released.
+    expect((db().prepare("SELECT COUNT(*) AS n FROM billing_outbox WHERE key LIKE 'release:request:%' AND created_at >= ?").get(t) as { n: number }).n).toBe(0);
+  });
+
+  it("a press whose tries got no answer in time is refused within the whole wait, the hold the service made meanwhile goes back, and a resend of it is a new try", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const was = { ...billing.RESERVE_RETRY };
+    Object.assign(billing.RESERVE_RETRY, { forMs: 3000, firstMs: 200 });
+    // The service takes each reserve, but answers only after the app stopped waiting.
+    Object.assign(svc, { slowMs: 2500, slowPath: "/v1/reserve" });
+    const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
+    try {
+      const t = Date.now();
+      const r = await run(press);
+      expect(r.status, JSON.stringify(r.body)).toBe(503);
+      expect(r.body.error).toBe(billing.BILLING_WAIT.run);
+      expect(Date.now() - t, "within the whole wait").toBeLessThanOrEqual(3000 + 500);
+      expect(made()).toBe(rows);
+      await sleep(600);
+      const held = [...svc.holds.values()].filter((h) => h.account === A && !h.released && h.createdAt >= t);
+      expect(held.length, "the service made a hold the app never heard of").toBe(1);
+      // Its release waits a minute (a reserve still on its way is answered first), then goes.
+      await outbox.drainOutbox(Date.now() + 1000);
+      expect(held[0].released).toBe(false);
+      await outbox.drainOutbox(Date.now() + outbox.REQUEST_RELEASE_AFTER_MS + 1000);
+      expect(held[0].released, "released by its request id").toBe(true);
+      expect(svc.callsOf("/v1/release").some((c) => (c.body as { requestId?: string }).requestId === held[0].requestId)).toBe(true);
+      // The page sends the same press again: a new try, under a request id of its own, never the hold that went back.
+      Object.assign(svc, { slowMs: 0, slowPath: null });
+      const reserves = svc.callsOf("/v1/reserve").length;
+      const again = await run(press);
+      expect(again.status, JSON.stringify(again.body)).toBe(201);
+      const tried = svc.callsOf("/v1/reserve").slice(reserves).map((c) => (c.body as { requestId?: string }).requestId);
+      expect(tried.length).toBe(1);
+      expect(tried[0]).not.toBe(held[0].requestId);
+      expect(svc.holds.get(holdOf(again.body.items![0].id)!)?.requestId).toBe(tried[0]);
+      expect(made()).toBe(rows + 1);
+    } finally {
+      Object.assign(billing.RESERVE_RETRY, was);
+    }
   });
 });
 
@@ -508,12 +1041,20 @@ describe("the worker steps aside for another program", () => {
     const back = taskOf(id)!;
     expect(back.state).toBe("waiting");
     expect(back.requeues, "a step aside costs no attempt").toBe(0);
-    // The game runs for 40 minutes, past the run's 20 minute wait limit. Near its end, another account's run comes in.
+    // The game runs for 40 minutes, past the run's 20 minute wait limit. Near its end, another account presses Run: with
+    // the only worker stepped aside, no run is made that would wait for nothing (the price check says it starts soon).
     await pass(35 * MIN, [d], watch);
-    const theirs = (await pressRun(IMAGE, b1)).id;
+    const all = () => (db().prepare('SELECT COUNT(*) AS n FROM generations').get() as { n: number }).n;
+    const rows = all();
+    const holds = svc.holds.size;
+    const theirs = await run(IMAGE, b1);
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(503);
+    expect(theirs.body).toMatchObject({ error: billing.BILLING_WAIT.run, code: "busy" });
+    expect((await priceCheck(IMAGE, b1)).body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
+    expect(all()).toBe(rows);
+    expect(svc.holds.size).toBe(holds);
     await pass(5 * MIN, [d], watch);
     expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
-    expect(getGeneration(theirs)?.queue?.place).toBe(2);
     // The game ends: it runs first, in its place, and settles against the hold it was given at Run.
     const hold = holdOf(id);
     d.pause(null);
@@ -636,24 +1177,49 @@ describe("a run that can never succeed here", () => {
 });
 
 describe("no worker online", () => {
-  it("with every worker paused, the price check says Free and nothing of the wait today, so Run stays on", async () => {
+  it("with every worker paused, the price check says it starts soon, so Run is off", async () => {
     standInWorker("paused", { paused: true });
     const q = await priceCheck(IMAGE);
     expect(q.status, JSON.stringify(q.body)).toBe(200);
     expect(q.body.place).toBe("pool");
-    expect(q.body.quote).toMatchObject({ allowed: true, text: "Free" });
-    expect(q.body.quote?.code).toBeUndefined();
+    expect(q.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
+    // A guest is told the same.
+    const g = await priceCheck(IMAGE, "");
+    expect(g.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
   });
 
-  it("a run made while every worker is paused waits In line in its place, then ends at its wait limit today", async () => {
-    clock();
-    standInWorker("paused", { paused: true });
+  it("Run pressed while every worker is away makes no run that would wait for nothing, and promises no start; once one is back, Run works", async () => {
+    const away = [
+      standInWorker("paused here", { connected: true }),
+      standInWorker("never connected", { connected: false }),
+      standInWorker("silent", {}),
+      standInWorker("outside its hours", {}),
+    ];
+    db().prepare("UPDATE relay_workers SET paused_local = 1, local_why = 'gpu-busy:game.exe' WHERE id = ?").run(away[0].id);
+    db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now() - 3 * MIN, away[2].id);
+    pool.patchWorker(away[3].id, { hours: { tz: "UTC", days: {} } });
+    const rows = made();
+    const holds = svc.holds.size;
+    const r = await run(IMAGE);
+    expect(r.status, JSON.stringify(r.body)).toBe(503);
+    // Plain words that promise no start (no run was made), and no billing card: the price check, asked again, says
+    // "Starting soon" with Run off.
+    expect(r.body).toEqual({ error: billing.BILLING_WAIT.run, code: "busy" });
+    expect(r.headers.get("x-fuobe-billing")).toBeNull();
+    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
+    expect(made()).toBe(rows);
+    expect(svc.holds.size).toBe(holds);
+    // The silent one beats again: Run is back on, and the run goes in line.
+    db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now(), away[2].id);
+    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: true, text: "Free" });
     const { id } = await pressRun();
-    const watch = watchOf(id);
-    await pass(10 * MIN, [], watch);
-    expect(watch.problems({ place: 1 })).toEqual([]);
-    await pass(15 * MIN, [], watch);
-    await expectFreeFailure(id);
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+  });
+
+  it("a worker making room for local work first is on: the run goes in line", async () => {
+    const w = standInWorker();
+    db().prepare("UPDATE relay_workers SET local_why = 'waiting-for-yield' WHERE id = ?").run(w.id);
+    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: true, text: "Free" });
   });
 });
 
@@ -711,19 +1277,92 @@ describe("the billing service down or restarting", () => {
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it("Run pressed while the service is down is refused at once today, and nothing is made: the reserve isn't tried again while the service comes back", async () => {
-    standInWorker();
+  it("Run pressed while the service restarts waits for it: the run is made once, with one hold, and finishes", async () => {
+    const w = standInWorker();
     // The account's policy is known from its price check.
     expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
     const rows = made();
     const holds = svc.holds.size;
+    const reserves = svc.callsOf("/v1/reserve").length;
     await svc.downFor(10_000);
+    const t = Date.now();
     const r = await run(IMAGE);
-    expect(r.status, JSON.stringify(r.body)).toBe(503);
-    expect(r.body.code).toBe("paused");
-    expect(made()).toBe(rows);
-    await svc.start();
-    expect(svc.holds.size).toBe(holds);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(Date.now() - t, "it waited for the service").toBeGreaterThanOrEqual(9_000);
+    expect(made() - rows).toBe(1);
+    expect(svc.holds.size - holds).toBe(1);
+    // Every try was the same press: one request id.
+    const ids = new Set(svc.callsOf("/v1/reserve").slice(reserves).map((c) => (c.body as { requestId?: string }).requestId));
+    expect(ids.size).toBe(1);
+    const id = r.body.items![0].id;
+    const watch = watchOf(id);
+    const d = driver(w);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a service that stays down past the wait: Run says to try again in a moment, in plain words, and nothing is made", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const was = { ...billing.RESERVE_RETRY };
+    Object.assign(billing.RESERVE_RETRY, { forMs: 1500, firstMs: 200 });
+    try {
+      await svc.stop();
+      const r = await run(IMAGE);
+      expect(r.status, JSON.stringify(r.body)).toBe(503);
+      expect(r.body.error).toBe(billing.BILLING_WAIT.run);
+      expect(r.body.error).not.toMatch(/paus|error|service|GPU|worker/i);
+      expect(made()).toBe(rows);
+    } finally {
+      Object.assign(billing.RESERVE_RETRY, was);
+      await svc.start();
+    }
+  });
+
+  it("down for 30 s while one account presses Run and another's run settles: both finish, each settles once, and no error shows", async () => {
+    const w = standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const theirs = await pressRun(IMAGE, b1);
+    await svc.downFor(30_000);
+    // Account A presses Run during the outage; meanwhile the worker renders B's run, which finishes and can't settle yet.
+    const press = run(IMAGE);
+    const d = driver(w);
+    d.onStep(() => tick());
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    await until(() => done(getGeneration(theirs.id)));
+    expect(getGeneration(theirs.id)?.status).toBe("succeeded");
+    await outbox.sweepBilling();
+    expect(svc.reportsFor(theirs.id)).toEqual([]);
+    const r = await press;
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const id = r.body.items![0].id;
+    const watch = watchOf(id);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    // The outbox's next try reaches the service again.
+    await outbox.drainOutbox(Date.now() + 10 * MIN);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    expect(await reportsOf(theirs.id)).toEqual([{ holdId: holdOf(theirs.id), kind: "settle", status: "succeeded" }]);
+    expect(svc.late).toEqual([]);
+  });
+
+  it("the last policy it gave stands for 10 minutes while it doesn't answer, then runs wait for it", async () => {
+    clock();
+    expect(await billing.policy(A)).toBeTruthy();
+    await svc.stop();
+    try {
+      vi.setSystemTime(Date.now() + 9 * MIN);
+      expect(await billing.policy(A), "9 minutes on").toBeTruthy();
+      vi.setSystemTime(Date.now() + 2 * MIN);
+      expect(await billing.policy(A), "11 minutes on").toBeNull();
+    } finally {
+      await svc.start();
+    }
+    vi.setSystemTime(Date.now() + MIN);
+    expect(await billing.policy(A), "answered again").toBeTruthy();
   });
 });
 
@@ -747,6 +1386,47 @@ describe("the run ceiling per lane", () => {
     await workAll(d);
     expect(long).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("its hold asks to stay open for the lane's run ceiling and the time back in line: a long run that went back in line still settles against its own hold", async () => {
+    clock();
+    // A 3 hour lane, and an hour back in line covered. The service's own fixed rule (2 hours after the wait limit) would
+    // close the hold before this run ends.
+    qs.saveQueueSettings({ ...qs.queueSettings(), runCeilingS: { default: 2700, lanes: { [imageLane()]: 3 * 3600 } }, pausedBudgetS: 3600 });
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const reserve = svc.callsOf("/v1/reserve").at(-1)!.body as { timing?: { runMs: number; pausedMs: number } };
+    const attempt = pool.SENDING_MS + 2 * 3 * 3_600_000 + pool.SAVING_MS;
+    expect(reserve.timing).toEqual({ runMs: pool.MAX_ATTEMPTS * attempt, pausedMs: 3_600_000 });
+    const hold = svc.holds.get(holdOf(id)!)!;
+    expect(hold.closeBy - hold.createdAt).toBe(svc.maxWaitMs + pool.MAX_ATTEMPTS * attempt + 3_600_000);
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 100;
+    const d = driver(w);
+    // A game takes the GPU 10 minutes in, for 40 minutes: the run goes back in line in its place.
+    const stepped = stepAsideWhenRunning(d, watch, "gpu-busy:game.exe", () => pass(10 * MIN, [d], watch));
+    await workAll(d);
+    expect(stepped()).toBe(true);
+    await pass(40 * MIN, [d], watch);
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+    // Back, it runs for two and a half hours.
+    d.pause(null);
+    let long = false;
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step === "running" && !long) {
+        long = true;
+        await pass(150 * MIN, [d], watch);
+      }
+    });
+    await workAll(d);
+    expect(long).toBe(true);
+    await expectOnce(id, watch, { place: 1 });
+    expect(Date.now()).toBeGreaterThan(hold.createdAt + svc.maxWaitMs + svc.holdLifeMs);
+    expect(svc.reportsFor(id)).toEqual([{ holdId: hold.id, kind: "settle", status: "succeeded" }]);
+    expect(svc.late).toEqual([]);
   });
 
   it("a run past its lane's ceiling is stopped by its worker and put back in line once, with its place kept; past it again, it ends in plain words", async () => {
@@ -853,12 +1533,9 @@ describe("a deploy while results are being sent", () => {
 
 describe("two app processes on one database (a deploy's overlap)", () => {
   let app2: AppProcess;
+  const appEnv = () => ({ FUOBE_HOSTED_RUNS: "1", FUOBE_BILLING_URL: svc.address, FUOBE_BILLING_TOKEN: svc.token, COMFYUI_URL: DEAD, FUOBE_PUBLIC_SIGNUP: "1" });
   beforeAll(async () => {
-    app2 = await startAppProcess({
-      dataDir: dir,
-      env: { FUOBE_HOSTED_RUNS: "1", FUOBE_BILLING_URL: svc.address, FUOBE_BILLING_TOKEN: svc.token, COMFYUI_URL: DEAD, FUOBE_PUBLIC_SIGNUP: "1" },
-      allow: [comfy.url],
-    });
+    app2 = await startAppProcess({ dataDir: dir, env: appEnv(), allow: [comfy.url] });
   });
   afterAll(async () => {
     await app2?.stop();
@@ -866,6 +1543,26 @@ describe("two app processes on one database (a deploy's overlap)", () => {
 
   /** The run as the account's session reads it from the other process. */
   const there = (id: string) => async () => (await app2.generation(id, a1)) as unknown as RunLike;
+
+  /** When the app process that names its turns `token` last said it still runs (none: it exited, or never ran). */
+  const seenAt = (token: string) => (db().prepare("SELECT seen_at FROM app_processes WHERE token = ?").get(token) as { seen_at: number } | undefined)?.seen_at;
+  /** The app process that holds the turn to save the run's result. */
+  const turnOf = (id: string) => (db().prepare("SELECT finish_by FROM generation_runs WHERE id = ?").get(id) as { finish_by: string | null } | undefined)?.finish_by ?? null;
+  /** That process is in the middle of saving the run's result: it took the turn, minutes before its turn runs out. */
+  const holdTurn = (id: string, token: string) => db().prepare("UPDATE generation_runs SET finish_by = ?, finish_until = ? WHERE id = ?").run(token, Date.now() + 4 * MIN, id);
+
+  /** One more app process on this database, and the name its turns carry. */
+  async function anotherApp(): Promise<{ app: AppProcess; token: string }> {
+    const tokens = () => (db().prepare("SELECT token FROM app_processes").all() as { token: string }[]).map((r) => r.token);
+    const known = new Set(tokens());
+    const app = await startAppProcess({ dataDir: dir, env: appEnv(), allow: [comfy.url] });
+    const token = tokens().find((t) => !known.has(t));
+    if (!token) {
+      await app.stop();
+      throw new Error("The new app process never said it runs");
+    }
+    return { app, token };
+  }
 
   it("the other process serves the worker and a session: the same run, the same state", async () => {
     const w = standInWorker();
@@ -882,7 +1579,7 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await expect(app2.generation(id, b1)).rejects.toThrow(/answered 403/);
   });
 
-  it("a step the worker reports to the other process isn't seen here today: live progress stays in the memory of the process that took the report, so every look shows no step", async () => {
+  it("a step and a preview picture the worker reports to the other process are seen here too: a refresh, both sessions, the list and the other process show the same step", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
     const watch = watchOf(id, { "other process": there(id) });
@@ -891,25 +1588,38 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     const d = driver(w);
     // The worker's calls reach the other process; this one's runner turns.
     d.via(app2.api);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
     const steps: (number | null)[][] = [];
+    const pictures: (string | null)[] = [];
     d.onStep(async (step, _path, report) => {
       if (step !== "running" || Number(report?.value ?? 0) < 2) return;
       await tick();
       steps.push((await watch.look()).map((s) => s.progress));
+      const g = (await sessionRead(a2)(id)) as RunLike & { preview?: string };
+      pictures.push(g.preview ? await previewOf(a2, g.preview) : null);
     });
     await workAll(d);
     expect(steps.length, "looks while the worker said it was past step 2").toBeGreaterThan(0);
-    for (const at of steps) for (const p of at) expect(p ?? 0, "the step a look shows").toBe(0);
+    for (const at of steps) {
+      for (const p of at) expect(p ?? 0, "the step a look shows").toBeGreaterThan(0);
+      expect(Math.max(...at.map((p) => p ?? 0)) - Math.min(...at.map((p) => p ?? 0)), "every look at one moment, the same step").toBeLessThanOrEqual(1 / 10 + 1e-9);
+    }
+    // The second device loads the picture from this process, though the other one took it.
+    expect(pictures.some((p) => p && p.startsWith("ffd8ff"))).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it("while one process saves a finished run's result, the other saves it too today, and the run ends failed: no runner lease or one-time finalize", async () => {
+  it("while one process saves a finished run's result, the other leaves it to that process: the result is saved once, and the run settles once", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
+    const watch = watchOf(id, { "other process": there(id) });
     const d = driver(w);
     // This process's runner turns at every step but the result's parts: the result is saved below.
     d.onStep(async (step) => {
-      if (step !== "part") await tick();
+      if (step === "part") return;
+      await tick();
+      await watch.look();
     });
     await d.beat();
     expect(await d.runOne()).toBe(true);
@@ -920,12 +1630,252 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     const theirs = app2.tick();
     await pause.paused;
     await tick();
+    // (Only this process is looked at now: the other one waits in the middle of its move until it is released.)
+    expect(getGeneration(id)?.status, "this process leaves the run to the one saving it").toBe("running");
+    expect(getGeneration(id)?.message).toBe(POOL_WORDS.working);
     pause.release();
     await theirs;
-    await expectFreeFailure(id);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it("both processes send a finished run's report today when their sweeps meet, so the service gets it twice", async () => {
+  it("a process that stopped while it saved a result leaves it to the other once its turn runs out", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    expect(getGeneration(id)?.status).toBe("running");
+    // Another process took the turn and stopped (a deploy ended it) before it saved anything.
+    db().prepare("UPDATE generation_runs SET finish_by = 'another-process', finish_until = ? WHERE id = ?").run(Date.now() + 60_000, id);
+    await tick();
+    expect(getGeneration(id)?.status).toBe("running");
+    // Its turn runs out: this process saves the result.
+    db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, id);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("an app restarted while it saved a result collects it at once: the app that stopped gave its turn back as it exited", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    expect(getGeneration(id)?.status).toBe("running");
+    // The app before the restart was saving the result (it holds the turn, for minutes yet) when it was told to stop.
+    const { app, token } = await anotherApp();
+    try {
+      holdTurn(id, token);
+      for (let i = 0; i < 3; i++) await tick();
+      expect(getGeneration(id)?.status, "a turn whose app still runs is left to it").toBe("running");
+      expect(updateLive(id, { message: POOL_WORDS.inLine })).toBe(false);
+      // While it runs, it says so every few seconds: a turn it has held longer than its quiet limit stays its own.
+      const quietSince = seenAt(token)! - QUIET_MS - 1000;
+      db().prepare("UPDATE app_processes SET seen_at = ? WHERE token = ?").run(quietSince, token);
+      for (let i = 0; i < 150 && seenAt(token)! <= quietSince; i++) await sleep(100);
+      expect(seenAt(token), "its next word").toBeGreaterThan(quietSince);
+      await tick();
+      expect(getGeneration(id)?.status).toBe("running");
+      expect(turnOf(id)).toBe(token);
+    } finally {
+      await app.stop();
+    }
+    // It exited as an app does when it is told to stop: its turn went with it, and this app saves the result now.
+    expect(seenAt(token)).toBeUndefined();
+    expect(turnOf(id)).toBeNull();
+    await tick();
+    expect(getGeneration(id)?.status).toBe("succeeded");
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("an app killed while it saved a result leaves it to this one once it has been quiet for 20 s, minutes before its turn runs out", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    const { app, token } = await anotherApp();
+    holdTurn(id, token);
+    await app.kill();
+    // Killed: nothing of it ran as it ended, so its turn and its last word are still there.
+    expect(turnOf(id)).toBe(token);
+    await tick();
+    expect(getGeneration(id)?.status, "its last word is a moment old: it may only be slow").toBe("running");
+    // 20 s with no word from it: it stopped, and this app saves the result, long before its turn would run out.
+    clock();
+    vi.setSystemTime(Date.now() + QUIET_MS + 1000);
+    await tick();
+    expect(getGeneration(id)?.status).toBe("succeeded");
+    expect(turnOf(id)).not.toBe(token);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a stop that lands after another process saved the result, while it waited for the workers, leaves the run saved: its file stays, and it settles once", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id, { "other process": there(id) });
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    expect(getGeneration(id)?.status).toBe("running");
+    // The stop (a press of Stop in another tab) asks the run's workers to drop it, and waits for their answer.
+    let asked!: () => void;
+    const reached = new Promise<void>((r) => (asked = r));
+    let answer!: () => void;
+    const answered = new Promise<void>((r) => (answer = r));
+    const realCancel = comfyProvider.cancel!;
+    const cancel = vi.spyOn(comfyProvider, "cancel").mockImplementation(async (ctx) => {
+      asked();
+      await answered;
+      return realCancel.call(comfyProvider, ctx);
+    });
+    try {
+      const stopping = cancelGeneration(id);
+      await reached;
+      // Meanwhile the other process saves the result.
+      await app2.tick();
+      expect(getGeneration(id)?.status).toBe("succeeded");
+      answer();
+      await stopping;
+    } finally {
+      answer();
+      cancel.mockRestore();
+    }
+    // The stop came too late: the run stays saved with its file, and its report is one settle, never a refund.
+    expect(getGeneration(id)?.status).toBe("succeeded");
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a run stopped while its result is saved stays stopped, and the file saved for it goes (none is left filling the account's space)", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const d = driver(w);
+    // The stop lands while the result is saved: as its file is kept, the run is stopped (a cancel from another tab).
+    db().exec(`CREATE TEMP TRIGGER stop_while_saved AFTER INSERT ON assets WHEN NEW.generation_id = '${id}' BEGIN UPDATE generations SET status = 'canceled' WHERE id = '${id}'; END`);
+    try {
+      await workAll(d);
+      await until(() => assetsOf(id) === 0 && getGeneration(id)?.status === "canceled");
+      for (let i = 0; i < 5; i++) await tick();
+    } finally {
+      db().exec("DROP TRIGGER IF EXISTS stop_while_saved");
+    }
+    expect(getGeneration(id)).toMatchObject({ status: "canceled" });
+    expect(assetsOf(id)).toBe(0);
+  });
+
+  it("with the moderation service checking outputs, a run stopped while its result is saved is never brought back to wait for its check", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    mod.run = { allowed: true, checkOutputs: true };
+    try {
+      const w = standInWorker();
+      const { id } = await pressRun();
+      const d = driver(w);
+      db().exec(`CREATE TEMP TRIGGER stop_while_saved AFTER INSERT ON assets WHEN NEW.generation_id = '${id}' BEGIN UPDATE generations SET status = 'canceled' WHERE id = '${id}'; END`);
+      try {
+        await workAll(d);
+        await until(() => assetsOf(id) === 0 && getGeneration(id)?.status === "canceled");
+        for (let i = 0; i < 5; i++) await tick();
+      } finally {
+        db().exec("DROP TRIGGER IF EXISTS stop_while_saved");
+      }
+      expect(getGeneration(id)).toMatchObject({ status: "canceled" });
+      expect((db().prepare("SELECT stage FROM generations WHERE id = ?").get(id) as { stage: string | null }).stage).toBeNull();
+      expect((db().prepare("SELECT COUNT(*) AS n FROM output_checks WHERE generation_id = ?").get(id) as { n: number }).n).toBe(0);
+      expect(assetsOf(id)).toBe(0);
+      expect(mod.calls_of("/v1/check-output")).toEqual([]);
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
+  });
+
+  it("with the moderation service checking outputs, a process whose turn runs out while it saves a result leaves it to the process that took over: nothing of its own save is held or checked", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    mod.run = { allowed: true, checkOutputs: true };
+    try {
+      const w = standInWorker();
+      const { id } = await pressRun();
+      const d = driver(w);
+      // As its file is kept, the save here has taken past its turn, and another process took the turn over.
+      db().exec(`CREATE TEMP TRIGGER turn_taken AFTER INSERT ON assets WHEN NEW.generation_id = '${id}' BEGIN UPDATE generation_runs SET finish_by = 'another-process', finish_until = ${Date.now() + 10 * MIN} WHERE id = '${id}'; END`);
+      try {
+        await workAll(d);
+        await until(() => taskOf(id)?.state === "done" && assetsOf(id) === 0);
+        for (let i = 0; i < 5; i++) await tick();
+      } finally {
+        db().exec("DROP TRIGGER IF EXISTS turn_taken");
+      }
+      // Nothing of this process's save is held or checked: its file went.
+      expect(getGeneration(id)?.status).toBe("running");
+      expect((db().prepare("SELECT stage FROM generations WHERE id = ?").get(id) as { stage: string | null }).stage).toBeNull();
+      expect((db().prepare("SELECT COUNT(*) AS n FROM output_checks WHERE generation_id = ?").get(id) as { n: number }).n).toBe(0);
+      expect(assetsOf(id)).toBe(0);
+      // A slow look here changes nothing while the other process saves it.
+      expect(updateLive(id, { status: "failed", error: "Timed out after 45 minutes", completed_at: Date.now() })).toBe(false);
+      // The process holding the turn holds its own save for the check (here a result with no file, which succeeds as it is),
+      // once: a run already held for its check is never held again.
+      db().prepare("UPDATE generations SET stage = 'checking' WHERE id = ?").run(id);
+      expect(outputChecks.holdForCheck(id, [], { live: true, turn: "another-process" })).toBe(false);
+      db().prepare("UPDATE generations SET stage = NULL WHERE id = ?").run(id);
+      expect(outputChecks.holdForCheck(id, [], { live: true, turn: "a-third-process" })).toBe(false);
+      expect(outputChecks.holdForCheck(id, [], { live: true, turn: "another-process" })).toBe(true);
+      expect(getGeneration(id)?.status).toBe("succeeded");
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
+  });
+
+  it("a look at a run that comes back after another process saved it, or while another process saves it, changes nothing", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    const saved = getGeneration(id)!;
+    // A slow look from before the save says it still works, or that it failed: the saved run stays as it is.
+    expect(updateLive(id, { status: "running", progress: 0.5, message: POOL_WORDS.working })).toBe(false);
+    expect(updateLive(id, { status: "failed", error: "Timed out after 45 minutes", completed_at: Date.now() })).toBe(false);
+    expect(getGeneration(id)).toMatchObject({ status: "succeeded", outputs: saved.outputs });
+    // A run another process is saving now: a look here neither fails it nor moves it back.
+    const next = (await pressRun()).id;
+    db().prepare("UPDATE generation_runs SET finish_by = 'another-process', finish_until = ? WHERE id = ?").run(Date.now() + 60_000, next);
+    expect(updateLive(next, { status: "failed", error: "Timed out after 45 minutes", completed_at: Date.now() })).toBe(false);
+    expect(getGeneration(next)?.status).toBe("queued");
+    // Its turn runs out (that process stopped): this one may change it again.
+    db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, next);
+    expect(updateLive(next, { message: POOL_WORDS.inLine })).toBe(true);
+    await workAll(d);
+    expect((await ended(next))?.status).toBe("succeeded");
+  });
+
+  it("both processes' sweeps meet over a finished run's report: one sends it, so the service gets it once", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
     const watch = watchOf(id);
@@ -949,6 +1899,7 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     expect(watch.problems({ place: 1 })).toEqual([]);
     expect(g?.status).toBe("succeeded");
     const settle = { holdId: holdOf(id), kind: "settle", status: "succeeded" };
-    expect(svc.reportsFor(id)).toEqual([settle, settle]);
+    expect(svc.reportsFor(id)).toEqual([settle]);
+    expect(svc.callsOf("/v1/settle").filter((c) => (c.body as { generationId?: string }).generationId === id)).toHaveLength(1);
   });
 });

@@ -28,18 +28,20 @@ import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER } from "@/lib/gues
 import { db } from "./db";
 import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, stepsOf, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
-import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, outputsWords, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
+import { holdTiming } from "./queue-settings";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, outputsWords, poolAllows, poolAllowsRun, poolAway, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
+import { queueRequestRelease } from "./billing-outbox";
+import { reserveRequestId, type Press } from "./run-requests";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
 import { ACCOUNT_LIMITS } from "./account-files";
 import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
 import { needsGpu, ownSetupHere, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
-import { reserveRequestId } from "./tool-presses";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
 
 export { poolCardRefuses };
@@ -120,6 +122,13 @@ const OWN = { kind: "own" } as const;
 
 /** What an account whose own GPU didn't answer is asked, when its run named no place (never moved and charged unasked). */
 export const OWN_GPU_QUIET = "Your GPU isn't answering right now. Run this on this studio's GPUs instead, or try again when your GPU is back.";
+
+/**
+ * Run pressed while every GPU here that could run it is away (it was there when the price check before Run asked): no
+ * run is made, and the answer promises no start. It is no billing refusal, so no card opens for it: the page says the
+ * words and asks the price check again, which now says "Starting soon" with Run off until one of those GPUs is back.
+ */
+const awayRefusal = (): Refusal => ({ status: 503, body: { error: BILLING_WAIT.run, code: "busy" }, headers: { "Retry-After": "15" } });
 
 /** A run this install's GPUs won't take, refused in the words the price check before Run gives too. */
 const notOffered = (error: string): { kind: "refuse"; refusal: Refusal } => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
@@ -252,6 +261,16 @@ export function madeRunProblem(run: { policy: Policy; steps: RunFacts["steps"]; 
   const held = new Map((run.steps ?? []).map((s) => [`${s.model} ${s.op ?? ""}`, s.jobs]));
   for (const s of pricedSteps(made)) if (s.jobs > (held.get(`${s.model} ${s.op ?? ""}`) ?? 0)) return HOSTED_WORDS.notOffered;
   return null;
+}
+
+/**
+ * Are the workers that could run some GPU step of a run all away now (paused, silent, outside their hours): its own
+ * model's, or a later step's of a chain? Then the run would wait for nothing at that step, so it isn't made. Light steps
+ * (a join, a trim) are left out, as they cost nothing.
+ */
+export function runAway(planned: Pick<Planned, "route">, steps: PlannedStep[] | null | undefined): boolean {
+  if (poolAway(planned.route.endpoint)) return true;
+  return (steps ?? []).some((s) => s.provider === "comfyui" && !freeStep(s) && poolAway(stepEndpoint(s)));
 }
 
 /**
@@ -444,6 +463,10 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
     if (ownFallback) return OWN;
     return gateRefusal(gate);
   }
+  // Every GPU here that could run it is off for now (paused, silent, outside its hours): a run made now would only wait
+  // until its wait limit ended it. It goes to the account's own GPU as any run these GPUs can't take now, else it isn't
+  // made (awayRefusal).
+  if (runAway(planned, gate.steps)) return ownFallback ? OWN : { kind: "refuse", refusal: awayRefusal() };
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
   return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };
@@ -514,9 +537,10 @@ export async function moderateRun(
 
 /**
  * Set the run's price aside (no billing service: nothing to set aside; the run is free). Returns the stamp the run's
- * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md). `pressId`: the press of
- * Run it belongs to (a tool's scope and its page's id for the press), so every resend of that press asks for the same
- * hold; none, a fresh request id.
+ * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md). `press`: the press of
+ * Run it belongs to and its try (run-requests.ts), so every send of that try reserves under one request id, and a new try
+ * under one of its own; none (a script): an id of this request's own. A reserve given up after a try that may have made a
+ * hold releases it by its request id, unless a send of the same try owns that hold (`press.gaveUp`).
  */
 export async function reservePool(
   account: Account,
@@ -525,20 +549,34 @@ export async function reservePool(
   shown: { amount: number; priceVersion: string } | null,
   checkOutputs: boolean,
   steps?: RunFacts["steps"],
-  pressId: string | null = null,
+  press: Press | null = null,
 ): Promise<{ ok: true; stamp: RunStamp } | { ok: false; refusal: Refusal }> {
   const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }) };
   if (!billingConfigured()) return { ok: true, stamp: base };
   const kind = outputKind(planned.op, planned.model);
+  const run: RunFacts = { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) };
+  const requestId = press ? reserveRequestId(account.id, press.key, press.tries) : nanoid(16);
   const a = await reserve({
-    requestId: pressId ? reserveRequestId(account.id, pressId) : nanoid(16),
+    requestId,
     account: accountFacts(account),
-    run: { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) },
+    run,
     queue: queueFacts(account.id, planned.route.endpoint),
     shown: shown ?? { amount: 0, priceVersion: "" },
+    // How long its hold must stay open once a worker first takes it: every attempt at its lanes' run ceilings, and the
+    // time it may spend back in line (the queue's settings).
+    timing: holdTiming(run.steps?.length ? run.steps : [{ lane: run.lane, jobs: run.jobs }], MAX_ATTEMPTS, attemptLimitMs),
   });
   if (!a) return { ok: true, stamp: base };
   if (!a.ok) {
+    if (a.unsure) {
+      // A try may have made a hold the app never heard of: it goes back by its request id, and the press's next send is a
+      // new try under a request id of its own. A send of the same try that got there first (it made the run, or was
+      // refused and gave its hold back) owns that hold, so nothing is released by its request id. One statement decides,
+      // after any run it made.
+      db().transaction(() => {
+        if (!press || press.gaveUp()) queueRequestRelease(requestId);
+      })();
+    }
     return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }) }) };
   }
   forgetBalance(account.id);
@@ -564,6 +602,9 @@ export interface PoolLine {
   place: number;
   etaSeconds: number | null;
 }
+
+/** A price check's answer while every GPU that could run it is off for now: Run is off, and the wait is said. */
+const startingSoonQuote = (): Quote => ({ allowed: false, amount: 0, priceVersion: "", text: HOSTED_WORDS.startingSoon, code: "busy", etaS: null });
 
 /** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
 /**
@@ -623,6 +664,12 @@ export async function poolQuote(
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
     return { planned, quote: gateQuote(gate, !account), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+  }
+  // Every GPU here that could run it is off for now: Run is off and says it starts soon (the price check asks again by
+  // itself, and Run comes back on once one is back), never a run that would wait for nothing.
+  if (runAway(planned, gate.steps)) {
+    if (hasGpu && wish !== "pool") return null;
+    return { planned, quote: startingSoonQuote(), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
   // Light work only (joins, trims): free, and never counted against the policy's limits, so the service isn't asked.
   if (lightRun(gate.steps)) {

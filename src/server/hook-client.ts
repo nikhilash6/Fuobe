@@ -15,6 +15,11 @@ export class HookDown extends Error {
   constructor(
     readonly hook: string,
     detail: string,
+    /**
+     * What went wrong, as far as it is known: the HTTP status it answered, no answer in time, or no connection at all
+     * (`refused`: nothing was sent, so the service did nothing).
+     */
+    readonly why: { status?: number; timedOut?: boolean; refused?: boolean } = {},
   ) {
     super(`${hook}: ${detail}`);
   }
@@ -94,14 +99,14 @@ export function hookCall<T>(c: HookCall): Promise<T> {
     let settled = false;
     // The whole call, connection to last byte, within timeoutMs.
     const timer = setTimeout(() => {
-      fail(`no answer in ${c.timeoutMs} ms from ${c.method} ${c.path}`);
+      fail(`no answer in ${c.timeoutMs} ms from ${c.method} ${c.path}`, { timedOut: true });
       req.destroy();
     }, c.timeoutMs);
-    const fail = (why: string) => {
+    const fail = (detail: string, why: HookDown["why"] = {}) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      reject(new HookDown(c.hook, why));
+      reject(new HookDown(c.hook, detail, why));
     };
     const req = lib.request(opts, (res) => {
       const chunks: Buffer[] = [];
@@ -118,7 +123,7 @@ export function hookCall<T>(c: HookCall): Promise<T> {
       res.on("end", () => {
         if (settled) return;
         const status = res.statusCode ?? 0;
-        if (status < 200 || status > 299) return fail(`HTTP ${status} from ${c.method} ${c.path}`);
+        if (status < 200 || status > 299) return fail(`HTTP ${status} from ${c.method} ${c.path}`, { status });
         try {
           const text = Buffer.concat(chunks).toString("utf8");
           const value = (text ? JSON.parse(text) : {}) as T;
@@ -131,7 +136,8 @@ export function hookCall<T>(c: HookCall): Promise<T> {
       });
       res.on("error", (e) => fail(e.message));
     });
-    req.on("error", (e) => fail(e.message));
+    // No connection (refused, no such socket): nothing reached the service.
+    req.on("error", (e: NodeJS.ErrnoException) => fail(e.message, e.code === "ECONNREFUSED" || e.code === "ENOENT" ? { refused: true } : {}));
     if (payload) req.write(payload);
     req.end();
   });

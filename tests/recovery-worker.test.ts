@@ -166,6 +166,8 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
     studio.pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l, { delayMs: 0 }])), claimAfterMs: 0 });
     // Connected once: it said its build (one that takes this studio's job tickets).
     studio.db().prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ?, catalog_version = ?, protocol = 3 WHERE id = ?").run(JSON.stringify({ lanes, workflows: studio.workflows() }), JSON.stringify({ vramBytes: 32 * 2 ** 30 }), program.catalogVersion, w.id);
+    // Connected, as a worker that beat a moment ago (a run is refused while every worker that could run it is away).
+    studio.db().prepare("UPDATE relay_workers SET seen_at = ?, paused_local = 0 WHERE id = ?").run(Date.now(), w.id);
     return w;
   }
 

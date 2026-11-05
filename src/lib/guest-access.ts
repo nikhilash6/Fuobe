@@ -169,6 +169,9 @@ export function accountGeneration(method: string, pathname: string): string | un
   // Cancel, and Fuobe Soul's finished picture for its own result.
   const step = /^\/api\/generations\/([^/]+)\/(cancel|finish)$/.exec(pathname);
   if (method === "POST" && step) return step[1];
+  // A run's live preview picture while it works.
+  const preview = /^\/api\/generations\/([^/]+)\/preview$/.exec(pathname);
+  if ((method === "GET" || method === "HEAD") && preview) return preview[1];
   const one = GENERATION.exec(pathname);
   // PATCH: a like, a pin or a review status (all the route changes).
   return one && (method === "GET" || method === "HEAD" || method === "PATCH" || method === "DELETE") ? one[1] : undefined;

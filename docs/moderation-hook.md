@@ -39,13 +39,16 @@ outputs then show as soon as the run succeeds and `check-output` is never called
 
 When outputs are checked:
 
-1. The run's files are saved and **held**: never served to the account, never by a shared link. The row stays running
-   with the stage "Checking", and the tile says so.
-2. Each file goes to `check-output`. "wait", or no answer, asks again later.
-3. Every file "show": the files are served and the run succeeds.
-4. Any file "hide": that file is deleted, the others with it, and the run fails with the service's `text`. A billing
+1. While the run works, it shows no preview picture: the workers' ComfyUI is asked for none, and a picture a worker
+   sends anyway is dropped. Its preview address answers 404.
+2. The run's files are saved and **held**: never served to the account, never by a shared link. The row stays running
+   with the stage "Checking", and the tile says so. A run stopped while its files are saved stays stopped, and its
+   files are deleted.
+3. Each file goes to `check-output`. "wait", or no answer, asks again later.
+4. Every file "show": the files are served and the run succeeds.
+5. Any file "hide": that file is deleted, the others with it, and the run fails with the service's `text`. A billing
    hold is refunded as `hidden`.
-5. Past `FUOBE_MODERATION_MAX_WAIT_H`: the run fails with "This result couldn't be checked in time" and its files are
+6. Past `FUOBE_MODERATION_MAX_WAIT_H`: the run fails with "This result couldn't be checked in time" and its files are
    deleted. A billing hold is refunded as `unchecked`.
 
 ## Reports

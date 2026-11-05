@@ -17,7 +17,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { POOL_WORDS } = await import("@/lib/relay");
-const { PendingTile, FailedTile } = await import("@/components/studio/feed");
+const { PendingTile, FailedTile, Feed } = await import("@/components/studio/feed");
+const { CREATE_GENERATION_KEY, goesToPool, newPressId, PRESS_RESEND, sendPress } = await import("@/lib/api");
 const { AiTag } = await import("@/components/studio/ai-tag");
 const { TooltipProvider } = await import("@/components/ui/tooltip");
 
@@ -67,6 +68,17 @@ describe("a run's tile on this studio's GPUs", () => {
     expect(html).toContain(">Working<");
     expect(html).toContain("40%");
   });
+  it("working with a preview picture: the picture shows under Working; in line, none", () => {
+    const src = "/api/generations/g1/preview?at=123";
+    const working = render(createElement(PendingTile, { g: gen({ place: "pool", status: "running", message: POOL_WORDS.working, progress: 0.4, preview: src }), ratio: 1 }));
+    expect(working).toContain(`src="${src}"`);
+    expect(working).toContain(">Working<");
+    const inLine = render(createElement(PendingTile, { g: gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine, preview: src }), ratio: 1 }));
+    expect(inLine).not.toContain("<img");
+    // The owner's own job on the workers shows its picture too.
+    const owner = render(createElement(PendingTile, { g: gen({ status: "running", message: "Generating", progress: 0.4, preview: src }), ratio: 1 }));
+    expect(owner).toContain(`src="${src}"`);
+  });
   it("a run that can't finish: one plain sentence, and Retry", () => {
     const html = render(createElement(FailedTile, { g: gen({ place: "pool", status: "failed", error: POOL_WORDS.failed, notCharged: true }), ratio: 1, onRetry: () => {} }));
     expect(html).toContain(POOL_WORDS.failed.replace("'", "&#x27;"));
@@ -94,3 +106,93 @@ describe("a run's tile on this studio's GPUs", () => {
   });
 });
 
+
+describe("a run on this studio's GPUs between Run and its answer", () => {
+
+  /** A feed whose page pressed Run with these requests and has no answer yet (the run is still being made). */
+  const feedWhileMaking = (requests: object[], items: Generation[] = []) => {
+    const client = new QueryClient();
+    for (const r of requests) {
+      const m = client.getMutationCache().build(client, { mutationKey: CREATE_GENERATION_KEY, mutationFn: () => new Promise(() => {}) });
+      void m.execute(r);
+    }
+    return renderToStaticMarkup(
+      createElement(QueryClientProvider, { client }, createElement(TooltipProvider, null, createElement(Feed, { items, empty: createElement("p", null, "Nothing yet") }))),
+    );
+  };
+
+  it("shows In line while the run is made (a wait for the billing service included), with no other words", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", place: "pool", params: { aspectRatio: "16:9" } }]);
+    expect(html).toContain('data-run-state="in-line"');
+    expect(html).toContain(`>${POOL_WORDS.inLine}<`);
+    expect(html).not.toContain("Nothing yet");
+    expect(html).not.toMatch(/pause|error|billing|GPU/i);
+  });
+  it("a run that names no place but sends the price it showed goes there too, above the runs already made", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", shown: { amount: 0, priceVersion: "" } }], [gen({ place: "pool", status: "running", message: POOL_WORDS.working })]);
+    expect(html.indexOf('data-run-state="in-line"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-run-state="in-line"')).toBeLessThan(html.indexOf('data-run-state="working"'));
+  });
+  it("every other run being made shows nothing new", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" }, { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", place: "own" }]);
+    expect(html).not.toContain("data-run-state");
+    expect(html).toContain("Nothing yet");
+    expect(goesToPool(undefined)).toBe(false);
+  });
+});
+
+describe("one press of Run", () => {
+  const answer = (status: number) => new Response(JSON.stringify({ items: [] }), { status });
+
+  it("each press gets its own id, made of plain letters and digits", () => {
+    const a = newPressId();
+    const b = newPressId();
+    expect(a).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+    expect(b).not.toBe(a);
+  });
+
+  it("on this studio's GPUs, a press whose answer is lost on the way is sent again as it was, a few times at most", async () => {
+    const waits: number[] = [];
+    const wait = async (ms: number) => void waits.push(ms);
+    // The network dropped, then a proxy gave up on a slow answer, then the answer came.
+    const seen: string[] = [];
+    const outcomes: (() => Response)[] = [
+      () => {
+        throw new TypeError("Failed to fetch");
+      },
+      () => answer(504),
+      () => answer(201),
+    ];
+    const res = await sendPress(async () => (seen.push("send"), outcomes[seen.length - 1]()), true, wait);
+    expect(res.status).toBe(201);
+    expect(seen).toHaveLength(3);
+    expect(waits).toEqual([PRESS_RESEND.afterMs, PRESS_RESEND.afterMs]);
+    // Never more than PRESS_RESEND.times again: the last answer stands.
+    let n = 0;
+    const last = await sendPress(async () => (n++, answer(502)), true, wait);
+    expect(last.status).toBe(502);
+    expect(n).toBe(PRESS_RESEND.times + 1);
+    // The studio's own answers (a refusal, a busy line) are never sent again.
+    n = 0;
+    expect((await sendPress(async () => (n++, answer(503)), true, wait)).status).toBe(503);
+    expect(n).toBe(1);
+  });
+
+  it("every other run is sent once, as before", async () => {
+    let n = 0;
+    expect((await sendPress(async () => (n++, answer(504)), false, async () => {})).status).toBe(504);
+    expect(n).toBe(1);
+    n = 0;
+    await expect(
+      sendPress(
+        async () => {
+          n++;
+          throw new TypeError("Failed to fetch");
+        },
+        false,
+        async () => {},
+      ),
+    ).rejects.toThrow("Failed to fetch");
+    expect(n).toBe(1);
+  });
+});

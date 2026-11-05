@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
@@ -517,15 +517,67 @@ export function useLibraryFacets(opts: { steps?: boolean } = {}) {
   });
 }
 
+/** The new runs being made (useCreateGeneration), as the mutation cache knows them. */
+export const CREATE_GENERATION_KEY = ["create-generation"] as const;
+
+/**
+ * Does this new run go to this studio's GPUs (hosted runs)? The composer names the place, or sends the price it showed
+ * for a run there. Other runs (an install's own GPU, a cloud key) say neither.
+ */
+export function goesToPool(req: GenerationRequest | undefined): boolean {
+  return !!req && (req.place === "pool" || "shown" in req);
+}
+
+/**
+ * The runs on this studio's GPUs being made now (Run pressed, no answer yet), with when Run was pressed. The feed shows
+ * each one as "In line" until the run is made, so a short wait before it starts never looks like nothing happened.
+ */
+export function useMakingPoolRuns(): { at: number; request: GenerationRequest }[] {
+  const pending = useMutationState({
+    filters: { mutationKey: CREATE_GENERATION_KEY, status: "pending" },
+    select: (m) => ({ at: m.state.submittedAt, request: m.state.variables as GenerationRequest | undefined }),
+  });
+  return pending.filter((p): p is { at: number; request: GenerationRequest } => goesToPool(p.request));
+}
+
+/** A new id for one press of Run: every send of that press carries it, so the studio makes its run once. */
+export function newPressId(): string {
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === "function") return c.randomUUID();
+  const b = new Uint8Array(16);
+  if (typeof c?.getRandomValues === "function") c.getRandomValues(b);
+  else for (let i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+/** How often, and after how long, a press of Run whose answer was lost on the way is sent again (the same press). */
+export const PRESS_RESEND = { times: 2, afterMs: 1500 };
+
+/**
+ * Send one press of Run. A run on this studio's GPUs whose answer is lost on the way (the network dropped, or a proxy in
+ * between gave up on a slow answer: 502, 504) is sent again with the same press id, and the studio answers with the run
+ * the first send made (it makes one run, and sets its price aside once). Other runs are sent once, as before.
+ */
+export async function sendPress(send: () => Promise<Response>, again: boolean, wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))): Promise<Response> {
+  for (let i = 0; ; i++) {
+    const last = !again || i >= PRESS_RESEND.times;
+    try {
+      const res = await send();
+      if (last || (res.status !== 502 && res.status !== 504)) return res;
+    } catch (e) {
+      if (last) throw e;
+    }
+    await wait(PRESS_RESEND.afterMs);
+  }
+}
+
 export function useCreateGeneration() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: CREATE_GENERATION_KEY,
     mutationFn: async (req: GenerationRequest) => {
-      const res = await fetch("/api/generations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req),
-      });
+      const body = JSON.stringify({ ...req, requestId: newPressId() });
+      const res = await sendPress(() => fetch("/api/generations", { method: "POST", headers: { "Content-Type": "application/json" }, body }), goesToPool(req));
       // Stopped by the GPU pre-flight: the guided fix opens (watchGuestRefusals), so no error toast on top of it.
       if (res.status === 409 && res.headers.get("x-fuobe-gpu-setup") === "1") {
         const b = (await res.json().catch(() => ({}))) as { error?: string };
@@ -546,6 +598,9 @@ export function useCreateGeneration() {
       // The runs going and the line changed: the price check before the next Run asks again.
       refreshPriceChecks(qc);
     },
+    // Refused (every GPU that could run it went away since the price check, a limit, a new price): the price check asks
+    // again, so Run and its words show where things stand now.
+    onError: () => refreshPriceChecks(qc),
   });
 }
 

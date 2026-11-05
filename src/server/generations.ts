@@ -108,7 +108,9 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
-import { poolLane } from "./computer/pool";
+import { hostedRunsOn } from "./hosted-switch";
+import { poolLane, queueOfGeneration } from "./computer/pool";
+import { runPreviewAt } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope, outsideDemo } from "./demo-scope";
@@ -227,7 +229,25 @@ export function toGeneration(r: Row): Generation {
     ...(checking && !pool && { stage: "checking" as const }),
     // Waiting in line on this install's GPUs: its place and the wait, about.
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
+    // The owner's own job on the workers, waiting: its place in their line (in the list as after a refresh).
+    ...(stored.place !== "pool" && r.status === "queued" && r.provider === "comfyui" && workerQueue(r.id)),
+    // Working on this install's GPUs: the address of its latest preview picture, while there is one. None for a run
+    // whose outputs the moderation service sees first (a preview would show what its check holds back).
+    ...(r.status === "running" && r.provider === "comfyui" && !checking && !stored.checkOutputs && livePreview(r.id)),
   };
+}
+
+/** The owner's job waiting for the workers: its place in their line, as the Generation field. */
+function workerQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
+  const q = queueOfGeneration(id);
+  return q ? { queue: q } : {};
+}
+
+/** A run's latest preview picture from the workers, as the address its tile loads (it changes with each picture). */
+function livePreview(id: string): { preview: string } | Record<string, never> {
+  // (Only with hosted runs on: computer/tasks.ts previewShown.)
+  const at = hostedRunsOn() ? runPreviewAt(id) : null;
+  return at ? { preview: `/api/generations/${encodeURIComponent(id)}/preview?at=${at}` } : {};
 }
 
 /** A pool row's words while it goes: in line, or working on it. */
@@ -521,7 +541,8 @@ export const ASSET_FREE: Record<string, string> = {
   "gpu_snapshots.report_json": "readiness built from that inventory",
   "generations.external_meta_json": "the provider's job handles",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
-  "tool_presses.answer_json": "a copy of the answer one press of a tool's Run got, for a resend of it: its runs' own rows keep their files",
+  "run_requests.ids_json": "the ids of the runs one press of Run made, never a file",
+  "run_requests.answer_json": "a copy of the answer one press of a tool's Run got, for a resend of it: its runs' own rows keep their files",
   "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
   "admin_tokens.scopes_json": "an admin token's scope names",
   "admin_audit.detail_json": "small facts about an admin action: counts, ids and names, never a file's URL",
@@ -565,6 +586,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_tasks.tried_json": "the ids of the workers that lost or failed this job",
   "relay_tasks.ticket_json": "an account's job ticket for the workers: settings, and the names and SHA-256 of the job's own staged inputs",
   "relay_tasks.finish_json": "a finishing job's ticket for a worker's CPU slot: settings, and the names and SHA-256 of the job's own staged inputs",
+  "relay_tasks.progress_json": "a job's live step, node name and place in its ComfyUI's queue (its preview picture is a file in the task's folder, never a Fuobe file)",
   "relay_workers.facts_json": "what a worker said about its ComfyUI: its GPU, memory and version",
   "relay_workers.inventory_json": "a worker's model files and node packs: names, sizes and hashes on that PC",
   "relay_workers.lanes_json": "the lanes a worker can run: hashes of model file names",
@@ -2327,6 +2349,7 @@ export function ensureRunner(): void {
 
 function startRunner(): void {
   watchGenerations(db());
+  keepBeating();
   const cur = globalThis.__fuobeRunner;
   if (cur) {
     // After a dev hot-reload, point the existing timers at this module's (fresh) code.
@@ -2509,7 +2532,11 @@ async function pollOne(r: Row): Promise<void> {
   }
   const ctx = pollContext(r, model);
   // Its outputs are saved and the 3D finish runs (or ran until a restart): nothing more to ask the provider.
-  if (ctx.meta.finishing) return resumeFinish(r);
+  // (Only the app process whose turn it is: two processes on one database never run its finish twice.)
+  if (ctx.meta.finishing) {
+    if (claimFinish(r.id)) resumeFinish(r);
+    return;
+  }
   // Poll first: a job that finished while the server was asleep or down is collected, not timed out.
   let res: PollResult | undefined;
   let pollError: unknown;
@@ -2551,7 +2578,7 @@ async function pollOne(r: Row): Promise<void> {
       await adapterFor(r.provider, account)
         .cancel?.(ctx)
         .catch(() => {});
-      update(r.id, {
+      updateLive(r.id, {
         status: "failed",
         error: run.started_at || deadline
           ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
@@ -2570,24 +2597,24 @@ async function pollOne(r: Row): Promise<void> {
     if (!res) throw pollError;
     if (startsNow) db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now(), r.id);
     // Back in line (a worker paused, went quiet or gave it back): no progress of the attempt before is kept.
-    update(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: res.message ?? null });
+    updateLive(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: res.message ?? null });
     return;
   }
   if (res.state === "failed") {
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
-    update(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
+    updateLive(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
     // (A run on this install's GPUs says nothing about the account's own GPU.)
     if (res.fix && !onPool) markStale(account ? `acct:${account}` : "install");
     return;
   }
   // The Watermark Remover gave the original back (no clean repair was possible): no new result, the run says what to try.
   if (r.op === "watermark-remove" && (res.outputs as RichOutput[]).some((o) => rejectedRepair(o.meta?.quality as WatermarkQuality | undefined))) {
-    update(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
+    updateLive(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
     return;
   }
   // A Watermark Remover scan with no report the page can read fails in words (never a page that waits for marks forever).
   if (r.op === "watermark-scan" && !(res.outputs as RichOutput[]).some((o) => parseScanReport(o.text))) {
-    update(r.id, { status: "failed", error: WATERMARK_COPY.scanFailed, completed_at: Date.now(), message: null });
+    updateLive(r.id, { status: "failed", error: WATERMARK_COPY.scanFailed, completed_at: Date.now(), message: null });
     return;
   }
   // A Watermark Remover result keeps how it was asked, next to the repair's verdict: the marks removed (as checked) and how.
@@ -2603,8 +2630,11 @@ async function pollOne(r: Row): Promise<void> {
     }
     res = { ...res, outputs: (res.outputs as RichOutput[]).map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, watermark: { mode, ...(marks && { marks }) } } } : o)) };
   }
+  // One app process saves a finished run's results: the one that takes the turn (two processes on one database during a
+  // deploy's overlap never both save them, and the second never ends a saved run as failed).
+  if (!claimFinish(r.id)) return;
   // Mark first so a slow download isn't polled twice.
-  update(r.id, { status: "running", progress: 0.99, message: "Saving results" });
+  updateLive(r.id, { status: "running", progress: 0.99, message: "Saving results" });
   const outputs: OutputFile[] = [];
   // An account's job keeps at most 16 outputs, and a result it can't save fails the job (never a link to its ComfyUI).
   const dropped = account && res.outputs.length > ACCOUNT_LIMITS.outputsPerJob ? res.outputs.length - ACCOUNT_LIMITS.outputsPerJob : 0;
@@ -2617,13 +2647,15 @@ async function pollOne(r: Row): Promise<void> {
     try {
       outputs.push(await mosaicOutput(r, res.outputs as RichOutput[]));
     } catch (e) {
-      update(r.id, { status: "failed", error: (e as Error).message, completed_at: Date.now(), message: null });
+      updateLive(r.id, { status: "failed", error: (e as Error).message, completed_at: Date.now(), message: null });
       return;
     }
   } else {
     for (const o of keepMatte(res.outputs as RichOutput[], matte)) {
       try {
         outputs.push(await persistOutput(o, r.id));
+        // Still saving: the turn is still this process's.
+        claimFinish(r.id);
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
@@ -2633,7 +2665,7 @@ async function pollOne(r: Row): Promise<void> {
             if (left) fs.rmSync(left, { force: true });
           }
           const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
-          update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
+          updateLive(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
           return;
         }
         outputs.push({ url: o.url, kind: o.kind ?? r.kind, ...inlineText(o.text, o.meta), ...(o.draftId ? { draftId: o.draftId } : {}) });
@@ -2651,7 +2683,7 @@ async function pollOne(r: Row): Promise<void> {
     }
     for (const o of cards) deleteAsset(o.assetId!);
     if (cards.size && cards.size === outputs.length) {
-      update(r.id, { status: "failed", error: BLOCKED_CARD_MESSAGE, completed_at: Date.now(), message: null });
+      updateLive(r.id, { status: "failed", error: BLOCKED_CARD_MESSAGE, completed_at: Date.now(), message: null });
       return;
     }
     if (cards.size) outputs.splice(0, outputs.length, ...outputs.filter((o) => !cards.has(o)));
@@ -2662,7 +2694,7 @@ async function pollOne(r: Row): Promise<void> {
     if (!measured) {
       // Nothing of a failed build is kept, the owner's included.
       for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
-      update(r.id, { status: "failed", error: NO_SUBJECT_MESSAGE, completed_at: Date.now(), message: null });
+      updateLive(r.id, { status: "failed", error: NO_SUBJECT_MESSAGE, completed_at: Date.now(), message: null });
       return;
     }
     outputs.splice(0, outputs.length, ...measured);
@@ -2680,23 +2712,146 @@ async function pollOne(r: Row): Promise<void> {
   // An image-to-3D GLB from ComfyUI gets the server's finish first (the web GLB, seconds): the outputs are
   // stored now and the row stays running until it's done, so a restart resumes it from them. The turntable
   // is rendered after the job has succeeded (src/server/model3d-finish.ts).
+  // Stopped (or taken over by another app process) while its results were saved: the files saved here belong to no run,
+  // so they go now instead of filling the account's space.
+  const dropSaved = () => {
+    for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+  };
   if (modelToFinish(r, outputs) >= 0) {
-    update(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" });
+    if (!updateLive(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" })) return dropSaved();
     resumeFinish({ ...r, outputs_json: JSON.stringify(outputs) });
     return;
   }
   // The moderation service asked to see this run's outputs first: they are held, and the row waits ("Checking").
   if (stored.checkOutputs && moderationConfigured()) {
-    holdForCheck(r.id, outputs);
+    if (!holdForCheck(r.id, outputs, { live: true, turn: runnerToken() })) dropSaved();
     return;
   }
-  update(r.id, {
+  const saved = updateLive(r.id, {
     status: "succeeded",
     outputs_json: JSON.stringify(outputs),
     progress: 1,
     message: dropped ? `Kept ${ACCOUNT_LIMITS.outputsPerJob} of ${ACCOUNT_LIMITS.outputsPerJob + dropped} results` : null,
     completed_at: Date.now(),
   });
+  if (!saved) dropSaved();
+}
+
+/**
+ * Change a run the runner looked at, only while it still goes (queued or running, and not held for its output check) and
+ * no other app process that still runs holds its turn to save its results. A look that took a while (a slow poll, a
+ * deploy's overlap) never takes a run another process saved, failed or canceled meanwhile back to an earlier state, and
+ * never fails a run another process is saving. Returns whether the change was made.
+ */
+export function updateLive(id: string, fields: Partial<Row>, now = Date.now()): boolean {
+  const keys = Object.keys(fields);
+  if (!keys.length) return false;
+  return (
+    db()
+      .prepare(
+        `UPDATE generations SET ${keys.map((k) => `${k} = @${k}`).join(", ")}, updated_at = @__now WHERE id = @__id AND status IN ('queued', 'running') AND stage IS NULL
+           AND NOT EXISTS (SELECT 1 FROM generation_runs t WHERE t.id = @__id AND t.finish_by IS NOT NULL AND t.finish_by != @__me AND t.finish_until >= @__now
+             AND NOT ${HOLDER_QUIET})`,
+      )
+      .run({ ...fields, __now: now, __id: id, __me: runnerToken(), __quiet: now - QUIET_MS }).changes > 0
+  );
+}
+
+/** How long an app process holds the turn to save a finished run's results (it renews it as it goes). */
+const FINISH_TURN_MS = 5 * 60_000;
+/** How often an app process says it still runs (keepBeating)… */
+const BEAT_MS = 5_000;
+/** …and how long after its last word it counts as stopped (killed, or crashed): its turns are free then, before they run out. */
+export const QUIET_MS = 20_000;
+/** A process quiet this long is forgotten. */
+const FORGET_MS = 24 * 60 * 60_000;
+
+/** SQL: the process holding turn `t` has been quiet since before @__quiet. A turn whose process has no row waits to run out. */
+const HOLDER_QUIET = "EXISTS (SELECT 1 FROM app_processes p WHERE p.token = t.finish_by AND p.seen_at < @__quiet)";
+
+declare global {
+  /** This app process, as the runs whose results it saves name it. */
+  var __fuobeRunnerToken: string | undefined;
+  /** This app process's beat (keepBeating). */
+  var __fuobeBeat: ReturnType<typeof setInterval> | undefined;
+}
+
+const runnerToken = () => (globalThis.__fuobeRunnerToken ??= `${process.pid}:${nanoid(12)}`);
+
+/** Say that this app process still runs. */
+function beat(now = Date.now()): void {
+  db()
+    .prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET seen_at = excluded.seen_at")
+    .run(runnerToken(), now, now);
+}
+
+/**
+ * From now on, this app process says every 5 s that it still runs (in the database, so every process on it reads that,
+ * wherever it runs), and another process takes a turn this one holds only once this one has been quiet for 20 s. When it
+ * exits, it gives its turns back at once, so the app that starts next saves those runs straight away. Once per process:
+ * the runner starts it, and so does the first turn it takes.
+ */
+function keepBeating(): void {
+  if (globalThis.__fuobeBeat) return;
+  const now = Date.now();
+  try {
+    beat(now);
+    db().prepare("DELETE FROM app_processes WHERE seen_at < ?").run(now - FORGET_MS);
+  } catch (e) {
+    console.warn(`[generations] app process: ${(e as Error).message}`);
+  }
+  const timer = setInterval(() => {
+    try {
+      beat();
+    } catch {
+      // A busy or closed database: the next beat says it.
+    }
+  }, BEAT_MS);
+  timer.unref?.();
+  globalThis.__fuobeBeat = timer;
+  process.once("exit", giveTurnsBack);
+}
+
+/** This app process exits (it saves nothing more): its turns go back now, and its row with them. */
+function giveTurnsBack(): void {
+  try {
+    const d = db();
+    const me = runnerToken();
+    d.transaction(() => {
+      d.prepare("UPDATE generation_runs SET finish_by = NULL, finish_until = NULL WHERE finish_by = ? AND finish_until >= ?").run(me, Date.now());
+      d.prepare("DELETE FROM app_processes WHERE token = ?").run(me);
+    })();
+  } catch {
+    // The database closed first: its turns are free once this process has been quiet for 20 s.
+  }
+}
+
+/**
+ * Take (or renew) this app process's turn to save a run's results: only while the run still goes, and only when no other
+ * process holds the turn, or the one that holds it stopped part way (its turn ran out, or it has been quiet for 20 s:
+ * killed, or crashed), so this one takes over. Two processes on one database (a deploy's overlap) never both save a
+ * run, so a run is finished once.
+ */
+export function claimFinish(id: string, now = Date.now()): boolean {
+  keepBeating();
+  const d = db();
+  return d
+    .transaction((): boolean => {
+      const g = d.prepare("SELECT status, stage FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "stage"> | undefined;
+      // A run held for its output check was saved already.
+      if (!g || (g.status !== "queued" && g.status !== "running") || g.stage) return false;
+      const me = runnerToken();
+      d.prepare("INSERT OR IGNORE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, NULL)").run(id, now);
+      return (
+        d
+          .prepare(
+            `UPDATE generation_runs AS t SET finish_by = @__me, finish_until = @until WHERE t.id = @__id
+               AND (t.finish_by IS NULL OR t.finish_by = @__me OR t.finish_until IS NULL OR t.finish_until < @__now OR ${HOLDER_QUIET})`,
+          )
+          .run({ __me: me, until: now + FINISH_TURN_MS, __id: id, __now: now, __quiet: now - QUIET_MS }).changes > 0
+      );
+    })
+    .immediate();
 }
 
 /** Start (or keep running) the 3D finish of a job whose outputs are stored; it marks the job done when it ends. */
@@ -3039,7 +3194,7 @@ export async function cancelGeneration(id: string): Promise<void> {
   if ((JSON.parse(r.external_meta_json ?? "{}") as Record<string, unknown>).finishing) {
     stopModelFinish(id);
     stopWorkerFinish(id);
-    update(id, { status: "canceled", completed_at: Date.now(), message: null });
+    markCanceled(id);
     return;
   }
   const model = getModel(r.model_id);
@@ -3061,9 +3216,21 @@ export async function cancelGeneration(id: string): Promise<void> {
   }
   stopModelFinish(id);
   stopWorkerFinish(id);
-  update(id, { status: "canceled", completed_at: Date.now(), message: null });
+  // Saved meanwhile (here, or by another app process while the provider was asked to stop): it stays as it is.
+  if (!markCanceled(id)) return;
   // Steps waiting only to feed this one are dropped too (nothing was spent on them).
   dropUnused(depIds(r.depends_on));
+}
+
+/**
+ * End a run as canceled, only while it still goes (queued or running: a run held for its output check too). A run that
+ * was saved, failed or canceled since the cancel looked at it stays as it is, with its result and its report. A save
+ * still under way doesn't stop it: the cancel wins, and that save ends with nothing kept (updateLive). Returns whether
+ * the run was canceled.
+ */
+function markCanceled(id: string): boolean {
+  const now = Date.now();
+  return db().prepare("UPDATE generations SET status = 'canceled', completed_at = ?, message = NULL, updated_at = ? WHERE id = ? AND status IN ('queued', 'running')").run(now, now, id).changes > 0;
 }
 
 // ---------------------------------------------------------------------------

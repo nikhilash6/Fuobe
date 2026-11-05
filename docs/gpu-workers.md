@@ -333,6 +333,7 @@ in that class came.
 | `ownerWaitLimitS` | How long the owner's own jobs may wait before a worker first takes them, in seconds. `null`: no limit | `null` |
 | `fairShare` | Each class goes round its accounts (above). Off: strict order | `false` |
 | `pickAllowanceMs` | How long a job in a worker's warm lane may go ahead of an older one (above). 0: strict order | `0` |
+| `pausedBudgetS` | How long, in all, a run that has started may spend back in line while its worker steps aside, and still be inside the deadline its hold asks for ([billing-hook.md](billing-hook.md)). A run past it still delivers its result | `7200` (2 hours) |
 
 A worker's run limit for one attempt is 3 times the lane's 90th percentile on that worker plus its model load, at
 least 10 minutes and never past the lane's run ceiling. With no measured run in the lane yet, it is the ceiling.
@@ -359,6 +360,14 @@ worker that has its model files first. A job larger than every worker's PC may e
 picture, longest clip or most results) is refused when it is sent too, the owner's and an account's alike. The same check keeps an account's run out of the line when no worker could ever
 take it: a worker must be allowed the lane, its last list of files must have the workflow's files and node packs, and
 it must have the VRAM.
+
+When every worker that could run an account's run is away right now (paused on the website or on its PC, draining,
+outside its hours, silent for over 2 minutes, or never connected), the price check says "Starting soon" and Run is
+off. When those workers go away between the price check and a press of Run, the press makes no run. Its answer is
+"Try again in a moment." (503, code `busy`), with no billing card, and the page asks the price check again, which now
+says "Starting soon". The price check asks again by itself, and Run comes back on once one of those workers is back.
+A worker that waits for local ComfyUI work to make room is not away: runs go in line for it. An account with its own
+GPU gets its run there instead, unless it asked for this install's GPUs.
 
 **The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
 its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,
@@ -722,6 +731,18 @@ its target), at most once an hour each.
     than once counts once: the attempt whose result was kept. The studio keeps at most the run ceiling of the job's lane,
     and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
     before the studio hears that it was sent).
+  - `running` can carry `preview`: the latest preview picture of the job, a JPEG of at most 64 KB as base64, at most
+    one every 2 seconds. A claim says `reportPreview: true` when the run shows one: only with hosted runs on
+    (`FUOBE_HOSTED_RUNS=1`; without them, no job shows one, as before). The worker keeps the latest
+    preview its ComfyUI sends on its socket and adds it to a `running` report. A PNG preview, or a JPEG over 64 KB, is
+    made a smaller JPEG with ffmpeg first (at most 512 pixels on its long side); a worker without ffmpeg sends only
+    ComfyUI's own small JPEGs. The studio keeps only the latest one for the job, shows it in the run's tile while the
+    run works, and serves it only to the run's own account (`GET /api/generations/<id>/preview`, never cached). It
+    drops the picture when the job ends, goes back in line or is claimed again. A picture that is not a JPEG, is too
+    big, comes too soon or comes from an attempt that no longer holds the job is dropped, and the rest of the report
+    still counts. A picture that the studio cannot keep (a full disk, a file open elsewhere) is dropped too. A run
+    whose outputs the moderation service checks first shows no preview ([moderation-hook.md](moderation-hook.md)).
+    Progress from reports and beats is kept in the database, so every app process sees the same step.
   - `give-back` with `why` (`stalled`, `run-limit` or `media`) puts the job back in line. The job keeps its place and
     counts as an attempt. Only a worker's job can be given back. With `update-worker` (a ticket for another catalog)
     or `outside-ceiling` (more than its PC allows), that worker is not offered the job again until its build or its

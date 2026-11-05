@@ -9,7 +9,7 @@ import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
 import { hostedRunsOn } from "../hosted-switch";
 import { catalogVersion } from "./catalog-version";
-import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
+import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
@@ -270,7 +270,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       const t = typeof r?.task === "string" ? (d.prepare("SELECT * FROM relay_tasks WHERE id = ? AND worker_id = ?").get(r.task, w.id) as TaskRow | undefined) : undefined;
       if (!t || !(SENT_STATES as readonly string[]).includes(t.state)) continue;
       setTask(t.id, { device_seen_at: now });
-      noteProgress(t.id, r as unknown as Record<string, unknown>, now);
+      noteProgress(t.id, r as unknown as Record<string, unknown>, now, t.lease_hash);
     }
     for (const id of b.stopped) d.prepare("UPDATE relay_tasks SET stop = 0 WHERE id = ? AND device = ?").run(id, device);
     // A task its CPU slot held that ended with a stop: the CPU slot heard it in its reports and emptied its ComfyUI then.
@@ -650,6 +650,8 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
       ...(o.lostAt && t.worker_id && { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), lost: { worker: t.worker_id, at: o.lostAt } }) }),
     });
     d.prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+    // In line again: nothing of the attempt before shows (no step, no preview).
+    dropProgress(t.id);
     return true;
   }).immediate();
 }
@@ -896,10 +898,15 @@ export function poolLane(workflowId: string): string {
  * whether this install's GPUs could ever run it).
  */
 export function workersCanRun(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean } = {}): boolean {
+  return ableWorkers(workflowId, o).length > 0;
+}
+
+/** The workers that may and can run this workflow (any workflow: null), whatever their state now (workersCanRun). */
+function ableWorkers(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean } = {}): WorkerRow[] {
   const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
   const lane = workflowId ? poolLane(workflowId) : null;
   // (Runs made here go to the "pool" pool: poolFields.)
-  return poolWorkers().some((w) => {
+  return poolWorkers().filter((w) => {
     if (w.pool !== "pool") return false;
     if (o.tickets && !ticketReady(w)) return false;
     const allow = allowOf(w);
@@ -909,6 +916,38 @@ export function workersCanRun(workflowId: string | null, o: { size?: Needs["size
     if (!needs || !(lane! in allow) || !cap.workflows.includes(workflowId) || ceilingProblem(ceiling, { workflowId, lane, size: o.size })) return false;
     return needs.minVramBytes <= (factsOf(w).vramBytes ?? 0);
   });
+}
+
+/**
+ * Is a worker on to take work soon: connected and heard from within the silence limit, paused neither on the website
+ * nor on its PC (a game or another program on its GPU counts as paused), not draining, new enough, and inside its
+ * hours? A worker that makes room for local ComfyUI work first is on: people's runs keep their place and it takes them
+ * next.
+ */
+function onSoon(w: WorkerRow, now: number): boolean {
+  return (
+    !w.revoked_at &&
+    !(w.expires_at && w.expires_at <= now) &&
+    !w.paused_server &&
+    !w.paused_local &&
+    !w.drain &&
+    (w.protocol ?? 0) >= MIN_PROTOCOL &&
+    !!w.seen_at &&
+    now - w.seen_at <= RELAY_TIMES.poolSilentMs &&
+    hoursAt(hoursOf(w), now).inside
+  );
+}
+
+/**
+ * Is every worker that could run an account's job of this workflow (any workflow: null) away now: paused, draining,
+ * outside its hours, silent, or never connected? Only workers that take job tickets now count (ticketReady), as an
+ * account's run goes as one. A run made then would wait for nothing until its wait limit ended it, so the price check
+ * says "Starting soon" (Run is off), and a press of Run makes nothing. False when no worker could run it at all
+ * (workersCanRun refuses that) or one is on.
+ */
+export function workersAway(workflowId: string | null, now = Date.now()): boolean {
+  const able = ableWorkers(workflowId, { tickets: true });
+  return able.length > 0 && !able.some((w) => onSoon(w, now));
 }
 
 /**

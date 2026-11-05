@@ -383,9 +383,22 @@ describe("reports", () => {
     const jpeg = Buffer.alloc(30 * 1024, 7);
     jpeg.set([0xff, 0xd8, 0xff]);
     expect((await report({ event: "running", value: 1, max: 4, preview: jpeg.toString("base64") })).status).toBe(413);
-    expect(tasks.taskPreview(c.id)).toBeNull();
+    expect(tasks.taskById(c.id)?.preview_at).toBeNull();
     expect((await report({ event: "running", value: 2, max: 4 })).status).toBe(200);
-    expect(tasks.taskProgress(c.id)).toMatchObject({ value: 2, max: 4 });
+    expect(tasks.taskProgress(tasks.taskById(c.id)!)).toMatchObject({ value: 2, max: 4 });
+  });
+
+  it("from a person's own computer, a report over 64 KB counts against the lower limit a minute, as before", async () => {
+    waitingTask(`acct:${a}`);
+    const c = await claimed("a");
+    const report = (body: Record<string, unknown>) => call("a", "POST", `/api/gpu/computer/tasks/${c.id}/report`, { headers: { "x-fuobe-lease": c.lease }, body: { ...body } });
+    expect((await report({ event: "sent", promptId: c.promptId })).status).toBe(200);
+    // About 70 KB: under the bound a worker's report with its preview picture has, over a person's own computer's.
+    const big = { event: "running", value: 1, max: 4, padding: "x".repeat(70 * 1024) };
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) statuses.push((await report(big)).status);
+    expect(statuses.slice(0, 30).every((s) => s !== 429), JSON.stringify(statuses)).toBe(true);
+    expect(statuses[30]).toBe(429);
   });
 
   it("a finished entry over 8 MB is refused", async () => {

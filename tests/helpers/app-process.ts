@@ -31,7 +31,10 @@ export interface AppProcess {
   pauseNextSave: () => Promise<{ paused: Promise<void>; release: () => void }>;
   /** What it wrote to its error output. */
   errors: () => string;
+  /** It exits as `next start` does when it is told to stop (its exit handlers run). */
   stop: () => Promise<void>;
+  /** It is killed: it ends at once, with no word and none of its exit handlers. */
+  kill: () => Promise<void>;
 }
 
 const realFetch = globalThis.fetch;
@@ -99,6 +102,12 @@ export async function startAppProcess(o: { dataDir: string; env?: Record<string,
       await post("/__app/exit").catch(() => child.kill());
       await Promise.race([ended, new Promise((r) => setTimeout(r, 5000))]);
       if (child.exitCode === null) child.kill();
+    },
+    kill: async () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const ended = new Promise((r) => child.once("exit", r));
+      child.kill("SIGKILL");
+      await ended;
     },
   };
 }
