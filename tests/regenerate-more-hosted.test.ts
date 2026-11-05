@@ -33,6 +33,8 @@ const { resetRates } = await import("@/server/rate");
 const { decidePlace, poolQuote } = await import("@/server/hosted-run");
 const R = await import("@/lib/catalog/regenerate");
 const { ownSetupLabel, ownSetupOnly } = await import("@/lib/own-setup");
+const generationsRoute = await import("@/app/api/generations/route");
+const { poolRunState } = await import("@/lib/hosted");
 
 let fake: FakeBilling;
 let a = "";
@@ -72,6 +74,24 @@ describe("MiniMax H3 at 2K on this install's GPUs", () => {
     expect((await poolQuote(auth.accountById(a)!, twoK(), undefined))?.quote).toMatchObject({ allowed: false, text: ownSetupLabel(setup), ownSetup: setup });
     expect(fake.calls_of("/v1/quote").length).toBe(quotes);
     expect((await decidePlace(auth.accountById(a)!, twoK("768p"), undefined)).kind).toBe("pool");
+  });
+
+  it("the price check before Run answers 2K with its label, which Run opens; never a refusal's words", async () => {
+    const setup = ownSetupOnly("regenerate:h3-2k")!;
+    const text = JSON.stringify({ ...twoK(), place: "pool" });
+    const r = await generationsRoute.POST(
+      new Request("http://localhost:3000/api/generations?preview=1", {
+        method: "POST",
+        headers: { host: "localhost:3000", "content-type": "application/json", "content-length": String(Buffer.byteLength(text)), cookie: `${auth.SESSION_COOKIE}=${auth.createSession(a).value}` },
+        body: text,
+      }),
+    );
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as Parameters<typeof poolRunState>[0];
+    expect(body?.place).toBe("pool");
+    const state = poolRunState(body);
+    expect(state).toMatchObject({ refused: true, text: ownSetupLabel(setup), setup });
+    expect(state?.text).not.toMatch(/worker|comfy|pool|vram|held|isn['’]t|can['’]t|not available/i);
   });
 
   it("a policy that keeps Open-H3 Regenerate off these GPUs changes nothing for 768p", async () => {

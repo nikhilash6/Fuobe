@@ -55,8 +55,8 @@ describe("Kandinsky 6.0 on this install's GPUs", () => {
     const before = fake.calls_of("/v1/quote").length;
     const q = await poolQuote(account, t2v, undefined);
     expect(q).not.toBeNull();
-    expect(q!.planned.model.id).toBe("oss-kandinsky6");
-    expect(q!.planned.route).toMatchObject({ provider: "comfyui", endpoint: "kandinsky6-t2av" });
+    expect(q!.planned!.model.id).toBe("oss-kandinsky6");
+    expect(q!.planned!.route).toMatchObject({ provider: "comfyui", endpoint: "kandinsky6-t2av" });
     expect(q!.quote).toMatchObject({ amount: 7, priceVersion: "v7" });
     const sent = fake.calls_of("/v1/quote").slice(before);
     expect(sent).toHaveLength(1);

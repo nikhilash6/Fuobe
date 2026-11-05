@@ -144,7 +144,9 @@ export async function POST(request: Request) {
       // quote (its words for Run) and where it would stand in line. Off, or a run on its own GPU or key: priced as before.
       // (The client's address is read only for a policy that counts runs per address.)
       const pool = viewer.kind !== "owner" ? await poolQuote(account, req, wish, { addr: () => clientAddress(request) }) : null;
-      if (pool) {
+      // A mode that runs on the visitor's own setup only has no plan here: its label, which Run opens.
+      if (pool && !pool.planned) return Response.json({ modelId: req.modelId, place: "pool", quote: pool.quote, line: pool.line });
+      if (pool?.planned) {
         const { model, ...p } = pool.planned;
         return Response.json({ ...p, modelId: model.id, modelName: model.name, engine: model.engine, kind: outputKind(p.op, model), opLabel: OPERATION_LABELS[p.op] ?? p.op, place: "pool", quote: pool.quote, line: pool.line });
       }

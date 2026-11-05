@@ -25,7 +25,7 @@ import {
 } from "./billing";
 import { getModel } from "@/lib/catalog";
 import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER } from "@/lib/guest-access";
-import { createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, type PlannedStep } from "./generations";
+import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
 import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
@@ -90,6 +90,18 @@ const billingRefusal = (code: RefuseCode | "price-changed", text: string, extra:
 });
 
 type Planned = ReturnType<typeof previewGeneration>;
+
+/**
+ * Planning a run on this install's GPUs was refused for a mode or option that runs on a visitor's own setup only (MiniMax
+ * H3 at 2K, Kandinsky 6.0 Pro: their check refuses them there before poolGate is asked): that setup, so the run and its
+ * price check say its label as poolGate would. Null for any other refusal (a cloud model without the visitor's key
+ * keeps today's answer: it never runs here).
+ */
+function refusedForOwnSetup(e: unknown, req: GenerationRequest): OwnSetup | null {
+  if (!(e instanceof AccountRunError) || req.engine === "cloud") return null;
+  const own = requestOwnSetup({ ...req, engine: "open" });
+  return own?.need === "gpu" ? own : null;
+}
 
 /**
  * The decision for an account's run: its own GPU or key as today, this install's GPUs, or a refusal. On this install's
@@ -340,7 +352,10 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   let planned: Planned;
   try {
     planned = runOnPool(account.id, () => previewGeneration(asked));
-  } catch {
+  } catch (e) {
+    // A mode that runs on the visitor's own setup only: its own GPU when it has one, else refused in its label's words.
+    const own = refusedForOwnSetup(e, asked);
+    if (own && !accountGpu(account.id)) return gateRefusal({ ok: false, reason: "ownSetup", setup: own });
     // A paid model, a model switched off, a request with something wrong: today's path says what.
     return OWN;
   }
@@ -524,7 +539,7 @@ export async function poolQuote(
   asked: GenerationRequest,
   wish: PlaceWish,
   o: { addr?: () => string | null } = {},
-): Promise<{ planned: Planned; quote: Quote; line: PoolLine } | null> {
+): Promise<{ planned: Planned | null; quote: Quote; line: PoolLine } | null> {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return null;
   // A guest is priced under the billing service's policy for guests (none set: as an account would be, once signed up).
   const p = await billingPolicy(account?.id ?? null);
@@ -533,7 +548,11 @@ export async function poolQuote(
   let planned: Planned;
   try {
     planned = runOnPool(account?.id ?? null, () => previewGeneration(req));
-  } catch {
+  } catch (e) {
+    // A mode that runs on the visitor's own setup only, for a viewer with no GPU of its own: Run says its label and opens
+    // that setup (no plan to show: it never runs here).
+    const own = refusedForOwnSetup(e, req);
+    if (own && !(account && accountGpu(account.id)) && !(p && !p.hosted)) return { planned: null, quote: gateQuote({ ok: false, reason: "ownSetup", setup: own }, !account), line: { place: 1, etaSeconds: null } };
     return null;
   }
   if (planned.route.provider !== "comfyui") return null;
