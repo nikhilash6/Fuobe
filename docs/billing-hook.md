@@ -207,7 +207,9 @@ the hold is closed. Reports are written to an outbox table first and sent from t
 doubling, up to 10 minutes) for 7 days. A restart loses nothing: the outbox finds every finished row with a hold and no
 report from what is stored. A run whose rows couldn't be made after its reserve sends one `release`. Two app processes
 on one database (during a deploy) never send the same report: a process takes a report before it sends it, and only one
-process saves a finished run's results.
+process saves a finished run's results. A process that stops while it saves a result gives that turn back as it exits,
+so the next process saves the result at once. A process that is killed loses the turn once it has been quiet for 20
+seconds. A stop that comes after the result was saved leaves the run saved, so its report is a `settle`.
 
 ## When the service is down
 
