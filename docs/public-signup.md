@@ -227,8 +227,9 @@ its own results, once. The server never calls the person's computer. Runs wait w
   this one install and connects by itself when ComfyUI is back with it. The setting and the guard
   below are under "Advanced". See [gpu-workers.md](gpu-workers.md).
 - **Pairing** (Safari, phones, a blocked browser, a PC with no screen): Fuobe Connect shows a code,
-  and the person approves it while signed in (`/connect?code=…`). That ComfyUI then runs this
-  person's jobs, and only theirs, with no tab open. Settings → Your GPU lists it, with Disconnect.
+  and the person types it and approves it while signed in (`/connect?pair=1`; the page never fills
+  in a code from its link). That ComfyUI then runs this person's jobs, and only theirs, with no tab
+  open. Settings → Your GPU lists it, with Disconnect.
 - **Fuobe's setting (Advanced).** Without Fuobe Connect, ComfyUI must run with
   `--enable-cors-header <the site's address>`. The card gives the fix for the install it finds: a
   start file for Windows portable or Easy-Install (it restarts ComfyUI with the setting and leaves a

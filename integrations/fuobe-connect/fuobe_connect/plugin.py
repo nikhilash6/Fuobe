@@ -11,11 +11,12 @@ import asyncio
 import logging
 import os
 import re
+import sys
 
 from aiohttp import web
 
 from . import __version__
-from .graph import NodeList
+from .graph import NodeList, comfy_kinds
 from .middleware import MARKER, Studios, make_middleware
 from .origins import DEFAULT_STUDIOS, NONE, host_name, is_ip, is_loopback, normalise, parse_list, same_host, says_none, studio, trusted_origins, with_twins
 
@@ -167,7 +168,8 @@ def install():
     user_dir = folder_paths.get_user_directory()
     store = Store(user_dir)
     _state["store"] = store
-    nodes = NodeList(user_dir)
+    # ComfyUI's node classes, read when a graph first uses each type (node packs that load after this one count too).
+    nodes = NodeList(user_dir, comfy_kinds(lambda: getattr(sys.modules.get("nodes"), "NODE_CLASS_MAPPINGS", None) or {}))
     studios = Studios(nodes)
     _state["studios"] = studios
     lan = os.environ.get("FUOBE_CONNECT_LAN") == "1"

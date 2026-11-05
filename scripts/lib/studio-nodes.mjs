@@ -27,3 +27,66 @@ export function studioNodes(root) {
   for (const extra of ["LoraLoader", "LoraLoaderModelOnly"]) nodes.add(extra);
   return [...nodes].sort();
 }
+
+// Outputs ComfyUI never checks the type of: any ("*"), match-typed and dropdown-typed ones. A link from one reaches
+// any input (a dropdown too, whose list ComfyUI checks only for a value the graph writes), so Fuobe Connect lets such a
+// link, and any link into a dropdown, feed only what Fuobe's own graphs feed that way.
+const LOOSE_TYPES = new Set(["*", "COMFY_MATCHTYPE_V3", "COMBO"]);
+const looseType = (t) => typeof t !== "string" || t.split(",").some((p) => LOOSE_TYPES.has(p.trim()));
+const isDropdown = (spec) => {
+  const t = Array.isArray(spec) ? spec[0] : spec;
+  return Array.isArray(t) || t === "COMBO" || t === "COMFY_DYNAMICCOMBO_V3";
+};
+/** An input's name with a trailing number made general: images.image1 and images.image2 are one kind of input. */
+export const inputKind = (key) => key.replace(/\d+$/, "#");
+
+/** The studio's graphs (API form): workflows/comfyui and the hand-built ones. */
+export function studioGraphs(root) {
+  const out = [];
+  for (const dir of ["workflows/comfyui", "scripts/comfy/hand-built"]) {
+    const at = path.join(root, dir);
+    if (!fs.existsSync(at)) continue;
+    for (const f of fs.readdirSync(at)) {
+      if (!f.endsWith(".json") || ["requirements.json", "manifest.json", "object_info.subset.json"].includes(f)) continue;
+      try {
+        const g = JSON.parse(fs.readFileSync(path.join(at, f), "utf8"));
+        if (g && typeof g === "object" && !Array.isArray(g)) out.push(g);
+      } catch {}
+    }
+  }
+  return out;
+}
+
+/**
+ * The node types (on `nodes`) with outputs ComfyUI doesn't type-check, by output slot, and every [source type, target
+ * type, input kind] that the studio's graphs link from such an output or into a dropdown. Types come from
+ * workflows/comfyui/object_info.subset.json; inside ComfyUI, Fuobe Connect also reads them from the node classes.
+ */
+export function connectLinks(root, nodes) {
+  const info = JSON.parse(fs.readFileSync(path.join(root, "workflows/comfyui/object_info.subset.json"), "utf8"));
+  const loose = {};
+  for (const n of nodes) {
+    const outs = info[n]?.output;
+    if (!Array.isArray(outs)) continue;
+    const slots = outs.flatMap((t, i) => (looseType(t) ? [i] : []));
+    if (slots.length) loose[n] = slots;
+  }
+  const dropdown = (cls, key) => {
+    const inputs = info[cls]?.input ?? {};
+    const spec = inputs.required?.[key] ?? inputs.optional?.[key];
+    return spec !== undefined && isDropdown(spec);
+  };
+  const links = new Set();
+  for (const g of studioGraphs(root)) {
+    for (const n of Object.values(g)) {
+      if (!n || typeof n !== "object" || typeof n.class_type !== "string") continue;
+      for (const [key, v] of Object.entries(n.inputs ?? {})) {
+        if (!Array.isArray(v) || v.length !== 2 || typeof v[0] !== "string" || !Number.isInteger(v[1])) continue;
+        const src = g[v[0]]?.class_type;
+        if (typeof src !== "string") continue;
+        if (loose[src]?.includes(v[1]) || dropdown(n.class_type, key)) links.add(JSON.stringify([src, n.class_type, inputKind(key)]));
+      }
+    }
+  }
+  return { loose, links: [...links].sort().map((l) => JSON.parse(l)) };
+}

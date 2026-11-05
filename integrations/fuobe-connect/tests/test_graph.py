@@ -17,14 +17,20 @@ sys.path.insert(0, PACK)
 
 from fuobe_connect import __version__  # noqa: E402
 from fuobe_connect.graph import (  # noqa: E402
+    ARG_NODES,
     FILE_LOADERS,
     LINK_INPUTS,
+    LOOSE,
+    LOOSE_LINKS,
     OPTIONAL_FILES,
     OWN_NODES_FILE,
     PATH_INPUTS,
     TEXT_INPUTS,
+    NodeKinds,
     NodeList,
+    comfy_kinds,
     graph_problem,
+    input_kind,
     may_download,
     refusal,
     run_prefix,
@@ -53,6 +59,9 @@ class NamesTest(unittest.TestCase):
         for ok in ["fuobe_abcdefgh12.png", "fuobe_ABC-def_1234.mp4", "fuobe_abcdefgh12.spz", "fuobe_abcdefgh12.wav"]:
             self.assertTrue(staged_name_ok(ok), ok)
         for bad in ["my_photo.png", "fuobe_short.png", "fuobe_abcdefgh12.html", "fuobe_abcdefgh12.svg", "fuobe_abcdefgh12.py", "fuobe_abcdefgh12.js", "fuobe_abcdefgh12.png [output]", "../fuobe_abcdefgh12.png", None, 3]:
+            self.assertFalse(staged_name_ok(bad), bad)
+        # A settings file, or a file of no known type, that a node could read as one (ffmpeg's format file is a .json).
+        for bad in ["fuobe_abcdefgh12.json", "fuobe_abcdefgh12.txt", "fuobe_abcdefgh12.csv", "fuobe_abcdefgh12.bin", "fuobe_abcdefgh12.octet"]:
             self.assertFalse(staged_name_ok(bad), bad)
 
 
@@ -107,6 +116,8 @@ class VetTest(unittest.TestCase):
             "$HOME",
             "%USERPROFILE%" + B + "x",
             "%APPDATA%",
+            "%HOMEDRIVE%%HOMEPATH%" + B + "x",  # two variables, one after the other
+            "${HOME}$USER/x",
             # What a node that trims its text sees.
             " C:/Users/me",
             "\t/etc/passwd",
@@ -230,7 +241,7 @@ class NodeRulesTest(unittest.TestCase):
     """Inputs that a listed node reads as a file or a folder take only Fuobe's own form, and never a link."""
 
     def test_rules_name_shipped_nodes(self):
-        for table in (PATH_INPUTS, LINK_INPUTS, TEXT_INPUTS, OPTIONAL_FILES):
+        for table in (PATH_INPUTS, LINK_INPUTS, TEXT_INPUTS, OPTIONAL_FILES, ARG_NODES, LOOSE):
             for cls in table:
                 self.assertIn(cls, SHIPPED, cls)
         self.assertIn("Hi3DLoadMesh", FILE_LOADERS)
@@ -348,6 +359,183 @@ class NodeRulesTest(unittest.TestCase):
             self.assertIsNone(vet1("StringFormat", f_string=ok), ok)
         for bad in ["{a.__init__.__globals__[os].environ}", "{a[0]}", "x {b.real}", "{{{a.x}}}", "{a:{b.__class__}}", ["2", 0]]:
             self.assertEqual(vet1("StringFormat", f_string=bad), "unsafe-path", bad)
+
+
+def chain(*nodes) -> dict:
+    """A graph whose last node is fed by the ones before it (ids "1", "2", ...)."""
+    return g(*nodes)
+
+
+class FakeNode:
+    """A node class as ComfyUI's NODE_CLASS_MAPPINGS holds it."""
+
+    def __init__(self, inputs: dict, outputs: tuple):
+        self._inputs = inputs
+        self.RETURN_TYPES = outputs
+
+    def INPUT_TYPES(self):
+        return self._inputs
+
+
+class AnyType(str):
+    """A node pack's own "any" type: a text that says it equals every other type."""
+
+    def __ne__(self, other):
+        return False
+
+
+# What ComfyUI's node classes say about the nodes the tests below use (as /object_info shows them).
+CLASSES = {
+    "CreateList": FakeNode({"required": {"input1": ("*", {})}}, ("*",)),
+    "GetItemFromList": FakeNode({"required": {"list": ("*", {}), "index": ("INT", {})}}, ("*",)),
+    "VRAM_Debug": FakeNode({"required": {"any_input": ("*", {})}}, ("*", "INT", "INT", "INT")),
+    "ComfySwitchNode": FakeNode({"required": {"switch": ("BOOLEAN", {}), "on_true": ("COMFY_MATCHTYPE_V3", {}), "on_false": ("COMFY_MATCHTYPE_V3", {})}}, ("COMFY_MATCHTYPE_V3",)),
+    "PrimitiveStringMultiline": FakeNode({"required": {"value": ("STRING", {})}}, ("STRING",)),
+    "StringConcatenate": FakeNode({"required": {"string_a": ("STRING", {}), "string_b": ("STRING", {}), "delimiter": ("STRING", {})}}, ("STRING",)),
+    "CLIPTextEncode": FakeNode({"required": {"text": ("STRING", {}), "clip": ("CLIP",)}}, ("CONDITIONING",)),
+    "LoraLoader": FakeNode({"required": {"model": ("MODEL",), "clip": ("CLIP",), "lora_name": (["mine.safetensors"],), "strength_model": ("FLOAT", {})}}, ("MODEL", "CLIP")),
+    "Apply Whisper": FakeNode({"required": {"audio": ("AUDIO",), "model": (["base", "small"],)}}, ("STRING", "whisper_alignment", "whisper_alignment")),
+    "GetVideoComponents": FakeNode({"required": {"video": ("VIDEO", {})}}, ("IMAGE", "AUDIO", "FLOAT", "COMBO", "COMBO")),
+    "CreateVideo": FakeNode({"required": {"images": ("IMAGE", {}), "fps": ("FLOAT", {}), "bit_depth": ("COMBO", {"options": ["8bit", "10bit"]})}}, ("VIDEO",)),
+    "MyAnyNode": FakeNode({"required": {"value": ("STRING", {})}}, (AnyType("ANYTHING"),)),
+    "MyOptions": FakeNode({"required": {}}, (["a", "b"],)),
+}
+KINDS = comfy_kinds(lambda: CLASSES)
+WITH_OWN = SHIPPED | {"MyAnyNode", "MyOptions"}
+
+
+class LinkTest(unittest.TestCase):
+    """ComfyUI doesn't type-check a link from an "any", match-typed or dropdown-typed output, and checks a dropdown's
+    value against its list only when the graph writes it. Such links, and links into a dropdown, feed only what Fuobe's
+    own graphs feed that way."""
+
+    def test_shipped_list(self):
+        for cls in ("CreateList", "GetItemFromList", "VRAM_Debug", "ComfySwitchNode", "StartLoop", "EndLoop"):
+            self.assertIn(cls, LOOSE, cls)
+        self.assertEqual(LOOSE["GetVideoComponents"], frozenset({3, 4}))
+        self.assertIn(("GetVideoComponents", "CreateVideo", "bit_depth"), LOOSE_LINKS)
+        self.assertIn(("StartLoop", "AudioConcat", "audio#"), LOOSE_LINKS)
+        for src, dst, key in LOOSE_LINKS:
+            self.assertIn(src, SHIPPED, src)
+            self.assertIn(dst, SHIPPED, dst)
+            self.assertEqual(input_kind(key), key)
+        self.assertEqual(input_kind("images.image12"), "images.image#")
+        self.assertEqual(input_kind("audio2"), "audio#")
+
+    def test_any_link_into_a_dropdown(self):
+        """CreateList or VRAM_Debug ("*") hands a dropdown any text: a model name it then downloads, or a file name."""
+        evil = "attacker/evil-repo"
+        for kinds in (None, KINDS):
+            through_list = chain(node("CreateList", input1=evil), node("GetItemFromList", list=["1", 0], index=0), node("DownloadAndLoadWav2VecModel", model=["2", 0], base_precision="fp16", load_device="main_device"))
+            self.assertIsNotNone(vet_graph(through_list, SHIPPED, STAGED, kinds))
+            through_debug = chain(node("PrimitiveStringMultiline", value=evil), node("VRAM_Debug", any_input=["1", 0]), node("DownloadAndLoadWav2VecModel", model=["2", 0]))
+            self.assertIsNotNone(vet_graph(through_debug, SHIPPED, STAGED, kinds))
+            # A dropdown that no rule here names: the link itself is refused.
+            for src in (node("GetItemFromList", list=["9", 0], index=0), node("VRAM_Debug", any_input=["9", 0]), node("ComfySwitchNode", switch=True, on_true=["9", 0], on_false=["9", 0])):
+                self.assertEqual(vet_graph(chain(src, node("LoraLoader", model=["8", 0], clip=["8", 1], lora_name=["1", 0])), SHIPPED, STAGED, kinds), "unsafe-graph", src)
+                self.assertEqual(vet_graph(chain(src, node("Apply Whisper", audio=["8", 0], model=["1", 0])), SHIPPED, STAGED, kinds), "unsafe-graph", src)
+                # Into any input Fuobe's graphs don't feed that way: the text would reach it unchecked.
+                self.assertEqual(vet_graph(chain(src, node("CLIPTextEncode", text=["1", 0], clip=["8", 0])), SHIPPED, STAGED, kinds), "unsafe-graph", src)
+
+    def test_links_fuobe_graphs_make(self):
+        for kinds in (None, KINDS):
+            # Fuobe's own: a switch picks a model for the sampler; a clip's bit depth goes to the encoder.
+            self.assertIsNone(vet_graph(chain(node("ComfySwitchNode", switch=True, on_true=["8", 0], on_false=["9", 0]), node("KSampler", model=["1", 0], positive=["7", 0])), SHIPPED, STAGED, kinds))
+            self.assertIsNone(vet_graph(chain(node("GetVideoComponents", video=["9", 0]), node("CreateVideo", images=["1", 0], fps=["1", 2], bit_depth=["1", 3])), SHIPPED, STAGED, kinds))
+            self.assertIsNone(vet_graph(chain(node("StartLoop", initial_iteration_value=["9", 0]), node("AudioConcat", audio1=["1", 4], audio2=["9", 0])), SHIPPED, STAGED, kinds))
+            # A typed output (pictures, a number) feeds any input it fits; ComfyUI checks its type.
+            self.assertIsNone(vet_graph(chain(node("GetVideoComponents", video=["9", 0]), node("SaveImage", images=["1", 0], filename_prefix="fuobe/x")), SHIPPED, STAGED, kinds))
+            # The bit depth into another dropdown: no.
+            self.assertEqual(vet_graph(chain(node("GetVideoComponents", video=["9", 0]), node("Apply Whisper", audio=["9", 0], model=["1", 3])), SHIPPED, STAGED, kinds), "unsafe-graph")
+
+    def test_node_kinds_inside_comfyui(self):
+        """Inside ComfyUI the node classes say more: any node's untyped outputs (your own listed nodes' too), and
+        every dropdown, which a typed link may not feed either when a node skips ComfyUI's type check."""
+        own_any = chain(node("MyAnyNode", value="x"), node("CLIPTextEncode", text=["1", 0], clip=["8", 0]))
+        self.assertIsNone(vet_graph(own_any, WITH_OWN, STAGED))  # not on the shipped list of untyped outputs
+        self.assertEqual(vet_graph(own_any, WITH_OWN, STAGED, KINDS), "unsafe-graph")
+        options = chain(node("MyOptions"), node("LoraLoader", model=["8", 0], clip=["8", 1], lora_name=["1", 0]))
+        self.assertEqual(vet_graph(options, WITH_OWN, STAGED, KINDS), "unsafe-graph")
+        typed_into_dropdown = chain(node("StringConcatenate", string_a="mine", string_b=".safetensors", delimiter=""), node("LoraLoader", model=["8", 0], clip=["8", 1], lora_name=["1", 0]))
+        self.assertIsNone(vet_graph(typed_into_dropdown, SHIPPED, STAGED))  # ComfyUI itself refuses STRING into a dropdown
+        self.assertEqual(vet_graph(typed_into_dropdown, SHIPPED, STAGED, KINDS), "unsafe-graph")
+        # A typed text into a text input stays fine.
+        self.assertIsNone(vet_graph(chain(node("StringConcatenate", string_a="a", string_b="b", delimiter=" "), node("CLIPTextEncode", text=["1", 0], clip=["8", 0])), SHIPPED, STAGED, KINDS))
+        # A class that can't say what it is counts as having nothing to say; one that fails on its outputs is untyped.
+        broken = NodeKinds(lambda cls: (_ for _ in ()).throw(RuntimeError("no")))
+        self.assertFalse(broken.loose("X", 0))
+        odd = NodeKinds(lambda cls: ({"required": {}}, 5))
+        self.assertTrue(odd.loose("X", 0))
+
+    def test_ffmpeg_format_file(self):
+        """VHS_VideoCombine opens video_formats/<format>.json with the name as given and hands what it reads to ffmpeg:
+        a format worked out at run time could name a .json in the input folder."""
+        for staged in (None, ["fuobe_abcdefgh12.json"]):
+            for kinds in (None, KINDS):
+                replaced = chain(
+                    node("StringReplace", string="video/@@" + B + "@@" + B + "@@" + B + "input" + B + "fuobe_abcdefgh12", find="@", replace="."),
+                    node("GetItemFromList", list=["1", 0], index=0),
+                    node("VHS_VideoCombine", images=["9", 0], format=["2", 0], frame_rate=24, filename_prefix="fuobe/x"),
+                )
+                self.assertIsNotNone(vet_graph(replaced, SHIPPED, staged, kinds))
+                switched = chain(
+                    node("PrimitiveStringMultiline", value="video/C:" + B + "ComfyUI" + B + "input" + B + "fuobe_abcdefgh12"),
+                    node("ComfySwitchNode", switch=True, on_true=["1", 0], on_false=["1", 0]),
+                    node("VHS_VideoCombine", images=["9", 0], format=["2", 0], frame_rate=24, filename_prefix="fuobe/x"),
+                )
+                self.assertIsNotNone(vet_graph(switched, SHIPPED, staged, kinds))
+        for ok in ["video/h264-mp4", "video/ffv1-mkv", "video/ProRes", "video/webm", "image/gif", "image/webp", "video/nvenc_h264-mp4"]:
+            self.assertIsNone(vet1("VHS_VideoCombine", images=["9", 0], format=ok, frame_rate=24, filename_prefix="fuobe/x"), ok)
+        for bad in ["video/.." + B + ".." + B + "input" + B + "fuobe_abcdefgh12", "video/../x", "video/a/b", "video/a" + B + "b", "video/", "video/.x", "text/plain", "image/png"]:
+            self.assertEqual(vet1("VHS_VideoCombine", images=["9", 0], format=bad, frame_rate=24, filename_prefix="fuobe/x"), "unsafe-path", bad)
+
+    def test_ffmpeg_settings_are_plain_words(self):
+        """The format's settings go into ffmpeg's arguments, the GIF dither into a filter (where "movie=" reads a file)."""
+        base = {"images": ["9", 0], "format": "video/h264-mp4", "frame_rate": 24, "filename_prefix": "fuobe/x"}
+        self.assertIsNone(vet1("VHS_VideoCombine", **base, pix_fmt="yuv420p", crf=19, save_metadata=True, profile="hq", dither="sierra2_4a", audio=["8", 0]))
+        for bad in ["none[x];movie=secret.png[y];[x][y]overlay", "sierra2_4a:diff_mode=rectangle", "yuv420p -i x", "a,b"]:
+            self.assertEqual(vet1("VHS_VideoCombine", **{**base, "format": "video/ffmpeg-gif"}, dither=bad), "unsafe-path", bad)
+        # A link only into the pictures, the sound, the batch, the VAE and the frame rate.
+        made = chain(node("StringConcatenate", string_a="none", string_b="x", delimiter=","), node("VHS_VideoCombine", **{**base, "format": "video/ffmpeg-gif"}, dither=["1", 0]))
+        self.assertEqual(vet_graph(made, SHIPPED, STAGED), "unsafe-graph")
+        prefix = chain(node("StringConcatenate", string_a="fuobe", string_b="x", delimiter="_"), node("VHS_VideoCombine", **{**base, "filename_prefix": ["1", 0]}))
+        self.assertEqual(vet_graph(prefix, SHIPPED, STAGED), "unsafe-graph")
+
+    def test_download_names(self):
+        """Nodes that download what their dropdown names, or load a pickle by name: only the names on their lists."""
+        for ok in ["TencentGameMate/chinese-wav2vec2-base", "facebook/wav2vec2-base-960h"]:
+            self.assertIsNone(vet1("DownloadAndLoadWav2VecModel", model=ok, base_precision="fp16"), ok)
+        for bad in ["attacker/evil-repo", "facebook/wav2vec2-base-960h-evil", "TencentGameMate/chinese-wav2vec2-base/../x", ["2", 0]]:
+            self.assertEqual(vet1("DownloadAndLoadWav2VecModel", model=bad), "unsafe-path", bad)
+        for ok in ["rife47.pth", "rife49.pth", "rife417.pth", "rife426.pth", "sudo_rife4_269.662_testV1_scale1.pth"]:
+            self.assertIsNone(vet1("RIFE VFI", ckpt_name=ok, frames=["9", 0]), ok)
+        for bad in ["rife50.pth", "x/rife49.pth", "rife49.pth.evil", ["2", 0]]:
+            self.assertEqual(vet1("RIFE VFI", ckpt_name=bad), "unsafe-path", bad)
+        for ok in ["face_yolov8m.pt", "bbox" + B + "face_yolov8m.pt", "segm/person_yolov8m-seg.pt"]:
+            self.assertIsNone(vet1("H3FaceTrackCrop", detector=ok), ok)
+        for bad in ["face.pth", "bbox/../x.pt", "other" + B + "x.pt", ".x.pt", ["2", 0]]:
+            self.assertEqual(vet1("H3FaceTrackCrop", detector=bad), "unsafe-path", bad)
+
+    def test_studio_workflows_pass_with_node_kinds(self):
+        """Every workflow Fuobe ships passes with the node classes' own kinds too (from Fuobe's recorded /object_info)."""
+        folder = os.path.join(PACK, "..", "..", "workflows", "comfyui")
+        info_file = os.path.join(folder, "object_info.subset.json")
+        if not os.path.exists(info_file):
+            self.skipTest("Fuobe's workflows aren't beside this copy of the pack")
+        with open(info_file, encoding="utf-8") as f:
+            info = {k: v for k, v in json.load(f).items() if isinstance(v, dict)}
+        kinds = NodeKinds(lambda cls: (info[cls].get("input") or {}, info[cls].get("output") or []) if cls in info else None)
+        checked = 0
+        for path in glob.glob(os.path.join(folder, "*.json")):
+            if os.path.basename(path) in ("requirements.json", "manifest.json", "object_info.subset.json"):
+                continue
+            with open(path, encoding="utf-8") as fh:
+                wf = json.load(fh)
+            if not isinstance(wf, dict) or not all(isinstance(n, dict) and "class_type" in n for n in wf.values()):
+                continue
+            checked += 1
+            self.assertIsNone(vet_graph(staged_like_the_studio(wf), SHIPPED, None, kinds), os.path.basename(path))
+        self.assertGreater(checked, 50)
 
 
 class NodeListTest(unittest.TestCase):

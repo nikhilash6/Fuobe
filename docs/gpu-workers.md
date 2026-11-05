@@ -27,20 +27,31 @@ page checked:
   - no text names a place: an absolute path in any form (`/x`, `\x`, `//host/share`, `\\?\C:\x`, `C:\x`, `D:x`), a
     `..` step, a home folder (`~`, `~user`), an environment variable at the start, a URL, a folder tag, or a JSON key
     that names a file, a folder or an address. Spaces and quotes in front don't hide one;
-  - an input that a listed node reads as a file or a folder holds the one value or form the studio's own graphs use,
-    written in the graph, never a link (`PATH_INPUTS` in `fuobe_connect/graph.py`);
+  - an input that a listed node reads as a file or a folder, or a name that it downloads, holds the one value or form
+    the studio's own graphs use, written in the graph, never a link (`PATH_INPUTS` in `fuobe_connect/graph.py`);
+  - a link from an output that ComfyUI doesn't type-check ("any", match-typed or dropdown-typed, such as
+    `GetItemFromList`, `CreateList`, `VRAM_Debug` or `ComfySwitchNode`), and any link into a dropdown, feeds only what
+    the studio's own graphs feed that way (`loose` and `links` in `allowed_nodes.json`). ComfyUI checks a dropdown's
+    value against its list only when the graph writes it. Inside ComfyUI the pack also reads these kinds from every
+    node class;
+  - `VHS_VideoCombine` takes only a plain format name and plain-word settings (they go into ffmpeg's arguments), and
+    a link only for its pictures, sound, batch, VAE and frame rate;
   - every loader reads a Fuobe input (`fuobe_<id>.<ext>`), and no node gets a JSON object except a 3D view's entries;
-- an upload goes only into the input folder, under a Fuobe input name;
+- an upload goes only into the input folder, under a Fuobe input name, as a picture, clip, sound, 3D scene, array or
+  subtitle file (never `.json`, `.txt`, `.csv` or a file of no known type);
 - the studio sees, cancels, stops and downloads only its own prompts and their results; the queue shows other prompts
   only as places in the line, the node list hides the names of the person's input files, and the model lists leave
   out `custom_nodes` and `configs`.
 
 When a graph builder starts giving one of those inputs a new value, add its form to `PATH_INPUTS` and ship it with the
 next Fuobe Connect release (the pack's `tests/test_graph.py` runs every workflow in `workflows/comfyui` through the
-checks).
+checks). When a graph starts linking from an untyped output into a new input, or into a dropdown, run
+`node scripts/connect-nodes.mjs` too: until the pack ships the new link, people's ComfyUI refuses that graph.
 
 It cannot reach the Manager's install calls, the person's user files or settings, a file of the person's in the input
-folder, or the person's own results, and its workflows cannot open a file of the person's by its path. Fuobe
+folder, or the person's own results. Its workflows cannot name a file of the person's by its path: path-like text is
+refused, a file input takes only Fuobe's own form, and a value that another node works out can't reach a file input, a
+dropdown or ffmpeg's arguments. Fuobe
 Connect answers the CORS and Private Network Access preflights for the trusted origins only. Every other website still
 meets ComfyUI's own check.
 
@@ -55,19 +66,22 @@ Connect get a refusal that asks them to update it.
 
 1. In ComfyUI, open **Extensions → Connect to Fuobe**. On a PC with no screen, start ComfyUI with
    `FUOBE_CONNECT_PAIR=1`. Fuobe Connect asks the studio for a short code: `POST /api/gpu/pair/start`.
-2. The person opens `/connect?code=…`, signs in, checks the computer's name and GPU, and approves the code:
-   `POST /api/gpu/pair`. A code is valid for 10 minutes and works only once.
+2. The person opens `/connect?pair=1`, signs in, types the code that their own ComfyUI shows, checks the computer's
+   name and GPU, and approves the code: `POST /api/gpu/pair`. A code is valid for 10 minutes and works only once. The
+   page never fills in a code from its link, so a link that someone else sends can't pair their ComfyUI with the
+   person's account in one click.
 3. Fuobe Connect polls with a secret that only it knows: `POST /api/gpu/pair/poll`. After the approval, its next poll
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 
 The token acts only as that person's own computer. The ComfyUI gets that person's jobs, and nobody else's. The jobs
 run with no Fuobe tab open. Fuobe Connect pairs only with a studio the person trusts (or `https://fuobe.com`), and
-checks every job as in direct mode before ComfyUI sees it. If the poll answer names the approving account, ComfyUI
-shows it. The person can pause jobs in ComfyUI. When the owner pairs a ComfyUI, the studio's ComfyUI jobs move to the
-owner's computer, as before, unless they run on workers or hosted runs are on (`FUOBE_HOSTED_RUNS=1`). Then the pairing
-changes nothing of where they run: the paired ComfyUI takes the owner's jobs once the owner chooses the computer in
-Settings → ComfyUI. Every change of that setting is in the admin log (`settings.comfy_where`, with the value before and
-after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
+checks every job as in direct mode before ComfyUI sees it. The approved poll answer names the approving account,
+masked (`a•••@example.com`, or "the studio's owner"), and ComfyUI shows it. The person can pause jobs in ComfyUI. When
+the owner pairs a ComfyUI, the studio's ComfyUI jobs move to the owner's computer, as before, unless they run on workers
+or hosted runs are on (`FUOBE_HOSTED_RUNS=1`). Then the pairing changes nothing of where they run: the paired ComfyUI
+takes the owner's jobs once the owner chooses the computer in Settings → ComfyUI. Every change of that setting is in
+the admin log (`settings.comfy_where`, with the value before and after). The person can disconnect the ComfyUI in
+Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
 or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected token gets 401 at its next call.
 
 ## Workers (the owner's shared GPUs)

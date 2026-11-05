@@ -410,7 +410,7 @@ class Runner:
         for w in t.get("wanted") or []:
             if not isinstance(w, dict) or not _small_int(w.get("n")):
                 return "unsafe-graph"
-        return vet_graph(t.get("graph"), frozenset(self.nodes()), names)
+        return vet_graph(t.get("graph"), frozenset(self.nodes()), names, getattr(self.nodes, "kinds", None))
 
     def _record(self, t: dict, why: str | None) -> dict:
         graph = t.get("graph") if isinstance(t.get("graph"), dict) else {}

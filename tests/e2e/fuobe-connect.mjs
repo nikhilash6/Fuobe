@@ -103,7 +103,7 @@ try {
   // Pairing: a code, approved by Alice while signed in.
   const a = connect("alice-pc");
   const code = await a.next("code");
-  check("Fuobe Connect gets a code and a link to the studio", code && /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code.code) && code.url.startsWith(`${SITE}/connect?code=`), code ? `${code.code} ${code.url}` : a.err());
+  check("Fuobe Connect gets a code and a link to the studio", code && /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code.code) && code.url === `${SITE}/connect?pair=1`, code ? `${code.code} ${code.url}` : a.err());
   const anon = await fetch(`${SITE}/api/gpu/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.code }) });
   check("a signed-out visitor can't approve a code", anon.status === 401, `${anon.status}`);
   const look = await alice(`/api/gpu/pair?code=${encodeURIComponent(code.code)}`);
@@ -114,6 +114,7 @@ try {
   check("Alice approves the code", ok.status === 200 && ok.body?.ok, JSON.stringify(ok.body));
   const paired = await a.next("paired");
   check("the ComfyUI gets its token once approved", paired?.token?.startsWith("fuobe_wkr_"), paired ? paired.workerId : a.err());
+  check("the ComfyUI learns who approved it, masked", paired?.account === "al•••@example.com", paired?.account);
   const again = await alice("/api/gpu/pair", { method: "POST", body: JSON.stringify({ code: code.code }) });
   check("an approved code can't be used again", again.status === 404, `${again.status}`);
   const gpu = await alice("/api/account/gpu");

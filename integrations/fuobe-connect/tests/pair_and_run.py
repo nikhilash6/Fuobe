@@ -44,7 +44,7 @@ async def main(site_url: str, comfy_url: str, name: str, token: str | None):
                 if p.status == 200 and p.body.get("state") == "approved":
                     token = p.body["token"]
                     shown = token if os.environ.get("FUOBE_CONNECT_TEST_PRINT_TOKEN") == "1" else f"…{token[-4:]}"
-                    say(event="paired", workerId=p.body["workerId"], token=shown)
+                    say(event="paired", workerId=p.body["workerId"], token=shown, account=p.body.get("account"))
                     break
                 if p.status == 404:
                     say(event="gone")

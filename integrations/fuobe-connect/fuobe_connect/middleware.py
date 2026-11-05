@@ -191,7 +191,7 @@ class Studios:
             return _refuse("Not a run's prompt", 400)
         if "front" in body and not isinstance(body["front"], bool):
             return _refuse("Not a run's prompt", 400)
-        why = vet_graph(body.get("prompt"), frozenset(self.nodes()), None)
+        why = vet_graph(body.get("prompt"), frozenset(self.nodes()), None, getattr(self.nodes, "kinds", None))
         if why:
             _note(f"a trusted studio: its workflow was refused ({why})")
             return _refuse(REASONS[why], 400)
