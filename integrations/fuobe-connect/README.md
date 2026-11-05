@@ -27,8 +27,9 @@ phones, some other browsers), use pairing (below).
 the Fuobe studios you trust. By default these are `https://fuobe.com` and `https://www.fuobe.com`. A studio's address
 must start with `https://` (`http://` only for a studio on this computer, such as `http://localhost:3000`).
 
-A trusted studio reaches this ComfyUI only at `127.0.0.1`, `::1` or `localhost`, never at a network address. Its page
-can:
+A trusted studio reaches this ComfyUI only at `127.0.0.1`, `::1` or `localhost`. It never reaches it at a network
+address (unless you allow that, below) or under another name that leads to this computer, such as `127.0.0.1.nip.io`.
+Its page can:
 
 - read ComfyUI's facts (`/system_stats`: version, GPU, memory, start options), its node list and the file lists of its
   model folders, with each folder's place on disk (every folder ComfyUI lists, except `custom_nodes` and `configs`). In
@@ -60,6 +61,9 @@ can:
     Fuobe's own workflows feed from that node type. Inside ComfyUI, Fuobe Connect reads which outputs these are and
     which inputs are dropdowns from every node, your own listed ones too. The shipped list is in
     `fuobe_connect/allowed_nodes.json` (`loose` and `links`);
+  - a link must name its node's output with a whole number from 0 (`["4", 0]`), the way Fuobe's own workflows and
+    ComfyUI's page write it. ComfyUI also takes `true`, `false`, a number with a point (`0.0`) or `-1` as an output.
+    Fuobe Connect sees each of these as a link, and refuses it;
   - `VHS_VideoCombine` puts its format's settings into ffmpeg's arguments, so each setting must be one plain word
     (`yuv420p`, `hq`), and it takes a link only for its pictures, sound, batch, VAE and frame rate;
   - the workflow may not give a node a JSON object (ComfyUI passes one on unchecked), except a 3D view's entries.
@@ -68,22 +72,31 @@ can:
   example, save into your output folder, or keep a node pack's own cache. These checks follow what the listed nodes do
   at the versions Fuobe's workflows pin. A newer version of a node pack can read its inputs in a new way;
 - see, follow, cancel, stop and remove only the prompts it queued (and a batch's later passes, which save under
-  `fuobe/<id>`). In the queue, your own prompts show only as places in the line. It can't clear the queue or stop
+  `fuobe/<id>`). A prompt becomes the studio's only after ComfyUI takes it. Fuobe Connect refuses a prompt whose id
+  ComfyUI already has in its queue or its history, so a studio that learns the id of a prompt of yours can't take
+  that prompt over. In the queue, your own prompts show only as places in the line. It can't clear the queue or stop
   your own work;
 - download only the results that its own prompts' history lists;
-- open ComfyUI's live socket only under a Fuobe client id (`fuobe-…`), never your own ComfyUI tab's.
+- open ComfyUI's live socket only under a Fuobe client id (`fuobe-…`), never your own ComfyUI tab's. Note that
+  ComfyUI itself sends the live messages of a prompt queued without a client id (many scripts and API tools queue
+  that way) to every open socket, a studio's too: the prompt's id, its progress, its preview pictures, its errors and
+  the names of the files it saves. The studio still can't download those files or control that prompt. A prompt
+  queued from ComfyUI's own page carries that page's client id, and its messages go only to that page.
 
-A trusted studio can't reach the Manager's install calls, your user files or your settings. It can't read a file of
-yours in the input folder or download a result of yours. Its workflows can't name a file of yours by its path: text
-that names a place (an absolute path, a `..` step, a home folder, a URL) is refused, an input that a listed node reads
-as a file takes only Fuobe's own form, and a value that another node works out can't reach such an input, a dropdown
-or ffmpeg's arguments. Of
-ComfyUI's folder lists it can't read `custom_nodes` (every file of your node packs) or `configs`. Every other website
-still meets ComfyUI's own check, unchanged. Nothing in ComfyUI's own files changes.
+A trusted studio can't reach the Manager's install calls, your user files or your settings: Fuobe Connect turns away
+every request of a trusted studio outside the list above itself, whatever ComfyUI's start options say. It can't read a
+file of yours in the input folder or download a result of yours. Its workflows can't name a file of yours by its path:
+text that names a place (an absolute path, a `..` step, a home folder, a URL) is refused, an input that a listed node
+reads as a file takes only Fuobe's own form, and a value that another node works out can't reach such an input, a
+dropdown or ffmpeg's arguments. Of ComfyUI's folder lists it can't read `custom_nodes` (every file of your node packs)
+or `configs`. Every other website still meets ComfyUI's own check, unchanged. Nothing in ComfyUI's own files changes.
 
 If ComfyUI runs with `--enable-cors-header` (an older Fuobe setup), ComfyUI's own check is off. Fuobe Connect then also
 turns away every website except ComfyUI's own page, the site that the setting names and the trusted studios. This is
-what Fuobe's guard file did, so you can delete `fuobe_guard.py` and the setting.
+what Fuobe's guard file did, so you can delete `fuobe_guard.py` and the setting. A trusted studio gets only the checked
+requests above even when the setting names it, so a trusted studio doesn't need the setting. With
+`--enable-cors-header *` (every website) Fuobe Connect adds no check for other websites, but a trusted studio still
+gets only the checked requests.
 
 ## Choose your studios, or none
 
@@ -100,7 +113,8 @@ studio can't. Every check above applies to your nodes too: a workflow can't link
 ComfyUI doesn't type-check, or into a dropdown of theirs.
 
 **A network address.** A trusted studio reaches this ComfyUI only on this computer. To let it reach a ComfyUI that
-runs with `--listen` at a network address, start ComfyUI with `FUOBE_CONNECT_LAN=1`.
+runs with `--listen` at a network address, start ComfyUI with `FUOBE_CONNECT_LAN=1`. Its requests get the same checks
+there.
 
 **A name for ComfyUI's page.** Fuobe Connect's own window works when you open ComfyUI at `127.0.0.1`, `localhost` or
 an IP address. If you open it by a name (for example `comfy.local`, or a domain in front of it), set

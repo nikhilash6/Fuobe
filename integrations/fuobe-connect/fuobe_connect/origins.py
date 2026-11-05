@@ -6,7 +6,8 @@ A trusted site is a Fuobe studio: https://fuobe.com (and https://www.fuobe.com) 
 Only an exact origin counts (scheme, host and port), and only https, except a studio on this computer (http://localhost
 or http://127.0.0.1, for development). A trusted site may use only the paths a Fuobe run needs (`allowed`); the
 middleware then checks what each request asks for (middleware.py). It never reaches the Manager's install calls, your
-user files or your settings: those stay behind ComfyUI's own check, as for every other website.
+user files or your settings: the middleware turns away every other request of a trusted site itself, even when
+ComfyUI's own check is off (--enable-cors-header).
 """
 
 from __future__ import annotations

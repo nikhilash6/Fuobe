@@ -21,6 +21,9 @@ A graph from a studio (a trusted page in direct mode, or the paired studio in pa
   into its media inputs, and its other text only as one plain word;
 - a value the graph writes is never a JSON object, except a 3D view's entries: ComfyUI hands an object to a node
   unchecked, and some nodes read a file's path from one;
+- a link names its node's output with a whole number from 0 (["4", 0]). ComfyUI also takes true, false, a number with
+  a point (0.0) or -1 as an output. is_link here sees every link that ComfyUI sees, and a link in any of those forms
+  is refused;
 - a few inputs take only a link from one node type, or text of one shape (LINK_INPUTS, TEXT_INPUTS).
 
 A result is downloaded only when this run's own history lists it. A model name the graph writes is checked by ComfyUI
@@ -300,8 +303,17 @@ def comfy_kinds(mappings) -> NodeKinds:
 
 
 def is_link(v) -> bool:
-    """[node id, output slot]: a value another node works out."""
-    return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and isinstance(v[1], int) and not isinstance(v[1], bool)
+    """[node id, output slot]: a value another node works out. Every value ComfyUI reads as a link
+    (comfy_execution/graph_utils.py is_link): the slot may be any number, true or false too. ComfyUI reads [n, false] as
+    output 0, [n, true] as output 1 and [n, -1] as the last output."""
+    return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and isinstance(v[1], (int, float))
+
+
+def plain_slot(v) -> bool:
+    """A link whose slot is written the way Fuobe's graphs (and ComfyUI's own page) write it: a whole number from 0
+    (0, 1, 2 ...). Any other form is refused: -1 is the last output, which the checks here would take for another
+    one, and Fuobe's graphs never write true, false or a number with a point."""
+    return type(v[1]) is int and 0 <= v[1] < 1000
 
 
 def link_problem(graph: dict, cls: str, key: str, v, kinds: NodeKinds | None = None) -> str | None:
@@ -320,6 +332,8 @@ def link_problem(graph: dict, cls: str, key: str, v, kinds: NodeKinds | None = N
 def input_problem(graph: dict, cls: str, key: str, v, kinds: NodeKinds | None = None) -> str | None:
     """What is wrong with one input under its node's own rule: 'unsafe-path', 'unsafe-graph', or None."""
     if isinstance(v, dict) and (cls, key) not in OBJECT_INPUTS:
+        return "unsafe-graph"
+    if is_link(v) and not plain_slot(v):
         return "unsafe-graph"
     links = LINK_INPUTS.get(cls, {}).get(key)
     if is_link(v) and links is not None:
@@ -477,13 +491,14 @@ def vet_graph(graph, allowed: frozenset | set, staged: list[str] | None, kinds: 
 
 
 def _strings(v, depth: int = 0):
-    """Every text in an input value (a picture entry list is a dict of texts). A link [node, slot] has none."""
+    """Every text in an input value (a picture entry list is a dict of texts). A link [node, slot] has none: ComfyUI
+    reads one only as the input's whole value, so a list inside a value is read for its texts like any other."""
     if isinstance(v, str):
         yield v
     elif isinstance(v, dict) and depth < 4:
         for x in v.values():
             yield from _strings(x, depth + 1)
-    elif isinstance(v, list) and depth < 4 and not (len(v) == 2 and isinstance(v[0], str) and isinstance(v[1], int)):
+    elif isinstance(v, list) and depth < 4 and not (depth == 0 and is_link(v)):
         for x in v:
             yield from _strings(x, depth + 1)
 

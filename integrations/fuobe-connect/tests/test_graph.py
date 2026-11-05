@@ -31,6 +31,7 @@ from fuobe_connect.graph import (  # noqa: E402
     comfy_kinds,
     graph_problem,
     input_kind,
+    is_link,
     may_download,
     refusal,
     run_prefix,
@@ -42,6 +43,28 @@ from fuobe_connect.graph import (  # noqa: E402
 )
 
 B = chr(92)  # a backslash
+
+
+def comfy_is_link():
+    """ComfyUI's own is_link: from COMFYUI_DIR's comfy_execution/graph_utils.py when set (only that function is read),
+    else a copy of it."""
+    folder = os.environ.get("COMFYUI_DIR")
+    if folder:
+        import ast
+
+        with open(os.path.join(folder, "comfy_execution", "graph_utils.py"), encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        picked = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "is_link"]
+        ns: dict = {}
+        exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/graph_utils.py", "exec"), ns)
+        return ns["is_link"]
+
+    def copy(obj):
+        if not isinstance(obj, list) or len(obj) != 2 or not isinstance(obj[0], str):
+            return False
+        return isinstance(obj[1], int) or isinstance(obj[1], float)
+
+    return copy
 NODES = frozenset({"LoadImage", "SaveImage", "CLIPTextEncode", "Load3D", "VHS_LoadVideo", "LoadImagesFromFolderKJ", "LoadImageFromUrl", "Image Load", "Image Saver", "PrimitiveString"})
 STAGED = ["fuobe_abcdefgh12.png", "fuobe_abcdefgh34.spz"]
 
@@ -447,6 +470,44 @@ class LinkTest(unittest.TestCase):
             self.assertIsNone(vet_graph(chain(node("GetVideoComponents", video=["9", 0]), node("SaveImage", images=["1", 0], filename_prefix="fuobe/x")), SHIPPED, STAGED, kinds))
             # The bit depth into another dropdown: no.
             self.assertEqual(vet_graph(chain(node("GetVideoComponents", video=["9", 0]), node("Apply Whisper", audio=["9", 0], model=["1", 3])), SHIPPED, STAGED, kinds), "unsafe-graph")
+
+    def test_every_link_comfyui_reads(self):
+        """ComfyUI reads [node, false] as output 0, [node, true] as output 1 and [node, -1] as the last output, and
+        takes a number with a point as a link too. Each one is a link here, and each one is refused: a value worked out
+        by a loose output would otherwise reach a dropdown or ffmpeg's arguments as if no link were there."""
+        comfy = comfy_is_link()
+        for v in (["1", 0], ["1", 3], ["1", False], ["1", True], ["1", 0.0], ["1", -1], ["1", 2.5], ["1", "0"], [1, 0], ["1"], ["1", 0, 0], ("1", 0), "1"):
+            self.assertEqual(is_link(v), comfy(v), v)
+        made = node("StringConcatenate", string_a="mine", string_b=".safetensors", delimiter="")
+        switch = node("ComfySwitchNode", switch=True, on_true=["1", 0], on_false=["1", 0])
+        video = {"images": ["9", 0], "format": "video/h264-mp4", "frame_rate": 24, "filename_prefix": "fuobe/x"}
+        for kinds in (None, KINDS):
+            # Slot 0: the link rules refuse these (the loose switch into a dropdown, a link into ffmpeg's arguments).
+            self.assertEqual(vet_graph(chain(made, switch, node("CheckpointLoaderSimple", ckpt_name=["2", 0])), SHIPPED, STAGED, kinds), "unsafe-graph")
+            self.assertEqual(vet_graph(chain(made, switch, node("VHS_VideoCombine", **video, pix_fmt=["2", 0])), SHIPPED, STAGED, kinds), "unsafe-graph")
+            for slot in (False, True, 0.0, 1.0, -1, 1000):
+                for target in (
+                    node("CheckpointLoaderSimple", ckpt_name=["2", slot]),
+                    node("LoraLoader", model=["8", 0], clip=["8", 1], lora_name=["2", slot]),
+                    node("VHS_VideoCombine", **video, pix_fmt=["2", slot]),
+                    node("VHS_VideoCombine", **{**video, "filename_prefix": ["2", slot]}),
+                    node("VHS_VideoCombine", **{**video, "images": ["2", slot]}),
+                    node("CLIPTextEncode", text=["2", slot], clip=["8", 0]),
+                    node("KSampler", model=["2", slot], positive=["7", 0]),
+                    node("LoadImage", image=["2", slot]),
+                ):
+                    self.assertEqual(vet_graph(chain(made, switch, target), SHIPPED, STAGED, kinds), "unsafe-graph", (slot, target))
+            # Fuobe's own form still passes.
+            self.assertIsNone(vet_graph(chain(made, switch, node("KSampler", model=["2", 0], positive=["7", 0])), SHIPPED, STAGED, kinds))
+
+    def test_lists_inside_a_value_are_read(self):
+        """ComfyUI reads a link only as an input's whole value. A list inside a value is never a link, so its texts are
+        read like any other."""
+        for inner in (["//host/share/x", 0], ["C:" + B + "Users" + B + "x", False], ["/etc/passwd", 0.0]):
+            self.assertEqual(vet1("CLIPTextEncode", text="a red door", clip=[inner, 0]), "unsafe-path", inner)
+            self.assertEqual(vet1("CLIPTextEncode", text=["x", [inner]], clip=["8", 0]), "unsafe-path", inner)
+        # A link's own node id isn't text a node reads.
+        self.assertIsNone(vet1("CLIPTextEncode", text="a red door", clip=["8", 0]))
 
     def test_node_kinds_inside_comfyui(self):
         """Inside ComfyUI the node classes say more: any node's untyped outputs (your own listed nodes' too), and
