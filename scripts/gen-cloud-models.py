@@ -434,9 +434,11 @@ model("seedance-2-5", "Seedance 2.5", "ByteDance", "seedance", "video",
        ("extend", "bytedance/seedance-2.5/reference-to-video", "fal", {"fixed": {"task": "extension"}, "videoArray": True}),
        ("finalize", "bytedance/seedance-2.5/draft/complete")],
       # fal bills tokens: height × width × (seconds of input video + seconds out) × 24 / 1024, at $0.0214 per 1K tokens
-      # (480p, 720p) or $0.0234 (1080p), times 0.6 when reference clips go in (fal's reference-to-video page, re-read
-      # 2026-11-01; its sidebar's $0.473/s divides by 1000 where the formula says 1024). Per second of 16:9: 480p
-      # 864×496, 720p 1280×720, 1080p 1920×1080; with clips, on the seconds in plus out (Pricing.clipInput, no floor).
+      # (480p, 720p) or $0.0234 (1080p), times 0.6 when reference clips go in (fal's text, image and reference to video
+      # pages, re-read 2026-11-06). Their per-second figures ($0.2205, $0.4730, $1.164) run about 2% above the formula;
+      # the pages call them approximations and the token formula authoritative, and their worked examples follow the
+      # formula (5 s at 720p $2.31, 10 s at 480p $2.15). Per second of 16:9: 480p 864×496, 720p 1280×720, 1080p 1920×1080; with clips,
+      # on the seconds in plus out (Pricing.clipInput, no floor).
       badges=["top", "audio", "new"],
       pricing=("second", 0.46224, "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
                {"byResolution": {"480p": 0.21494, "720p": 0.46224, "1080p": 1.13724},
@@ -578,15 +580,16 @@ model("minimax-h3-max", "MiniMax H3 Max", "MiniMax", "hailuo", "video", "Top-tie
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32 (extend) — image and text to video at the launch price $0.052 (480P $0.0325, 1080P $0.104) until 2026-10-31; reference to video: 4 square references included, about $0.02 for each one after",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16, "2K": 0.32}}))
 # Build plan N7-5 (Fly path in Cinema's 3D scene): H3 Max following a keyframed camera path from one still. A hidden
-# helper (Cinema's "Film this path" picks it), priced per second by resolution: fal's launch rates until 2026-10-31, then
-# the list rates (Pricing.promo). Prompt expansion stays off so the user's motion words reach the model as written.
+# helper (Cinema's "Film this path" picks it), priced per second by resolution. fal's page (re-read 2026-11-06): 30% off
+# the list rates from 2026-11-01 through 2026-11-15, then the list rates (Pricing.promo). Prompt expansion stays off so
+# the user's motion words reach the model as written.
 model("minimax-h3-max-camera", "MiniMax H3 Max camera controls", "MiniMax", "hailuo", "video",
       "A still filmed along a camera path you keyframe: orbits, arcs, dollies and slides that follow the path exactly",
       [("camera-path", "minimax/h3-max/camera-controls")], hidden=True, ranged_durations=True,
       defaults={"duration": 5, "resolution": "768P"}, fixed={"prompt_expansion_mode": "disabled"},
-      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16 — launch price $0.052 (480P $0.0325, 1080P $0.104) until 2026-10-31",
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16 — 30% off, $0.056 (480P $0.035, 1080P $0.112), until 2026-11-15",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16},
-                "promo": {"until": "2026-10-31", "usd": 0.052, "byResolution": {"480P": 0.0325, "768P": 0.052, "1080P": 0.104}}}))
+                "promo": {"until": "2026-11-15", "usd": 0.056, "byResolution": {"480P": 0.035, "768P": 0.056, "1080P": 0.112}}}))
 # Blockout to film (package blockout-film; new-models-10.md §5): H3 Max renders a grey-box / previs animation (≤ 15 s,
 # ≤ 32 shots) with up to 8 reference stills; camera, blocking and timing come from the video. A hidden helper Cinema's
 # Blockout offers under its own name beside Seedance 2.5. Billed per second by resolution, at least 5 s a shot, plus a
@@ -664,15 +667,17 @@ def H3_REPLICATE_ROUTES(ep, adaptive=False):
 
 
 # Replicate's H3 Lite (480P / 768P) and HighSpeed (one rate): words, a first frame, first and last frames, or references, 4-15 s.
+# Prices per second of output from Replicate's model pages (re-read 2026-11-06): Lite $0.0125 at 480P, $0.02 at 768P;
+# HighSpeed $0.03.
 model("minimax-h3-lite", "MiniMax H3 Lite", "MiniMax", "hailuo", "video",
       "The lightest H3 with sound: words, frames or references, 4–15 s at 480P or 768P",
       H3_REPLICATE_ROUTES("minimax/h3-lite"),
       badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, fit_values=True, options={"maxImages": 9},
-      pricing=("second", 0.04, "768P; 480P $0.025", {"byResolution": {"480P": 0.025, "768P": 0.04}}))
+      pricing=("second", 0.02, "768P; 480P $0.0125", {"byResolution": {"480P": 0.0125, "768P": 0.02}}))
 model("minimax-h3-highspeed", "MiniMax H3 HighSpeed", "MiniMax", "hailuo", "video",
       "H3 tuned for speed, with sound: words, frames or references, 4–15 s",
       H3_REPLICATE_ROUTES("minimax/h3-highspeed", adaptive=True),
-      badges=["new", "audio", "fast"], defaults={"aspectRatio": "16:9", "duration": 5}, fit_values=True, options={"maxImages": 9}, pricing=("second", 0.06))
+      badges=["new", "audio", "fast"], defaults={"aspectRatio": "16:9", "duration": 5}, fit_values=True, options={"maxImages": 9}, pricing=("second", 0.03))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})

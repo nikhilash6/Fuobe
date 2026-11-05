@@ -6,13 +6,13 @@ import type { StudioConfig } from "@/components/studio/studio-context";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Launch prices (Pricing.promo): H3 Max camera controls at $0.052/s (768P) through 2026-10-31, then $0.08/s; FLUX 3 Max
- * at $0.0425/s (720p) through 2026-11-07, then $0.17/s. The catalog keeps both prices. The server prices a run on the
+ * Launch prices (Pricing.promo): H3 Max camera controls at $0.056/s (768P, 30% off) through 2026-11-15, then $0.08/s;
+ * FLUX 3 Max at $0.0425/s (720p) through 2026-11-07, then $0.17/s. The catalog keeps both prices. The server prices a run on the
  * day it runs, even when it started before a launch price ended; the browser shows the price of the day it is looked at;
  * nothing a page prerenders at build time reads the clock (Next.js stops the build on Date.now() while prerendering).
  */
 
-// The server starts on 2026-10-30, the day before H3 Max's launch price ends, and loads the catalog then.
+// The server starts on 2026-10-30, before both launch prices end, and loads the catalog then.
 vi.useFakeTimers({ now: Date.parse("2026-10-30T10:00:00Z"), toFake: ["Date"] });
 
 const dir = tempDir("fuobe-launch-prices-");
@@ -65,23 +65,23 @@ afterAll(() => {
 describe("the catalog keeps both prices", () => {
   it("H3 Max camera controls and FLUX 3 Max carry the list price and the launch price, as plain data", () => {
     const h3 = getModel(H3)!.pricing!;
-    expect(h3).toMatchObject({ unit: "second", usd: 0.08, byResolution: { "768P": 0.08 }, promo: { until: "2026-10-31", usd: 0.052, byResolution: { "768P": 0.052 } } });
+    expect(h3).toMatchObject({ unit: "second", usd: 0.08, byResolution: { "768P": 0.08 }, promo: { until: "2026-11-15", usd: 0.056, byResolution: { "768P": 0.056 } } });
     expect(Object.getOwnPropertyDescriptor(getModel(H3)!, "pricing")).toMatchObject({ writable: true });
     expect(getModel(FLUX)!.pricing).toMatchObject({ usd: 0.17, promo: { until: "2026-11-07", usd: 0.0425 } });
-    expect(launchHolds("2026-10-31", Date.parse("2026-10-31T23:59:59.999Z"))).toBe(true);
-    expect(launchHolds("2026-10-31", Date.parse("2026-11-01T00:00:00Z"))).toBe(false);
+    expect(launchHolds("2026-11-15", Date.parse("2026-11-15T23:59:59.999Z"))).toBe(true);
+    expect(launchHolds("2026-11-15", Date.parse("2026-11-16T00:00:00Z"))).toBe(false);
   });
 });
 
 describe("the server prices a run on the day it runs", () => {
-  it("H3 Max camera controls (Cinema's fly path): the launch rate today and through 2026-10-31 (UTC), the list rate from November", () => {
+  it("H3 Max camera controls (Cinema's fly path): the launch rate today and through 2026-11-15 (UTC), the list rate from 2026-11-16", () => {
     const m = getModel(H3)!;
     const cost = () => estimateCost(m, { duration: 5, resolution: "768P" }, 1, "camera-path");
-    expect(cost()).toBe(0.26);
-    at("2026-10-31T23:59:59Z");
-    expect(cost()).toBe(0.26);
+    expect(cost()).toBe(0.28);
+    at("2026-11-15T23:59:59Z");
+    expect(cost()).toBe(0.28);
     // Same process, same catalog: the run after midnight is priced at the list rate.
-    at("2026-11-01T00:00:00Z");
+    at("2026-11-16T00:00:00Z");
     expect(cost()).toBe(0.4);
   });
 
@@ -126,10 +126,10 @@ describe("the browser shows the price of the day it is", () => {
     expect(usd).toBeGreaterThan(0);
   });
 
-  it("the fly path's price in the browser: H3 Max at $0.052/s on 2026-10-31, $0.08/s on 2026-11-01", () => {
+  it("the fly path's price in the browser: H3 Max at $0.112/s (1080P) on 2026-11-15, $0.16/s on 2026-11-16", () => {
     const h3 = slimModel(getModel(H3)!);
-    expect(estimateCost(h3, { duration: 5, resolution: "1080P" }, 1, "camera-path", false, day("2026-10-31T12:00:00Z"))).toBe(0.52);
-    expect(estimateCost(h3, { duration: 5, resolution: "1080P" }, 1, "camera-path", false, day("2026-11-01T12:00:00Z"))).toBe(0.8);
+    expect(estimateCost(h3, { duration: 5, resolution: "1080P" }, 1, "camera-path", false, day("2026-11-15T12:00:00Z"))).toBe(0.56);
+    expect(estimateCost(h3, { duration: 5, resolution: "1080P" }, 1, "camera-path", false, day("2026-11-16T12:00:00Z"))).toBe(0.8);
   });
 
   it("the model picker's price", () => {
@@ -137,8 +137,8 @@ describe("the browser shows the price of the day it is", () => {
     expect(pickerPrice(flux, day("2026-11-07T08:00:00Z"))).toBe("$0.043/sec");
     expect(pickerPrice(flux, day("2026-11-08T08:00:00Z"))).toBe("$0.17/sec");
     expect(pickerPrice(flux, null)).toBe("");
-    expect(pickerPrice(slimModel(getModel(H3)!), day("2026-10-30T08:00:00Z"))).toBe("$0.052/sec");
-    expect(pickerPrice(slimModel(getModel(H3)!), day("2026-11-01T08:00:00Z"))).toBe("$0.08/sec");
+    expect(pickerPrice(slimModel(getModel(H3)!), day("2026-10-30T08:00:00Z"))).toBe("$0.056/sec");
+    expect(pickerPrice(slimModel(getModel(H3)!), day("2026-11-16T08:00:00Z"))).toBe("$0.08/sec");
   });
 
   it("the Models page: each row carries the launch price, and the browser picks it or the list price by the day", () => {
@@ -152,8 +152,8 @@ describe("the browser shows the price of the day it is", () => {
     expect(rowPrice(plain, null)).toBe(plain.price);
     // GET /api/models (a request, so it may read the clock) says the price of the day asked.
     const info = toModelInfo(getModel(H3)!);
-    expect(rowPrice(info, Date.parse("2026-10-30T10:00:00Z"))).toBe("$0.052 / second");
-    expect(rowPrice(info, Date.parse("2026-11-01T00:00:00Z"))).toBe("$0.08 / second");
+    expect(rowPrice(info, Date.parse("2026-10-30T10:00:00Z"))).toBe("$0.056 / second");
+    expect(rowPrice(info, Date.parse("2026-11-16T00:00:00Z"))).toBe("$0.08 / second");
   });
 
   it("useToday: no clock and no day while a page renders on the server (prerender, SSR); the day once the browser hydrates", () => {
@@ -161,10 +161,10 @@ describe("the browser shows the price of the day it is", () => {
     let html = "";
     expect(clockReads(() => (html = renderToString(createElement(Probe))))).toBe(0);
     expect(html).toBe("null");
-    expect(startOfDayUtc(Date.parse("2026-10-31T23:59:59.999Z"))).toBe(Date.parse("2026-10-31T00:00:00Z"));
+    expect(startOfDayUtc(Date.parse("2026-11-15T23:59:59.999Z"))).toBe(Date.parse("2026-11-15T00:00:00Z"));
     // The day's midnight is inside the launch's last day: the launch price holds all of it.
-    expect(pricingOn(getModel(H3)!.pricing!, day("2026-10-31T23:59:59Z"))!.usd).toBe(0.052);
-    expect(pricingOn(getModel(H3)!.pricing!, day("2026-11-01T00:00:00Z"))!.usd).toBe(0.08);
+    expect(pricingOn(getModel(H3)!.pricing!, day("2026-11-15T23:59:59Z"))!.usd).toBe(0.056);
+    expect(pricingOn(getModel(H3)!.pricing!, day("2026-11-16T00:00:00Z"))!.usd).toBe(0.08);
   });
 });
 

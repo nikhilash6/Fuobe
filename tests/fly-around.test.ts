@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
@@ -108,11 +108,18 @@ describe("the fly-around plan", () => {
     expect(p.steps[0].request.inputs).toEqual({ images: [image], video: "/api/files/uploads/r.webm" });
   });
 
-  it("in the cloud: H3 Max camera-controls with the keys, 5 s at 768P = $0.40 at list", () => {
-    const p = fly.planFlyAround({ engine: "cloud", image, orbit, duration: 5 });
-    expect(p.steps).toHaveLength(1);
-    expect(p.steps[0].request).toMatchObject({ modelId: "minimax-h3-max-camera", op: "camera-path", params: { duration: 5, resolution: "768P" } });
-    expect(p.costUsd).toBeCloseTo(0.4, 3);
+  it("in the cloud: H3 Max camera-controls with the keys, 5 s at 768P = $0.28 until 2026-11-15, $0.40 at list after", () => {
+    vi.useFakeTimers({ now: Date.parse("2026-11-15T12:00:00Z"), toFake: ["Date"] });
+    try {
+      const p = fly.planFlyAround({ engine: "cloud", image, orbit, duration: 5 });
+      expect(p.steps).toHaveLength(1);
+      expect(p.steps[0].request).toMatchObject({ modelId: "minimax-h3-max-camera", op: "camera-path", params: { duration: 5, resolution: "768P" } });
+      expect(p.costUsd).toBeCloseTo(0.28, 3);
+      vi.setSystemTime(Date.parse("2026-11-16T00:00:00Z"));
+      expect(fly.planFlyAround({ engine: "cloud", image, orbit, duration: 5 }).costUsd).toBeCloseTo(0.4, 3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("in the cloud with views: H3 Max reference-to-video with the still first and the path in words", () => {

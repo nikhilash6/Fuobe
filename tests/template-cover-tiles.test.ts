@@ -115,15 +115,20 @@ describe("Click to Ad's styles", () => {
 });
 
 describe("Fashion Factory's templates", () => {
-  it("show the cover's slides in the carousel (the first one only, until picked), else the drawn framings", () => {
+  it("show the cover's slides in the carousel (the first one only, until picked), else a branded tile with the name", () => {
     const h = html(FashionPreview, { t: by(FASHION, "ultra-bold") });
     expect(h).toContain('src="/previews/templates/fashion/ultra-bold.jpg?v=4d5e6f70"');
     expect(h).not.toContain("ultra-bold-2.jpg");
     expect(h).toContain('aria-label="Ultra bold preview 1 of 3"');
     expect(h).toContain('aria-label="Next preview"');
     const drawn = html(FashionPreview, { t: by(FASHION, "red-room") });
-    expect(drawn).toContain('<svg viewBox="0 0 60 70"');
+    expect(drawn).toContain('aria-label="Red Room preview"');
+    expect(drawn).toContain(">Red Room</span>");
+    expect(drawn).toContain("gradient(");
+    // Never the old drawn figure, and no carousel for a tile with one face.
+    expect(drawn).not.toContain("<svg");
     expect(drawn).not.toContain("<img");
+    expect(drawn).not.toContain('aria-label="Next preview"');
   });
 });
 
