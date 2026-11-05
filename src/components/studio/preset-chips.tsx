@@ -162,7 +162,7 @@ export function PresetChip({ type, value, onChange }: { type: "motion" | "effect
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 /**
- * Higgsfield's Mix: a second motion or effect on top of the first, each with a strength. The first one's strength scales
+ * The parity studio's Mix: a second motion or effect on top of the first, each with a strength. The first one's strength scales
  * its LoRAs, so its slider shows only on a model that runs them (`strengthOn` names the model that does, otherwise).
  */
 export function MixChip({

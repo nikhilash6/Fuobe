@@ -148,7 +148,7 @@ export function isHelperFeature(feature: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Review status (Higgsfield's Assets: In progress, Needs review, Approved, Rejected)
+// Review status (the parity studio's Assets: In progress, Needs review, Approved, Rejected)
 
 export const REVIEW_STATUSES: { id: ReviewStatus; label: string; color: string }[] = [
   { id: "in-progress", label: "In progress", color: "#029dfe" },
@@ -224,7 +224,7 @@ function subtreeHeight(all: FolderLink[], id: string, seen = new Set<string>()):
   return 1 + Math.max(0, ...kids.map((k) => subtreeHeight(all, k.id, seen)));
 }
 
-/** Why folder `id` can't go into `parentId` (null: the library root), in Higgsfield's words; null when it can. */
+/** Why folder `id` can't go into `parentId` (null: the library root), in the parity research's words; null when it can. */
 export function folderMoveError(all: FolderLink[], id: string, parentId: string | null): string | null {
   const f = all.find((x) => x.id === id);
   if (!f || (parentId && !all.some((x) => x.id === parentId))) return "That folder doesn't exist anymore";
@@ -273,7 +273,7 @@ export function zipSegment(name: string): string {
   return clean.slice(0, 80) || "Folder";
 }
 
-/** Higgsfield's seven folder swatches, as oklch hues (lime is the default). */
+/** The parity studio's seven folder swatches, as oklch hues (lime is the default). */
 export const FOLDER_COLORS = [
   { id: "lime", label: "Lime", hue: 125, chroma: 0.21 },
   { id: "cyan", label: "Cyan", hue: 205, chroma: 0.12 },

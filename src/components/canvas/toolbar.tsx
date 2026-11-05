@@ -12,7 +12,7 @@ import { useModKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 import { BOARD_COLOR_VAR, Swatches } from "./board";
 
-/** What a drag or click on the board does (Higgsfield's toolbar: V, H, D, E, N, ⇧T, R, T, C). */
+/** What a drag or click on the board does (the parity studio's toolbar: V, H, D, E, N, ⇧T, R, T, C). */
 export type Tool = "select" | "hand" | "draw" | "erase" | "note" | "table" | "shape" | "text" | "comment";
 export type DragShape = "rect" | "ellipse" | "arrow";
 

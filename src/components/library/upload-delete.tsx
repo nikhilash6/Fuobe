@@ -22,7 +22,7 @@ type Check = { state: "checking" } | { state: "free" } | { state: "used"; usedBy
 
 /**
  * Deleting an upload (the Library's Uploads tab and its viewer): first ask the server where the
- * file is used. Nothing: confirm, then delete it for good (uploads skip the Trash, as on Higgsfield).
+ * file is used. Nothing: confirm, then delete it for good (uploads skip the Trash, as in the parity research).
  * Something: say where, so the person knows what to remove first.
  */
 export function UploadDeleteProvider({ children }: { children: React.ReactNode }) {

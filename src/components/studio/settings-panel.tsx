@@ -200,7 +200,7 @@ export function SettingsChip(props: SettingsPanelProps) {
   );
 }
 
-/** Output formats as a list of choices, each with what it's for (Higgsfield's SDR to HDR copy). */
+/** Output formats as a list of choices, each with what it's for (the parity studio's SDR to HDR copy). */
 function FormatChoices({ formats, value, onChange, via }: { formats: VideoFormat[]; value: VideoFormat; onChange: (f: VideoFormat) => void; via?: (f: VideoFormat) => string | undefined }) {
   return (
     <div role="radiogroup" aria-label="Format" onKeyDown={radioKeys} className="grid gap-1">

@@ -1,5 +1,5 @@
 /**
- * Storyboards (Higgsfield Popcorn): up to 8 consistent frames. Frame 1 is made from the
+ * Storyboards (Popcorn): up to 8 consistent frames. Frame 1 is made from the
  * references (or text alone); every later frame is an edit of the previous frame, so faces,
  * wardrobe, location and grade carry through.
  *

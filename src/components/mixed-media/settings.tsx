@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cleanValues, defaultValues, parseHex, type MixedPreset, type MixedSetting, type MixedValues } from "@/lib/catalog/mixed-media";
 
 /**
- * Per-preset advanced settings (Higgsfield's param_configs): colours (or "describe the colour"),
+ * Per-preset advanced settings (the parity studio's param_configs): colours (or "describe the colour"),
  * dropdowns with a custom option, text. Saved per preset in this browser (localStorage).
  */
 

@@ -43,7 +43,7 @@ import { firstOn } from "./model-access";
 import { getAsset } from "./storage";
 
 /**
- * Layers studio (Higgsfield Layers): projects, saved versions of their layer document, and the AI
+ * Layers studio (Layers parity): projects, saved versions of their layer document, and the AI
  * jobs their tools start. A job is ordinary generations (so results survive restarts, show in the
  * Library and run on either engine); the editor applies a finished job to its document and saves a
  * version, which marks the job applied (src/lib/layers.ts has the document model).

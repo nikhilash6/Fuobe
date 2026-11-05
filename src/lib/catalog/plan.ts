@@ -802,7 +802,7 @@ export function controlSets(model: ModelDef, params: GenParams): GenParams {
 }
 
 /**
- * Remove background and Depth map options (Higgsfield's Video tools): what to keep, the cut-out or its alpha mask,
+ * Remove background and Depth map options (the parity studio's Video tools): what to keep, the cut-out or its alpha mask,
  * the colour map and side by side, each checked against what the model makes, so nothing is quietly swapped.
  */
 function checkVideoToolOptions(model: ModelDef, op: "bg-remove-video" | "depth-video", prompt: string, params: GenParams) {

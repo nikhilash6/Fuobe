@@ -1,7 +1,7 @@
 import type { InputSlot, LoraRef, Preset } from "./types";
 
 /*
- * Camera motions (Higgsfield "DoP"-style presets) and VFX effects.
+ * Camera motions (the parity studio "DoP"-style presets) and VFX effects.
  *
  * Cloud: the user's image is animated by a frontier model (Kling 2.5 Turbo by default, any
  * video model works) with a camera-language prompt tuned per preset.
@@ -20,7 +20,7 @@ type MotionSpec = {
   hue?: number;
   loras?: LoraRef[];
   description?: string;
-  /** Needs a start and an end frame (Higgsfield "Start & End" presets). */
+  /** Needs a start and an end frame (the parity studio "Start & End" presets). */
   endFrame?: boolean;
   parity?: string;
 };
@@ -173,7 +173,7 @@ const MOTION_SPECS: MotionSpec[] = [
   // Transitions
   { name: "Roll Transition", category: "Transitions", icon: "RotateCcw", endFrame: true, prompt: "The camera rolls forward like a spinning wheel, rotating through the frame to transition seamlessly from the start frame into the end frame" },
   { name: "Flying Cam Transition", category: "Transitions", icon: "Plane", prompt: "The camera lifts off and flies rapidly out of the scene, soaring through the air and swooping down into a new location to land on the subject" },
-  // Action & sports (Higgsfield "Catch the Pulse")
+  // Action & sports (the parity studio "Catch the Pulse")
   { name: "Baseball Kick", category: "Action & Sports", icon: "Footprints", prompt: "The subject winds up and delivers a powerful high kick, leg snapping through the frame with dramatic impact and a slight camera shake" },
   { name: "Basketball Dunks", category: "Action & Sports", icon: "Volleyball", prompt: "The subject sprints, leaps high and slams a basketball through the hoop, hanging on the rim as the camera follows from a low angle" },
   { name: "Boxing", category: "Action & Sports", icon: "Swords", prompt: "The subject throws quick jabs and hooks with fast head movement while the camera stays up close, rhythmic and intense" },
@@ -302,7 +302,7 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Tiny Planet", category: "Scale", icon: "Globe2", prompt: "The scene curls into a tiny planet around the subject" },
   { name: "Giant", category: "Scale", icon: "Maximize", prompt: "The subject grows into a giant towering over the city" },
   { name: "Giant People", category: "Scale", icon: "Users", prompt: "Colossal people as tall as skyscrapers walk through the city behind the subject, who looks up in awe" },
-  // Viral (Higgsfield /viral)
+  // Viral (the parity studio /viral)
   { name: "Aquarium", category: "Viral", icon: "Fish", prompt: "The room fills with water like a giant aquarium, colorful fish and bubbles swirling around the subject" },
   { name: "Atomic", category: "Viral", icon: "Atom", prompt: "A blinding flash on the horizon behind the subject blooms into a mushroom cloud as the shockwave blows their hair back" },
   { name: "Attack of Clones", category: "Viral", icon: "Users", prompt: "Dozens of identical clones of the subject march in from every side and surround them" },
@@ -343,7 +343,7 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Tattoo Animation", category: "Viral", icon: "PenTool", prompt: "Ink tattoos appear on the subject's skin and come alive, the drawings crawling and moving across their arms" },
   { name: "Train Rush", category: "Viral", icon: "TrainFront", prompt: "A high-speed train rushes past right behind the subject, wind whipping their hair and clothes, motion blur streaking" },
   { name: "Turning Monkey", category: "Viral", icon: "PawPrint", prompt: "The subject turns their head and, mid-turn, morphs into a monkey with the same outfit and expression" },
-  // UGC (Higgsfield /ugc)
+  // UGC (the parity studio /ugc)
   { name: "Ballet", category: "UGC", icon: "Music", prompt: "The subject performs graceful ballet turns and an arabesque in a bright studio, filmed on a phone" },
   { name: "Eating", category: "UGC", icon: "Utensils", prompt: "The subject takes a bite of their food and reacts with delight to the phone camera, casual creator vlog style" },
   { name: "Fix and Pose", category: "UGC", icon: "Camera", prompt: "The subject fixes their hair and outfit in front of the phone camera, then snaps into a confident pose" },
@@ -379,7 +379,7 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Smoke Transition", category: "Transitions", icon: "CloudFog", endFrame: true, prompt: "Thick smoke billows across the frame, swallowing the start frame, and clears on the end frame" },
   { name: "Splash Transition", category: "Transitions", icon: "Droplets", endFrame: true, prompt: "A splash of water bursts across the lens, washing the start frame away and settling on the end frame" },
   { name: "Trucksition", category: "Transitions", icon: "Truck", endFrame: true, prompt: "A truck drives across the foreground, blocking the view, and when it passes the scene has become the end frame" },
-  // Blockbuster (Higgsfield Visual Effects / Effects 2.0)
+  // Blockbuster (Visual Effects / Effects 2.0)
   { name: "Studio Slide", category: "Blockbuster", icon: "MoveHorizontal", prompt: "The subject slides sideways across a seamless studio floor in one smooth motion as the camera glides with them, then strikes a pose" },
   { name: "Wild Ride", category: "Blockbuster", icon: "Gauge", prompt: "The subject clings on as whatever they are standing on launches into a wild high-speed ride, the world blurring past" },
   { name: "Smash and Grab", category: "Blockbuster", icon: "Hammer", prompt: "Glass shatters in slow motion as the subject smashes through a window, grabs a glowing prize and runs" },

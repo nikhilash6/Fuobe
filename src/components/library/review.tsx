@@ -7,7 +7,7 @@ import type { Generation, ReviewStatus } from "@/lib/catalog/types";
 import { REVIEW_STATUSES, reviewInfo } from "@/lib/library";
 import { cn } from "@/lib/utils";
 
-/** The status colour (Higgsfield's), ringed so the lime stays visible on a light card. */
+/** The status colour (the parity studio's), ringed so the lime stays visible on a light card. */
 export function ReviewDot({ status, className }: { status: ReviewStatus; className?: string }) {
   return <span aria-hidden className={cn("size-2 shrink-0 rounded-full ring-1 ring-black/15 dark:ring-white/20", className)} style={{ background: reviewInfo(status)?.color }} />;
 }

@@ -16,7 +16,7 @@ const Body = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("describe"), engine: Engine, prompt: z.string().max(2000), requestId: RequestId }),
 ]);
 
-/** What's wrong with a body, said for the mode it was meant for (Higgsfield's words where it has them). */
+/** What's wrong with a body, said for the mode it was meant for (the parity research's words where it has them). */
 function bodyError(mode: unknown, issues: z.core.$ZodIssue[]): string {
   const at = (key: string) => issues.some((i) => i.path[0] === key);
   if (at("engine")) return "Pick Cloud or Open source";

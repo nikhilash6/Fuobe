@@ -19,7 +19,7 @@ import { zipFiles } from "./zip";
 
 const layoutOf = (c: AdCreative, ratio: string) => (c.layout as AdLayout | null) ?? defaultLayout(ratio, c.position);
 
-/** The formats a creative exists in: a baked (Higgsfield) ad only in the one it was rendered in. */
+/** The formats a creative exists in: a baked ad (drawn whole by the retired provider) only in the one it was rendered in. */
 export const formatsOf = (c: Pick<AdCreative, "baked" | "ratio">): AdRatio[] => (c.baked ? [c.ratio ?? "4:5"] : [...AD_RATIOS]);
 
 /** The format to export a creative in when the grid shows `ratio`. */

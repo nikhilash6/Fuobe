@@ -23,12 +23,12 @@ import type { Engine, GenerationRequest, GenParams, LoraRef, ModelDef, Operation
 
 /*
  * Cinema Studio 4.0 as a Fuobe Original (build plan O6): the director's data and the pure planning step
- * shared by the browser (live cost, previews) and the server (src/server/cinema-generate.ts). No Higgsfield
+ * shared by the browser (live cost, previews) and the server (src/server/cinema-generate.ts). No retired provider's
  * API: everything runs on open weights (Fuobe Cinema, Fuobe Soul) or on partner models through fal / Replicate.
  *
- * Everything below the "Research data" line is copied from docs/research/higgsfield-studios.json →
+ * Everything below the "Research data" line is copied from docs/research/parity-studios.json →
  * cinemaStudio (genres, eras, tempos, camera bodies, lenses, apertures, the 33 camera moves, the 50 public
- * palettes with their 12 hex colours, the 7 lighting presets, the Emotion Wheel), higgsfield-image-studios.json
+ * palettes with their 12 hex colours, the 7 lighting presets, the Emotion Wheel), parity-image-studios.json
  * → characterSheet.soulCast (the 17 Soul Cast fields) and fuobe-originals-recipes-5.json →
  * studios[cinema-studio].original (Fuobe Cinema's recipe: which camera LoRA each move takes, the longest take).
  * tests/cinema.test.ts checks the copy against the JSON, so a research update shows up as a failing test.
@@ -57,13 +57,13 @@ export interface DirectorOption {
 export interface CinemaPalette {
   name: string;
   slug: string;
-  /** 12 colours, dark → light, the last one is the accent (= Higgsfield's background colour). */
+  /** 12 colours, dark → light, the last one is the accent (= the parity studio's background colour). */
   hex: string[];
 }
 
 export interface EmotionStep {
   name: string;
-  /** Exact fragment Higgsfield adds after the character. */
+  /** Exact fragment the parity studio adds after the character. */
   prompt: string;
   intensity: number;
 }
@@ -80,7 +80,7 @@ export interface CameraMove {
   name: string;
   /** What the move does (shown in the picker). */
   hint: string;
-  /** Display name confirmed in Higgsfield's UI (else title-cased from the slug). */
+  /** Display name confirmed in the parity studio's UI (else title-cased from the slug). */
   confirmed: boolean;
   /** Camera-language phrase used when the move is written into the prompt. */
   phrase: string;
@@ -379,7 +379,7 @@ export interface CinemaPlan {
 }
 
 // ---------------------------------------------------------------------------
-// Research data (docs/research/higgsfield-studios.json → cinemaStudio.directorsPanel)
+// Research data (docs/research/parity-studios.json → cinemaStudio.directorsPanel)
 
 export const GENRES: DirectorOption[] = [
   { name: "General", slug: null, description: "No genre-specific visual logic; the prompt drives the look" },
@@ -545,7 +545,7 @@ export const EMOTION_FAMILIES: EmotionFamily[] = [
 
 /**
  * Focal lengths. The research confirms the field (`camera_focal_length_id`, required for stills) but
- * Higgsfield's value list needs a login, so these are the standard cine primes.
+ * The researched value list needs a login, so these are the standard cine primes.
  */
 export const FOCAL_LENGTHS: DirectorOption[] = [
   { name: "Auto", slug: null, description: "Model chooses from scene context" },
@@ -757,7 +757,7 @@ export interface ReferenceCheck {
   elements: number;
 }
 
-/** Higgsfield's reference limits, with its own messages. Durations in seconds (NaN = unknown yet). */
+/** The researched reference limits, with its own messages. Durations in seconds (NaN = unknown yet). */
 export function checkReferences(r: ReferenceCheck): string | null {
   const L = REFERENCE_LIMITS;
   if (r.images > L.images) return `You can add a maximum of ${L.images} images`;
@@ -807,7 +807,7 @@ export function gridPrompt(scene: string, size: GridSize, type: GridType): strin
 }
 
 // ---------------------------------------------------------------------------
-// Soul Cast (cinemaStudio.soulCast, higgsfield-image-studios.json → characterSheet.soulCast)
+// Soul Cast (cinemaStudio.soulCast, parity-image-studios.json → characterSheet.soulCast)
 
 export interface CastField {
   key: string;
@@ -850,7 +850,7 @@ export const SOUL_CAST_FIELDS: CastField[] = [
 export const SOUL_CAST_TABS = [...new Set(SOUL_CAST_FIELDS.map((f) => f.tab))];
 export const castDefaults = (): CastValues => ({ budget: 250, era: 2020 });
 
-/** Higgsfield's Randomize: genre, era, race, gender, age and archetype. */
+/** The parity studio's Randomize: genre, era, race, gender, age and archetype. */
 export function randomizeCast(values: CastValues, rand: () => number = Math.random): CastValues {
   const pick = (key: string) => {
     const f = SOUL_CAST_FIELDS.find((x) => x.key === key)!;
@@ -1209,7 +1209,7 @@ export function directorSummary(s: DirectorSettings): string[] {
   ].filter((x): x is string => !!x);
 }
 
-/** Cinematic stills need the camera, lens and focal length (Higgsfield: "Camera settings are required"). */
+/** Cinematic stills need the camera, lens and focal length (the parity studio: "Camera settings are required"). */
 export function stillCameraMissing(s: DirectorSettings): string | null {
   const missing = [!s.camera && "camera", !s.lens && "lens", !s.focal && "focal length"].filter(Boolean);
   return missing.length ? `Camera settings are required — pick a ${missing.join(", ")}` : null;
@@ -2091,7 +2091,7 @@ function planEdit(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
 }
 
 // ---------------------------------------------------------------------------
-// 3D scene and recomposition (higgsfield-delta-4.md §4.4; paid-model-apis-4.md §8; comfyui-oss-4.md §i)
+// 3D scene and recomposition (parity-delta-4.md §4.4; paid-model-apis-4.md §8; comfyui-oss-4.md §i)
 
 /** What builds a still's 3D scene: MoGe 2's textured mesh on the open engine, a Marigold depth map on the cloud. */
 export const SCENE_MODELS: Record<Engine, string> = { cloud: "marigold-depth", open: "oss-scene-moge" };

@@ -7,7 +7,7 @@
  * fal in the cloud: Wan Animate for motion, MiniMax H3 + the Character Swap LoRA for characters, SAM 3.1 + Wan VACE for
  * swaps, a restyled first frame + Wan Fun VACE for looks. Lite is the cheaper, faster tier of the same Original. Other
  * hosted open models (SCAIL-2, Wan Motion, Wan 2.2 Animate Replace, hosted Wan 2.2 VACE) and partner models (Kling,
- * P-Video, H3 Max Recast, Gemini Omni, Happy Horse) stay as labelled alternatives. No Higgsfield model or look.
+ * P-Video, H3 Max Recast, Gemini Omni, Happy Horse) stay as labelled alternatives. No retired provider's model or look.
  *
  * Every model takes a part of the clip (Kling 3–15 s, VACE 81 or 241 frames, H3 5–15 s…), so longer selections are cut
  * into pieces or windows, made one by one, joined, and the clip's own sound put back (the remove-object plumbing). Pure
@@ -79,7 +79,7 @@ export const GENJUTSU = {
   feature: "genjutsu",
   /** Cuts, tracks, pieces, joins and the sound: kept apart from the finished videos. */
   stepFeature: "genjutsu-step",
-  /** The source window: "Choose a source video between 4 and 30 seconds" (Higgsfield's limit, kept). */
+  /** The source window: "Choose a source video between 4 and 30 seconds" (the researched limit, kept). */
   minSeconds: 4,
   maxSeconds: 30,
   maxBytes: 200 * 1024 * 1024,

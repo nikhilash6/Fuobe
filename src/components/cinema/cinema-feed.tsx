@@ -649,7 +649,7 @@ export function CinemaFeed({
   const live = [...selected].filter((id) => ids.includes(id));
   const selecting = live.length > 0;
 
-  // Esc unselects (Higgsfield: "Unselect All (Esc)").
+  // Esc unselects (the parity studio: "Unselect All (Esc)").
   useEffect(() => {
     if (!selecting) return;
     const onKey = (e: KeyboardEvent) => {

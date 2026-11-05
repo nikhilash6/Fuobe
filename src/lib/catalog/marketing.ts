@@ -5,8 +5,8 @@ import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
  * Fuobe's own templates, UGC hooks and settings, Click-to-Ad styles, ad angles) and the pure
  * planning helpers the client (live blockers, prices) and the server (pipelines) both use.
  *
- * Structure follows docs/research/higgsfield-marketing-agents.md §1–§4 (categories → formats →
- * capabilities). Template names, prompts and previews are Fuobe's own; no Higgsfield covers.
+ * Structure follows docs/research/parity-marketing-agents.md §1–§4 (categories → formats →
+ * capabilities). Template names, prompts and previews are Fuobe's own; no parity-studio covers.
  */
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ export interface Product {
 export const MAX_SELLING_POINTS = 5;
 export const MAX_PRODUCT_IMAGES = 8;
 
-/** Ads Studio's rotating research labels (Higgsfield's 14, in their order). */
+/** Ads Studio's rotating research labels (the parity studio's 14, in their order). */
 export const RESEARCH_LABELS = [
   "Reading your website",
   "Determining the name of your brand",
@@ -151,7 +151,7 @@ export const BRAND_EXAMPLES: { label: string; text: string }[] = [
   { label: "Digital Services", text: "Northbound — a two-person studio that designs and builds fast marketing sites for seed-stage SaaS teams in four weeks." },
 ];
 
-/** Brand kit languages (as Higgsfield lists them). */
+/** Brand kit languages (as the parity studio lists them). */
 export const BRAND_LANGUAGES = [
   "Arabic", "Chinese", "Czech", "Danish", "Dutch", "English", "Finnish", "French", "German", "Greek", "Hebrew", "Hindi", "Hungarian", "Indonesian",
   "Italian", "Japanese", "Kazakh", "Korean", "Norwegian", "Polish", "Portuguese", "Romanian", "Russian", "Spanish", "Swedish", "Thai", "Turkish",
@@ -561,7 +561,7 @@ export function interleaved(list: MarketingTemplate[]): MarketingTemplate[] {
 }
 
 // ---------------------------------------------------------------------------
-// UGC hooks and settings (the mechanics are Higgsfield's; the prompts are Fuobe's own words)
+// UGC hooks and settings (the mechanics are the parity studio's; the prompts are Fuobe's own words)
 
 export interface UgcHook {
   id: string;

@@ -14,7 +14,7 @@ import { placeholdersOn } from "@/lib/demo-mode";
 
 /**
  * Cinema Studio's 3D scene, the light half (the viewer and three.js load only when a scene opens): which takes
- * are scenes, what a step costs, and the "Create 3D scene" confirmation (Higgsfield asks the same, with
+ * are scenes, what a step costs, and the "Create 3D scene" confirmation (the parity studio asks the same, with
  * "Don't show this again").
  */
 

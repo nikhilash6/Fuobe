@@ -1,5 +1,5 @@
 /**
- * Colour grading that runs in the browser (WebGL): Higgsfield's free "Color Grading" tool.
+ * Colour grading that runs in the browser (WebGL): the parity studio's free "Color Grading" tool.
  * Every slider is -100…100 (0 = untouched) except grain/vignette/sharpness/fade (0…100).
  */
 
@@ -82,7 +82,7 @@ export interface GradePreset {
   grade: Partial<Grade>;
 }
 
-/** Higgsfield's five (Natural, Split Tone, Soft Skin, Old Lens, 16mm) plus a few classic film looks. */
+/** The parity studio's five (Natural, Split Tone, Soft Skin, Old Lens, 16mm) plus a few classic film looks. */
 export const PRESETS: GradePreset[] = [
   { id: "natural", name: "Natural", grade: { contrast: 8, vibrance: 12, highlights: -10, shadows: 8, sharpness: 15 } },
   { id: "split-tone", name: "Split Tone", grade: { contrast: 12, saturation: -10, splitAmount: 45, splitShadowHue: 200, splitHighlightHue: 32 } },

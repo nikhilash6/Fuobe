@@ -314,7 +314,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
   const hasProduct = productImages.length > 0;
   const prompt = input.prompt?.trim() ?? "";
   const website = input.website?.trim() || brand?.website || "";
-  // Required inputs, in Higgsfield's words.
+  // Required inputs, in the parity research's words.
   if (f.product === "required" && !hasProduct) throw new PlanError(product ? `${product.name} has no images` : "Attach a product to generate");
   if (f.oneOf?.length) {
     const has = { product: hasProduct, avatar: !!input.avatar, prompt: !!prompt, website: !!website };

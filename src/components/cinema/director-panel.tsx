@@ -99,7 +99,7 @@ function OptionGrid({ options, value, onChange, cols = 2 }: { options: DirectorO
   );
 }
 
-/** Film setup control: a carousel with Previous/Next arrows over one list (Higgsfield's pattern). */
+/** Film setup control: a carousel with Previous/Next arrows over one list (the parity studio's pattern). */
 function Carousel({ kind, title, subtitle, options, value, onChange, disabled }: { kind: string; title: string; subtitle: string; options: DirectorOption[]; value: string | null | undefined; onChange: (slug: string | null) => void; disabled?: string }) {
   const i = Math.max(0, options.findIndex((o) => o.slug === (value ?? null)));
   const cur = options[i];

@@ -46,7 +46,7 @@ export const CAST_LOOK = "v1-realistic";
 
 const BY_ID = new Map(SOUL_LOOK_CARDS.map((c) => [c.id, c]));
 
-/** A look's card by its Fuobe id, or by Higgsfield's old style id (settings saved before the Originals). */
+/** A look's card by its Fuobe id, or by legacy style id (settings saved before the Originals). */
 export function lookCard(id: string | null | undefined): SoulLookCard | undefined {
   if (!id) return undefined;
   return BY_ID.get(id) ?? BY_ID.get(SOUL_LEGACY_IDS[id.toLowerCase()] ?? "");

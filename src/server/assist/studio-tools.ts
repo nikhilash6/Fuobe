@@ -395,7 +395,7 @@ function facelessSteps(i: FacelessToolInput, ctx: ToolContext, voiceFor: VoiceFo
   const open = engineOf(ctx) === "open";
   const aspect = ["9:16", "16:9", "1:1"].includes(i.aspect_ratio ?? "") ? i.aspect_ratio! : "9:16";
   const stillModel = open ? "oss-qwen-image-21" : "nano-banana-pro";
-  // Higgsfield's Faceless runs Gemini Omni Flash per block (16:9 / 9:16 only); square goes to Seedance. On your GPU,
+  // The parity studio's Faceless runs Gemini Omni Flash per block (16:9 / 9:16 only); square goes to Seedance. On your GPU,
   // MiniMax H3 makes 5 s clips from stills of one shape; the copy join puts them together without decoding them, and
   // the mux lays the narration in place of their own sound.
   const clipModel = open ? "oss-minimax-h3" : aspect === "1:1" ? "seedance-2-5" : "gemini-omni-flash";

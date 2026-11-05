@@ -10,7 +10,7 @@ import { copyText } from "@/lib/clipboard";
 import { decodeSetup, encodeSetup, type GenjutsuSetup } from "@/lib/catalog/genjutsu";
 
 /**
- * Higgsfield's "share a setup by code", done locally: Copy setup puts a link with the settings as a short code
+ * The parity studio's "share a setup by code", done locally: Copy setup puts a link with the settings as a short code
  * (/genjutsu?setup=gj2.…) on the clipboard; Paste setup reads a code or such a link back. The clip itself isn't in
  * it; reference images are files of this install.
  */

@@ -1,5 +1,5 @@
 /**
- * Canvas boards beyond the node graph (Higgsfield Canvas parity): pages, groups (frames), comment pins and
+ * Canvas boards beyond the node graph (Canvas parity): pages, groups (frames), comment pins and
  * annotation shapes. Everything here is pure, shared by the editor and the server.
  *
  * A canvas row stores a document of pages; each page is its own board (nodes, edges, viewport, and the

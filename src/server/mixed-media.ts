@@ -243,7 +243,7 @@ export interface MixedEstimate {
   fps: number;
   /** Cloud: how it restyles. */
   mode?: MixedMode;
-  /** Cloud Per frame: the price of redrawing one frame (Higgsfield's 2 credits a frame). */
+  /** Cloud Per frame: the price of redrawing one frame (the parity studio's 2 credits a frame). */
   perFrameUsd?: number | null;
   notes: string[];
 }

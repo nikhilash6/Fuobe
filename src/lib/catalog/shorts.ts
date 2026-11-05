@@ -1,16 +1,16 @@
 /**
- * Shorts Studio (Higgsfield's Shorts Studio / reels_studio): restyle your own footage into a new
+ * Shorts Studio (the parity studio's Shorts Studio / reels_studio): restyle your own footage into a new
  * look while the motion stays yours. Up to 2 minutes in; the clip is cut into segments (≤10 s on
  * cloud models, ≤5 s = 81 frames at 16 fps on the open engine), each segment is restyled, and the
  * segments are stitched back together under the original sound.
  *
  * Fuobe Shorts (build plan O9) is the default on both engines: each segment's first frame drawn in the look
  * (Qwen-Image 2.1 Turbo on your GPU, hosted Qwen-Image-Edit 2511 on fal), then Wan 2.2 Fun VACE carries it through every frame by depth, on your GPU (81 frames at
- * 16 fps a segment) or on fal (pieces of up to 241 frames at the clip's own rate). Gemini Omni Flash (Higgsfield's
+ * 16 fps a segment) or on fal (pieces of up to 241 frames at the clip's own rate). Gemini Omni Flash (the parity studio's
  * Shorts engine) and the other partner models stay as choices.
  *
  * Pure module (presets, limits, segment planning, prompts, the pipeline's steps), shared by the
- * page, the server (src/server/shorts.ts) and the tests. Research: docs/research/higgsfield-studios.md §2,
+ * page, the server (src/server/shorts.ts) and the tests. Research: docs/research/parity-studios.md §2,
  * docs/research/fuobe-originals-recipes-5.md (studios[shorts]).
  */
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
@@ -20,7 +20,7 @@ import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
 import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 // ---------------------------------------------------------------------------
-// Limits (Higgsfield's, from the upload dialog) and engine shapes
+// Limits (the parity studio's, from the upload dialog) and engine shapes
 
 export const SHORTS = {
   minSeconds: 4,
@@ -49,7 +49,7 @@ export const SHORTS_RATIOS = [
 ] as const;
 export type ShortsRatio = (typeof SHORTS_RATIOS)[number]["value"];
 
-/** Languages for on-screen words (type presets), as Higgsfield lists them. "auto" = the language spoken in the clip. */
+/** Languages for on-screen words (type presets), as the parity studio lists them. "auto" = the language spoken in the clip. */
 export const SHORTS_LANGUAGES = [
   "English",
   "Spanish",
@@ -90,7 +90,7 @@ export const SHORTS_LANGUAGES = [
 export const SHORTS_ORIGINAL = "fuobe-shorts";
 
 /**
- * Restyle models per engine; the first is the default: Fuobe Shorts. Gemini Omni Flash (Higgsfield's Shorts engine) and
+ * Restyle models per engine; the first is the default: Fuobe Shorts. Gemini Omni Flash (the parity studio's Shorts engine) and
  * the other partner models stay as choices in the cloud.
  */
 export const SHORTS_MODELS: Record<Engine, string[]> = {
@@ -108,7 +108,7 @@ export const SHORTS_TOOLS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Presets: the 44 Higgsfield names, with Fuobe's own descriptions and prompts
+// Presets: the 44 the parity studio names, with Fuobe's own descriptions and prompts
 
 export type ShortsCategory = "Colour" | "Drawn" | "Comic & pop" | "Type" | "Street & collage" | "Digital" | "Craft";
 
@@ -318,7 +318,7 @@ export function clipLengthProblem(m: { name: string; minSeconds?: number; maxSec
   return null;
 }
 
-/** Higgsfield's upload rules for the picture: up to 4000 px on the long side, between 1:3 and 3:1. */
+/** The researched upload rules for the picture: up to 4000 px on the long side, between 1:3 and 3:1. */
 export function clipShapeProblem(width?: number, height?: number): string | null {
   if (!width || !height) return null;
   if (Math.max(width, height) > SHORTS.maxDimension) return `This clip is ${width}×${height} — use one up to ${SHORTS.maxDimension} px on its long side`;
