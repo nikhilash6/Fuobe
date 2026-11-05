@@ -4,9 +4,9 @@ import { body, handle, once } from "@/server/shorts-schemas";
 
 /**
  * Restore & colourise a clip (Fuobe Restore): the prompt is written first when none is given; windows or pieces are
- * joined and the sound put back. The owner's run as always; an account's on its own GPU or its own fal.ai key, with its
- * own files and Fuobe's offline template for the words, after the checks every tool run gets
- * (src/server/account-tool-run.ts); a guest signs up first.
+ * joined and the sound put back. The owner's run as always; an account's on its own GPU (its cloud run is refused: the
+ * gated Restore IC-LoRA never goes with its key), with its own files and Fuobe's offline template for the words, after
+ * the checks every tool run gets (src/server/account-tool-run.ts); a guest signs up first.
  */
 export async function POST(request: Request) {
   const viewer = toolViewer(request);

@@ -247,7 +247,7 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/remove-object/preview",
       "/api/remove-object/reroll",
       "/api/katana/k1/retry",
-      // Restore & colourise runs on its own GPU or fal.ai key.
+      // Restore & colourise runs on its own GPU.
       "/api/restore",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));

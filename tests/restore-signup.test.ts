@@ -5,7 +5,7 @@ import { tempDir } from "./helpers/temp-dir";
 /**
  * Restore & colourise under the owner's public sign-up rules (docs/public-signup.md): its price
  * check is open to guests and accounts and priced for their own GPU, never a demo; an account's run goes to its own GPU
- * or fal.ai key (a guest signs up first, an account with neither connects one), while the prompt writer, which asks the
+ * (a guest signs up first, an account without one connects one), while the prompt writer, which asks the
  * studio's own AI helpers, stays the owner's (own-gpu-tool); the owner's are unchanged. The GPU pre-flight board has its row, on graphs the requirement index knows.
  */
 

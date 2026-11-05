@@ -69,6 +69,8 @@ const { listAccountProjects } = await import("@/server/account-projects");
 const { listKatana } = await import("@/server/katana");
 const { purgeAccount } = await import("@/server/account-sweep");
 const { setSetting } = await import("@/server/settings");
+const { saveAccountKey } = await import("@/server/account-keys");
+const { RESTORE_ON_YOUR_GPU } = await import("@/server/restore");
 
 const CLIP = fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4"));
 const src = { duration: 12, fps: 16, width: 72, height: 128, hasAudio: true };
@@ -503,6 +505,29 @@ describe("an account runs the video tools on its own ComfyUI", () => {
     const none = await restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: { url: clip, ...src } }, "c"));
     expect([403, 404]).toContain(none.status);
     expect((await none.json()).code).not.toBe("own-gpu-tool");
+  });
+
+  it("keeps an account's Restore on its own GPU: a cloud run on its key answers before anything starts, whatever the install holds", async () => {
+    // A key-only account (its own fal.ai key, no GPU), with the owner's Hugging Face token set: the gated Restore
+    // IC-LoRA is in the install's reach, and still never goes with an account's key.
+    const k = auth.createAccount("video-k@example.com", "long enough").id;
+    cookies.k = `${auth.SESSION_COOKIE}=${auth.createSession(k).value}`;
+    saveAccountKey(k, "fal", "acct-fal-k-key:secret-k");
+    const kClip = await upload("k", CLIP, "video/mp4", "old-film.mp4");
+    setSetting("huggingfaceDownloadToken", "hf_owner_token_for_this_test");
+    try {
+      const cloud = await restoreRoute.POST(json("/api/restore", "POST", { engine: "cloud", source: { url: kClip, name: "old-film.mp4", ...src } }, "k"));
+      expect(cloud.status, await cloud.clone().text()).toBe(422);
+      expect((await cloud.json()).error).toBe(RESTORE_ON_YOUR_GPU);
+      expect(db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = ?").get(k)).toEqual({ n: 0 });
+      // On its GPU's engine the same account is asked to connect one (the card), never refused.
+      const open = await restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: { url: kClip, name: "old-film.mp4", ...src } }, "k"));
+      expect(open.status).toBe(403);
+      expect(open.headers.get(access.CONNECT_GPU_HEADER)).toBe("1");
+      expect((await open.json()).code).toBe("connect-gpu");
+    } finally {
+      setSetting("huggingfaceDownloadToken", "");
+    }
   });
 
   it("an account's Katana runs go with the account", async () => {

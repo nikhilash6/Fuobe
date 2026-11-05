@@ -279,9 +279,11 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. The Audio tools have their own routes (below).
   Restore & colourise (`POST /api/restore`) shows to everyone, its tab, page and result-menu item marked "Runs on your
-  own GPU · 24 GB or fal.ai key": an account runs it on its own GPU or fal.ai key after the same checks as Genjutsu's,
-  with Fuobe's offline template for the words (writing them from the frames with the studio's AI helper stays the
-  owner's); a guest gets the sign-up card, an account with neither "Connect your GPU". A guest's model pickers list the
+  own GPU · 24 GB": an account runs it on its own GPU after the same checks as Genjutsu's, with Fuobe's offline template
+  for the words (writing them from the frames with the studio's AI helper stays the owner's). A visitor's page is the
+  GPU's whatever the engine switch says, since the cloud engine carries the gated Restore IC-LoRA, which never goes with
+  an account's own key (an account's cloud run answers 422 before anything starts); a guest gets the sign-up card, an
+  account without a GPU "Connect your GPU". A guest's model pickers list the
   paid models after the open ones, each marked "Use your own fal.ai key" (or Replicate); choosing one opens the sign-up
   card. An account without a key sees the same list with "Add your fal.ai key". Image to 3D's cloud models, Retexture,
   Rig and "Use the cloud" for Pick an object are marked the same way for a visitor on open models only.
@@ -400,7 +402,10 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   AI helper. Turnaround and Fly around never use the studio's WorldCast worker for an account; a character from the
   owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
   /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
-  the sign-up card.
+  the sign-up card. Removing a person with MiniMax H3 and VOID's removal on the open engine keep their "own setup"
+  entries (`video-tools:remove-person`, `video-tools:remove-object-void` in `src/lib/own-setup.ts`) until a real render
+  passes on this studio's GPU and is recorded in `workflows/comfyui/gpu-tested.json` (`remove-person`,
+  `remove-object-void`): their graphs' `validated` in the manifest says only that ComfyUI accepted the graph.
 - **Audio tools.** An account runs Split soundtrack and Clean up dialogue, Video tools → Remove dialogue, Edit speech,
   Loop / extend, Join and Clean up voice (`POST /api/audio-tools`) the same way as Genjutsu's: every step on its own
   ComfyUI, or on its own fal.ai or Replicate key where a step is a cloud model, with only its own files, after the same

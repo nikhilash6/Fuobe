@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { accountProjectRoute, ownGpuRun } from "@/lib/guest-access";
-import { OWN_SETUP_IDS, ownSetupAction, ownSetupItem, ownSetupOnly } from "@/lib/own-setup";
-import { ownSetupOnlyNow } from "@/server/own-setup-live";
+import { OWN_SETUP_IDS, ownSetupAction, ownSetupGraphs, ownSetupItem, ownSetupLabel, ownSetupOnly } from "@/lib/own-setup";
+import { ownSetupOnlyNow, ownSetupsNow } from "@/server/own-setup-live";
 
 /**
  * Every surface that shows a "runs with your own setup" label leads somewhere an account can run it: a label next to a
@@ -71,6 +71,21 @@ describe("the label follows the GPU's validated graphs on the server", () => {
     expect(ownSetupOnlyNow("audio:edit-speech", undefined, m)).toEqual(ownSetupOnly("audio:edit-speech"));
     // Without graphs, the static answer: a 48 GB card stays a 48 GB card.
     expect(ownSetupOnlyNow("regenerate:upscale", undefined, m)).toEqual(ownSetupOnly("regenerate:upscale"));
+  });
+
+  it("keeps Remove a person and VOID marked though ComfyUI accepted their graphs: only a real render on this studio's GPU lifts them", () => {
+    // The manifest's `validated` on these graphs is ComfyUI's check (queued with placeholder files, never run).
+    const m = manifest({ "video-person-remove-h3-relay": true, "video-person-remove-h3-mask": true, "video-erase-void": true });
+    const want = { "video-tools:remove-person": { need: "gpu", vramGb: 24 }, "video-tools:remove-object-void": { need: "gpu", vramGb: 40 } };
+    for (const [id, setup] of Object.entries(want)) {
+      expect(ownSetupGraphs(id), id).toEqual([]);
+      expect(ownSetupOnly(id), id).toEqual(setup);
+      expect(ownSetupOnlyNow(id, undefined, m), id).toEqual(setup);
+    }
+    expect(ownSetupsNow(Object.keys(want), m)).toEqual(want);
+    // Their labels say what to use, and wait for a pass of their own in gpu-tested.json (own-setup-flags.test.ts).
+    expect(ownSetupLabel(ownSetupOnly("video-tools:remove-object-void")!)).toBe("Runs on your own GPU · 40 GB");
+    expect(ownSetupLabel(ownSetupOnly("video-tools:remove-person")!)).toBe("Runs on your own GPU · 24 GB");
   });
 });
 

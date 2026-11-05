@@ -93,11 +93,15 @@ const ITEMS: Record<string, Entry> = {
   "image-to-3d:idol-clean": { setup: gpu(8, { files: true }), graphs: ["image-to-splat-idol-clean"] },
   // Tools whose steps run on a GPU of the visitor's own.
   "audio:edit-speech": { setup: gpu(24, { files: true }), graphs: ["speech-edit-auk"] },
-  "video-tools:restore": { setup: gpu(24, { files: true, orKey: "fal" }), graphs: ["video-restore-ltx25-tiled"] },
-  // Validated on this studio's GPU already (their graphs): no label shows once a surface reads ownSetupsNow, and none
-  // asks for them on the client.
-  "video-tools:remove-person": { setup: gpu(24), graphs: ["video-person-remove-h3-relay", "video-person-remove-h3-mask"] },
-  "video-tools:remove-object-void": { setup: gpu(40), graphs: ["video-erase-void"] },
+  // On the visitor's own GPU only: the cloud engine carries the gated Restore IC-LoRA, which never goes with a visitor's
+  // own key (src/server/loras.ts prepareCloudLoras), so an account's cloud run is refused before it starts.
+  "video-tools:restore": { setup: gpu(24, { files: true }), graphs: ["video-restore-ltx25-tiled"] },
+  // Removing a person with H3 and VOID's removal open on this studio's GPU once a real render passes there (`passes`).
+  // Their graphs' manifest `validated` only says ComfyUI accepted the graph (scripts/comfy/validate-workflows.mjs
+  // queues it with placeholder model files and takes it back before it runs): VOID's two passes and the H3 removal
+  // have never rendered on this studio's GPU, so that flag can't lift their label.
+  "video-tools:remove-person": { setup: gpu(24), passes: "remove-person" },
+  "video-tools:remove-object-void": { setup: gpu(40), passes: "remove-object-void" },
   "cinema:world": { setup: gpu(24, { files: true }) },
   "oss-hy-nomas-world": { setup: gpu(24, { files: true }) },
 };
