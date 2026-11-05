@@ -59,12 +59,12 @@ const bodies = () => [
   { engine: "open", mode: "picture", picture: { stage: "frame" }, references: [clip], source: { url: clip, ...src }, range: { start: 0, end: 6 } },
   { engine: "open", mode: "swap", target: "type", object: { action: "remove", target: "the handbag" }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
   { engine: "open", mode: "swap", target: "type", object: { action: "background", target: "the people" }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
-  { engine: "open", mode: "character", modelId: "oss-h3-group-swap", references: [clip, clip], character: { onePerPerson: true }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
 ];
 // Features that passed: a visitor's price check isn't refused by the gate.
 const opened = () => [
   { engine: "open", mode: "finish", finish: { tool: "colours" }, source: { url: clip, ...src }, range: { start: 0, end: 12 } },
   { engine: "open", mode: "character", modelId: "oss-h3-group-swap", references: [clip, clip], source: { url: clip, ...src }, range: { start: 0, end: 6 } },
+  { engine: "open", mode: "character", modelId: "oss-h3-group-swap", references: [clip, clip], character: { onePerPerson: true }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
 ];
 
 describe("Genjutsu's Openjutsu features before and after they open", () => {

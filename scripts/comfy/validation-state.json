@@ -1265,6 +1265,12 @@
     "error": null,
     "at": "2026-11-03T19:15:30.473Z"
   },
+  "video-group-swap-h3-one-by-one": {
+    "sha256": "9d0da7b722affa7801f563599740f334e39308f506f41ca71ee31ed6fd5fd989",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:47:07.475Z"
+  },
   "video-h3-t2v-2k": {
     "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
     "validated": false,
