@@ -40,7 +40,15 @@ Connect checks each request it lets through in Python, whatever the studio's pag
     `true`, `false`, a number with a point or `-1` as an output; the pack sees those as links too, and refuses them;
   - `VHS_VideoCombine` takes only a plain format name and plain-word settings (they go into ffmpeg's arguments), and
     a link only for its pictures, sound, batch, VAE and frame rate;
-  - every loader reads a Fuobe input (`fuobe_<id>.<ext>`), and no node gets a JSON object except a 3D view's entries;
+  - every loader reads a Fuobe input (`fuobe_<id>.<ext>`). A written value is a text, a number, `true`, `false` or
+    `null`: never a list (ComfyUI reads one as a link) and never a JSON object, except a 3D view's entries in the exact
+    form of ComfyUI's 3D nodes (the camera and the models' placements are numbers only). No object holds `"__value__"`
+    at any depth (ComfyUI unwraps it, so a link inside would skip ComfyUI's check), and a node holds only `class_type`,
+    `inputs` and `_meta` (ComfyUI reads `is_changed`, `_loop_body` and `_loop_end` as its own);
+  - inside ComfyUI, every node that ComfyUI runs is one it checks first: a link goes only into an input the node lists
+    (worked out the way ComfyUI does it for dynamic inputs), no input names a hidden one, a node type ComfyUI would swap
+    before its check is refused, and a graph with a loop holds only nodes that lead to an output. A 3D node's camera and
+    placements in a run's history never count as one of its files;
 - an upload goes only into the input folder, under a Fuobe input name, as a picture, clip, sound, 3D scene, array or
   subtitle file (never `.json`, `.txt`, `.csv` or a file of no known type);
 - the studio sees, cancels, stops and downloads only its own prompts and their results; a prompt is its own only once

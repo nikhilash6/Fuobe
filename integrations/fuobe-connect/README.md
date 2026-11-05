@@ -66,7 +66,17 @@ Its page can:
     Fuobe Connect sees each of these as a link, and refuses it;
   - `VHS_VideoCombine` puts its format's settings into ffmpeg's arguments, so each setting must be one plain word
     (`yuv420p`, `hq`), and it takes a link only for its pictures, sound, batch, VAE and frame rate;
-  - the workflow may not give a node a JSON object (ComfyUI passes one on unchecked), except a 3D view's entries.
+  - a value written in the workflow is one plain thing: a text, a number, `true`, `false` or `null`. Never a list
+    (ComfyUI reads a list as a link) and never a JSON object (ComfyUI passes one on unchecked), except a 3D view's
+    entries, which must have the exact form of ComfyUI's own 3D nodes: the camera and the models' placements are
+    numbers only. No object anywhere may hold a `"__value__"` key: ComfyUI takes the value out of one, so a link
+    inside it would run a node that ComfyUI never checked;
+  - a node holds only its type, its inputs and its title. ComfyUI reads other keys as its own (`is_changed`,
+    `_loop_body`, `_loop_end`);
+  - every node that ComfyUI runs must be one that ComfyUI checks first. A link goes only into an input that the node
+    lists (ComfyUI runs a node linked from any other input name but never checks it), no input may name one of the
+    node's hidden inputs, a node type that ComfyUI would swap for another before it checks the workflow is refused, and
+    a workflow with a loop (`StartLoop`, `EndLoop`) may hold only nodes that lead to one of its outputs.
 
   A workflow that uses an installed node from the list can still do what that node does in ComfyUI's own folders: for
   example, save into your output folder, or keep a node pack's own cache. These checks follow what the listed nodes do

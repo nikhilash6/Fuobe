@@ -19,15 +19,33 @@ A graph from a studio (a trusted page in direct mode, or the paired studio in pa
   value another node works out would reach a dropdown, or any other input, unchecked;
 - a node that puts its inputs into a program's arguments (ARG_NODES: VHS_VideoCombine and ffmpeg) takes a link only
   into its media inputs, and its other text only as one plain word;
-- a value the graph writes is never a JSON object, except a 3D view's entries: ComfyUI hands an object to a node
-  unchecked, and some nodes read a file's path from one;
+- a value the graph writes is one plain thing: a text, a number (never NaN or infinity), true, false or null. Never a
+  list: ComfyUI reads a list as a link. Never a JSON object: ComfyUI hands an object to a node unchecked, and some nodes
+  read a file's path from one. The one exception is a 3D view's entries (OBJECT_INPUTS), each in the exact form
+  ComfyUI's own 3D nodes use: numbers for the camera and the models' placements, nothing else;
+- no object anywhere holds a "__value__" key, at any depth: ComfyUI's validate_inputs takes the value out of
+  {"__value__": x} in place, so {"__value__": ["4", 0]} becomes a link to a node it never validated;
+- a node holds only "class_type", "inputs" and "_meta" (its title). ComfyUI reads other keys as its own state:
+  "is_changed" stands in for the node's IS_CHANGED, and Start Loop reads "_loop_body" and "_loop_end";
 - a link names its node's output with a whole number from 0 (["4", 0]). ComfyUI also takes true, false, a number with
   a point (0.0) or -1 as an output. is_link here sees every link that ComfyUI sees, and a link in any of those forms
   is refused;
 - a few inputs take only a link from one node type, or text of one shape (LINK_INPUTS, TEXT_INPUTS).
 
-A result is downloaded only when this run's own history lists it. A model name the graph writes is checked by ComfyUI
-itself, against the files in your model folders.
+Inside ComfyUI, where the node classes can say what they take (NodeKinds), also:
+
+- a link goes only into an input that ComfyUI validates on that node: one the node lists as required or optional (a v3
+  node's dynamic inputs worked out from the node's own values, the way validate_inputs does it). ComfyUI runs a node
+  linked from any other input name but never validates it;
+- no input names one of the node's hidden inputs: ComfyUI hands some of those to the node as written, unchecked;
+- a node type that isn't installed but that ComfyUI would swap for another (its node replacements) is refused: the swap
+  happens after this check, with other inputs;
+- a graph with a loop (Start Loop, End Loop) has only nodes ComfyUI validates (each one reached from an output node):
+  the loop runs nodes downstream of an output, and its body, without validating them.
+
+A result is downloaded only when this run's own history lists it (never from what a 3D node echoes there as data: its
+camera and the models' placements). A model name the graph writes is checked by ComfyUI itself, against the files in
+your model folders.
 
 Pure, so the tests run it alone.
 """
@@ -35,8 +53,10 @@ Pure, so the tests run it alone.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
+import sys
 
 # The names Fuobe gives the files it sends (src/server/computer/tasks.ts stageInput).
 INPUT_NAME = re.compile(r"^fuobe_[A-Za-z0-9_-]{8,24}\.[a-z0-9]{1,5}$")
@@ -188,8 +208,112 @@ TEXT_INPUTS: dict[str, dict] = {
     "StringFormat": {"f_string": lambda s: not _FIELD_ACCESS.search(s)},
 }
 
-# The only inputs that take a JSON object the graph writes: a 3D view's entries (Load3D's are checked below).
-OBJECT_INPUTS = frozenset({("Load3D", "image"), ("Save3DAdvanced", "viewport_state")})
+# ---------------------------------------------------------------------------
+# The objects a graph may write: a 3D view's entries
+#
+# ComfyUI hands an object to a node unchecked. Load3D reads its picture entries as files (checked in graph_problem) and
+# passes the camera and the models' placements on; Save3DAdvanced reads only those two and shows both in the run's
+# history (Saved3DModels). So each takes exactly the form of ComfyUI's own Load3DCamera.CameraInfo and
+# Load3DModelInfo.Model3DTransform (comfy_api/latest/_io.py): numbers, no other key.
+
+
+def _number(x) -> bool:
+    return type(x) in (int, float) and math.isfinite(x)
+
+
+def _vector(v, names: tuple) -> bool:
+    """{"x": 1, "y": 2, "z": 3} (or a list of as many numbers): numbers only, under these names only."""
+    if isinstance(v, dict):
+        return len(v) <= len(names) and all(k in names and _number(x) for k, x in v.items())
+    return isinstance(v, list) and len(v) <= len(names) and all(_number(x) for x in v)
+
+
+_XYZ = ("x", "y", "z")
+_XYZW = ("x", "y", "z", "w")
+_CAMERA_NUMBERS = frozenset({"zoom", "fov", "aspect", "near", "far"})
+_CAMERA_VECTORS = {"position": _XYZ, "target": _XYZ, "quaternion": _XYZW, "frustum": ("left", "right", "top", "bottom")}
+_PLACEMENT = {"position": _XYZ, "quaternion": _XYZW, "scale": _XYZ}
+# Load3D's picture entries: files it opens (each one of this run's inputs, or "").
+_VIEW_FILES = frozenset({"image", "mask", "normal", "recording"})
+
+
+def camera_ok(v) -> bool:
+    """A camera as ComfyUI's 3D nodes write it, or null."""
+    if v is None:
+        return True
+    if not isinstance(v, dict) or len(v) > 12:
+        return False
+    for k, x in v.items():
+        if k in _CAMERA_NUMBERS:
+            ok = _number(x)
+        elif k in _CAMERA_VECTORS:
+            ok = _vector(x, _CAMERA_VECTORS[k])
+        elif k == "cameraType":
+            ok = x in ("perspective", "orthographic")
+        elif k == "useCustomUp":
+            ok = isinstance(x, bool)
+        else:
+            ok = False
+        if not ok:
+            return False
+    return True
+
+
+def placements_ok(v) -> bool:
+    """The models' placements: a short list of {position, quaternion, scale}, numbers only."""
+    return isinstance(v, list) and len(v) <= 64 and all(isinstance(p, dict) and all(k in _PLACEMENT and _vector(x, _PLACEMENT[k]) for k, x in p.items()) for p in v)
+
+
+def _view_ok(v, files) -> bool:
+    if not isinstance(v, dict):
+        return False
+    for k, x in v.items():
+        if k in _VIEW_FILES:
+            ok = files(x)
+        elif k == "camera_info":
+            ok = camera_ok(x)
+        elif k == "model_3d_info":
+            ok = placements_ok(x)
+        else:
+            ok = False
+        if not ok:
+            return False
+    return True
+
+
+# The only inputs that take a JSON object the graph writes, each with its one form. Load3D's picture entries are texts
+# (graph_problem checks each names one of this run's inputs); Save3DAdvanced reads none of them, so they stay empty.
+OBJECT_INPUTS = {
+    ("Load3D", "image"): lambda v: _view_ok(v, lambda x: isinstance(x, str)),
+    ("Save3DAdvanced", "viewport_state"): lambda v: _view_ok(v, lambda x: x == ""),
+}
+
+# The keys a node may hold. ComfyUI reads others as its own state: "is_changed" stands in for the node's own IS_CHANGED
+# (execution.py IsChangedCache), and Start Loop reads "_loop_body" and "_loop_end" (comfy_extras/nodes_loop.py).
+NODE_KEYS = frozenset({"class_type", "inputs", "_meta"})
+
+
+def node_keys_ok(node: dict) -> bool:
+    """Only the keys above, and a title (with the pack's name and version, as ComfyUI's page writes them) as _meta."""
+    if not set(node) <= NODE_KEYS:
+        return False
+    meta = node.get("_meta")
+    return meta is None or (isinstance(meta, dict) and len(meta) <= 8 and all(isinstance(k, str) and isinstance(x, str) and len(x) <= 1024 for k, x in meta.items()))
+
+
+def has_value_key(v) -> bool:
+    """An object, at any depth, with a "__value__" key: ComfyUI's validate_inputs takes the value out of it in place, so
+    a list inside one becomes a link to a node it never validated."""
+    stack = [v]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            if "__value__" in x:
+                return True
+            stack.extend(x.values())
+        elif isinstance(x, list):
+            stack.extend(x)
+    return False
 
 # Nodes that take inputs under any name and put the values into a program's arguments. VHS_VideoCombine hands its
 # format's settings to ffmpeg, one inside a filter (the GIF format's dither), and ComfyUI checks neither their type nor
@@ -237,69 +361,242 @@ LOOSE_LINKS: frozenset = frozenset(
 )
 
 
+# A type no node has: an output type that says it equals this one says it equals every type.
+_NO_TYPE = "\x00FUOBE_CONNECT_NO_SUCH_TYPE"
+
+
 def loose_type(t) -> bool:
-    """An output type that ComfyUI matches to any input: "*", a match type, a dropdown, a list of options, or a text
-    type of a node pack's own that says it equals every other type."""
-    if type(t) is not str:
+    """An output type that ComfyUI matches to any input (validate_node_input): one that says it equals every other type
+    (`not t != other`: a node pack's own "any", ComfyUI's IO.ANY), "*", a match type, a dropdown, or a list of options.
+    ComfyUI's own IO types (IO.CONDITIONING, IO.IMAGE ...) are texts that compare by their names, like any text."""
+    if isinstance(t, (list, tuple)):
         return True
-    return any(p.strip() in _LOOSE_TYPES for p in t.split(","))
+    try:
+        if not (t != _NO_TYPE):
+            return True
+    except Exception:
+        return True
+    if not isinstance(t, str):
+        return False  # ComfyUI matches a type that isn't text to no input
+    return any(p.strip() in _LOOSE_TYPES for p in str.__str__(t).split(","))
 
 
 def dropdown_spec(spec) -> bool:
     """An input spec ComfyUI shows as a dropdown: a list of options, COMBO, or a dynamic dropdown."""
     t = spec[0] if isinstance(spec, (list, tuple)) and spec else spec
-    return isinstance(t, (list, tuple)) or (isinstance(t, str) and t in _DROPDOWN_TYPES)
+    return isinstance(t, (list, tuple)) or (isinstance(t, str) and str.__str__(t) in _DROPDOWN_TYPES)
+
+
+def _input_names(inputs) -> frozenset:
+    """The inputs ComfyUI's validate_inputs goes through on a node: its required and optional ones (only the names the
+    dicts hold: a node pack's dict that claims to hold every name still lists only its own)."""
+    inputs = inputs if isinstance(inputs, dict) else {}
+    return frozenset(inputs.get("required") or {}) | frozenset(inputs.get("optional") or {})
+
+
+_MISSING = {"found": False}
 
 
 class NodeKinds:
-    """What the node classes themselves say, inside ComfyUI: which outputs ComfyUI doesn't type-check and which inputs
-    are dropdowns. It covers every node, your own listed ones too. `lookup(class_type)` gives (INPUT_TYPES(),
-    RETURN_TYPES) or None. A node's kinds are read once (a class that fails to say is asked again next time: ComfyUI
-    refuses a graph with it anyway)."""
+    """What the node classes themselves say, inside ComfyUI: which outputs ComfyUI doesn't type-check, which inputs are
+    dropdowns, which inputs ComfyUI validates, which are hidden, which nodes are outputs and which are loop boundaries.
+    It covers every node, your own listed ones too.
 
-    def __init__(self, lookup):
+    `lookup(class_type)` gives (INPUT_TYPES(), RETURN_TYPES) or None (no such node type), optionally with a third item:
+    {"output": OUTPUT_NODE, "loop": a loop boundary, "dynamic": a node whose inputs depend on its values}.
+    `checked(class_type, inputs)`: the input names ComfyUI validates on one node of a dynamic type, worked out the way
+    validate_inputs does it (else the names INPUT_TYPES lists). `replaced(class_type)`: ComfyUI would swap this missing
+    node type for another before validating (its node replacements).
+
+    A node's kinds are read once. A class that fails to say is asked again next time (ComfyUI refuses a graph with it
+    anyway), and so is one that isn't there (a node pack could still load it)."""
+
+    def __init__(self, lookup, checked=None, replaced=None):
         self._lookup = lookup
-        self._seen: dict[str, tuple] = {}
+        self._checked = checked
+        self._replaced = replaced
+        self._seen: dict[str, dict] = {}
 
-    def _kinds(self, cls: str) -> tuple:
-        if cls not in self._seen:
-            loose, drops = frozenset(), frozenset()
-            try:
-                found = self._lookup(cls)
-            except Exception:
-                return loose, drops
-            if found is not None:
-                inputs, outputs = found
-                try:
-                    loose = frozenset(i for i, t in enumerate(outputs or ()) if loose_type(t))
-                except Exception:
-                    loose = frozenset(range(64))
-                try:
-                    drops = frozenset(
-                        k for part in ("required", "optional") for k, spec in dict((inputs or {}).get(part) or {}).items() if dropdown_spec(spec)
-                    )
-                except Exception:
-                    drops = frozenset()
-            self._seen[cls] = (loose, drops)
-        return self._seen[cls]
+    def _kinds(self, cls: str) -> dict | None:
+        """The class's kinds; _MISSING when there is no such class; None when it couldn't say."""
+        if cls in self._seen:
+            return self._seen[cls]
+        try:
+            found = self._lookup(cls)
+        except Exception:
+            return None
+        if found is None:
+            return _MISSING
+        inputs, outputs = found[0], found[1]
+        about = found[2] if len(found) > 2 and isinstance(found[2], dict) else {}
+        rec: dict = {"found": True, "loose": frozenset(), "drops": frozenset(), "names": None, "hidden": frozenset()}
+        try:
+            rec["loose"] = frozenset(i for i, t in enumerate(outputs or ()) if loose_type(t))
+        except Exception:
+            rec["loose"] = frozenset(range(64))
+        try:
+            rec["drops"] = frozenset(k for part in ("required", "optional") for k, spec in dict((inputs or {}).get(part) or {}).items() if dropdown_spec(spec))
+        except Exception:
+            pass
+        try:
+            rec["names"] = _input_names(inputs)
+        except Exception:
+            pass
+        try:
+            rec["hidden"] = frozenset((inputs or {}).get("hidden") or {})
+        except Exception:
+            rec["names"] = None  # its hidden inputs are unknown, so no input of it can be checked
+        rec["output"] = about.get("output") is True
+        rec["loop"] = bool(about.get("loop"))
+        rec["dynamic"] = bool(about.get("dynamic"))
+        self._seen[cls] = rec
+        return rec
 
     def loose(self, cls: str, slot: int) -> bool:
-        return slot in self._kinds(cls)[0]
+        rec = self._kinds(cls)
+        return slot in rec["loose"] if rec and rec["found"] else False
 
     def dropdown(self, cls: str, key: str) -> bool:
-        return key in self._kinds(cls)[1]
+        rec = self._kinds(cls)
+        return key in rec["drops"] if rec and rec["found"] else False
+
+    def found(self, cls: str) -> bool | None:
+        """True: ComfyUI has this node type. False: it hasn't. None: the class couldn't say."""
+        rec = self._kinds(cls)
+        return None if rec is None else rec["found"]
+
+    def checked(self, cls: str, inputs: dict) -> frozenset | None:
+        """The input names ComfyUI validates on this node; None when that can't be known (the graph is refused)."""
+        rec = self._kinds(cls)
+        if not rec or not rec["found"]:
+            return None
+        if rec["dynamic"] and self._checked is not None:
+            try:
+                names = self._checked(cls, inputs)
+            except Exception:
+                return None
+            return None if names is None else frozenset(names)
+        return rec["names"]
+
+    def hidden(self, cls: str) -> frozenset:
+        rec = self._kinds(cls)
+        return rec["hidden"] if rec and rec["found"] else frozenset()
+
+    def output(self, cls: str) -> bool:
+        rec = self._kinds(cls)
+        return bool(rec and rec["found"] and rec["output"])
+
+    def loop(self, cls: str) -> bool:
+        rec = self._kinds(cls)
+        return bool(rec and rec["found"] and rec["loop"])
+
+    def replaced(self, cls: str) -> bool:
+        """ComfyUI would swap this node type for another before validating. When that can't be known: yes."""
+        if self._replaced is None:
+            return False
+        try:
+            return bool(self._replaced(cls))
+        except Exception:
+            return True
 
 
-def comfy_kinds(mappings) -> NodeKinds:
-    """NodeKinds from ComfyUI's NODE_CLASS_MAPPINGS (a callable that returns it, read at each new node type)."""
+def _comfy_replacements():
+    """ComfyUI's node replacement manager (server.PromptServer.instance.node_replace_manager), when there is one."""
+    prompt_server = getattr(sys.modules.get("server"), "PromptServer", None)
+    return getattr(getattr(prompt_server, "instance", None), "node_replace_manager", None)
+
+
+def comfy_kinds(mappings, replacements=None) -> NodeKinds:
+    """NodeKinds from ComfyUI's NODE_CLASS_MAPPINGS (a callable that returns it, read at each new node type), with the
+    inputs ComfyUI validates worked out by ComfyUI's own code. `replacements`: a callable that returns ComfyUI's node
+    replacement manager (default: the running server's)."""
+
+    def v3(klass) -> bool:
+        try:
+            from comfy_api.internal import _ComfyNodeInternal
+        except Exception:
+            return False
+        try:
+            return issubclass(klass, _ComfyNodeInternal)
+        except TypeError:
+            return False
 
     def lookup(cls):
         klass = mappings().get(cls)
         if klass is None:
             return None
-        return klass.INPUT_TYPES(), getattr(klass, "RETURN_TYPES", ())
+        about = {"output": getattr(klass, "OUTPUT_NODE", False) is True, "dynamic": v3(klass)}
+        if about["dynamic"]:
+            # As validate_prompt reads it: GET_SCHEMA().loop_boundary is "start" or "end".
+            try:
+                about["loop"] = getattr(klass.GET_SCHEMA(), "loop_boundary", None) in ("start", "end")
+            except Exception:
+                about["loop"] = False
+        return klass.INPUT_TYPES(), getattr(klass, "RETURN_TYPES", ()), about
 
-    return NodeKinds(lookup)
+    def checked(cls, inputs):
+        # validate_inputs: INPUT_TYPES(), then for a v3 node get_finalized_class_inputs(class_inputs, inputs), then
+        # set(required) | set(optional).
+        klass = mappings().get(cls)
+        if klass is None:
+            return None
+        class_inputs = klass.INPUT_TYPES()
+        if v3(klass):
+            from comfy_api.latest import _io
+
+            class_inputs = _io.get_finalized_class_inputs(class_inputs, inputs)[0]
+        return _input_names(class_inputs)
+
+    def replaced(cls):
+        manager = replacements() if replacements is not None else _comfy_replacements()
+        has = getattr(manager, "has_replacement", None)
+        return bool(has(cls)) if callable(has) else False
+
+    return NodeKinds(lookup, checked, replaced)
+
+
+def kinds_problem(graph: dict, kinds: NodeKinds) -> str | None:
+    """What ComfyUI itself would run without validating, inside ComfyUI: 'unknown-node', 'unsafe-graph', or None.
+
+    validate_prompt validates from the output nodes, through the inputs each node lists (validate_inputs). The
+    scheduler (TopologicalSort.add_node) follows a link in any input of a node. So a link in an input the node doesn't
+    list (or a hidden one) runs the node it names unvalidated. A loop (validate_loops, Start Loop's expansion) runs
+    nodes downstream of an output and its body without validating them."""
+    missing = False
+    for node in graph.values():
+        if kinds.found(node["class_type"]) is False:
+            # ComfyUI swaps a missing node type for another (apply_replacements) after this check, with other inputs.
+            if kinds.replaced(node["class_type"]):
+                return "unknown-node"
+            missing = True
+    if missing:
+        # validate_prompt refuses the whole graph (missing_node_type) before it validates or runs any node of it, and
+        # says which node type is missing.
+        return None
+    loop = False
+    for node in graph.values():
+        cls = node["class_type"]
+        inputs = node.get("inputs") or {}
+        names = kinds.checked(cls, inputs)
+        if names is None:
+            return "unsafe-graph"
+        hidden = kinds.hidden(cls)
+        for k, v in inputs.items():
+            if k not in names and (is_link(v) or k in hidden):
+                return "unsafe-graph"
+        loop = loop or kinds.loop(cls)
+    if loop:
+        validated: set = set()
+        todo = [nid for nid, n in graph.items() if kinds.output(n["class_type"])]
+        while todo:
+            nid = todo.pop()
+            if nid in validated or nid not in graph:
+                continue
+            validated.add(nid)
+            todo.extend(v[0] for v in (graph[nid].get("inputs") or {}).values() if is_link(v))
+        if len(validated) < len(graph):
+            return "unsafe-graph"
+    return None
 
 
 def is_link(v) -> bool:
@@ -331,7 +628,14 @@ def link_problem(graph: dict, cls: str, key: str, v, kinds: NodeKinds | None = N
 
 def input_problem(graph: dict, cls: str, key: str, v, kinds: NodeKinds | None = None) -> str | None:
     """What is wrong with one input under its node's own rule: 'unsafe-path', 'unsafe-graph', or None."""
-    if isinstance(v, dict) and (cls, key) not in OBJECT_INPUTS:
+    if isinstance(v, dict):
+        shape = OBJECT_INPUTS.get((cls, key))
+        return None if shape is not None and shape(v) else "unsafe-graph"
+    if isinstance(v, list) and not is_link(v):
+        # ComfyUI reads a list as a link: one that isn't [node, output] is never a value a node gets as written.
+        return "unsafe-graph"
+    if isinstance(v, float) and not math.isfinite(v):
+        # NaN passes every min and max ComfyUI checks.
         return "unsafe-graph"
     if is_link(v) and not plain_slot(v):
         return "unsafe-graph"
@@ -453,7 +757,7 @@ def graph_problem(graph, staged: list[str] | None) -> str | None:
             pics = inputs["image"]
             if isinstance(pics, dict):
                 for f, x in pics.items():
-                    if f == "camera_info" or x in ("", None):
+                    if f in ("camera_info", "model_3d_info") or x in ("", None):
                         continue
                     if not _staged(x, staged):
                         return f"Node {node_id} ({cls}) reads a file this run didn't send"
@@ -465,18 +769,21 @@ def graph_problem(graph, staged: list[str] | None) -> str | None:
 def vet_graph(graph, allowed: frozenset | set, staged: list[str] | None, kinds: NodeKinds | None = None) -> str | None:
     """The first reason this graph may not run here, or None. The reasons are the worker program's
     ('unknown-node', 'unsafe-path') and 'unsafe-graph': a loader that reads a file this run didn't send, a JSON object
-    the graph writes, or a link from a node that may not feed that input. `kinds`: what ComfyUI's node classes say
-    (inside ComfyUI); without it, only the shipped list of untyped outputs is known."""
+    or a list the graph writes, a key ComfyUI reads as its own, or a link from a node that may not feed that input.
+    `kinds`: what ComfyUI's node classes say (inside ComfyUI); without it, only the shipped list of untyped outputs is
+    known, and the checks that need the node classes (kinds_problem) are left out."""
     if not isinstance(graph, dict) or not graph or len(graph) > 5000:
         return "unsafe-graph"
     for node in graph.values():
         if not isinstance(node, dict) or not isinstance(node.get("class_type"), str) or node["class_type"] not in allowed:
             return "unknown-node"
     for node in graph.values():
+        if not node_keys_ok(node):
+            return "unsafe-graph"
         inputs = node.get("inputs")
         if inputs is None:
             continue
-        if not isinstance(inputs, dict):
+        if not isinstance(inputs, dict) or has_value_key(inputs):
             return "unsafe-graph"
         for k, v in inputs.items():
             for s in _strings(v):
@@ -485,6 +792,10 @@ def vet_graph(graph, allowed: frozenset | set, staged: list[str] | None, kinds: 
             why = input_problem(graph, node["class_type"], k, v, kinds)
             if why:
                 return why
+    if kinds is not None:
+        why = kinds_problem(graph, kinds)
+        if why:
+            return why
     if graph_problem(graph, staged):
         return "unsafe-graph"
     return None
@@ -507,15 +818,20 @@ def _strings(v, depth: int = 0):
 # Results
 
 
+# What ComfyUI's 3D nodes show in a run's history beside their files (Saved3DModels): data the graph wrote, never a file.
+UI_DATA = frozenset({"camera_info", "model_3d_info"})
+
+
 def files_in(entries: list) -> list[dict]:
+    """Every file the entries' outputs list."""
     out = []
     for e in entries or []:
         outputs = e.get("outputs") if isinstance(e, dict) else None
         for ui in (outputs or {}).values() if isinstance(outputs, dict) else []:
             if not isinstance(ui, dict):
                 continue
-            for v in ui.values():
-                if isinstance(v, list):
+            for name, v in ui.items():
+                if isinstance(v, list) and name not in UI_DATA:
                     for f in v:
                         if isinstance(f, dict) and isinstance(f.get("filename"), str) and isinstance(f.get("type"), str):
                             out.append(f)
