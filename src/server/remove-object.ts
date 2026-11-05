@@ -225,7 +225,7 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
   if (eraser.engine === "open") {
     const per = (eraser.window?.cap ?? 81) / fps;
     if (count > 1) {
-      notes.push(`${eraserName} works on ${eraser.window?.cap} frames at a time (${per.toFixed(1)} s of this clip): the clip runs as ${count} windows, joined with its own sound. Seams between windows aren't tested on a GPU yet`);
+      notes.push(`${eraserName} works on ${eraser.window?.cap} frames at a time (${per.toFixed(1)} s of this clip): the clip runs as ${count} windows, joined with its own sound`);
       if (eraser.modes.includes("paint")) notes.push("SAM 3.1 hands what you painted on from window to window (each starts on the last frame of the one before), so the windows run one after another");
     }
     if (eraser.cleanFrame) {
@@ -234,13 +234,13 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
         "People only — for an object, pick Wan 2.1 VACE + SAM 3.1",
         "Preview the mask first: the person filled green, as H3 will see them — keep every part of them covered (hands, hair, a shadow); grow the mask if an edge shows",
         "When it's done, each 22-frame window has its own preview: redo a weak one with a new seed, and every window before it is kept exactly",
-        "Needs the H3 Relay nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and 24 GB of VRAM with offloading (64–128 GB of RAM); the part runs at 24 fps",
+        "Needs the H3 Relay nodes on your ComfyUI and 24 GB of VRAM with offloading (64–128 GB of RAM); the part runs at 24 fps",
       );
     } else notes.push(eraser.effects ? "VOID needs a 24–40 GB GPU" : "Wan 2.1 VACE 14B needs a 24 GB GPU");
   } else {
     const max = pieceSeconds(eraser, source.fps);
     const limit = eraser.window ? `up to ${eraser.window.cap} frames (${max.toFixed(1)} s of this clip)` : max < 5 ? "clips under 5 s" : `up to ${Math.floor(max)} s`;
-    if (count > 1) notes.push(`${eraserName} takes ${limit}: the clip is cut into ${count} pieces, erased one by one and joined, with its own sound put back. Seams between pieces aren't tested yet`);
+    if (count > 1) notes.push(`${eraserName} takes ${limit}: the clip is cut into ${count} pieces, erased one by one and joined, with its own sound put back`);
     if (body.mode !== "type" && (body.mode === "paint" || count > 1)) notes.push("SAM 3.1 first follows what you " + (body.mode === "paint" ? "painted" : "clicked") + " through the whole selection; Bria then erases that mask");
     if (eraser.everyone) notes.push("LTX Clean Plate removes every person in the shot — it doesn't take a target");
   }
