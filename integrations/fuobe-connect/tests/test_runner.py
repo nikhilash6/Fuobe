@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fuobe_connect.net import Answer, TooBig  # noqa: E402
 from fuobe_connect.runner import SEND_TRIES, Runner, Stopped  # noqa: E402
 
-NODES = frozenset({"LoadImage", "SaveImage", "CLIPTextEncode"})
+NODES = frozenset({"LoadImage", "SaveImage", "CLIPTextEncode", "AILab_Qwen3ASRSubtitle", "MiniMaxH3SourceTimeline", "WanVideoModelLoader"})
 DATA = b"picture"
 SHA = hashlib.sha256(DATA).hexdigest()
 LEASE = "a" * 64
@@ -134,6 +134,10 @@ class VetTest(unittest.TestCase):
         self.refused(task(graph={"1": {"class_type": "KJ_RunPython", "inputs": {"code": "x"}}}), "unknown-node")
         self.refused(task(graph={"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "C:/Users/me/x.png"}}}), "unsafe-path")
         self.refused(task(graph={"1": {"class_type": "LoadImage", "inputs": {"image": "my_photo.png"}}}), "unsafe-graph")
+        # A node that writes or reads a file at a path it is given: only Fuobe's own form, in pairing mode too.
+        self.refused(task(graph={"1": {"class_type": "AILab_Qwen3ASRSubtitle", "inputs": {"output_path": "//?/C:/Users/Public/x.srt", "output_format": "srt"}}}), "unsafe-path")
+        self.refused(task(graph={"1": {"class_type": "MiniMaxH3SourceTimeline", "inputs": {"video_path": "ComfyUI/input/private.mp4", "audio_path": ""}}}), "unsafe-path")
+        self.refused(task(graph={"1": {"class_type": "WanVideoModelLoader", "inputs": {"extra_model": {"path": "x.safetensors"}}}}), "unsafe-graph")
         # The studio's input names: only Fuobe's own, each once, with a file type a run sends.
         for name in ["my_photo.png", "fuobe_abcdefgh12.html", "ComfyUI_00001_.png [output]"]:
             t = task()

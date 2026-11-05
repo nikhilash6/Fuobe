@@ -9,6 +9,7 @@
  */
 import type { CameraKey } from "@/lib/camera-path";
 import type { SignatureRecord } from "./palettes";
+import type { RunTrouble } from "@/lib/diagnose";
 
 export type Engine = "cloud" | "open";
 
@@ -1475,6 +1476,11 @@ export interface Generation {
    * "Fix it", which opens the GPU pre-flight's guided fix.
    */
   fix?: GenerationFix | null;
+  /**
+   * An account's failed run on its own GPU or key: why (the cause), a details line for the curious, and the buttons that
+   * help (Start your pod, Check my GPU, Replace key…; src/lib/diagnose.ts). The plain sentence is `error`.
+   */
+  trouble?: RunTrouble;
   /** Failed or stopped before its paid provider took the job (no external id): the card says "Not billed", not its price. */
   notBilled?: true;
   /** Ran on this install's GPUs (hosted runs), not the account's own. */

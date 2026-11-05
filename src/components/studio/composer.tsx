@@ -99,6 +99,8 @@ import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
+import { gpuBeforeRun } from "@/lib/before-run";
+import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { cn } from "@/lib/utils";
 import { h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
 import { badgeFor, badgeText, dropGpuRetry, openGpuSetup, setGpuRetry, useGpuBadges } from "@/hooks/use-gpu";
@@ -824,6 +826,23 @@ export function Composer({ docked }: { docked: boolean }) {
 
   // An account's paid model it has no key for yet: Generate asks for the key (the note below says so too).
   const keyToAdd = model && status?.viewer?.paidAllowed !== false ? needsKey(model, status)?.[0] : undefined;
+
+  // The check before Run: an account's own GPU at a web address that didn't answer its last status check (the status
+  // strip's, every 30 s; nothing here asks the GPU) shows what is wrong and its fixes before Run. A run started anyway
+  // waits for the GPU. One of the account's keys that runs this tool's cloud version is offered too (an explicit click:
+  // it spends the person's own credit).
+  const gpuDown = gpuBeforeRun({ viewer: status?.viewer, model, engine, onPool: hostedHere && runOn === "pool", preset, has, getModel: catalog.getModel });
+  const [cloudRun, setCloudRun] = useState(false);
+  // "Run with your fal.ai key": once the switch to Cloud has moved the tool to its cloud model, it runs (once).
+  useEffect(() => {
+    if (!cloudRun) return;
+    const late = setTimeout(() => setCloudRun(false), 4000);
+    if (engine === "cloud" && model && (model.engine !== "open" || dualEngine(model))) {
+      setCloudRun(false);
+      submitRef.current();
+    }
+    return () => clearTimeout(late);
+  }, [cloudRun, engine, model]);
 
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here).
   const submit = (skip?: unknown) => {
@@ -1850,6 +1869,24 @@ export function Composer({ docked }: { docked: boolean }) {
           </p>
         )}
       </div>
+      {gpuDown && (
+        <div role="note" aria-live="polite" className="mx-1 mt-2 space-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">{gpuDown.words}</span> A run you start now waits for it.
+          </p>
+          <TroubleDetails details={gpuDown.details} />
+          <TroubleActions
+            actions={gpuDown.actions}
+            skip={["retry"]}
+            handlers={{
+              onRunWithKey: () => {
+                setEngine("cloud");
+                setCloudRun(true);
+              },
+            }}
+          />
+        </div>
+      )}
       {outcome && (
         <p className="px-2 pt-1 text-[12px] text-muted-foreground tabular-nums" aria-live="polite">
           {outcome}

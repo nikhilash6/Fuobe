@@ -139,11 +139,14 @@ def trusted_origins(env_value: str | None, configured: str | list | None) -> tup
 # body or the answer of several of these (middleware.py).
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+# A model folder's list. ComfyUI also answers for folders that hold no models: custom_nodes (every file of every node
+# pack) and configs.
+_MODELS = r"models(?:/(?!(?:custom_nodes|configs)\Z)[A-Za-z0-9_.-]{1,64})?"
 _GET = re.compile(
     r"/(?:"
-    r"system_stats|object_info(?:/[^/]{1,128})?|models(?:/[A-Za-z0-9_.-]{1,64})?|embeddings|queue|features"
+    rf"system_stats|object_info(?:/[^/]{{1,128}})?|{_MODELS}|embeddings|queue|features"
     rf"|history(?:/{_UUID})?|jobs(?:/{_UUID})?|view|ws"
-    r"|experiment/models(?:/[A-Za-z0-9_.-]{1,64})?"
+    rf"|experiment/{_MODELS}"
     r"|(?:v2/)?manager/(?:version|queue/status)|(?:v2/)?customnode/installed"
     r"|fuobe/connect|fuobe/guard|fuobe/live"
     r")"

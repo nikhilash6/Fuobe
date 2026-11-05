@@ -35,7 +35,11 @@ import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
+import type { Diagnosis } from "./diagnose";
 import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
+
+/** What the status strip says of a GPU that didn't answer (src/server/account-gpu.ts VisitorTrouble). */
+export type GpuTroubleView = Pick<Diagnosis, "cause" | "words" | "actions" | "retryable" | "details">;
 
 export interface Asset {
   id: string;
@@ -941,7 +945,18 @@ export interface StatusInfo {
    */
   viewer?: {
     kind: "guest" | "account";
-    gpu: { connected: boolean; mode?: "computer" | "link"; online?: boolean; comfy?: "down" | "no-setting"; device?: string; vramBytes?: number };
+    gpu: {
+      connected: boolean;
+      mode?: "computer" | "link";
+      online?: boolean;
+      comfy?: "down" | "no-setting";
+      device?: string;
+      vramBytes?: number;
+      /** A link that didn't answer its last status check: why, in plain words, and what helps (src/lib/diagnose.ts). */
+      trouble?: GpuTroubleView;
+      /** A link's kind: a RunPod pod's port gets "Start your pod". */
+      host?: "runpod" | "tunnel" | "web";
+    };
     keys?: CloudProvider[];
     paidAllowed?: boolean;
     /** Hosted runs (FUOBE_HOSTED_RUNS=1): runs may go to this studio's GPUs, so a GPU of one's own is optional. */

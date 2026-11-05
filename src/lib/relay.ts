@@ -455,6 +455,9 @@ export const RELAY_WORDS = {
   disconnected: "You disconnected your computer, so this run stopped. Press Retry.",
   /** A run sent to the computer whose Fuobe tab stopped answering (closed, asleep): it goes on once that tab is back. */
   computerAway: "Waiting for your computer. Open Fuobe there to finish this run.",
+  /** A run waiting for a ComfyUI paired with a code (Fuobe Connect runs inside it, no tab needed) that is off. */
+  pairedAway: "Waiting for your paired ComfyUI. Start ComfyUI there (or start your pod), and this run goes on by itself.",
+  pairedWaitedTooLong: (ms: number) => `Your paired ComfyUI didn't come online for ${duration(ms)}. Start it, then press Retry.`,
 } as const;
 
 /**

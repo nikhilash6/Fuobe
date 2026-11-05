@@ -30,27 +30,37 @@ must start with `https://` (`http://` only for a studio on this computer, such a
 A trusted studio reaches this ComfyUI only at `127.0.0.1`, `::1` or `localhost`, never at a network address. Its page
 can:
 
-- read ComfyUI's facts (`/system_stats`: version, GPU, memory, start options), its node list and its model lists. In
+- read ComfyUI's facts (`/system_stats`: version, GPU, memory, start options), its node list and the file lists of its
+  model folders, with each folder's place on disk (every folder ComfyUI lists, except `custom_nodes` and `configs`). In
   the node list, the loaders show only Fuobe's own input files, not your file names;
 - upload a run's input into the input folder, only under a name Fuobe gives (`fuobe_<id>.png` and similar), only as a
   picture, clip, sound, 3D scene or data file. It can replace an earlier Fuobe input, never a file of yours;
 - queue a workflow. Fuobe Connect checks every workflow here, in Python, before ComfyUI sees it:
   - every node type must be on the list this pack ships (`fuobe_connect/allowed_nodes.json`: the nodes Fuobe's own
     workflows use), or on your own list (below). A studio can't add to either list;
-  - no text input may name a path or an address: an absolute path, a drive letter, a network share, a `..` step, a
-    home folder, a URL, or a ComfyUI folder tag such as `name [output]`;
-  - every file loader must read a Fuobe input (`fuobe_<id>.<ext>`), never a file of yours.
+  - no text may name a place: an absolute path in any form (`/x`, `\x`, `//host/share`, `\\?\C:\x`, `C:\x`, or a
+    drive with no slash such as `D:x`), a `..` step, a home folder (`~`, `~user`), an environment variable at the start
+    (`$HOME/`, `%USERPROFILE%\`), a URL, a ComfyUI folder tag such as `name [output]`, or a key in JSON that names a
+    file, a folder or an address (`"video_path": …`). Spaces and quotes in front don't hide one;
+  - an input that a listed node reads as a file or a folder takes only the one value or form that Fuobe's own
+    workflows use, written in the workflow itself and never worked out by another node. For example, the source
+    paths of `MiniMaxH3SourceTimeline` must be empty, and the subtitle file of `AILab_Qwen3ASRSubtitle` must be empty
+    or under `fuobe/` in your output folder. `PATH_INPUTS` in `fuobe_connect/graph.py` lists every one;
+  - every file loader must read a Fuobe input (`fuobe_<id>.<ext>`), never a file of yours;
+  - the workflow may not give a node a JSON object (ComfyUI passes one on unchecked), except a 3D view's entries.
 
-  A workflow that uses an installed node from the list can still do what that node does (for example, save into your
-  output folder);
+  A workflow that uses an installed node from the list can still do what that node does in ComfyUI's own folders: for
+  example, save into your output folder, or keep a node pack's own cache;
 - see, follow, cancel, stop and remove only the prompts it queued (and a batch's later passes, which save under
   `fuobe/<id>`). In the queue, your own prompts show only as places in the line. It can't clear the queue or stop
   your own work;
 - download only the results that its own prompts' history lists;
 - open ComfyUI's live socket only under a Fuobe client id (`fuobe-…`), never your own ComfyUI tab's.
 
-A trusted studio can't reach the Manager's install calls, your user files, your settings, your input files or your
-own results. Every other website still meets ComfyUI's own check, unchanged. Nothing in ComfyUI's own files changes.
+A trusted studio can't reach the Manager's install calls, your user files or your settings. It can't read a file of
+yours in the input folder or download a result of yours, and its workflows can't open a file of yours by its path. Of
+ComfyUI's folder lists it can't read `custom_nodes` (every file of your node packs) or `configs`. Every other website
+still meets ComfyUI's own check, unchanged. Nothing in ComfyUI's own files changes.
 
 If ComfyUI runs with `--enable-cors-header` (an older Fuobe setup), ComfyUI's own check is off. Fuobe Connect then also
 turns away every website except ComfyUI's own page, the site that the setting names and the trusted studios. This is

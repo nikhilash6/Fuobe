@@ -140,6 +140,13 @@ class OriginsTest(unittest.TestCase):
         for m, p, q in [("GET", "/userdata/comfy.settings.json", ""), ("POST", "/v2/manager/queue/install", ""), ("POST", "/fuobe/connect/studios", ""), ("POST", "/fuobe/connect/pair", ""), ("DELETE", "/prompt", ""), ("GET", "/internal/logs", ""), ("GET", "/history", ""), ("GET", "/history", "max_items=64&offset=0"), ("GET", "/history/not-a-uuid", "")]:
             self.assertFalse(allowed(m, p, q), p)
 
+    def test_model_lists_only(self):
+        # A model folder's list, yes; ComfyUI's lists of every node pack's files and of its configs, no.
+        for p in ["/models", "/models/loras", "/api/models/checkpoints", "/experiment/models", "/experiment/models/loras", "/models/custom_nodes_extra"]:
+            self.assertTrue(allowed("GET", p), p)
+        for p in ["/models/custom_nodes", "/api/models/custom_nodes", "/models/configs", "/experiment/models/custom_nodes", "/api/experiment/models/configs"]:
+            self.assertFalse(allowed("GET", p), p)
+
     def test_paths_match_whole(self):
         # Python's "$" also matches before a final newline: the lists match the whole path.
         self.assertFalse(allowed("GET", "/system_stats\n"))
@@ -229,6 +236,12 @@ class DirectModeTest(unittest.TestCase):
                     "a node this pack doesn't ship": graph(**{"10": {"class_type": "Image Load", "inputs": {"image_path": "C:/Users/me/secret.png"}}}),
                     "an absolute path": graph(**{"10": {"class_type": "SaveImage", "inputs": {"filename_prefix": "/etc/cron.d/x", "images": ["8", 0]}}}),
                     "a Windows path": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "C:\\Users\\me\\x.png", "clip": ["4", 1]}}}),
+                    "a share with forward slashes": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "//attacker.example/share/x", "clip": ["4", 1]}}}),
+                    "a device path": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "//?/C:/Users/Public/x", "clip": ["4", 1]}}}),
+                    "the drive's root": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "\\Users\\Public\\x", "clip": ["4", 1]}}}),
+                    "a drive with no slash": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "D:Users\\x", "clip": ["4", 1]}}}),
+                    "another account's home": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "~admin/x", "clip": ["4", 1]}}}),
+                    "a JSON object": graph(**{"10": {"class_type": "SaveImage", "inputs": {"filename_prefix": {"__value__": ["x"]}, "images": ["8", 0]}}}),
                     "a URL": graph(**{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "http://192.168.1.1/admin", "clip": ["4", 1]}}}),
                     "a .. step": graph(**{"10": {"class_type": "SaveImage", "inputs": {"filename_prefix": "../../startup", "images": ["8", 0]}}}),
                     "a file of yours": graph(**{"10": {"class_type": "LoadImage", "inputs": {"image": "holiday.png"}}}),
