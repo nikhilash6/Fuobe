@@ -19,6 +19,7 @@ import { useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, use
 import { clock } from "@/lib/av/audio-tools";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import type { Cue } from "@/lib/cues";
+import type { OwnSetup } from "@/lib/own-setup";
 import { parseCues } from "@/lib/cues";
 import { downloadHref } from "@/lib/library";
 import { readSpeechEditHandoff } from "@/lib/speech-edit-handoff";
@@ -264,7 +265,12 @@ function EffectOptions({ effect, onChange }: { effect: SpeechEffect; onChange: (
   }
 }
 
-export function SpeechEditTool() {
+/**
+ * `setup`: what the page read for "audio:edit-speech" (ownSetupsNow): null once its graph is validated on this studio's
+ * GPU, when the label leaves; left out, the static entry.
+ */
+export function SpeechEditTool({ setup }: { setup?: OwnSetup | null } = {}) {
+  const item = setup === undefined ? OWN_SETUP : setup;
   const [engine, setEngine, mode] = useEngine();
   // A guest or an account: its own setup's label beside the title (after hydration, so it matches the server HTML),
   // and a press that asks for it first.
@@ -366,7 +372,7 @@ export function SpeechEditTool() {
   const transcribing = create.isPending || t?.status === "queued" || t?.status === "running";
 
   const transcribe = () => {
-    if (!ready || !press(OWN_SETUP)) return;
+    if (!ready || !press(item)) return;
     create.mutate(
       { feature: SPEECH_EDIT_FEATURE, modelId: "oss-qwen3-asr", engine: "open", op: "transcribe", inputs: ready.kind === "video" ? { video: ready.ref } : { audio: ready.ref }, title: `Transcript · ${baseName(ready)}` },
       { onSuccess: (items) => setTranscriptId(items[0]?.id ?? null), onError: (e) => toastError(e) },
@@ -375,7 +381,7 @@ export function SpeechEditTool() {
   const go = () => {
     if (blocker) return void toast(blocker);
     if (error) return void toast.error(error);
-    if (!press(OWN_SETUP)) return;
+    if (!press(item)) return;
     run.mutate(body!, {
       onSuccess: (r) => {
         const edit = r.items.find((x) => x.op === "speech-edit") ?? r.result;
@@ -394,7 +400,7 @@ export function SpeechEditTool() {
     <ToolShell title="Audio">
       {!source && (
         <ToolHero title="Edit speech" subtitle={SUBTITLE}>
-          {hydrated && visitor && <OwnSetupChip setup={OWN_SETUP} short={false} className="mt-3" />}
+          {hydrated && visitor && <OwnSetupChip setup={item} short={false} className="mt-3" />}
         </ToolHero>
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-6")}>

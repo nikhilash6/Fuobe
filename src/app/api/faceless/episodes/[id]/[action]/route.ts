@@ -1,6 +1,21 @@
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { asViewer, guestRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
-import { episodeView, graphFiles, graphToolSteps, handle, regenerateEpisode, regenerateToolSteps, renderEpisode, renderGraph, retryEpisode, retryGraph, rewriteEpisode, undoChange, upscaleEpisode, upscaleToolSteps } from "@/server/faceless";
+import {
+  episodeView,
+  graphFiles,
+  graphToolSteps,
+  handle,
+  regenerateEpisode,
+  regenerateToolSteps,
+  renderEpisode,
+  renderGraph,
+  retryEpisode,
+  retryGraph,
+  rewriteEpisode,
+  undoChange,
+  upscaleEpisode,
+  upscaleToolSteps,
+} from "@/server/faceless";
 import { planned } from "@/server/faceless-account";
 
 const ACTIONS = {
@@ -32,7 +47,7 @@ const RUNS: Partial<Record<Action, (id: string) => Work>> = {
     return { steps: graphToolSteps(g), files: graphFiles(g) };
   },
   upscale: (id) => ({ steps: upscaleToolSteps(id), files: [] }),
-  // Its steps read the episode's own results (chained), never a file of their own.
+  // Its own GPU only, one with the memory it needs (regenerateEpisode's gate); the episode's own results are its files.
   regenerate: (id) => ({ steps: regenerateToolSteps(id), files: [] }),
 };
 

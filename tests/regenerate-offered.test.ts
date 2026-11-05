@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
-import { REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import { UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
 import { VIDEO_UPSCALE_STUDIO } from "@/lib/studios";
 import { getModel } from "@/lib/catalog";
@@ -83,14 +83,15 @@ describe("Regenerate shows for everyone with what it needs, and runs on the visi
 });
 
 describe("tools a guest or an account can't open", () => {
-  it("leaves Restore & colourise out of a visitor's result menus, keeps it for the owner, and offers Remove dialogue to both", () => {
+  it("offers Restore & colourise (labelled: the visitor's own GPU or key) and Remove dialogue to both", () => {
     const owner = ids(gen());
     expect(owner).toContain("restore-video");
     const visitor = ids(gen(), { visitor: true });
-    expect(visitor).not.toContain("restore-video");
+    expect(visitor).toContain("restore-video");
+    expect(outputActions(gen(), 0, { visitor: true }).find((a) => a.id === "restore-video")?.ownSetup).toBe("video-tools:restore");
     // An account runs Remove dialogue on its own GPU (tests/account-audio.test.ts).
     expect(visitor).toContain("remove-dialogue");
-    expect(ids(upload(), { visitor: true })).not.toContain("restore-video");
+    expect(ids(upload(), { visitor: true })).toContain("restore-video");
   });
 
   it("offers Remove a person and Clean up dialogue in a visitor's result menus, as the owner's", () => {
@@ -102,8 +103,15 @@ describe("tools a guest or an account can't open", () => {
     expect(visitor).toContain("clean-dialogue");
   });
 
-  it("leaves Restore & colourise's Video tools tab out for a visitor; Remove a person's and Remove dialogue's tabs are everyone's", () => {
+  it("shows every Video tools tab to everyone; Restore & colourise's says what it runs on", () => {
     const tabs = Object.fromEntries(HUB_MODES["video-tools"].map((m) => [m.id, m.ownerOnly ?? false]));
-    expect(tabs).toMatchObject({ restore: true, "remove-person": false, "remove-dialogue": false, matte: false, evolution: false, "remove-object": false });
+    expect(tabs).toMatchObject({ restore: false, "remove-person": false, "remove-dialogue": false, matte: false, evolution: false, "remove-object": false });
+    expect(HUB_MODES["video-tools"].find((m) => m.id === "restore")?.ownSetup).toBe("video-tools:restore");
+  });
+
+  it("shows the owner the same Regenerate surfaces, labelled; the owner's held run says what it needs", () => {
+    // OwnSetupChip has no owner check: the owner reads the same label a visitor does.
+    expect(UPSCALE_FIRST_STEPS.find((s) => s.id === "regenerate")?.ownSetup).toBe("regenerate:upscale");
+    for (const words of [REGEN_COPY.held, REGEN_COPY.heldTwoK, REGEN_COPY.heldEnhance, REGEN_COPY.heldFinish, REGEN_COPY.heldEpisode]) expect(words).toMatch(/48 GB/);
   });
 });

@@ -49,9 +49,9 @@ describe("what each area lists", () => {
     for (const id of ["create", "studios"] as const)
       for (const kind of [undefined, "guest", "account"] as const)
         for (const i of ids(id, kind)) expect(entry(i)!.visibility ?? [], `${id}: ${i}`).not.toEqual(["owner"]);
-    // The owner's own modes (Restore & colourise) are theirs alone.
+    // Restore & colourise is everyone's: it runs on a visitor's own GPU or key, and says so.
     expect(ids("studios", "owner")).toContain("video-tools-restore");
-    expect(ids("studios", "guest")).not.toContain("video-tools-restore");
+    expect(ids("studios", "guest")).toContain("video-tools-restore");
   });
 
   it("gives every card a cover from the catalog, or a picture drawn for it, and a line that fits two lines", async () => {

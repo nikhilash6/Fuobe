@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { refusalShown } from "@/lib/refusals";
 import { postFileWithProgress } from "@/lib/upload";
 
 /**
@@ -85,6 +86,8 @@ export function useSourceClip(maxBytes: number) {
           setClip((c) => (c && c.preview === local ? { ...c, url: up.url, uploading: false, progress: 1, info } : c));
         } catch (e) {
           if ((e as Error).name === "AbortError") return;
+          // Refused with its own card open (sign up, or connect a GPU or key): the slot is empty again, ready for the clip.
+          if (refusalShown(e)) return setClip((c) => (c && c.preview === local ? null : c));
           setClip((c) => (c && c.preview === local ? { ...c, uploading: false, error: (e as Error).message } : c));
         }
       })();

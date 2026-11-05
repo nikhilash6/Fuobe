@@ -4,16 +4,21 @@ import { body, handle, once } from "@/server/shorts-schemas";
 
 /**
  * Restore & colourise a clip (Fuobe Restore): the prompt is written first when none is given; windows or pieces are
- * joined and the sound put back. The owner's run as always. An account's runs on its own GPU, with its own files, after
- * the checks every tool run gets (src/server/account-tool-run.ts): its prompt is its own words or Fuobe's offline
- * template, never the studio's AI helper. A guest signs up first.
+ * joined and the sound put back. The owner's run as always; an account's on its own GPU or its own fal.ai key, with its
+ * own files and Fuobe's offline template for the words, after the checks every tool run gets
+ * (src/server/account-tool-run.ts); a guest signs up first.
  */
-async function post(request: Request) {
+export async function POST(request: Request) {
+  const viewer = toolViewer(request);
+  if (viewer.kind === "guest") return guestRun();
+  if (viewer.kind === "account") {
+    const big = bodyTooBig(request);
+    if (big) return big;
+  }
   return handle(async () => {
     const input = await body(request, RestoreBodySchema, "Add the clip to restore and pick an engine");
-    const viewer = toolViewer(request);
-    if (viewer.kind !== "account") {
-      // A repeated requestId (a second click on Restore) gets the run the first one started.
+    // A repeated requestId (a second click on Restore) gets the run the first one started.
+    if (viewer.kind === "owner") {
       const result = await once("restore", input.requestId, () => createRestore(input));
       return Response.json(result, { status: 201 });
     }
@@ -32,14 +37,4 @@ async function post(request: Request) {
       ({ value, gpuWarning }) => Response.json({ ...value, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
     );
   }, request);
-}
-
-export async function POST(request: Request) {
-  const viewer = toolViewer(request);
-  if (viewer.kind === "guest") return guestRun();
-  if (viewer.kind === "account") {
-    const big = bodyTooBig(request);
-    if (big) return big;
-  }
-  return post(request);
 }

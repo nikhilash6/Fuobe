@@ -4,9 +4,9 @@ import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Restore & colourise under the owner's public sign-up rules (docs/public-signup.md): its price
- * check is open to guests and accounts and priced for their own GPU, never a demo; its run is open to accounts (a guest
- * signs up first); its prompt writer uses the studio's own AI helper, so a guest or an account gets own-gpu-tool (with
- * or without a GPU); the owner's are unchanged. The GPU pre-flight board has its row, on graphs the requirement index knows.
+ * check is open to guests and accounts and priced for their own GPU, never a demo; an account's run goes to its own GPU
+ * or fal.ai key (a guest signs up first, an account with neither connects one), while the prompt writer, which asks the
+ * studio's own AI helpers, stays the owner's (own-gpu-tool); the owner's are unchanged. The GPU pre-flight board has its row, on graphs the requirement index knows.
  */
 
 const dir = tempDir("fuobe-restore-signup-");
@@ -72,35 +72,29 @@ describe("the proxy: Restore & colourise as main treats a tool", () => {
     expect(passed(proxy(req("/video-tools/restore", { cookie })))).toBe(true);
   });
 
-  it("opens the price check to guests and accounts, and the run to accounts; a guest's run signs up first", async () => {
+  it("opens the price check to guests and accounts, the run to an account's own GPU; the writer stays the owner's", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const bare = auth.createSession(newAccount().id).value;
     const withGpu = newAccount();
     auth.setAccountGpu(withGpu.id, { url: "https://gpu.example" });
     const gpu = auth.createSession(withGpu.id).value;
-    for (const cookie of [undefined, bare, gpu]) expect(passed(proxy(req("/api/restore/estimate", { method: "POST", cookie }))), String(cookie)).toBe(true);
+    // The run: a guest signs up, an account with neither a GPU nor a key connects one, one with a GPU passes.
     const guest = proxy(req("/api/restore", { method: "POST" }));
     expect(guest.status).toBe(401);
     expect(guest.headers.get(access.GUEST_HEADER)).toBe("1");
-    expect(passed(proxy(req("/api/restore", { method: "POST", cookie: gpu })))).toBe(true);
-    // Neither a GPU nor a key of its own: asked to connect one, as for every tool.
     const none = proxy(req("/api/restore", { method: "POST", cookie: bare }));
     expect(none.status).toBe(403);
     expect(none.headers.get(access.CONNECT_GPU_HEADER)).toBe("1");
-  });
-
-  it("keeps the prompt writer the owner's: it uses the studio's AI helper", async () => {
-    process.env.FUOBE_PUBLIC_SIGNUP = "1";
-    const bare = auth.createSession(newAccount().id).value;
-    const withGpu = newAccount();
-    auth.setAccountGpu(withGpu.id, { url: "https://gpu.example" });
-    const gpu = auth.createSession(withGpu.id).value;
+    expect(passed(proxy(req("/api/restore", { method: "POST", cookie: gpu })))).toBe(true);
     for (const cookie of [undefined, bare, gpu]) {
-      const r = proxy(req("/api/restore/prompt", { method: "POST", cookie }));
-      expect(r.status).toBe(403);
-      expect(r.headers.get(access.CONNECT_GPU_HEADER)).toBeNull();
-      expect(r.headers.get(access.GUEST_HEADER)).toBeNull();
-      expect(await r.json()).toEqual({ error: access.OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
+      expect(passed(proxy(req("/api/restore/estimate", { method: "POST", cookie }))), String(cookie)).toBe(true);
+      for (const p of ["/api/restore/prompt"]) {
+        const r = proxy(req(p, { method: "POST", cookie }));
+        expect(r.status, p).toBe(403);
+        expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
+        expect(r.headers.get(access.GUEST_HEADER), p).toBeNull();
+        expect(await r.json(), p).toEqual({ error: access.OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
+      }
     }
   });
 

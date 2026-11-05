@@ -63,12 +63,15 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
 export function ModelCard({
   g,
   cloudAllowed,
+  keyInstead,
   refineAllowed = false,
   finalAllowed = false,
   onFinal,
 }: {
   g: Generation;
   cloudAllowed: boolean;
+  /** A visitor on open models only: Rig and Retexture run with its own fal.ai key, and say so. */
+  keyInstead?: boolean;
   refineAllowed?: boolean;
   /** TRELLIS.2 runs here and is switched on: an Idol 3D draft offers "Build the final with TRELLIS.2". */
   finalAllowed?: boolean;
@@ -538,8 +541,8 @@ export function ModelCard({
       </div>
       {refinable && refining && view.glb && refineFrom && <RefineDialog glb={view.glb} photo={refineFrom} open={refining} onOpenChange={setRefining} feature={g.feature} />}
       {printing && view.glb && <PrintDialog glb={view.glb} name={name} open={printing} onOpenChange={setPrinting} refined={refined} />}
-      {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
-      {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} />}
+      {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} keyInstead={keyInstead} />}
+      {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} keyInstead={keyInstead} />}
     </article>
   );
 }

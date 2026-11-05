@@ -1,4 +1,5 @@
 import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
+import type { OwnSetup } from "@/lib/own-setup";
 import { PATH_FRAMES, keyAt } from "@/lib/camera-path";
 import { exactOrbitKeys, type ExactOrbit } from "@/lib/exact-orbit";
 
@@ -107,6 +108,9 @@ export const MODEL3D_SETUPS = {
   clean: "image-to-3d:idol-clean",
 } as const;
 export type Model3dSetupKey = keyof typeof MODEL3D_SETUPS;
+
+/** Image to 3D's cloud models (Meshy, Tripo, SAM 3D Objects, Idol 3D in the cloud) for a visitor: its own fal.ai key. */
+export const MODEL3D_KEY: OwnSetup = { need: "key", provider: "fal" };
 
 /**
  * Where "Build the final with TRELLIS.2" goes from a finished Idol 3D result on the open engine: Image to 3D with

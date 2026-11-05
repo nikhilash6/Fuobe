@@ -53,6 +53,7 @@ const flyRoute = await import("@/app/api/fly-around/route");
 const katanaRoute = await import("@/app/api/katana/route");
 const katanaOneRoute = await import("@/app/api/katana/[id]/route");
 const katanaRetryRoute = await import("@/app/api/katana/[id]/retry/route");
+const restoreRoute = await import("@/app/api/restore/route");
 const uploadsRoute = await import("@/app/api/uploads/route");
 const gpuRoute = await import("@/app/api/account/gpu/route");
 const { proxy } = await import("@/proxy");
@@ -209,6 +210,7 @@ const RUNS = [
   "/api/fly-around",
   "/api/katana",
   "/api/katana/k1/retry",
+  "/api/restore",
 ];
 
 describe("the proxy opens the video tools to accounts, and keeps the sign-up card for guests", () => {
@@ -264,6 +266,7 @@ describe("the proxy opens the video tools to accounts, and keeps the sign-up car
       [turnaroundRoute, "/api/turnaround"],
       [flyRoute, "/api/fly-around"],
       [katanaRoute, "/api/katana"],
+      [restoreRoute, "/api/restore"],
     ] as const) {
       const r = await route.POST(json(p, "POST", {}));
       expect(r.status, p).toBe(401);
@@ -486,6 +489,20 @@ describe("an account runs the video tools on its own ComfyUI", () => {
     ] as const) {
       expect((await route.POST(big(p))).status, p).toBe(413);
     }
+  });
+
+  it("Restore & colourise runs on the account's own ComfyUI, its words from Fuobe's template (never the AI helper)", async () => {
+    const r = await start(() => restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: { url: clip, name: "skate.mp4", ...src } }, "a")));
+    const body = (await r.clone().json()) as { by?: string; prompt?: string };
+    expect(body.by).toBe("offline");
+    expect(body.prompt).toBeTruthy();
+    await ranAsOwn(r, "a", a);
+    // Another account's clip is refused; one with neither a GPU nor a key is asked to connect one.
+    const theirs = await restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: { url: clip, ...src } }, "b"));
+    expect(theirs.status).toBe(403);
+    const none = await restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: { url: clip, ...src } }, "c"));
+    expect([403, 404]).toContain(none.status);
+    expect((await none.json()).code).not.toBe("own-gpu-tool");
   });
 
   it("an account's Katana runs go with the account", async () => {

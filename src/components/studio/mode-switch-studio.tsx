@@ -38,6 +38,7 @@ import { RemoveDialogueTool } from "@/components/audio-tools/remove-dialogue-too
 import { CleanVoiceTool } from "@/components/audio-tools/clean-voice-tool";
 import { DesignVoiceTool } from "@/components/audio-tools/design-voice-tool";
 import { SpeechEditTool } from "@/components/audio-tools/speech-edit-tool";
+import { ownSetupsNow } from "@/server/own-setup-live";
 import { HubBodySkeleton } from "@/components/skeletons";
 import { StudioPage } from "./studio-page";
 import type { StudioConfig } from "./studio-context";
@@ -74,14 +75,15 @@ const TOOLS: Partial<Record<HubKind, Record<string, () => React.ReactNode>>> = {
     split: () => <SplitSoundtrackTool />,
     clean: () => <CleanVoiceTool />,
     design: () => <DesignVoiceTool />,
-    "edit-speech": () => <SpeechEditTool />,
+    // Their labels follow the GPU's validated graphs (ownSetupsNow): read when the page is made.
+    "edit-speech": () => <SpeechEditTool setup={ownSetupsNow(["audio:edit-speech"])["audio:edit-speech"]} />,
   },
   "video-tools": {
     "remove-object": () => <RemoveObjectTool />,
     "remove-person": () => <RemoveObjectTool person />,
     "remove-dialogue": () => <RemoveDialogueTool />,
     evolution: () => <EvolutionTool />,
-    restore: () => <RestoreTool />,
+    restore: () => <RestoreTool setup={ownSetupsNow(["video-tools:restore"])["video-tools:restore"]} />,
     captions: () => <CaptionsStudio />,
     trim: () => <TrimTool />,
   },

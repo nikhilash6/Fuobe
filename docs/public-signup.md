@@ -278,8 +278,13 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. The Audio tools have their own routes (below).
-  Restore & colourise runs for accounts (below), but is still left out of the Video tools tabs and the result menus
-  for them.
+  Restore & colourise (`POST /api/restore`) shows to everyone, its tab, page and result-menu item marked "Runs on your
+  own GPU · 24 GB or fal.ai key": an account runs it on its own GPU or fal.ai key after the same checks as Genjutsu's,
+  with Fuobe's offline template for the words (writing them from the frames with the studio's AI helper stays the
+  owner's); a guest gets the sign-up card, an account with neither "Connect your GPU". A guest's model pickers list the
+  paid models after the open ones, each marked "Use your own fal.ai key" (or Replicate); choosing one opens the sign-up
+  card. An account without a key sees the same list with "Add your fal.ai key". Image to 3D's cloud models, Retexture,
+  Rig and "Use the cloud" for Pick an object are marked the same way for a visitor on open models only.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
@@ -295,8 +300,11 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   marked "Runs on your own GPU · 48 GB" (Kandinsky Pro's choice says about 80 GB). An account runs them on its own GPU
   only, when that GPU has the memory (`src/server/own-setup-run.ts`); otherwise it gets "Connect your GPU" (`connect-gpu`).
   Cinema's and the Video studio's exact orbit are marked "Runs on your own GPU · 48 GB or fal.ai key". Faceless's
-  "Regenerate to 1080p" shows on an account's finished open-source episodes with its label, and runs on its own GPU.
-  MiniMax H3's "Fast decode", once it is offered, carries its label in the same way.
+  "Regenerate to 1080p" and Shorts' Enhance run on an account's own GPU through their own routes (`.../regenerate`,
+  `.../enhance`). The owner sees these surfaces too; while they are held on this studio's GPU, the owner's run answers
+  with what it needs ("needs a GPU with 48 GB or more"). Cinema's "Make a prop from a picture" (Idol 3D) runs on a
+  visitor's own GPU through Image to 3D's route. MiniMax H3's "Fast decode", once it is offered, carries its label in
+  the same way.
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
@@ -337,8 +345,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   Idol 3D's other sides ("Make the other sides from the front") and Trim spikes show to everyone and run on the
   account's own GPU through the same route; each is labelled with what it runs on ("Runs on your own GPU · 24 GB")
   until its graph is validated on this studio's GPU (`graphs` in `src/lib/own-setup.ts`, read by the page with
-  `ownSetupsNow`, `src/server/own-setup-live.ts`), when the label leaves by itself. Retexture opens once its cloud
-  models pass a live call. On this install's
+  `ownSetupsNow`, `src/server/own-setup-live.ts`), when the label leaves by itself. Retexture and Rig run on the
+  account's own fal.ai key. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
 - **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
   /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
@@ -357,7 +365,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   its History, a short's page (`/shorts/<id>`) and its preset list show only its own, and another account's or the
   owner's read as not found (404). It keeps up to 50 shorts. Deleting a short deletes its runs for good (an account
   has no Trash). It downloads the full video, each part, and "Download parts" as one zip of its own runs.
-  Enhance (`.../enhance`) isn't offered to it yet (403 `own-gpu-tool`). A guest gets the sign-up card.
+  Enhance (`.../enhance`, Open-H3 Regenerate) runs on its own GPU only, one with 48 GB or more (`connect-gpu`
+  otherwise), after the same checks. A guest gets the sign-up card.
 - **Cinema Studio.** An account makes, reopens and runs its own projects (`/api/cinema/projects/**`): up to 50,
   each with its folders, takes, Director settings, brief and AI Director chat, deleted with the account. Another
   account's project, or the owner's, reads as not found (404), and the owner's lists never show an account's. A take
@@ -394,15 +403,14 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
   /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
   the sign-up card.
-- **Restore & colourise.** An account runs it (`POST /api/restore`) on its own GPU only, the same way as the Video
-  tools: every window, join and the sound put back on its own ComfyUI, with only its own clip and reference picture,
-  after the same checks. Its ComfyUI needs the gated Restore IC-LoRA; the run names the file before anything starts.
-  The prompt is the account's own words, or Fuobe's offline template filled with its few words. The prompt writer
-  (`POST /api/restore/prompt`) stays the owner's, because it uses the studio's AI helper. A cloud run is refused with
-  one sentence that says to switch to the open engine: the gated LoRA is never sent with a visitor's own key. Its price
-  check (`POST /api/restore/estimate`) is priced for the account's own GPU. With hosted runs on, an account without a
-  GPU of its own gets the "own setup" label (`video-tools:restore`) in the price check, and Run opens Connect your GPU.
-  A guest gets the sign-up card.
+- **Restore & colourise.** An account runs it (`POST /api/restore`) on its own GPU or its own fal.ai key, the same way
+  as the Video tools: every window, join and the sound put back on its own setup, with only its own clip and reference
+  picture, after the same checks. The prompt is the account's own words, or Fuobe's offline template filled with its
+  few words. The prompt writer (`POST /api/restore/prompt`) stays the owner's, because it uses the studio's AI helper.
+  A cloud run that has no copy of the gated Restore IC-LoRA to send is refused with one sentence that says to switch to
+  the open engine. Its price check (`POST /api/restore/estimate`) is priced as the account's run would go: on its own
+  GPU, or on its own key for the cloud engine. With hosted runs on, an account with neither gets the "own setup" label
+  (`video-tools:restore`) in the price check, and Run opens that setup. A guest gets the sign-up card.
 - **Audio tools.** An account runs Split soundtrack and Clean up dialogue, Video tools → Remove dialogue, Edit speech,
   Loop / extend, Join and Clean up voice (`POST /api/audio-tools`) the same way as Genjutsu's: every step on its own
   ComfyUI, or on its own fal.ai or Replicate key where a step is a cloud model, with only its own files, after the same
@@ -434,8 +442,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   script for review, a channel and a series made from a preset need no GPU or key. The server never fetches a link for
   it: a channel's YouTube reference is kept as the link, and an explainer's link source and a series' TikTok or
   Instagram link are the owner's (it attaches the file or uploads the clip). "Generate in Claude" (the studio's own MCP
-  server) isn't offered to it (403 `own-gpu-tool`). "Regenerate to 1080p" runs on its own GPU when that GPU has the
-  memory, after the same checks as a render. A guest gets the sign-up card.
+  server) isn't offered to it (403 `own-gpu-tool`). "Regenerate to 1080p" runs on its own GPU only, one with 48 GB or
+  more (`connect-gpu` otherwise). A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

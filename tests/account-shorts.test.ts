@@ -202,6 +202,7 @@ describe("the proxy opens Shorts to accounts, and keeps the sign-up card for gue
       ["POST", "/api/shorts/sessions"],
       ["POST", "/api/shorts/sessions/s1/segments/0"],
       ["POST", "/api/shorts/sessions/s1/segments/0/primary"],
+      ["POST", "/api/shorts/sessions/s1/segments/0/enhance"],
       ["POST", "/api/shorts/sessions/s1/stitch"],
       ["PATCH", "/api/shorts/sessions/s1"],
       ["DELETE", "/api/shorts/sessions/s1"],
@@ -217,12 +218,11 @@ describe("the proxy opens Shorts to accounts, and keeps the sign-up card for gue
     expect(await viaProxy("/api/shorts/sessions").json()).toEqual({ items: [] });
     expect(await viaProxy("/api/shorts/presets").json()).toEqual({ items: [] });
     expect(viaProxy("/api/shorts/sessions/s1").status).toBe(401);
-    // The price check stays open to everyone; Enhance isn't offered to a visitor.
+    // The price check stays open to everyone.
     expect(passed(viaProxy("/api/shorts/estimate", "POST"))).toBe(true);
-    expect(viaProxy("/api/shorts/sessions/s1/segments/0/enhance", "POST").status).toBe(403);
   });
 
-  it("an account reaches its own Shorts routes (the routes scope them); Enhance stays closed", async () => {
+  it("an account reaches its own Shorts routes (the routes scope them), Enhance on its own GPU too", async () => {
     for (const [method, p] of [
       ["GET", "/api/shorts/sessions"],
       ["POST", "/api/shorts/sessions"],
@@ -231,6 +231,7 @@ describe("the proxy opens Shorts to accounts, and keeps the sign-up card for gue
       ["DELETE", "/api/shorts/sessions/s1"],
       ["POST", "/api/shorts/sessions/s1/segments/0"],
       ["POST", "/api/shorts/sessions/s1/segments/0/primary"],
+      ["POST", "/api/shorts/sessions/s1/segments/0/enhance"],
       ["POST", "/api/shorts/sessions/s1/stitch"],
       ["GET", "/api/shorts/presets"],
       ["POST", "/api/shorts/presets"],
@@ -239,12 +240,9 @@ describe("the proxy opens Shorts to accounts, and keeps the sign-up card for gue
     ] as const) {
       expect(passed(viaProxy(p, method, "a")), `${method} ${p}`).toBe(true);
     }
-    const e = viaProxy("/api/shorts/sessions/s1/segments/0/enhance", "POST", "a");
-    expect(e.status).toBe(403);
-    expect((await e.json()).code).toBe("own-gpu-tool");
   });
 
-  it("the routes refuse a guest themselves, and Enhance refuses anyone but the owner", async () => {
+  it("the routes refuse a guest themselves; Enhance answers an account with its own session only", async () => {
     const p = { id: "s1", index: "0" };
     for (const [name, r] of [
       ["create", () => sessionsRoute.POST(json("/api/shorts/sessions", "POST", {}))],
@@ -262,11 +260,13 @@ describe("the proxy opens Shorts to accounts, and keeps the sign-up card for gue
     // A guest's reads have nothing of anyone's.
     expect(await (await sessionsRoute.GET(json("/api/shorts/sessions", "GET"))).json()).toEqual({ items: [] });
     expect(await (await presetsRoute.GET(json("/api/shorts/presets", "GET"))).json()).toEqual({ items: [] });
-    for (const who of [undefined, "a"]) {
-      const r = await enhanceRoute.POST(json("/api/shorts/sessions/s1/segments/0/enhance", "POST", {}, who), params(p));
-      expect(r.status).toBe(403);
-      expect((await r.json()).code).toBe("own-gpu-tool");
-    }
+    const guest = await enhanceRoute.POST(json("/api/shorts/sessions/s1/segments/0/enhance", "POST", {}), params(p));
+    expect(guest.status).toBe(401);
+    expect(guest.headers.get(access.GUEST_HEADER)).toBe("1");
+    // An account's Enhance is never the "isn't available" refusal: a session that isn't its own reads as gone.
+    const mine = await enhanceRoute.POST(json("/api/shorts/sessions/s1/segments/0/enhance", "POST", {}, "a"), params(p));
+    expect(mine.status).toBe(404);
+    expect((await mine.json()).code).not.toBe("own-gpu-tool");
   });
 });
 

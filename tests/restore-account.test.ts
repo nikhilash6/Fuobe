@@ -10,7 +10,7 @@ vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typ
  * Restore & colourise for a signed-in account (public sign-up): its run goes to the account's own ComfyUI (a stand-in
  * here) as one batch of its own steps, with only its own clip; the prompt is its own words or Fuobe's offline template,
  * and the studio's ComfyUI and AI helper are never reached. A guest signs up first; an account with no GPU is asked to
- * connect one before anything is made; the cloud engine says to switch to the open engine.
+ * connect one before anything is made.
  */
 const dir = tempDir("fuobe-restore-account-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -47,7 +47,7 @@ const { clearAccountLoras } = await import("@/server/account-loras");
 const { setSetting } = await import("@/server/settings");
 const { saveFile } = await import("@/server/storage");
 const { runAsTenant } = await import("@/server/tenant");
-const { RESTORE_ON_OWN_GPU } = await import("@/server/restore");
+const { NOT_YOURS_MESSAGE } = await import("@/server/storage");
 const { offlineRestorePrompt, RESTORE } = await import("@/lib/catalog/restore");
 
 const CLIP = fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4"));
@@ -154,20 +154,19 @@ describe("Restore & colourise for an account", () => {
     expect(body).toMatchObject({ prompt: "a harbour at dawn, natural colour", by: "you" });
   });
 
-  it("says to switch to the open engine for a cloud run, before anything is made", async () => {
-    const clip = await upload("a", CLIP, "video/mp4", "old3.mp4");
+  it("takes only its own clip: another account's real upload is refused as not its own, before anything is made", async () => {
+    const theirs = runAsTenant({ kind: "account", id: c }, () => saveFile({ data: CLIP, contentType: "video/mp4", source: "upload", name: "theirs.mp4" }).url);
     const n = count();
-    const r = await restoreRoute.POST(json("/api/restore", "POST", { engine: "cloud", source: source(clip) }, "a"));
-    expect(r.status).toBe(422);
-    expect((await r.json()).error).toBe(RESTORE_ON_OWN_GPU);
+    fetched.length = 0;
+    const r = await restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: source(theirs), requestId: "restore-theirs" }, "a"));
+    expect(r.status, await r.clone().text()).toBe(403);
+    expect(await r.json()).toEqual({ error: NOT_YOURS_MESSAGE, code: "input-not-yours" });
     expect(count()).toBe(n);
-  });
-
-  it("takes only its own clip", async () => {
-    const n = count();
-    const r = await restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: source("/api/files/uploads/someone-else.mp4") }, "a"));
-    expect(r.status).toBeGreaterThanOrEqual(400);
-    expect(count()).toBe(n);
+    expect(fetched.filter(notStatus)).toEqual([]);
+    // Its own copy of the same clip runs.
+    const mine = await upload("a", CLIP, "video/mp4", "mine.mp4");
+    const ok = await start(() => restoreRoute.POST(json("/api/restore", "POST", { engine: "open", source: source(mine), requestId: "restore-mine" }, "a")));
+    expect(ok.status, await ok.clone().text()).toBe(201);
   });
 
   it("asks an account with neither a GPU nor a key to connect one, before anything is made", async () => {

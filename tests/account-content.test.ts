@@ -266,8 +266,10 @@ describe("the proxy opens the three tools to accounts, and keeps the sign-up car
       expect(link.status, who).toBe(403);
       expect((await link.json()).code).toBe("own-gpu-tool");
     }
-    // "Regenerate to 1080p" goes to its route, which runs it on the account's own GPU when that GPU fits it.
+    // "Regenerate to 1080p" runs on its own GPU: the route checks its own episode first.
     expect(passed(viaProxy("/api/faceless/episodes/ep1/regenerate", "POST", "a"))).toBe(true);
+    const guestRegen = viaProxy("/api/faceless/episodes/ep1/regenerate", "POST");
+    expect(guestRegen.status).toBe(401);
   });
 
   it("the routes refuse a guest themselves", async () => {

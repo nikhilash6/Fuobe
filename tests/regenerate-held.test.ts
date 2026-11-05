@@ -99,11 +99,12 @@ const regen = (video: string): GenerationRequest => ({ feature: "upscale", model
 const twoK: GenerationRequest = { feature: "video", modelId: R.H3_OPEN_MODEL, op: "t2v", prompt: "A lighthouse in a storm", params: { resolution: "2K", duration: 5 } };
 
 describe("Open-H3 Regenerate while it is held", () => {
-  it("is held, and its refusals are plain words", () => {
+  it("is held, and the owner's answers say what it needs in plain words", () => {
     expect(R.REGEN_OFFERED).toBe(false);
     for (const words of [R.REGEN_COPY.held, R.REGEN_COPY.heldTwoK, R.REGEN_COPY.heldEnhance, R.REGEN_COPY.heldFinish, R.REGEN_COPY.heldEpisode]) {
       plain(words);
-      expect(words).toMatch(/isn't available .*yet/);
+      expect(words).toMatch(/needs a GPU with 48 GB or more/);
+      expect(words).not.toMatch(/isn't available|not available|coming soon|yet/i);
     }
   });
 

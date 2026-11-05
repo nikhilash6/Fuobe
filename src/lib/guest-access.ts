@@ -314,8 +314,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   // Translate & dub: a dub, and voicing one language of the account's own dub (src/server/dub.ts).
   /^\/api\/audio-tools$/,
   /^\/api\/dub(\/[^/]+\/voice)?$/,
-  // Restore & colourise: its windows, joins and sound on the account's own GPU, with its own words or Fuobe's offline
-  // template for the prompt. The prompt writer (/api/restore/prompt) stays the owner's: it uses the studio's AI helper.
+  // Restore & colourise: its windows or pieces and their join on the account's own GPU or fal.ai key, with Fuobe's
+  // offline template for the words when none are given (the studio's AI helper stays the owner's: /api/restore/prompt).
   /^\/api\/restore$/,
 ];
 
@@ -328,9 +328,9 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
 export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // Character Swap Studio: the list, a project, its prices, its decisions, and stopping its jobs.
   /^\/api\/swap-studio\/projects(\/[^/]+(\/(decisions|estimate|stop|takes\/stop))?)?$/,
-  // Shorts Studio: its own sessions (start one, a new take, stitch again, pick a take, rename, delete) and its own
-  // presets. Enhance isn't here: it isn't offered on an account's own GPU yet.
-  /^\/api\/shorts\/sessions(\/[^/]+(\/stitch|\/segments\/[^/]+(\/primary)?)?)?$/,
+  // Shorts Studio: its own sessions (start one, a new take, Enhance a take on its own GPU, stitch again, pick a take,
+  // rename, delete) and its own presets.
+  /^\/api\/shorts\/sessions(\/[^/]+(\/stitch|\/segments\/[^/]+(\/(primary|enhance))?)?)?$/,
   /^\/api\/shorts\/presets(\/[^/]+)?$/,
   // Cinema Studio: its projects, folders, takes, grid tiles and AI Director chat (the Director's built-in breakdown:
   // no AI helper, GPU or key), and a ready film made as its own project (src/server/cinema.ts).
@@ -347,8 +347,8 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // Faceless Studio, the Explainer and Content Factory: their own channels, episodes, explainers and series, their topic
   // ideas, documents and narrator samples, and their runs (renders, retries, changes, upscales, avatars, readings), each
   // checked by the route on its own GPU or key (src/server/faceless.ts, content-factory.ts). "Generate in Claude" isn't
-  // here (it hands the brief to the studio's own MCP server), nor "Regenerate to 1080p" (held with Open-H3 Regenerate),
-  // nor reading a link (the server never fetches a link for an account: it uploads the file or pastes the words).
+  // here (it hands the brief to the studio's own MCP server), nor reading a link (the server never fetches a link for an
+  // account: it uploads the file or pastes the words). "Regenerate to 1080p" runs on the account's own GPU only.
   /^\/api\/faceless\/(channels(\/[^/]+(\/avatar)?)?|episodes(\/[^/]+(\/(render|retry|rewrite|undo|upscale|regenerate|change))?)?|topics|voices\/preview)$/,
   /^\/api\/explainer(\/document)?$/,
   /^\/api\/content-factory\/series(\/[^/]+(\/(episodes|generate|read))?)?$/,

@@ -227,14 +227,10 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/content-factory/claude",
       // A run route that ignores ?preview=1 isn't a price check.
       "/api/faceless/episodes/e1/estimate",
-      // Restore & colourise's prompt writer uses the studio's own AI helper (its run is the account's:
-      // tests/restore-account.test.ts).
+      // Restore & colourise's prompt writer (the studio's AI helper).
       "/api/restore/prompt",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
-      // Regenerate in Shorts segments (n7-10): studio jobs, like their renders. (Faceless's Regenerate to 1080p goes to
-      // its route, which runs it on the account's own GPU: tests/account-content.test.ts.)
-      "/api/shorts/sessions/s1/segments/0/enhance",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
@@ -242,9 +238,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
     // Cinema Studio's takes and the video tools (Remove a person's mask preview and "Redo from here", Katana's retry,
-    // Restore & colourise) run
-    // on its own GPU or key (tests/account-cinema.test.ts, tests/account-video-tools.test.ts): with neither, connect one
-    // first. A run route that ignores ?preview=1 isn't a price check.
+    // Restore & colourise) run on its own GPU or key (tests/account-cinema.test.ts, tests/account-video-tools.test.ts):
+    // with neither, connect one first. A run route that ignores ?preview=1 isn't a price check.
     for (const p of [
       "/api/cinema/projects/p1/generate",
       "/api/cinema/projects/p1/generate?preview=1",
@@ -252,6 +247,7 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/remove-object/preview",
       "/api/remove-object/reroll",
       "/api/katana/k1/retry",
+      // Restore & colourise runs on its own GPU or fal.ai key.
       "/api/restore",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
@@ -259,6 +255,9 @@ describe("accounts never run on the owner's keys or GPU", () => {
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBe("1");
       expect((await r.json()).code, p).toBe("connect-gpu");
     }
+    // Regenerate to 1080p in Faceless and Enhance in Shorts run on its own GPU: the routes check its own episode or
+    // session, then its GPU (tests/account-content.test.ts, tests/account-shorts.test.ts).
+    for (const p of ["/api/faceless/episodes/e1/regenerate", "/api/shorts/sessions/s1/segments/0/enhance"]) expect(passed(proxy(req(p, { method: "POST", cookie }))), p).toBe(true);
     // Owner-only routes say so (not "connect your GPU").
     expect(proxy(req("/api/mcp", { method: "POST", cookie })).headers.get(access.CONNECT_GPU_HEADER)).toBeNull();
     // Price checks and signing out are fine.

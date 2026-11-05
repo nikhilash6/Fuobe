@@ -54,7 +54,7 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
     { id: "remove-dialogue", label: "Remove dialogue" },
     { id: "remove-person", label: "Remove a person" },
     { id: "evolution", label: "Evolution" },
-    { id: "restore", label: "Restore & colourise", ownerOnly: true, selfHostedOnly: true },
+    { id: "restore", label: "Restore & colourise", ownSetup: "video-tools:restore" },
     { id: "relight", label: "Relight" },
     { id: "depth", label: "Depth map" },
     { id: "captions", label: "Captions" },

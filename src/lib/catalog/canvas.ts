@@ -1629,8 +1629,8 @@ export function describeNode(graph: CanvasGraph, n: CanvasNode, ctx: DescribeCon
       costUsd: null,
       error:
         mode === "open"
-          ? `${model.name} is a cloud model, which isn't available here. Pick an open-source model`
-          : `${model.name} is an open-source model, which isn't available here. Pick a cloud model`,
+          ? `${model.name} is a cloud model: pick an open-source model`
+          : `${model.name} is an open-source model: pick a cloud model`,
     };
   }
   const built = buildRequest(graph, n, model);

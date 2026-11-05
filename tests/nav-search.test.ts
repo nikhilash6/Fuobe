@@ -167,9 +167,9 @@ describe("search and who is looking", () => {
     expect(labels("comfyui server", GUEST)[0]).toBe("Connect your GPU");
   });
 
-  it("never offers Restore to a guest or an account; Remove dialogue is everyone's (its page says where it runs)", () => {
+  it("offers Restore and Remove dialogue to everyone (their pages say what they run on)", () => {
     for (const entries of [GUEST, ACCOUNT]) {
-      for (const q of ["restore colourise", "restore old footage"]) expect(all(q, entries).map((h) => h.id), q).not.toContain("video-tools-restore");
+      for (const q of ["restore colourise", "restore old footage"]) expect(all(q, entries).map((h) => h.id), q).toContain("video-tools-restore");
       expect(all("remove dialogue", entries).map((h) => h.id)).toContain("video-tools-remove-dialogue");
     }
     expect(all("restore colourise").map((h) => h.id)).toContain("video-tools-restore");

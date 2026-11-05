@@ -102,20 +102,36 @@ function blockedSteps(): string {
   return "Click the icon to the left of the address, turn on Apps on device, then reload.";
 }
 
-const UNSUPPORTED: Record<"safari" | "phone" | "http", string> = {
-  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or give your ComfyUI a web address.",
-  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or give your ComfyUI a web address.",
-  http: "Your browser only lets a secure page reach apps on this computer. Open Fuobe on the computer that runs ComfyUI, or give your ComfyUI a web address.",
+type Unsupported = "safari" | "phone" | "http";
+
+/**
+ * Why this browser can't use the ComfyUI on the person's computer, in their terms, then the way that works from right
+ * here: the web address form shown below these words. Two short sentences. The person already has Fuobe open, so no
+ * line tells them to open it.
+ */
+const UNSUPPORTED: Record<Unsupported, string> = {
+  phone: "A phone or tablet can't reach the ComfyUI on your computer from a website. Give your ComfyUI a web address below, and your runs reach it from here.",
+  safari: "Safari doesn't let a website talk to programs on your Mac, so this page can't reach your ComfyUI. Give your ComfyUI a web address below, and it works from Safari.",
+  http: "Your browser marks this page as not secure, so it doesn't let the page talk to programs on this computer, like ComfyUI. Give your ComfyUI a web address below, and it works from here.",
 };
 
-/** The owner's second way is a ComfyUI at a server address (a cloud GPU, a tunnel), not an account's link. */
-const UNSUPPORTED_OWNER: Record<"safari" | "phone" | "http", string> = {
-  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or use a ComfyUI on a server below.",
-  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or use a ComfyUI on a server below.",
-  http: "Your browser only lets a secure page reach apps on this computer. Open the studio over https, or on the computer that runs ComfyUI, or use a ComfyUI on a server below.",
+/** The owner's way from here is a ComfyUI at a server address (a cloud GPU, a tunnel), shown below these words. */
+const UNSUPPORTED_OWNER: Record<Unsupported, string> = {
+  phone: "A phone or tablet can't reach the ComfyUI on your computer from a website. Use a ComfyUI on a server below, and your runs reach it from here.",
+  safari: "Safari doesn't let a website talk to programs on your Mac, so this page can't reach your ComfyUI. Use a ComfyUI on a server below, and it works from Safari.",
+  http: "Your browser marks this page as not secure, so it doesn't let the page talk to programs on this computer, like ComfyUI. Use a ComfyUI on a server below, or give this studio a secure address.",
 };
 
-export const unsupportedWords = (why: "safari" | "phone" | "http", owner = false) => (owner ? UNSUPPORTED_OWNER : UNSUPPORTED)[why];
+/** Under Safari's words, a quieter last line: what the other browsers allow (never "open Fuobe in…": it is open). */
+const OTHER_BROWSERS = "Chrome, Edge and Firefox allow this, so switching browser also works.";
+
+/** The words, for a <p>: the two sentences, and on Safari the other browsers' line below them. */
+export const unsupportedWords = (why: Unsupported, owner = false) => (
+  <>
+    {(owner ? UNSUPPORTED_OWNER : UNSUPPORTED)[why]}
+    {why === "safari" && <span className="mt-1 block text-[12px]">{OTHER_BROWSERS}</span>}
+  </>
+);
 
 /** Save a file the page made (the start file, the guard). */
 function save(name: string, text: string) {
@@ -713,7 +729,7 @@ function Screen({
       return (
         <div className="space-y-3">
           <p className="flex items-start gap-2 text-muted-foreground">
-            <MonitorSmartphone className="mt-0.5 size-4 shrink-0" /> {UNSUPPORTED[state.why]}
+            <MonitorSmartphone className="mt-0.5 size-4 shrink-0" /> <span>{unsupportedWords(state.why)}</span>
           </p>
           <PairInstead />
         </div>
