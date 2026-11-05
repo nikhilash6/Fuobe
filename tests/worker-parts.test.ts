@@ -20,6 +20,8 @@ import { tempDir } from "./helpers/temp-dir";
 const hasFfmpeg = spawnSync("ffmpeg", ["-hide_banner", "-version"]).status === 0;
 /** A check that starts the real ffmpeg (several times, for a preview): time for a busy machine running other tests too. */
 const FFMPEG_MS = 60_000;
+/** Each of a preview's tries, on a busy machine (ffmpeg runs at low priority): the check waits for every try. */
+const PREVIEW_TRY_MS = 30_000;
 
 /** A clock that moves only when the policy sleeps. */
 function clock() {
@@ -262,11 +264,11 @@ describe("clips and sound, made again", () => {
     const png = path.join(dir, "preview.png");
     const made = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=768x512", "-frames:v", "1", png]);
     expect(made.status).toBe(0);
-    const out = await previewJpeg({ ffmpeg: "ffmpeg", data: new Uint8Array(fs.readFileSync(png)), type: "image/png" });
+    const out = await previewJpeg({ ffmpeg: "ffmpeg", data: new Uint8Array(fs.readFileSync(png)), type: "image/png", timeoutMs: PREVIEW_TRY_MS });
     expect(out).not.toBeNull();
     expect([...out!.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
     expect(out!.length).toBeLessThanOrEqual(64 * 1024);
-  }, FFMPEG_MS);
+  }, PREVIEW_QUALITIES.length * PREVIEW_TRY_MS + FFMPEG_MS);
 
   it.runIf(hasFfmpeg)("ffmpeg refuses a playlist that names another file on this PC, and makes a plain clip again", async () => {
     const dir = tempDir("fuobe-worker-playlist-");

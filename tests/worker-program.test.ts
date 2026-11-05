@@ -157,6 +157,7 @@ describe("cleanup (check 13) and setup", () => {
     expect(syncedFolder("D:\\FuobeWorker")).toBe(false);
   });
 
+  // Each setup asks ffmpeg for its version: 60 s, for a busy machine running other tests too.
   it("setup again keeps a port pinned by hand and the rest of worker.json, drops the older setups' 8190, and adds no defaults", async () => {
     const setupWith = async (saved: Record<string, unknown>) => {
       const home = tempDir("fuobe-worker-setup-home-");
@@ -173,7 +174,7 @@ describe("cleanup (check 13) and setup", () => {
     for (const key of ["hungMin", "busyVramMb", "localComfyPorts", "allowHttpSite"]) expect(kept).not.toHaveProperty(key);
     expect((await setupWith({ port: 8190 })).port).toBeNull();
     expect((await setupWith({})).port).toBeNull();
-  });
+  }, 60_000);
 
   it("hashes its inventory the way the studio does", async () => {
     const { inventoryHash } = await import("@/server/computer/pool");
