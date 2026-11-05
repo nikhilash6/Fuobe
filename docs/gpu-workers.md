@@ -667,7 +667,9 @@ gives a new step neither that run's place nor its start. When two app processes 
 overlap), only the one that takes a step's turn sends it, so each step is sent once. A step is marked just before its
 job is made; when the process that was sending it stopped part way, the next one looks for the step's job: none
 made, and the step is sent now (in its run's place); one made, and the step ends in the one plain sentence and that
-job stops, so it is never run twice. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
+job stops, so it is never run twice. That look is for steps on the workers, whose jobs are tasks in the studio's
+database. A step sent to the install's own ComfyUI (on the studio's machine) may be in its queue already, so when its
+send was cut off it ends in the plain sentence instead of being sent again. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
 with its files, and one that a CPU slot runs at its next progress report (the worker sends one at least every 10
 seconds). A 3D model finished this way waits for the output check when the run asked for one, as any run's outputs do.
 The time a CPU task runs is never counted as GPU time.

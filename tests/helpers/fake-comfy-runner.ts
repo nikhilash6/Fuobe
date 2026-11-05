@@ -61,6 +61,8 @@ export interface FakeComfyOptions {
    * it is cut off before the answer comes. Its connection stays open until `dropHeld()` or `close()`.
    */
   hold?: (method: string, path: string) => boolean;
+  /** How long to wait before handling a request as usual (0 or undefined: at once): a slow network or GPU. */
+  slow?: (method: string, path: string) => number;
 }
 
 /** A tiny but real WAV (mono, 16-bit, 8 kHz, 0.1 s of silence). */
@@ -205,6 +207,12 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", () => {
+      // (A slow answer: the request is handled as usual after that wait.)
+      const wait = opts.slow?.(req.method ?? "GET", new URL(req.url ?? "/", "http://fake").pathname) ?? 0;
+      if (wait > 0) setTimeout(handle, wait);
+      else handle();
+    });
+    const handle = () => {
       const body = Buffer.concat(chunks);
       const url = new URL(req.url ?? "/", "http://fake");
       const entry: FakeLogEntry = { method: req.method ?? "GET", path: url.pathname + url.search, at: Date.now() };
@@ -343,7 +351,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         return res.end(png ? TINY_PNG : TINY_MP4);
       }
       json(404, { error: "not found" });
-    });
+    };
   });
   return new Promise((resolve) => {
     server.listen(port, "127.0.0.1", () => {

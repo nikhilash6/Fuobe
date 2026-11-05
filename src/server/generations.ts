@@ -73,7 +73,7 @@ import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
-import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, ownLink, probeComfy, relayFile, troubleError, type OwnGpu } from "./providers/comfyui";
+import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, onPoolWorkers, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, ownLink, probeComfy, relayFile, troubleError, type OwnGpu } from "./providers/comfyui";
 import { accountById, accountGpu, gpuLink, type AccountGpu } from "./auth";
 import { accountEngineMode, accountKey, markKeyGood, paidAllowed, usableProviders } from "./account-keys";
 import { addKeyMessage, CLOUD_KEY, CLOUD_PROVIDERS, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
@@ -443,6 +443,13 @@ interface PendingMeta {
    * Cleared when the try fails and the step waits; gone once it is handed over (markSending).
    */
   sending?: number;
+  /**
+   * With `sending`: that send's job is a task of this database (a step of a run on this install's workers), so whether
+   * the send made it is known (hasJobFor). Without it the job went to a ComfyUI or a provider that may have it.
+   */
+  sendingTask?: boolean;
+  /** Who holds the run as the release before this one marked it (OLD_LEASE), and until when. */
+  lease?: { by?: unknown; until?: unknown };
 }
 
 /** A run's wait for its own GPU or key, kept with it (survives a restart). */
@@ -486,10 +493,50 @@ const readMeta = (json: string | null | undefined): PendingMeta & Record<string,
  * this install's GPUs.
  */
 
-/** Another app process took this run's turn (this one went quiet meanwhile): it is that process's to send now. */
+/**
+ * The release before this one marked the runs an instance held with a lease in external_meta_json (`lease`: {by, until},
+ * renewed every 15 s, good for 60 s), not with a turn. For the first deploy of this release its old instance still runs
+ * next to the new one for a moment, on the same database, so both marks count: a live lease whose holder isn't an app
+ * process of this release (none in app_processes) holds a run as a turn of another process does, and while this process
+ * holds a run's turn, the run carries a lease of this process too (takeSubmitTurn, renewed by the beat, gone with the
+ * turn), which the release before reads as held. Neither then sends, fails or takes over a run the other holds.
+ */
+export const OLD_LEASE = { ms: 60_000, renewMs: 15_000 };
+
+/** A lease field of a row's external_meta_json, in SQL (NULL when the column isn't JSON). */
+const leaseField = (table: string, field: "by" | "until") =>
+  `(CASE WHEN json_valid(${table}.external_meta_json) THEN json_extract(${table}.external_meta_json, '$.lease.${field}') END)`;
+
+/**
+ * SQL: a live lease of the release before (OLD_LEASE) holds the run in `table` (1, else 0: never NULL); this process's
+ * own lease never does. Named parameters: @__now and @__me.
+ */
+const OLD_LEASE_HELD = (table: string) =>
+  `(COALESCE(${leaseField(table, "until")} > @__now, 0) AND ${leaseField(table, "by")} IS NOT @__me
+    AND NOT EXISTS (SELECT 1 FROM app_processes lp WHERE lp.token = ${leaseField(table, "by")}))`;
+
+/** A live lease of the release before (OLD_LEASE) holds this run: an instance of that release is sending it or waiting on it. */
+function oldLeaseHolds(json: string | null | undefined, now = Date.now()): boolean {
+  const lease = readMeta(json).lease;
+  if (!lease || typeof lease !== "object" || typeof lease.until !== "number" || lease.until <= now) return false;
+  if (lease.by === runnerToken()) return false;
+  return !(typeof lease.by === "string" && db().prepare("SELECT 1 FROM app_processes WHERE token = ?").get(lease.by));
+}
+
+/** This process's lease on a run whose turn it holds (OLD_LEASE), as SQL sets it (@lease: leaseOf). */
+const LEASE_SET = `json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.lease', json(@lease))`;
+const leaseOf = (now: number) => JSON.stringify({ by: runnerToken(), until: now + OLD_LEASE.ms });
+
+/**
+ * Another app process took this run's turn (this one went quiet meanwhile), or an instance of the release before holds it
+ * (OLD_LEASE): it is that process's to send now.
+ */
 function turnTaken(id: string): boolean {
-  const held = db().prepare("SELECT held_by FROM submit_turns WHERE id = ?").pluck().get(id) as string | undefined;
-  return held !== undefined && held !== runnerToken();
+  const r = db().prepare("SELECT s.held_by, g.external_meta_json FROM generations g LEFT JOIN submit_turns s ON s.id = g.id WHERE g.id = ?").get(id) as
+    | { held_by: string | null; external_meta_json: string | null }
+    | undefined;
+  if (!r) return false;
+  return (r.held_by !== null && r.held_by !== runnerToken()) || oldLeaseHolds(r.external_meta_json);
 }
 
 /** A row still waiting for its hand-over (queued or running, no job yet): only then is it changed. */
@@ -1699,11 +1746,12 @@ const DEP_IDS = "json_each(CASE WHEN substr(g.depends_on, 1, 1) = '[' AND json_v
 
 /**
  * SQL: an app process that still runs holds the turn to hand the run in `table` to its provider (takeSubmitTurn: it is
- * sending it, or waiting on its own GPU or key for it); `others`: a process other than this one. Named parameters:
- * @__me (this process's name) and @__quiet (since when a process that still runs has said so).
+ * sending it, or waiting on its own GPU or key for it); `others`: a process other than this one. An instance of the
+ * release before that holds it with a live lease (OLD_LEASE) holds it too. Named parameters: @__me (this process's
+ * name), @__quiet (since when a process that still runs has said so) and @__now.
  */
 const TURN_HELD = (table: string, others: boolean) =>
-  `EXISTS (SELECT 1 FROM submit_turns s JOIN app_processes p ON p.token = s.held_by WHERE s.id = ${table}.id${others ? " AND s.held_by != @__me" : ""} AND p.seen_at >= @__quiet)`;
+  `(EXISTS (SELECT 1 FROM submit_turns s JOIN app_processes p ON p.token = s.held_by WHERE s.id = ${table}.id${others ? " AND s.held_by != @__me" : ""} AND p.seen_at >= @__quiet) OR ${OLD_LEASE_HELD(table)})`;
 
 /**
  * Waiting steps that can move: none of their dependencies is still queued or running (so they launch), or one
@@ -1788,9 +1836,12 @@ export const COMFY_WAIT = { ms: 60_000 };
 
 /** Launch dependent jobs whose inputs finished; fail the ones whose inputs failed. Never waits for an upload. */
 async function advanceDependents(): Promise<void> {
+  // A server that is stopping launches no step (the app process that goes on does), and leaves the steps it looked at.
+  if (draining()) return;
+  const now = Date.now();
   const rows = db()
     .prepare(READY_DEPENDENTS)
-    .all({ limit: 50 + submitting().size, __me: runnerToken(), __quiet: Date.now() - QUIET_MS }) as Row[];
+    .all({ limit: 50 + submitting().size, __me: runnerToken(), __quiet: now - QUIET_MS, __now: now }) as Row[];
   // A forced look at ComfyUI, at most one a sweep, for the steps that found it not answering.
   let lookedAgain: Promise<boolean> | undefined;
   for (const r of rows) {
@@ -1838,17 +1889,19 @@ async function advanceDependents(): Promise<void> {
       continue;
     }
     // Every app process looks at the same waiting steps (a deploy runs two for a moment): only the one that takes the
-    // step's turn sends it, so it is sent once.
+    // step's turn sends it, so it is sent once. A server that began to stop meanwhile leaves it to the one that goes on.
+    if (draining()) return;
     if (!takeSubmitTurn(r.id, { waiting: true })) continue;
     // A step that waited for its own GPU or key, taken over after a restart or a deploy (its wait is kept with it, as a
     // run's is: takeOver). One cut off in the middle of its send, on a later try or its first (markSending), may have
-    // reached its GPU or provider: never sent twice. On this install's GPUs its job is a row of this database, so that is
-    // known: with none made, nothing was sent and the step is sent now (in its run's place); with one made, it stops
-    // with the step instead of running for nothing.
+    // reached its GPU or provider: never sent twice. A step of a run on this install's workers whose send was to make a
+    // task here (`sendingTask`) is known: with no task made, nothing was sent and the step is sent now (in its run's
+    // place); with one made, it stops with the step instead of running for nothing. One sent to this install's own
+    // ComfyUI (no task: its job may be there) stops as an account's own does.
     const pending = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null);
     const heal = pending.heal;
     if ((heal && typeof heal.sending === "number") || typeof pending.sending === "number") {
-      if (stored.place === "pool" && !hasJobFor(r.id)) notSending(r.id);
+      if (stored.place === "pool" && pending.sendingTask === true && !hasJobFor(r.id)) notSending(r.id);
       else {
         fail(CUT_OFF_SENDING, "interrupted-sending");
         if (stored.place === "pool") stopJobsOf(r.id);
@@ -2361,26 +2414,44 @@ class LetGo extends Error {}
  * takes the wait over later (this one cut off in the middle of the send, by a restart or a deploy) then doesn't send it
  * a second time. So is a step of an account's longer run on its first try (`step`: on its own GPU or key, or on this
  * install's GPUs): the process that launches it after this one was cut off never sends it again (advanceDependents).
- * Throws LetGo when another app process took the run's turn, or when this server is stopping and the run waited (the
- * next process goes on with its wait, and sends it).
+ * `task`: the job this send makes is a task of this database (a run on this install's workers), noted with the mark.
+ *
+ * The look at the turn and the mark are one step (an immediate transaction): a process that stalled past its turn (20 s
+ * with no beat) and another took it meanwhile never marks or sends the run, and one that takes the turn after the mark
+ * sees it (takeOver, advanceDependents). Throws LetGo when this process doesn't hold the run's turn (another took it, or
+ * an instance of the release before holds it: OLD_LEASE), when this server is stopping and the run waited (the next
+ * process goes on with its wait, and sends it), and for a step's first try while this server is stopping (the next
+ * process launches it, instead of finding it cut off in the middle of its send; the owner's steps too).
  */
-function markSending(id: string, step: boolean): void {
-  const r = db().prepare(`SELECT external_meta_json, depends_on FROM generations WHERE id = ? AND ${PENDING}`).get(id) as Pick<Row, "external_meta_json" | "depends_on"> | undefined;
-  if (!r) throw new Error("Stopped");
-  if (turnTaken(id)) throw new LetGo("Taken by another app process");
-  if (!readMeta(r.external_meta_json).heal) {
-    // A first try (nothing waited): a run's send cut off here fails at the next process's look (sweepInterrupted).
-    if (step && r.depends_on) {
-      db()
-        .prepare(`UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending', @now) WHERE id = @id AND ${PENDING}`)
-        .run({ id, now: Date.now() });
-    }
-    return;
-  }
-  if (draining()) throw new LetGo("Stopping");
-  db()
-    .prepare(`UPDATE generations SET external_meta_json = json_set(external_meta_json, '$.heal.sending', @now) WHERE id = @id AND ${PENDING} AND json_type(external_meta_json, '$.heal') = 'object'`)
-    .run({ id, now: Date.now() });
+function markSending(id: string, step: boolean, task = false): void {
+  const d = db();
+  const out = d
+    .transaction((): "gone" | "taken" | "stopping" | "marked" => {
+      const r = d
+        .prepare(`SELECT g.external_meta_json, g.depends_on, s.held_by FROM generations g LEFT JOIN submit_turns s ON s.id = g.id WHERE g.id = ? AND g.status IN ('queued', 'running') AND g.external_id IS NULL`)
+        .get(id) as (Pick<Row, "external_meta_json" | "depends_on"> & { held_by: string | null }) | undefined;
+      if (!r) return "gone";
+      if (r.held_by !== runnerToken() || oldLeaseHolds(r.external_meta_json)) return "taken";
+      const now = Date.now();
+      if (!readMeta(r.external_meta_json).heal) {
+        // A first try (nothing waited): a run's send cut off here fails at the next process's look (sweepInterrupted).
+        if (!r.depends_on) return "marked";
+        if (draining()) return "stopping";
+        if (!step) return "marked";
+        d.prepare(
+          `UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending', @now${task ? ", '$.sendingTask', json('true')" : ""})
+           WHERE id = @id AND ${PENDING}`,
+        ).run({ id, now });
+        return "marked";
+      }
+      if (draining()) return "stopping";
+      d.prepare(`UPDATE generations SET external_meta_json = json_set(external_meta_json, '$.heal.sending', @now) WHERE id = @id AND ${PENDING} AND json_type(external_meta_json, '$.heal') = 'object'`).run({ id, now });
+      return "marked";
+    })
+    .immediate();
+  if (out === "gone") throw new Error("Stopped");
+  if (out === "taken") throw new LetGo("Taken by another app process");
+  if (out === "stopping") throw new LetGo("Stopping");
 }
 
 /** A send its provider answered with a refusal (a 4xx): the job was never taken. */
@@ -2392,7 +2463,7 @@ function refusedAtSend(e: unknown): boolean {
 /** A send that is over without a job: the run's mark of being sent goes (it was never handed over). */
 function notSending(id: string): void {
   db()
-    .prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.heal.sending', '$.sending') WHERE id = ? AND ${PENDING} AND json_valid(external_meta_json)`)
+    .prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.heal.sending', '$.sending', '$.sendingTask') WHERE id = ? AND ${PENDING} AND json_valid(external_meta_json)`)
     .run(id);
 }
 
@@ -2404,7 +2475,11 @@ export const OWN_QUEUE = { scale: 1 };
 /** The longest an account's job waits in its own GPU's (or provider's) queue, however it moves. */
 const OWN_QUEUE_CAP_MS = 2 * 60 * 60_000;
 
-/** The words a waiting run's tile shows, its wait kept with it (external_meta_json `heal`). False: it isn't waiting any more. */
+/**
+ * The words a waiting run's tile shows, its wait kept with it (external_meta_json `heal`). False: it isn't waiting any more,
+ * or this process no longer holds its turn (it stalled, and another took the wait over: that one's wait, and its mark of
+ * a send, stay as they are).
+ */
 function markWaiting(id: string, heal: HealState, trouble: Diagnosis, next: number, message: string): boolean {
   heal.next = next;
   heal.words = trouble.words;
@@ -2415,10 +2490,10 @@ function markWaiting(id: string, heal: HealState, trouble: Diagnosis, next: numb
     db()
       .prepare(
         `UPDATE generations SET status = 'queued', message = @message, updated_at = @now,
-           external_meta_json = json_set(json_remove(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending'), '$.heal', json(@heal))
-         WHERE id = @id AND ${PENDING}`,
+           external_meta_json = json_set(json_remove(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending', '$.sendingTask'), '$.heal', json(@heal))
+         WHERE id = @id AND ${PENDING} AND EXISTS (SELECT 1 FROM submit_turns s WHERE s.id = @id AND s.held_by = @me)`,
       )
-      .run({ id, message, now: Date.now(), heal: JSON.stringify(heal) }).changes > 0
+      .run({ id, message, now: Date.now(), heal: JSON.stringify(heal), me: runnerToken() }).changes > 0
   );
 }
 
@@ -3135,8 +3210,9 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     if (cloned && route.map?.cloneFirst && !input.voiceEmbedding) input.voiceEmbedding = cloned;
     // Nothing is sent once the run stopped being this one's to send (cancelled, failed, or taken by another instance).
     if (!going()) throw new Error("Stopped");
-    // (Every account's step on its first try: on its own GPU or key, and on this install's GPUs.)
-    markSending(id, !!req.account);
+    // (Every account's step on its first try: on its own GPU or key, and on this install's GPUs. On the workers its job is
+    // a task of this database, made by this send: the mark says so.)
+    markSending(id, !!req.account, providerId === "comfyui" && onPoolWorkers());
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });
     // A saved voice the cloud just cloned keeps the embedding (the owner's runs only), so its next line skips the clone.
     if (typeof res.meta?.voiceEmbedding === "string" && !req.account) void keepVoiceEmbedding(req.inputs?.voiceAudio, res.meta.voiceEmbedding).catch(() => {});
@@ -3271,21 +3347,26 @@ function startRunner(): void {
  * restart, or a deploy's old instance gone). One waiting for its own GPU or key goes on here, with what is left of its
  * wait (one process takes it); one cut off in the middle of its hand-over can't be recovered, and fails. A run a process
  * that still runs is sending or waiting on (this one, or another in a deploy's overlap) is left to it. Runs at start and
- * every tick.
+ * every tick; not while this server stops (the app process that goes on looks).
  */
 function sweepInterrupted(): void {
+  if (draining()) return;
   const now = Date.now();
   const rows = db()
     .prepare(
       `SELECT g.id, g.provider, g.model_id, g.op, g.request_json, g.external_meta_json FROM generations g
          WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before AND NOT ${TURN_HELD("g", false)}`,
     )
-    .all({ before: now - STALE_SUBMIT.ms, __me: runnerToken(), __quiet: now - QUIET_MS }) as Pick<Row, "id" | "provider" | "model_id" | "op" | "request_json" | "external_meta_json">[];
+    .all({ before: now - STALE_SUBMIT.ms, __me: runnerToken(), __quiet: now - QUIET_MS, __now: now }) as Pick<Row, "id" | "provider" | "model_id" | "op" | "request_json" | "external_meta_json">[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
-    const meta = readMeta(r.external_meta_json);
-    if (meta.heal && takeOver(r, meta.heal)) continue;
+    let meta = readMeta(r.external_meta_json);
+    if (meta.heal) {
+      if (takeOver(r, meta.heal)) continue;
+      // (As it is now: the process it was taken from may have marked it as being sent since this look.)
+      meta = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null);
+    }
     // A run that waited and was cut off in the middle of its send may have reached its GPU or provider: never sent twice.
     const cutOff = !!meta.heal && typeof meta.heal.sending === "number";
     const words = cutOff ? CUT_OFF_SENDING : "This run stopped before it started. Press Retry.";
@@ -3318,6 +3399,14 @@ function takeOver(r: Pick<Row, "id" | "provider" | "model_id" | "op" | "request_
   if (!account || stored.place === "pool") return false;
   // Another app process took it first.
   if (!takeSubmitTurn(r.id)) return true;
+  // Read again under the turn: the process that held it may have marked it as being sent after the sweep's look, before
+  // it went quiet (markSending marks only under its turn). Then it may have reached its GPU or provider: never sent twice.
+  const now = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null).heal;
+  if (!now || typeof now.sending === "number") {
+    handOverEnds(r.id);
+    return false;
+  }
+  h = now;
   let p: ReturnType<typeof prepare>;
   try {
     p = asAccount(account, () => prepare(stored));
@@ -3876,6 +3965,23 @@ function beat(now = Date.now()): void {
     .prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET seen_at = excluded.seen_at")
     .run(runnerToken(), now, now);
   noteCatalogProcess(catalogVersion(), processStart(), now);
+  renewLeases(now);
+}
+
+/**
+ * The leases of the runs whose turn this process holds (OLD_LEASE), renewed once less than OLD_LEASE.ms - renewMs is left
+ * (each renewal is a change of the run that its live updates send). Never over a live lease of the release before.
+ */
+function renewLeases(now: number): void {
+  const by = leaseField("generations", "by");
+  const until = leaseField("generations", "until");
+  db()
+    .prepare(
+      `UPDATE generations SET external_meta_json = ${LEASE_SET}
+       WHERE id IN (SELECT id FROM submit_turns WHERE held_by = @me) AND ${PENDING}
+         AND (${until} IS NULL OR ${until} <= @now OR ${by} = @me) AND (${by} IS NOT @me OR ${until} IS NULL OR ${until} < @fresh)`,
+    )
+    .run({ me: runnerToken(), now, fresh: now + OLD_LEASE.ms - OLD_LEASE.renewMs, lease: leaseOf(now) });
 }
 
 /**
@@ -3895,6 +4001,16 @@ function keepBeating(): void {
   } catch (e) {
     console.warn(`[generations] app process: ${(e as Error).message}`);
   }
+  // Started inside a caller's transaction (the runner, first started by a run being made): that first word goes if the
+  // transaction is rolled back, so it is said again as soon as the transaction is over, not 5 s later.
+  if (db().inTransaction)
+    setImmediate(() => {
+      try {
+        beat();
+      } catch {
+        // The next beat says it.
+      }
+    });
   const timer = setInterval(() => {
     try {
       beat();
@@ -3914,6 +4030,8 @@ function giveTurnsBack(): void {
     const me = runnerToken();
     d.transaction(() => {
       d.prepare("UPDATE generation_runs SET finish_by = NULL, finish_until = NULL WHERE finish_by = ? AND finish_until >= ?").run(me, Date.now());
+      // (Its leases first, while its turns still name the runs: OLD_LEASE.)
+      d.prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.lease') WHERE id IN (SELECT id FROM submit_turns WHERE held_by = @me) AND ${leaseField("generations", "by")} = @me`).run({ me });
       d.prepare("DELETE FROM submit_turns WHERE held_by = ?").run(me);
       d.prepare("DELETE FROM app_processes WHERE token = ?").run(me);
     })();
@@ -3964,17 +4082,21 @@ function takeSubmitTurn(id: string, o: { waiting?: boolean } = {}, now = Date.no
   const d = db();
   return d
     .transaction((): boolean => {
-      const g = d.prepare("SELECT status, external_id FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id"> | undefined;
+      const g = d.prepare("SELECT status, external_id, external_meta_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id" | "external_meta_json"> | undefined;
       if (!g || g.external_id || (g.status !== "queued" && (o.waiting || g.status !== "running"))) return false;
-      return (
+      // An instance of the release before holds it (its lease: OLD_LEASE).
+      if (oldLeaseHolds(g.external_meta_json, now)) return false;
+      const took =
         d
           .prepare(
             `INSERT INTO submit_turns (id, held_by, held_at) VALUES (@id, @me, @now)
              ON CONFLICT(id) DO UPDATE SET held_by = excluded.held_by, held_at = excluded.held_at
              WHERE submit_turns.held_by = @me OR NOT EXISTS (SELECT 1 FROM app_processes p WHERE p.token = submit_turns.held_by AND p.seen_at >= @quiet)`,
           )
-          .run({ id, me: runnerToken(), now, quiet: now - QUIET_MS }).changes > 0
-      );
+          .run({ id, me: runnerToken(), now, quiet: now - QUIET_MS }).changes > 0;
+      // The lease the release before reads as held, while this process holds the turn (renewed by the beat).
+      if (took) d.prepare(`UPDATE generations SET external_meta_json = ${LEASE_SET} WHERE id = @id AND ${PENDING}`).run({ id, lease: leaseOf(now) });
+      return took;
     })
     .immediate();
 }
@@ -3991,7 +4113,13 @@ function noteSubmitTurn(id: string): void {
 function handOverEnds(id: string): void {
   submitting().delete(id);
   try {
-    db().prepare("DELETE FROM submit_turns WHERE id = ? AND held_by = ?").run(id, runnerToken());
+    const d = db();
+    const me = runnerToken();
+    d.transaction(() => {
+      d.prepare("DELETE FROM submit_turns WHERE id = ? AND held_by = ?").run(id, me);
+      // Its lease goes with the turn (OLD_LEASE): an instance of the release before may take a run left waiting at once.
+      d.prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.lease') WHERE id = ? AND ${leaseField("generations", "by")} = ?`).run(id, me);
+    })();
   } catch {
     // A closed database: the turn is free once this process has been quiet for 20 s.
   }

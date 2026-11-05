@@ -707,7 +707,8 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   with what is left of its wait (its tries and its time), on one instance only; so does a step of a
   longer run. Another instance never fails, takes or sends a run whose turn a running instance
   holds. A server that is stopping sends no more tries and gives its waiting runs' turns back at
-  once, for the next instance. A run that
+  once, for the next instance; it launches no new step of a longer run and takes over no wait,
+  and a step whose first send it had begun is left unsent, for the next instance to launch. A run that
   waited, and a step of a longer run on any try (its first too), is marked just before the try sends
   the job itself: a server cut off in the middle of that send leaves a job the GPU or provider may
   already have, so the next instance doesn't send it again, and the run fails with "This run was

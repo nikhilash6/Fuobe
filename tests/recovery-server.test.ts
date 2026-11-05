@@ -1662,8 +1662,8 @@ describe("two app processes on one database (a deploy's overlap)", () => {
 
   it("a chain's next step whose send was cut off: with no job made yet it is sent once, at its run's place, with no error", async () => {
     const { id, step, d } = await runAndNextStep();
-    // Marked as being sent by a process that was killed before it made the step's job.
-    db().prepare("UPDATE generations SET external_meta_json = json_object('sending', ?) WHERE id = ?").run(Date.now() - 1000, step);
+    // Marked as being sent to the workers (a task here) by a process that was killed before it made the step's job.
+    db().prepare("UPDATE generations SET external_meta_json = json_object('sending', ?, 'sendingTask', json('true')) WHERE id = ?").run(Date.now() - 1000, step);
     sendingIn("app-cut-off", step, QUIET_MS + 1000);
     await Promise.all([tick(), app2.tick()]);
     for (let i = 0; i < 200 && !jobsOf(step).length; i++) await sleep(25);
@@ -1696,6 +1696,62 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await Promise.all([tick(), app2.tick()]);
     expect(jobsOf(step).map((t) => t.id), "nothing more was sent").toEqual([made.id]);
     expect(jobsOf(step)[0].state, "the job it made stops with it").toBe("canceled");
+  });
+
+  /** Hosted runs on the install's own ComfyUI, on this machine (the stand-in), instead of the workers. */
+  const onInstallServer = () => {
+    setSetting("comfyWhere", "server");
+    setSetting("comfyUrl", comfy.url);
+  };
+  /** Every mark of a send this process leaves on a run (a temporary trigger on its own connection): the run's meta then. */
+  const watchMarks = () => {
+    db().exec(`CREATE TEMP TABLE IF NOT EXISTS send_marks (id TEXT, meta TEXT);
+      CREATE TEMP TRIGGER IF NOT EXISTS send_mark AFTER UPDATE OF external_meta_json ON main.generations
+      WHEN (CASE WHEN json_valid(NEW.external_meta_json) THEN json_type(NEW.external_meta_json, '$.sending') END) IS NOT NULL
+      BEGIN INSERT INTO send_marks VALUES (NEW.id, NEW.external_meta_json); END;`);
+    return (id: string) => (db().prepare("SELECT meta FROM send_marks WHERE id = ?").pluck().all(id) as string[]).map((m) => JSON.parse(m) as { sending?: number; sendingTask?: boolean });
+  };
+
+  it("a step's mark of its send says whether its job is a task here: on the workers it is, on the install's own ComfyUI it isn't", async () => {
+    const marks = watchMarks();
+    try {
+      const { id, step, d } = await runAndNextStep();
+      await tick();
+      for (let i = 0; i < 200 && !jobsOf(step).length; i++) await sleep(25);
+      expect(marks(step), "marked once, as a task here").toEqual([expect.objectContaining({ sending: expect.any(Number), sendingTask: true })]);
+      await workAll(d);
+      expect((await ended(step))?.status).toBe("succeeded");
+      // The same on the install's own ComfyUI: its job may be in that ComfyUI's queue, and no task here says so.
+      const first = JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(id) as { request_json: string }).request_json);
+      const [next] = runOnPool(A, () => withRunStamp(stampOf(first), () => createGenerations({ feature: "image", modelId: "oss-selftest-image", op: "edit", prompt: "invert it", chainFrom: "first" }, { dependsOn: id })));
+      onInstallServer();
+      const posts = comfy.posts();
+      await tick();
+      expect(await until(() => marks(next.id).length > 0 && comfy.posts() > posts)).toBe(true);
+      expect(marks(next.id)).toEqual([expect.objectContaining({ sending: expect.any(Number) })]);
+      expect(marks(next.id)[0].sendingTask).toBeUndefined();
+      expect(jobsOf(next.id), "no task here").toHaveLength(0);
+    } finally {
+      db().exec("DROP TRIGGER IF EXISTS send_mark; DROP TABLE IF EXISTS send_marks;");
+    }
+  });
+
+  it("a chain's next step on the install's own ComfyUI whose send was cut off is never sent again: it ends in the plain sentence, with no job here", async () => {
+    const { step } = await runAndNextStep();
+    onInstallServer();
+    const posts = comfy.posts();
+    // Marked as being sent by a process that was killed while it posted the step to that ComfyUI (no task here: its job
+    // may be in that ComfyUI's queue).
+    db().prepare("UPDATE generations SET external_meta_json = json_object('sending', ?) WHERE id = ?").run(Date.now() - 1000, step);
+    sendingIn("app-cut-off-server", step, QUIET_MS + 1000);
+    await Promise.all([tick(), app2.tick()]);
+    const g = await ended(step);
+    expect(plainFailure(g!, { charged: false }), JSON.stringify(g)).toEqual([]);
+    expect(db().prepare("SELECT error FROM generations WHERE id = ?").get(step)).toEqual({ error: "This run was interrupted while it was being sent. Press Retry." });
+    await Promise.all([tick(), app2.tick()]);
+    await sleep(500);
+    expect(comfy.posts(), "nothing more was posted to that ComfyUI").toBe(posts);
+    expect(jobsOf(step)).toHaveLength(0);
   });
 
   it("a step and a preview picture the worker reports to the other process are seen here too: a refresh, both sessions, the list and the other process show the same step", async () => {

@@ -79,7 +79,7 @@ beforeEach(() => {
   resetRates();
   SELF_HEAL.scale = SCALE;
   STALE_SUBMIT.ms = 0;
-  Object.assign(fake.opts, { loras: [], delayMs: 0, answer: undefined, hold: undefined, output: undefined });
+  Object.assign(fake.opts, { loras: [], delayMs: 0, answer: undefined, hold: undefined, slow: undefined, output: undefined });
   fake.dropHeld();
   fake.log.length = 0;
   globalThis.__fuobeAccountGpus?.clear();
@@ -172,6 +172,9 @@ describe("two app processes and a run waiting for its account's own GPU", () => 
     expect(turnOf(id)).toBeNull();
     expect(row(id)).toMatchObject({ status: "queued", external_id: null });
     expect(healOf(id)?.since).toBe(before.since);
+    // A server that is stopping takes no wait over, its own included: the other process does.
+    await tick();
+    expect(turnOf(id)).toBeNull();
     // The other process takes the wait over: its turn, the wait's start kept, its tries going on from where they were.
     expect(await until(() => turnOf(id) === theirs && (healOf(id)?.tries ?? 0) > before.tries, () => app2.tick())).toBe(true);
     expect(healOf(id)?.since).toBe(before.since);
@@ -213,6 +216,157 @@ describe("a step of a longer run that waits for its account's own GPU", () => {
     expect(await until(() => ended(step.id), () => app2.tick())).toBe(true);
     expect(row(step.id).status, row(step.id).error ?? "").toBe("succeeded");
     expect(prompts(), "the step was sent once").toBe(1);
+  });
+});
+
+/** The account's first run, done on the GPU with a picture, and the next step of its longer run (not launched yet). */
+async function doneRunAndStep(): Promise<{ first: string; step: string }> {
+  fake.opts.output = "both";
+  const first = await startRun();
+  expect(await until(() => ended(first))).toBe(true);
+  expect(row(first).status, row(first).error ?? "").toBe("succeeded");
+  const pic = await uploadPng();
+  fake.log.length = 0;
+  const [step] = asAccount(a, () =>
+    createGenerations({ feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic] } } as Parameters<typeof createGenerations>[0], { dependsOn: first }),
+  );
+  return { first, step: step.id };
+}
+const metaOf = (id: string) => JSON.parse(row(id).external_meta_json || "{}") as { sending?: number; lease?: { by: string; until: number }; heal?: Heal };
+const both = () => Promise.all([tick(), app2.tick()]).then(() => {});
+
+describe("a server that is stopping", () => {
+  it("launches no new step of a longer run: the other process launches it, and it is sent once", async () => {
+    const { step } = await doneRunAndStep();
+    shutdown().draining = true;
+    for (let i = 0; i < 3; i++) await tick();
+    expect(turnOf(step), "not taken here").toBeNull();
+    expect(row(step)).toMatchObject({ status: "queued", external_id: null });
+    expect(prompts()).toBe(0);
+    expect(await until(() => ended(step), () => app2.tick())).toBe(true);
+    expect(row(step).status, row(step).error ?? "").toBe("succeeded");
+    expect(prompts(), "sent once, by the process that goes on").toBe(1);
+  });
+
+  it("leaves a step whose first send it had begun unsent and unmarked: the other process launches it, and it is sent once", async () => {
+    const { step } = await doneRunAndStep();
+    // The server starts to stop while the step's picture goes to the GPU (after the step was taken here).
+    fake.opts.answer = (m, p) => {
+      if (m === "POST" && p === "/upload/image") shutdown().draining = true;
+      return undefined;
+    };
+    await tick();
+    expect(await until(() => shutdown().draining && !globalThis.__fuobeSubmitting?.has(step), async () => {})).toBe(true);
+    fake.opts.answer = undefined;
+    expect(turnOf(step), "its turn went back").toBeNull();
+    expect(row(step)).toMatchObject({ status: "queued", external_id: null });
+    expect(metaOf(step).sending, "never marked as being sent").toBeUndefined();
+    expect(prompts()).toBe(0);
+    expect(await until(() => ended(step), () => app2.tick())).toBe(true);
+    expect(row(step).status, row(step).error ?? "").toBe("succeeded");
+    expect(prompts(), "sent once").toBe(1);
+  });
+});
+
+describe("a process that stalls while it sends a run", () => {
+  it("once another process took the run's turn, it never marks or sends it: the run is sent once, by the one that took it", async () => {
+    gpuStarting();
+    const id = await startRun();
+    expect(await until(() => waiting(id))).toBe(true);
+    // Its GPU is back; the picture this process sends it is slow to land.
+    let slowed = 0;
+    fake.opts.slow = (m, p) => (m === "POST" && p === "/upload/image" && !slowed++ ? 8000 : 0);
+    gpuBack();
+    expect(await until(() => slowed > 0)).toBe(true);
+    // Meanwhile this process stalls (no beat for 20 s), and the other takes the wait over.
+    clearInterval(globalThis.__fuobeBeat);
+    globalThis.__fuobeBeat = undefined;
+    db().prepare("UPDATE app_processes SET seen_at = ? WHERE token = ?").run(Date.now() - QUIET_MS - 1000, mine());
+    expect(await until(() => ended(id), () => app2.tick())).toBe(true);
+    expect(row(id).status, row(id).error ?? "").toBe("succeeded");
+    // This process's slow send lands after that: it sends nothing.
+    for (let i = 0; i < 600 && globalThis.__fuobeSubmitting?.has(id); i++) await sleep(20);
+    expect(globalThis.__fuobeSubmitting?.has(id)).toBe(false);
+    const sends = fake.log.map((e) => `${e.method} ${e.path}`);
+    expect(sends.lastIndexOf("POST /upload/image"), "its picture landed after the run was sent (by the other process)").toBeGreaterThan(sends.indexOf("POST /prompt"));
+    expect(row(id).status).toBe("succeeded");
+    expect(prompts(), "sent once, by the process that took it").toBe(1);
+    // (This process says it runs again: its beat starts with the runner.)
+    ensureRunner();
+    expect(globalThis.__fuobeBeat).toBeDefined();
+  });
+});
+
+/** The release before marked a run it held with a lease (OLD_LEASE), held by `by` until `until`. */
+const leaseBy = (id: string, by: string, until: number) =>
+  db().prepare("UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.lease', json_object('by', ?, 'until', ?)) WHERE id = ?").run(by, until, id);
+/** That release's claim of a run (its code, as it is): true when it took the run. */
+const oldClaim = (id: string, me: string) => {
+  const now = Date.now();
+  return (
+    db()
+      .prepare(
+        `UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.lease', json(@lease))
+         WHERE id = @id AND external_id IS NULL AND status IN ('queued', 'running')
+           AND (NOT json_valid(external_meta_json) OR json_extract(external_meta_json, '$.lease.until') IS NULL
+                OR json_extract(external_meta_json, '$.lease.until') < @now OR json_extract(external_meta_json, '$.lease.by') = @me)`,
+      )
+      .run({ id, now, me, lease: JSON.stringify({ by: me, until: now + 60_000 }) }).changes > 0
+  );
+};
+
+describe("an instance of the release before on the same database (the first deploy of this release)", () => {
+  it("a run it waits on (its live lease) is left to it by both processes; once its lease runs out, one of them goes on with the wait and sends it once", async () => {
+    gpuStarting();
+    const id = await startRun();
+    expect(await until(() => waiting(id))).toBe(true);
+    await drainHere(id);
+    shutdown().draining = false;
+    const before = healOf(id)!;
+    leaseBy(id, "old-instance", Date.now() + 60_000);
+    for (let i = 0; i < 3; i++) await both();
+    expect(turnOf(id), "neither takes it").toBeNull();
+    expect(row(id)).toMatchObject({ status: "queued", external_id: null });
+    expect(healOf(id)?.tries).toBe(before.tries);
+    expect(prompts()).toBe(0);
+    gpuBack();
+    leaseBy(id, "old-instance", Date.now() - 1);
+    expect(await until(() => ended(id), both)).toBe(true);
+    expect(row(id).status, row(id).error ?? "").toBe("succeeded");
+    expect(prompts(), "sent once").toBe(1);
+  });
+
+  it("a step of a longer run it is launching (its live lease) is left to it; once its lease runs out, one of them launches it, sent once", async () => {
+    const { step } = await doneRunAndStep();
+    leaseBy(step, "old-instance", Date.now() + 60_000);
+    for (let i = 0; i < 3; i++) await both();
+    expect(turnOf(step)).toBeNull();
+    expect(row(step)).toMatchObject({ status: "queued", external_id: null });
+    expect(prompts()).toBe(0);
+    leaseBy(step, "old-instance", Date.now() - 1);
+    expect(await until(() => ended(step), both)).toBe(true);
+    expect(row(step).status, row(step).error ?? "").toBe("succeeded");
+    expect(prompts(), "sent once").toBe(1);
+  });
+
+  it("a run whose turn this process holds carries its lease, which that release reads as held; the beat renews it, and it goes with the turn", async () => {
+    gpuStarting();
+    const id = await startRun();
+    expect(await until(() => waiting(id))).toBe(true);
+    expect(turnOf(id)).toBe(mine());
+    expect(metaOf(id).lease?.by).toBe(mine());
+    expect(metaOf(id).lease!.until).toBeGreaterThan(Date.now() + 30_000);
+    expect(oldClaim(id, "old-instance"), "that release can't take it").toBe(false);
+    // About to run out: the beat (every 5 s) renews it.
+    leaseBy(id, mine(), Date.now() + 2000);
+    expect(await until(() => metaOf(id).lease!.until > Date.now() + 30_000, async () => {}, 8000)).toBe(true);
+    expect(oldClaim(id, "old-instance")).toBe(false);
+    // This process stops: the turn goes, and the lease with it, so that release may go on with the run at once.
+    await drainHere(id);
+    expect(turnOf(id)).toBeNull();
+    expect(metaOf(id).lease).toBeUndefined();
+    expect(oldClaim(id, "old-instance")).toBe(true);
+    db().prepare("UPDATE generations SET status = 'canceled' WHERE id = ?").run(id);
   });
 });
 
