@@ -227,8 +227,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/content-factory/claude",
       // A run route that ignores ?preview=1 isn't a price check.
       "/api/faceless/episodes/e1/estimate",
-      // Restore & colourise: its run and its prompt writer.
-      "/api/restore",
+      // Restore & colourise's prompt writer uses the studio's own AI helper (its run is the account's:
+      // tests/restore-account.test.ts).
       "/api/restore/prompt",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
@@ -241,7 +241,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
-    // Cinema Studio's takes and the video tools (Remove a person's mask preview and "Redo from here", Katana's retry) run
+    // Cinema Studio's takes and the video tools (Remove a person's mask preview and "Redo from here", Katana's retry,
+    // Restore & colourise) run
     // on its own GPU or key (tests/account-cinema.test.ts, tests/account-video-tools.test.ts): with neither, connect one
     // first. A run route that ignores ?preview=1 isn't a price check.
     for (const p of [
@@ -251,6 +252,7 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/remove-object/preview",
       "/api/remove-object/reroll",
       "/api/katana/k1/retry",
+      "/api/restore",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
