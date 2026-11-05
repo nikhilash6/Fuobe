@@ -144,9 +144,11 @@ A run made only of CPU work is free and never counted. Fuobe asks the service fo
 counts against none of the policy's limits. A worker with a CPU slot runs it beside its GPU's job, in a line of its
 own ([gpu-workers.md](gpu-workers.md), "The CPU slot"). A worker with none runs it in its GPU's line, as before.
 
-3D runs (Image to 3D and the other 3D tools) aren't offered on this install's GPUs yet, whatever `kinds.model3d` says.
-They run on the account's own GPU, as before. An account with no GPU of its own is told the tool isn't available here
-(403, `code: "own-gpu-tool"`).
+A 3D model whose GLB gets its finish (an image-to-3D model, or Hi3D's refine of one) runs on this install's GPUs while
+a worker's CPU slot runs that finish ([gpu-workers.md](gpu-workers.md), "The CPU slot"); then `kinds.model3d` says, as
+for any other kind. Every other 3D run (a splat, a scene, a still made into 3D in one chain), and any 3D run while no
+CPU slot finishes it, runs on the account's own GPU, as before. An account with no GPU of its own is then told the
+tool isn't available here (403, `code: "own-gpu-tool"`).
 
 The policy's limits count runs on this install's GPUs only, never runs on the account's own GPU or key (those keep the
 install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going

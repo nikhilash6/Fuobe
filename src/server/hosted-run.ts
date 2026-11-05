@@ -29,6 +29,7 @@ import { db } from "./db";
 import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, stepsOf, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
+import { poolFinishes3d } from "./computer/finish";
 import { holdTiming } from "./queue-settings";
 import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, outputsWords, poolAllows, poolAllowsRun, poolAway, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
@@ -223,7 +224,7 @@ export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
       if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return HOSTED_WORDS.notOffered;
       continue;
     }
-    if (s.provider !== "comfyui" || s.kind === "model3d") return HOSTED_WORDS.notOffered;
+    if (s.provider !== "comfyui" || (s.kind === "model3d" && !poolFinishes3d(s))) return HOSTED_WORDS.notOffered;
     if (!poolAllows(p, s.modelId, s.presetId) || !kindAllowed(p, s.kind as RunFacts["kind"])) return HOSTED_WORDS.notOffered;
     if (!poolTakes(stepEndpoint(s))) return HOSTED_WORDS.notOffered;
   }
@@ -298,11 +299,12 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
 }
 
 /**
- * Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, a model their card can't run,
- * LoRAs, a kind of file, more outputs at once than a run there makes (`outputs`: a tool's run, which can't be cut down
- * the way the studios' own runs are), one that runs on the visitor's own setup only (`ownSetup`: a static item of
- * own-setup.ts, or a workflow none of this install's GPUs can run right now: none holds its files, serves its lane, or
- * has the memory), or (`busy`) not right now: the GPUs that could run it are being updated.
+ * Why this install's GPUs won't take a run: a 3D model no worker finishes (computer/finish.ts poolFinishes3d), a model
+ * or kind not offered there, a model their card can't run, LoRAs, a kind of file, more outputs at once than a run there
+ * makes (`outputs`: a tool's run, which can't be cut down the way the studios' own runs are), one that runs on the
+ * visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or a workflow none of this install's GPUs can
+ * run right now: none holds its files, serves its lane, or has the memory), or (`busy`) not right now: the GPUs that
+ * could run it are being updated.
  */
 export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "outputs" | "ownSetup" | "busy";
 
@@ -325,11 +327,11 @@ export const gateText = (gate: GateRefusal, guest: boolean): string =>
 
 /**
  * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
- * before Run (poolQuote), so the two always agree: its output kind (no 3D there), the policy's model, app and kind
- * lists (for the run's own model and every other model it makes a step with, such as a 2K take's finish), a worker
- * allowed its lane, a card that can run it, LoRAs, the kinds of file it sends, and every later step of a chain (planned
- * only once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs no policy is
- * checked. Passed, it gives the planned steps for the run's one price.
+ * before Run (poolQuote), so the two always agree: its output kind (3D only where a worker finishes it), the policy's
+ * model, app and kind lists (for the run's own model and every other model it makes a step with, such as a 2K take's
+ * finish), a worker allowed its lane, a card that can run it, LoRAs, the kinds of file it sends, and every later step
+ * of a chain (planned only once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs
+ * no policy is checked. Passed, it gives the planned steps for the run's one price.
  *
  * First of all, every step's own setup (own-setup.ts): a model, mode or option that runs on a visitor's own GPU or key
  * only is refused as "ownSetup" with that setup, on the run's own step and on every later step of a chain alike.
@@ -344,7 +346,9 @@ export function poolGate(
   if (own) return { ok: false, reason: "ownSetup", setup: own };
   const gpu = needsGpu(planned.route.endpoint);
   const kind = outputKind(planned.op, planned.model);
-  if (kind === "model3d") return { ok: false, reason: "model3d" };
+  // A 3D model only where a worker finishes it (its GLB checked, made for the web and given a turntable there): then the
+  // policy's kinds say, as for any other kind.
+  if (kind === "model3d" && !poolFinishes3d({ provider: planned.route.provider, op: planned.op })) return { ok: false, reason: "model3d" };
   if (p && (!poolAllowsRun(p, planned, req.presetId) || !kindAllowed(p, kind))) return { ok: false, reason: "notOffered", setup: gpu };
   // Nothing of this install's runs it right now (no worker holds its files, is allowed its lane, or has the memory it
   // needs): a run that would wait for nothing, so it runs on the visitor's own GPU instead.

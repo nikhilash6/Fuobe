@@ -236,8 +236,8 @@ export async function POST(request: Request) {
           return refuse(422, ISOLATED_ON_COMPUTER, { code: "isolated-on-computer" });
         }
         // An account's 3D model (Image to 3D, Photo to 3D, Make it 3D) runs on its own GPU or key, and is finished on
-        // this server under the account's limits (model3d-finish.ts). This install's GPUs don't take 3D: decidePlace
-        // refuses it there, and createGenerations refuses a run stamped for them.
+        // this server under the account's limits (model3d-finish.ts). This install's GPUs take a 3D model only where a
+        // worker's CPU slot finishes it (computer/finish.ts poolFinishes3d): decidePlace and createGenerations say so.
         const skip = (body as { gpuCheck?: unknown } | null)?.gpuCheck === "skip";
         const gate = await gateGeneration(gpuTargetFor(request, "read"), { request: req, route: planned.route, op: planned.op, modelId: planned.model.id, gpu: planned.gpu, h3: planned.h3, skip, actor: account?.id ?? "owner" });
         if (!gate.ok) {

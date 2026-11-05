@@ -853,6 +853,36 @@ describe("the price check before Run and the run itself", async () => {
     }
   });
 
+  it("a 3D model runs here only while a worker's CPU slot finishes it, and then as the policy's kinds say; a splat or a scene never does", async () => {
+    const a = account();
+    const acct = auth.accountById(a.id)!;
+    withBilling({ limits: NO_LIMITS });
+    const req = { ...THREE_D, account: a.id } as never;
+    const refused = async (r: Record<string, unknown>) => {
+      const run = await hostedRun.decidePlace(acct, { ...r, account: a.id } as never, undefined);
+      return run.kind === "refuse" ? run.refusal.body.error : run.kind;
+    };
+    expect(await refused(THREE_D)).toBe(OWN_GPU_TOOL_MESSAGE);
+    // A worker whose CPU slot runs the 3D finish: the model's GLB is checked, made for the web and given its turntable there.
+    db().prepare("UPDATE relay_workers SET cpu_slot_json = ? WHERE id = ?").run(JSON.stringify({ finishes: ["model3d"] }), worker.id);
+    try {
+      expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
+      expect((await hostedRun.poolQuote(acct, req, undefined))?.quote.allowed).toBe(true);
+      // The policy's kinds still say.
+      withBilling({ limits: NO_LIMITS, kinds: { model3d: false } });
+      expect(await refused(THREE_D)).toBe(HOSTED_WORDS.notOffered);
+      withBilling({ limits: NO_LIMITS });
+      // A splat or a scene gets no finish there: it stays on a visitor's own setup.
+      expect(await refused({ ...THREE_D, modelId: "oss-triposplat", op: "splat" })).toBe(OWN_GPU_TOOL_MESSAGE);
+      expect(await refused({ ...THREE_D, modelId: "oss-scene-moge", op: "scene-3d" })).toBe(OWN_GPU_TOOL_MESSAGE);
+    } finally {
+      db().prepare("UPDATE relay_workers SET cpu_slot_json = NULL WHERE id = ?").run(worker.id);
+    }
+    // No CPU slot that finishes it any more: refused again, before Run and at the run alike.
+    expect(await refused(THREE_D)).toBe(OWN_GPU_TOOL_MESSAGE);
+    expect((await hostedRun.poolQuote(acct, req, undefined))?.quote).toMatchObject({ allowed: false, text: OWN_GPU_TOOL_MESSAGE });
+  });
+
   it("while every worker that could run it is built from the catalog before the studio's update, Run is off with plain words, never a run that waits for nothing", async () => {
     const a = account();
     const acct = auth.accountById(a.id)!;

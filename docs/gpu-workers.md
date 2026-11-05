@@ -584,7 +584,8 @@ kind, in the run's class and at the run's place in line. Light CPU work has its 
 finishing job's run limit is its lane's run ceiling, which the owner sets in the queue settings. Another program on the
 GPU stops only the GPU's job; a pause now by hand stops both. A 3D run of an account on the install's GPUs is taken
 only while a worker heard from in the last few minutes, built for this studio's catalog, has a CPU slot that runs the
-3D finish.
+3D finish, and only for a model whose GLB gets that finish (an image-to-3D model, or Hi3D's refine of one). Then the
+billing policy's `kinds.model3d` says, as for any other kind.
 
 A finishing job is queued once for its run (and step), even when two app processes ask at the same time, and its
 results are stored once. It waits for a CPU slot as long as its run may wait in line. If no CPU slot takes it by then,

@@ -98,7 +98,7 @@ import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
-import { finishTask, pathOnWorker, startWorkerModelFinish, stopWorkerFinish, workersFinish } from "./computer/finish";
+import { finishTask, pathOnWorker, poolFinishes3d, startWorkerModelFinish, stopWorkerFinish, workersFinish } from "./computer/finish";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -1136,9 +1136,12 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   const found = catalogModel && offeredFor(catalogModel, original.engine);
   const shotModel = found && dualEngine(found) ? onEngine(found, engineFor(found, original.engine)) : found;
   // An account's 3D model is finished on this server under its own limits (model3d-finish.ts). On this install's GPUs it
-  // is finished on a worker's CPU slot (computer/finish.ts): offered only while a worker runs that finish. Any Angle's 3D
-  // view is the exception: a splat and its turntable, nothing to finish.
-  if (original.account && original.place === "pool" && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel && !workersFinish("model3d")) throw new Error(OWN_GPU_TOOL_MESSAGE);
+  // is finished on a worker's CPU slot (computer/finish.ts): offered only for a model whose GLB gets that finish, while a
+  // worker runs it (poolFinishes3d). Any Angle's 3D view is the exception: a splat and its turntable, nothing to finish.
+  if (original.account && original.place === "pool" && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) {
+    const ops = original.op ? [original.op] : shotModel.routes.filter((r) => r.provider === "comfyui").map((r) => r.op);
+    if (!ops.length || !ops.every((op) => poolFinishes3d({ provider: "comfyui", op }))) throw new Error(OWN_GPU_TOOL_MESSAGE);
+  }
   if (!opts.dependsOn && shotModel?.options.multiShot?.mode === "concat" && (original.params?.shots?.filter((x) => x.prompt.trim()).length ?? 0) > 1) {
     return createShotFilm(original, shotModel);
   }

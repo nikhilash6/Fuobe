@@ -42,7 +42,8 @@ import { answerPress, claimPress, pressTry, releasePress, toolPressKey, toolPres
  * - the GPU pre-flight on its own ComfyUI (409 gpu-setup with the guided fix), and the LoRAs a step adds (409
  *   comfy_missing_model);
  * - the moderation service's check, when one is set (hosted-run.ts moderateRun);
- * - a 3D model only on the account's own GPU or key (model3dAllowed): its finish runs on this server under its limits.
+ * - a 3D model on the account's own GPU or key (model3dAllowed): its finish runs on this server under its limits. On this
+ *   install's GPUs the gate offers one only where a worker finishes it (hosted-run.ts poolGate).
  *
  * Then the tool's own start runs inside asAccount (tenant.ts): every generation it creates is stamped as the account's,
  * reads only its files and goes to its GPU or key. Where a run goes is decided in one place (`placeOf`): with hosted
@@ -242,8 +243,9 @@ export interface ToolStep {
 export type ToolPlace = { kind: "own" } | ({ kind: "pool" } & ToolPoolRun) | { kind: "refuse"; refusal: Refusal };
 
 /**
- * Whether a run placed here may make a 3D model. A 3D model is finished on this server under the account's own limits
- * (model3d-finish.ts): allowed on the account's own GPU or key, never on this install's GPUs (hosted runs don't offer 3D yet).
+ * Whether a run placed on the account's own GPU or key may make a 3D model: always, finished on this server under the
+ * account's own limits (model3d-finish.ts). A run on this install's GPUs never comes here: the gate (hosted-run.ts
+ * poolGate) lets a 3D model there only where a worker's CPU slot finishes it.
  */
 export const model3dAllowed = (place: Pick<ToolPlace, "kind">): boolean => place.kind === "own";
 

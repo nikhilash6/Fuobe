@@ -43,9 +43,12 @@ const PROGRESS_EVERY_MS = 2_000;
 
 const isGlb = (o: OutputFile) => o.kind === "model3d" && (o.contentType === "model/gltf-binary" || /\.glb(\?|$)/i.test(o.url));
 
+/** The operations whose GLB gets a finish: an image-to-3D job and Hi3D's refine of one (not a scene, splat or rig). */
+export const FINISHED_3D_OPS: readonly string[] = ["image-to-3d", "refine-3d"];
+
 /** Which output a finish works on: the first GLB of an image-to-3D job (or Hi3D's refine of one) from ComfyUI (not a scene, splat or rig). */
 export function modelToFinish(r: { provider: string; op: string }, outputs: OutputFile[]): number {
-  if (r.provider !== "comfyui" || (r.op !== "image-to-3d" && r.op !== "refine-3d")) return -1;
+  if (r.provider !== "comfyui" || !FINISHED_3D_OPS.includes(r.op)) return -1;
   return outputs.findIndex((o) => isGlb(o) && !!o.assetId && !o.meta?.finish && !o.meta?.role);
 }
 

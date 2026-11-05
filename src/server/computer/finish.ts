@@ -7,7 +7,7 @@ import type { HistoryEntryLike, WantedFile } from "@/lib/relay";
 import { accountTotalBytes, accountUsage, diskFloorBytes, diskFreeBytes, diskHasRoom } from "../account-files";
 import { db } from "../db";
 import { pictureWithoutMetadata } from "../media-clean";
-import { ACCOUNT_TURNTABLE, accountFinishProblem, MODEL_FINISH_VERSION, modelToFinish, OWN_ORBIT, withTurntable } from "../model3d-finish";
+import { ACCOUNT_TURNTABLE, accountFinishProblem, FINISHED_3D_OPS, MODEL_FINISH_VERSION, modelToFinish, OWN_ORBIT, withTurntable } from "../model3d-finish";
 import { getSetting } from "../settings";
 import { absolutePath, deleteAsset, getAsset, readRef, saveFile, type Asset } from "../storage";
 import { tenantAccount } from "../tenant";
@@ -41,6 +41,15 @@ export function workersFinish(kind: FinishKind, now = Date.now()): boolean {
     .prepare("SELECT cpu_slot_json, protocol, catalog_version FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL AND pool = 'pool' AND cpu_slot_json IS NOT NULL AND seen_at > ?")
     .all(now - RETRY_WINDOW_MS) as Pick<WorkerRow, "cpu_slot_json" | "protocol" | "catalog_version">[];
   return rows.some((w) => ticketReady(w) && !!cpuSlotOf(w)?.finishes.includes(kind));
+}
+
+/**
+ * May a 3D model's run go on this install's GPUs: one whose GLB gets its finish (an image-to-3D job or Hi3D's refine of
+ * one from ComfyUI: model3d-finish.ts FINISHED_3D_OPS), while a worker's CPU slot runs that finish (workersFinish). Every
+ * other 3D model (a scene, a splat, a rig, a still made into 3D in one chain) stays on a visitor's own GPU or key.
+ */
+export function poolFinishes3d(step: { provider: string; op: string }): boolean {
+  return step.provider === "comfyui" && FINISHED_3D_OPS.includes(step.op) && workersFinish("model3d");
 }
 
 /** A finishing job's ticket as its task keeps it, or null. */
