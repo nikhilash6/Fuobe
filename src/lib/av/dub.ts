@@ -178,6 +178,23 @@ export function gpuTranslateTokens(seconds?: number): number {
   return Math.min(16_384, Math.max(2048, Math.ceil(seconds * 10)));
 }
 
+/** Who is looking, as the studio's status says it (useStatus().data?.viewer): its own GPU and keys. */
+export interface DubViewer {
+  kind: "guest" | "account";
+  gpu?: { connected: boolean };
+  keys?: readonly string[];
+}
+
+/**
+ * Whether "Review the script first" waits for the viewer's own GPU: a signed-in account's translations run there
+ * (GPU_TRANSLATE_MODEL; no fal.ai or Replicate model translates text), so an account with a key and no GPU dubs in one
+ * shot on its key instead, or connects its GPU for the review. False for the owner, a guest (asked to sign up first) and
+ * an account with neither (asked to connect before its video is added).
+ */
+export function stepsNeedGpu(viewer: DubViewer | undefined): boolean {
+  return viewer?.kind === "account" && !viewer.gpu?.connected && !!viewer.keys?.length;
+}
+
 /** Step 1 (both engines): the voice to clone, the timed transcript and one translation per target language. */
 export function prepareSteps(o: PrepareInput): DubStep[] {
   const targets = targetsFor(o.engine === "open" ? "open" : "cloud-steps", o.targets);

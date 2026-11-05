@@ -16,7 +16,7 @@ import { SourceLanguageSelect, TargetLanguages } from "@/components/av/language-
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { useEngine, useIsOwner, useModelAccess } from "@/lib/api";
+import { CONNECT_GPU_EVENT, useEngine, useIsOwner, useModelAccess, useStatus, type ConnectGpuDetail } from "@/lib/api";
 import { isPlaceholder } from "@/lib/demo-mode";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cueProblems } from "@/lib/av/cue-edit";
@@ -31,6 +31,7 @@ import {
   ONE_SHOT_MODELS,
   priceLine,
   reviewCues,
+  stepsNeedGpu,
   takeLines,
   translateKey,
   VOICE_SPLIT_IDS,
@@ -120,13 +121,17 @@ export function DubStudio() {
 }
 
 function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
-  const [engine, , engineMode] = useEngine();
+  const [engine, setEngine, engineMode] = useEngine();
   // The note about DBS on your GPU is for the studio's own install with both engines.
   const owner = useIsOwner();
   const { create } = useDubActions();
   const [video, setVideo] = useState<SlotValue | null>(null);
   const [duration, setDuration] = useState<number | undefined>(undefined);
-  const [mode, setMode] = useState<"steps" | "oneshot">("steps");
+  // An account with its key and no GPU starts on One shot: the review's translation runs on its GPU (stepsNeedGpu).
+  const keyOnly = stepsNeedGpu(useStatus().data?.viewer);
+  const cloudOffered = engineMode !== "open";
+  const [pickedMode, setMode] = useState<"steps" | "oneshot" | null>(null);
+  const mode = pickedMode ?? (keyOnly && cloudOffered ? "oneshot" : "steps");
   const [picked, setModel] = useState<OneShotModel>("heygen-translate");
   // One-shot dubbing models switched off in Settings → Models & licences leave the menu; the pick falls back to one that is on.
   const access = useModelAccess();
@@ -145,9 +150,16 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
     const l = languageByCode(c);
     return l && supportsTarget(route, l);
   });
+  // "Review the script first" for that account: One shot on its key, or its GPU connected, instead of a Translate that can't run.
+  const needsGpu = keyOnly && !oneShot;
+  const pickOneShot = () => {
+    if (engine === "open") setEngine("cloud");
+    setMode("oneshot");
+  };
+  const connectGpu = () => window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { gpuOnly: true, needs: "gpu" } }));
   const blocker = !video ? "Add the video to translate" : video.uploading ? "Uploading…" : !usable.length ? "Pick a language to dub into" : null;
   const body =
-    video && !video.uploading && usable.length
+    video && !video.uploading && usable.length && !needsGpu
       ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration, ...(engine === "open" && { voiceSplit: split }) }
       : null;
   const price = useDubPrice(body);
@@ -187,7 +199,19 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
         </div>
         <Panel title="How">
           <div role="radiogroup" aria-label="How to dub" className="grid gap-2 sm:grid-cols-2">
-            <ModeCard on={!oneShot} icon={<Languages className="size-4" />} title="Review the script first" onClick={() => setMode("steps")} note={engineMode === "open" ? "Transcribe and translate, edit every line, then voice it." : "Transcribe and translate, edit every line, then voice it. Cloud and open source."} />
+            <ModeCard
+              on={!oneShot}
+              icon={<Languages className="size-4" />}
+              title="Review the script first"
+              onClick={() => setMode("steps")}
+              note={
+                keyOnly
+                  ? "Transcribe and translate, edit every line, then voice it. The translation runs on your GPU."
+                  : engineMode === "open"
+                    ? "Transcribe and translate, edit every line, then voice it."
+                    : "Transcribe and translate, edit every line, then voice it. Cloud and open source."
+              }
+            />
             {/* One shot is cloud only: an open-source-only studio doesn't offer it (nobody here can switch the engine). */}
             {engineMode !== "open" && (
               <ModeCard
@@ -280,18 +304,38 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
             </div>
           </div>
         </Panel>
-        <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
-          <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
-            {oneShot ? `${ONE_SHOT[model].name} returns the finished video for each language.` : engine === "open" ? ROUTE_LINE.open(split) : ROUTE_LINE.cloud(owner)}
-          </p>
-          <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
-            <PriceNote price={price.data} loading={price.isFetching && !price.data} error={price.error as Error | null} hint={oneShot ? undefined : "Translating costs little; you'll see the voice's price before it speaks"} />
-            <Button size="lg" className={cn("shrink-0 rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={start} disabled={create.isPending} aria-describedby={blocker ? "dub-blocker" : undefined}>
-              {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {oneShot ? "Dub it" : "Translate"}
-            </Button>
+        {needsGpu ? (
+          <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+            <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
+              {cloudOffered ? "Reviewing the script translates every line on your GPU. On your key, One shot dubs the whole video in one go." : "Reviewing the script translates every line on your GPU."}
+            </p>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 self-end sm:self-auto">
+              <Button size="lg" variant={cloudOffered ? "outline" : "default"} className="shrink-0 rounded-full" onClick={connectGpu}>
+                <Cpu className="size-4" />
+                Connect your GPU
+              </Button>
+              {cloudOffered && (
+                <Button size="lg" className="shrink-0 rounded-full" onClick={pickOneShot}>
+                  <Wand2 className="size-4" />
+                  Use One shot
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+            <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
+              {oneShot ? `${ONE_SHOT[model].name} returns the finished video for each language.` : engine === "open" ? ROUTE_LINE.open(split) : ROUTE_LINE.cloud(owner)}
+            </p>
+            <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
+              <PriceNote price={price.data} loading={price.isFetching && !price.data} error={price.error as Error | null} hint={oneShot ? undefined : "Translating costs little; you'll see the voice's price before it speaks"} />
+              <Button size="lg" className={cn("shrink-0 rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={start} disabled={create.isPending} aria-describedby={blocker ? "dub-blocker" : undefined}>
+                {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                {oneShot ? "Dub it" : "Translate"}
+              </Button>
+            </div>
+          </div>
+        )}
         {blocker && (
           <p id="dub-blocker" className="sr-only">
             {blocker}
