@@ -218,3 +218,12 @@ describe("a cloud model a visitor runs on its own key only", () => {
     expect(keyOnlySetup(undefined, "open")).toBeNull();
   });
 });
+
+describe("Run on an item this install's GPUs don't run, for an account that has the setup", () => {
+  it("says where the next press runs it, in plain words", async () => {
+    const { movedToOwnText } = await import("@/lib/own-setup-controls");
+    expect(movedToOwnText(true)).toBe("Switched to your GPU. Press Run to start.");
+    expect(movedToOwnText(false)).toBe("Switched to your key. Press Run to start.");
+    for (const said of [movedToOwnText(true), movedToOwnText(false)]) expect(said).not.toMatch(REASON);
+  });
+});

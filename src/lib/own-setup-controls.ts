@@ -20,3 +20,11 @@ export function keyOnlySetup(m: { id: string; engine: string } | undefined, engi
   const o = m ? ownSetupOnly(m.id, m.engine === "cloud" ? "cloud" : engine) : null;
   return o?.need === "key" ? o : null;
 }
+
+/**
+ * Said when Run moves an account's draft to its own setup (a refused price check on this install's GPUs, for an account
+ * that has the GPU or key that runs it): where the next press runs it.
+ */
+export function movedToOwnText(gpuConnected: boolean): string {
+  return gpuConnected ? "Switched to your GPU. Press Run to start." : "Switched to your key. Press Run to start.";
+}

@@ -23,7 +23,7 @@ import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from 
 import { composerOnPool, composerPlace } from "@/lib/run-place";
 import { PoolNote } from "./pool-note";
 import { modelOwnSetup, poolRunsModel } from "@/lib/pool-rules";
-import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
+import { controlSetup, keyOnlySetup, movedToOwnText } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
 import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
 import { HoldFilesCtx } from "@/lib/held-files";
@@ -835,12 +835,16 @@ export function Composer({ docked }: { docked: boolean }) {
     }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
-    // Refused by the price check (Run is off; Enter in the prompt lands here too): its words, and nothing is sent.
+    // It runs on the visitor's own setup: Run opens it (Connect your GPU, Add your key, a guest's sign-up), and nothing
+    // is sent. An account that has it (its own GPU, or the key that runs it) is moved there, to run with the next press.
     if (!blocker && poolSetup) {
-      // An account that has the setup (its own GPU, or the key that runs it) runs it there.
-      if (pressSetup(poolSetup)) setRunOn("own");
+      if (pressSetup(poolSetup)) {
+        setRunOn("own");
+        toast(movedToOwnText(!!viewerInfo?.gpu.connected), { id: "composer-blocker" });
+      }
       return;
     }
+    // Refused by the price check (Run is off; Enter in the prompt lands here too): its words, and nothing is sent.
     if (!blocker && poolRefused && poolState) return void toast(poolState.text, { id: "composer-blocker" });
     if (blocker || create.isPending || signature.lock.isPending) {
       if (blocker) {
