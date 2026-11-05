@@ -3013,7 +3013,7 @@ export async function cancelGeneration(id: string): Promise<void> {
   // awaits, so it can't mark the job done in between.
   if ((JSON.parse(r.external_meta_json ?? "{}") as Record<string, unknown>).finishing) {
     stopModelFinish(id);
-  stopWorkerFinish(id);
+    stopWorkerFinish(id);
     update(id, { status: "canceled", completed_at: Date.now(), message: null });
     return;
   }
