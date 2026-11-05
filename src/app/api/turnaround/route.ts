@@ -1,9 +1,9 @@
 import { requestViewer } from "@/server/auth";
-import { bodyTooBig, guestRun, onceForAccount, priceAsRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { recordExists } from "@/server/records";
 import { body, handle, once } from "@/server/shorts-schemas";
 import { createTurnaround, planTurnaroundRun, previewTurnaround, startTurnaround, TurnaroundBodySchema, turnaroundRun, turnaroundSteps, type TurnaroundRun } from "@/server/turnaround";
-import { withPlanPrice } from "@/server/tool-runs";
+import { poolPricedCheck } from "@/server/tool-runs";
 import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
@@ -22,8 +22,7 @@ async function post(request: Request) {
     // An account's run never uses the studio's WorldCast worker, nor asks it anything.
     if (toolViewer(request).kind !== "account") await worldcastContextNow();
     const run = turnaroundRun(input);
-    // With hosted runs on, a run that would go to this install's GPUs adds its place, price and line.
-    if (new URL(request.url).searchParams.get("preview")) return Response.json(await withPlanPrice(request, previewTurnaround(run), () => turnaroundSteps(planTurnaroundRun(run))));
+    if (new URL(request.url).searchParams.get("preview")) return Response.json(previewTurnaround(run));
     const viewer = toolViewer(request);
     if (viewer.kind !== "account") {
       const result = await once("turnaround", requestId, () => createTurnaround(run));
@@ -46,11 +45,22 @@ async function post(request: Request) {
   });
 }
 
-/** A price check (`?preview=1`) is priced as the asker's run would go; a guest's run signs up first. */
+/** The steps a turnaround's body would make (a character from the library is never planned for a visitor). */
+function turnaroundPlan(raw: unknown) {
+  const input = TurnaroundBodySchema.parse(raw);
+  delete input.requestId;
+  if (input.elementId) throw new Error("Character not found");
+  return turnaroundSteps(planTurnaroundRun(turnaroundRun(input)));
+}
+
+/**
+ * A price check (`?preview=1`) is priced as the asker's run would go, with its place, price and line on this install's
+ * GPUs when it would go there (src/server/tool-runs.ts poolPricedCheck); a guest's run signs up first.
+ */
 export async function POST(request: Request) {
   const viewer = toolViewer(request);
   const preview = !!new URL(request.url).searchParams.get("preview");
-  if (preview) return priceAsRun(request, () => post(request));
+  if (preview) return poolPricedCheck(request, () => post(request), turnaroundPlan);
   if (viewer.kind === "guest") return guestRun();
   if (viewer.kind === "account") {
     const big = bodyTooBig(request);

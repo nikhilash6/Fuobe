@@ -1,10 +1,11 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { ONE_SHOT_MODELS, VOICE_SPLIT_IDS, type VoiceSplit } from "@/lib/av/dub";
-import { asViewer, bodyTooBig, guestRun, onceForAccount, priceAsRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { createDubSession, dubPlanSteps, dubRoomProblem, listDubSessions, planDub, previewDub, startDub, type DubPlan } from "@/server/dub";
 import { connectRefusal } from "@/server/connect-refusal";
 import { ShortsError } from "@/server/shorts";
+import { poolPricedCheck } from "@/server/tool-runs";
 
 const Body = z.object({
   engine: z.enum(["cloud", "open"]),
@@ -82,5 +83,6 @@ export async function POST(request: Request) {
     const big = bodyTooBig(request);
     if (big) return big;
   }
-  return preview ? priceAsRun(request, () => post(request, true)) : post(request, false);
+  // With hosted runs on, a run that would go to this install's GPUs adds its place, price and line (poolPricedCheck).
+  return preview ? poolPricedCheck(request, () => post(request, true), (raw) => dubPlanSteps(planDub(Body.parse(raw)))) : post(request, false);
 }

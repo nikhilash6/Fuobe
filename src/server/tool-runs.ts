@@ -1,10 +1,10 @@
 import "server-only";
-import { onceForAccount, runAccountTool, toolPriceCheck, toolViewer, toolWishes, type ToolStep } from "./account-tool-run";
+import { onceForAccount, priceAsRun, runAccountTool, toolPriceCheck, toolViewer, toolWishes, type ToolStep } from "./account-tool-run";
 import type { Account } from "./auth";
 import { db } from "./db";
 import { captureRun } from "./generations";
 import type { GenerationRequest } from "@/lib/catalog/types";
-import type { PlaceWish } from "./hosted-run";
+import { runOnPool } from "./hosted";
 import { withoutStamp } from "./run-stamp";
 
 /**
@@ -80,35 +80,28 @@ export async function runToolForAccount<T>(request: Request, account: Account, o
 }
 
 /**
- * A tool's price check (`?preview=1`) with its place on this install's GPUs added when the run would go there:
- * `{ place: "pool", quote, line }` beside the tool's own answer (an account's or a guest's; the owner's as always).
+ * A tool's price check (`?preview=1` or its estimate route) as one answer: the tool's own, priced as the asker's run
+ * would go (priceAsRun), with `{ place: "pool", quote, line }` added when the run would go to this install's GPUs (an
+ * account with no GPU of its own, or one whose runs go there first; a guest). Then the tool's own answer is made as a
+ * run there too (runOnPool), so an account with no GPU of its own is priced instead of asked to connect one. The
+ * owner's as always.
+ *
+ * `plan` gets the request's body (read from a copy, before `preview` reads it) and gives the run's steps; a body or a
+ * plan that doesn't check out adds nothing here (the tool's own answer says why).
  */
-export async function withPoolPrice(request: Request, answer: object, start: () => unknown, wish?: PlaceWish): Promise<object> {
-  if (toolViewer(request).kind === "owner" || "error" in answer) return answer;
-  const pool = await toolPriceCheck(request, () => dryRunSteps(start), wish);
-  return pool ? { ...answer, ...pool } : answer;
-}
-
-/**
- * The same, for a tool that plans its steps itself (turnaroundSteps, flyAroundSteps…): `plan` gives the run's steps as
- * the viewer's run plans them. The place and price come from the request's headers when the body has no field for them.
- */
-export async function withPlanPrice(request: Request, answer: unknown, plan: () => ToolStep[] | Promise<ToolStep[]>): Promise<unknown> {
-  if (toolViewer(request).kind === "owner" || !answer || typeof answer !== "object" || "error" in answer) return answer;
-  const pool = await toolPriceCheck(request, plan);
-  return pool ? { ...answer, ...pool } : answer;
-}
-
-/** Every stored file a body names (`/api/files/…`), wherever it sits: the files an account's run must own. */
-export function bodyFiles(value: unknown): string[] {
-  const out = new Set<string>();
-  const walk = (v: unknown, depth: number) => {
-    if (depth > 8) return;
-    if (typeof v === "string") {
-      if (v.startsWith("/api/files/")) out.add(v);
-    } else if (Array.isArray(v)) for (const x of v) walk(x, depth + 1);
-    else if (v && typeof v === "object") for (const x of Object.values(v)) walk(x, depth + 1);
-  };
-  walk(value, 0);
-  return [...out];
+export async function poolPricedCheck(
+  request: Request,
+  preview: () => Response | Promise<Response>,
+  plan: (body: unknown) => ToolStep[] | Promise<ToolStep[]>,
+): Promise<Response> {
+  const viewer = toolViewer(request);
+  if (viewer.kind === "owner") return preview();
+  let body: Promise<unknown> | null = null;
+  const read = () => (body ??= request.clone().json().catch(() => null));
+  const pool = await toolPriceCheck(request, async () => plan(await read()));
+  if (!pool) return priceAsRun(request, preview);
+  const res = await runOnPool(viewer.kind === "account" ? viewer.account.id : null, preview);
+  const answer: unknown = res.ok ? await res.clone().json().catch(() => null) : null;
+  if (!answer || typeof answer !== "object" || Array.isArray(answer) || "error" in answer) return res;
+  return Response.json({ ...answer, ...pool }, { status: res.status, headers: { "Cache-Control": "no-store" } });
 }

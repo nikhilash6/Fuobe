@@ -1,7 +1,8 @@
-import { bodyTooBig, guestRun, onceForAccount, priceAsRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { AudioToolBody, AudioToolError, audioToolFiles, audioToolSteps, planAudioTool, previewAudioTool, runAudioTool, startAudioTool, type AudioToolPlan } from "@/server/audio-tools";
 import { connectRefusal } from "@/server/connect-refusal";
 import { ConnectComfyError } from "@/server/generations";
+import { poolPricedCheck } from "@/server/tool-runs";
 
 /** What a field that doesn't check out means, in words the page shows. */
 const MESSAGES: Record<string, string> = {
@@ -83,5 +84,6 @@ export async function POST(request: Request) {
     const big = bodyTooBig(request);
     if (big) return big;
   }
-  return preview ? priceAsRun(request, () => post(request, true)) : post(request, false);
+  // With hosted runs on, a run that would go to this install's GPUs adds its place, price and line (poolPricedCheck).
+  return preview ? poolPricedCheck(request, () => post(request, true), (raw) => audioToolSteps(planAudioTool(AudioToolBody.parse(raw)))) : post(request, false);
 }

@@ -1,8 +1,9 @@
 import { connection } from "next/server";
-import { bodyTooBig, guestRun, onceForAccount, priceAsRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { asAccount } from "@/server/generations";
 import { createKatana, KatanaBody, katanaRoom, katanaRunSteps, listKatana, planKatanaRun, previewKatana, startKatana, type KatanaRun } from "@/server/katana";
 import { connectRefusal } from "@/server/connect-refusal";
+import { poolPricedCheck } from "@/server/tool-runs";
 
 /**
  * Recent Katana runs with the state of every step: the owner's, or a signed-in account's own (its jobs are its own
@@ -31,7 +32,8 @@ const badBody = (path: string) =>
 export async function POST(request: Request) {
   const preview = new URL(request.url).searchParams.get("preview") === "1";
   const viewer = toolViewer(request);
-  if (preview) return priceAsRun(request, () => post(request, true));
+  // With hosted runs on, a run that would go to this install's GPUs adds its place, price and line (poolPricedCheck).
+  if (preview) return poolPricedCheck(request, () => post(request, true), (raw) => katanaRunSteps(planKatanaRun(KatanaBody.parse(raw))));
   if (viewer.kind === "guest") return guestRun();
   if (viewer.kind === "owner") return post(request, false);
   const big = bodyTooBig(request);

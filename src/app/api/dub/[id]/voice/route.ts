@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { asViewer, bodyTooBig, guestRun, onceForAccount, priceAsRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { asViewer, bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { CueSchema, getDubSession, planVoiceDub, previewVoiceDub, startVoiceDub, voiceDub, voicePlanSteps, type VoicePlan } from "@/server/dub";
+import { poolPricedCheck } from "@/server/tool-runs";
 
 const Body = z.object({
   lang: z.string().min(2).max(12),
@@ -55,5 +56,15 @@ export async function POST(request: Request, ctx: RouteContext<"/api/dub/[id]/vo
     const big = bodyTooBig(request);
     if (big) return big;
   }
-  return preview ? priceAsRun(request, () => post(request, ctx, true)) : post(request, ctx, false);
+  if (!preview) return post(request, ctx, false);
+  // With hosted runs on, a run that would go to this install's GPUs adds its place, price and line (poolPricedCheck).
+  const { id } = await ctx.params;
+  return poolPricedCheck(
+    request,
+    () => post(request, ctx, true),
+    (raw) => {
+      const b = Body.parse(raw);
+      return voicePlanSteps(planVoiceDub(id, b.lang, { cues: b.cues, lipsync: b.lipsync }));
+    },
+  );
 }

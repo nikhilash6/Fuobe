@@ -1,7 +1,7 @@
-import { bodyTooBig, guestRun, onceForAccount, priceAsRun, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
 import { body, handle, once } from "@/server/shorts-schemas";
 import { createFlyAround, flyAroundSteps, FlyAroundSchema, planFlyAroundRun, previewFlyAround, startFlyAround, type FlyAroundRun } from "@/server/fly-around";
-import { withPlanPrice } from "@/server/tool-runs";
+import { poolPricedCheck } from "@/server/tool-runs";
 import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
@@ -16,8 +16,7 @@ async function post(request: Request) {
     // The WorldCast worker's answer, fresh, before the plan reads it (N7-9). An account's run never uses it.
     // An account's run never uses the studio's WorldCast worker, nor asks it anything.
     if (toolViewer(request).kind !== "account") await worldcastContextNow();
-    // With hosted runs on, a run that would go to this install's GPUs adds its place, price and line.
-    if (new URL(request.url).searchParams.get("preview")) return Response.json(await withPlanPrice(request, previewFlyAround(input), () => flyAroundSteps(planFlyAroundRun(input))));
+    if (new URL(request.url).searchParams.get("preview")) return Response.json(previewFlyAround(input));
     const viewer = toolViewer(request);
     if (viewer.kind !== "account") {
       // A plan that can't run (FlyAroundError) is a 422 with its reason, as any planner's error is.
@@ -41,10 +40,13 @@ async function post(request: Request) {
   }, request);
 }
 
-/** A price check (`?preview=1`) is priced as the asker's run would go; a guest's run signs up first. */
+/**
+ * A price check (`?preview=1`) is priced as the asker's run would go, with its place, price and line on this install's
+ * GPUs when it would go there (src/server/tool-runs.ts poolPricedCheck); a guest's run signs up first.
+ */
 export async function POST(request: Request) {
   const viewer = toolViewer(request);
-  if (new URL(request.url).searchParams.get("preview")) return priceAsRun(request, () => post(request));
+  if (new URL(request.url).searchParams.get("preview")) return poolPricedCheck(request, () => post(request), (raw) => flyAroundSteps(planFlyAroundRun(FlyAroundSchema.parse(raw))));
   if (viewer.kind === "guest") return guestRun();
   if (viewer.kind === "account") {
     const big = bodyTooBig(request);
