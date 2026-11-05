@@ -642,11 +642,18 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   and the cloud run makes their outputs, never the whole batch again; while it is on its way the
   batch's other tiles don't offer the button, and a later press on one of them answers 409 "This run
   has already started or stopped, so nothing new was run." (`replaces` beside the request names the
-  run). A step of a longer run (a relight and then its clip, a film's shot, a Cinema, Storyboard or
-  Mixed Media step) doesn't offer it: moved alone, the step would stop and the rest of the run would
-  go without it. Its wait goes on, and `replaces` on it answers 409 "This step is part of a longer
-  run, so it can't move to your key on its own. It goes on by itself, or cancel it and run the tool
-  again with your key." The Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
+  run). A step of a longer run (a relight and then its clip, a film's shot, a Mixed Media step), or a
+  job of a batch whose other waiting job a later step waits for, doesn't offer it: moved alone, the
+  step would stop and the rest of the run would go without it. Its wait goes on, and `replaces` on it
+  answers 409 "This step is part of a longer run, so it can't move to your key on its own. It goes on
+  by itself, or cancel it and run the tool again with your key." (`chained-run`). Nor does a run a
+  tool made for one of the account's projects (a Cinema take, a Storyboard board, a short, a Faceless
+  or Content Factory run), even a take of one step: moved alone, it would leave its project, where it
+  would show Canceled. `replaces` on it answers 409 "This run is part of one of your projects, so it
+  can't move to your key on its own. It goes on by itself, or cancel it and run it again in its
+  project with your key." (`project-run`). Only a run made on its own (`POST /api/generations`, as a
+  studio's Generate makes it, or Image to 3D) moves: the server marks it so when it makes it, and the
+  tile offers the button only where a press can act. The Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
   GPU that is off 30 minutes, one starting up 10 minutes, and 40 minutes in all. Before the run
   fails, the GPU is asked once more. When the account saves a new address (or password) while a
   run waits, the run goes there; when it disconnects its GPU, the run stops and says so, with
@@ -660,11 +667,13 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   that waits renews its hold on it: after a restart, or when a deploy's new instance takes over,
   the run goes on with what is left of its wait (its tries and its time), on one instance only; so
   does a step of a longer run. A server that is stopping
-  sends no more tries and lets go of its waiting runs at once, for the next instance. A try marks
-  the run just before it sends the job itself: a server cut off in the middle of that send leaves a
-  job the GPU or provider may already have, so the next instance doesn't send it again, and the run
-  fails with "This run was interrupted while it was being sent. Press Retry." (a step of a longer
-  run too). Its tile doesn't say **Not billed**, because the provider may have the job. A run planned for
+  sends no more tries and lets go of its waiting runs at once, for the next instance. A run that
+  waited, and a step of a longer run on any try (its first too), is marked just before the try sends
+  the job itself: a server cut off in the middle of that send leaves a job the GPU or provider may
+  already have, so the next instance doesn't send it again, and the run fails with "This run was
+  interrupted while it was being sent. Press Retry." Its tile doesn't say **Not billed**, because
+  the provider may have the job. A try the provider turned down as it was sent (a refused key, an
+  empty balance, a model gone: a 4xx answer) still says **Not billed**. A run planned for
   another provider by then stops in plain words. Runs that wait for the GPU count apart from the 4
   runs at once (up to 4 more wait); a fifth waiting run answers 429 "You have 4 runs waiting for
   your GPU. Cancel one, or run one with your key, to start another." Runs that wait on a key (its
@@ -713,7 +722,8 @@ owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words
   waited). A run that stops in this server's own words writes one too, with its cause: cut off by a
   restart (`interrupted`, or `interrupted-sending` in the middle of its send), refused as its
   account runs now (`connect-gpu`, `add-key`, `switched-off`…), its keys changed while it waited
-  (`keys-changed`), or a step whose earlier step didn't finish (`earlier-step`). It never holds
+  (`keys-changed`), or a step whose earlier step didn't finish (`earlier-step`: the first step after
+  the failure only; the steps after it, which stop for the same reason, write none). It never holds
   a prompt, a key, a token, an address or a file's name. A failed run also
   keeps, for the owner only, the cause, stage, code, kind of address and the provider's own words
   (cleaned, 2 KB at most): `ownRunNote(id)` in `src/server/run-events.ts` reads it, and no account
