@@ -58,7 +58,7 @@ const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
-const { getGeneration, ensureRunner, updateLive } = await import("@/server/generations");
+const { getGeneration, ensureRunner, QUIET_MS, updateLive } = await import("@/server/generations");
 const pool = await import("@/server/computer/pool");
 const tasks = await import("@/server/computer/tasks");
 const billing = await import("@/server/billing");
@@ -1549,12 +1549,9 @@ describe("a deploy while results are being sent", () => {
 
 describe("two app processes on one database (a deploy's overlap)", () => {
   let app2: AppProcess;
+  const appEnv = () => ({ FUOBE_HOSTED_RUNS: "1", FUOBE_BILLING_URL: svc.address, FUOBE_BILLING_TOKEN: svc.token, COMFYUI_URL: DEAD, FUOBE_PUBLIC_SIGNUP: "1" });
   beforeAll(async () => {
-    app2 = await startAppProcess({
-      dataDir: dir,
-      env: { FUOBE_HOSTED_RUNS: "1", FUOBE_BILLING_URL: svc.address, FUOBE_BILLING_TOKEN: svc.token, COMFYUI_URL: DEAD, FUOBE_PUBLIC_SIGNUP: "1" },
-      allow: [comfy.url],
-    });
+    app2 = await startAppProcess({ dataDir: dir, env: appEnv(), allow: [comfy.url] });
   });
   afterAll(async () => {
     await app2?.stop();
@@ -1562,6 +1559,26 @@ describe("two app processes on one database (a deploy's overlap)", () => {
 
   /** The run as the account's session reads it from the other process. */
   const there = (id: string) => async () => (await app2.generation(id, a1)) as unknown as RunLike;
+
+  /** When the app process that names its turns `token` last said it still runs (none: it exited, or never ran). */
+  const seenAt = (token: string) => (db().prepare("SELECT seen_at FROM app_processes WHERE token = ?").get(token) as { seen_at: number } | undefined)?.seen_at;
+  /** The app process that holds the turn to save the run's result. */
+  const turnOf = (id: string) => (db().prepare("SELECT finish_by FROM generation_runs WHERE id = ?").get(id) as { finish_by: string | null } | undefined)?.finish_by ?? null;
+  /** That process is in the middle of saving the run's result: it took the turn, minutes before its turn runs out. */
+  const holdTurn = (id: string, token: string) => db().prepare("UPDATE generation_runs SET finish_by = ?, finish_until = ? WHERE id = ?").run(token, Date.now() + 4 * MIN, id);
+
+  /** One more app process on this database, and the name its turns carry. */
+  async function anotherApp(): Promise<{ app: AppProcess; token: string }> {
+    const tokens = () => (db().prepare("SELECT token FROM app_processes").all() as { token: string }[]).map((r) => r.token);
+    const known = new Set(tokens());
+    const app = await startAppProcess({ dataDir: dir, env: appEnv(), allow: [comfy.url] });
+    const token = tokens().find((t) => !known.has(t));
+    if (!token) {
+      await app.stop();
+      throw new Error("The new app process never said it runs");
+    }
+    return { app, token };
+  }
 
   it("the other process serves the worker and a session: the same run, the same state", async () => {
     const w = standInWorker();
@@ -1656,6 +1673,73 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     expect(getGeneration(id)?.status).toBe("running");
     // Its turn runs out: this process saves the result.
     db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, id);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("an app restarted while it saved a result collects it at once: the app that stopped gave its turn back as it exited", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    expect(getGeneration(id)?.status).toBe("running");
+    // The app before the restart was saving the result (it holds the turn, for minutes yet) when it was told to stop.
+    const { app, token } = await anotherApp();
+    try {
+      holdTurn(id, token);
+      for (let i = 0; i < 3; i++) await tick();
+      expect(getGeneration(id)?.status, "a turn whose app still runs is left to it").toBe("running");
+      expect(updateLive(id, { message: POOL_WORDS.inLine })).toBe(false);
+      // While it runs, it says so every few seconds: a turn it has held longer than its quiet limit stays its own.
+      const quietSince = seenAt(token)! - QUIET_MS - 1000;
+      db().prepare("UPDATE app_processes SET seen_at = ? WHERE token = ?").run(quietSince, token);
+      for (let i = 0; i < 150 && seenAt(token)! <= quietSince; i++) await sleep(100);
+      expect(seenAt(token), "its next word").toBeGreaterThan(quietSince);
+      await tick();
+      expect(getGeneration(id)?.status).toBe("running");
+      expect(turnOf(id)).toBe(token);
+    } finally {
+      await app.stop();
+    }
+    // It exited as an app does when it is told to stop: its turn went with it, and this app saves the result now.
+    expect(seenAt(token)).toBeUndefined();
+    expect(turnOf(id)).toBeNull();
+    await tick();
+    expect(getGeneration(id)?.status).toBe("succeeded");
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("an app killed while it saved a result leaves it to this one once it has been quiet for 20 s, minutes before its turn runs out", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    const { app, token } = await anotherApp();
+    holdTurn(id, token);
+    await app.kill();
+    // Killed: nothing of it ran as it ended, so its turn and its last word are still there.
+    expect(turnOf(id)).toBe(token);
+    await tick();
+    expect(getGeneration(id)?.status, "its last word is a moment old: it may only be slow").toBe("running");
+    // 20 s with no word from it: it stopped, and this app saves the result, long before its turn would run out.
+    clock();
+    vi.setSystemTime(Date.now() + QUIET_MS + 1000);
+    await tick();
+    expect(getGeneration(id)?.status).toBe("succeeded");
+    expect(turnOf(id)).not.toBe(token);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 

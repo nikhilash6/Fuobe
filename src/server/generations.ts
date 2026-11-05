@@ -2328,6 +2328,7 @@ export function ensureRunner(): void {
 
 function startRunner(): void {
   watchGenerations(db());
+  keepBeating();
   const cur = globalThis.__fuobeRunner;
   if (cur) {
     // After a dev hot-reload, point the existing timers at this module's (fresh) code.
@@ -2717,9 +2718,9 @@ async function pollOne(r: Row): Promise<void> {
 
 /**
  * Change a run the runner looked at, only while it still goes (queued or running, and not held for its output check) and
- * no other app process holds its turn to save its results. A look that took a while (a slow poll, a deploy's overlap) never takes a run another
- * process saved, failed or canceled meanwhile back to an earlier state, and never fails a run another process is
- * saving. Returns whether the change was made.
+ * no other app process that still runs holds its turn to save its results. A look that took a while (a slow poll, a
+ * deploy's overlap) never takes a run another process saved, failed or canceled meanwhile back to an earlier state, and
+ * never fails a run another process is saving. Returns whether the change was made.
  */
 export function updateLive(id: string, fields: Partial<Row>, now = Date.now()): boolean {
   const keys = Object.keys(fields);
@@ -2728,28 +2729,90 @@ export function updateLive(id: string, fields: Partial<Row>, now = Date.now()): 
     db()
       .prepare(
         `UPDATE generations SET ${keys.map((k) => `${k} = @${k}`).join(", ")}, updated_at = @__now WHERE id = @__id AND status IN ('queued', 'running') AND stage IS NULL
-           AND NOT EXISTS (SELECT 1 FROM generation_runs WHERE id = @__id AND finish_by IS NOT NULL AND finish_by != @__me AND finish_until >= @__now)`,
+           AND NOT EXISTS (SELECT 1 FROM generation_runs t WHERE t.id = @__id AND t.finish_by IS NOT NULL AND t.finish_by != @__me AND t.finish_until >= @__now
+             AND NOT ${HOLDER_QUIET})`,
       )
-      .run({ ...fields, __now: now, __id: id, __me: runnerToken() }).changes > 0
+      .run({ ...fields, __now: now, __id: id, __me: runnerToken(), __quiet: now - QUIET_MS }).changes > 0
   );
 }
 
 /** How long an app process holds the turn to save a finished run's results (it renews it as it goes). */
 const FINISH_TURN_MS = 5 * 60_000;
+/** How often an app process says it still runs (keepBeating)… */
+const BEAT_MS = 5_000;
+/** …and how long after its last word it counts as stopped (killed, or crashed): its turns are free then, before they run out. */
+export const QUIET_MS = 20_000;
+/** A process quiet this long is forgotten. */
+const FORGET_MS = 24 * 60 * 60_000;
+
+/** SQL: the process holding turn `t` has been quiet since before @__quiet. A turn whose process has no row waits to run out. */
+const HOLDER_QUIET = "EXISTS (SELECT 1 FROM app_processes p WHERE p.token = t.finish_by AND p.seen_at < @__quiet)";
 
 declare global {
   /** This app process, as the runs whose results it saves name it. */
   var __fuobeRunnerToken: string | undefined;
+  /** This app process's beat (keepBeating). */
+  var __fuobeBeat: ReturnType<typeof setInterval> | undefined;
 }
 
 const runnerToken = () => (globalThis.__fuobeRunnerToken ??= `${process.pid}:${nanoid(12)}`);
 
+/** Say that this app process still runs. */
+function beat(now = Date.now()): void {
+  db()
+    .prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET seen_at = excluded.seen_at")
+    .run(runnerToken(), now, now);
+}
+
+/**
+ * From now on, this app process says every 5 s that it still runs (in the database, so every process on it reads that,
+ * wherever it runs), and another process takes a turn this one holds only once this one has been quiet for 20 s. When it
+ * exits, it gives its turns back at once, so the app that starts next saves those runs straight away. Once per process:
+ * the runner starts it, and so does the first turn it takes.
+ */
+function keepBeating(): void {
+  if (globalThis.__fuobeBeat) return;
+  const now = Date.now();
+  try {
+    beat(now);
+    db().prepare("DELETE FROM app_processes WHERE seen_at < ?").run(now - FORGET_MS);
+  } catch (e) {
+    console.warn(`[generations] app process: ${(e as Error).message}`);
+  }
+  const timer = setInterval(() => {
+    try {
+      beat();
+    } catch {
+      // A busy or closed database: the next beat says it.
+    }
+  }, BEAT_MS);
+  timer.unref?.();
+  globalThis.__fuobeBeat = timer;
+  process.once("exit", giveTurnsBack);
+}
+
+/** This app process exits (it saves nothing more): its turns go back now, and its row with them. */
+function giveTurnsBack(): void {
+  try {
+    const d = db();
+    const me = runnerToken();
+    d.transaction(() => {
+      d.prepare("UPDATE generation_runs SET finish_by = NULL, finish_until = NULL WHERE finish_by = ? AND finish_until >= ?").run(me, Date.now());
+      d.prepare("DELETE FROM app_processes WHERE token = ?").run(me);
+    })();
+  } catch {
+    // The database closed first: its turns are free once this process has been quiet for 20 s.
+  }
+}
+
 /**
  * Take (or renew) this app process's turn to save a run's results: only while the run still goes, and only when no other
- * process holds the turn (or its turn ran out: that process stopped part way, so this one takes over). Two processes on
- * one database (a deploy's overlap) never both save a run, so a run is finished once.
+ * process holds the turn, or the one that holds it stopped part way (its turn ran out, or it has been quiet for 20 s:
+ * killed, or crashed), so this one takes over. Two processes on one database (a deploy's overlap) never both save a
+ * run, so a run is finished once.
  */
 export function claimFinish(id: string, now = Date.now()): boolean {
+  keepBeating();
   const d = db();
   return d
     .transaction((): boolean => {
@@ -2760,8 +2823,11 @@ export function claimFinish(id: string, now = Date.now()): boolean {
       d.prepare("INSERT OR IGNORE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, NULL)").run(id, now);
       return (
         d
-          .prepare("UPDATE generation_runs SET finish_by = ?, finish_until = ? WHERE id = ? AND (finish_by IS NULL OR finish_by = ? OR finish_until IS NULL OR finish_until < ?)")
-          .run(me, now + FINISH_TURN_MS, id, me, now).changes > 0
+          .prepare(
+            `UPDATE generation_runs AS t SET finish_by = @__me, finish_until = @until WHERE t.id = @__id
+               AND (t.finish_by IS NULL OR t.finish_by = @__me OR t.finish_until IS NULL OR t.finish_until < @__now OR ${HOLDER_QUIET})`,
+          )
+          .run({ __me: me, until: now + FINISH_TURN_MS, __id: id, __now: now, __quiet: now - QUIET_MS }).changes > 0
       );
     })
     .immediate();

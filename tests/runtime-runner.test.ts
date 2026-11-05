@@ -152,6 +152,34 @@ describe("restarts (S7)", () => {
       globalThis.__fuobeSubmitting!.delete("uploading-1");
     }
   });
+
+  it("collects a result whose save the app before a restart left part way at once, not when that app's turn would run out", async () => {
+    const g = image("saved by the app before a restart");
+    await until(() => row(g.id).external_id);
+    // That app took the turn to save the result, minutes before its turn runs out, and still said it ran a moment ago.
+    const now = Date.now();
+    db().prepare("INSERT OR IGNORE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, NULL)").run(g.id, now);
+    db().prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES ('app-before', ?, ?)").run(now - 60_000, now);
+    db().prepare("UPDATE generation_runs SET finish_by = 'app-before', finish_until = ? WHERE id = ?").run(now + 4 * 60_000, g.id);
+    const poll = mockProvider.poll;
+    let finished = false;
+    mockProvider.poll = async (ctx) => {
+      const r = await poll(ctx);
+      if (ctx.externalId === row(g.id).external_id && r.state === "succeeded") finished = true;
+      return r;
+    };
+    try {
+      // The result is ready at the provider. While that app may still be saving it, it is left to that app.
+      await until(() => finished, 10_000);
+      await sleep(2_000);
+      expect(["queued", "running"]).toContain(row(g.id).status);
+      // 20 s with no word from it (it was killed, or crashed): this app saves the result at its next turn.
+      db().prepare("UPDATE app_processes SET seen_at = ? WHERE token = 'app-before'").run(Date.now() - gens.QUIET_MS - 1000);
+      expect((await settle(g.id, 5_000)).status).toBe("succeeded");
+    } finally {
+      mockProvider.poll = poll;
+    }
+  });
 });
 
 describe("cancel while submitting (S13)", () => {

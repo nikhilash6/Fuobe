@@ -1015,6 +1015,17 @@ const RUNNER_COLUMNS: [string, string, string][] = [
   ["generation_runs", "finish_until", "INTEGER"],
 ];
 
+/**
+ * Each app process on this database, by the name its turns carry, and when it last said it still runs (generations.ts
+ * keepBeating). A turn whose process went quiet is free before it runs out. Made here rather than as a numbered
+ * migration, so branches that add migrations never clash over its place.
+ */
+const RUNNER_TABLES = `CREATE TABLE IF NOT EXISTS app_processes (
+    token TEXT PRIMARY KEY,
+    started_at INTEGER NOT NULL,
+    seen_at INTEGER NOT NULL
+  );`;
+
 /** Columns of the relay tables that came later: [table, column, type]. */
 const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_runners", "comfy", "TEXT NOT NULL DEFAULT 'ok'"],
@@ -1138,6 +1149,7 @@ function open(): Database.Database {
   }
   // The optional billing and moderation services (billing.ts, moderation.ts): their tables and columns.
   db.exec(HOOK_TABLES);
+  db.exec(RUNNER_TABLES);
   for (const [table, column, type] of [...HOOK_COLUMNS, ...RUNNER_COLUMNS]) {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
     if (!has) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
