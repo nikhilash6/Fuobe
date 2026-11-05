@@ -34,6 +34,7 @@ const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
 const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
+const { catalogVersion } = await import("@/server/computer/catalog-version");
 const { ComputerRunner } = await import("@/lib/computer-runner");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -88,7 +89,8 @@ function addTask(o: { owner?: boolean } = {}): string {
     principal: "owner",
     generationId: gid,
     graph,
-    ...(!o.owner && { ticket: { inputs: [{ slot: "images.0", name: input }] } as never }),
+    // (Made for this studio's catalog: an older one would be made again before a claim, and this one composes nothing.)
+    ...(!o.owner && { ticket: { catalogVersion: catalogVersion(), inputs: [{ slot: "images.0", name: input }] } as never }),
     // A person's run (an account's): the studio counts it in the beat's claimableNow.
     pool: { pools: ["pool"], ...(!o.owner && { account: "turns-account" }), rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
   }).id;
