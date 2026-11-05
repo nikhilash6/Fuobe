@@ -305,6 +305,11 @@ interface HealState {
   /** The words of the last try (the run fails in them when the wait is over), and what helps meanwhile. */
   words?: string;
   trouble?: RunTrouble;
+  /**
+   * When a try began sending the job itself (markSending): an instance that takes the wait over later (this one cut off
+   * in the middle of that send) doesn't send it again. Cleared when the try fails and the run waits again (markWaiting).
+   */
+  sending?: number;
 }
 
 const readMeta = (json: string | null | undefined): PendingMeta & Record<string, unknown> => {
@@ -2008,6 +2013,9 @@ async function submitNow(
     // instead of sending files to an address that answers nothing.
     const known = link && !resume ? cachedGpuState(account!, link.url) : undefined;
     for (;;) {
+      // A try again (its wait kept with the run) while this server stops: nothing more is sent from here, and the run
+      // is left as it is, for the next instance to go on with.
+      if ((heal.tries > 0 || resume) && draining()) return;
       let error: unknown;
       if (heal.tries === 0 && !resume && known && !known.online && known.trouble?.retryable) error = troubleError(known.trouble);
       else if (link && (heal.tries > 0 || lookFirst)) {
@@ -2023,6 +2031,8 @@ async function submitNow(
           if (account && heal.tries > 0) recordOwnRun({ run: id, account, ...facts({ attempt: heal.tries, waitedMs: Date.now() - heal.since }), hostKind: hostKindOf(gpu), outcome: "healed" });
           return;
         } catch (e) {
+          // Another instance holds the run now, or this server is stopping: left as it is, for the instance that goes on.
+          if (e instanceof LetGo) return;
           error = e;
           // A voice the provider cloned for this run (a billed step) is kept for the next try.
           const voice = (e as { voiceEmbedding?: unknown } | null)?.voiceEmbedding;
@@ -2078,7 +2088,41 @@ async function submitNow(
     }
   } finally {
     submitting().delete(id);
+    // This server is stopping: a run still waiting here is let go of now, so the next instance takes it at its next
+    // look instead of after the hold runs out.
+    if (draining()) letGo(id);
   }
+}
+
+/** handOver stopped before the send: another instance holds the run, or this server is stopping while the run waited. */
+class LetGo extends Error {}
+
+/** Give up this instance's hold on a run still waiting for its hand-over (another instance may take it at once). */
+function letGo(id: string): void {
+  db()
+    .prepare(
+      `UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.lease')
+       WHERE id = @id AND ${PENDING} AND json_valid(external_meta_json) AND json_extract(external_meta_json, '$.lease.by') = @me`,
+    )
+    .run({ id, me: instance() });
+}
+
+/**
+ * Just before a run's job is sent. A run that waited (its `heal` kept with it) is marked as being sent: an instance that
+ * takes the wait over later (this one cut off in the middle of the send, by a restart or a deploy) then doesn't send it
+ * a second time. Throws LetGo when another instance holds the run, or when this server is stopping and the run waited
+ * (the next instance goes on with its wait, and sends it).
+ */
+function markSending(id: string): void {
+  const r = db().prepare(`SELECT external_meta_json FROM generations WHERE id = ? AND ${PENDING}`).get(id) as Pick<Row, "external_meta_json"> | undefined;
+  if (!r) throw new Error("Stopped");
+  if (heldElsewhere(r.external_meta_json)) throw new LetGo("Held by another instance");
+  // A first try (nothing waited): a send cut off here fails at the next instance's look (sweepInterrupted).
+  if (!readMeta(r.external_meta_json).heal) return;
+  if (draining()) throw new LetGo("Stopping");
+  db()
+    .prepare(`UPDATE generations SET external_meta_json = json_set(external_meta_json, '$.heal.sending', @now) WHERE id = @id AND ${PENDING} AND json_type(external_meta_json, '$.heal') = 'object'`)
+    .run({ id, now: Date.now() });
 }
 
 /** Self-healing's clock: tests make it faster (0.001: a 30-minute wait takes 1.8 s). */
@@ -2094,6 +2138,8 @@ function markWaiting(id: string, heal: HealState, trouble: Diagnosis, next: numb
   heal.next = next;
   heal.words = trouble.words;
   heal.trouble = troubleOf(trouble);
+  // The try that was sending failed: the next one may send.
+  delete heal.sending;
   return (
     db()
       .prepare(
@@ -2336,6 +2382,8 @@ const FINAL_AT_POLL: ReadonlySet<string> = new Set(["key-rejected", "key-balance
 
 /** How long an account's run's polls on its own GPU may keep failing before it stops (its key's provider: the run's own clock). */
 const POLL_HEAL_MS = { comfyui: 15 * 60_000 };
+/** The growing wait between an account's polls that keep failing. */
+const POLL_BACKOFF = { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 };
 /** Polls that fail in a row before the tile says it is waiting. */
 const POLL_MISSES_SAID = 3;
 /** How long a made result's copy is tried again (a GPU or provider that dropped the connection for a while). */
@@ -2406,7 +2454,12 @@ async function healPoll(r: Row, ctx: PollContext, account: string, pollError: un
   const now = Date.now();
   const h = pollHeals().get(r.id) ?? { first: now, n: 0, next: 0 };
   h.n++;
-  h.next = now + backoffMs(h.n, { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 }, d.retryAfterMs) * SELF_HEAL.scale;
+  // What the other side asked for (Retry-After) is kept to, up to twice the longest wait: a run's own clocks (its GPU's
+  // budget below, a run's time in pollOne) are read at each poll, so a day-long Retry-After can't hold the run.
+  const ask = Math.min(backoffMs(h.n, POLL_BACKOFF, d.retryAfterMs), POLL_BACKOFF.maxMs * 2) * SELF_HEAL.scale;
+  // A run on its own GPU asks once more when its budget ends, whatever the wait said.
+  const budgetLeft = r.provider === "comfyui" ? Math.max(0, h.first + POLL_HEAL_MS.comfyui * SELF_HEAL.scale - now) : Infinity;
+  h.next = now + Math.min(ask, budgetLeft);
   pollHeals().set(r.id, h);
   if (h.n === 1) ownEvent(r.id, account, pollError, d, factsOf(r, { stage: "poll", attempt: 1 }), "waiting");
   if (r.provider === "comfyui" && now - h.first >= POLL_HEAL_MS.comfyui * SELF_HEAL.scale) {
@@ -2782,6 +2835,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     if (cloned && route.map?.cloneFirst && !input.voiceEmbedding) input.voiceEmbedding = cloned;
     // Nothing is sent once the run stopped being this one's to send (cancelled, failed, or taken by another instance).
     if (!going()) throw new Error("Stopped");
+    markSending(id);
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });
     // A saved voice the cloud just cloned keeps the embedding (the owner's runs only), so its next line skips the clone.
     if (typeof res.meta?.voiceEmbedding === "string" && !req.account) void keepVoiceEmbedding(req.inputs?.voiceAudio, res.meta.voiceEmbedding).catch(() => {});
@@ -2913,8 +2967,8 @@ function startRunner(): void {
 function sweepInterrupted(): void {
   const now = Date.now();
   const rows = db()
-    .prepare("SELECT id, request_json, external_meta_json FROM generations WHERE status IN ('queued','running') AND external_id IS NULL AND depends_on IS NULL AND created_at < ?")
-    .all(now - STALE_SUBMIT.ms) as Pick<Row, "id" | "request_json" | "external_meta_json">[];
+    .prepare("SELECT id, provider, request_json, external_meta_json FROM generations WHERE status IN ('queued','running') AND external_id IS NULL AND depends_on IS NULL AND created_at < ?")
+    .all(now - STALE_SUBMIT.ms) as Pick<Row, "id" | "provider" | "request_json" | "external_meta_json">[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
@@ -2922,15 +2976,22 @@ function sweepInterrupted(): void {
     // An instance that is alive holds it (this one's renewals included).
     if (meta.lease && typeof meta.lease.until === "number" && meta.lease.until > now) continue;
     if (meta.heal && takeOver(r, meta.heal)) continue;
-    updateIfGoing(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL");
+    // A run that waited and was cut off in the middle of its send may have reached its GPU or provider: never sent twice.
+    const words = meta.heal && typeof meta.heal.sending === "number" ? CUT_OFF_SENDING : "This run stopped before it started. Press Retry.";
+    updateIfGoing(r.id, { status: "failed", error: words, completed_at: Date.now(), message: null }, " AND external_id IS NULL");
   }
 }
 
+/** A waiting run whose instance was cut off while it sent the job (its GPU or provider may have it): not sent again. */
+const CUT_OFF_SENDING = "This run was interrupted while it was being sent. Press Retry.";
+
 /**
  * A waiting run no instance holds any more: taken by this one, planned again as its account runs now (its GPU, its keys),
- * and its wait goes on where it was (its budget and its tries kept). False: it isn't one this can take.
+ * and its wait goes on where it was (its budget and its tries kept). False: it isn't one this can take (one cut off in
+ * the middle of its send among them: it fails, rather than being sent twice).
  */
-function takeOver(r: Pick<Row, "id" | "request_json">, h: HealState): boolean {
+function takeOver(r: Pick<Row, "id" | "provider" | "request_json">, h: HealState): boolean {
+  if (typeof h.sending === "number") return false;
   let stored: GenerationRequest;
   try {
     stored = JSON.parse(r.request_json) as GenerationRequest;
@@ -2948,6 +3009,16 @@ function takeOver(r: Pick<Row, "id" | "request_json">, h: HealState): boolean {
     // It can't run as the account runs now (its key removed, its model switched off): said in its own words.
     const refusal = e instanceof AccountRunError ? e.refusal.error : (e as Error).message;
     updateIfGoing(r.id, { status: "failed", error: refusal, completed_at: Date.now(), message: null }, " AND external_id IS NULL");
+    return true;
+  }
+  // Planned for another provider now (its GPU disconnected, another key): its polls would ask the provider it was made
+  // for, so it stops, as a run whose GPU changed while it waited does.
+  if (p.providerId !== r.provider) {
+    if (r.provider === "comfyui") {
+      const gpu = accountGpu(account);
+      const end = diagnoseGpuJob({ kind: gpu ? "moved" : "disconnected" }, { kind: "link", url: gpuLink(gpu)?.url ?? "" });
+      failRun(r.id, new Error("moved"), end, account, { provider: r.provider, model: p.plan.model.id, op: p.plan.op, stage: "submit" });
+    } else updateIfGoing(r.id, { status: "failed", error: "This run stopped because your keys changed while it waited. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL");
     return true;
   }
   submitting().add(r.id);

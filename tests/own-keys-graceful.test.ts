@@ -196,6 +196,17 @@ describe("an account's run on its own key waits out a busy or down provider", ()
     expect(JSON.parse(tts[1].body)).toMatchObject({ speaker_voice_embedding_file_url: expect.stringMatching(/voice-fal-\d+\.safetensors$/) });
   });
 
+  it("runs waiting while fal.ai is busy count among the runs at once: a provider that is down gathers no more", async () => {
+    gens.SELF_HEAL.scale = 0.1;
+    fal.script = (r) => (isSubmit(r) ? { status: 429, body: { detail: "Too many requests" }, headers: { "Retry-After": "5" } } : null);
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) ids.push((await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" })).id);
+    for (let i = 0; i < 500 && ids.some((id) => !gens.getGeneration(id)?.waiting); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(ids.every((id) => gens.getGeneration(id)?.waiting)).toBe(true);
+    await expect(run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" })).rejects.toThrow(/^429: .*You have 4 runs going/);
+    for (const id of ids) await gens.cancelGeneration(id);
+  });
+
   it("a 502 at submit may have started a job already: never sent twice", async () => {
     fal.script = (r) => (isSubmit(r) ? { status: 502, body: "<!DOCTYPE html><html><head><title>502 Bad gateway</title></head></html>" } : null);
     const g = await run(cookies.A, { modelId: "nano-banana-pro", engine: "cloud" });

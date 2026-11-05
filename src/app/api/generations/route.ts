@@ -47,40 +47,82 @@ export async function GET(request: Request) {
   return Response.json({ items: listGenerations({ ...listOptionsFrom(new URL(request.url).searchParams), account: viewer.kind === "account" ? viewer.account.id : undefined }) });
 }
 
-/** A run waiting for the account's own GPU or key to come back: no job yet, its wait kept with it (generations.ts `heal`). */
-const WAITING = "(external_id IS NULL AND json_valid(external_meta_json) AND json_extract(external_meta_json, '$.heal') IS NOT NULL)";
+/**
+ * A run waiting for the account's own GPU to come back: no job yet, its wait kept with it (generations.ts `heal`). A run
+ * waiting on a key (its provider busy or down) isn't one: it counts among the runs going now, so a provider that is down
+ * can't gather more of them than that.
+ */
+const WAITING = "(provider = 'comfyui' AND external_id IS NULL AND json_valid(external_meta_json) AND json_extract(external_meta_json, '$.heal') IS NOT NULL)";
+
+/** Leave out the runs a new one takes the place of (a JSON list of ids). */
+const NOT_REPLACED = "id NOT IN (SELECT value FROM json_each(?))";
 
 /**
  * An account's runs going now (queued or running), counted as runs: a run's jobs and chain steps share a batch. Runs
- * waiting for its own GPU or key are counted apart (`waiting`): they use neither while they wait. `except`: a run the new
- * one takes the place of ("Run with your key" on a waiting run).
+ * waiting for its own GPU are counted apart (`waiting`): they use nothing while they wait. `except`: the runs the new one
+ * takes the place of ("Run with your key" on a waiting run).
  */
-function activeRuns(accountId: string, except?: string): number {
+function activeRuns(accountId: string, except: readonly string[] = []): number {
   const r = db()
     .prepare(
-      `SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ? AND NOT ${WAITING} AND id IS NOT ?`,
+      `SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ? AND NOT ${WAITING} AND ${NOT_REPLACED}`,
     )
-    .get(accountId, except ?? null) as { n: number };
+    .get(accountId, JSON.stringify(except)) as { n: number };
   return r.n;
 }
 
-function waitingRuns(accountId: string, except?: string): number {
+function waitingRuns(accountId: string, except: readonly string[] = []): number {
   const r = db()
-    .prepare(`SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status = 'queued' AND json_extract(request_json, '$.account') = ? AND ${WAITING} AND id IS NOT ?`)
-    .get(accountId, except ?? null) as { n: number };
+    .prepare(`SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status = 'queued' AND json_extract(request_json, '$.account') = ? AND ${WAITING} AND ${NOT_REPLACED}`)
+    .get(accountId, JSON.stringify(except)) as { n: number };
   return r.n;
 }
+
+/** What a new run takes the place of: the rows that stop once it is made, and how many outputs they were to make. */
+interface Replaced {
+  ids: string[];
+  /** The outputs the stopped rows were to make (none: the request's own count stays). */
+  outputs?: number;
+}
+
+/** A `replaces` for a run that can't be taken over any more: started on its GPU meanwhile, or stopped already. */
+const NOT_REPLACEABLE = "This run has already started or stopped, so nothing new was run.";
 
 /**
  * Beside the request: the account's own run (waiting for its GPU or key, or failed) this one takes the place of ("Run
- * with your fal.ai key" on it): it stops once this one is made.
+ * with your fal.ai key" on it). A waiting run takes its whole batch with it: every job of the same request not handed
+ * over yet stops once this one is made, and this one makes their outputs (never the whole batch again). Undefined: no
+ * `replaces`; null: one that can't be taken over any more (asked again just before the run is made, nothing awaited).
  */
-function replacedRun(body: unknown, accountId: string): string | undefined {
+function replacedRun(body: unknown, accountId: string): Replaced | null | undefined {
   const id = (body as { replaces?: unknown } | null)?.replaces;
-  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(id)) return undefined;
-  const row = db().prepare("SELECT status, external_id FROM generations WHERE id = ? AND json_extract(request_json, '$.account') = ?").get(id, accountId) as { status: string; external_id: string | null } | undefined;
-  return row && (row.status === "failed" || (row.status === "queued" && !row.external_id)) ? id : undefined;
+  if (id === undefined || id === null) return undefined;
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(id)) return null;
+  const row = db()
+    .prepare("SELECT status, external_id, batch_id, request_json FROM generations WHERE id = ? AND json_extract(request_json, '$.account') = ?")
+    .get(id, accountId) as { status: string; external_id: string | null; batch_id: string | null; request_json: string } | undefined;
+  if (!row) return null;
+  if (row.status === "failed") return { ids: [id] };
+  if (row.status !== "queued" || row.external_id) return null;
+  if (!row.batch_id) return { ids: [id] };
+  // Its batch's jobs (the same request; a chain's later steps have their own), and those not handed over yet.
+  const jobs = db()
+    .prepare("SELECT id, status, external_id FROM generations WHERE batch_id = ? AND request_json = ? AND depends_on IS NULL")
+    .all(row.batch_id, row.request_json) as { id: string; status: string; external_id: string | null }[];
+  const ids = jobs.filter((j) => j.status === "queued" && !j.external_id).map((j) => j.id);
+  if (!ids.includes(id)) ids.push(id);
+  let asked = 1;
+  try {
+    asked = Math.max(1, Number((JSON.parse(row.request_json) as { params?: { numOutputs?: unknown } }).params?.numOutputs) || 1);
+  } catch {}
+  // Each job made its share of the outputs asked for.
+  const outputs = Math.min(asked, ids.length * Math.ceil(asked / Math.max(1, jobs.length)));
+  return { ids, ...(outputs !== asked && { outputs }) };
 }
+
+/** The request with the outputs of the runs it takes the place of (their count, not the whole batch's again). */
+const withReplacedOutputs = <R extends { params?: { numOutputs?: number } }>(req: R, r: Replaced | undefined): R =>
+  r?.outputs ? { ...req, params: { ...req.params, numOutputs: r.outputs } } : req;
 
 /** What the sign-in proxy passes on of a request body (next.config.ts proxyClientMaxBodySize). */
 const PROXY_BODY_BYTES = 4 * 1024 * 1024;
@@ -152,12 +194,17 @@ export async function POST(request: Request) {
     return refuse(r.status, r.body.error, r.body, r.headers);
   };
   const notes: string[] = [];
-  const replaces = account && !preview ? replacedRun(body, account.id) : undefined;
+  const replacing = account && !preview ? replacedRun(body, account.id) : undefined;
+  // A run that started or stopped meanwhile (another tile's press took it already): nothing new runs.
+  if (replacing === null) return refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
+  let replaces = replacing;
+  // It makes the outputs of the jobs it stops, not its whole batch's again.
+  req = withReplacedOutputs(req, replaces);
   if (account && !preview) {
     // Room on the server, room in the account's files, and a fair share of runs.
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total >= accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
-    if (activeRuns(account.id, replaces) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+    if (activeRuns(account.id, replaces?.ids) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${account.id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
     if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
     if ((req.params?.numOutputs ?? 1) > ACCOUNT_LIMITS.outputsPerRun) {
@@ -209,7 +256,7 @@ export async function POST(request: Request) {
     if (account && onPool && billingConfigured()) {
       // The billing service's limits for runs on this install's GPUs (never above the studio's own).
       const lim = onPool.policy.limits;
-      if (lim.activeRuns > 0 && activeRuns(account.id, replaces) >= lim.activeRuns) {
+      if (lim.activeRuns > 0 && activeRuns(account.id, replaces?.ids) >= lim.activeRuns) {
         unhit(`run:${account.id}`);
         return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
       }
@@ -287,10 +334,24 @@ export async function POST(request: Request) {
         stamp = held.stamp;
       } else if (mod.checkOutputs) stamp = { checkOutputs: true };
     }
+    // The run this one takes the place of, asked again with nothing awaited from here until it stops: a press on another
+    // of its batch's tiles meanwhile took it already (or it started on its GPU), so nothing new runs.
+    if (replaces && account) {
+      const now = replacedRun(body, account.id);
+      if (!now) {
+        unhit(`run:${account.id}`);
+        if (stamp?.hold) queueRelease(stamp.hold);
+        return refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
+      }
+      // Fewer of its jobs left to stop (one was handed over meanwhile): fewer outputs. A run on this install's GPUs keeps
+      // the count it was priced and set aside for.
+      if (!onPool && now.outputs !== undefined && now.outputs !== replaces.outputs) req = { ...req, params: { ...req.params, numOutputs: Math.min(now.outputs, req.params?.numOutputs ?? now.outputs) } };
+      replaces = now;
+    }
     // Counted again just before the run is stored, with nothing awaited in between: requests that arrived together all
     // passed the first count while the checks above waited.
-    const waitingFull = !onPool && goesTo === "comfyui" && waitingRuns(account?.id ?? "", replaces) >= ACCOUNT_LIMITS.waitingRuns;
-    if (account && (activeRuns(account.id, replaces) >= ACCOUNT_LIMITS.activeRuns || waitingFull)) {
+    const waitingFull = !onPool && goesTo === "comfyui" && waitingRuns(account?.id ?? "", replaces?.ids) >= ACCOUNT_LIMITS.waitingRuns;
+    if (account && (activeRuns(account.id, replaces?.ids) >= ACCOUNT_LIMITS.activeRuns || waitingFull)) {
       unhit(`run:${account.id}`);
       if (stamp?.hold) queueRelease(stamp.hold);
       return refuse(429, waitingFull ? ACCOUNT_MESSAGES.waitingRuns : ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
@@ -304,8 +365,9 @@ export async function POST(request: Request) {
       if (stamp?.hold) queueRelease(stamp.hold);
       throw e;
     }
-    // The run this one takes the place of stops now (it was waiting, or it failed): never two of the same.
-    if (replaces) await cancelGeneration(replaces);
+    // The runs this one takes the place of stop now (they were waiting, or it failed): never two of the same. Each is
+    // marked stopped as it is called (a job not handed over yet awaits nothing first), before another request is read.
+    if (replaces) await Promise.all(replaces.ids.map((id) => cancelGeneration(id)));
     // A script's open-source run while ComfyUI is on the owner's computer: it waits for the owner's Fuobe tab there.
     if (viewer.kind === "owner" && token && getSetting("comfyWhere") === "computer" && items.some((g) => g.provider === "comfyui")) notes.push(RUNS_ON_COMPUTER_NOTE);
     // What the run leaves out or changes (a model that replaced a retired one, a LoRA that runs only on a GPU, a length the API rounds).

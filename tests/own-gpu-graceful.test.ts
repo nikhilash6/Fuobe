@@ -64,7 +64,7 @@ afterAll(async () => {
 beforeEach(() => {
   resetRates();
   SELF_HEAL.scale = 0.001;
-  Object.assign(fake.opts, { loras: [], delayMs: 0, answer: undefined });
+  Object.assign(fake.opts, { loras: [], delayMs: 0, answer: undefined, hold: undefined });
   fake.log.length = 0;
   auth.setAccountGpu(a, { url: fake.url });
   globalThis.__fuobeTestGpuHosts = undefined;
@@ -360,6 +360,20 @@ describe("a run on an account's own GPU heals itself, or fails in plain words wi
     expect(kinds(g?.trouble)).toEqual(expect.arrayContaining(["retry", "check-gpu"]));
   });
 
+  it("a GPU that asks to be asked again tomorrow (Retry-After) still stops within the run's own budget", async () => {
+    fake.opts.delayMs = 60_000;
+    const id = await startRun();
+    for (let i = 0; i < 300 && !db().prepare("SELECT external_id FROM generations WHERE id = ?").pluck().get(id); i++) await new Promise((r) => setTimeout(r, 10));
+    // Its address now answers every look with "too many requests, ask again in a day".
+    fake.opts.answer = () => ({ status: 429, body: "slow down", contentType: "text/plain", headers: { "retry-after": "86400" } });
+    const started = Date.now();
+    const g = await settle(id, 10_000);
+    expect(g?.status).toBe("failed");
+    // 15 minutes at this test's clock (1.8 s here at most), never the day it asked for.
+    expect(Date.now() - started).toBeLessThan(8_000);
+    plainWords(g?.error);
+  });
+
   it("a made result whose copy breaks off is copied again at a later look, the tile saying so, and never made twice", async () => {
     let refused = 0;
     fake.opts.answer = (_m, p) => (p === "/view" && refused++ < 4 ? html(502) : undefined);
@@ -505,6 +519,18 @@ describe("the reported case, end to end: a RunPod pod that is stopped (its addre
 });
 
 describe("what the owner learns of an account's failed run on its own GPU", () => {
+  it("keeps at most 2 KB of what the GPU said, counted in bytes, never cutting a character in two", async () => {
+    const { keptText } = await import("@/server/run-events");
+    const wide = "é".repeat(3000);
+    const kept = keptText(wide)!;
+    expect(Buffer.byteLength(kept)).toBeLessThanOrEqual(2048);
+    expect(kept).toBe("é".repeat(1024));
+    const emoji = "a" + "😀".repeat(1000);
+    expect(Buffer.byteLength(keptText(emoji)!)).toBeLessThanOrEqual(2048);
+    expect(keptText(emoji)).not.toMatch(/�/u);
+    expect(keptText("short")).toBe("short");
+  });
+
   it("one log line and a note kept with the run (no address, no token), never in the account's own answers", async () => {
     const warn = vi.spyOn(console, "warn");
     try {
@@ -595,6 +621,33 @@ describe("runs that wait, and a file too big for the address", () => {
     for (const g of ((await instead.json()) as { items: { id: string }[] }).items) await cancelGeneration(g.id);
   });
 
+  it("a run that takes the place of one tile of a waiting batch takes the batch's place, once, for the jobs not handed over", async () => {
+    SELF_HEAL.scale = 0.01;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const pic = await uploadPng();
+    const body = { feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic] }, params: { numOutputs: 3 } };
+    const first = await generationsRoute.POST(json("/api/generations", "POST", body));
+    expect(first.status, await first.clone().text()).toBe(201);
+    const jobs = ((await first.json()) as { items: { id: string }[] }).items.map((g) => g.id);
+    expect(jobs).toHaveLength(3);
+    for (let i = 0; i < 500 && jobs.some((id) => !getGeneration(id)?.waiting); i++) await new Promise((r) => setTimeout(r, 10));
+    // One of its jobs reached the GPU meanwhile: it goes on there, and isn't made a second time.
+    db().prepare("UPDATE generations SET external_id = 'kept-job', status = 'running', external_meta_json = '{}' WHERE id = ?").run(jobs[2]);
+    const instead = await generationsRoute.POST(json("/api/generations", "POST", { ...body, replaces: jobs[0] }));
+    expect(instead.status, await instead.clone().text()).toBe(201);
+    const made = ((await instead.json()) as { items: { id: string }[] }).items.map((g) => g.id);
+    // The two jobs that hadn't started: two outputs, never the batch's three again.
+    expect(made).toHaveLength(2);
+    expect(getGeneration(jobs[0])?.status).toBe("canceled");
+    expect(getGeneration(jobs[1])?.status).toBe("canceled");
+    expect(getGeneration(jobs[2])?.status).toBe("running");
+    // The same button on the batch's other waiting tile, pressed a moment later: nothing new runs.
+    const again = await generationsRoute.POST(json("/api/generations", "POST", { ...body, replaces: jobs[1] }));
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { error: string }).error).toBe("This run has already started or stopped, so nothing new was run.");
+    for (const id of [...jobs, ...made]) await cancelGeneration(id);
+  });
+
   it("a file the address refuses as too big: Send a smaller copy makes one, and the run made again with it runs", async () => {
     // A big picture (noise: it doesn't shrink as a PNG).
     const sharp = (await import("sharp")).default;
@@ -629,6 +682,31 @@ describe("runs that wait, and a file too big for the address", () => {
     const sentBytes = fake.log.filter((e) => e.path === "/upload/image").at(-1)?.upload?.length ?? 0;
     expect(sentBytes).toBeGreaterThan(0);
     expect(sentBytes).toBeLessThan(big.length * 0.8);
+
+    // A copy is real work: one at a time for an account, a few at once on the server, a few an hour for a run.
+    const ask = async () => {
+      const r = await smallerRoute.POST(new Request(`http://localhost:3000/api/generations/${id}/smaller`, { method: "POST", headers: headers() }), { params: Promise.resolve({ id }) });
+      return { status: r.status, error: ((await r.json()) as { error?: string }).error };
+    };
+    globalThis.__fuobeSmallerCopies = { total: 1, accounts: new Set([a]) };
+    expect(await ask()).toEqual({ status: 429, error: "Your last smaller copy is still being made. Try again once it's done." });
+    globalThis.__fuobeSmallerCopies = { total: 2, accounts: new Set(["someone-else", "another"]) };
+    expect(await ask()).toEqual({ status: 429, error: "Smaller copies are busy right now. Try again in a minute." });
+    globalThis.__fuobeSmallerCopies = undefined;
+    // Files that are full say so before any copy is made.
+    const { ACCOUNT_LIMITS } = await import("@/server/account-files");
+    const limits = ACCOUNT_LIMITS as { newAccountBytes: number };
+    const was = limits.newAccountBytes;
+    limits.newAccountBytes = 1;
+    try {
+      expect(await ask()).toEqual({ status: 422, error: "Your files are full, so a smaller copy can't be kept. Delete a few results, then try again." });
+    } finally {
+      limits.newAccountBytes = was;
+    }
+    // Three for this run this hour (the busy answers aren't counted, the full one is), then none.
+    expect((await ask()).status).toBe(200);
+    expect((await ask()).status).toBe(429);
+    expect((await ask()).error).toMatch(/^You've made a few smaller copies already\. Try again in \d+ minutes?\.$/);
   });
 });
 
@@ -655,6 +733,31 @@ describe("a wait survives a restart or a deploy", () => {
     }
   });
 
+  it("a waiting run another instance takes over is never sent to a provider other than the one it was made for", async () => {
+    SELF_HEAL.scale = 0.01;
+    STALE_SUBMIT.ms = 0;
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const shut = (globalThis.__fuobeShutdown ??= { stops: new Set(), draining: false, hooked: false });
+    try {
+      const id = await startRun();
+      for (let i = 0; i < 500 && !getGeneration(id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+      // This instance stops waiting on it (as when it stops), and the run's row says another provider made it.
+      shut.draining = true;
+      for (let i = 0; i < 500 && globalThis.__fuobeSubmitting?.has(id); i++) await new Promise((r) => setTimeout(r, 10));
+      shut.draining = false;
+      db().prepare("UPDATE generations SET provider = 'fal' WHERE id = ?").run(id);
+      fake.opts.answer = undefined;
+      fake.log.length = 0;
+      const g = await settle(id, 5_000);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toBe("This run stopped because your keys changed while it waited. Press Retry.");
+      expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
+    } finally {
+      shut.draining = false;
+      STALE_SUBMIT.ms = 2 * 60_000;
+    }
+  });
+
   it("a deploy's old instance hands its waiting run to the new one, which goes on with it and runs it once", async () => {
     SELF_HEAL.scale = 0.01;
     LEASE.ms = 400;
@@ -669,6 +772,10 @@ describe("a wait survives a restart or a deploy", () => {
     for (let i = 0; i < 500 && globalThis.__fuobeSubmitting?.has(id); i++) await new Promise((r) => setTimeout(r, 10));
     expect(globalThis.__fuobeSubmitting?.has(id)).toBe(false);
     expect(getGeneration(id)?.status).toBe("queued");
+    // It let go of its hold at once (the new instance needn't wait for it to run out), and kept the wait.
+    const kept = JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id))) as { lease?: unknown; heal?: unknown };
+    expect(kept.lease).toBeUndefined();
+    expect(kept.heal).toBeTruthy();
     // It is gone: its timers, its runs in hand, its name. A new instance starts on the same database.
     const old = globalThis.__fuobeRunner;
     if (old) {
@@ -696,5 +803,62 @@ describe("a wait survives a restart or a deploy", () => {
     expect(g?.status, g?.error ?? "").toBe("succeeded");
     expect(g?.error ?? "").not.toMatch(/stopped before it started/);
     expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+  });
+
+  it("an instance cut off while it sends a run that waited: the next one never sends it a second time", async () => {
+    // The module the runner runs now (the test above started another instance of it): its knobs and the first one's.
+    const now = await import("@/server/generations");
+    for (const m of [{ SELF_HEAL, LEASE, STALE_SUBMIT }, now]) {
+      m.SELF_HEAL.scale = 0.01;
+      m.LEASE.ms = 400;
+      m.LEASE.renewMs = 100;
+      m.STALE_SUBMIT.ms = 0;
+    }
+    fake.opts.answer = (_m, p) => (p === "/upload/image" || p === "/system_stats" ? html(502) : undefined);
+    const id = await startRun();
+    for (let i = 0; i < 500 && !getGeneration(id)?.waiting; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(getGeneration(id)?.waiting).toBeTruthy();
+    // The GPU is back: the run's next try sends its job, and the GPU takes it; the answer never comes back to this
+    // instance, which is cut off (a restart, a deploy's old instance) before it can note the job.
+    fake.log.length = 0;
+    fake.opts.hold = (m, p) => m === "POST" && p === "/prompt";
+    fake.opts.answer = undefined;
+    for (let i = 0; i < 1000 && !fake.log.some((e) => e.path === "/prompt"); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+    const meta = JSON.parse(String(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id))) as { heal?: { sending?: number } };
+    expect(typeof meta.heal?.sending).toBe("number");
+    const old = globalThis.__fuobeRunner;
+    if (old) {
+      clearInterval(old.timer);
+      if (old.fastTimer) clearInterval(old.fastTimer);
+    }
+    globalThis.__fuobeRunner = undefined;
+    if (globalThis.__fuobeLeaseTimer) clearTimeout(globalThis.__fuobeLeaseTimer);
+    globalThis.__fuobeLeaseTimer = undefined;
+    globalThis.__fuobeSubmitting = new Set();
+    globalThis.__fuobeInstance = undefined;
+    vi.resetModules();
+    const next = await import("@/server/generations");
+    next.SELF_HEAL.scale = 0.01;
+    next.STALE_SUBMIT.ms = 0;
+    next.LEASE.ms = 400;
+    try {
+      // The cut-off instance's hold runs out; the next instance looks.
+      await new Promise((r) => setTimeout(r, 500));
+      next.ensureRunner();
+      const g = await settle(id, 10_000);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toBe("This run was interrupted while it was being sent. Press Retry.");
+      // Exactly one job across both instances, also once the first instance's send ends.
+      expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+      fake.dropHeld();
+      await new Promise((r) => setTimeout(r, 200));
+      await settle(id, 1_000);
+      expect(fake.log.filter((e) => e.path === "/prompt")).toHaveLength(1);
+      expect(getGeneration(id)?.status).toBe("failed");
+    } finally {
+      fake.opts.hold = undefined;
+      fake.dropHeld();
+    }
   });
 });

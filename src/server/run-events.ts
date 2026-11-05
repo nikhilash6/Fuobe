@@ -42,7 +42,15 @@ export interface OwnRunNote {
   said?: string;
 }
 
+/** The most kept of a GPU's or provider's own words: 2 KB (in bytes, as stored). */
 const MAX_SAID = 2048;
+
+/** Text cut to at most `max` bytes in UTF-8, never in the middle of a character. */
+export function capBytes(t: string, max = MAX_SAID): string {
+  if (Buffer.byteLength(t) <= max) return t;
+  // A character cut in two decodes as U+FFFD at the end: left out.
+  return Buffer.from(t).subarray(0, max).toString("utf8").replace(/�+$/u, "");
+}
 
 /** A network failure's message as a short code. */
 export function networkCode(text: string): string {
@@ -61,7 +69,7 @@ export function keptText(text: string | undefined, o: { url?: string; secret?: s
   let t = withoutSecrets(withoutAddress(String(text), o.url));
   if (o.secret && o.secret.length >= 4) t = t.split(o.secret).join("••••");
   t = t.replace(/\s+/g, " ").trim();
-  return t ? t.slice(0, MAX_SAID) : undefined;
+  return t ? capBytes(t) : undefined;
 }
 
 /** One line for the server's log (JSON). Any kind of run event goes through here. */
@@ -79,7 +87,7 @@ export function recordOwnRun(e: OwnRunEvent, said?: string): void {
   const place: RunPlace = e.provider === "comfyui" ? "own-gpu" : "own-key";
   recordRunEvent("own-run", { run: e.run, account: e.account, place, provider: e.provider, model: e.model, op: e.op, stage: e.stage, code: e.code, hostKind: e.hostKind, cause: e.cause, attempt: e.attempt, waitedMs: e.waitedMs, outcome: e.outcome }, e.outcome === "failed" ? "warn" : "info");
   if (e.outcome !== "failed") return;
-  const note: OwnRunNote = { at: Date.now(), cause: e.cause, stage: e.stage, code: e.code, hostKind: e.hostKind, ...(said && { said: said.slice(0, MAX_SAID) }) };
+  const note: OwnRunNote = { at: Date.now(), cause: e.cause, stage: e.stage, code: e.code, hostKind: e.hostKind, ...(said && { said: capBytes(said) }) };
   try {
     db()
       .prepare("UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.ownRun', json(?)) WHERE id = ?")

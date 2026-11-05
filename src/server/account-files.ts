@@ -46,7 +46,7 @@ export const ACCOUNT_LIMITS = {
   diskFreeBytes: 20 * GB,
   /** Runs: at once (queued or running), per hour, and outputs per run. */
   activeRuns: 4,
-  /** Runs waiting for the account's own GPU or key to come back (they use neither meanwhile): counted apart. */
+  /** Runs waiting for the account's own GPU to come back (they use nothing meanwhile): counted apart. A run waiting on a key counts among the runs at once. */
   waitingRuns: 4,
   runsPerHour: 60,
   outputsPerRun: 4,
