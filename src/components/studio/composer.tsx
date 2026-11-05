@@ -98,8 +98,10 @@ import { qwen21Note } from "@/lib/qwen21-speed";
 import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
-import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
-import { gpuBeforeRun } from "@/lib/before-run";
+import { addKeyLabel, billedTo, CLOUD_KEY, cloudVersion, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
+import { beforeRunTail, gpuBeforeRun, runOnceOnKey } from "@/lib/before-run";
+import { BILLING_URL, ISOLATED_ON_GPU_WHY, withKeyAction, type TroubleAction } from "@/lib/diagnose";
+import { openModelPicker } from "@/lib/open-model-picker";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { cn } from "@/lib/utils";
 import { h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
@@ -832,17 +834,24 @@ export function Composer({ docked }: { docked: boolean }) {
   // waits for the GPU. One of the account's keys that runs this tool's cloud version is offered too (an explicit click:
   // it spends the person's own credit).
   const gpuDown = gpuBeforeRun({ viewer: status?.viewer, model, engine, onPool: hostedHere && runOn === "pool", preset, has, getModel: catalog.getModel });
-  const [cloudRun, setCloudRun] = useState(false);
-  // "Run with your fal.ai key": once the switch to Cloud has moved the tool to its cloud model, it runs (once).
-  useEffect(() => {
-    if (!cloudRun) return;
-    const late = setTimeout(() => setCloudRun(false), 4000);
-    if (engine === "cloud" && model && (model.engine !== "open" || dualEngine(model))) {
-      setCloudRun(false);
-      submitRef.current();
-    }
-    return () => clearTimeout(late);
-  }, [cloudRun, engine, model]);
+  // A graph that needs a second ComfyUI (LatentSync 1.6, ThinkSound) can't run on an account's single GPU at a web address:
+  // said before Run, with what runs it instead (its cloud version on a key, or another model).
+  const viewerGpu = status?.viewer?.kind === "account" ? status.viewer.gpu : undefined;
+  const isolatedHere = !!model && model.worker === "isolated" && model.engine === "open" && !!viewerGpu?.connected && viewerGpu.mode === "link" && !(hostedHere && runOn === "pool");
+  const isolatedTwin =
+    isolatedHere && status?.viewer?.paidAllowed !== false ? cloudVersion(preset, model, status?.viewer?.usableKeys ?? status?.viewer?.keys ?? [], has, catalog.getModel) : null;
+  // "Run with your fal.ai key": this run, once, on the tool's cloud version and that key. The engine switch stays where it
+  // was, so the next run goes to the GPU again (the person picks Cloud themselves to stay there).
+  const runOnceWithKey = (a: TroubleAction) => {
+    const sent = signature.apply(
+      buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
+    );
+    const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
+    return runOnceOnKey(withVoiceFirst, a, (r) => create.mutateAsync(r)).then(
+      (words) => void toast.success(words),
+      (e) => toastError(e),
+    );
+  };
 
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here).
   const submit = (skip?: unknown) => {
@@ -1028,6 +1037,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const ownCostText = keyOnly && cost == null ? ownSetupLabel(keyOnly) : costLabel({ demo, cost: cost ?? freeHere, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost);
   // An account's paid run is billed to its own provider account (Your keys), or still needs that key.
   const payer = paidThrough(model, status);
+  // Its provider account's balance ran out on a run: said before the next one, with Add credit.
+  const emptyPayer = payer && status?.viewer?.emptyKeys?.includes(payer) ? payer : null;
   const missingKey = needsKey(model, status)?.[0];
   const ownPayerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
   // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
@@ -1669,6 +1680,7 @@ export function Composer({ docked }: { docked: boolean }) {
             {!lockedModel || appChoice ? (
               catalog.ready ? (
                 <ModelPicker
+                  listens
                   models={appChoice ? appPickerModels : models}
                   value={model}
                   engine={engine}
@@ -1872,19 +1884,28 @@ export function Composer({ docked }: { docked: boolean }) {
       {gpuDown && (
         <div role="note" aria-live="polite" className="mx-1 mt-2 space-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
           <p>
-            <span className="font-medium text-foreground">{gpuDown.words}</span> A run you start now waits for it.
+            <span className="font-medium text-foreground">{gpuDown.words}</span> {beforeRunTail(gpuDown.waits)}
           </p>
           <TroubleDetails details={gpuDown.details} />
+          <TroubleActions actions={gpuDown.actions} skip={["retry"]} handlers={{ onRunWithKey: runOnceWithKey }} />
+        </div>
+      )}
+      {isolatedHere && !gpuDown && (
+        <div role="note" className="mx-1 mt-2 space-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">{ISOLATED_ON_GPU_WHY}</span>{" "}
+            {isolatedTwin ? "Run it with your key instead, or pick another model." : "Pick another model to run it now."}
+          </p>
           <TroubleActions
-            actions={gpuDown.actions}
-            skip={["retry"]}
-            handlers={{
-              onRunWithKey: () => {
-                setEngine("cloud");
-                setCloudRun(true);
-              },
-            }}
+            actions={[...(isolatedTwin ? [withKeyAction(isolatedTwin.provider, isolatedTwin.modelId, isolatedTwin.op)] : []), { kind: "pick-model", label: "Pick another model" }]}
+            handlers={{ onRunWithKey: runOnceWithKey, onPickModel: openModelPicker }}
           />
+        </div>
+      )}
+      {emptyPayer && model && (
+        <div role="note" className="mx-1 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+          <p className="min-w-0 flex-1 basis-56">Your {CLOUD_KEY[emptyPayer].label} balance is empty. Add credit there, then run.</p>
+          <TroubleActions actions={[{ kind: "add-credit", label: `Add credit on ${CLOUD_KEY[emptyPayer].label}`, target: BILLING_URL[emptyPayer] }]} />
         </div>
       )}
       {outcome && (

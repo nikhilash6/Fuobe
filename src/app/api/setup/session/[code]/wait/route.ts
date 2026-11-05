@@ -7,7 +7,8 @@ import { hit } from "@/server/rate";
 
 /**
  * The account's open tab waits here (up to 25 s) for its AI to read the status: `poke: true` asks for a fresh look at
- * its ComfyUI and a report. `slow`: the server holds too many waits, so the tab reports every 10 s instead.
+ * its ComfyUI and a report. `slow`: the server holds too many waits, so the tab reports every 10 s instead. `?tab=`:
+ * the tab's id, so a tab that doesn't lead the setup never takes the leading tab's wait.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/setup/session/[code]/wait">) {
   await connection();
@@ -18,5 +19,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/setup/sessio
   if (!setup) return Response.json({ error: "This setup code is not active." }, { status: 404, headers: SETUP_HEADERS });
   const r = hit(`setup:wait:${account.id}`, 30, 60_000);
   if (!r.ok) return tooMany(`Too many waits. Try again in ${inMinutes(r.retryAfterS)}.`, r.retryAfterS);
-  return Response.json(await waitSetup(setup, request.signal), { headers: SETUP_HEADERS });
+  const tab = new URL(request.url).searchParams.get("tab");
+  const tabId = tab && /^[A-Za-z0-9_-]{8,40}$/.test(tab) ? tab : undefined;
+  return Response.json(await waitSetup(setup, request.signal, undefined, tabId), { headers: SETUP_HEADERS });
 }

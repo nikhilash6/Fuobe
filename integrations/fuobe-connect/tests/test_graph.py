@@ -62,7 +62,7 @@ def comfy_is_link():
             tree = ast.parse(f.read())
         picked = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "is_link"]
         ns: dict = {}
-        exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/graph_utils.py", "exec"), ns)
+        exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/graph_utils.py", "exec"), ns)  # noqa: S102
         return ns["is_link"]
 
     def copy(obj):

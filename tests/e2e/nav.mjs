@@ -80,7 +80,7 @@ try {
       if (i > 0 && !f?.ring) rings = false;
     }
     // Create, Studios, Apps, Motions & effects and Canvas are one button each (their page is the menu's See all).
-    const want = ["Skip to content", "Fuobe home", "Create", /^Studios, [0-9]+ studios$/, "Apps", "Motions & effects", "Canvas", "Assist", "Library", /^Search/, "New creation"];
+    const want = ["Skip to content", "Fuobe home", "Create", "Studios", "Apps", "Motions & effects", "Canvas", "Assist", "Library", /^Search/, "New creation"];
     for (let i = order.length; i < want.length; i++) {
       await p.keyboard.press("Tab");
       order.push((await focused(p))?.name ?? "");

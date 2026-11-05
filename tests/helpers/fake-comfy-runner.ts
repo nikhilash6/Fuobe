@@ -53,9 +53,14 @@ export interface FakeComfyOptions {
   mixed?: boolean;
   /**
    * Answers a request before anything else when it returns one (a GPU that is off, starting up, behind a password or a
-   * web page): its status, body and content type. Undefined: the request goes on as usual.
+   * web page): its status, body, content type and any headers (a redirect's location). Undefined: the request goes on as usual.
    */
-  answer?: (method: string, path: string) => { status: number; body?: string; contentType?: string } | undefined;
+  answer?: (method: string, path: string) => { status: number; body?: string; contentType?: string; headers?: Record<string, string> } | undefined;
+  /**
+   * True: the request is taken (logged, with the graph a /prompt sent) and never answered, as when the server that sent
+   * it is cut off before the answer comes. Its connection stays open until `dropHeld()` or `close()`.
+   */
+  hold?: (method: string, path: string) => boolean;
 }
 
 /** A tiny but real WAV (mono, 16-bit, 8 kHz, 0.1 s of silence). */
@@ -107,6 +112,8 @@ export interface FakeComfy {
   url: string;
   log: FakeLogEntry[];
   opts: FakeComfyOptions;
+  /** Ends every request `hold` kept open (their senders see the connection close). */
+  dropHeld: () => void;
   close: () => Promise<void>;
 }
 
@@ -193,6 +200,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
   const jobs = new Map<string, number>();
   const graphs = new Map<string, Record<string, unknown> | undefined>();
   let lastUpload: Buffer | undefined;
+  const held: http.ServerResponse[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
@@ -206,9 +214,18 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         res.end(JSON.stringify(value));
       };
       const p = url.pathname;
+      if (opts.hold?.(entry.method, p)) {
+        if (p === "/prompt") {
+          try {
+            entry.prompt = (JSON.parse(body.toString("utf8")) as { prompt?: Record<string, unknown> }).prompt;
+          } catch {}
+        }
+        held.push(res);
+        return;
+      }
       const said = opts.answer?.(entry.method, p);
       if (said) {
-        res.writeHead(said.status, { "content-type": said.contentType ?? "text/html" });
+        res.writeHead(said.status, { "content-type": said.contentType ?? "text/html", ...said.headers });
         return res.end(said.body ?? "");
       }
       if (p === "/system_stats") return json(200, { system: { comfyui_version: "0.3.fake", ram_total: 64 * 2 ** 30 }, devices: [{ name: "Fake GPU", vram_total: (opts.vramGb ?? 24) * 2 ** 30 }] });
@@ -337,6 +354,9 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         url: `http://127.0.0.1:${at}`,
         log,
         opts,
+        dropHeld: () => {
+          for (const r of held.splice(0)) r.destroy();
+        },
         close: () =>
           new Promise<void>((done) => {
             server.closeAllConnections?.();

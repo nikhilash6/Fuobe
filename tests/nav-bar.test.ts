@@ -278,7 +278,8 @@ describe("the bar's shell", () => {
     expect(html).toContain(`aria-controls="${LAUNCHER_ID}"`);
     expect(html).toMatch(new RegExp(`<section[^>]*id="${LAUNCHER_ID}"[^>]*hidden`));
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain(`>${studioCount()}<`);
+    // Studios is its name only: no count beside it.
+    expect(html).not.toContain(`>${studioCount()}<`);
     for (const h of ["/", "/assist", "/library", "/?new=1"]) expect(hrefs(html), h).toContain(h);
     for (const h of ["/create", "/studios", "/apps", "/motions-and-effects", "/canvas"]) expect(html, h).toContain(`data-href="${h}"`);
     // Search's name is the words it shows (sr-only below lg).
@@ -455,9 +456,9 @@ describe("menu items: one button each, the area's page inside its menu", () => {
     }
     expect(item(html, "more")).toContain('aria-expanded="false"');
     expect(item(html, "more")).not.toContain("data-href");
-    // Its spoken name starts with its visible words ("Studios, 29 studios"): the count's words are hidden text, not a label.
+    // Its name is its visible word: no label, and no count beside it.
     expect(item(html, "studios")).not.toContain("aria-label=");
-    expect(html).toMatch(new RegExp(`Studios<span class="sr-only">, </span><span[^>]*>${studioCount()}</span><span class="sr-only"> studios</span>`));
+    expect(item(html, "studios")).not.toContain("sr-only");
     // The Studios item is still the launcher's disclosure button (search hands focus back to it).
     expect(item(html, "studios")).toContain("data-studios-trigger");
     for (const name of ["Create menu", "Studios menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).not.toContain(`aria-label="${name}"`);

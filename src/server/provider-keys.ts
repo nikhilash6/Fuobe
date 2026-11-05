@@ -1,6 +1,6 @@
 import "server-only";
 import { addKeyMessage, balanceMessage, CLOUD_KEY, keyRejectedMessage, type CloudProvider } from "@/lib/your-keys";
-import { accountKey, markKeyRejected } from "./account-keys";
+import { accountKey, markKeyBalanceEmpty, markKeyRejected } from "./account-keys";
 import { ProviderError } from "./providers/types";
 import { getSetting } from "./settings";
 import { tenant, tenantAccount } from "./tenant";
@@ -56,7 +56,11 @@ export function accountKeyError(p: CloudProvider, status: number, text: string, 
   // `said`: the provider's own words (the key already taken out), for the run's details line and to tell a key refused
   // from a model the key may not run (src/lib/diagnose.ts).
   const said = (e: ProviderError) => Object.assign(e, { said: text });
-  if (balanceRefusal(status, text)) return said(new ProviderError(balanceMessage(p), status));
+  if (balanceRefusal(status, text)) {
+    // Settings → Your keys says "Add credit", and the key isn't offered elsewhere until it takes a run again.
+    markKeyBalanceEmpty(account, p, used);
+    return said(new ProviderError(balanceMessage(p), status));
+  }
   if (status === 401 || status === 403) {
     if (status === 401) markKeyRejected(account, p, used);
     return said(new ProviderError(keyRejectedMessage(p), status));

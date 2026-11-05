@@ -74,14 +74,43 @@ function openCount(accountId: string, poolOnly: boolean, now = Date.now()): numb
 }
 
 /**
- * An account's runs going now (queued or running), wherever they run: a run's jobs and chain steps share a batch. A run
- * let in whose rows are still being made counts too (openAdmission).
+ * A run waiting for the account's own GPU to come back: no job yet, its wait kept with it (generations.ts `heal`). A run
+ * waiting on a key (its provider busy or down) isn't one: it counts among the runs going now, so a provider that is down
+ * can't gather more of them than that.
  */
-export function accountActiveRuns(accountId: string): number {
+const WAITING_FOR_GPU = "(provider = 'comfyui' AND external_id IS NULL AND json_valid(external_meta_json) AND json_extract(external_meta_json, '$.heal') IS NOT NULL)";
+
+/** Leave out the runs a new one takes the place of (a JSON list of ids). */
+const NOT_REPLACED = "id NOT IN (SELECT value FROM json_each(?))";
+
+/** How a run made by a studio's Run (POST /api/generations) is counted against the studio's own limits. */
+export interface StudioCount {
+  /** The runs it takes the place of ("Run with your key" on a waiting run): they stop once it is made. */
+  except?: readonly string[];
+  /** Runs waiting for the account's own GPU are counted apart (accountWaitingRuns): they use nothing while they wait. */
+  waitingApart?: boolean;
+}
+
+/**
+ * An account's runs going now (queued or running), wherever they run: a run's jobs and chain steps share a batch. A run
+ * let in whose rows are still being made counts too (openAdmission). `o`: as a studio's Run counts them (StudioCount).
+ */
+export function accountActiveRuns(accountId: string, o: StudioCount = {}): number {
+  const waiting = o.waitingApart ? ` AND NOT ${WAITING_FOR_GPU}` : "";
   const r = db()
-    .prepare("SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?")
-    .get(accountId) as { n: number };
+    .prepare(
+      `SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?${waiting} AND ${NOT_REPLACED}`,
+    )
+    .get(accountId, JSON.stringify(o.except ?? [])) as { n: number };
   return r.n + openCount(accountId, false);
+}
+
+/** An account's runs waiting for its own GPU to come back (WAITING_FOR_GPU), but those a new run takes the place of. */
+export function accountWaitingRuns(accountId: string, except: readonly string[] = []): number {
+  const r = db()
+    .prepare(`SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status = 'queued' AND json_extract(request_json, '$.account') = ? AND ${WAITING_FOR_GPU} AND ${NOT_REPLACED}`)
+    .get(accountId, JSON.stringify(except)) as { n: number };
+  return r.n;
 }
 
 /**
@@ -191,9 +220,17 @@ export function poolLimitRefusal(accountId: string, policy: Pick<Policy, "limits
   return null;
 }
 
-/** The studio's own limit of runs at once (every account run, wherever it goes), as a refusal. */
-function accountLimitRefusal(accountId: string): LimitRefusal | null {
-  return accountActiveRuns(accountId) >= ACCOUNT_LIMITS.activeRuns ? { status: 429, error: ACCOUNT_MESSAGES.activeRuns, code: ACTIVE_RUNS_CODE, retryAfterS: 30 } : null;
+/**
+ * The studio's own limit of runs at once (every account run, wherever it goes), as a refusal. `studio`: a studio's Run,
+ * counted as StudioCount says; with `mayWait` (a run for the account's own GPU, which may wait for it) the runs waiting
+ * for that GPU meet a limit of their own too.
+ */
+function accountLimitRefusal(accountId: string, studio?: StudioCount & { mayWait?: boolean }): LimitRefusal | null {
+  if (studio?.mayWait && accountWaitingRuns(accountId, studio.except) >= ACCOUNT_LIMITS.waitingRuns) {
+    return { status: 429, error: ACCOUNT_MESSAGES.waitingRuns, code: ACTIVE_RUNS_CODE, retryAfterS: 30 };
+  }
+  const n = accountActiveRuns(accountId, studio ? { except: studio.except, waitingApart: true } : {});
+  return n >= ACCOUNT_LIMITS.activeRuns ? { status: 429, error: ACCOUNT_MESSAGES.activeRuns, code: ACTIVE_RUNS_CODE, retryAfterS: 30 } : null;
 }
 
 /** A refusal thrown inside admitRun's transaction, so nothing `make` wrote is kept. */
@@ -219,6 +256,8 @@ export function admitRun<T, P = never>(
   o: {
     accountId: string;
     pool: { policy: Pick<Policy, "limits">; addr: string | null } | null;
+    /** A studio's Run (POST /api/generations): counted as accountLimitRefusal says. */
+    studio?: StudioCount & { mayWait?: boolean };
     now?: number;
     prior?: () => P | null;
     refused?: (why: AdmitRefused["refusal"] | Error) => void;
@@ -236,7 +275,7 @@ export function admitRun<T, P = never>(
       .transaction((): Answer | null => {
         const prior = o.prior?.() ?? null;
         if (prior !== null) return { ok: false, prior };
-        const refusal = accountLimitRefusal(o.accountId) ?? (o.pool ? poolLimitRefusal(o.accountId, o.pool.policy, o.pool.addr, now) : null);
+        const refusal = accountLimitRefusal(o.accountId, o.studio) ?? (o.pool ? poolLimitRefusal(o.accountId, o.pool.policy, o.pool.addr, now) : null);
         if (refusal) {
           refused?.(refusal);
           return { ok: false, refusal };

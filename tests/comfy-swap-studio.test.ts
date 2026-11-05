@@ -55,8 +55,9 @@ describe("the studio's graphs in the library", () => {
         // The subset was read from a server with H3 Relay (the person removal validates there).
         expect(subset[c], c).not.toBeNull();
       }
-      expect(entry(id).validated).toBe(false);
-      expect((entry(id) as { validationError?: string }).validationError).toMatch(/missing_node_type: Node 'H3Relay/);
+      // Both rendered on an RTX 5090 (a shot mask, then one segment with it and its anchor), so both are marked validated.
+      expect(entry(id).validated).toBe(true);
+      expect((entry(id) as { validationError?: string }).validationError).toBeUndefined();
     }
   });
 

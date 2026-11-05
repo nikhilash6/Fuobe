@@ -62,11 +62,11 @@ describe("the guide", () => {
       // The address is never printed or tested from the agent: it goes to the clipboard.
       expect(g.text).toMatch(/Set-Clipboard|pbcopy|xclip/);
       expect(g.text).not.toMatch(/<address>\/system_stats/);
-      expect(g.text).toMatch(/Stop-Process -Id \(Get-Content fuobe-tunnel\.pid\)|pkill -f \.fuobe\/tunnel\.log/);
+      expect(g.text).toMatch(/Stop-Process -Id \(Get-Content ~\\\.fuobe\\tunnel\.pid\)|pkill -f \.fuobe\/tunnel\.log/);
       // Only this tunnel: never every cloudflared the person runs.
       expect(g.text).not.toMatch(/Stop-Process -Name cloudflared|pkill -f "cloudflared tunnel --url"/);
       // An old log can't give a dead address.
-      expect(g.text).toMatch(/Remove-Item fuobe-tunnel\.log|rm -f ~\/\.fuobe\/tunnel\.log/);
+      expect(g.text).toMatch(/Get-ChildItem ~\\\.fuobe -Filter tunnel\.log \| Remove-Item|rm -f ~\/\.fuobe\/tunnel\.log/);
     }
   });
 
@@ -77,12 +77,20 @@ describe("the guide", () => {
       expect(g.text).toContain("ComfyUI-Manager");
       expect(g.text).toContain("Closing it stops the address.");
       expect(g.text).toMatch(/they close the tunnel's window/);
+      // The tunnel's log goes in the person's own user folder, which other users of the computer can't read.
       if (g.os !== "windows") expect(g.text).toContain("mkdir -p -m 700 ~/.fuobe");
+      else {
+        expect(g.text).toContain("New-Item -ItemType Directory -Force ~\\.fuobe | Out-Null");
+        expect(g.text).toContain('Start-Process cloudflared -WorkingDirectory ~\\.fuobe -ArgumentList "tunnel","--url","http://127.0.0.1:8188","--logfile","tunnel.log"');
+        expect(g.text).toContain("Select-String -Path ~\\.fuobe\\tunnel.log");
+        expect(g.text).not.toMatch(/fuobe-tunnel|in this folder/);
+      }
       // The models folder the model step names is found first.
       expect(g.text).toContain("Common places for custom_nodes:");
       expect(g.text).toContain("The models folder is next to custom_nodes");
       // The address goes into Fuobe on the computer, even when Fuobe was opened on a phone.
-      expect(g.text).toContain(`${SITE}/connect?setup=ai on this computer`);
+      expect(g.text).toContain(`${SITE}/connect?setup=ai&way=address in a browser on this computer, and signs in with the same account.`);
+      expect(g.text).toContain("with the same setup code");
     }
     const mac = guides.find((x) => x.way === "address" && x.os === "mac")!.text;
     expect(mac).toContain(`osascript -e 'tell application "Terminal" to do script "cloudflared tunnel --url http://127.0.0.1:8188 --logfile ~/.fuobe/tunnel.log"'`);
@@ -93,7 +101,7 @@ describe("the guide", () => {
   it("Windows commands have no $ and no braces, so they also run through powershell.exe -Command", () => {
     for (const g of guides.filter((g) => g.os === "windows")) {
       for (const line of commands(g.text)) {
-        if (!/^ {3}(curl\.exe|Get-|Start-Process|Select-String|Remove-Item|Stop-Process|certutil|winget|cloudflared)/.test(line)) continue;
+        if (!/^ {3}(curl\.exe|Get-|New-Item|Start-Process|Select-String|Remove-Item|Stop-Process|certutil|winget|cloudflared)/.test(line)) continue;
         expect(line.replace("%{http_code}", ""), line).not.toMatch(/[$`{}]/);
       }
       expect(g.text).toContain("winget install --id Cloudflare.cloudflared -e --accept-source-agreements --accept-package-agreements".repeat(g.way === "address" ? 1 : 0));

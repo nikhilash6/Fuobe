@@ -14,8 +14,9 @@ import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
 import { findView, requestViewKey } from "@/server/any-angle";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, captureRun, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, stepsOf, type AccountRunRefusal } from "@/server/generations";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, captureRun, CHAINED_RUN, createGenerations, getGeneration, keyMoveBlock, listGenerations, outputKind, previewGeneration, PROJECT_RUN, stepsOf, stopReplaced, type AccountRunRefusal, type KeyMoveBlock } from "@/server/generations";
 import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, poolLimitRefusal } from "@/server/pool-limits";
+import { db } from "@/server/db";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
@@ -45,6 +46,67 @@ export async function GET(request: Request) {
   return Response.json({ items: listGenerations({ ...listOptionsFrom(new URL(request.url).searchParams), account: viewer.kind === "account" ? viewer.account.id : undefined }) });
 }
 
+/** What a new run takes the place of: the rows that stop once it is made, and how many outputs they were to make. */
+interface Replaced {
+  ids: string[];
+  /** The outputs the stopped rows were to make (none: the request's own count stays). */
+  outputs?: number;
+}
+
+/** A `replaces` for a run that can't be taken over any more: started on its GPU meanwhile, or stopped already. */
+const NOT_REPLACEABLE = "This run has already started or stopped, so nothing new was run.";
+
+/** What a `replaces` on a waiting run Run with your key can't move on its own answers (409, in plain words). */
+const BLOCKED: Record<KeyMoveBlock, { error: string; code: string }> = {
+  chained: { error: CHAINED_RUN, code: "chained-run" },
+  project: { error: PROJECT_RUN, code: "project-run" },
+};
+
+/** A `replaces` that names a waiting run Run with your key can't move on its own: why (generations.ts keyMoveBlock). */
+interface Blocked {
+  blocked: KeyMoveBlock;
+}
+
+/**
+ * Beside the request: the account's own run (waiting for its GPU or key, or failed) this one takes the place of ("Run
+ * with your fal.ai key" on it). A waiting run takes its whole batch with it: every job of the same request not handed
+ * over yet stops once this one is made, and this one makes their outputs (never the whole batch again). Undefined: no
+ * `replaces`; null: one that can't be taken over any more (asked again just before the run is made, nothing awaited);
+ * Blocked: a waiting run never moved alone (a step of a longer run, or a run of one of the account's projects), the same
+ * check its tile makes before it offers the button.
+ */
+function replacedRun(body: unknown, accountId: string): Replaced | Blocked | null | undefined {
+  const id = (body as { replaces?: unknown } | null)?.replaces;
+  if (id === undefined || id === null) return undefined;
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(id)) return null;
+  const row = db()
+    .prepare("SELECT status, external_id, batch_id, request_json, depends_on FROM generations WHERE id = ? AND json_extract(request_json, '$.account') = ?")
+    .get(id, accountId) as { status: string; external_id: string | null; batch_id: string | null; request_json: string; depends_on: string | null } | undefined;
+  if (!row) return null;
+  if (row.status === "failed") return { ids: [id] };
+  if (row.status !== "queued" || row.external_id) return null;
+  const blocked = keyMoveBlock({ id, depends_on: row.depends_on, batch_id: row.batch_id, request_json: row.request_json });
+  if (blocked) return { blocked };
+  if (!row.batch_id) return { ids: [id] };
+  // Its batch's jobs (the same request; a chain's later steps have their own), and those not handed over yet.
+  const jobs = db()
+    .prepare("SELECT id, status, external_id FROM generations WHERE batch_id = ? AND request_json = ? AND depends_on IS NULL")
+    .all(row.batch_id, row.request_json) as { id: string; status: string; external_id: string | null }[];
+  const ids = jobs.filter((j) => j.status === "queued" && !j.external_id).map((j) => j.id);
+  if (!ids.includes(id)) ids.push(id);
+  let asked = 1;
+  try {
+    asked = Math.max(1, Number((JSON.parse(row.request_json) as { params?: { numOutputs?: unknown } }).params?.numOutputs) || 1);
+  } catch {}
+  // Each job made its share of the outputs asked for.
+  const outputs = Math.min(asked, ids.length * Math.ceil(asked / Math.max(1, jobs.length)));
+  return { ids, ...(outputs !== asked && { outputs }) };
+}
+
+/** The request with the outputs of the runs it takes the place of (their count, not the whole batch's again). */
+const withReplacedOutputs = <R extends { params?: { numOutputs?: number } }>(req: R, r: Replaced | undefined): R =>
+  r?.outputs ? { ...req, params: { ...req.params, numOutputs: r.outputs } } : req;
+
 /** What the sign-in proxy passes on of a request body (next.config.ts proxyClientMaxBodySize). */
 const PROXY_BODY_BYTES = 4 * 1024 * 1024;
 const BODY_TOO_BIG = "That request is over 4 MB. Upload pictures and clips first (POST /api/uploads), then send their /api/files/ paths.";
@@ -66,11 +128,14 @@ const accountRunAnswer = (r: AccountRunRefusal): Answer => ({
   headers: r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {},
 });
 
-/** The answer to a run the limits refuse as it is made (admitRun), or one with a step this install's GPUs don't take. */
+/**
+ * The answer to a run the limits refuse as it is made (admitRun), one with a step this install's GPUs don't take, or one
+ * whose run it takes the place of was taken meanwhile.
+ */
 const limitAnswer = (r: AdmitRefused["refusal"]): Answer => ({
   status: r.status,
   body: { error: r.error, code: r.code },
-  headers: r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) },
+  headers: r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : r.status === 429 ? { "Retry-After": String(r.retryAfterS ?? 30) } : {},
 });
 
 /** Start a generation; `?preview=1` only says what it would run as (model, operation, jobs, outputs, cost). */
@@ -136,11 +201,20 @@ export async function POST(request: Request) {
     if (made) return madeAlready(made.ids);
   }
   const notes: string[] = [];
+  const replacing = account && !preview ? replacedRun(body, account.id) : undefined;
+  // A run that started or stopped meanwhile (another tile's press took it already): nothing new runs.
+  if (replacing === null) return refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
+  // A waiting step of a longer run, or a run of one of the account's projects: it goes on as it is (moved alone, the rest
+  // of the run would go without it, or the project would lose it).
+  if (replacing && "blocked" in replacing) return refuse(409, BLOCKED[replacing.blocked].error, { code: BLOCKED[replacing.blocked].code });
+  let replaces = replacing;
+  // It makes the outputs of the jobs it stops, not its whole batch's again.
+  req = withReplacedOutputs(req, replaces);
   if (account && !preview) {
     // Room on the server, room in the account's files, and a fair share of runs.
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total >= accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
-    if (accountActiveRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+    if (accountActiveRuns(account.id, { except: replaces?.ids, waitingApart: true }) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${account.id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
     if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
     if ((req.params?.numOutputs ?? 1) > ACCOUNT_LIMITS.outputsPerRun) {
@@ -214,6 +288,8 @@ export async function POST(request: Request) {
     // GPU pre-flight: a ComfyUI run that is sure to fail for something missing stops here with the plan that fixes it
     // (src/server/gpu/gate.ts; never when the check is unknown, for graphics memory, or with gpuCheck "skip").
     let gpuWarning: string | undefined;
+    // Where the run goes (its GPU, or a key): runs waiting for the GPU are counted apart, and only a run for the GPU waits too.
+    let goesTo: string | undefined;
     // (A run on this install's GPUs: its plan was checked by decidePlace; the pre-flight is about the account's own GPU.)
     if (viewer.kind !== "guest" && !onPool) {
       let planned: ReturnType<typeof previewGeneration> | null = null;
@@ -224,6 +300,7 @@ export async function POST(request: Request) {
         if (e instanceof AccountRunError) return refused(e.refusal);
         // Otherwise createGenerations says what's wrong with the request.
       }
+      goesTo = planned?.route.provider;
       if (account && planned) {
         // Where the run goes decides what the account needs: its GPU for ComfyUI, its own key for fal.ai or Replicate.
         const own = accountRun(account.id, planned.route.provider, "submit");
@@ -277,8 +354,25 @@ export async function POST(request: Request) {
         stamp = held.stamp;
       } else if (mod.checkOutputs) stamp = { checkOutputs: true };
     }
+    // The run this one takes the place of, asked again with nothing awaited from here until it is made: a press on another
+    // of its batch's tiles meanwhile took it already (or it started on its GPU), so nothing new runs.
+    if (replaces && account) {
+      const now = replacedRun(body, account.id);
+      if (!now || "blocked" in now) {
+        unhit(`run:${account.id}`);
+        if (stamp?.hold) queueRelease(stamp.hold);
+        return now ? refuse(409, BLOCKED[now.blocked].error, { code: BLOCKED[now.blocked].code }) : refuse(409, NOT_REPLACEABLE, { code: "not-replaceable" });
+      }
+      // Fewer of its jobs left to stop (one was handed over meanwhile): fewer outputs. A run on this install's GPUs keeps
+      // the count it was priced and set aside for.
+      if (!onPool && now.outputs !== undefined && now.outputs !== replaces.outputs) req = { ...req, params: { ...req.params, numOutputs: Math.min(now.outputs, req.params?.numOutputs ?? now.outputs) } };
+      replaces = now;
+    }
     const make = () => createGenerations(req);
-    const inScope = <T,>(fn: () => T): T => (account && onPool ? runOnPool(account.id, () => withRunStamp(stamp ?? { place: "pool" }, fn)) : stamp ? onOwn(() => withRunStamp(stamp, fn)) : onOwn(fn));
+    // An account's run made here is its own, in no tool's project: Run with your key may take its place while it waits.
+    const alone = (s: RunStamp): RunStamp => ({ ...s, standalone: true });
+    const inScope = <T,>(fn: () => T): T =>
+      account && onPool ? runOnPool(account.id, () => withRunStamp(alone(stamp ?? { place: "pool" }), fn)) : account ? onOwn(() => withRunStamp(alone(stamp ?? {}), fn)) : stamp ? onOwn(() => withRunStamp(stamp, fn)) : onOwn(fn);
     let items: ReturnType<typeof createGenerations>;
     try {
       if (account) {
@@ -292,6 +386,9 @@ export async function POST(request: Request) {
             {
               accountId: account.id,
               pool: pool && !pool.light ? { policy: pool.policy, addr } : null,
+              // The studio's own limits as a run made here meets them: runs waiting for the account's own GPU are counted
+              // apart (a run for its GPU meets their limit too), and the runs this one takes the place of are left out.
+              studio: { except: replaces?.ids ?? [], mayWait: !onPool && goesTo === "comfyui" },
               // A send of this press that got here first made the run, or ended this try (its hold is going back):
               // nothing is made twice, and nothing against a hold that went back.
               ...(poolTry !== null && { prior: () => pressPrior(account.id, pressId!, poolTry) }),
@@ -300,9 +397,17 @@ export async function POST(request: Request) {
               ...(poolTry !== null && stamp?.hold && { refused: () => void endTry(account.id, pressId!, poolTry) }),
             },
             () => {
+              // The run this one takes the place of, asked once more in the same step: a press that reached another app
+              // process first took it already, so nothing new runs.
+              const still = replaces ? replacedRun(body, account.id) : undefined;
+              if (still === null) throw new AdmitRefused({ status: 409, error: NOT_REPLACEABLE, code: "not-replaceable" });
+              if (still && "blocked" in still) throw new AdmitRefused({ status: 409, ...BLOCKED[still.blocked] });
               const run = captureRun(make);
               const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
               if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+              // The runs this one takes the place of stop in the same step (they were waiting, or it failed): never two of
+              // the same, whichever app process a second press reaches.
+              if (still) stopReplaced(still.ids);
               if (poolTry !== null) notePressRun(account.id, pressId!, poolTry, run.value.map((g) => g.id), stamp?.hold ?? null);
               return run;
             },

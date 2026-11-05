@@ -13,6 +13,8 @@
  *
  * Run with: node --import tests/helpers/ts-register.mjs tests/helpers/app-process-child.ts
  * Requests to anything but the addresses in FUOBE_TEST_ALLOW (comma-separated) answer 599: no real network.
+ * FUOBE_TEST_GPU_PORT: an account's own GPU at that port on this machine (a stand-in ComfyUI) is reached, as in vitest.
+ * FUOBE_TEST_SELF_HEAL_SCALE and FUOBE_TEST_STALE_SUBMIT_MS: the clocks of a wait and of a run cut off before its send.
  */
 import fs from "node:fs";
 import http from "node:http";
@@ -50,7 +52,11 @@ fs.renameSync = ((from: fs.PathLike, to: fs.PathLike) => {
   return realRename(from, to);
 }) as typeof fs.renameSync;
 
-const { ensureRunner } = await import("@/server/generations");
+// An account's own GPU on this machine (a test's stand-in ComfyUI), and the clocks a test makes faster.
+if (process.env.FUOBE_TEST_GPU_PORT) globalThis.__fuobeTestGpuPort = Number(process.env.FUOBE_TEST_GPU_PORT);
+const { ensureRunner, SELF_HEAL, STALE_SUBMIT } = await import("@/server/generations");
+if (process.env.FUOBE_TEST_SELF_HEAL_SCALE) SELF_HEAL.scale = Number(process.env.FUOBE_TEST_SELF_HEAL_SCALE);
+if (process.env.FUOBE_TEST_STALE_SUBMIT_MS) STALE_SUBMIT.ms = Number(process.env.FUOBE_TEST_STALE_SUBMIT_MS);
 const { sweepBilling } = await import("@/server/billing-outbox");
 const { loadRoutes, apiAs } = await import("./computer-tab");
 const one = await import("@/app/api/generations/[id]/route");

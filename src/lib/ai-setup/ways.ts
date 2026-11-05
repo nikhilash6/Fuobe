@@ -61,5 +61,11 @@ export function browserOf(nav: { userAgent?: string; brave?: unknown }): Browser
   return "other";
 }
 
+/**
+ * Where the setup opens as a page of its own: /connect?setup=ai, and with `way` the panel starts on that way. A phone's
+ * setup ends on the computer with "address": the box for the web address is there at once, under the same code.
+ */
+export const aiSetupHref = (way?: Way) => `/connect?setup=ai${way ? `&way=${way}` : ""}`;
+
 /** "on my Windows computer", or "on my computer" when the system isn't known. */
 export const onMyComputer = (os: Os) => (OS_NAME[os] ? `on my ${OS_NAME[os]} computer` : "on my computer");

@@ -15,13 +15,14 @@ import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { useNow } from "@/components/studio/use-now";
 import { useGpuBadges, useGpuCheck, useGpuPlan } from "@/hooks/use-gpu";
 import { showCode, spokenCode } from "@/lib/ai-setup/code";
-import { addressCauseOf, type AddressCause, type TabFacts } from "@/lib/ai-setup/facts";
+import { addressCauseOf, onCpuDevice, type AddressCause, type TabFacts } from "@/lib/ai-setup/facts";
 import { FIRST_MODEL_NAME, firstModelOf, type FirstModel } from "@/lib/ai-setup/first-picture";
 import { agentLine, AGENTS, AI_TARGETS, chatLink, fullInstructions, isAgent, prefillText, type Agent, type AiTarget } from "@/lib/ai-setup/handoff";
 import { nextOf } from "@/lib/ai-setup/next-step";
 import { personWords } from "@/lib/ai-setup/person-words";
+import { quietFacts, quietWords, RESTART_SLOW_MS, RESTART_WAIT_MIN } from "@/lib/ai-setup/restart";
 import { isConnected, isDone, stepsOf } from "@/lib/ai-setup/steps";
-import { BROWSER_LABEL, browserOf, OS_NAME, pickWay, WAY_LABEL, waysFor, type Os, type Way } from "@/lib/ai-setup/ways";
+import { aiSetupHref, BROWSER_LABEL, browserOf, OS_NAME, pickWay, WAY_LABEL, waysFor, type Os, type Way } from "@/lib/ai-setup/ways";
 import { useStatus } from "@/lib/api";
 import { copyText, copyWithToast } from "@/lib/clipboard";
 import { platformOf } from "@/lib/comfy-install";
@@ -51,6 +52,8 @@ export interface AiSetupPanelProps {
   kind?: string;
   onStart?: () => void;
   onNotNow?: () => void;
+  /** The way to start on (/connect?setup=ai&way=address: a phone's setup ends here, at the box for the web address). */
+  startWay?: Way;
 }
 
 type GpuView = { gpu: { mode: "computer" } | { mode?: "link"; url: string } | null };
@@ -58,8 +61,6 @@ type GpuView = { gpu: { mode: "computer" } | { mode?: "link"; url: string } | nu
 const AGENT_KEY = "fuobe.ai-setup.agent";
 const STUCK_MS = 240_000;
 const GUARD_WAIT_MS = 60_000;
-/** ComfyUI stopped answering this recently: it is restarting (or was closed), not missing. */
-const GONE_MS = 90_000;
 
 function readAgent(): Agent {
   try {
@@ -104,13 +105,13 @@ const Quiet = ({ children, onClick, className }: { children: React.ReactNode; on
   </button>
 );
 
-export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPanelProps) {
+export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow, startWay }: AiSetupPanelProps) {
   const qc = useQueryClient();
   const support = useComputerSupport();
   const { ways, off, phone } = waysFor(support, FUOBE_CONNECT_PUBLISHED);
-  // The way picked by hand, while this browser can use it; else the one that fits (the browser's own answer can come a
-  // moment after the first paint, on a phone's narrow screen).
-  const [chosen, setWay] = useState<Way | null>(null);
+  // The way picked by hand (or by the link), while this browser can use it; else the one that fits (the browser's own
+  // answer can come a moment after the first paint, on a phone's narrow screen).
+  const [chosen, setWay] = useState<Way | null>(startWay ?? null);
   const way: Way = chosen && ways.includes(chosen) && !off.includes(chosen) ? chosen : pickWay(support, FUOBE_CONNECT_PUBLISHED);
   const detected = useMemo<Os>(() => (typeof window === "undefined" ? "other" : platformOf(nav())), []);
   const [osPicked, setOsPicked] = useState<Os | null>(null);
@@ -119,7 +120,11 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
   const browser = useMemo(() => (typeof window === "undefined" ? ("other" as const) : browserOf(nav())), []);
   const [changing, setChanging] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => heading.current?.focus(), []);
+  // Opened for the web address (from a phone): the box for it takes the focus once it shows, so a paste goes there.
+  const [focusAddress] = useState(startWay === "address");
+  useEffect(() => {
+    if (!focusAddress) heading.current?.focus();
+  }, [focusAddress]);
 
   // The account's GPU (what is saved) and whether it answers (the status strip's check).
   const gpuQ = useQuery({ queryKey: ["account-gpu"], queryFn: async () => (await (await fetch("/api/account/gpu")).json()) as GpuView });
@@ -147,6 +152,8 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
   // The web address: what the form last did.
   const [address, setAddress] = useState<{ state: "none" | "testing" | "ok" | "failed"; cause?: AddressCause; words?: string }>({ state: "none" });
   const check = useGpuCheck();
+  // ComfyUI runs on the processor: this tab's own read of it, or, for a web address, the device its last check named.
+  const cpu = way === "address" ? saved === "link" && onCpuDevice(viewerGpu?.device) : probe.cpu;
 
   // A picture model, and the first picture.
   const badges = useGpuBadges().data;
@@ -156,25 +163,20 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
   const now = useNow(5000);
   const browserState: TabFacts["browser"] =
     way !== "direct" ? "unknown" : support !== "ok" ? "unsupported" : probe.state.s === "blocked" ? "blocked" : probe.perm === "granted" ? "granted" : probe.state.s === "start" ? "ask" : "unknown";
-  // Where ComfyUI last answered, and when it stopped: a ComfyUI that went quiet a moment ago is restarting (Fuobe's
-  // start file, the AI), so the setup says so and doesn't ask to install it.
+  // Where ComfyUI last answered, and when it stopped: a ComfyUI that went quiet up to 5 minutes ago is starting again
+  // (Fuobe's start file, the AI; a portable one loads every add-on first), so the setup says so, with the time so far,
+  // and doesn't ask to install it. Past that, it says that ComfyUI didn't come back.
   const s0 = probe.state;
   const answering = s0.s === "found" || s0.s === "needs-setting" || s0.s === "waiting" ? s0.port : s0.s === "looking" ? undefined : null;
   const [lastComfy, setLastComfy] = useState<{ port: number | null; gone: { port: number; at: number } | null }>({ port: null, gone: null });
   if (answering !== undefined && answering !== lastComfy.port)
     setLastComfy({ port: answering, gone: answering === null ? (lastComfy.port !== null ? { port: lastComfy.port, at: now } : lastComfy.gone) : null });
-  const goneAt = s0.s === "none" && lastComfy.gone && now - lastComfy.gone.at < GONE_MS ? lastComfy.gone.port : null;
-  const comfy = goneAt
-    ? "waiting"
-    : probe.state.s === "found"
-      ? "found"
-      : probe.state.s === "needs-setting"
-        ? "unreadable"
-        : probe.state.s === "waiting"
-          ? "waiting"
-          : probe.state.s === "none"
-            ? "none"
-            : undefined;
+  // The finder's own wait (ComfyUI went quiet while it waited for the setting), or a ComfyUI it read that stopped.
+  const quietSince = s0.s === "waiting" ? { port: s0.port, at: s0.since } : s0.s === "none" ? lastComfy.gone : null;
+  const quietMs = quietSince ? Math.max(0, now - quietSince.at) : 0;
+  const restart = quietSince ? quietFacts(quietMs) : null;
+  const quietPort = restart ? quietSince!.port : undefined;
+  const comfy = restart ? restart.comfy : s0.s === "found" ? "found" : s0.s === "needs-setting" ? "unreadable" : s0.s === "none" ? "none" : undefined;
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     const on = () => setVisible(document.visibilityState === "visible");
@@ -190,7 +192,8 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
     browserName: browser,
     ...(way !== "address" && {
       ...(comfy && { comfy }),
-      ...((goneAt ?? probe.port) && { port: goneAt ?? probe.port }),
+      ...((quietPort ?? probe.port) && { port: quietPort ?? probe.port }),
+      ...(restart && { quietMin: restart.quietMin }),
       ...(probe.install && { install: probe.install }),
       ...(probe.cors && { cors: probe.cors }),
       ...(found && { listen: probe.listen }),
@@ -198,9 +201,9 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
       ...(found && { guard: probe.guard ?? "none" }),
       ...(skipGuard && { guardSkipped: true }),
       ...((connectedHere || (saved === "computer" && online && found)) && { connected: true }),
-      ...(probe.cpu && { cpu: true }),
       ...(probe.cpu && probe.cpuFlag && { cpuFlag: true }),
     }),
+    ...(cpu && { cpu: true }),
     ...(way === "address" && { address: address.state === "none" && saved === "link" ? "ok" : address.state, ...(address.cause && { addressCause: address.cause }) }),
     model: model.state === "checking" ? "checking" : model.state,
     ...(model.state === "none" && { modelWhy: model.why }),
@@ -312,11 +315,16 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
           {probe.perm !== "granted" && <AllowNote />}
         </>
       );
-    else if (goneAt)
+    else if (restart?.comfy === "waiting") extras.comfyui = <RestartWait port={quietPort!} ms={quietMs} />;
+    else if (restart)
       extras.comfyui = (
-        <p className="flex items-center gap-2 text-[12px] text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" /> ComfyUI stopped answering on port {goneAt}. Waiting for it to start again…
-        </p>
+        <>
+          <p className="text-[12px] text-muted-foreground">
+            ComfyUI hasn&apos;t answered on port {quietPort} for {quietWords(quietMs)}. Look at its window: if it shows an error, ask your AI about it. If the window closed, start
+            ComfyUI again. Fuobe finds it by itself once it answers.
+          </p>
+          {s === "none" && <NoComfy onLook={(port, host) => void probe.look({ ports: [{ port, host }] })} missed={probe.state.missed} notComfy={probe.state.notComfy} installed />}
+        </>
       );
     else if (s === "looking") extras.comfyui = <p className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin" /> Looking for ComfyUI on this computer…</p>;
     else if (s === "blocked")
@@ -358,15 +366,17 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
     if (auto.error) extras.guard = <p className="text-[12px] text-destructive">{auto.error}</p>;
   }
   if (way === "address" && !(saved === "link" && online && address.state !== "failed"))
-    extras.address = <AddressForm saved={saved === "link"} state={address} onState={setAddress} onConnected={() => void check.start()} phone={phone} site={site} />;
+    extras.address = (
+      <AddressForm saved={saved === "link"} state={address} onState={setAddress} onConnected={() => void check.start()} phone={phone} site={site} focus={focusAddress && !phone} />
+    );
   if (connected && !fromRun) {
     if (model.state === "download") extras.model = <ModelDownload model={model.model} gbTenths={model.gbTenths} os={os ?? "other"} onCheck={() => void recheck()} checking={check.running} />;
     else if (model.state === "none")
       extras.model = (
         <div className="space-y-1.5">
           <p className="text-[12px] text-muted-foreground">
-            {probe.cpu
-              ? "ComfyUI runs on your computer's processor, not on its graphics card, so no picture model fits. Your AI can make ComfyUI use the graphics card."
+            {cpu
+              ? "ComfyUI runs on your computer's processor, not on a graphics card. Fuobe's picture models need a graphics card with 8 GB or more, so none fits here, and on the processor one picture would take many minutes. If the computer has a graphics card, your AI can make ComfyUI use it."
               : model.why === "setup"
                 ? "These picture models need more than a download on your ComfyUI, most often an update. Your AI can update it."
                 : "Your GPU has too little memory for the small picture models (the smallest needs 8 GB)."}
@@ -504,7 +514,7 @@ export function AiSetupPanel({ onBack, fromRun, onStart, onNotNow }: AiSetupPane
       {/* The checklist, or the finish in its place (the box keeps its height). */}
       <section aria-label="Fuobe checks as your AI works" className="min-h-[18rem] rounded-2xl bg-brand-faint/50 p-4">
         {finished ? (
-          <FinishCard picture={picture} gpu={gpuName} cpu={probe.cpu} onClose={onBack} />
+          <FinishCard picture={picture} gpu={gpuName} cpu={cpu} onClose={onBack} />
         ) : (
           <>
             <p className="mb-3 text-[13px] font-medium">Fuobe checks as your AI works</p>
@@ -547,19 +557,45 @@ function wayLine(way: Way, support: string): string {
   return "Fuobe uses ComfyUI right from this tab. Runs go while Fuobe is open here.";
 }
 
-/** Nothing answers: install it with the AI, or a port of its own. */
-function NoComfy({ onLook, missed, notComfy }: { onLook: (port: number, host: string) => void; missed?: number; notComfy?: number }) {
+/** Nothing answers: install it with the AI, or a port of its own (`installed`: ComfyUI ran here a while ago, so no install). */
+function NoComfy({ onLook, missed, notComfy, installed }: { onLook: (port: number, host: string) => void; missed?: number; notComfy?: number; installed?: boolean }) {
   const [port, setPort] = useState(false);
   return (
     <div className="space-y-2">
-      <p className="text-[12px] text-muted-foreground">
-        No ComfyUI yet? Your AI can install it.{" "}
-        <a href="https://www.comfy.org/download" target="_blank" rel="noopener noreferrer" className="text-brand-text underline-offset-4 hover:underline">
-          Get ComfyUI Desktop
-          <span className="sr-only"> (opens a new tab)</span>
-        </a>
-      </p>
+      {!installed && (
+        <p className="text-[12px] text-muted-foreground">
+          No ComfyUI yet? Your AI can install it.{" "}
+          <a href="https://www.comfy.org/download" target="_blank" rel="noopener noreferrer" className="text-brand-text underline-offset-4 hover:underline">
+            Get ComfyUI Desktop
+            <span className="sr-only"> (opens a new tab)</span>
+          </a>
+        </p>
+      )}
       {port ? <OtherPort onLook={onLook} missed={missed} notComfy={notComfy} /> : <Quiet onClick={() => setPort(true)}>ComfyUI on another port?</Quiet>}
+    </div>
+  );
+}
+
+/**
+ * ComfyUI stopped answering a moment ago: it is starting again. The time so far, and after a minute, why it can take
+ * this long (a portable or Easy-Install ComfyUI loads every add-on before it answers).
+ */
+function RestartWait({ port, ms }: { port: number; ms: number }) {
+  const slow = ms >= RESTART_SLOW_MS;
+  return (
+    <div className="space-y-1">
+      <p className="flex items-center gap-2 text-[12px] text-muted-foreground">
+        <Loader2 className="size-3.5 shrink-0 animate-spin" />
+        <span>
+          {slow ? `Still waiting for ComfyUI on port ${port}: ${quietWords(ms)} so far.` : `ComfyUI stopped answering on port ${port}. Waiting for it to start again… (${quietWords(ms)})`}
+        </span>
+      </p>
+      {slow && (
+        <p className="text-[12px] text-muted-foreground">
+          ComfyUI loads all its add-ons before it answers. A portable or Easy-Install ComfyUI can take up to {RESTART_WAIT_MIN} minutes. Fuobe goes on by itself as soon as it
+          answers.
+        </p>
+      )}
     </div>
   );
 }
@@ -710,13 +746,16 @@ function HandOffs({
           )}
         </>
       )}
-      <CodeLine code={code} ended={ended} renewed={renewed} onEnd={onEnd} onFresh={onFresh} />
+      <CodeLine code={code} waiting={waiting} ended={ended} renewed={renewed} onEnd={onEnd} onFresh={onFresh} />
     </div>
   );
 }
 
-/** The setup code, with End this code in a small menu; after it ends, a new one. */
-function CodeLine({ code, ended, renewed, onEnd, onFresh }: { code: string | null; ended: boolean; renewed: boolean; onEnd: () => void; onFresh: () => void }) {
+/**
+ * The setup code, with End this code in a small menu; after it ends, a new one. While the code is on its way
+ * (`waiting`), the same lines with a blank where the code goes, so nothing below moves when it arrives.
+ */
+function CodeLine({ code, waiting, ended, renewed, onEnd, onFresh }: { code: string | null; waiting: boolean; ended: boolean; renewed: boolean; onEnd: () => void; onFresh: () => void }) {
   if (ended)
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-[12px] text-muted-foreground">
@@ -724,31 +763,45 @@ function CodeLine({ code, ended, renewed, onEnd, onFresh }: { code: string | nul
         <Quiet onClick={onFresh}>Share again</Quiet>
       </div>
     );
-  if (!code) return null;
-  const shown = showCode(code);
+  if (!code && !waiting) return null;
+  const shown = code ? showCode(code) : "";
   return (
-    <div className="space-y-1.5 border-t pt-3">
-      {renewed && <p className="text-[12px]">Fuobe made a new code. Tell your AI: My new setup code is {shown}.</p>}
+    <div className="space-y-1.5 border-t pt-3" data-code-line={code ? "ready" : "waiting"}>
+      {renewed && code && <p className="text-[12px]">Fuobe made a new code. Tell your AI: My new setup code is {shown}.</p>}
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
           Setup code
-          <span aria-label={`Setup code ${spokenCode(code)}`} className="font-mono text-[13px] tracking-widest text-foreground">
-            {shown}
-          </span>
-          <button type="button" onClick={() => void copyWithToast(renewed ? `My new setup code is ${shown}` : shown, "Code copied")} className="grid size-8 place-items-center rounded-md hover:bg-muted hover:text-foreground" aria-label="Copy the setup code">
-            <Copy className="size-3.5" />
-          </button>
+          {code ? (
+            <>
+              <span aria-label={`Setup code ${spokenCode(code)}`} className="font-mono text-[13px] tracking-widest text-foreground">
+                {shown}
+              </span>
+              <button type="button" onClick={() => void copyWithToast(renewed ? `My new setup code is ${shown}` : shown, "Code copied")} className="grid size-8 place-items-center rounded-md hover:bg-muted hover:text-foreground" aria-label="Copy the setup code">
+                <Copy className="size-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="h-4 w-32 shrink-0 rounded bg-muted motion-safe:animate-pulse" />
+              <span className="sr-only">Fuobe is making your code.</span>
+              <span aria-hidden className="size-8" />
+            </>
+          )}
         </p>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="More about this code">
-              <Ellipsis className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onEnd}>End this code</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {code ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="More about this code">
+                <Ellipsis className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onEnd}>End this code</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <span aria-hidden className="size-8 shrink-0" />
+        )}
       </div>
       <p className="text-[12px] text-muted-foreground">Your AI reads Fuobe&apos;s checks with this code. It can only read them, and the code ends by itself.</p>
     </div>
@@ -829,6 +882,7 @@ function AddressForm({
   onConnected,
   phone,
   site,
+  focus,
 }: {
   saved: boolean;
   state: { state: string; cause?: AddressCause; words?: string };
@@ -836,9 +890,17 @@ function AddressForm({
   onConnected: () => void;
   phone: boolean;
   site: string;
+  /** Take the focus when it shows (opened for the web address, from a phone). */
+  focus?: boolean;
 }) {
   const qc = useQueryClient();
   const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    input.current?.focus({ preventScroll: true });
+    input.current?.scrollIntoView({ block: "center" });
+  }, [focus]);
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [withToken, setWithToken] = useState(false);
@@ -874,10 +936,12 @@ function AddressForm({
   return (
     <div className="space-y-1.5">
       <Label htmlFor={`${id}-url`} className="text-[12px]">
-        {saved ? "Paste a new web address" : "Your ComfyUI's web address"}
+        Your ComfyUI&apos;s web address
       </Label>
+      {saved && <p className="text-[12px] text-muted-foreground">Fuobe can&apos;t reach the address it has. Each time cloudflared starts, it makes a new one: paste the new one here.</p>}
       <div className="flex gap-2">
         <Input
+          ref={input}
           id={`${id}-url`}
           placeholder="https://your-address.trycloudflare.com"
           value={url}
@@ -931,11 +995,41 @@ function AddressForm({
         Keep the address to yourself. Paste it here, not in your AI&apos;s chat.{" "}
         {!showToken && <Quiet onClick={() => setWithToken(true)}>Has a password or token?</Quiet>}
       </p>
-      {phone && (
-        <p className="text-[12px] text-muted-foreground">
-          The address goes on your computer&apos;s clipboard. Open {host}/connect on that computer, sign in, and paste it there. Or paste it here if your phone shares that clipboard.
-        </p>
-      )}
+      {phone && <OnComputer site={site} host={host} />}
+    </div>
+  );
+}
+
+/**
+ * On a phone: the address is on the computer's clipboard, so it goes into Fuobe there. The link opens this box on the
+ * computer, under the same code once the person signs in with the same account.
+ */
+function OnComputer({ site, host }: { site: string; host: string }) {
+  const path = aiSetupHref("address");
+  const link = `${site}${path}`;
+  const share = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  return (
+    <div className="space-y-1.5 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]">
+      <p>
+        The address goes on your computer&apos;s clipboard, not your phone&apos;s. On that computer, open <span className="break-all font-medium">{host}{path}</span> and sign in with this
+        account. This box is there, with the same setup code. Paste the address in it. If your phone shares the computer&apos;s clipboard, you can paste it here instead.
+      </p>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="h-9"
+        onClick={async () => {
+          if (share) {
+            try {
+              await navigator.share({ title: "Paste my ComfyUI's web address in Fuobe", url: link });
+              return;
+            } catch {}
+          }
+          await copyWithToast(link, "Link copied");
+        }}
+      >
+        <Send /> {share ? "Send this link to my computer" : "Copy this link for my computer"}
+      </Button>
     </div>
   );
 }
@@ -985,7 +1079,7 @@ function PhoneSend({ site, os, onOs }: { site: string; os: Os | null; onOs: (os:
       </Button>
       <div className="space-y-1.5">
         <p className="text-[12px] text-muted-foreground">
-          Or start with an AI app on this phone. The commands run on your computer, and at the end you paste an address into Fuobe there, so sign in to Fuobe on that computer too. Which computer runs ComfyUI?
+          Or start with an AI app on this phone. The commands run on your computer, and at the end you paste an address into Fuobe on that computer, signed in to this account. Which computer runs ComfyUI?
         </p>
         <TabRow role="tablist" aria-label="Computer" fade={false} className="w-fit">
           {(["windows", "mac", "linux"] as Os[]).map((o) => (

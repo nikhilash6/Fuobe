@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { onCloudKey } from "@/lib/before-run";
-import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
+import { useOptionalCatalog } from "./catalog";
+import { TroubleDetails } from "@/components/gpu/trouble";
+import { RunTroubleActions } from "@/components/gpu/run-trouble-actions";
 import { useCreateGeneration, useGenerationActions, useMakingPoolRuns, useStatus } from "@/lib/api";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
@@ -109,6 +110,9 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   const where = local ? (local.here ? "Keep this tab open" : "Running in another Fuobe tab") : null;
   // A live frame: from the ComfyUI on this computer, or (Working on the workers) the latest preview picture.
   const frame = local?.preview ?? (g.status === "running" ? g.preview : undefined);
+  // Waiting for its own GPU or key to come back: what helps meanwhile, and until when it waits.
+  const waiting = g.status === "queued" ? g.waiting : undefined;
+  const until = waiting?.until && waiting.until > now ? new Date(waiting.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
   return (
     // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
     // otherwise make the tile wider than its column and spill over the next card.
@@ -139,7 +143,10 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
             {pct != null && <span>{pct}%</span>}
             <span className={cn(pct != null && "before:mr-1.5 before:content-['·']")}>{elapsed(g.createdAt, Math.max(now, g.createdAt))}</span>
             {left != null && <span className="before:mr-1.5 before:content-['·']">{leftLabel(left)}</span>}
+            {until && <span className="before:mr-1.5 before:content-['·']">waits until {until}</span>}
           </p>
+          {/* Run with your key moves this run (and the rest of its batch not handed over yet) to the key, in one server call. */}
+          {waiting && <RunTroubleActions g={g} className="mt-1.5" actions={waiting.actions} skip={["retry"]} max={2} compact />}
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -166,35 +173,48 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   );
 }
 
+/** A failed tile narrower than this (in px, at the feed's 224 px height) shows two trouble buttons, not three. */
+const NARROW_TILE_PX = 260;
+
 export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
   const create = useCreateGeneration();
+  const feed = useContext(FeedCtx);
+  const catalog = useOptionalCatalog();
   const trouble = g.status === "failed" ? g.trouble : undefined;
   // A run on this studio's GPUs that couldn't finish: one plain sentence (the server's), nothing technical.
   const poolFailed = g.place === "pool" && g.status === "failed";
+  const shape = Math.max(ratio, 0.8);
+  const narrow = shape * 224 < NARROW_TILE_PX;
+  const [retrying, setRetrying] = useState(false);
   return (
-    <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: Math.max(ratio, 0.8) }}>
-      <div className="min-h-0 space-y-1 overflow-hidden">
+    <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: shape }}>
+      <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
         {poolFailed ? (
-          <p className="line-clamp-5 text-[13px] leading-snug font-medium break-words">{g.error || POOL_WORDS.failed}</p>
+          <p className={cn("shrink-0 text-[13px] leading-snug font-medium break-words", narrow ? "line-clamp-4" : "line-clamp-5")}>{g.error || POOL_WORDS.failed}</p>
         ) : (
           <>
-            <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
-            {g.error && <p className="line-clamp-5 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground">{g.error}</p>}
-            {/* An account's own GPU or key: what came back, small, for the curious. */}
-            <TroubleDetails details={trouble?.details} />
+            <p className="shrink-0 text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
+            {g.error && <p className={cn("shrink-0 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground", narrow ? "line-clamp-4" : "line-clamp-5")}>{g.error}</p>}
+            {/* An account's own GPU or key: what came back, small, for the curious (the first thing cut when room is short). */}
+            <TroubleDetails details={trouble?.details} className="min-h-0" />
           </>
         )}
       </div>
+      {/* In a studio, Pick another model brings its settings back into the composer and opens its model picker. */}
       {trouble && (
-        <TroubleActions
-          className="mt-2"
+        <RunTroubleActions
+          g={g}
+          reuse={feed?.reuse}
+          model={catalog?.getModel(g.modelId)}
+          className="mt-2 shrink-0"
           actions={trouble.actions}
           skip={["retry"]}
-          max={3}
-          handlers={{ onRunWithKey: (a) => create.mutate(onCloudKey(g.request, a), { onError: (e) => toastError(e) }) }}
+          max={narrow ? 2 : 3}
+          compact
+          context="run"
         />
       )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex shrink-0 flex-wrap gap-1.5">
         {g.status === "failed" && g.fix && (
           // Something was missing on the GPU: the guided fix shows what, and how to add it.
           <button
@@ -208,11 +228,15 @@ export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number
           </button>
         )}
         <button
+          disabled={create.isPending || retrying}
           onClick={(e) => {
             e.stopPropagation();
+            // A second click a moment later starts nothing more (each run is billed or uses the GPU).
+            setRetrying(true);
+            setTimeout(() => setRetrying(false), 3000);
             onRetry();
           }}
-          className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
+          className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent disabled:opacity-70"
         >
           <RotateCcw className="size-3" /> Retry
         </button>

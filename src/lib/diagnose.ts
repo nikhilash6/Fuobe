@@ -46,6 +46,7 @@ export type TroubleCause =
   | "gpu-went-away"
   | "gpu-save-failed"
   | "gpu-isolated"
+  | "gpu-too-long"
   // Your keys
   | "key-rejected"
   | "key-balance"
@@ -60,6 +61,7 @@ export type TroubleCause =
   | "provider-stopped"
   | "no-result"
   | "result-expired"
+  | "provider-too-long"
   | "unknown";
 
 export type TroubleActionKind =
@@ -75,7 +77,11 @@ export type TroubleActionKind =
   /** Pair a ComfyUI with a code (/connect): no web address needed. */
   | "pair"
   /** Run on the ComfyUI on this computer instead. */
-  | "use-computer";
+  | "use-computer"
+  /** Send a smaller copy of the file the GPU's address refused as too big (a run made again with it, on a click). */
+  | "send-smaller"
+  /** Run it again one size or length smaller (out of memory), on a click. */
+  | "try-smaller";
 
 export interface TroubleAction {
   kind: TroubleActionKind;
@@ -91,7 +97,7 @@ export interface Diagnosis {
   cause: TroubleCause;
   /** One plain sentence: what is wrong and what to do. Never a status code, an address or a program's own words. */
   words: string;
-  /** For the curious: the status, the host and the reason, short. */
+  /** For the curious: the status, the kind of address (never the address itself) and the reason, short. */
   details?: string;
   actions: TroubleAction[];
   /** Waiting can fix it: the run (or the check) tries again by itself. */
@@ -132,20 +138,52 @@ export function gpuHostOf(url: string): { kind: "runpod"; port: number } | { kin
   return TUNNEL_HOST.test(host) ? { kind: "tunnel" } : { kind: "web" };
 }
 
-const hostOf = (url: string) => {
+/**
+ * A GPU's address said by its kind, for the details line and logs: "RunPod pod, port 8188", "your tunnel", "your web
+ * address". Never the address itself: a pod's or a tunnel's address is enough to reach a ComfyUI without a password.
+ */
+export function gpuPlaceWords(url: string): string {
+  const k = gpuHostOf(url);
+  return k.kind === "runpod" ? `RunPod pod, port ${k.port}` : k.kind === "tunnel" ? "your tunnel" : "your web address";
+}
+
+/** The host names (and host:port) of an address, to take out of a text that names them. */
+function hostsOf(url: string): string[] {
   try {
-    return new URL(url).host;
+    const u = new URL(url);
+    return [...new Set([u.host, u.hostname].filter((h) => h.length > 2))].sort((a, b) => b.length - a.length);
   } catch {
-    return "";
+    return [];
   }
-};
+}
+
+/** An IP address with its port: v4, v6 in brackets, or the v6 a socket error names after its code ("ECONNREFUSED ::1:443"). */
+const IP_PORT = /\[[0-9a-f:]{2,}\](?::\d{1,5})?|\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/gi;
+const SOCKET_V6 = /(\bE[A-Z]{3,}\s+)[0-9a-f]*:[0-9a-f:.]+/g;
+
+/**
+ * A text with a GPU's address taken out: its host (and any IP address and port, a socket error's "1.2.3.4:443") become
+ * "your GPU". For the details line, logs and anything kept with a run.
+ */
+export function withoutAddress(text: string, url?: string): string {
+  let t = text;
+  for (const h of url ? hostsOf(url) : []) t = t.split(h).join("your GPU");
+  return t.replace(SOCKET_V6, "$1your GPU").replace(IP_PORT, "your GPU");
+}
+
+/** Credentials a text may echo back (a page that repeats the request's headers): taken out. */
+export function withoutSecrets(text: string): string {
+  return text
+    .replace(/\b(Bearer|Basic|Key|Token)\s+[A-Za-z0-9._~+/=:-]{6,}/gi, "$1 ••••")
+    .replace(/("?(?:authorization|x-api-key|api[_-]?key|access[_-]?token|token|password|secret)"?\s*[:=]\s*"?)[^"\s,;}&]{4,}/gi, "$1••••");
+}
 
 // ---------------------------------------------------------------------------
 // The details line
 
 /** A short details line from an answer's text: an HTML page's title (or nothing), other text on one line, cut short. */
 export function cleanDetails(text: string | undefined, max = 160): string {
-  const t = String(text ?? "");
+  const t = withoutSecrets(String(text ?? ""));
   if (!t.trim()) return "";
   if (/^\s*</.test(t) || /<html|<!doctype/i.test(t)) {
     const title = /<title[^>]*>([^<]{1,200})<\/title>/i.exec(t)?.[1];
@@ -170,6 +208,9 @@ const A = {
   pick: (): TroubleAction => ({ kind: "pick-model", label: "Pick another model" }),
   credit: (p: CloudProvider): TroubleAction => ({ kind: "add-credit", label: `Add credit on ${CLOUD_KEY[p].label}`, target: BILLING_URL[p] }),
   withKey: (p: CloudProvider): TroubleAction => ({ kind: "run-with-key", label: `Run with your ${CLOUD_KEY[p].label} key`, target: p }),
+  smaller: (): TroubleAction => ({ kind: "send-smaller", label: "Send a smaller copy" }),
+  trySmaller: (): TroubleAction => ({ kind: "try-smaller", label: "Try one size smaller" }),
+  connectGpu: (): TroubleAction => ({ kind: "gpu-settings", label: "Connect your GPU", target: "/settings#your-gpu" }),
 };
 
 /**
@@ -178,6 +219,15 @@ const A = {
  */
 export function withKeyAction(p: CloudProvider, modelId?: string, op?: string): TroubleAction {
   return { ...A.withKey(p), ...(modelId && { modelId }), ...(modelId && op && { op }) };
+}
+
+/**
+ * A run's buttons with "Run with your … key" right after the first (the one that fixes the GPU): a tile that shows only a
+ * few keeps it. Once only.
+ */
+export function withOfferAfterFirst(actions: TroubleAction[], offer: TroubleAction | null | undefined): TroubleAction[] {
+  if (!offer || actions.some((a) => a.kind === "run-with-key")) return actions;
+  return [...actions.slice(0, 1), offer, ...actions.slice(1)];
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +258,8 @@ const PRIVATE = /won't fetch .*(this machine|private network)/i;
 const TOO_LONG = /took over \d+ s|Timed out|ETIMEDOUT|timeout/i;
 const NGROK_OFFLINE = /ERR_NGROK_3200|ERR_NGROK_8012|endpoint .{0,40}is offline|tunnel .{0,40}not found/i;
 const CF_TUNNEL_DOWN = /Error 1033|Argo Tunnel error|Cloudflare Tunnel error/i;
+/** cloudflared (or another tunnel) is up, but nothing listens behind it: ComfyUI is closed. */
+const ORIGIN_DOWN = /unable to reach the origin|origin service .{0,40}(down|not responding)|connection refused.{0,40}(127\.0\.0\.1|localhost)|dial tcp .{0,60}connect: connection refused/i;
 
 const isHtml = (f: GpuFailure) => /text\/html/i.test(f.contentType ?? "") || /^\s*</.test(f.body ?? "");
 
@@ -221,20 +273,37 @@ const isCheck = (s: GpuStage) => s === "test" || s === "status";
  * that help. `place` names what the GPU is (a RunPod pod's port gets its own words and "Start your pod").
  */
 export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
+  const d = readGpuFailure(f, place);
+  // At ComfyUI's /prompt, a failure that may have reached it (a reset, a timeout, a proxy's 5xx) is never sent again: the
+  // job may be on the GPU already. Only what proves nothing arrived (nothing listens, no such name, a stopped pod, a
+  // tunnel that is down) is waited out.
+  return f.stage === "prompt" && d.retryable && !nothingArrived(f, place) ? { ...d, retryable: false } : d;
+}
+
+/** A failure that proves the request never reached ComfyUI. */
+function nothingArrived(f: GpuFailure, place: GpuPlace): boolean {
+  if (f.error && !f.status) return /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EAI_NONAME|getaddrinfo|Couldn't resolve/i.test(f.error);
+  const pod = place.kind === "link" && gpuHostOf(place.url).kind === "runpod";
+  return (pod && f.status === 404) || f.status === 530 || NGROK_OFFLINE.test(f.body ?? "") || CF_TUNNEL_DOWN.test(f.body ?? "");
+}
+
+function readGpuFailure(f: GpuFailure, place: GpuPlace): Diagnosis {
   const link = place.kind === "link" ? place : null;
   const kind = link ? gpuHostOf(link.url) : { kind: "web" as const };
   const pod = kind.kind === "runpod" ? kind : null;
-  const host = link ? hostOf(link.url) : "";
+  const where = link ? gpuPlaceWords(link.url) : "";
   const check = isCheck(f.stage);
   const status = f.status ?? 0;
-  const said = cleanDetails(f.body);
+  // What came back, without the GPU's address (its host, an IP and port) or a credential it echoed.
+  const clean = (text: string | undefined, max?: number) => cleanDetails(withoutAddress(String(text ?? ""), link?.url), max);
+  const said = clean(f.body);
   const retryAfterMs = f.retryAfterS && f.retryAfterS > 0 ? f.retryAfterS * 1000 : undefined;
-  const detailsFor = (what?: string) => joinDetails(host, status ? `HTTP ${status}` : undefined, what);
+  const detailsFor = (what?: string) => joinDetails(where, status ? `HTTP ${status}` : undefined, what);
   // How a waiting problem goes on: a check connects once it answers; a run goes on by itself, then "press Retry".
   const thenCheck = check ? "and we connect as soon as it answers" : "then press Retry";
   const gpuButtons = (): TroubleAction[] => (check ? [A.check()] : [A.retry(), A.check()]);
 
-  // The pod's port answers nothing (404: the pod is stopped; 502: nothing listens on that port yet).
+  // The pod's port answers nothing (404: the pod is stopped, or nothing is on that port).
   const podDown = (): Diagnosis => ({
     cause: "gpu-stopped",
     words: `Your RunPod pod isn't running, or ComfyUI isn't on port ${pod!.port}. Start your pod, ${thenCheck}.`,
@@ -262,9 +331,13 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
         };
   const starting = (): Diagnosis => ({
     cause: "gpu-starting",
-    words: check
-      ? "Your GPU is starting up. This can take a few minutes, and we connect as soon as ComfyUI is ready."
-      : "Your GPU is starting up, so ComfyUI wasn't ready for this run. Press Retry in a minute.",
+    words: pod
+      ? check
+        ? `Your pod is on, but ComfyUI on port ${pod.port} isn't ready yet. We connect as soon as it is.`
+        : `Your pod is on, but ComfyUI on port ${pod.port} wasn't ready for this run. Press Retry in a minute.`
+      : check
+        ? "Your GPU is starting up. This can take a few minutes, and we connect as soon as ComfyUI is ready."
+        : "Your GPU is starting up, so ComfyUI wasn't ready for this run. Press Retry in a minute.",
     details: detailsFor(said),
     actions: [...(pod ? [A.startPod()] : []), ...gpuButtons(), A.gpuSettings()],
     retryable: true,
@@ -274,12 +347,13 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
   // No answer at all.
   if (f.error && !status) {
     const e = f.error;
+    const reason = clean(e);
     if (PRIVATE.test(e)) return diagnoseAddress("local");
     if (CERTIFICATE.test(e)) {
       return {
         cause: "gpu-certificate",
         words: "Your GPU's address has a certificate problem. Use the https address your tunnel or pod gives you.",
-        details: detailsFor(cleanDetails(e)),
+        details: detailsFor(reason),
         actions: [A.gpuSettings(), A.pair()],
         retryable: false,
       };
@@ -288,22 +362,23 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
       return {
         cause: "gpu-not-found",
         words: "We can't find your GPU's address. If your tunnel restarted, it has a new address: paste it in Settings → Your GPU.",
-        details: detailsFor(cleanDetails(e)),
+        details: detailsFor(reason),
         actions: [A.gpuSettings("Paste the new address"), A.pair(), ...(check ? [] : [A.retry()])],
         retryable: true,
       };
     }
-    // A big file over a slow address: sending it took longer than the upload may take.
-    if (f.stage === "upload" && TOO_LONG.test(e) && (f.bytes ?? 0) > 20 * 2 ** 20) {
+    // A big file over a slow address: sending it took longer than the upload may take (once it was going: a connection
+    // that never opened is a GPU that doesn't answer).
+    if (f.stage === "upload" && TOO_LONG.test(e) && !/Timed out reaching|ETIMEDOUT|ECONNREFUSED|EHOSTUNREACH/i.test(e) && (f.bytes ?? 0) > 20 * 2 ** 20) {
       return {
         cause: "gpu-slow-upload",
         words: "Sending your file to your GPU took too long. Try a shorter clip, or a smaller file.",
-        details: detailsFor(cleanDetails(e)),
-        actions: [A.retry()],
+        details: detailsFor(reason),
+        actions: [A.smaller(), A.retry()],
         retryable: false,
       };
     }
-    return offline(cleanDetails(e));
+    return offline(reason);
   }
 
   // An answer, but not ComfyUI's.
@@ -324,11 +399,12 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
     };
   }
   if (status >= 300 && status < 400) {
-    let to = "";
+    let to: URL | null = null;
     try {
-      to = new URL(f.location ?? "", "https://x.invalid").hostname.toLowerCase();
+      to = new URL(f.location ?? "", link?.url ?? "https://x.invalid");
     } catch {}
-    if (to.endsWith(".cloudflareaccess.com")) {
+    const toHost = to?.hostname.toLowerCase() ?? "";
+    if (toHost.endsWith(".cloudflareaccess.com")) {
       return {
         cause: "gpu-sign-in",
         words: "Your GPU's address asks for a sign-in first. Turn the sign-in off for this address, or pair your ComfyUI with a code.",
@@ -337,16 +413,22 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
         retryable: false,
       };
     }
+    // Where it sends: another site by its name only (never a path, a query or a password in it); the GPU's own address
+    // never by name.
+    const same = !!to && !!link && hostsOf(link.url).includes(to.host);
+    const target = !to || !f.location ? undefined : same ? "to another page of your GPU's address" : `to ${withoutAddress(to.host, link?.url)}`;
     return {
       cause: "gpu-not-comfy",
       words: "Your GPU's address sends us to another page. Paste the final https address in Settings → Your GPU.",
-      details: detailsFor(f.location ? `to ${cleanDetails(f.location, 120)}` : undefined),
+      details: detailsFor(target),
       actions: [A.gpuSettings("Fix the address"), ...(check ? [] : [A.retry()])],
       retryable: false,
     };
   }
-  if (pod && (status === 404 || status === 502)) return podDown();
-  if (status === 404 && NGROK_OFFLINE.test(f.body ?? "")) return offline(said || `HTTP ${status}`);
+  if (pod && status === 404) return podDown();
+  // A tunnel whose program isn't running, or whose ComfyUI behind it doesn't listen: ngrok's offline pages (3200: no
+  // agent; 8012: the agent can't reach ComfyUI), Cloudflare's 530 or 1033, cloudflared's "unable to reach the origin".
+  if (NGROK_OFFLINE.test(f.body ?? "") || ORIGIN_DOWN.test(f.body ?? "")) return offline(said || `HTTP ${status}`);
   if (status === 530 || CF_TUNNEL_DOWN.test(f.body ?? "")) return offline(said || `HTTP ${status}`);
   if (status === 502 || status === 503 || status === 504 || (status >= 520 && status <= 529)) return starting();
   if (status === 429) {
@@ -365,16 +447,16 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
     return isHtml(f)
       ? {
           cause: "gpu-too-big",
-          words: `This file is too big to send to your GPU's address${size}. Use a shorter clip or a smaller file, or pair your ComfyUI with a code.`,
+          words: `This file is too big to send to your GPU's address${size}. Send a smaller copy, or pair your ComfyUI with a code.`,
           details: detailsFor(),
-          actions: [A.pair(), A.retry()],
+          actions: [A.smaller(), A.pair(), A.retry()],
           retryable: false,
         }
       : {
           cause: "gpu-too-big",
-          words: `This file is too big for your ComfyUI${size}. Use a smaller file, or start ComfyUI with a higher --max-upload-size.`,
+          words: `This file is too big for your ComfyUI${size}. Send a smaller copy, or start ComfyUI with a higher --max-upload-size.`,
           details: detailsFor(said),
-          actions: [A.retry()],
+          actions: [A.smaller(), A.retry()],
           retryable: false,
         };
   }
@@ -400,7 +482,7 @@ export function diagnoseGpu(f: GpuFailure, place: GpuPlace): Diagnosis {
 }
 
 /** An address the check refused before calling it (checkGpuAddress), in the words Settings → Your GPU shows. */
-export function diagnoseAddress(problem: "format" | "scheme" | "credentials" | "local" | "studio" | "not-found", host?: string): Diagnosis {
+export function diagnoseAddress(problem: "format" | "scheme" | "credentials" | "local" | "studio" | "not-found", url?: string): Diagnosis {
   switch (problem) {
     case "format":
     case "scheme":
@@ -425,7 +507,7 @@ export function diagnoseAddress(problem: "format" | "scheme" | "credentials" | "
       return {
         cause: "gpu-not-found",
         words: "We can't find this address. If your tunnel restarted, it has a new address: paste the new one.",
-        details: host,
+        ...(url && { details: joinDetails(gpuPlaceWords(url), "name not found") }),
         actions: [A.pair()],
         retryable: true,
       };
@@ -458,12 +540,24 @@ export const isOutOfMemoryText = (s: string) => OOM.test(s);
 const minutes = (n: number) => `${n} minute${n === 1 ? "" : "s"}`;
 
 /** A job that failed on the person's own GPU while it ran: its own words for the details line, plain words above. */
-export function diagnoseGpuJob(e: { kind: "error"; nodeType?: string; message?: string } | { kind: "interrupted" } | { kind: "lost"; resent?: boolean } | { kind: "moved" } | { kind: "gone"; minutes: number } | { kind: "busy"; minutes: number } | { kind: "save"; over?: string } | { kind: "isolated" }, place: GpuPlace): Diagnosis {
+export type GpuJobTrouble =
+  | { kind: "error"; nodeType?: string; message?: string }
+  | { kind: "interrupted" }
+  | { kind: "lost"; resent?: boolean }
+  | { kind: "moved" }
+  | { kind: "disconnected" }
+  | { kind: "gone"; minutes: number }
+  | { kind: "busy"; minutes: number }
+  | { kind: "too-long"; minutes: number }
+  | { kind: "save"; over?: string }
+  | { kind: "isolated" };
+
+export function diagnoseGpuJob(e: GpuJobTrouble, place: GpuPlace): Diagnosis {
   const pod = place.kind === "link" && gpuHostOf(place.url).kind === "runpod";
   switch (e.kind) {
     case "error": {
       const msg = (e.message ?? "").trim();
-      if (isOutOfMemoryText(msg)) return { cause: "gpu-out-of-memory", words: OUT_OF_MEMORY_WORDS, details: joinDetails(e.nodeType, cleanDetails(msg, 120)), actions: [A.retry(), A.pick()], retryable: false };
+      if (isOutOfMemoryText(msg)) return { cause: "gpu-out-of-memory", words: OUT_OF_MEMORY_WORDS, details: joinDetails(e.nodeType, cleanDetails(msg, 120)), actions: [A.trySmaller(), A.retry(), A.pick()], retryable: false };
       return {
         cause: "gpu-job-error",
         words: "Your GPU hit a problem while making this. Press Retry, or update your add-ons.",
@@ -483,6 +577,8 @@ export function diagnoseGpuJob(e: { kind: "error"; nodeType?: string; message?: 
       };
     case "moved":
       return { cause: "gpu-moved", words: "This run stopped because your GPU moved to a new address. Press Retry.", actions: [A.retry()], retryable: false };
+    case "disconnected":
+      return { cause: "gpu-moved", words: "You disconnected your GPU, so this run stopped. Connect it again, then press Retry.", actions: [A.connectGpu(), A.retry()], retryable: false };
     case "gone":
       return {
         cause: "gpu-went-away",
@@ -491,7 +587,9 @@ export function diagnoseGpuJob(e: { kind: "error"; nodeType?: string; message?: 
         retryable: false,
       };
     case "busy":
-      return { cause: "gpu-busy", words: `Your GPU was busy for ${minutes(e.minutes)}, so this run stopped. Press Retry when it's free.`, actions: [A.retry()], retryable: false };
+      return { cause: "gpu-busy", words: `Your GPU was busy for ${minutes(e.minutes)}, so this run stopped. Press Retry when it's free.`, actions: [A.retry(), A.check()], retryable: false };
+    case "too-long":
+      return { cause: "gpu-too-long", words: `This took longer than ${minutes(e.minutes)}, so we stopped it. Press Retry, or try a shorter clip.`, actions: [A.retry(), A.trySmaller()], retryable: false };
     case "save":
       return e.over
         ? { cause: "gpu-save-failed", words: `Your ComfyUI made a file over ${e.over}. Try a shorter clip or a lower size.`, actions: [A.retry()], retryable: false }
@@ -507,7 +605,8 @@ export function diagnoseGpuJob(e: { kind: "error"; nodeType?: string; message?: 
 }
 
 /** A workflow that needs a second ComfyUI of its own (LatentSync 1.6, ThinkSound): an account's single GPU can't run it. */
-export const ISOLATED_ON_GPU = "This one needs its own ComfyUI, so it can't run on your GPU next to your other add-ons. Pick another model.";
+export const ISOLATED_ON_GPU_WHY = "This one needs its own ComfyUI, so it can't run on your GPU next to your other add-ons.";
+export const ISOLATED_ON_GPU = `${ISOLATED_ON_GPU_WHY} Pick another model.`;
 
 /** ComfyUI refused the job (an add-on older than the tool expects, an input value it rejects): its words go in the details. */
 export function diagnoseRefusal(comfyWords: string | undefined): Diagnosis {
@@ -650,6 +749,15 @@ export function diagnoseKey(f: KeyFailure, ctx: KeyContext): Diagnosis {
   return { cause: "unknown", words: `${name} couldn't run this one. Press Retry.`, details, actions: [A.retry(), ...other], retryable: false };
 }
 
+/** A run on the person's own key that waited, or ran, past its time at the provider. */
+export function diagnoseKeyJob(e: { kind: "busy" | "too-long"; minutes: number }, ctx: KeyContext): Diagnosis {
+  const name = CLOUD_KEY[ctx.provider].label;
+  const other = ctx.other ? [A.withKey(ctx.other)] : [];
+  return e.kind === "busy"
+    ? { cause: "provider-busy", words: `${name} was busy for ${minutes(e.minutes)}, so this run stopped. Press Retry in a few minutes.`, actions: [A.retry(), ...other], retryable: false }
+    : { cause: "provider-too-long", words: `This took longer than ${minutes(e.minutes)} on ${name}, so we stopped it. Press Retry.`, actions: [A.retry(), ...other], retryable: false };
+}
+
 /** A finished result whose link at the provider expired before it was saved. */
 export function resultExpired(): Diagnosis {
   return { cause: "result-expired", words: "The finished file expired before we could save it. Press Retry to make it again.", actions: [A.retry()], retryable: false };
@@ -680,12 +788,14 @@ export function shortState(cause: TroubleCause | undefined): string {
 // Waiting
 
 /** While a run waits for its GPU (or its provider) to come back: the tile's words. */
-export function waitingWords(d: Pick<Diagnosis, "cause">, provider?: CloudProvider): string {
+export function waitingWords(d: Pick<Diagnosis, "cause">, provider?: CloudProvider, pod?: boolean): string {
   switch (d.cause) {
     case "gpu-stopped":
-      return "Waiting for your RunPod pod to start";
+      return "Your RunPod pod is off. Start it, and this run goes on by itself";
     case "gpu-starting":
-      return "Waiting for your GPU to start up";
+      return pod ? "Waiting for ComfyUI to start on your pod" : "Waiting for your GPU to start up";
+    case "gpu-not-found":
+      return "We can't find your GPU's address. Paste the new one, and this run goes there";
     case "gpu-busy":
       return "Waiting for your GPU";
     case "provider-busy":
@@ -696,6 +806,33 @@ export function waitingWords(d: Pick<Diagnosis, "cause">, provider?: CloudProvid
     default:
       return "Waiting for your GPU";
   }
+}
+
+/**
+ * The status check's words (Settings' words: "we connect as soon as it answers") as the composer says them before Run,
+ * where nothing connects: runs start once the GPU answers, and what is in Settings is said to be there.
+ */
+export function beforeRunWords(words: string): string {
+  return words
+    .replace(/,? and we connect as soon as it answers\./, ", and your runs start as soon as it answers.")
+    .replace(/,? and we connect as soon as ComfyUI is ready\./, ", and your runs start as soon as ComfyUI is ready.")
+    .replace(/ We connect as soon as it is\./, " Your runs start as soon as it is.")
+    .replace(/ We check again in a moment\./, " Your runs start as soon as it's free.")
+    .replace(/Paste it in Access token\./, "Add it in Settings → Your GPU.")
+    .replace(/Check it, and paste it in Access token again\./, "Update it in Settings → Your GPU.");
+}
+
+/**
+ * A check's words after Test, which saves nothing (so nothing connects by itself): what to press once the GPU answers.
+ * `budgetSpent`: the check stopped trying by itself, so it says so and names Save anyway too.
+ */
+export function testWords(words: string, budgetSpent = false): string {
+  const t = words
+    .replace(/,? and we connect as soon as it answers\./, ", then press Connect.")
+    .replace(/,? and we connect as soon as ComfyUI is ready\./, ": press Connect once ComfyUI is ready.")
+    .replace(/ We connect as soon as it is\./, " Press Connect once it is.")
+    .replace(/ We check again in a moment\./, " Try again in a moment.");
+  return budgetSpent ? `Still no answer. ${t.replace(/press Connect\.$/, "press Connect again, or Save anyway.").replace(/press Connect once (ComfyUI is ready|it is)\.$/, "press Connect again once $1, or Save anyway.")}` : t;
 }
 
 /** How long a run (or a check) keeps trying again by itself, from the first try to giving up, and its waits. */
@@ -738,8 +875,14 @@ export function retryPlan(cause: TroubleCause, use: "run" | "check" = "run"): Re
   }
 }
 
-/** The wait before try number `attempt` (1 = the first try again): doubling from firstMs up to maxMs, or what the other side said. */
+/**
+ * The wait before try number `attempt` (1 = the first try again): doubling from firstMs up to maxMs, or what the other
+ * side said (never sooner: a wait longer than the time left ends the wait, in plain words).
+ */
 export function backoffMs(attempt: number, plan: RetryPlan, retryAfterMs?: number): number {
   const doubled = Math.min(plan.maxMs, plan.firstMs * 2 ** Math.max(0, attempt - 1));
-  return retryAfterMs && retryAfterMs > 0 ? Math.min(Math.max(retryAfterMs, plan.firstMs), plan.maxMs * 2) : doubled;
+  return retryAfterMs && retryAfterMs > 0 ? Math.max(retryAfterMs, plan.firstMs) : doubled;
 }
+
+/** The longest a run waits in all, whatever its problems were on the way (a GPU off, then starting up). */
+export const HEAL_CAP_MS = 40 * MIN;

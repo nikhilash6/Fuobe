@@ -1,6 +1,7 @@
 import "server-only";
 import { hit, peek } from "./rate";
 import { visitorKey } from "./ai-setup";
+import { LoginGuard } from "./auth";
 
 /** Every answer of the setup routes: never cached or indexed, and no address leaks in a Referer. */
 export const SETUP_HEADERS = {
@@ -42,12 +43,27 @@ export function ownBudget(name: string, headers: Headers, perVisitor: number, wi
 }
 
 /**
- * A visitor's budget for a public read: its own when the studio can tell visitors apart (FUOBE_TRUST_PROXY), and
- * always one shared by everyone, much larger (so one busy visitor can't use it up for the rest, and a studio that can't
- * tell visitors apart never gives everyone one visitor's budget).
+ * Who reads codes that aren't active, for that visitor's own budget: the visitor behind a trusted proxy
+ * (FUOBE_TRUST_PROXY), else the last X-Forwarded-For hop when a proxy in front of the studio set one, else null (every
+ * visitor looks the same). The hop isn't checked without a trusted proxy, and that is safe here: a made-up one only
+ * moves its own reads to another budget, the shared budget still holds, and an active code never uses either budget.
+ * Never use it to lock anyone out of anything they own.
  */
-export function visitorBudget(name: string, headers: Headers, perVisitor: number, everyone: number, windowMs: number): { ok: boolean; retryAfterS: number } {
-  const key = visitorKey(headers);
+export function guessKey(headers: Headers): string | null {
+  const trusted = visitorKey(headers);
+  if (trusted) return trusted;
+  const hop = LoginGuard.clientKey(headers, true);
+  return hop === LoginGuard.DIRECT ? null : `hop:${hop}`;
+}
+
+/**
+ * The budget for codes that aren't active: one per visitor (guessKey), and always one shared by everyone, much larger
+ * (so one busy visitor can't use it up for the rest, and a studio that can't tell visitors apart never gives everyone
+ * one visitor's budget). A visitor past its own budget doesn't count against the shared one, and a key is only kept
+ * while the shared budget has room (made-up keys can't fill the limiter's memory).
+ */
+export function guessBudget(name: string, headers: Headers, perVisitor: number, everyone: number, windowMs: number): { ok: boolean; retryAfterS: number } {
+  const key = guessKey(headers);
   const shared = peek(`${name}:all`, everyone, windowMs);
   const own = key ? peek(`${name}:${key}`, perVisitor, windowMs) : { ok: true, retryAfterS: 0 };
   if (!shared.ok || !own.ok) return { ok: false, retryAfterS: Math.max(shared.retryAfterS, own.retryAfterS) };

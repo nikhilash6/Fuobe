@@ -643,7 +643,10 @@ the first job a step of the same run had on the workers, or else the time the ru
 the run's jobs, the step has no wait limit, since the wait limit applies only before the run's first start. Only steps
 of the same press of Run count (the same billing hold; with none, the same batch). A result kept from an earlier run
 gives a new step neither that run's place nor its start. When two app processes run on one database (a deploy's
-overlap), only the one that takes a step's turn sends it, so each step is sent once. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
+overlap), only the one that takes a step's turn sends it, so each step is sent once. A step is marked just before its
+job is made; when the process that was sending it stopped part way, the next one looks for the step's job: none
+made, and the step is sent now (in its run's place); one made, and the step ends in the one plain sentence and that
+job stops, so it is never run twice. When the run is canceled or deleted, its finishing jobs end too: one in line at once,
 with its files, and one that a CPU slot runs at its next progress report (the worker sends one at least every 10
 seconds). A 3D model finished this way waits for the output check when the run asked for one, as any run's outputs do.
 The time a CPU task runs is never counted as GPU time.

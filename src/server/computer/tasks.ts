@@ -683,6 +683,20 @@ const previewTask = (generationId: string) =>
 export const runPreviewAt = (generationId: string): number | null => previewTask(generationId)?.preview_at ?? null;
 
 /**
+ * A run's own job was made here (a task for it, in any state; a finishing job's, such as a camera path drawn for it,
+ * isn't one). On this install's GPUs the job is a row of this database, so a send that was cut off either made it or not.
+ */
+export const hasJobFor = (generationId: string): boolean => !!rdb().prepare("SELECT 1 FROM relay_tasks WHERE generation_id = ? AND finish_json IS NULL LIMIT 1").get(generationId);
+
+/** A run that ended before it noted its job (a send cut off): that job stops too, in line or on a worker. */
+export function stopJobsOf(generationId: string): void {
+  const rows = rdb()
+    .prepare(`SELECT id FROM relay_tasks WHERE generation_id = ? AND finish_json IS NULL AND state IN (${ACTIVE_STATES.map(() => "?").join(",")})`)
+    .all(generationId, ...ACTIVE_STATES) as { id: string }[];
+  for (const r of rows) endTask(r.id, "canceled", { error: "Stopped" });
+}
+
+/**
  * A computer asks for work: first a task it took before and lost track of (a reload: not in `running`), then, when it is
  * the runner, the oldest waiting task. Null when there is none. The claim gets a new lease each time.
  */

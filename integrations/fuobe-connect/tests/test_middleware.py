@@ -121,7 +121,7 @@ def comfy_prompt_queue():
         tree = ast.parse(f.read())
     picked = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "PromptQueue"]
     ns = {"threading": threading, "heapq": heapq, "copy": copy, "MAXIMUM_HISTORY_SIZE": 10000, **{k: getattr(typing, k) for k in typing.__all__ if hasattr(typing, k)}}
-    exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/execution.py", "exec"), ns)
+    exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/execution.py", "exec"), ns)  # noqa: S102
     return ns["PromptQueue"]
 
 

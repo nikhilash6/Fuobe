@@ -12,6 +12,7 @@ import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
+import { RunTroubleActions } from "@/components/gpu/run-trouble-actions";
 import { DRAG_TYPE } from "./folders";
 import { ReviewBadge } from "./review";
 import type { Layout } from "./view-options";
@@ -43,41 +44,59 @@ const LIST_MENU ="grid size-8 shrink-0 place-items-center rounded-lg text-muted-
 
 const idsOf = (e: LibraryEntry) => (e.type === "single" ? [e.g.id] : e.items.map((g) => g.id));
 
-export function StatusCover({ g }: { g: Generation }) {
+/**
+ * A run's cover while it goes or after it failed. An account's own GPU or key: what came back (small) and the way out
+ * (Start your pod, Check my GPU, Replace key…), the buttons kept in view first (the words give way on a small card).
+ * `small`: a list row's thumbnail (the row's own text says the rest).
+ */
+export function StatusCover({ g, small, actionable }: { g: Generation; small?: boolean; /** The account's own Library: the buttons act (Pick another model opens the run's studio with it). */ actionable?: boolean }) {
   if (g.status === "queued" || g.status === "running") {
     const pct = g.progress != null ? Math.round(g.progress * 100) : null;
+    const waiting = g.status === "queued" ? g.waiting : undefined;
     return (
       <div className="relative size-full bg-muted">
         <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
-        <div className="absolute inset-x-0 bottom-0 p-3">
-          <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{g.message ?? (g.status === "queued" ? "Queued" : "Generating…")}</p>
-          <p className="font-mono text-[11px] text-muted-foreground">
-            {pct != null ? `${pct}% · ` : ""}
-            {elapsed(g.createdAt)}
-          </p>
-        </div>
+        {!small && (
+          <div className="absolute inset-x-0 bottom-0 space-y-1 p-3">
+            <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{g.message ?? (g.status === "queued" ? "Queued" : "Generating…")}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">
+              {pct != null ? `${pct}% · ` : ""}
+              {elapsed(g.createdAt)}
+            </p>
+            {/* Waiting for its own GPU or key: what helps meanwhile (it goes on by itself). */}
+            {waiting &&
+              (actionable ? (
+                <RunTroubleActions g={g} actions={waiting.actions} skip={["retry"]} max={2} compact />
+              ) : (
+                <TroubleActions actions={waiting.actions} skip={["retry", "run-with-key"]} max={2} compact />
+              ))}
+          </div>
+        )}
       </div>
     );
   }
+  if (small) return <div className="size-full border border-dashed bg-background" />;
+  const trouble = g.status === "failed" ? g.trouble : undefined;
   return (
-    <div className="flex size-full flex-col justify-between border border-dashed bg-background p-3">
-      <div className="min-h-0 space-y-1 overflow-hidden">
-        <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
-        {g.error && <p className="line-clamp-4 text-[12px] leading-snug break-words text-muted-foreground">{g.error}</p>}
-        {/* An account's own GPU or key: what came back (small), and the way out (Start your pod, Check my GPU, Replace key…). */}
-        {g.status === "failed" && g.trouble && (
-          <>
-            <TroubleDetails details={g.trouble.details} />
-            <TroubleActions className="pt-1" actions={g.trouble.actions} skip={["retry"]} max={2} />
-          </>
-        )}
+    <div className="flex size-full flex-col justify-between gap-2 border border-dashed bg-background p-3">
+      <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
+        <p className="shrink-0 text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
+        {g.error && <p className="line-clamp-3 text-[12px] leading-snug break-words text-muted-foreground @[16rem]:line-clamp-4">{g.error}</p>}
+        {/* The details line goes first when the card is small. */}
+        {trouble && <TroubleDetails details={trouble.details} className="hidden @[16rem]:block" />}
       </div>
+      {trouble &&
+        (actionable ? (
+          <RunTroubleActions g={g} className="shrink-0" actions={trouble.actions} skip={["retry"]} max={2} compact context="run" />
+        ) : (
+          <TroubleActions className="shrink-0" actions={trouble.actions} skip={["retry"]} max={2} compact />
+        ))}
     </div>
   );
 }
 
 function Cover({ g, fit }: { g: Generation; fit: boolean }) {
-  if (g.status !== "succeeded" || !g.outputs.length) return <StatusCover g={g} />;
+  if (g.status !== "succeeded" || !g.outputs.length) return <StatusCover g={g} actionable={!g.deletedAt} />;
   if (isLayered(g)) return <LayersStack g={g} />;
   return <MediaThumb output={g.outputs[0]} g={g} fit={fit} className={cn(fit && "bg-muted")} />;
 }
@@ -237,7 +256,7 @@ export const AssetCard = memo(function AssetCard({
       >
         {target}
         <div className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-muted">
-          {stack ? cover ? <SmallThumb output={cover.o} g={cover.g} /> : <StatusCover g={g} /> : done ? <SmallThumb output={g.outputs[0]} g={g} /> : <StatusCover g={g} />}
+          {stack ? cover ? <SmallThumb output={cover.o} g={cover.g} /> : <StatusCover g={g} small /> : done ? <SmallThumb output={g.outputs[0]} g={g} /> : <StatusCover g={g} small />}
           <SelectDot selected={selected} visible={selecting} onToggle={(s) => api.toggle(entry.key, ids, s)} label={`Select ${title}`} />
         </div>
         <div className="min-w-0 flex-1">
@@ -253,6 +272,10 @@ export const AssetCard = memo(function AssetCard({
             {/* "Rendering", as the Status filter calls it: "In progress" is a review status. */}
             {!stack && g.status !== "succeeded" && ` · ${g.status === "failed" ? "Failed" : g.status === "canceled" ? "Canceled" : g.status === "queued" ? "Queued" : "Rendering"}`}
           </p>
+          {/* An account's own GPU or key: the way out, in the row (its thumbnail is too small for it). */}
+          {!stack && !trashed && (g.status === "failed" ? g.trouble : g.status === "queued" ? g.waiting : undefined) && (
+            <RunTroubleActions g={g} className="mt-1" actions={(g.status === "failed" ? g.trouble : g.waiting)!.actions} skip={["retry"]} max={1} compact context={g.status === "failed" ? "run" : "other"} />
+          )}
         </div>
         {g.favorite && !stack && <Heart className="size-4 shrink-0 fill-highlight text-highlight" />}
         {stack && <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />}
