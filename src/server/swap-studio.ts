@@ -1499,7 +1499,7 @@ export function studioNotes(engine: Engine): string[] {
   if (engine === "open") {
     return [
       WORKERS_NOTE,
-      "Needs H3 Relay 2.0's nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and a 24 GB GPU with offloading; the masks need SAM 3.1",
+      "Needs H3 Relay 2.0's nodes on your ComfyUI (add them with Fuobe's ComfyUI setup) and a 24 GB GPU with offloading; the masks need SAM 3.1",
       "Each segment is one H3 Relay pass with the approved mask, its anchor and the previous take's last frames as continuation history (a lossless 16-bit FFV1 master, about 3 MB a frame at 1 MP: ComfyUI takes uploads up to 100 MB unless started with a higher --max-upload-size, so keep history to about 30 frames or raise it)",
     ];
   }

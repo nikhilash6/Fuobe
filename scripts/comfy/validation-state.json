@@ -1265,6 +1265,12 @@
     "error": null,
     "at": "2026-11-03T19:15:30.473Z"
   },
+  "video-group-swap-h3-one-by-one": {
+    "sha256": "9d0da7b722affa7801f563599740f334e39308f506f41ca71ee31ed6fd5fd989",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:47:07.475Z"
+  },
   "video-h3-t2v-2k": {
     "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
     "validated": false,
@@ -1420,6 +1426,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T23:33:13.548Z"
+  },
+  "voice-clean-bed-reuse": {
+    "sha256": "8ddc340d4e521cd1a8783cd42a263a22ccfbec43fddb85732c28a62466501500",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T00:57:32.807Z"
   },
   "voice-clean-reuse": {
     "sha256": "22458293e2c786bca91d1b7ef85b82422b6652594c18c7bb2e7577b6b4eafcbd",

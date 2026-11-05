@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
-import { useAskBeforeUpload } from "@/lib/api";
+import { useAskFirst } from "./ask-first";
 import type { StudioElement } from "@/lib/catalog/elements";
 import { SOUL_ID_COPY, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { cn } from "@/lib/utils";
@@ -132,14 +132,14 @@ export function CharacterPicker({ value, onChange }: { value?: string; onChange:
   const { data, isLoading } = usePhotoCharacters();
   const [creating, setCreating] = useState(false);
   // A guest is asked to sign up first, and an account with neither its own GPU nor its own key to connect one.
-  const askFirst = useAskBeforeUpload();
+  const askFirst = useAskFirst();
   const characters = (data ?? []).filter((e) => e.kind === "character");
   return (
     <>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
         <button
           type="button"
-          onClick={() => askFirst() || setCreating(true)}
+          onClick={() => askFirst(() => setCreating(true))}
           className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Plus className="size-5" /> New character

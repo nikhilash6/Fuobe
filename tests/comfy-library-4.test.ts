@@ -119,8 +119,6 @@ describe("round-4 ComfyUI workflows", () => {
       "krea2-inpaint",
       "krea2-outpaint",
       "video-restore-ltx25-tiled",
-      // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
-      "voice-clean-bed-reuse",
       // Hi3D refine (hi3d-refine): Comfyui-Hi3d-T8 needs an Ampere-or-newer NVIDIA GPU, so it isn't on the validation server.
       "mesh-refine-hi3d",
       "video-character-swap-h3-relay",
@@ -144,7 +142,6 @@ describe("round-4 ComfyUI workflows", () => {
       "world-hy-nomas-turn",
       // Genjutsu's Openjutsu modes not checked against ComfyUI yet; each opens only after its /prompt
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
-      "video-group-swap-h3-one-by-one",
       "image-from-picture-prepare",
       "video-motion-transfer-h3",
     ]);

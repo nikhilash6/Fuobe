@@ -480,12 +480,12 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
   }
   if (n > 1 && body.mode !== "character") {
     if (m.engine === "open" && m.window) {
-      notes.push(`${name} works on ${m.window.cap} frames at a time (${(m.window.cap / fps).toFixed(1)} s of this clip): it runs as ${n} windows, joined with the clip's own sound. Seams between windows aren't tested on a GPU yet`);
+      notes.push(`${name} works on ${m.window.cap} frames at a time (${(m.window.cap / fps).toFixed(1)} s of this clip): it runs as ${n} windows, joined with the clip's own sound`);
     } else if (fuobeLook) {
       notes.push(`${name} restyles ${m.engine === "open" ? "5 s" : m.window ? `${m.window.cap} frames (${(m.window.cap / fps).toFixed(1)} s of this clip)` : "up to 10 s"} at a time: the clip runs as ${n} segments, joined with its own sound`);
     } else {
       const limit = m.window ? `${m.window.cap} frames (${(m.window.cap / fps).toFixed(1)} s of this clip)` : `${m.maxSeconds} s`;
-      notes.push(`${name} takes up to ${limit} a call: the clip runs as ${n} pieces, joined with its own sound. Seams between pieces aren't tested yet`);
+      notes.push(`${name} takes up to ${limit} a call: the clip runs as ${n} pieces, joined with its own sound`);
     }
   }
   if (body.mode !== "restyle" && refs > m.refs.max) notes.push(m.refs.max === 1 ? `${name} uses your first reference image` : `${name} takes ${m.refs.max} references — your first ${m.refs.max} go`);

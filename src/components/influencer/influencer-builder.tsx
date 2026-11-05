@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { toast } from "sonner";
 import { SaveCharacter } from "@/components/fashion/character-sheet";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { useAskFirst } from "@/components/photodump/ask-first";
 import { useRun, useRunPreview, type RunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { UploadBox } from "@/components/photodump/upload-box";
@@ -122,6 +123,9 @@ export function InfluencerBuilder() {
   // A guest is asked to sign up before choosing photos, and an account with neither its own GPU nor its own key to
   // connect one.
   const askFirst = useAskBeforeUpload();
+  // The sheet itself: a guest gets the sign-up card and an account with nothing to run on "Connect your GPU" before it is
+  // sent (a press before the page knows who is looking waits for that).
+  const askRun = useAskFirst();
   const wide = useWide();
   const [state, setState] = useState<InfluencerState>(INFLUENCER_START);
   const [active, setActive] = useState("tier");
@@ -192,14 +196,15 @@ export function InfluencerBuilder() {
     if (clothing.length + list.length > MAX_CLOTHING) toast("You can add up to three clothing references");
     list.slice(0, MAX_CLOTHING - clothing.length).forEach((f) => fileToList(f, setClothing, "image"));
   };
-  const create = () => {
-    if (blocker) return toast(blocker);
-    if (!body) return toast("Wait for the uploads to finish");
-    run.mutate(body, {
-      onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
-      onError: (e) => toastError(e, "Couldn't start the sheet"),
-    });
-  };
+  const create = () =>
+    askRun(() => {
+      if (blocker) return toast(blocker);
+      if (!body) return toast("Wait for the uploads to finish");
+      run.mutate(body, {
+        onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
+        onError: (e) => toastError(e, "Couldn't start the sheet"),
+      });
+    }, "run");
 
   return (
     <PageShell wide>

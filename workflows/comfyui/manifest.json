@@ -19595,7 +19595,7 @@
       ],
       "vramGb": 0,
       "license": "RE-USE weights OpenMDW-1.1 (NVIDIA; 'ready for commercial use' on the card; the card's safety section points to the NVIDIA Open Model License for use-case limits); ComfyUI-RE-USE code MIT with adapted RE-USE code OpenMDW-1.1; DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
-      "validated": false,
+      "validated": true,
       "notes": "CPU OK. The video soundtrack variant of voice-clean-reuse (the provider runs it for params.extra.background \"keep\"): DBS splits the soundtrack (graph A's nodes), RE-USE cleans only the dialogue, and REUSEEnhance mixes the original music & effects (the original minus the speech, AudioMerge subtract) back under it at bed_db, at the higher of the two rates, peak at most -1 dBFS. A source with more than 2 channels runs in mono with music + effects as the bed (node 5 rewired, as graph A). The result has the input's length, starting at 0, so it goes back on the picture with video-mux-audio-replace. DBS was trained on English mixes; the dialogue split is its strong part (15-16 dB)."
     },
     {
@@ -27972,7 +27972,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT",
-      "validated": false,
+      "validated": true,
       "notes": "The same settings as video-group-swap-h3 with pictures 2; about twice as long, sharper on two people."
     },
     {

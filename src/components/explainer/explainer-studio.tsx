@@ -291,6 +291,9 @@ export function ExplainerStudio({ picker, starters: given = [], fills: givenFill
   };
 
   const generate = () => {
+    // A guest is asked to sign up, and an account with neither its own GPU nor its own key to connect one, before any
+    // hint about the settings (the run would be refused for them whatever the settings say).
+    if (askFirst("run")) return;
     setTried(true);
     if (!prompt.trim() && !sources.length) return void toast("Add a prompt, or attach a file or link", { id: "faceless-blocker" });
     if (manualBad) return void toast("Duration must be Auto or a whole number of seconds between 15 and 600", { id: "faceless-blocker" });

@@ -354,6 +354,15 @@ describe("an account runs the video tools on its own ComfyUI", () => {
     const p = await start(() => mixedPreviewRoute.POST(json("/api/mixed-media/preview", "POST", body, "a")));
     expect(p.status, await p.clone().text()).toBe(201);
     expect(getGeneration(((await p.json()) as { id: string }).id)!.request.account).toBe(a);
+    // In the Trash, the render is still its own alone: another account and the owner read it as gone.
+    db().prepare("INSERT OR IGNORE INTO generation_trash (generation_id, deleted_at) VALUES (?, ?)").run(final, Date.now());
+    expect(getGeneration(final)).toBeNull();
+    for (const who of ["b", "owner"] as const) {
+      const res = await mixedProgressRoute.GET(get(`/api/mixed-media/progress?id=${final}`, who));
+      expect(res.status, who).toBe(404);
+      expect(await res.json()).toEqual({ error: "This render no longer exists" });
+    }
+    expect((await mixedProgressRoute.GET(get(`/api/mixed-media/progress?id=${final}`, "a"))).status).toBe(200);
   });
 
   it("films a turnaround and a fly around end to end, never asking the studio's WorldCast worker", async () => {

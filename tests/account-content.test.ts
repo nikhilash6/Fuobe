@@ -343,7 +343,8 @@ describe("Explainer: an account's explainers are its own and render on its own G
     expect(list.items.map((e) => e.id)).toEqual([id]);
     expect(list.items[0].status).toBe("done");
     expect(passed(viaProxy(`/explainer/${id}`, "GET", "a"))).toBe(true);
-    expect(viaProxy(`/explainer/${id}`, "GET", "b").status).toBe(404);
+    // Another account, a guest and the owner: a real 404 from the proxy, before the page's shell streams.
+    for (const who of ["b", undefined, "owner"]) expect(viaProxy(`/explainer/${id}`, "GET", who).status, who ?? "guest").toBe(404);
     expect(recordFor({ kind: "explainer", ids: [id] }, h("a"))).toBe(true);
     expect(recordFor({ kind: "explainer", ids: [id] }, h("b"))).toBe(false);
     expect(recordFor({ kind: "explainer", ids: [id] }, h("owner"))).toBe(false);
@@ -378,8 +379,9 @@ describe("Explainer: an account's explainers are its own and render on its own G
     expect((await actionRoute.POST(json(`/api/faceless/episodes/${owner.id}/render`, "POST", undefined, "a"), params({ id: owner.id, action: "render" }))).status).toBe(404);
     expect((await episodeRoute.DELETE(json(`/api/faceless/episodes/${owner.id}`, "DELETE", undefined, "a"), params({ id: owner.id }))).status).toBe(404);
     expect(recordFor({ kind: "explainer", ids: [owner.id] }, h("a"))).toBe(false);
-    // The owner still has it.
+    // The owner still has it, and its page opens.
     expect((await readEpisode(owner.id, "owner")).status).toBe(200);
+    expect(passed(viaProxy(`/explainer/${owner.id}`, "GET", "owner"))).toBe(true);
   });
 
   it("writes one for review first, then renders it from the review", async () => {
@@ -472,7 +474,10 @@ describe("Faceless Studio: an account's channels and episodes are its own", () =
     const page = (await (await channelRoute.GET(json(`/api/faceless/channels/${channel}`, "GET", undefined, "a"), params({ id: channel }))).json()) as { episodes: { id: string }[] };
     expect(page.episodes.map((e) => e.id)).toEqual([episode]);
     expect(passed(viaProxy(`/faceless/${channel}/${episode}`, "GET", "a"))).toBe(true);
-    expect(viaProxy(`/faceless/${channel}/${episode}`, "GET", "b").status).toBe(404);
+    for (const who of ["b", undefined, "owner"]) {
+      for (const p of [`/faceless/${channel}`, `/faceless/${channel}/new`, `/faceless/${channel}/${episode}`]) expect(viaProxy(p, "GET", who).status, `${who ?? "guest"} ${p}`).toBe(404);
+    }
+    expect(passed(viaProxy(`/faceless/${channel}`, "GET", "a"))).toBe(true);
     expect(recordFor({ kind: "episode", ids: [channel, episode] }, h("a"))).toBe(true);
     expect(recordFor({ kind: "channel", ids: [channel] }, h("b"))).toBe(false);
     expect(recordFor({ kind: "channel", ids: [channel] }, h("owner"))).toBe(false);
@@ -527,6 +532,7 @@ describe("Faceless Studio: an account's channels and episodes are its own", () =
     expect(add.status).toBe(404);
     const list = (await (await channelsRoute.GET(json("/api/faceless/channels", "GET", undefined, "owner"))).json()) as { items: { id: string }[] };
     expect(list.items.map((x) => x.id)).toEqual([owner.id]);
+    expect(passed(viaProxy(`/faceless/${owner.id}`, "GET", "owner"))).toBe(true);
   });
 
   it("a ready channel is made as its own", async () => {
@@ -651,7 +657,8 @@ describe("Content Factory: an account's series are its own", () => {
     expect(list.items.map((s) => s.id)).toEqual([series]);
     expect(list.items[0].episodes).toBe(2);
     expect(passed(viaProxy(`/content-factory/${series}`, "GET", "a"))).toBe(true);
-    expect(viaProxy(`/content-factory/${series}`, "GET", "b").status).toBe(404);
+    for (const who of ["b", undefined, "owner"]) expect(viaProxy(`/content-factory/${series}`, "GET", who).status, who ?? "guest").toBe(404);
+    expect(recordFor({ kind: "series", ids: [series] }, h("owner"))).toBe(false);
   });
 
   it("adds an episode for review: written, nothing renders yet", async () => {
@@ -677,6 +684,21 @@ describe("Content Factory: an account's series are its own", () => {
     expect((await seriesRoute.DELETE(json(`/api/content-factory/series/${series}`, "DELETE", undefined, "b"), params({ id: series }))).status).toBe(404);
     expect(fake.log.some((e) => e.path === "/prompt")).toBe(false);
     expect(store.getAccountProject(a, "content-factory", series)).not.toBeNull();
+  });
+
+  it("says its brief is being written on the cloud engine too, never that an AI helper writes it", async () => {
+    const before = (db().prepare("SELECT data_json FROM content_series WHERE id = ?").get(series) as { data_json: string }).data_json;
+    const data = JSON.parse(before) as { analysis?: Record<string, unknown> };
+    data.analysis = { ...data.analysis, status: "reading", engine: "cloud", steps: {}, stage: undefined };
+    db().prepare("UPDATE content_series SET data_json = ? WHERE id = ?").run(JSON.stringify(data), series);
+    try {
+      const v = (await (await seriesRoute.GET(json(`/api/content-factory/series/${series}`, "GET", undefined, "a"), params({ id: series }))).json()) as { analysis: { stage?: string } };
+      expect(v.analysis.stage).toBe("Writing the brief…");
+      expect((await settleSeries(series, "a")).analysis?.status).toBe("ready");
+      expect(llmAsked).not.toHaveBeenCalled();
+    } finally {
+      db().prepare("UPDATE content_series SET data_json = ? WHERE id = ?").run(before, series);
+    }
   });
 
   it("a series from a preset for an account with no GPU or key: made, but its run asks for one first", async () => {
@@ -711,10 +733,41 @@ describe("an account's limits, and its deletion", () => {
   });
 
   it("goes with the account: its channels, episodes, explainers and series", async () => {
+    const channels = store.listAccountProjects(a, "faceless").map((p) => p.id);
+    const series = store.listAccountProjects(a, "content-factory").map((p) => p.id);
+    expect(channels.length).toBeGreaterThan(0);
+    expect(series.length).toBeGreaterThan(0);
+    const rows = (table: string, ids: string[]) =>
+      (db().prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE id IN (${ids.map(() => "?").join(",")})`).get(...ids) as { n: number }).n;
+    expect(rows("faceless_channels", channels)).toBe(channels.length);
+    expect(rows("content_series", series)).toBe(series.length);
     await purgeAccount(a);
     for (const kind of ["faceless", "explainer", "content-factory"]) expect(store.listAccountProjects(a, kind), kind).toEqual([]);
+    // Their rows in the tools' own tables go too: channels (with their episodes) and series.
+    expect(rows("faceless_channels", channels)).toBe(0);
+    expect((db().prepare(`SELECT COUNT(*) AS n FROM faceless_episodes WHERE channel_id IN (${channels.map(() => "?").join(",")})`).get(...channels) as { n: number }).n).toBe(0);
+    expect(rows("content_series", series)).toBe(0);
     const left = db().prepare("SELECT COUNT(*) AS n FROM faceless_episodes e WHERE e.kind = 'explainer' AND e.channel_id IS NULL AND e.title = 'How bees make honey'").get() as { n: number };
     expect(left.n).toBe(0);
     expect((db().prepare("SELECT COUNT(*) AS n FROM content_series").get() as { n: number }).n).toBeGreaterThan(0);
+  });
+});
+
+describe("the content tools' pages ask first, and lead visitors only where they can go", () => {
+  const src = (f: string) => fs.readFileSync(path.join(__dirname, "..", f), "utf8").replace(/\s+/g, " ");
+
+  it("the narrator's Upload asks first, as Record does; saving voices in Elements is the owner's link", () => {
+    const page = src("src/components/faceless/narrator.tsx");
+    expect(page).toContain("const askFirst = useAskBeforeUpload();");
+    expect(page).toContain("onClick={() => askFirst() || file.current?.click()}");
+    expect(page).toContain("{!saved.length && !visitor && ( <Link href=\"/elements?new=1\"");
+  });
+
+  it("characters and places from Elements show for the owner only", () => {
+    expect(src("src/components/faceless/settings-form.tsx")).toContain('{!visitor && ( <Section title="Characters and places"');
+  });
+
+  it("Explainer's Generate asks a guest to sign up (an account to connect) before any hint about the settings", () => {
+    expect(src("src/components/explainer/explainer-studio.tsx")).toMatch(/const generate = \(\) => \{ (\/\/[^\n]*?)?.*?if \(askFirst\("run"\)\) return; setTried\(true\);/);
   });
 });

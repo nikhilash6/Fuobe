@@ -410,8 +410,9 @@ export interface FramesProgress {
 
 /** A per-frame render's frame edits at a glance (the page follows the main steps, not hundreds of frames), by its finished video's id. */
 export function framesProgress(finalId: string): FramesProgress | null {
-  // Another's render reads as gone (an account's to the owner, the owner's or another account's to an account).
-  if (getGeneration(finalId) && !ownRender(finalId)) return null;
+  // Another's render reads as gone (an account's to the owner, the owner's or another account's to an account),
+  // in the Trash too: the steps are read from the table itself, so the check can't lean on the Library's view.
+  if (!ownRender(finalId)) return null;
   const rows = renderSteps(finalId);
   if (!rows) return getGeneration(finalId) ? { total: 0, done: 0, running: 0 } : null;
   const frames = rows.filter((r) => r.feature === MIXED_FRAME_FEATURE);

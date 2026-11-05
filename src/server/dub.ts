@@ -334,6 +334,8 @@ export function priceSteps(engine: Engine, steps: DubStep[], seconds?: number): 
 /** What starting this dub would cost (POST /api/dub?preview=1). */
 export function previewDub(input: CreateDubInput): DubPrice {
   if (input.mode === "oneshot" && input.engine === "open") throw new Error("One-shot dubbing is a cloud service — the open engine dubs step by step");
+  // An account prices only its own video (or one of Fuobe's examples): another's reads as a missing file.
+  if (tenantAccount() && !storedMedia(input.video)) throw new Error("That video is gone — add it again");
   const seconds = videoLength(input.video, input.duration);
   const targets = [...new Set(input.targets)];
   if (input.mode === "oneshot") {

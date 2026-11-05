@@ -177,10 +177,10 @@ const ACCOUNT_CANVASES = /^\/api\/account\/canvases(\/[^/]+)?$/;
 
 /**
  * The Library's counts, its Uploads (its stored files), a zip of its runs (the Library's Download, a result's
- * Download all, Shorts' Download parts) and its own dubs (src/server/dub.ts): each route answers an account with its own
- * only.
+ * Download all, Shorts' Download parts), its own dubs (src/server/dub.ts) and its own Photodump packs (GET /api/photodump,
+ * the same list as /api/photodump/packs): each route answers an account with its own only.
  */
-const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip", "/api/dub"]);
+const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip", "/api/dub", "/api/photodump"]);
 
 /**
  * A signed-in account's zip of its own runs (/api/generations/zip; src/server/account-files.ts ACCOUNT_LIMITS): at most
