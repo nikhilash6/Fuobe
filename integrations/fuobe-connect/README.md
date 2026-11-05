@@ -250,6 +250,20 @@ and 3366. Set `FUOBE_CONNECT_TEST_PORT` to move them (the tests use that port an
 `COMFYUI_DIR` to a ComfyUI folder to read the middleware from that copy of ComfyUI. The tests need only `aiohttp`.
 They do not need models, a GPU or a running ComfyUI. The `tests` folder is not part of the published pack.
 
+## Releases
+
+Each version is published to the [Comfy Registry](https://registry.comfy.org), where ComfyUI-Manager finds it. To
+publish a version:
+
+1. In the Fuobe repository, set the new version in `pyproject.toml` and in `fuobe_connect/__init__.py`. The tests
+   check that the two are the same.
+2. Bring that change into this repository.
+3. Push a tag with the same version and a `v` in front, for example `v1.0.1`.
+
+The tag starts the workflow `.github/workflows/publish.yml`. The workflow publishes nothing when the tag and the
+version in `pyproject.toml` are different, or when the repository has no publishing key (the secret
+`REGISTRY_ACCESS_TOKEN`).
+
 ## Licence
 
 MIT
