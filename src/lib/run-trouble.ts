@@ -143,8 +143,8 @@ export function waitingRunHandlers(g: Generation, d: RunTroubleDeps): RunTrouble
   const key = batchKeyOf(g);
   return {
     onRunWithKey: async (a) => {
-      const was = moving.get(key);
-      if (was && was !== g.id) return false;
+      // One press at a time for a batch (a run's several pending tiles share it too).
+      if (moving.has(key)) return false;
       setMoving(key, g.id);
       const started = await d.run({ ...onCloudKey(g.request, a), replaces: g.id } as Generation["request"]);
       // Started: the batch's jobs stop, so their tiles go. Refused: the button comes back.

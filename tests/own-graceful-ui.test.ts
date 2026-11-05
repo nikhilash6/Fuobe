@@ -232,6 +232,8 @@ describe("a run's buttons, in a studio and in the Library", () => {
     const html = render(createElement(RunTroubleActions, { g: other, actions: [withKeyAction("fal", "minimax-h3", "i2v"), { kind: "check-gpu", label: "Check my GPU" }] }));
     expect(html).not.toContain("Run with your fal.ai key");
     await waitingRunHandlers(other, { run, onError: vi.fn() }).onRunWithKey!(withKeyAction("fal", "minimax-h3", "i2v"));
+    // Nor does another of the same run's pending tiles.
+    await waitingRunHandlers(waiting, { run, onError: vi.fn() }).onRunWithKey!(withKeyAction("fal", "minimax-h3", "i2v"));
     expect(sent).toHaveLength(1);
     // Refused: the button comes back.
     release(false);
