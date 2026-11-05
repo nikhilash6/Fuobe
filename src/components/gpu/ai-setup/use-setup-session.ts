@@ -150,12 +150,14 @@ export function useSetupSession(o: { way: Way; os: Os; phone: boolean; facts: Om
     setS((x) => ({ ...x, offline: false, aiReadAt: j?.aiReadAt ?? x.aiReadAt, mine: j?.mine ?? true, next: j?.next ?? x.next }));
   }, [make]);
   // A report when what the tab sees changes (a moment after, so a burst of changes is one report).
-  const factsKey = JSON.stringify(o.facts);
+  // Keyed on the facts' text, never on the object: the panel makes a new one on every render, and each report's answer
+  // renders the panel again.
+  const factsKey = o.facts ? JSON.stringify(o.facts) : "";
   useEffect(() => {
-    if (!s.code || s.ended || !o.facts) return;
+    if (!s.code || s.ended || !factsKey) return;
     const t = setTimeout(() => void report(), 300);
     return () => clearTimeout(t);
-  }, [factsKey, s.code, s.ended, report, o.facts]);
+  }, [factsKey, s.code, s.ended, report]);
 
   // The wait for the AI's reads: a loop on network answers, not timers, so it goes on in a hidden tab (whose timers the
   // browser slows down). A poke asks for a fresh look first; every answer ends with a report (the heartbeat).

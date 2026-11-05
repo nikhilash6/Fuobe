@@ -78,7 +78,7 @@ export function FinishCard({ picture, gpu, cpu, onClose }: { picture: FirstPictu
   const on = cpu ? "your computer's processor" : gpu ? `your ${gpu}` : "your GPU";
   return (
     <div className="grid items-center gap-5 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
-      <div className="mx-auto aspect-[4/5] w-full max-w-[13rem] overflow-hidden rounded-xl bg-muted max-sm:max-h-[50svh] max-sm:w-auto">
+      <div className="mx-auto aspect-[4/5] w-full max-w-[13rem] overflow-hidden rounded-xl bg-muted max-sm:max-h-[50svh] max-sm:max-w-none">
         {picture.url && (
           // eslint-disable-next-line @next/next/no-img-element -- the run's own file, any size
           <img

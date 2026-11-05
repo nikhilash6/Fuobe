@@ -82,12 +82,14 @@ async function context(browser, opts, { safari = false } = {}) {
   const ctx = await browser.newContext(opts);
   ctx.map = {};
   ctx.failed = [];
+  ctx.reports = 0;
   if (safari)
     await ctx.addInitScript(() => {
       Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
       Object.defineProperty(Navigator.prototype, "platform", { get: () => (/iPhone/.test(navigator.userAgent) ? "iPhone" : "MacIntel") });
     });
   ctx.on("response", (r) => {
+    if (/^\/api\/setup\/session\/[^/]+\/report$/.test(new URL(r.url()).pathname)) ctx.reports++;
     // A code that just ended answers 404 to a report on its way: the tab makes a new one. Anything else is a failure.
     if (new URL(r.url()).pathname.startsWith("/api/setup/session") && r.status() >= 400 && r.status() !== 404) ctx.failed.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`);
   });
@@ -165,6 +167,11 @@ try {
     const chat = page.getByRole("button", { name: /Open in ChatGPT/ });
     check(`${tag}: the hand-offs wait for the browser's question first`, await chat.isDisabled().catch(() => false));
     await page.screenshot({ path: path.join(shots, `${tag}-1-open.png`), fullPage: true });
+    // Nothing changes while nobody acts: the tab reports a change once, then only its heartbeat (every 25 s at most).
+    await sleep(2000);
+    const before = ctx.reports;
+    await sleep(8000);
+    check(`${tag}: a quiet tab sends few reports`, ctx.reports - before <= 2, `${ctx.reports - before} in 8 s`);
 
     // ComfyUI that doesn't let this page in yet.
     ctx.map = { 8188: CLOSED };
