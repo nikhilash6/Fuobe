@@ -17,7 +17,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { POOL_WORDS } = await import("@/lib/relay");
-const { PendingTile, FailedTile } = await import("@/components/studio/feed");
+const { PendingTile, FailedTile, Feed } = await import("@/components/studio/feed");
+const { CREATE_GENERATION_KEY, goesToPool } = await import("@/lib/api");
 const { AiTag } = await import("@/components/studio/ai-tag");
 const { TooltipProvider } = await import("@/components/ui/tooltip");
 
@@ -105,3 +106,37 @@ describe("a run's tile on this studio's GPUs", () => {
   });
 });
 
+
+describe("a run on this studio's GPUs between Run and its answer", () => {
+
+  /** A feed whose page pressed Run with these requests and has no answer yet (the run is still being made). */
+  const feedWhileMaking = (requests: object[], items: Generation[] = []) => {
+    const client = new QueryClient();
+    for (const r of requests) {
+      const m = client.getMutationCache().build(client, { mutationKey: CREATE_GENERATION_KEY, mutationFn: () => new Promise(() => {}) });
+      void m.execute(r);
+    }
+    return renderToStaticMarkup(
+      createElement(QueryClientProvider, { client }, createElement(TooltipProvider, null, createElement(Feed, { items, empty: createElement("p", null, "Nothing yet") }))),
+    );
+  };
+
+  it("shows In line while the run is made (a wait for the billing service included), with no other words", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", place: "pool", params: { aspectRatio: "16:9" } }]);
+    expect(html).toContain('data-run-state="in-line"');
+    expect(html).toContain(`>${POOL_WORDS.inLine}<`);
+    expect(html).not.toContain("Nothing yet");
+    expect(html).not.toMatch(/pause|error|billing|GPU/i);
+  });
+  it("a run that names no place but sends the price it showed goes there too, above the runs already made", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", shown: { amount: 0, priceVersion: "" } }], [gen({ place: "pool", status: "running", message: POOL_WORDS.working })]);
+    expect(html.indexOf('data-run-state="in-line"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-run-state="in-line"')).toBeLessThan(html.indexOf('data-run-state="working"'));
+  });
+  it("every other run being made shows nothing new", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" }, { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", place: "own" }]);
+    expect(html).not.toContain("data-run-state");
+    expect(html).toContain("Nothing yet");
+    expect(goesToPool(undefined)).toBe(false);
+  });
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
@@ -517,9 +517,33 @@ export function useLibraryFacets(opts: { steps?: boolean } = {}) {
   });
 }
 
+/** The new runs being made (useCreateGeneration), as the mutation cache knows them. */
+export const CREATE_GENERATION_KEY = ["create-generation"] as const;
+
+/**
+ * Does this new run go to this studio's GPUs (hosted runs)? The composer names the place, or sends the price it showed
+ * for a run there. Other runs (an install's own GPU, a cloud key) say neither.
+ */
+export function goesToPool(req: GenerationRequest | undefined): boolean {
+  return !!req && (req.place === "pool" || "shown" in req);
+}
+
+/**
+ * The runs on this studio's GPUs being made now (Run pressed, no answer yet), with when Run was pressed. The feed shows
+ * each one as "In line" until the run is made, so a short wait before it starts never looks like nothing happened.
+ */
+export function useMakingPoolRuns(): { at: number; request: GenerationRequest }[] {
+  const pending = useMutationState({
+    filters: { mutationKey: CREATE_GENERATION_KEY, status: "pending" },
+    select: (m) => ({ at: m.state.submittedAt, request: m.state.variables as GenerationRequest | undefined }),
+  });
+  return pending.filter((p): p is { at: number; request: GenerationRequest } => goesToPool(p.request));
+}
+
 export function useCreateGeneration() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: CREATE_GENERATION_KEY,
     mutationFn: async (req: GenerationRequest) => {
       const res = await fetch("/api/generations", {
         method: "POST",

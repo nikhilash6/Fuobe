@@ -204,6 +204,6 @@ process saves a finished run's results.
 |---|---|
 | No `FUOBE_BILLING_URL` | No call. Runs on this install's GPUs are closed, or free and allowed with `FUOBE_HOSTED_FREE=1`. |
 | Set, and it answers | As above. |
-| Set, and no answer in time | A press of Run waits while the reserve is tried again for up to 60 seconds (a restart of the service), then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
+| Set, and no answer in time | A press of Run waits while the reserve is tried again for up to 60 seconds (a restart of the service), and the feed shows the run as "In line" meanwhile. Then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
 
 The service's address and its errors are written to the server's log only. A browser never sees them.
