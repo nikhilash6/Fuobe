@@ -745,7 +745,8 @@ export class ComputerRunner {
       return null;
     }
     if (!t.graph || typeof t.graph !== "object") return "bad-ticket";
-    if (worker && ((t.class !== undefined && t.class !== "owner") || worker.graphs === false)) return "bad-ticket";
+    // A studio names the owner's own job "owner"; a graph for any other job, or for one that names no class, is refused.
+    if (worker && (t.class !== "owner" || worker.graphs === false)) return "bad-ticket";
     if (worker?.inside && !worker.inside(t)) return "outside-ceiling";
     return null;
   }

@@ -466,6 +466,25 @@ describe("the worker program composes tickets and keeps to its PC's ceiling", ()
     expect(p.logs.some((l) => /Starting its own ComfyUI/.test(l))).toBe(true);
   });
 
+  it("a raw graph that names no class is refused too", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const mine = await accountTask();
+    s.rewrite = (q, body) => {
+      if (q !== "/api/gpu/computer/claim") return body;
+      const { task } = body as { task: Record<string, unknown> };
+      const { ticket: _t, class: _c, ...rest } = task;
+      void _t;
+      void _c;
+      return { task: { ...rest, graph: mine.graph } };
+    };
+    start(w, s, p);
+    expect((await ended(mine.id)).state).toBe("failed");
+    expect(s.reports).toContainEqual({ event: "failed", reason: "bad-ticket" });
+    expect(prompts(p)).toBe(0);
+  });
+
   it("with acceptGraphs off, the owner's own whole graph is refused too", async () => {
     const w = addWorker();
     const s = studio();
