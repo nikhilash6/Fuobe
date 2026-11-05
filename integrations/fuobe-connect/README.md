@@ -207,31 +207,6 @@ curl -X POST -H "Content-Type: application/json" -d "{}" http://127.0.0.1:8188/f
 To remove Fuobe Connect, press **Disconnect** first. Then delete the `ComfyUI-Fuobe-Connect` folder from
 `custom_nodes` (or uninstall it in ComfyUI-Manager) and restart ComfyUI.
 
-## Security: known limits
-
-Fuobe Connect's checks went through four rounds of security review. The last round found no way around them. These
-known limits remain. Each one is of low severity.
-
-1. Another node pack can change a prompt after the check. ComfyUI lets a node pack add a handler (`on_prompt`) that
-   ComfyUI runs on every prompt, after Fuobe Connect checked it. If one of your node packs changes prompts in such a
-   handler, the workflow that runs is not exactly the one that Fuobe Connect checked. Fuobe Connect adds no such
-   handler.
-2. A number that comes through a link has no limit. ComfyUI checks a number's min and max only when the workflow
-   writes the number. A number that a listed node works out (a math node, for example) reaches the next node
-   unchecked. A studio can then ask for a very large picture or very many steps. This can only keep your GPU busy or
-   make ComfyUI run out of memory. To stop it, cancel the prompt in ComfyUI, or press **Pause jobs** if you paired.
-3. In a workflow with no loop, ComfyUI runs each node's `IS_CHANGED` check, also for a node that leads to no output.
-   ComfyUI doesn't check such a node first. Fuobe Connect checks every value written into it the same way as
-   elsewhere, so it can still read only Fuobe's own inputs.
-4. ComfyUI sends the live messages of a prompt queued without a client id to every open socket, a studio's too (see
-   above). The studio can't download that prompt's files or control it.
-5. A listed node does in ComfyUI's folders what it always does: for example, it saves into your output folder. The
-   checks follow the listed nodes at the versions that Fuobe's workflows pin. A newer version of a node pack can read
-   its inputs in a new way.
-6. A trusted studio can read facts about this computer: ComfyUI's start options, the GPU and its memory, and the names
-   and places on disk of your model files (see above). It can also use your GPU with the listed nodes. Add only
-   studios that you trust. To let no website use this ComfyUI from the browser, set the studios to `none`.
-
 ## Files
 
 Fuobe Connect keeps one file, `fuobe-connect.json`, in ComfyUI's `user` folder. The file holds the studios that you
