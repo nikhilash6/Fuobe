@@ -2,6 +2,7 @@
 
 import type { OriginalSound } from "@/lib/av/original-sound";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import type { CharacterOptions } from "@/lib/catalog/character-swap";
 import type { FinishOptions, GenjutsuLook, GenjutsuMode, GenjutsuTarget, GenjutsuTier, MakerSource, ObjectEdit, PictureOptions } from "@/lib/catalog/genjutsu";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
@@ -109,14 +110,15 @@ export function useDescribeCharacter() {
 export function useDescribeScene() {
   return useMutation({
     mutationFn: (b: { engine: "open"; source: { url: string; duration?: number }; range: { start: number; end: number }; frame?: string; ownPerson?: boolean }) =>
-      send<{ id: string; modelId: string }>("/api/genjutsu/scene", "POST", b),
+      // Its own id for this press: a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount).
+      send<{ id: string; modelId: string }>("/api/genjutsu/scene", "POST", b, { "x-request-id": nanoid(16) }),
     onSuccess: kick,
   });
 }
 
 /** The clip's words (one transcription; the page takes the part's lines from its cues). */
 export function useTranscribeClip() {
-  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; cleanVoiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b), onSuccess: kick });
+  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; cleanVoiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b, { "x-request-id": nanoid(16) }), onSuccess: kick });
 }
 
 /** Waits for one generation to finish (polling; the page's helpers that fill a field from it). */

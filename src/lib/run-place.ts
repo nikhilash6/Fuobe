@@ -1,3 +1,4 @@
+import { RUN_SHOWN_HEADER, shownHeader } from "./guest-access";
 import { ownSetupDetail, ownSetupLabel, type OwnSetup } from "./own-setup";
 import { lineWords } from "./pool-line";
 import { billedTo, CLOUD_KEY, type CloudProvider } from "./your-keys";
@@ -256,4 +257,37 @@ export function checkedPool(
   // that runs it, when that is the answer.
   if (check.quote.allowed === false) return { text, ...(sub && { sub }), refused: true, ...(ownSetup && { setup: ownSetup }) };
   return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }), ...(check.line && { wait: lineWords(check.line) }) };
+}
+
+/** What a tool page's price slot and Run say for a run on this studio's GPUs (toolPoolPrice). */
+export interface ToolPoolPrice {
+  /** The service's words for the price, then where the run would stand in line ("Free · In line · 2nd · about 3 min"). */
+  text: string;
+  /** The run wouldn't be taken now: Run is off, and `text` says why (unless `setup` runs it instead). */
+  refused: boolean;
+  /** Refused because it runs on the person's own setup: Run opens it. */
+  setup?: OwnSetup;
+  /** The price shown, sent with Run (the header a tool's run reads it from), so a changed price is asked about first. */
+  headers: Record<string, string>;
+}
+
+/**
+ * A tool's own price check (`?preview=1` or its estimate route) as its page shows it: when the server adds `{ place:
+ * "pool", quote, line }` (the run goes to this studio's GPUs), the service's price and the place in line instead of the
+ * page's own words ("Free · your GPU" is for the person's own GPU), Run off when it is refused, and the price shown to
+ * send with Run. Null when the run goes to the person's own GPU or key (the page says its own words).
+ */
+export function toolPoolPrice(check: unknown): ToolPoolPrice | null {
+  if (!check || typeof check !== "object") return null;
+  const c = check as { place?: unknown; quote?: { allowed?: boolean; amount?: number; priceVersion?: string; text?: string; sub?: string; ownSetup?: OwnSetup }; line?: { place: number; etaSeconds: number | null } };
+  if (c.place !== "pool" || !c.quote || typeof c.quote.text !== "string") return null;
+  const pool = checkedPool({ place: "pool", quote: { ...c.quote, text: c.quote.text }, ...(c.line && { line: c.line }) });
+  if (!pool) return null;
+  if (pool.refused) return { text: pool.text, refused: true, ...(pool.setup && { setup: pool.setup }), headers: {} };
+  const shown = typeof c.quote.amount === "number" && typeof c.quote.priceVersion === "string" ? { amount: c.quote.amount, priceVersion: c.quote.priceVersion } : null;
+  return {
+    text: [pool.text, pool.wait].filter(Boolean).join(" · "),
+    refused: false,
+    headers: shown ? { [RUN_SHOWN_HEADER]: shownHeader(shown) } : {},
+  };
 }

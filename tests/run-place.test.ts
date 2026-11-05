@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { quoteBody } from "@/lib/hosted";
-import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, runPlace, toolPoolPrice, type RunPlaceInput } from "@/lib/run-place";
+import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
+import { lineWords } from "@/lib/pool-line";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
 const fmt = (usd: number) => `$${usd.toFixed(2)}`;
@@ -257,5 +259,33 @@ describe("checkedPool", () => {
     const pool = checkedPool({});
     const p = runPlace({ audience: "account", engine: "open", hosted: !!pool, gpu: false, pool, format: (n) => `$${n.toFixed(2)}` });
     expect(p).toMatchObject({ where: "gpu", label: "Your GPU", needs: "gpu" });
+  });
+});
+
+describe("a tool page's own price check, for a run on this studio's GPUs", () => {
+  const line = { place: 2, etaSeconds: 180 };
+  it("says the service's price and the place in line instead of the page's own words, and carries the price shown", () => {
+    const p = toolPoolPrice({ costUsd: 0, demo: false, notes: [], place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line });
+    expect(p?.text).toBe(`Free · ${lineWords(line)}`);
+    expect(p?.text).not.toMatch(/GPU/);
+    expect(p?.refused).toBe(false);
+    expect(p?.headers).toEqual({ [RUN_SHOWN_HEADER]: shownHeader({ amount: 0, priceVersion: "v1" }) });
+  });
+
+  it("is refused in the service's words (Run off), or with the person's own setup that runs it", () => {
+    expect(toolPoolPrice({ place: "pool", quote: { allowed: false, amount: 0, priceVersion: "", text: "You have 2 runs going. Start this one when one finishes." }, line })).toEqual({
+      text: "You have 2 runs going. Start this one when one finishes.",
+      refused: true,
+      headers: {},
+    });
+    const setup = { need: "gpu" as const, vramGb: 24 };
+    expect(toolPoolPrice({ place: "pool", quote: { allowed: false, amount: 0, priceVersion: "", text: "Runs on your own GPU · 24 GB", ownSetup: setup } })).toMatchObject({ refused: true, setup });
+  });
+
+  it("is nothing for a run on the person's own GPU or key, or no answer yet", () => {
+    expect(toolPoolPrice({ costUsd: 0, demo: false, notes: [] })).toBeNull();
+    expect(toolPoolPrice({ place: "own" })).toBeNull();
+    expect(toolPoolPrice(undefined)).toBeNull();
+    expect(toolPoolPrice(null)).toBeNull();
   });
 });

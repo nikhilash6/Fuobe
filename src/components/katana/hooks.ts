@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { COMPUTER_KICK_EVENT, useGenerationEvents } from "@/lib/api";
 import type { KatanaJobView, Segment } from "@/lib/av/katana";
 import type { Engine } from "@/lib/catalog/types";
@@ -34,7 +35,8 @@ export interface KatanaPreview {
   model: string;
 }
 
-const post = async <T>(url: string, body: KatanaBody) => json<T>(await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+/** A press of Run carries its own id (x-request-id): a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount). */
+const post = async <T>(url: string, body: KatanaBody) => json<T>(await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "x-request-id": nanoid(16) }, body: JSON.stringify(body) }));
 
 export function useKatanaJobs() {
   const qc = useQueryClient();
@@ -85,7 +87,7 @@ export function useKatanaActions() {
   });
   /** Retry the failed steps (all: the whole run again, as a new run). */
   const retry = useMutation({
-    mutationFn: async ({ id, all }: { id: string; all?: boolean }) => json<KatanaJobView>(await fetch(`/api/katana/${id}/retry${all ? "?all=1" : ""}`, { method: "POST" })),
+    mutationFn: async ({ id, all }: { id: string; all?: boolean }) => json<KatanaJobView>(await fetch(`/api/katana/${id}/retry${all ? "?all=1" : ""}`, { method: "POST", headers: { "x-request-id": nanoid(16) } })),
     onSuccess: (job, { all }) => {
       kick();
       qc.setQueryData<KatanaJobView[]>(["katana"], (xs) => (all ? [job, ...(xs ?? [])] : (xs ?? []).map((j) => (j.id === job.id ? job : j))));

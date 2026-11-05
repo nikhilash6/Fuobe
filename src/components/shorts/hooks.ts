@@ -24,8 +24,9 @@ async function json<T>(res: Response): Promise<T> {
   return body;
 }
 
-export const send = async <T>(url: string, method: string, body?: unknown) =>
-  json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }));
+/** `headers`: any the request adds (a press's id, for a tool whose body has no field for it). */
+export const send = async <T>(url: string, method: string, body?: unknown, headers: Record<string, string> = {}) =>
+  json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) }));
 
 export interface ShortsBody {
   engine: Engine;

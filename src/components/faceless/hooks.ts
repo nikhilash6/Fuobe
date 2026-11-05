@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { useEffect, useRef, useState } from "react";
 import { COMPUTER_KICK_EVENT, useGenerationEvents } from "@/lib/api";
 import type {
@@ -34,7 +35,9 @@ async function json<T>(res: Response): Promise<T> {
 const ASKS = /\/(estimate|topics|link)$/;
 
 const send = async <T,>(url: string, method: string, body?: unknown) => {
-  const out = await json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }));
+  // Each POST is one press: its own id, so a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount).
+  const press: Record<string, string> = method === "POST" ? { "x-request-id": nanoid(16) } : {};
+  const out = await json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json", ...press }, body: body === undefined ? undefined : JSON.stringify(body) }));
   // A run may have started (a render, a reading, a picture): the tab that runs this person's jobs on the ComfyUI on this
   // computer (an account's "Your GPU") asks for them at once, as after a studio run.
   if (method === "POST" && !ASKS.test(url) && !(url.endsWith("/change") && !(body as { apply?: boolean } | undefined)?.apply)) window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));

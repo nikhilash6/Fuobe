@@ -240,6 +240,8 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
     askRun(() => {
       if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
       if (!body) return toast(mode === "describe" ? "Describe your character first" : "Wait for the uploads to finish");
+      // Not taken now (the price check said why): nothing is sent.
+      if (preview.data?.error) return toast(preview.data.error);
       run.mutate(body, {
         // The run line already says which model runs and why (its notes), so no toast here.
         onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),

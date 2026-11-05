@@ -58,6 +58,8 @@ import { downloadHref } from "@/lib/library";
 import { probeUrl } from "@/lib/media-probe";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
+import { usePoolRun } from "@/components/studio/pool-price";
+import { toolPoolPrice } from "@/lib/run-place";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 import { CleanDialoguePanel } from "./clean-dialogue-panel";
 import { CLEAN_DIALOGUE_PRESET, mixPresetFor } from "@/lib/av/clean-dialogue";
@@ -594,7 +596,11 @@ function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[
     }
     return backgroundLowered(peak);
   }, [bed]);
-  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
+  // On this studio's GPUs: the service's price and the place in line ("Free · your GPU" is for the person's own GPU).
+  const remuxCost = remuxPrice.data
+    ? (toolPoolPrice(remuxPrice.data)?.text ??
+      (remuxPrice.data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`))
+    : null;
 
   return (
     <section aria-labelledby="mixer" className="space-y-3">
@@ -753,17 +759,22 @@ export function SplitSoundtrackTool() {
   const cloudProblem = mode === "cloud" ? CLOUD_ONLY_PROBLEM : CLOUD_SPLIT_PROBLEM;
   const blocker = !source ? "Add a soundtrack to split" : source.uploading ? "Uploading…" : engine === "cloud" ? cloudProblem : null;
   const error = preview.error ? (preview.error as Error).message : null;
+  // A run on this studio's GPUs: nothing is sent while the service refuses it now; its own setup opens instead of it.
+  const poolRun = usePoolRun(p);
   const go = () => {
     if (blocker) return void toast(blocker);
     if (error) return void toast.error(error);
     if (!body) return;
-    run.mutate(body, {
-      onSuccess: (r) => {
-        setResultId(r.result.id);
-        toast.success("Splitting…");
-      },
-      onError: (e) => toastError(e),
-    });
+    if (poolRun.off) return void toast(poolRun.pool!.text);
+    poolRun.go(() =>
+      run.mutate(body, {
+        onSuccess: (r) => {
+          setResultId(r.result.id);
+          toast.success("Splitting…");
+        },
+        onError: (e) => toastError(e),
+      }),
+    );
   };
   const g = result.data;
   const stems = useMemo(() => (g?.status === "succeeded" ? stemsOf(g.outputs) : []), [g]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
 import { COMPUTER_KICK_EVENT, useGenerationEvents } from "@/lib/api";
 import type { DubPrice, DubSessionView, OneShotModel, VoiceSplit } from "@/lib/av/dub";
@@ -91,7 +92,8 @@ export function useDubActions() {
   const qc = useQueryClient();
   const put = (s: DubSessionView) => qc.setQueryData<DubSessionView[]>(["dub"], (xs) => (xs ? [s, ...xs.filter((x) => x.id !== s.id)] : [s]));
   const create = useMutation({
-    mutationFn: async (body: NewDub) => json<DubSessionView>(await fetch("/api/dub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })),
+    // Each press carries its own id: a resend of it gets the first dub (src/server/account-tool-run.ts onceForAccount).
+    mutationFn: async (body: NewDub) => json<DubSessionView>(await fetch("/api/dub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, requestId: nanoid(16) }) })),
     onSuccess: (s) => {
       kick();
       put(s);
@@ -110,7 +112,7 @@ export function useDubActions() {
   });
   const voice = useMutation({
     mutationFn: async ({ id, lang, cues, lipsync }: { id: string; lang: string; cues?: Cue[]; lipsync?: boolean }) =>
-      json<DubSessionView>(await fetch(`/api/dub/${id}/voice`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang, cues, lipsync }) })),
+      json<DubSessionView>(await fetch(`/api/dub/${id}/voice`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang, cues, lipsync, requestId: nanoid(16) }) })),
     onSuccess: (s) => {
       kick();
       put(s);

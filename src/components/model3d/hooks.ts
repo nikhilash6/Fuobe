@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { COMPUTER_KICK_EVENT, useCreateGeneration, useIsOwner } from "@/lib/api";
@@ -15,7 +16,8 @@ function useAccountRun3d() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (req: GenerationRequest): Promise<Generation[]> => {
-      const res = await fetch("/api/image-to-3d", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+      // Its own id for this press: a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount).
+      const res = await fetch("/api/image-to-3d", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...req, requestId: nanoid(16) }) });
       const body = (await res.json().catch(() => ({}))) as { items?: Generation[]; notes?: string[]; gpuWarning?: string; error?: string; code?: unknown };
       // Stopped by the GPU pre-flight: the guided fix opens (watchGuestRefusals), so no error toast on top of it.
       if (res.status === 409 && res.headers.get("x-fuobe-gpu-setup") === "1") throw Object.assign(new Error(body.error ?? "This tool needs setting up on your GPU"), { gpuSetup: true });

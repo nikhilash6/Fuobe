@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAskBeforeUpload, useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { toolPoolPrice } from "@/lib/run-place";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   categoriesFor,
@@ -99,7 +100,8 @@ function RunInfo({ preview, loading, blocker }: { preview?: RunPreview & { steps
   if (blocker) return <p className="text-[12.5px] text-destructive">{blocker}</p>;
   if (!preview) return <p className="h-5 text-[12.5px] text-muted-foreground">{loading ? "Pricing…" : ""}</p>;
   if (preview.error) return <p className="text-[12.5px] text-destructive">{preview.error}</p>;
-  const cost = preview.demo ? "Placeholder · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
+  // On this studio's GPUs: the service's price and the place in line ("Free · your GPU" is for the person's own GPU).
+  const cost = toolPoolPrice(preview)?.text ?? (preview.demo ? "Placeholder · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`);
   return (
     <div className="space-y-0.5 text-[12.5px] text-muted-foreground" aria-live="polite">
       <p>
@@ -200,6 +202,8 @@ export function InfluencerBuilder() {
     askRun(() => {
       if (blocker) return toast(blocker);
       if (!body) return toast("Wait for the uploads to finish");
+      // Not taken now (the price check said why): nothing is sent.
+      if (preview.data?.error) return toast(preview.data.error);
       run.mutate(body, {
         onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
         onError: (e) => toastError(e, "Couldn't start the sheet"),

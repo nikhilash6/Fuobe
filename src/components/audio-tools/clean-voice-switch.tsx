@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioLines, Loader2, Sparkles } from "lucide-react";
+import { nanoid } from "nanoid";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
@@ -121,7 +122,7 @@ export const cleanedName = (name?: string) => `${(name ?? "Recording").replace(/
 
 /** Clean one audio file on the open engine; resolves with the clean file's address. */
 export async function cleanVoiceFile(media: string, name: string | undefined, signal: AbortSignal): Promise<{ url: string; generation: Generation }> {
-  const run = await post<{ result: Generation }>({ tool: "clean", engine: "open", media, kind: "audio", ...(name && { name: name.slice(0, 200) }), strength: "full", level: "match", quality: "auto", background: "remove" });
+  const run = await post<{ result: Generation }>({ tool: "clean", engine: "open", media, kind: "audio", ...(name && { name: name.slice(0, 200) }), strength: "full", level: "match", quality: "auto", background: "remove", requestId: nanoid(16) });
   const g = await settle(run.result.id, signal);
   const out = g.outputs.find((o) => o.kind === "audio");
   if (!out) throw new Error("The clean voice didn't come back");

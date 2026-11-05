@@ -27,6 +27,7 @@ import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { usePoolRun } from "@/components/studio/pool-price";
 import { useKatanaActions, useKatanaJobs, useKatanaPreview, type KatanaBody } from "./hooks";
 
 type SplitMode = "fixed" | "scenes";
@@ -113,6 +114,8 @@ export function KatanaStudio({ examples }: { examples?: ExampleRowData | null })
       }
     : null;
   const preview = useKatanaPreview(useDeferredValue(body));
+  // A run on this studio's GPUs: the service's price and the place in line, and Run off when it is refused.
+  const poolRun = usePoolRun(preview.data);
   const shown = segments ?? preview.data?.segments ?? null;
   const setupBlocker = !reference
     ? "Add the reference edit"
@@ -305,13 +308,13 @@ export function KatanaStudio({ examples }: { examples?: ExampleRowData | null })
               {preview.data ? (
                 <>
                   {preview.data.segments.length} segment{preview.data.segments.length === 1 ? "" : "s"} · {preview.data.steps} steps ·{" "}
-                  <span className="font-mono text-foreground">{money(preview.data.costUsd, preview.data.demo, engine === "open")}</span>
+                  <span className="font-mono text-foreground">{poolRun.pool?.text ?? money(preview.data.costUsd, preview.data.demo, engine === "open")}</span>
                 </>
               ) : (
                 (blocker ?? "Pricing…")
               )}
             </p>
-            <Button size="lg" className={cn("rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={start.isPending || scanning !== null}>
+            <Button size="lg" className={cn("rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={() => poolRun.go(go)} disabled={start.isPending || scanning !== null || (poolRun.off && !blocker)}>
               {start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Recreate
             </Button>
           </div>

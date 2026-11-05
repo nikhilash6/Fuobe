@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { CustomPresetDialog } from "./custom-preset-dialog";
+import { usePoolRun } from "@/components/studio/pool-price";
 import { useShortsActions, useShortsEstimate, useShortsPresets, useSubmitGuard, type ShortsBody } from "./hooks";
 import { CreateCard, CustomCard, LookCard } from "./preset-card";
 import { ShortsHistory } from "./history";
@@ -361,6 +362,8 @@ function SetupPanel({
       : null;
   const estimate = useShortsEstimate(estimateBody);
   const est = estimate.data;
+  // A run on this studio's GPUs: Run off when the service refuses it now, or opening the person's own setup.
+  const poolRun = usePoolRun(est);
 
   const blocker = !presetId
     ? "Pick a preset first"
@@ -380,7 +383,9 @@ function SetupPanel({
                   : "Reading the clip…"
                 : estimate.error
                   ? (estimate.error as Error).message
-                  : null;
+                  : poolRun.off
+                    ? poolRun.pool!.text
+                    : null;
 
   const guard = useSubmitGuard();
   const [leaving, setLeaving] = useState(false);
@@ -390,13 +395,15 @@ function SetupPanel({
     if (busy || !estimateBody) return;
     // One session per click: a second click while this one is on its way does nothing (and the
     // server answers a repeated request id with the session it already started).
-    void guard(JSON.stringify(estimateBody), (requestId) => actions.create.mutateAsync({ ...estimateBody, requestId }), { hold: true })
-      .then((s) => {
-        if (!s) return;
-        setLeaving(true);
-        router.push(`/shorts/${s.id}`);
-      })
-      .catch((e: Error) => toastError(e));
+    poolRun.go(() =>
+      void guard(JSON.stringify(estimateBody), (requestId) => actions.create.mutateAsync({ ...estimateBody, requestId }), { hold: true })
+        .then((s) => {
+          if (!s) return;
+          setLeaving(true);
+          router.push(`/shorts/${s.id}`);
+        })
+        .catch((e: Error) => toastError(e)),
+    );
   };
 
   return (

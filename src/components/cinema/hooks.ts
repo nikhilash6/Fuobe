@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
 import type { CinemaFolder, CinemaGenerateInput, CinemaProject, CinemaTile, DirectorMessage, DirectorSettings } from "@/lib/catalog/cinema";
 import type { Generation } from "@/lib/catalog/types";
@@ -244,7 +245,8 @@ export function useItemActions(projectId: string) {
       await fetch(`/api/generations/${g.id}/cancel`, { method: "POST" }).finally(settle);
     },
     retry: async (g: CinemaGeneration) => {
-      await send(`/api/cinema/projects/${g.projectId ?? projectId}/items/${g.id}/retry`, "POST").finally(settle);
+      // Its own id: a resend of this press gets the first retry (src/server/account-tool-run.ts onceForAccount).
+      await send(`/api/cinema/projects/${g.projectId ?? projectId}/items/${g.id}/retry`, "POST", { requestId: nanoid(16) }).finally(settle);
       kick();
     },
     /** Finish in 2K: a MiniMax H3 take made again at 2K (fal) or redrawn at 2K on your GPU, in the same folder. */
@@ -260,13 +262,14 @@ export function useItemActions(projectId: string) {
   };
 }
 
-export type GenerateBody = { input: Omit<CinemaGenerateInput, "brief">; folderId: string | null };
+export type GenerateBody = { input: Omit<CinemaGenerateInput, "brief">; folderId: string | null; requestId?: string };
 export type GenerateResult = { items: Generation[]; folderId: string | null; plan: { notes: string[]; costUsd: number | null; outputs: number; modelId: string } };
 
 export function useCinemaGenerate(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: GenerateBody) => send<GenerateResult>(`/api/cinema/projects/${projectId}/generate`, "POST", body),
+    // Each press carries its own id: a resend of it gets the first take (src/server/account-tool-run.ts onceForAccount).
+    mutationFn: (body: GenerateBody) => send<GenerateResult>(`/api/cinema/projects/${projectId}/generate`, "POST", { ...body, requestId: body.requestId ?? nanoid(16) }),
     onSuccess: (res, body) => {
       kick();
       // New takes appear at once (where the server filed them); the stream and polling take over.

@@ -45,7 +45,9 @@ import {
 } from "@/lib/av/dub";
 import { languageByCode, supportsTarget, type DubRoute } from "@/lib/av/languages";
 import type { Cue } from "@/lib/cues";
+import { toolPoolPrice } from "@/lib/run-place";
 import { cn } from "@/lib/utils";
+import { usePoolRun } from "@/components/studio/pool-price";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { useDubActions, useDubPrice, useDubSessions, useVoicePrice } from "./hooks";
@@ -163,9 +165,12 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
       ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration, ...(engine === "open" && { voiceSplit: split }) }
       : null;
   const price = useDubPrice(body);
+  // A run on this studio's GPUs: nothing is sent while the service refuses it now; its own setup opens instead of it.
+  const poolRun = usePoolRun(price.data);
   const start = () => {
     if (blocker || !body) return void toast(blocker, { id: "dub-blocker" });
-    create.mutate(
+    if (poolRun.off) return void toast(poolRun.pool!.text, { id: "dub-blocker" });
+    poolRun.go(() => create.mutate(
       { ...body, title: video!.name?.replace(/\.[a-z0-9]+$/i, "") },
       {
         onSuccess: (s) => {
@@ -176,7 +181,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
         },
         onError: (e) => toastError(e),
       },
-    );
+    ));
   };
   return (
     <div className="pb-10">
@@ -346,7 +351,10 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   );
 }
 
-/** The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Placeholder · free", "Free on your GPU". */
+/**
+ * The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Placeholder · free", "Free on your GPU"; on
+ * this studio's GPUs, the service's price and the place in line.
+ */
 function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?: boolean; error?: Error | null; hint?: string }) {
   if (loading) return <Skeleton className="h-4 w-20" aria-label="Pricing" />;
   if (error) return <span className="max-w-[16rem] text-right text-[12px] leading-snug text-muted-foreground">{error.message}</span>;
@@ -354,7 +362,7 @@ function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?
   const extra = price.unpriced.length ? `${price.unpriced.join(" and ")} bill${price.unpriced.length === 1 ? "s" : ""} by the provider's own rate (per character or token).` : undefined;
   return (
     <span className="text-right text-[12px] leading-snug" title={[extra, hint].filter(Boolean).join(" ") || undefined}>
-      <span className="font-medium tabular-nums">{priceLine(price)}</span>
+      <span className="font-medium tabular-nums">{toolPoolPrice(price)?.text ?? priceLine(price)}</span>
       {price.steps > 1 && <span className="block text-muted-foreground">{price.steps} steps</span>}
     </span>
   );
@@ -638,11 +646,17 @@ function Review({ s, lang, time, onSeek }: { s: DubSessionView; lang: string; ti
   const crowded = useMemo(() => crowdedLines(cues, s.duration), [cues, s.duration]);
   const price = useVoicePrice(s.id, lang, lipsync, cues, stage !== "preparing" && !problems.length);
   const name = languageByCode(lang)?.name ?? lang;
-  const start = (c: Cue[]) =>
-    voice.mutate(
-      { id: s.id, lang, cues: c, lipsync },
-      { onSuccess: () => toast.success(`Voicing ${name}`), onError: (e) => toastError(e) },
+  // A run on this studio's GPUs: nothing is sent while the service refuses it now; its own setup opens instead of it.
+  const poolRun = usePoolRun(price.data);
+  const start = (c: Cue[]) => {
+    if (poolRun.off) return void toast(poolRun.pool!.text, { id: "dub-blocker" });
+    poolRun.go(() =>
+      voice.mutate(
+        { id: s.id, lang, cues: c, lipsync },
+        { onSuccess: () => toast.success(`Voicing ${name}`), onError: (e) => toastError(e) },
+      ),
     );
+  };
   return (
     <>
       <Panel

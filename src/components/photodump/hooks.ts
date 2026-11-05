@@ -1,10 +1,12 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nanoid } from "nanoid";
 import { COMPUTER_KICK_EVENT, useElements, useSaveElement, useViewer } from "@/lib/api";
 import type { StudioElement } from "@/lib/catalog/elements";
 import type { Generation } from "@/lib/catalog/types";
 import { responseError } from "@/lib/refusals";
+import { toolPoolPrice } from "@/lib/run-place";
 
 /**
  * A run started: the tab that runs this person's jobs on the ComfyUI on this computer (an account's "Your GPU") asks for
@@ -43,7 +45,13 @@ export interface UserPack {
 export function useRunPreview(url: string, body: unknown | null) {
   return useQuery({
     queryKey: ["run-preview", url, body],
-    queryFn: () => post<RunPreview>(`${url}?preview=1`, body),
+    queryFn: async () => {
+      const p = await post<RunPreview>(`${url}?preview=1`, body);
+      // A run on this studio's GPUs that isn't taken now (or runs on the person's own setup): said as the reason it
+      // can't run, so Run is off with the service's words.
+      const pool = toolPoolPrice(p);
+      return pool?.refused ? { ...p, error: pool.text } : p;
+    },
     enabled: body !== null,
     placeholderData: keepPreviousData,
     staleTime: 15_000,
@@ -54,7 +62,8 @@ export function useRunPreview(url: string, body: unknown | null) {
 export function useRun<B>(url: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: B) => post<{ batchId?: string; items: Generation[]; notes?: string[] }>(url, body),
+    // Each press carries its own id: a resend of it gets the first run (src/server/account-tool-run.ts onceForAccount).
+    mutationFn: (body: B) => post<{ batchId?: string; items: Generation[]; notes?: string[] }>(url, { ...(body as object), requestId: nanoid(16) }),
     onSuccess: () => {
       kick();
       void qc.invalidateQueries({ queryKey: ["generations"] });
@@ -67,7 +76,7 @@ export function useRun<B>(url: string) {
 export function useRetryPhoto() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => post<{ items: Generation[] }>("/api/photodump/retry", { id }),
+    mutationFn: (id: string) => post<{ items: Generation[] }>("/api/photodump/retry", { id, requestId: nanoid(16) }),
     onSuccess: () => {
       kick();
       void qc.invalidateQueries({ queryKey: ["generations"] });
