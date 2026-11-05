@@ -15,7 +15,7 @@ import { ShotsEditor } from "@/components/studio/shots-editor";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { uploadFile, useAssets, useIsOwner, useModelAccess, useStatus } from "@/lib/api";
-import { OwnSetupMark } from "@/components/own-setup";
+import { OwnSetupChip, OwnSetupMark } from "@/components/own-setup";
 import { ownSetupLabel, ownSetupOnly } from "@/lib/own-setup";
 import { offered } from "@/lib/model-access";
 import { getModel } from "@/lib/catalog";
@@ -686,6 +686,8 @@ export function PromptBar(props: PromptBarProps) {
       {video && action === "generate" && takesExact(draft.moves[0]) && (
         <div className="px-2 pb-1.5">
           <ExactOrbitControls compact engine={engine} value={draft.exact ?? null} defaults={exactDefaults(draft.moves[0])} onChange={(exact) => setDraft({ exact })} />
+          {/* The exact orbit films with a 48 GB GPU or a fal.ai key: said with its controls (own-setup.ts). */}
+          {!owner && <OwnSetupChip setup="fly-around:exact-orbit" className="mt-1" />}
         </div>
       )}
 

@@ -62,6 +62,18 @@ describe("hardware items: what a visitor sees", () => {
     expect(ownSetupStep(o, { kind: "account", gpu: { connected: true } })).toEqual({ kind: "run" });
     expect(ownSetupStep(o, null)).toEqual({ kind: "run" });
   });
+
+  it("Cinema's exact orbit says it films with a 48 GB GPU or a fal.ai key, and a key runs it", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync("src/components/cinema/prompt-bar.tsx", "utf8");
+    expect(src).toMatch(/<OwnSetupChip setup="fly-around:exact-orbit"/);
+    const o = ownSetupOnly("fly-around:exact-orbit")!;
+    expect(ownSetupLabel(o)).toBe("Runs on your own GPU · 48 GB or fal.ai key");
+    for (const words of [ownSetupLabel(o), ownSetupShort(o), ownSetupDetail(o)]) expect(words).not.toMatch(BANNED);
+    expect(ownSetupStep(o, { kind: "guest" })).toEqual({ kind: "sign-up" });
+    expect(ownSetupStep(o, { kind: "account", gpu: { connected: false }, keys: ["fal"] })).toEqual({ kind: "run" });
+    expect(ownSetupStep(o, { kind: "account", gpu: { connected: false } })).toMatchObject({ kind: "connect-gpu" });
+  });
 });
 
 describe("hardware items: where an account's run goes", () => {
