@@ -1376,10 +1376,9 @@ export function upscaleToolSteps(id: string): { request: GenerationRequest; deps
 /** "Regenerate to 1080p" on this episode: offered on the open engine once the film is done (null otherwise). */
 function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["regenerate"] {
   const modelId = ENGINE_MODELS[ep.settings.engine].regenerate;
-  // Open-H3 Regenerate needs a 48 GB card: offered with its label (own-setup.ts "regenerate:faceless"); a run goes to
-  // the owner's GPU only once it is offered (regenerateEpisode). An account's episodes don't have it yet: its route
-  // isn't one of an account's tool runs (src/lib/guest-access.ts).
-  if (!modelId || !getModel(modelId) || tenantAccount()) return null;
+  // Open-H3 Regenerate needs a 48 GB card: offered with its label (own-setup.ts "regenerate:faceless"); an account's run
+  // goes to its own GPU only (regenerateEpisode), the owner's once it is offered.
+  if (!modelId || !getModel(modelId)) return null;
   let demo = false;
   try {
     demo = runsAsDemo(modelId, "upscale-video");
@@ -1389,6 +1388,31 @@ function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["rege
   return { scenes, demo };
 }
 
+const REGENERATE_OPEN_ONLY = "Regenerate runs on your GPU (open source): switch the episode to open source to use it";
+const REGENERATE_WAIT = "Wait for the episode to finish first";
+
+/** Regenerate to 1080p has run on this episode, or is running. */
+function regeneratedAlready(ep: FacelessEpisode): boolean {
+  const had = ep.plan?.regenerated ? getGeneration(ep.plan.regenerated.final) : null;
+  return !!had && had.status !== "failed" && had.status !== "canceled";
+}
+
+/** What "Regenerate to 1080p" would run (an account's run is checked with it first): none once it has run or is running. */
+export function regenerateToolSteps(id: string): { request: GenerationRequest; deps: number }[] {
+  const ep = mustEpisode(id);
+  if (!ENGINE_MODELS[ep.settings.engine].regenerate) throw new FacelessError(REGENERATE_OPEN_ONLY, 422);
+  if (!ep.plan || !finalOf(ep)) throw new FacelessError(REGENERATE_WAIT, 409);
+  if (regeneratedAlready(ep)) return [];
+  const models = resolveModels(withOfferedVideo(ep.settings), narrationText(ep.script.blocks).length, getModel);
+  let plan: ReturnType<typeof regeneratePlan>;
+  try {
+    plan = regeneratePlan(currentGraph(ep), { engine: ep.settings.engine, joinMax: models.joinMax, lookup: getModel });
+  } catch (e) {
+    throw new FacelessError((e as Error).message, 422);
+  }
+  return plan.steps.map((s) => ({ request: { ...s.request, ...(s.chain && { chain: s.chain }) }, deps: s.after?.length ?? 0 }));
+}
+
 /**
  * "Regenerate to 1080p": every scene redrawn by Open-H3 Regenerate (RIFE first for a 16 fps clip), joined at 1080p, with
  * the episode's own narration, music bed and subtitles put back on (regeneratePlan). Runs on your GPU only; the finished
@@ -1396,15 +1420,15 @@ function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["rege
  */
 export function regenerateEpisode(id: string): FacelessEpisode {
   const ep = mustEpisode(id);
+  // Made or making already: the episode as it is (before any gate: nothing new runs).
+  if (regeneratedAlready(ep)) return ep;
   // Open-H3 Regenerate needs a 48 GB card: an account runs it on its own GPU when that GPU fits it (own-setup-run.ts),
   // never on this studio's. The owner's waits until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
   if (tenant()) ownSetupGate("regenerate:faceless");
   else if (!REGEN_OFFERED) throw new FacelessError(REGEN_COPY.heldEpisode, 422);
-  if (!ENGINE_MODELS[ep.settings.engine].regenerate) throw new FacelessError("Regenerate runs on your GPU (open source): switch the episode to open source to use it", 422);
+  if (!ENGINE_MODELS[ep.settings.engine].regenerate) throw new FacelessError(REGENERATE_OPEN_ONLY, 422);
   const final = finalOf(ep);
-  if (!ep.plan || !final) throw new FacelessError("Wait for the episode to finish first", 409);
-  const had = ep.plan.regenerated ? getGeneration(ep.plan.regenerated.final) : null;
-  if (had && had.status !== "failed" && had.status !== "canceled") return ep;
+  if (!ep.plan || !final) throw new FacelessError(REGENERATE_WAIT, 409);
   const graph = currentGraph(ep);
   const models = resolveModels(withOfferedVideo(ep.settings), narrationText(ep.script.blocks).length, getModel);
   let plan: ReturnType<typeof regeneratePlan>;

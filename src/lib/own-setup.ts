@@ -92,10 +92,12 @@ const ITEMS: Record<string, Entry> = {
   "image-to-3d:idol-other-sides": { setup: gpu(8, { files: true }), graphs: ["image-to-views-idol"] },
   "image-to-3d:idol-clean": { setup: gpu(8, { files: true }), graphs: ["image-to-splat-idol-clean"] },
   // Tools whose steps run on a GPU of the visitor's own.
-  "audio:edit-speech": { setup: gpu(24, { files: true }) },
-  "video-tools:restore": { setup: gpu(24, { files: true, orKey: "fal" }) },
-  "video-tools:remove-person": { setup: gpu(24) },
-  "video-tools:remove-object-void": { setup: gpu(40) },
+  "audio:edit-speech": { setup: gpu(24, { files: true }), graphs: ["speech-edit-auk"] },
+  "video-tools:restore": { setup: gpu(24, { files: true, orKey: "fal" }), graphs: ["video-restore-ltx25-tiled"] },
+  // Validated on this studio's GPU already (their graphs): no label shows once a surface reads ownSetupsNow, and none
+  // asks for them on the client.
+  "video-tools:remove-person": { setup: gpu(24), graphs: ["video-person-remove-h3-relay", "video-person-remove-h3-mask"] },
+  "video-tools:remove-object-void": { setup: gpu(40), graphs: ["video-erase-void"] },
   "cinema:world": { setup: gpu(24, { files: true }) },
   "oss-hy-nomas-world": { setup: gpu(24, { files: true }) },
 };
@@ -121,8 +123,11 @@ export function ownSetupFor(m: Pick<ModelDef, "id" | "engine" | "engines" | "rou
 
 /**
  * What an item needs to run on a visitor's own setup, or null when it runs as any other. `engine`: the side of a Fuobe
- * Original asked for. Never null for an item here until it passes (`passes`) or leaves the untested list: the hosted
- * runs never place one of these on this studio's GPUs or keys.
+ * Original asked for. Never null for an item here until it passes (`passes`) or leaves the untested list. It can't read
+ * the manifest (it runs in the browser too), so an item with `graphs` keeps its setup here even once they are
+ * validated: a server check (the hosted runs' pool gate) asks ownSetupOnlyNow in src/server/own-setup-live.ts, which
+ * reads them. Nothing in the pool enforces this table yet: hosted runs are off (FUOBE_HOSTED_RUNS), and the gate is the
+ * hosted runs' to add.
  */
 export function ownSetupOnly(modelOrAppId: string, engine?: Engine): OwnSetup | null {
   const item = ITEMS[modelOrAppId];
@@ -209,4 +214,18 @@ export function ownSetupStep(o: OwnSetup | null, viewer: OwnSetupViewer | null |
   }
   if (viewer.gpu?.connected || (o.orKey && keys.includes(o.orKey))) return { kind: "run" };
   return { kind: "connect-gpu", gpuOnly: !o.orKey };
+}
+
+/** The words on the button that opens a step: "Create a free account", "Add your fal.ai key", "Connect your GPU"; none for `run`. */
+export function ownSetupAction(step: OwnSetupStep): string | null {
+  switch (step.kind) {
+    case "sign-up":
+      return "Create a free account";
+    case "add-key":
+      return `Add your ${keyName(step.provider)} key`;
+    case "connect-gpu":
+      return "Connect your GPU";
+    default:
+      return null;
+  }
 }

@@ -194,13 +194,14 @@ export interface PropMakerStatus {
 
 /**
  * Why "Make a prop from a picture" (Idol 3D on your GPU, open source; Idol has no hosted route for this) can't run
- * here, or null when it can. The same rule as src/lib/connections.ts make3dOffered (Idol 3D on the open engine):
- * visitors make no 3D yet, Paid APIs only leaves the open engine out, the model can be off, and the GPU must be
+ * here, or null when it can. The same rule as src/lib/connections.ts make3dOffered (Idol 3D on the open engine): a
+ * guest or an account makes it on its own GPU (the press asks a guest to sign up, an account without a GPU to connect
+ * one: own-setup.ts), Paid APIs only leaves the open engine out, the model can be off, and the owner's GPU must be
  * connected (or placeholder results on). A splat already in the Library can be placed either way.
  */
 export function propMakerBlocker(s: PropMakerStatus | undefined): string | null {
   if (!s) return "Checking what runs here…";
-  if (s.viewer) return "Making a prop from a picture isn't available on your account yet. You can place 3D results you already have.";
+  if (s.viewer) return s.idolOn ? null : "Make a splat in Image to 3D → Splat, then place it here from your Library.";
   if (s.engineMode === "cloud") return "Making a prop from a picture runs Idol 3D on your GPU (open source), which Paid APIs only leaves out. You can still place splats from your Library.";
   if (!s.idolOn) return "Idol 3D is turned off in Settings → Models & licences. Turn it on there to make props from pictures.";
   if (s.demoMode !== "on" && !s.providers?.comfyui?.configured && !s.ownerGpu) return "Connect ComfyUI in Settings to make props from pictures on your GPU.";

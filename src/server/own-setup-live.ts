@@ -2,6 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { getModel } from "@/lib/catalog";
+import type { Engine } from "@/lib/catalog/types";
 import { ownSetupGraphs, ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
 
 const MANIFEST = path.join(process.cwd(), "workflows", "comfyui", "manifest.json");
@@ -26,6 +27,19 @@ export function graphsReady(modelId: string, manifest = MANIFEST): boolean {
   if (!graphs.length) return false;
   const validated = validatedGraphs(manifest);
   return graphs.every((g) => validated.has(g));
+}
+
+/**
+ * ownSetupOnly as it stands now, for a server check (the hosted runs' pool gate, a price check): an item whose graphs
+ * the manifest marks validated runs as any other (null); everything else is ownSetupOnly's answer.
+ */
+export function ownSetupOnlyNow(id: string, engine?: Engine, manifest = MANIFEST): OwnSetup | null {
+  const graphs = ownSetupGraphs(id);
+  if (graphs.length) {
+    const validated = validatedGraphs(manifest);
+    if (graphs.every((g) => validated.has(g))) return null;
+  }
+  return ownSetupOnly(id, engine);
 }
 
 /**

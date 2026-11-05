@@ -116,7 +116,10 @@ describe("the catalogue of studio features", () => {
 
 describe("who sees a studio's features", () => {
   it("keeps the owner's own modes the owner's, in every place", () => {
-    for (const id of ["canvas-skills", "assist-memory", "assist-scheduled", "video-tools-restore"]) {
+    // Restore & colourise shows to everyone, labelled: it runs on a visitor's own GPU or key (own-setup.ts).
+    expect(entry("video-tools-restore")!.visibility).toBeUndefined();
+    for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === "video-tools-restore"), kind).toBe(true);
+    for (const id of ["canvas-skills", "assist-memory", "assist-scheduled"]) {
       expect(entry(id)!.visibility, id).toEqual(["owner"]);
       for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === id), `${kind}: ${id}`).toBe(false);
     }

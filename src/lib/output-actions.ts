@@ -117,9 +117,6 @@ export interface ActionContext {
 /** A draft's one-tap 1080p render: a new paid run, said before the tap (left out while placeholders are on). */
 export const draftRenderPaid = (placeholders: boolean | undefined): string => (placeholders ? "" : " · paid");
 
-/** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
-const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video"]);
-
 const q = (url: string) => encodeURIComponent(url);
 
 /** Image to 3D → Splat on Idol 3D's Quick look with a picture in the slot (the link Image to 3D reads: readModel3dLink). */
@@ -146,7 +143,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   }
   const out: OutputAction[] = [];
   const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => {
-    if (!(ctx.visitor && OWNER_ONLY_ACTIONS.has(id))) out.push({ id, label, href, placement });
+    out.push({ id, label, href, placement });
   };
   // A Kinetic Motion result (a clip, a frame, a contact sheet or a version) opens its recipe in the Kinetic editor.
   // A visitor opens only their own (an owner's result shown on a public page would not open for them).
@@ -193,8 +190,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("reframe", "Reframe", `/reframe?video=${q(o.url)}`);
       link("lipsync", "Lipsync", `/lipsync?video=${q(o.url)}`);
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
-      // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in.
-      link("restore-video", "Restore & colourise", `/video-tools/restore?video=${q(o.url)}`);
+      // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in. It runs
+      // on the viewer's own GPU or fal.ai key (own-setup.ts), and says so.
+      out.push({ id: "restore-video", label: "Restore & colourise", href: `/video-tools/restore?video=${q(o.url)}`, placement: "menu", ownSetup: "video-tools:restore" });
       // A mask or clean foreground from Remove background or Green screen: on to ProRes 4444 or EXR for the edit (Export runs on
       // your GPU). A cut-out isn't offered: Export would drop its transparency (src/lib/av/keying.ts).
       if (ctx.engineMode !== "cloud" && exportsCleanly(g.op, g.request?.params)) link("export-pro", "Export as ProRes or EXR", `/upscale/export?video=${q(o.url)}&format=prores_4444`);

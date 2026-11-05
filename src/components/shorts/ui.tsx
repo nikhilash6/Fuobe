@@ -172,7 +172,8 @@ export function ClipDrop({
         disabled={disabled}
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) onFile(f);
+          // Asked again here too: a file can arrive without the button (a file picker opened another way).
+          if (f && !askFirst()) onFile(f);
           e.target.value = "";
         }}
       />

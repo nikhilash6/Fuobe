@@ -353,7 +353,10 @@ describe("Split soundtrack's, Remove dialogue's and Edit speech's pages are open
     const speech = src("src/components/audio-tools/speech-edit-tool.tsx").replace(/\s+/g, " ");
     expect(speech).toContain('const OWN_SETUP = "audio:edit-speech";');
     expect(speech).toContain("useAskBeforeUpload({ gpuOnly: true })");
-    expect(speech.match(/press\(OWN_SETUP\)/g)?.length).toBe(2);
+    // The label the page read (ownSetupsNow: none once AuK's graph is validated), else the static entry.
+    expect(speech).toContain("const item = setup === undefined ? OWN_SETUP : setup;");
+    expect(speech.match(/press\(item\)/g)?.length).toBe(2);
+    expect(src("src/components/studio/mode-switch-studio.tsx")).toContain('<SpeechEditTool setup={ownSetupsNow(["audio:edit-speech"])["audio:edit-speech"]} />');
   });
 });
 

@@ -427,7 +427,7 @@ function ElementsBody({ starters: given }: { starters: StarterCardData[] }) {
         description="Characters, locations, props and styles you can reuse. Save one once, then type @ in any image or video prompt, and it looks the same every time."
       >
         {visitor ? (
-          <SelfHostNote className="max-w-xs">Saving elements isn&apos;t available here.</SelfHostNote>
+          <SelfHostNote className="max-w-xs">Saving elements runs on your own Fuobe install.</SelfHostNote>
         ) : (
           <Button onClick={() => setOpen(true)}>
             <Plus /> New element

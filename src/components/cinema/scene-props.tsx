@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
-import { priceLine, useRunPreview } from "@/components/model3d/hooks";
-import { useCreateGeneration, useGenerations, useStatus } from "@/lib/api";
+import { priceLine, useCreate3d, useRunPreview } from "@/components/model3d/hooks";
+import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
+import { useGenerations, useStatus } from "@/lib/api";
+import type { OwnSetup } from "@/lib/own-setup";
 import { IDOL_MODELS, IDOL_QUALITIES, MODEL3D_FEATURE, model3dRequest, type IdolQuality } from "@/lib/av/model3d";
 import { getModel } from "@/lib/catalog";
 import type { Generation } from "@/lib/catalog/types";
@@ -105,9 +107,15 @@ function AddPropBody({ onPlace, onMaking }: { onPlace: (c: PropCandidate & { nam
   );
 }
 
+/** A prop from a picture runs Idol 3D on a visitor's own GPU. */
+const PROP_SETUP: OwnSetup = { need: "gpu" };
+
 function MakeFromPicture({ onMaking }: { onMaking: (generationId: string) => void }) {
   const status = useStatus().data;
-  const create = useCreateGeneration();
+  // The owner's run on the studio's GPU; a visitor's goes to Image to 3D's own route (its own GPU, its checks).
+  const create = useCreate3d();
+  const visitor = !!useOwnSetupViewer();
+  const press = useOwnSetupPress();
   const [photo, setPhoto] = useState<SlotValue | null>(null);
   const [quality, setQuality] = useState<IdolQuality>("best");
   const blocker = propMakerBlocker(status && { ...status, idolOn: offered(status.access, IDOL_MODELS.open, "open") });
@@ -121,14 +129,14 @@ function MakeFromPicture({ onMaking }: { onMaking: (generationId: string) => voi
   const price = priceLine(preview.data);
   const make = () => {
     if (!req) return;
-    create.mutate(req, {
-      onSuccess: (items) => {
+    void create.mutateAsync(req).then(
+      (items) => {
         const g = items[0];
         if (g) onMaking(g.id);
         setPhoto(null);
       },
-      onError: (e) => toastError(e, "Couldn't start the prop"),
-    });
+      (e) => toastError(e, "Couldn't start the prop"),
+    );
   };
   return (
     <section className="space-y-2.5" aria-labelledby="prop-picture">
@@ -143,6 +151,7 @@ function MakeFromPicture({ onMaking }: { onMaking: (generationId: string) => voi
             <MediaSlot label="Picture" kind="image" value={photo} onChange={setPhoto} />
             <div className="min-w-0 flex-1 space-y-2 text-[13px]">
               <p>One object, whole, on a plain background works best. Idol 3D makes it on your GPU (open source), and it lands in the scene when it&apos;s ready.</p>
+              {visitor && <OwnSetupChip setup={PROP_SETUP} />}
               <div className="inline-flex h-8 rounded-full bg-muted p-0.5" role="radiogroup" aria-label="Idol 3D quality">
                 {IDOL_QUALITIES.map((q) => (
                   <button
@@ -160,7 +169,7 @@ function MakeFromPicture({ onMaking }: { onMaking: (generationId: string) => voi
               </div>
             </div>
           </div>
-          <Button className="w-full rounded-full" disabled={!req || create.isPending} onClick={make}>
+          <Button className="w-full rounded-full" disabled={!req || create.isPending} onClick={() => press(PROP_SETUP, make)}>
             {create.isPending ? <Loader2 className="animate-spin" /> : <Plus />} Make the prop{price ? ` · ${price}` : ""}
           </Button>
         </>

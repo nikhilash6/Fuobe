@@ -266,10 +266,10 @@ describe("the proxy opens the three tools to accounts, and keeps the sign-up car
       expect(link.status, who).toBe(403);
       expect((await link.json()).code).toBe("own-gpu-tool");
     }
-    // "Regenerate to 1080p" stays held with Open-H3 Regenerate, for everyone.
-    const regen = viaProxy("/api/faceless/episodes/ep1/regenerate", "POST", "a");
-    expect(regen.status).toBe(403);
-    expect((await regen.json()).code).toBe("own-gpu-tool");
+    // "Regenerate to 1080p" runs on its own GPU: the route checks its own episode first.
+    expect(passed(viaProxy("/api/faceless/episodes/ep1/regenerate", "POST", "a"))).toBe(true);
+    const guestRegen = viaProxy("/api/faceless/episodes/ep1/regenerate", "POST");
+    expect(guestRegen.status).toBe(401);
   });
 
   it("the routes refuse a guest themselves", async () => {

@@ -3,7 +3,8 @@
 import { Cpu, KeyRound } from "lucide-react";
 import { useCallback } from "react";
 import { askToSignUp, CONNECT_GPU_EVENT, useIsOwner, useStatus, type ConnectGpuDetail } from "@/lib/api";
-import { ownSetupDetail, ownSetupLabel, ownSetupOnly, ownSetupShort, ownSetupStep, type OwnSetup, type OwnSetupStep, type OwnSetupViewer } from "@/lib/own-setup";
+import { ownSetupAction, ownSetupDetail, ownSetupLabel, ownSetupOnly, ownSetupShort, ownSetupStep, type OwnSetup, type OwnSetupStep, type OwnSetupViewer } from "@/lib/own-setup";
+import { Button } from "@/components/ui/button";
 import { openAddKey } from "@/components/keys/your-keys";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,38 @@ export function OwnSetupMark({ setup, className }: { setup: OwnSetup | string | 
       <Icon className="size-3 shrink-0" aria-hidden />
       <span className="sr-only">{`, ${label}`}</span>
     </span>
+  );
+}
+
+/**
+ * In place of a form a visitor can't run yet (a dialog, a panel): the item's label, one sentence on what it runs with
+ * (or `children`), and the one button that sets it up ("Create a free account", "Add your fal.ai key", "Connect your
+ * GPU"). Just the label for the owner, or a visitor who has the setup (its form shows instead, so this isn't used).
+ */
+export function OwnSetupNote({ setup, children, onOpen, className }: { setup: OwnSetup | string | null | undefined; children?: React.ReactNode; onOpen?: () => void; className?: string }) {
+  const viewer = useOwnSetupViewer();
+  const o = typeof setup === "string" ? ownSetupOnly(setup) : setup;
+  if (!o) return null;
+  const step = ownSetupStep(o, viewer);
+  const action = ownSetupAction(step);
+  return (
+    <div data-slot="own-setup-note" className={cn("flex flex-col items-start gap-2 rounded-xl bg-muted p-3 text-[13px] text-muted-foreground", className)}>
+      <OwnSetupChip setup={o} short={false} />
+      <p>{children ?? ownSetupDetail(o)}</p>
+      {action && (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="rounded-full"
+          onClick={() => {
+            onOpen?.();
+            openOwnSetupStep(step);
+          }}
+        >
+          {action}
+        </Button>
+      )}
+    </div>
   );
 }
 

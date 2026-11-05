@@ -160,13 +160,20 @@ describe("making a prop from a picture (Idol 3D on your GPU only)", () => {
     expect(propMakerBlocker({ ...owner, providers: {}, ownerGpu: { device: "x" } })).toBeNull();
   });
 
-  it("says why not otherwise: visitors, Paid APIs only, Idol 3D switched off, no GPU", () => {
-    expect(propMakerBlocker({ ...owner, viewer: { account: "a" } })).toMatch(/isn't available on your account yet/);
+  it("opens to a visitor, on its own GPU (the press sets it up), whatever the owner's GPU", () => {
+    expect(propMakerBlocker({ ...owner, viewer: { kind: "account" } })).toBeNull();
+    expect(propMakerBlocker({ ...owner, viewer: { kind: "guest" }, providers: {} })).toBeNull();
+    const read = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+    expect(read("src/components/cinema/scene-props.tsx")).toContain("press(PROP_SETUP, make)");
+  });
+
+  it("says why not otherwise: Paid APIs only, Idol 3D switched off, no GPU", () => {
     expect(propMakerBlocker({ ...owner, engineMode: "cloud" })).toMatch(/your GPU \(open source\), which Paid APIs only leaves out/);
     expect(propMakerBlocker({ ...owner, idolOn: false })).toMatch(/turned off in Settings → Models & licences/);
     expect(propMakerBlocker({ ...owner, providers: {} })).toMatch(/Connect ComfyUI in Settings/);
-    // Visitor copy names no files, codes or engines' internals.
-    expect(propMakerBlocker({ ...owner, viewer: { account: "a" } })).not.toMatch(/ComfyUI|GPU|Idol|owner|install/i);
+    // Visitor copy names no files, codes or engines' internals, and no refusal.
+    const visitor = propMakerBlocker({ ...owner, viewer: { kind: "account" }, idolOn: false })!;
+    expect(visitor).not.toMatch(/ComfyUI|GPU|Idol|owner|install|isn't available/i);
   });
 });
 

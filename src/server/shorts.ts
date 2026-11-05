@@ -772,6 +772,23 @@ export function regenerateSegment(id: string, index: number): ShortsSessionView 
  * result is a new take beside the others, to compare and pick.
  */
 export function enhanceSegment(id: string, index: number): ShortsSessionView {
+  return startEnhance(planEnhanceRun(id, index));
+}
+
+/** An Enhance planned (the chosen take's 1080p redraw), not started yet. */
+export interface EnhanceRun {
+  id: string;
+  index: number;
+  from: string;
+  cut: ShortsTake["cut"];
+  plan: ReturnType<typeof planEnhance>;
+}
+
+/**
+ * Plan an Enhance of one segment's chosen take. An account's runs on its own GPU only, and only when that GPU has the
+ * memory it needs (own-setup-run.ts): its route checks the steps first (src/server/account-tool-run.ts).
+ */
+export function planEnhanceRun(id: string, index: number): EnhanceRun {
   const s = readSession(id);
   const seg = segmentAt(s, index);
   // Open-H3 Regenerate needs a 48 GB card: an account runs it on its own GPU when that GPU fits it (own-setup-run.ts),
@@ -787,21 +804,29 @@ export function enhanceSegment(id: string, index: number): ShortsSessionView {
   const url = g?.status === "succeeded" ? g.outputs.find((o) => o.kind === "video")?.url : undefined;
   if (!url) throw new ShortsError(ENHANCE_COPY.notReady, 409);
   let plan: ReturnType<typeof planEnhance>;
-  let pipeline;
   try {
     plan = planEnhance(sessionPlanInput(s), seg, { url }, `e${seg.takes.length}`);
-    pipeline = createPipeline(plan.steps, { batchId: s.batchId });
   } catch (e) {
     throw new ShortsError((e as Error).message, 422);
   }
+  return { id, index, from: take.look, cut: take.cut, plan };
+}
+
+/** Start a planned Enhance: a new take beside the others, to compare and pick. */
+export function startEnhance(run: EnhanceRun): ShortsSessionView {
+  // Read again before anything is made: the session may have gone meanwhile.
+  const s = readSession(run.id);
+  segmentAt(s, run.index);
+  const { plan } = run;
+  const pipeline = pipelineOf(plan.steps, { batchId: s.batchId });
   const next: ShortsTake = {
-    cut: take.cut,
+    cut: run.cut,
     look: pipeline.byKey[plan.keys.look].id,
-    enhance: { from: take.look, ...(plan.keys.smooth ? { smooth: pipeline.byKey[plan.keys.smooth].id } : {}) },
+    enhance: { from: run.from, ...(plan.keys.smooth ? { smooth: pipeline.byKey[plan.keys.smooth].id } : {}) },
     createdAt: Date.now(),
   };
-  saveSession({ ...s, segments: s.segments.map((x, i) => (i === index ? { ...x, takes: [...x.takes, next] } : x)) });
-  return getSession(id);
+  saveSession({ ...s, segments: s.segments.map((x, i) => (i === run.index ? { ...x, takes: [...x.takes, next] } : x)) });
+  return getSession(run.id);
 }
 
 /** Use another take of a segment in the stitch. */

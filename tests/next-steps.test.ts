@@ -97,7 +97,8 @@ describe("Keep going with this", () => {
     expect(ids(sounded)).toContain("split-soundtrack");
     expect(ids(sounded)).toContain("remove-dialogue");
     expect(ids(sounded, { ...ALL_ADAPTERS, visitor: true })).toContain("remove-dialogue");
-    expect(ids(sounded, { ...ALL_ADAPTERS, visitor: true })).not.toContain("restore-video");
+    // Restore & colourise is offered to a visitor as to the owner (labelled: its own GPU or key).
+    expect(ids(sounded, { ...ALL_ADAPTERS, visitor: true }).includes("restore-video")).toBe(ids(sounded, ALL_ADAPTERS).includes("restore-video"));
   });
 
   it("offers a sound: a photo that says it, another voice, a loop, the parts", () => {
