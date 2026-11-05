@@ -87,7 +87,7 @@ describe("ComfyUI-Idol: pinned, recorded and expected by the build", () => {
   });
 
   it("the manifest entry names the pack, keeps idol-1's files and adds the crop and pruning bindings", () => {
-    expect(entry).toMatchObject({ capability: "splat", vramGb: 8, limits: { maxGaussians: 1048576 }, validated: false });
+    expect(entry).toMatchObject({ capability: "splat", vramGb: 8, limits: { maxGaussians: 1048576 }, validated: true });
     expect(entry.customNodes).toEqual([{ name: "ComfyUI-Idol", repo: REPO }]);
     expect(entry.models).toEqual(core.models);
     expect(entry.defaults).toMatchObject({ splatFormat: "spz", cutout: true, cropMode: "synthetic", minOpacity: 0.05, maxScale: 0, steps: 50, cfg: 4, numGaussians: 262144 });

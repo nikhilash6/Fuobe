@@ -135,7 +135,8 @@ describe("the 768p draft that keeps its latent, and the 2K finish from it", () =
     const url = "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/3ec17a324ced54151364f24f8b5fb6bf7e26414f/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors";
     expect(pins[url]).toEqual({ revision: "3ec17a324ced54151364f24f8b5fb6bf7e26414f", sizeBytes: 1956193000, sha256: "c8168ebc17bbacc4296103dda2fec1ba85b24392fa08cf2bfbcef0cff0dc3cc8" });
     const { manifest } = getWorkflow(R.H3_LATENT_DRAFT_WORKFLOW);
-    expect(manifest.validated).toBe(false);
+    // Rendered on an RTX 5090 (the 768p draft with its latent saved), so it is marked validated.
+    expect(manifest.validated).toBe(true);
     expect(manifest.license).toMatch(/Turbo 4-step v1\.2 LoRA Apache-2\.0/);
   });
 });
