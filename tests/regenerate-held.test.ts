@@ -6,10 +6,11 @@ import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { TINY_MP4 } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
 
-// Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED, off). Nothing offers it
-// (tests/regenerate-offered.test.ts), and the server refuses every way in too, in plain words and before anything is
-// made: a run of it sent straight to the API (Upscale → Video, Edit video's Enhance, a Canvas or skill step), MiniMax H3
-// at 2K on your GPU, Shorts' Enhance, Faceless's Regenerate to 1080p and Cinema's Finish in 2K on a take from your GPU.
+// Open-H3 Regenerate is held on this studio's GPUs until it has run on a card that fits it (REGEN_OFFERED, off). It shows
+// for everyone with what it needs (tests/regenerate-offered.test.ts), and an account runs it on its own GPU (a 48 GB card,
+// src/lib/own-setup.ts). For the owner the server refuses every way in, in plain words and before anything is made: a run
+// of it sent straight to the API (Upscale → Video, Edit video's Enhance, a Canvas or skill step), MiniMax H3 at 2K on
+// your GPU, Shorts' Enhance, Faceless's Regenerate to 1080p and Cinema's Finish in 2K on a take from your GPU.
 // The tests that mock it on check each of them as it runs once it is switched on.
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -24,6 +25,7 @@ delete process.env.FUOBE_HOSTED_RUNS;
 globalThis.__fuobeTestDiskFree = 1e13;
 
 const R = await import("@/lib/catalog/regenerate");
+const { ownSetupDetail, ownSetupOnly } = await import("@/lib/own-setup");
 const auth = await import("@/server/auth");
 const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
@@ -53,8 +55,9 @@ afterAll(() => {
   globalThis.__fuobeTestDiskFree = undefined;
 });
 
+/** The owner's request (a guest is asked to sign up first; an account's own channels: tests/account-content.test.ts). */
 const json = (method: string, body?: unknown) =>
-  new Request("http://x/api", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  new Request("http://x/api", { method, headers: { "Content-Type": "application/json", cookie: owner }, body: body === undefined ? undefined : JSON.stringify(body) });
 const params = <T extends Record<string, string>>(p: T) => ({ params: Promise.resolve(p) }) as never;
 const clip = (accountId?: string) => saveFile({ data: TINY_MP4, contentType: "video/mp4", source: "upload", name: "clip.mp4", ...(accountId && { accountId }) }).url;
 const count = () => (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
@@ -130,11 +133,18 @@ describe("Open-H3 Regenerate while it is held", () => {
     await refused(() => post(asked), R.REGEN_COPY.heldEnhance);
   });
 
-  it("refuses an account's run of it, or of H3 in 2K, on its own GPU in the same plain words", async () => {
-    await refused(() => post(regen(clip(account)), { cookie: accountCookie }), R.REGEN_COPY.held);
-    await refused(() => post(regen(clip(account)), { cookie: accountCookie, preview: true }), R.REGEN_COPY.held);
-    await refused(() => post(twoK, { cookie: accountCookie }), R.REGEN_COPY.heldTwoK);
-    await refused(() => post(twoK, { cookie: accountCookie, preview: true }), R.REGEN_COPY.heldTwoK);
+  it("asks an account with no GPU of its own to connect one (a 48 GB card), never with the owner's words", async () => {
+    const detail = ownSetupDetail(ownSetupOnly(R.REGEN_MODEL)!);
+    for (const body of [regen(clip(account)), twoK]) {
+      const before = count();
+      const r = await post(body, { cookie: accountCookie });
+      expect(r.status, await r.clone().text()).toBe(403);
+      expect(r.headers.get("x-fuobe-connect-gpu")).toBe("1");
+      const answer = (await r.json()) as { error: string; code: string };
+      expect(answer).toEqual({ error: detail, code: "connect-gpu" });
+      expect(answer.error).not.toMatch(/isn't available|held|yet/);
+      expect(count()).toBe(before);
+    }
   });
 
   it("refuses it as any tool's step: a Canvas node, a step that waits for another, a 2K take whose words come from a text node", async () => {

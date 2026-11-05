@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import { NotFoundState } from "@/components/empty-state";
 import { MediaThumb } from "@/components/studio/feed";
 import { Viewer } from "@/components/studio/viewer";
@@ -56,7 +57,7 @@ import {
   type StepView,
 } from "@/lib/catalog/faceless";
 import type { Generation } from "@/lib/catalog/types";
-import { useEngineMode, useIsVisitor } from "@/lib/api";
+import { useEngineMode } from "@/lib/api";
 import { FACELESS_REGEN_COPY } from "@/lib/catalog/faceless";
 import { timeAgo } from "@/lib/format";
 import { downloadHref, downloadName } from "@/lib/library";
@@ -223,8 +224,6 @@ const PART_OPTIONS: { value: ChangePart; label: string }[] = [
 /** Change the selected scenes: describe the change, see what re-runs and the price, apply or discard. */
 function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: SceneRow[]; onClose: () => void; onOpen: (g: Generation) => void }) {
   const ep = view.episode;
-  // A guest or an account: the open engine runs on a self-hosted Fuobe only (not on their own GPU yet).
-  const visitor = useIsVisitor();
   const [part, setPart] = useState<ChangePart>("picture");
   const [instruction, setInstruction] = useState("");
   const [lines, setLines] = useState<string[]>(() => scenes.map((s) => s.narration));
@@ -351,7 +350,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
                 : preview.isError
                   ? (preview.error as Error).message
                   : preview.data
-                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Placeholder · free" : ep.settings.engine === "open" ? (visitor ? "Not available here" : "Free · your GPU") : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
+                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Placeholder · free" : ep.settings.engine === "open" ? "Free · your GPU" : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
                     : "Pricing…"}
           </p>
           <Button variant="ghost" onClick={discard} disabled={!draft}>
@@ -477,6 +476,8 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
   const [title, setTitle] = useState("");
   const [open, setOpen] = useState<Generation | null>(null);
   const [confirm, setConfirm] = useState(false);
+  // Regenerate to 1080p needs a 48 GB card (own-setup.ts): a visitor runs it on its own GPU, else gets the step that sets it up.
+  const press = useOwnSetupPress();
 
   if (error && /not found/i.test((error as Error).message)) return <NotFoundState title="This episode doesn't exist">It may have been deleted. Its videos are still in your library.</NotFoundState>;
   const ep = view?.episode;
@@ -552,7 +553,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                 {regenOffer && !regenerated && (
                   <DropdownMenuItem
                     disabled={!!regenerating || action.isPending}
-                    onClick={() => run("regenerate", "Regenerating each scene at 1080p — the download switches to it when it's done")}
+                    onClick={() => press("regenerate:faceless", () => run("regenerate", "Regenerating each scene at 1080p — the download switches to it when it's done"))}
                     className="items-start"
                   >
                     <Sparkles className="mt-0.5" />
@@ -562,6 +563,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                         <span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">Free</span>
                       </span>
                       <span className="text-[11.5px] leading-snug text-muted-foreground">Sharper, may redraw · {FACELESS_REGEN_COPY.time(regenOffer.scenes)}</span>
+                      <OwnSetupChip setup="regenerate:faceless" className="mt-0.5" />
                     </span>
                   </DropdownMenuItem>
                 )}

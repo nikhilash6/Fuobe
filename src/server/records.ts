@@ -1,6 +1,6 @@
 import "server-only";
 import type { RecordRef } from "@/lib/record-pages";
-import { getAccountProject } from "./account-projects";
+import { accountProjectOwner, getAccountProject } from "./account-projects";
 import { requestAccount } from "./auth";
 import { db } from "./db";
 
@@ -35,7 +35,20 @@ export function recordExists(ref: RecordRef): boolean {
 }
 
 /** Record pages a tool keeps per account (public sign-up): the project kind it keeps them as (account-projects.ts). */
-const ACCOUNT_KINDS: Partial<Record<RecordRef["kind"], string>> = { shorts: "shorts", cinema: "cinema", "swap-project": "swap" };
+const ACCOUNT_KINDS: Partial<Record<RecordRef["kind"], string>> = {
+  shorts: "shorts",
+  cinema: "cinema",
+  "swap-project": "swap",
+  // Faceless channels, their episodes (the channel is the project), explainers and Content Factory series: their rows
+  // live in the tool's own tables under the project's id (src/server/faceless.ts, content-factory.ts).
+  channel: "faceless",
+  episode: "faceless",
+  explainer: "explainer",
+  series: "content-factory",
+};
+
+/** Kinds whose rows share the tool's table with the owner's: the project only says whose a row is. */
+const SHARED_TABLE = new Set<RecordRef["kind"]>(["channel", "episode", "explainer", "series"]);
 
 /**
  * For a signed-in account: whether the record a page names is one of its own, on a page a tool keeps per account (null:
@@ -45,7 +58,7 @@ export function accountRecordExists(ref: RecordRef, accountId: string): boolean 
   const kind = ACCOUNT_KINDS[ref.kind];
   if (!kind) return null;
   try {
-    return !!getAccountProject(accountId, kind, ref.ids[0]);
+    return !!getAccountProject(accountId, kind, ref.ids[0]) && (!SHARED_TABLE.has(ref.kind) || recordExists(ref));
   } catch {
     return true;
   }
@@ -54,5 +67,9 @@ export function accountRecordExists(ref: RecordRef, accountId: string): boolean 
 /** recordExists for whoever asks (a page's request headers): an account's own on a page kept per account. */
 export function recordFor(ref: RecordRef, headers: Headers): boolean {
   const account = requestAccount({ headers } as Request);
-  return (account && accountRecordExists(ref, account.id)) ?? recordExists(ref);
+  if (account) return accountRecordExists(ref, account.id) ?? recordExists(ref);
+  // The owner's page never opens an account's row of a shared table.
+  const kind = ACCOUNT_KINDS[ref.kind];
+  if (kind && SHARED_TABLE.has(ref.kind) && accountProjectOwner(kind, ref.ids[0])) return false;
+  return recordExists(ref);
 }

@@ -90,6 +90,8 @@ export interface OutputAction {
   /** Set on file links: the browser downloads instead of navigating. */
   download?: string;
   destructive?: boolean;
+  /** An item that runs on the visitor's own setup (src/lib/own-setup.ts): its label sits next to the action's. */
+  ownSetup?: string;
 }
 
 export interface ActionContext {
@@ -265,7 +267,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // delete that first checks nothing uses the file.
   if (g.feature === "upload") {
     // An upload's Regenerate (it has no words of its own) sits with its other hand-offs.
-    if (REGEN_OFFERED && o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
+    // Open-H3 Regenerate needs a 48 GB card: the item says so (own-setup.ts), and a visitor runs it on its own GPU only.
+    if (o.kind === "video" && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url), ownSetup: "regenerate:upscale" });
     return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete for good…", placement: "menu", destructive: true }];
   }
   if (g.outputs.length > 1) out.push({ id: "download-all", label: `Download all ${g.outputs.length} (.zip)`, placement: "menu", href: `/api/generations/zip?ids=${g.id}`, download: "" });
@@ -275,9 +278,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // results keep their upscalers in Upscale.
   if (o.kind === "video" && g.status === "succeeded") {
     if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
-    else if (REGEN_OFFERED && (g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
-    // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words.
-    if (REGEN_OFFERED && canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu" });
+    else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt), ownSetup: "regenerate:upscale" });
+    // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words (a 48 GB card).
+    if (canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu", ownSetup: "regenerate:enhance" });
   }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });

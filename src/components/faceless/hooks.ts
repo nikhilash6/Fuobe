@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useGenerationEvents } from "@/lib/api";
+import { COMPUTER_KICK_EVENT, useGenerationEvents } from "@/lib/api";
 import type {
   ChangePart,
   ChangePreview,
@@ -30,8 +30,16 @@ async function json<T>(res: Response): Promise<T> {
   return body;
 }
 
-const send = async <T,>(url: string, method: string, body?: unknown) =>
-  json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }));
+/** POSTs that only ask (a price, topic ideas, a page read): nothing runs. */
+const ASKS = /\/(estimate|topics|link)$/;
+
+const send = async <T,>(url: string, method: string, body?: unknown) => {
+  const out = await json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }));
+  // A run may have started (a render, a reading, a picture): the tab that runs this person's jobs on the ComfyUI on this
+  // computer (an account's "Your GPU") asks for them at once, as after a studio run.
+  if (method === "POST" && !ASKS.test(url) && !(url.endsWith("/change") && !(body as { apply?: boolean } | undefined)?.apply)) window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
+  return out;
+};
 
 const inFlight = (s: string) => s === "writing" || s === "rendering";
 

@@ -3,13 +3,14 @@ import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import type { CinemaFolder, CinemaItem, CinemaProject, CinemaTakeInfo, CinemaTile, DirectorMessage, DirectorSettings } from "@/lib/catalog/cinema";
 import { finishIn2k, REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { ownSetupGate } from "./own-setup-run";
+import { tenant, tenantAccount } from "./tenant";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { createAccountProject, deleteAccountProject, getAccountProject, listAccountProjects, updateAccountProject, type AccountProject } from "./account-projects";
 import { db } from "./db";
 import { ConnectComfyError, createGenerations, getGeneration, listGenerations, previewChained, previewGeneration, toGeneration } from "./generations";
 import { deleteForever, trashGenerations } from "./library";
 import { engineMode } from "./settings";
-import { tenantAccount } from "./tenant";
 
 /**
  * Cinema Studio projects: Director settings, brief and AI Director chat per project, nested folders
@@ -902,10 +903,14 @@ export function planFinish(projectId: string, generationId: string): FinishPlan 
   const row = itemRow(projectId, generationId);
   const g = row ? liveGeneration(generationId) : null;
   if (!row || !g) throw new CinemaError("That take isn't in this project", 404);
-  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): only while it is offered (REGEN_OFFERED).
+  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): a 48 GB card. An account runs it on its own
+  // GPU when that GPU fits it (own-setup-run.ts), never on this studio's; the owner's only while it is offered (REGEN_OFFERED).
   const finish = finishIn2k(g, engineMode());
   if (!finish) throw new CinemaError("Finish in 2K is for finished MiniMax H3 takes made below 2K", 422);
-  if (finish.perSecond === null && !REGEN_OFFERED) throw new CinemaError(REGEN_COPY.heldFinish, 422);
+  if (finish.perSecond === null) {
+    if (tenant()) ownSetupGate("regenerate:cinema-finish");
+    else if (!REGEN_OFFERED) throw new CinemaError(REGEN_COPY.heldFinish, 422);
+  }
   // Once per take: a 2K finish under way or made (this action's, or the 2K run's own finish of its draft) isn't repeated.
   if (finishedIn2k(generationId)) throw new CinemaError("This take already has a 2K finish", 409);
   const project = getProject(projectId);

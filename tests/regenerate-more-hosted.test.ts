@@ -10,7 +10,7 @@ import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 // refused on this install's GPUs before Run (its 768p draft still runs there), and a policy that keeps the finish's model
 // off those GPUs keeps the whole run off, priced or run.
 // Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
-// tests/regenerate-offered.test.ts checks that nothing offers it while it is off.
+// tests/regenerate-offered.test.ts checks where it is offered.
 vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-hosted-"));
 process.env.FUOBE_DATA_DIR = dir;
@@ -74,7 +74,7 @@ describe("MiniMax H3 at 2K on this install's GPUs", () => {
     expect((await decidePlace(auth.accountById(a)!, twoK("768p"), undefined)).kind).toBe("pool");
   });
 
-  it("a policy that keeps Open-H3 Regenerate off these GPUs keeps the 2K run off; 768p still runs here", async () => {
+  it("a policy that keeps Open-H3 Regenerate off these GPUs changes nothing for 768p", async () => {
     fake.policy = { ...fake.policy, pool: { deny: [R.REGEN_MODEL] } };
     // Said before Run (Run is off), in the words the run itself gets, and never priced.
     const before = fake.calls_of("/v1/quote").length;

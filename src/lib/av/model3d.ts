@@ -96,6 +96,19 @@ export const isIdolMesh = (id: string | null | undefined) => id === IDOL_MESH_MO
 export const FINAL_3D = { model: "oss-trellis2", label: "Build the final with TRELLIS.2", note: "A textured, riggable .glb · 16 GB GPU" } as const;
 
 /**
+ * Image to 3D's extra steps that run on a visitor's own GPU, by the own-setup id each is labelled with
+ * (src/lib/own-setup.ts): Refine detail (Hi3D), the TRELLIS.2 final, Idol 3D's other sides and its spike trim. The page
+ * reads which still carry a label (ownSetupsNow) and the studio shows it next to each.
+ */
+export const MODEL3D_SETUPS = {
+  refine: "image-to-3d:hi3d-refine",
+  final: "image-to-3d:trellis-final",
+  sides: "image-to-3d:idol-other-sides",
+  clean: "image-to-3d:idol-clean",
+} as const;
+export type Model3dSetupKey = keyof typeof MODEL3D_SETUPS;
+
+/**
  * Where "Build the final with TRELLIS.2" goes from a finished Idol 3D result on the open engine: Image to 3D with
  * TRELLIS.2 picked and the result's own picture filled in. null on any other result, without the picture, or when
  * TRELLIS.2 isn't offered here (`allowed`: switched on in Settings → Models & licences, open models run, not a visitor).

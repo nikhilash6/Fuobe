@@ -17,7 +17,7 @@ import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
-import { H3_LATENT_DRAFT_WORKFLOW, H3_OPEN_MODEL, REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_LATENT_WORKFLOW, REGEN_MODEL, REGEN_OFFERED, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { H3_LATENT_DRAFT_WORKFLOW, H3_OPEN_MODEL, REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_LATENT_WORKFLOW, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { RTX_FRAMEGEN_MODEL, RTX_HDR_MODEL, RTX_UPSCALE_MODEL } from "@/lib/catalog/rtx-video";
 import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
@@ -343,49 +343,39 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/video", label: "Sound for video", group: "Audio", config: S.FOLEY_STUDIO },
   { href: "/upscale/video", label: "Upscale video", group: "Video tools", config: S.VIDEO_UPSCALE_STUDIO },
   // Upscale → Video's Regenerate · creative (Open-H3 Regenerate with its refiner LoRA); a clip over 15 s is redrawn in
-  // parts joined packet by packet. Listed only while it is offered (REGEN_OFFERED).
-  ...(REGEN_OFFERED
-    ? [
-        {
-          href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
-          label: "Regenerate in 2K",
-          group: "Video tools",
-          steps: [
-            { modelId: REGEN_MODEL, op: "upscale-video" as const },
-            { modelId: REGEN_JOIN, op: "concat" as const },
-          ],
-        } satisfies StudioRowDef,
-      ]
-    : []),
+  // parts joined packet by packet. It needs a 48 GB card: the row says what the connected GPU lacks.
+  {
+    href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
+    label: "Regenerate in 2K",
+    group: "Video tools",
+    steps: [
+      { modelId: REGEN_MODEL, op: "upscale-video" as const },
+      { modelId: REGEN_JOIN, op: "concat" as const },
+    ],
+  } satisfies StudioRowDef,
   // NVIDIA RTX Video in Upscale → Video ("Quick · RTX"), FPS boost and SDR to HDR. An NVIDIA RTX card only (frame
   // generation: RTX 40 or later): elsewhere the row reads "Needs an NVIDIA RTX card".
   { href: `/upscale/video?model=${RTX_UPSCALE_MODEL}`, label: "Quick upscale · RTX", group: "Video tools", steps: [{ modelId: RTX_UPSCALE_MODEL, op: "upscale-video" }] },
   // MiniMax H3 at 2K on your GPU (Cinema and the Video studio's 2K tier, and Finish in 2K on a take): the 768p draft that
-  // keeps its latent, and the 2K finish from it. It finishes with Open-H3 Regenerate, so it is listed only while that is
-  // offered (REGEN_OFFERED).
-  ...(REGEN_OFFERED ? [{ href: `/video?model=${H3_OPEN_MODEL}&resolution=2K`, label: "MiniMax H3 in 2K", group: "Video", workflows: [H3_LATENT_DRAFT_WORKFLOW, REGEN_LATENT_WORKFLOW] } satisfies StudioRowDef] : []),
+  // keeps its latent, and the 2K finish from it. It finishes with Open-H3 Regenerate (a 48 GB card).
+  { href: `/video?model=${H3_OPEN_MODEL}&resolution=2K`, label: "MiniMax H3 in 2K", group: "Video", workflows: [H3_LATENT_DRAFT_WORKFLOW, REGEN_LATENT_WORKFLOW] } satisfies StudioRowDef,
   // The Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap, the
   // person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character composited
-  // over the footage, the windows joined and the part's sound put back. It regenerates with Open-H3 Regenerate, so it is
-  // listed only while that is offered (REGEN_OFFERED).
-  ...(REGEN_OFFERED
-    ? [
-        {
-          href: "/genjutsu?mode=character",
-          label: "Character swap in 2K",
-          group: "Video tools",
-          steps: [
-            { modelId: ORIGINALS.character, op: "video-swap" as const },
-            { modelId: SHARPEN_TOOLS.mask, op: "bg-remove-video" as const },
-            { modelId: SHARPEN_TOOLS.fit, op: "trim" as const },
-            { modelId: REGEN_MODEL, op: "upscale-video" as const },
-            { modelId: COMPOSITE_MODEL, op: "composite" as const },
-            { modelId: REGEN_JOIN, op: "concat" as const },
-            { modelId: SHARPEN_TOOLS.mux, op: "mux" as const },
-          ],
-        } satisfies StudioRowDef,
-      ]
-    : []),
+  // over the footage, the windows joined and the part's sound put back. It regenerates with Open-H3 Regenerate (a 48 GB card).
+  {
+    href: "/genjutsu?mode=character",
+    label: "Character swap in 2K",
+    group: "Video tools",
+    steps: [
+      { modelId: ORIGINALS.character, op: "video-swap" as const },
+      { modelId: SHARPEN_TOOLS.mask, op: "bg-remove-video" as const },
+      { modelId: SHARPEN_TOOLS.fit, op: "trim" as const },
+      { modelId: REGEN_MODEL, op: "upscale-video" as const },
+      { modelId: COMPOSITE_MODEL, op: "composite" as const },
+      { modelId: REGEN_JOIN, op: "concat" as const },
+      { modelId: SHARPEN_TOOLS.mux, op: "mux" as const },
+    ],
+  } satisfies StudioRowDef,
   // Upscale → Video's Kandinsky VSR (2x, 2.25x, 4x; clips up to 5 s).
   { href: "/upscale/video?model=oss-kandinsky6-vsr", label: "Kandinsky VSR", group: "Video tools", steps: [{ modelId: "oss-kandinsky6-vsr", op: "upscale-video" }] },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },

@@ -222,7 +222,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/layers/l1/jobs",
       "/api/enhance",
       "/api/brands/b1/chat",
-      "/api/faceless/episodes/e1/render",
+      // Faceless, Explainer and Content Factory runs go to their routes (tests/account-content.test.ts); handing a brief
+      // to Claude stays the owner's.
       "/api/content-factory/claude",
       // A run route that ignores ?preview=1 isn't a price check.
       "/api/faceless/episodes/e1/estimate",

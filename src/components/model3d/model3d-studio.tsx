@@ -18,7 +18,7 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { HandoffImage } from "@/components/nav/next-steps";
 import { ExampleRow } from "@/components/studio/example-row";
-import { useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { useEngine, useGenerations, useHydrated, useIsOwner, useModelAccess, useStatus } from "@/lib/api";
 import {
   FINAL_3D,
   IDOL_QUALITIES,
@@ -51,7 +51,8 @@ import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types"
 import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
-import { OwnSetupChip } from "@/components/own-setup";
+import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
+import { Model3dSetupsProvider, useModel3dSetup, type Model3dSetups } from "./own-setups";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
@@ -124,6 +125,8 @@ function IdolSettings({
 }) {
   // Only the owner reads what trimming needs on the ComfyUI (it's theirs to set up).
   const owner = useIsOwner();
+  // A visitor's trim runs on its own GPU: what that needs, until the trim's graph is validated here.
+  const cleanSetup = useModel3dSetup("clean");
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const move = (from: number, by: number) => {
     const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
@@ -179,7 +182,7 @@ function IdolSettings({
                 Trim spikes
               </Label>
               {/* A visitor's run is on its own GPU: what that needs (the owner reads the line below instead). */}
-              {!owner && <OwnSetupChip setup="image-to-3d:idol-clean" className="ml-1.5 align-[1px]" />}
+              <OwnSetupChip setup={cleanSetup} className="ml-1.5 align-[1px]" />
               <p id="m3d-idol-trim-hint" className="mt-0.5 text-[12px] text-muted-foreground">
                 Drops the thin, needle-like bits around the edges of the 3D file.
               </p>
@@ -242,12 +245,23 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
  * Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate.
  * examples: "See what it makes" (studioExamples("image-to-3d"), from the page), where the models go until there is one.
  */
-export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
+export function Model3dStudio({ setups = {}, ...props }: { info: Record<string, Model3dInfo>; setups?: Model3dSetups; examples?: ExampleRowData | null }) {
+  return (
+    <Model3dSetupsProvider value={setups}>
+      <Model3dStudioBody {...props} />
+    </Model3dSetupsProvider>
+  );
+}
+
+function Model3dStudioBody({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
   const [engine, setEngine, engineMode] = useEngine();
   // An account makes its models on its own GPU or key (POST /api/image-to-3d); a guest gets the sign-up card when it
-  // uploads or runs. The extras that need this studio's own setup (Refine detail, the TRELLIS.2 final) stay the owner's.
-  const visitor = useLikelyVisitor();
+  // uploads or runs. The extras (Refine detail, the TRELLIS.2 final, Idol 3D's other sides) show to everyone, marked
+  // with what they run on until their graphs are validated on this studio's GPU (MODEL3D_SETUPS).
   const owner = useIsOwner();
+  const refineSetup = useModel3dSetup("refine");
+  const cleanSetup = useModel3dSetup("clean");
+  const press = useOwnSetupPress();
   const access = useModelAccess();
   const create = useCreate3d();
   const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", "app:app-photo-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
@@ -353,13 +367,20 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
   const preview = useRunPreview(engineKnown ? priced : null);
   const price = priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
-  // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
-  const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on (a visitor's
+  // runs on its own GPU, its label beside the switch).
+  const refineAllowed = engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
   // "Build the final with TRELLIS.2" on an Idol 3D result: while TRELLIS.2 runs here and is switched on.
-  const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
+  const finalAllowed = engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
+  // A run with a step on the visitor's own GPU: a guest gets the sign-up card, an account without a GPU "Connect your GPU".
+  const needs = refining !== null ? refineSetup : idolSplat && engine === "open" && idolTrim ? cleanSetup : null;
   const go = () => {
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
+    if (needs) return void press(needs, start);
+    start();
+  };
+  const start = () => {
     create.mutate(withRefine(model3dRequest(input), engine, refining), {
       onSuccess: () =>
         toast.success(

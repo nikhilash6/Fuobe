@@ -131,7 +131,8 @@ export const starterHref = (s: Pick<StarterCardData, "id" | "surface"> & { use?:
 export const starterShown = (s: Pick<StarterCardData, "cover">, visitor: boolean) => !visitor || !!s.cover;
 
 /**
- * Surfaces whose starters a visitor makes too: a signed-in account's Cinema film is its own project (a guest is offered a
- * free account first). Elsewhere a starter is saved to the owner's library, so only the owner makes it.
+ * Surfaces whose starters a visitor makes too: a signed-in account's Cinema film and Faceless channel are its own
+ * projects, and a ready series or explainer fills its own composer (a guest is offered a free account first). Elsewhere
+ * a starter is saved to the owner's library, so only the owner makes it.
  */
-export const VISITOR_MAKES: ReadonlySet<StarterSurface> = new Set<StarterSurface>(["cinema"]);
+export const VISITOR_MAKES: ReadonlySet<StarterSurface> = new Set<StarterSurface>(["cinema", "faceless", "content-factory", "explainer"]);

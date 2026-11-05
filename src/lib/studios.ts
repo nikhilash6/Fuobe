@@ -2,7 +2,7 @@ import { getModel } from "@/lib/catalog";
 import { SIGNATURE_MODELS } from "@/lib/catalog/palettes";
 import { FACE_MOSAIC_MODELS } from "@/lib/catalog/open-tools";
 import { UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
-import { FINISH_CHOICES, REGEN_MODEL, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { FINISH_CHOICES, REGEN_MODEL } from "@/lib/catalog/regenerate";
 import type { Preset } from "@/lib/catalog/types";
 import type { StudioConfig } from "@/components/studio/studio-context";
 
@@ -158,8 +158,11 @@ export const VIDEO_UPSCALE_STUDIO: StudioConfig = {
   // Archive footage (scans, tape, black and white) is restored and colourised first: Fuobe Restore rebuilds it, then upscales.
   firstSteps: UPSCALE_FIRST_STEPS,
   // On your GPU: SeedVR2 "Restore · faithful" and NVIDIA's "Quick · RTX" side by side (the row adds Quick · RTX), with
-  // Open-H3 "Regenerate · creative" beside them while it is offered (GPU-only: nobody hosts it).
-  finishChoices: REGEN_OFFERED ? FINISH_CHOICES : FINISH_CHOICES.filter((c) => c.modelId !== REGEN_MODEL),
+  // Open-H3 "Regenerate · creative" beside them (GPU-only: nobody hosts it). It needs a 48 GB card, so its choice says so
+  // (own-setup.ts), and a visitor runs it on its own GPU only.
+  finishChoices: FINISH_CHOICES,
+  // Open-H3 Regenerate stays out of the model list (its choice above is how it is picked); the composer still finds it.
+  extraModels: [REGEN_MODEL],
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
   defaultModels: { cloud: "topaz-video", open: "oss-seedvr2" },
   clipFacts: true,
