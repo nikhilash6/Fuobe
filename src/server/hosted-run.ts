@@ -14,12 +14,16 @@ import {
   cachedPolicy,
   forgetBalance,
   FREE_QUOTE,
+  lastPrefer,
   policy as billingPolicy,
+  policyGiveUpMs,
+  policyOfferAfterS,
   quote as billingQuote,
   refusalStatus,
   reserve,
   type Policy,
   type Quote,
+  type QueueFacts,
   type RefuseCode,
   type RunFacts,
 } from "./billing";
@@ -44,7 +48,7 @@ import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
 import { needsGpu, ownSetupHere, poolCardRefuses, requestOwnSetup } from "./pool-own-setup";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
-import { placeOf, type Place } from "@/lib/place-name";
+import type { Place } from "@/lib/place-name";
 import { placeFor, placeOfAccount } from "./place-name";
 import { rememberedPlace } from "./run-on";
 
@@ -127,13 +131,6 @@ const OWN = { kind: "own" } as const;
 /** What an account whose own GPU didn't answer is asked, when its run named no place (never moved and charged unasked). */
 export const ownGpuQuiet = (place: Place): string => `Your GPU isn't answering right now. Run this on ${place.text} instead, or wait for your GPU.`;
 
-/**
- * Run pressed while every GPU here that could run it is away (it was there when the price check before Run asked): no
- * run is made, and the answer promises no start. It is no billing refusal, so no card opens for it: the page says the
- * words and asks the price check again, which now says "Starting soon" with Run off until one of those GPUs is back.
- */
-const awayRefusal = (): Refusal => ({ status: 503, body: { error: BILLING_WAIT.run, code: "busy" }, headers: { "Retry-After": "15" } });
-
 /** A run this install's GPUs won't take, refused in the words the price check before Run gives too. */
 const notOffered = (error: string): { kind: "refuse"; refusal: Refusal } => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
 
@@ -154,8 +151,6 @@ const ownSetupRefusal = (setup: OwnSetup): { kind: "refuse"; refusal: Refusal } 
 function gateRefusal(gate: GateRefusal, place: Place): { kind: "refuse"; refusal: Refusal } {
   if (gate.reason === "ownSetup") return ownSetupRefusal(gate.setup ?? needsGpu());
   const error = gateText(gate, false, place);
-  // Not right now (the GPUs that could run it are being updated): refused as a busy moment, with Run off until then.
-  if (gate.reason === "busy") return { kind: "refuse", refusal: billingRefusal("busy", error) };
   if (gate.reason === "model3d") return { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } };
   const r = notOffered(error);
   if (gate.setup) r.refusal.body.ownSetup = gate.setup;
@@ -176,8 +171,13 @@ const prefersPool = (p: Policy | null | undefined): boolean => !!p?.hosted && p.
  */
 const pickedPlace = (account: Account | null, wish: PlaceWish): PlaceWish => (account && !wish ? rememberedPlace(account.id) : undefined);
 
-/** This install's GPUs go first for this run: the policy says so, or the account picked them. */
-const poolFirst = (p: Policy | null | undefined, picked: PlaceWish): boolean => prefersPool(p) || picked === "pool";
+/**
+ * This install's GPUs go first for this run: the policy says so, or the account picked them. With no policy to read (the
+ * billing service doesn't answer), the place its last answer put first: a run that would go to this install's GPUs keeps
+ * waiting for them, never moved to the account's own GPU because the service went quiet.
+ */
+const poolFirst = (p: Policy | null | undefined, picked: PlaceWish, accountId?: string | null): boolean =>
+  prefersPool(p) || picked === "pool" || (p === null && accountId !== undefined && lastPrefer(accountId) === "pool");
 
 /** May a run of this kind use this install's GPUs under the policy (`kinds` absent: every kind)? */
 export const kindAllowed = (p: Pick<Policy, "kinds">, kind: RunFacts["kind"]): boolean => p.kinds?.[kind] !== false;
@@ -321,10 +321,11 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
  * or kind not offered there, a model their card can't run, LoRAs, a kind of file, more outputs at once than a run there
  * makes (`outputs`: a tool's run, which can't be cut down the way the studios' own runs are), one that runs on the
  * visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or a workflow none of this install's GPUs can
- * run right now: none holds its files, serves its lane, or has the memory), or (`busy`) not right now: the GPUs that
- * could run it are being updated.
+ * run right now: none holds its files, serves its lane, or has the memory). Each is a label the visitor reads before
+ * Run, with the setup that runs it. A run these GPUs take but can't start right now (every one that could is away, or
+ * being updated) is no reason: it waits in line (runWaits).
  */
-export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "outputs" | "ownSetup" | "busy";
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "outputs" | "ownSetup";
 
 /**
  * A gate's refusal: its reason, and the visitor's own setup that would run it (`setup`: always with "ownSetup"; with the
@@ -386,11 +387,20 @@ export function poolGate(
   }
   const problem = steps && p ? stepsProblem(p, steps) : null;
   if (problem) return { ok: false, reason: problem === hostedWords(placeFor(p)).rtxCard ? "rtxCard" : "notOffered", setup: gpu };
-  // A run its GPUs could take, but none of them can right now (every one that could is built from the catalog before
-  // this studio's update): Run is off until one is updated, never a run that waits in line for nothing.
-  const endpoints = [planned.route.endpoint, ...(steps ?? []).filter((s) => s.provider === "comfyui").map(stepEndpoint)];
-  if (!endpoints.every((e) => poolTicketsReady(e))) return { ok: false, reason: "busy" };
   return { ok: true, steps };
+}
+
+/**
+ * Does a run these GPUs take wait for one of them to be free: every GPU that could run some GPU step of it is away now
+ * (paused, silent, outside its hours: runAway), or built from the catalog before this studio's update (it takes the run
+ * once updated)? It is taken all the same, and waits in line in its place ("starts when a GPU is free"). Light work only
+ * (joins, trims) never waits for a GPU.
+ */
+export function runWaits(planned: Pick<Planned, "route">, steps: PlannedStep[] | null | undefined): boolean {
+  if (lightRun(steps)) return false;
+  if (runAway(planned, steps)) return true;
+  const endpoints = [planned.route.endpoint, ...(steps ?? []).filter((s) => s.provider === "comfyui" && !freeStep(s)).map(stepEndpoint)];
+  return !endpoints.every((e) => poolTicketsReady(e));
 }
 
 /**
@@ -433,10 +443,11 @@ export function poolRequest(req: GenerationRequest, p: Pick<Policy, "limits"> | 
  * Where an account's run goes (hosted.ts has the order). Only with hosted runs on; otherwise always "own" (today).
  *
  * An account with a GPU of its own keeps it as before: its own GPU first (unless the policy puts this install's first),
- * and every run this install's GPUs wouldn't take (the service down, hosted runs closed to it, a model or a kind not
- * offered, LoRAs, inputs, a step no worker takes, 3D) goes to its own GPU, even while that GPU doesn't answer. Only a run
- * this install's GPUs would take, that named no place, whose own GPU doesn't answer, is asked about (never moved there,
- * and charged, unasked).
+ * and every run this install's GPUs wouldn't take (hosted runs closed to it, a model or a kind not offered, LoRAs,
+ * inputs, a step no worker takes, 3D) goes to its own GPU, even while that GPU doesn't answer. Only a run this install's
+ * GPUs would take, that named no place, whose own GPU doesn't answer, is asked about (never moved there, and charged,
+ * unasked). A run that goes to this install's GPUs is never moved to its own GPU because they are busy, away or being
+ * updated, or because the billing service went quiet: it waits in line for them.
  *
  * One order (the place a run names, then what only one place can run, then the account's own pick, then the policy):
  * a run that names no place follows the account's pick (run-on.ts): its own GPU, at once and never asked about; or this
@@ -464,16 +475,19 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   // call to the billing service); when none is kept, it is read while the GPU is checked.
   let p = cachedPolicy(account.id);
   let ownOffline = false;
-  if (ownFallback && !poolFirst(p, picked)) {
+  if (ownFallback && !poolFirst(p, picked, account.id)) {
     const [online, read] = await Promise.all([ownGpuOnline(account.id), p === undefined ? billingPolicy(account.id) : Promise.resolve(p)]);
     p = read;
-    if (!poolFirst(p, picked)) {
+    if (!poolFirst(p, picked, account.id)) {
       if (online) return OWN;
       ownOffline = true;
     }
   }
   if (p === undefined) p = await billingPolicy(account.id);
-  if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  // The billing service doesn't answer: a run whose own GPU goes first goes there as before; one that goes to this
+  // install's GPUs (the service's last answer put them first, or the account picked them) is never moved to its own GPU
+  // for that: it waits for the service.
+  if (!p) return ownFallback && !poolFirst(p, picked, account.id) ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
   // Closed to this account: its own GPU (or today's "Connect your GPU"); asked for by name, said so.
   if (!p.hosted) return wish === "pool" ? notOffered(hostedWords(placeFor(p)).notHosted) : OWN;
   // Planned, checked and priced for the outputs it would make there (the policy's cap per run).
@@ -485,17 +499,15 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
       return OWN;
     }
   }
-  // The same check as the price check before Run (poolGate): what this install's GPUs can't take goes to the account's
-  // own GPU when it has one and didn't ask for this install's; otherwise it is refused in the same words.
+  // The same check as the price check before Run (poolGate): what this install's GPUs can't take (a label the person
+  // reads before Run) goes to the account's own GPU when it has one and didn't ask for this install's; otherwise it is
+  // refused in the same words. A run they take is taken even while every GPU that could run it is away or being updated:
+  // it waits in line in its place until one is free, never moved to the account's own GPU for that.
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (ownFallback) return OWN;
     return gateRefusal(gate, placeFor(p));
   }
-  // Every GPU here that could run it is off for now (paused, silent, outside its hours): a run made now would only wait
-  // until its wait limit ended it. It goes to the account's own GPU as any run these GPUs can't take now, else it isn't
-  // made (awayRefusal).
-  if (runAway(planned, gate.steps)) return ownFallback ? OWN : { kind: "refuse", refusal: awayRefusal() };
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace(placeFor(p)) };
   return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };
@@ -565,11 +577,23 @@ export async function moderateRun(
 }
 
 /**
+ * The wait limit the policy gives a run on this install's GPUs (`limits.giveUpS`; 0: as long as it takes), as a stamp's
+ * field, when it gives one: for a run that sets nothing aside (light work), as reservePool stamps it for the others.
+ */
+export function policyWait(p: Pick<Policy, "limits"> | null | undefined): Pick<RunStamp, "waitMs"> {
+  const ms = policyGiveUpMs(p);
+  return ms === undefined ? {} : { waitMs: ms };
+}
+
+/**
  * Set the run's price aside (no billing service: nothing to set aside; the run is free). Returns the stamp the run's
  * rows carry, or the refusal (402, 409 with the new price, 429, 503, 403; docs/billing-hook.md). `press`: the press of
  * Run it belongs to and its try (run-requests.ts), so every send of that try reserves under one request id, and a new try
  * under one of its own; none (a script): an id of this request's own. A reserve given up after a try that may have made a
  * hold releases it by its request id, unless a send of the same try owns that hold (`press.gaveUp`).
+ *
+ * How long the run may wait before it first starts: the policy's `limits.giveUpS` when it says (0: as long as it takes),
+ * which wins over the reserve answer's `maxWaitMs`; else that answer's; else the install's own (FUOBE_POOL_WAIT_MIN).
  */
 export async function reservePool(
   account: Account,
@@ -579,8 +603,10 @@ export async function reservePool(
   checkOutputs: boolean,
   steps?: RunFacts["steps"],
   press: Press | null = null,
+  policy: Pick<Policy, "limits"> | null = null,
 ): Promise<{ ok: true; stamp: RunStamp } | { ok: false; refusal: Refusal }> {
-  const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }) };
+  const giveUp = policyGiveUpMs(policy);
+  const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }), ...(giveUp !== undefined && { waitMs: giveUp }) };
   if (!billingConfigured()) return { ok: true, stamp: base };
   const kind = outputKind(planned.op, planned.model);
   const run: RunFacts = { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) };
@@ -619,35 +645,54 @@ export async function reservePool(
       ...(a.text && { charge: a.text }),
       // Something was set aside (a free run's hold sets aside nothing): only then can a run that ends early say so.
       ...(Number(a.amount) > 0 && { charged: true }),
-      ...(a.maxWaitMs > 0 && { waitMs: a.maxWaitMs }),
+      ...(giveUp === undefined && a.maxWaitMs > 0 && { waitMs: a.maxWaitMs }),
       ...(a.class === "paid" && { class: "paid" as const }),
       ...(Number.isFinite(boost) && boost > 0 && { boostMs: Math.min(boost, 24 * 60 * 60_000) }),
     },
   };
 }
 
-/** Where a new run would stand in line on this install's GPUs right now (1: next), and the wait, about (null: unknown). */
+/**
+ * Where a new run would stand in line on this install's GPUs right now (1: next), and the wait, about (null: unknown).
+ * The run is taken whatever the line: Run stays on.
+ *
+ * - `unknown`: no GPU that could run it can take it now (away, or being updated): it starts when one is free.
+ *   `returnAt` (epoch ms): when the first of them is due back, when one says.
+ * - `light`: light work only (joins, trims): ready in seconds, with no GPU.
+ * - `long`: the wait passes the policy's `offerAfterS` (or is unknown): an account with its own GPU or key that runs it
+ *   may be offered it for this run, once.
+ */
 export interface PoolLine {
   place: number;
   etaSeconds: number | null;
+  unknown?: true;
+  returnAt?: number;
+  light?: true;
+  long?: true;
 }
 
-/** A price check's answer while every GPU that could run it is off for now: Run is off, and the wait is said. */
-const startingSoonQuote = (): Quote => ({ allowed: false, amount: 0, priceVersion: "", text: hostedWords(placeOf(null)).startingSoon, code: "busy", etaS: null });
+/** The line a price check says, from the queue's facts (and the service's own estimate, `q.etaS`, when it gave one). */
+function poolLine(facts: Pick<QueueFacts, "ahead" | "etaS" | "nextOpenAt">, o: { light: boolean; waits: boolean; p: Policy | null; q?: Quote }, now = Date.now()): PoolLine {
+  const place = Math.max(0, facts.ahead) + 1;
+  if (o.light) return { place, etaSeconds: null, light: true };
+  const afterMs = policyOfferAfterS(o.p) * 1000;
+  if (o.waits) {
+    const back = facts.nextOpenAt && facts.nextOpenAt > now ? facts.nextOpenAt : undefined;
+    return { place, etaSeconds: null, unknown: true, ...(back && { returnAt: back }), ...((!back || back - now > afterMs) && { long: true }) };
+  }
+  const eta = o.q?.etaS ?? facts.etaS ?? null;
+  return { place, etaSeconds: eta, ...(eta !== null && eta * 1000 > afterMs && { long: true }) };
+}
 
-/** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
 /**
  * A price check refused for what this install's GPUs don't take: its words, and (`ownSetup`) the visitor's own setup
  * that runs it, so Run opens that setup (Connect your GPU, Add your key, or a guest's sign-up) instead of staying off.
  */
 const notOfferedQuote = (text: string, setup?: OwnSetup): Quote & { ownSetup?: OwnSetup } => ({ allowed: false, amount: 0, priceVersion: "", text, code: "not-offered", ...(setup && { ownSetup: setup }) });
 
-/**
- * A gate's refusal as the price check's quote (gateText: the label's words for an own setup). Busy (the GPUs that could
- * run it are being updated) is quoted as code "busy", shown like the other busy moments with Run off.
- */
+/** A gate's refusal as the price check's quote (gateText: the label's words for an own setup), with that setup. */
 const gateQuote = (gate: GateRefusal, guest: boolean, place: Place): Quote & { ownSetup?: OwnSetup } =>
-  gate.reason === "busy" ? { ...notOfferedQuote(gateText(gate, guest, place)), code: "busy" } : notOfferedQuote(gateText(gate, guest, place), gate.reason === "model3d" ? undefined : gate.setup);
+  notOfferedQuote(gateText(gate, guest, place), gate.reason === "model3d" ? undefined : gate.setup);
 
 /**
  * A price check on this install's GPUs (hosted runs on): the plan there, the billing service's quote (no service: free,
@@ -687,38 +732,31 @@ export async function poolQuote(
   }
   if (planned.route.provider !== "comfyui") return null;
   const hasGpu = !!account && !!accountGpu(account.id);
-  if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked) && (await ownGpuOnline(account.id))) return null;
+  if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked, account.id) && (await ownGpuOnline(account.id))) return null;
   if (p && !p.hosted) return null;
-  const line = (facts: { ahead: number; etaS: number | null }, q?: Quote): PoolLine => ({ place: Math.max(0, facts.ahead) + 1, etaSeconds: q?.etaS ?? facts.etaS ?? null });
   // What this install's GPUs won't take goes to the viewer's own GPU when it has one (as the run would); otherwise the
-  // price check says so, and Run stays off.
+  // price check says its label, and Run opens the setup that runs it.
   const gate = poolGate(p, planned, req, () => stepsFor(account, req));
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { planned, quote: gateQuote(gate, !account, placeFor(p)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+    return { planned, quote: gateQuote(gate, !account, placeFor(p)), line: poolLine(queueFacts(account?.id ?? null, planned.route.endpoint), { light: false, waits: false, p }) };
   }
-  // Every GPU here that could run it is off for now: Run is off and says it starts soon (the price check asks again by
-  // itself, and Run comes back on once one is back), never a run that would wait for nothing.
-  if (runAway(planned, gate.steps)) {
-    if (hasGpu && wish !== "pool") return null;
-    return { planned, quote: startingSoonQuote(), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
-  }
+  // Taken whatever the line: while every GPU here that could run it is away (or being updated), the line says it starts
+  // when one is free, and Run stays on.
+  const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
+  const shape = { light: lightRun(gate.steps), waits: runWaits(planned, gate.steps), p };
   // Light work only (joins, trims): free, and never counted against the policy's limits, so the service isn't asked.
-  if (lightRun(gate.steps)) {
-    const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
-    return { planned, quote: FREE_QUOTE, line: line(queue) };
-  }
+  if (shape.light) return { planned, quote: FREE_QUOTE, line: poolLine(queue, shape) };
   // Priced once for every step of a chain that uses this install's GPUs. Its facts are read as the viewer (an input's
   // size from its own files only: another's file reads as none, and says nothing of whether it exists).
   const facts = { ...runOnPool(account?.id ?? null, () => runFacts(req, planned, outputKind(planned.op, planned.model))), ...(gate.steps && { steps: pricedSteps(gate.steps) }) };
-  const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
   let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
   // The policy's limits on this account's runs here, as the run would meet them (pool-limits.ts): said before Run.
   if (q.allowed && account && p) {
     const over = poolLimitRefusal(account.id, p, o.addr ?? null);
     if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
   }
-  return { planned, quote: q, line: line(queue, q) };
+  return { planned, quote: q, line: poolLine(queue, { ...shape, q }) };
 }
 
 /**
@@ -811,17 +849,20 @@ export async function decideToolPlace(account: Account, steps: ToolRunStep[], wi
   const ownFallback = !!accountGpu(account.id) && wish !== "pool";
   let p = cachedPolicy(account.id);
   let ownOffline = false;
-  if (ownFallback && !poolFirst(p, picked)) {
+  if (ownFallback && !poolFirst(p, picked, account.id)) {
     const [online, read] = await Promise.all([ownGpuOnline(account.id), p === undefined ? billingPolicy(account.id) : Promise.resolve(p)]);
     p = read;
-    if (!poolFirst(p, picked)) {
+    if (!poolFirst(p, picked, account.id)) {
       if (online) return OWN;
       ownOffline = true;
     }
   }
   if (p === undefined) p = await billingPolicy(account.id);
-  if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  // As decidePlace: a run that goes to this install's GPUs waits for a quiet service, never moved to its own GPU for it.
+  if (!p) return ownFallback && !poolFirst(p, picked, account.id) ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
   if (!p.hosted) return wish === "pool" ? notOffered(hostedWords(placeFor(p)).notHosted) : OWN;
+  // What these GPUs can't take (a label) goes to its own GPU; what they take is taken, even while every GPU that could
+  // run it is away or being updated: it waits in line until one is free.
   const gate = toolGate(p, account.id, steps);
   if (gate === "unplanned") return OWN;
   if (!gate.ok) {
@@ -848,28 +889,25 @@ export async function toolPoolQuote(
   if (picked === "own") return null;
   const p = await billingPolicy(account?.id ?? null);
   const hasGpu = !!account && !!accountGpu(account.id);
-  if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked) && (await ownGpuOnline(account.id))) return null;
+  if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked, account.id) && (await ownGpuOnline(account.id))) return null;
   if (p && !p.hosted) return null;
   const gate = toolGate(p, account?.id ?? null, steps);
   if (gate === "unplanned") return null;
-  const lineOf = (endpoint: string | undefined, q?: Quote): PoolLine => {
-    const facts = queueFacts(account?.id ?? null, endpoint);
-    return { place: Math.max(0, facts.ahead) + 1, etaSeconds: q?.etaS ?? facts.etaS ?? null };
-  };
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
-    return { quote: gateQuote(gate, !account, placeFor(p)), line: lineOf(undefined) };
+    return { quote: gateQuote(gate, !account, placeFor(p)), line: poolLine(queueFacts(account?.id ?? null, undefined), { light: false, waits: false, p }) };
   }
-  const endpoint = gate.main.planned.route.endpoint;
-  if (lightRun(gate.rows)) return { quote: FREE_QUOTE, line: lineOf(endpoint) };
   const { req, planned } = gate.main;
+  const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
+  const shape = { light: lightRun(gate.rows), waits: runWaits(planned, gate.rows), p };
+  if (shape.light) return { quote: FREE_QUOTE, line: poolLine(queue, shape) };
   const facts = { ...runOnPool(account?.id ?? null, () => runFacts(req, planned, outputKind(planned.op, planned.model))), steps: pricedSteps(gate.rows) };
-  let q = await billingQuote(account ? accountFacts(account) : null, facts, queueFacts(account?.id ?? null, endpoint));
+  let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
   if (q.allowed && account && p) {
     const over = poolLimitRefusal(account.id, p, o.addr ?? null);
     if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
   }
-  return { quote: q, line: lineOf(endpoint, q) };
+  return { quote: q, line: poolLine(queue, { ...shape, q }) };
 }
 
 /**
@@ -881,5 +919,5 @@ export function poolMayTake(account: Account | null, wish: PlaceWish): boolean {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return false;
   const picked = pickedPlace(account, wish);
   if (picked === "own") return false;
-  return !account || !accountGpu(account.id) || wish === "pool" || poolFirst(cachedPolicy(account.id), picked);
+  return !account || !accountGpu(account.id) || wish === "pool" || poolFirst(cachedPolicy(account.id), picked, account.id);
 }

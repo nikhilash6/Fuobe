@@ -4,9 +4,9 @@ import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
 import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
-import { placeOf, type Place } from "@/lib/place-name";
+import type { Place } from "@/lib/place-name";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
-import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun } from "./computer/pool";
+import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun, type LinePlace } from "./computer/pool";
 import { db } from "./db";
 import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
@@ -87,8 +87,8 @@ export function poolTakes(endpoint: string | undefined): boolean {
 
 /**
  * Are this install's GPUs all away for this endpoint now (on the workers: every worker that could run it paused, silent or
- * outside its hours)? Then a run waits for nothing: the price check says "Starting soon" (Run is off), and a press of
- * Run makes nothing. On this install's own ComfyUI: never.
+ * outside its hours)? A run made then waits in line until one is back: the price check says it starts when a GPU is
+ * free (hosted-run.ts runWaits), and Run stays on. On this install's own ComfyUI: never.
  */
 export function poolAway(endpoint: string | undefined): boolean {
   if (!endpoint || !poolOnWorkers()) return false;
@@ -153,9 +153,6 @@ export function hostedWords(place: Place) {
     inputs: "This kind of file runs on your own GPU. Connect one in Settings, or use a picture.",
     rtxCard: "This one needs an NVIDIA RTX card. Connect your own RTX GPU in Settings, or pick another choice.",
     notHosted: `Your account can't run on ${place.text} right now. Your own GPU or key still works.`,
-    busy: "Busy right now. Try again in a little while.",
-    /** Every GPU that could run it is off for now: Run opens again by itself once one is back. */
-    startingSoon: "Starting soon",
   };
 }
 
@@ -165,7 +162,6 @@ export type HostedReason = keyof ReturnType<typeof hostedWords>;
 /** The same refusals for a guest, who has no Settings to connect a GPU in yet (no place name in them). */
 export function hostedGuestWords() {
   return {
-    busy: hostedWords(placeOf(null)).busy,
     notOffered: "This one isn't offered here. Pick another model.",
     rtxCard: "This one isn't offered here right now. Pick another choice.",
     loras: "Extra LoRAs aren't offered here. Run without them.",
@@ -218,8 +214,12 @@ export const POOL_LANE = "comfyui";
 /** The pool's rows that wait or run (the route's place-in-line facts). */
 const POOL_ROWS = "json_extract(g.request_json, '$.place') = 'pool' AND g.status IN ('queued', 'running')";
 
-/** How long a run on this install's GPUs may wait in line: the billing service's limit, else FUOBE_POOL_WAIT_MIN (30). */
+/**
+ * How long a run on this install's GPUs may wait in line: the limit stamped on it (the policy's or the billing service's;
+ * 0: as long as it takes), else FUOBE_POOL_WAIT_MIN (30).
+ */
 export function poolWaitMs(stamped?: number): number {
+  if (stamped === 0) return Infinity;
   if (stamped && stamped > 0) return stamped;
   const m = Number(process.env.FUOBE_POOL_WAIT_MIN);
   return (Number.isFinite(m) && m > 0 ? m : 30) * 60_000;
@@ -272,7 +272,7 @@ export function queueFacts(accountId: string | null, workflowId?: string | null)
 }
 
 /** A waiting row's place in line on this install's GPUs (1: next), and the wait, about. Null when it isn't waiting there. */
-export function placeInLine(generationId: string): { place: number; etaSeconds: number | null } | null {
+export function placeInLine(generationId: string): LinePlace | null {
   // On the workers: its task's place in their line (back in line after an attempt, the same place).
   const task = queueOfGeneration(generationId);
   if (task || poolOnWorkers()) return task;

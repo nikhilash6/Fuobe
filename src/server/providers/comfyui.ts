@@ -283,7 +283,8 @@ export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this mach
  * Where an account's job waits in line on the workers, in its run's class (paid before free). Its run's first job: at
  * the time it came (with the billing service's head start), with the run's wait limit. A later job of the same run (a
  * chain's next step, sent once the steps before it are done): at the run's place (pool.ts runPlaceOf), and with no wait
- * limit once a worker took any of the run's jobs (the wait limit applies only before the run's first start).
+ * limit (the run was taken in line once; the wait limit applies only before its first start). The run's wait limit is
+ * the one stamped on it (0: as long as it takes), else the install's own (FUOBE_POOL_WAIT_MIN).
  */
 function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string }) {
   const stamp = runStamp();
@@ -293,7 +294,7 @@ function accountPoolFields(workflowId: string, account: string, generationId: st
     class: stamp?.class ?? "free",
     boostMs: stamp?.boostMs,
     ...(run?.rankAt != null && { rankAt: run.rankAt }),
-    waitMs: run?.started ? undefined : stamp?.waitMs || poolWaitMs(),
+    waitMs: run?.started || run?.later ? undefined : (stamp?.waitMs ?? poolWaitMs()),
     size: o.size,
     catalogVersion: o.catalogVersion,
   });

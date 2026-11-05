@@ -23,7 +23,10 @@ export interface RunStamp {
   charge?: string;
   charged?: boolean;
   checkOutputs?: boolean;
-  /** How long it may wait in line on this install's GPUs (ms), from the billing service. */
+  /**
+   * How long it may wait in line on this install's GPUs before it first starts (ms), from the billing service. 0: as long
+   * as it takes (no wait limit). Absent: the install's own limit (FUOBE_POOL_WAIT_MIN).
+   */
   waitMs?: number;
   /** Its class in the line on this install's GPUs, from the billing service (none: "free"). */
   class?: "paid" | "free";
@@ -61,12 +64,15 @@ export function stamped(req: GenerationRequest): GenerationRequest {
     ...(s.charge && { charge: s.charge }),
     ...(s.charged && { charged: true }),
     ...(s.checkOutputs && { checkOutputs: true }),
-    ...(s.waitMs && s.waitMs > 0 && { waitMs: s.waitMs }),
+    ...(waitOf(s.waitMs) !== undefined && { waitMs: s.waitMs }),
     ...(s.class === "paid" && { class: "paid" as const }),
     ...(s.boostMs && s.boostMs > 0 && { boostMs: s.boostMs }),
     ...(s.light && { light: true }),
   };
 }
+
+/** A stamped wait limit as kept (0: no limit), or undefined for none at all (the install's own limit applies). */
+const waitOf = (ms: unknown): number | undefined => (typeof ms === "number" && Number.isFinite(ms) && ms >= 0 ? ms : undefined);
 
 /** A stored request's stamp, to run a later step of it (advanceDependents, polls) as it was decided. */
 export function stampOf(req: Pick<GenerationRequest, (typeof STAMP_FIELDS)[number]>): RunStamp {
@@ -76,7 +82,7 @@ export function stampOf(req: Pick<GenerationRequest, (typeof STAMP_FIELDS)[numbe
     ...(req.charge && { charge: req.charge }),
     ...(req.charged && { charged: true }),
     ...(req.checkOutputs && { checkOutputs: true }),
-    ...(req.waitMs && { waitMs: req.waitMs }),
+    ...(waitOf(req.waitMs) !== undefined && { waitMs: req.waitMs }),
     ...(req.class === "paid" && { class: "paid" as const }),
     ...(req.boostMs && req.boostMs > 0 && { boostMs: req.boostMs }),
     ...(req.light && { light: true }),

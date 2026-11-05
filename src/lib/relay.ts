@@ -469,6 +469,8 @@ export const RELAY_WORDS = {
 export const POOL_WORDS = {
   inLine: "In line",
   working: "Working",
+  /** Working, with its model still loading (the GPU had another one loaded): no progress yet. */
+  gettingReady: "Working · getting ready",
   failed: "Sorry, this one couldn't be made.",
 } as const;
 

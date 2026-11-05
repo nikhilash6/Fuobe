@@ -65,6 +65,8 @@ export interface Progress {
   node?: string;
   nodesDone?: number;
   position?: number;
+  /** Taken by a worker with another model loaded (or none): loading its model, until its first step reports. */
+  cold?: boolean;
   at: number;
 }
 
@@ -579,9 +581,23 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   d.transaction(() => {
     const cur = d.prepare(`SELECT progress_json FROM relay_tasks WHERE id = ? AND ${STILL_HELD}`).get(id, lease) as Pick<TaskRow, "progress_json"> | undefined;
     if (!cur) return;
-    d.prepare(`UPDATE relay_tasks SET progress_json = ? WHERE id = ? AND ${STILL_HELD}`).run(JSON.stringify({ ...taskProgress(cur), ...p }), id, lease);
+    const next = { ...taskProgress(cur), ...p };
+    // Its first step reported: its model is loaded (noteCold), so it is no longer getting ready.
+    if (p.value !== undefined) delete next.cold;
+    d.prepare(`UPDATE relay_tasks SET progress_json = ? WHERE id = ? AND ${STILL_HELD}`).run(JSON.stringify(next), id, lease);
   }).immediate();
 }
+
+/**
+ * Note that a task a worker just took starts with its model to load (the worker had another lane's model loaded, or
+ * none): it is "getting ready" until its first step reports (noteProgress). Over a fresh attempt's empty progress only.
+ */
+export function noteCold(id: string, now: number): void {
+  rdb().prepare("UPDATE relay_tasks SET progress_json = ? WHERE id = ? AND progress_json IS NULL").run(JSON.stringify({ cold: true, at: now } satisfies Progress), id);
+}
+
+/** Is a task still getting ready: taken cold (noteCold), with no step reported since? */
+export const taskCold = (t: Pick<TaskRow, "progress_json">): boolean => taskProgress(t)?.cold === true;
 
 /** A task still sent to the computer or worker that holds the lease given (the query's last parameter). */
 const STILL_HELD = `state IN (${SENT_STATES.map((x) => `'${x}'`).join(",")}) AND lease_hash IS ?`;

@@ -61,7 +61,12 @@ type Policy = {
   hosted: boolean;                                                // may this account use this install's GPUs at all
   pool: { allow?: string[]; deny?: string[]; apps?: { allow?: string[]; deny?: string[] } };  // models and apps there
   uploads: { image: boolean; video: boolean; audio: boolean };    // which of its own files those runs may use
-  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number; addressRunsPerHour?: number };
+  limits: {
+    activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number;
+    keepDays: number; spaceBytes: number; addressRunsPerHour?: number;
+    giveUpS?: number;                                              // longest wait before a GPU first takes a run (0: none)
+    offerAfterS?: number;                                          // a wait after which an account's own GPU or key is offered (absent: 1200)
+  };
   prefer?: "pool" | "own";                                         // the default place (absent: "own")
   kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };  // absent: all
   cardText?: string;                                               // preset cards' words for a run there (absent: none)
@@ -73,6 +78,19 @@ type Policy = {
 `cardText` is what a preset card says when its run would go to this install's GPUs for the viewer, such as "Try free"
 (at most 40 characters). With a service set, the cards say only these words, and nothing when the policy has none.
 With no service, runs there are free (`FUOBE_HOSTED_FREE=1`), and the cards say "Try free".
+
+`limits.giveUpS` is how long a run on this install's GPUs may wait before a GPU first takes it, in seconds. `0`: as long
+as it takes (the run never fails for a wait). Present, it wins over the reserve answer's `maxWaitMs`; absent, that
+answer says, and with none `FUOBE_POOL_WAIT_MIN`. `limits.offerAfterS` is the wait (in seconds, as the price check
+estimates it) after which the line before Run offers an account its own GPU, or a key that runs the item's cloud
+version at its price, for that one run. Absent: 1200. A wait with no end known (every GPU that could run it is away)
+counts as past it.
+
+While the service doesn't answer, a run that would go to this install's GPUs because the service's last answer put them
+first (`prefer: "pool"`) waits for the service; it is never moved to the account's own GPU for that.
+
+`queue.nextOpenAt` is when the first GPU that could run the run is due back (the start of its hours, or the end of a
+pause on its PC that has one), when every such GPU is away and one says; otherwise null.
 
 `placeName` is the name visitors read for this install's GPUs ("Runs on Studio North GPUs", "Made on: Studio North
 GPUs"), at most 40 characters. Absent: the install's own name for them (Settings → Workers → Name for your GPUs, else
@@ -216,7 +234,7 @@ a run started without a price check (a result's Upscale, a retry, Run again) run
 
 A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that fails or is removed says "Not
 charged" only when its reserve answer set an amount aside (`amount` above 0). `maxWaitMs` is how long the run may wait
-in line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over:
+in line before a GPU first takes it (unless the policy's `limits.giveUpS` says); past it the row fails and is refunded. Once a GPU has taken it, the limit is over:
 a run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
 
 `timing` says how long the hold must stay open after a GPU first takes the run, so the run's reports always come

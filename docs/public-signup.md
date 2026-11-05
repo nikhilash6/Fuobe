@@ -699,9 +699,21 @@ With it on:
   account's own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
   Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
-- A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
-  `FUOBE_POOL_WAIT_MIN` minutes (30 by default), or what the billing service says, before a GPU first takes it; past
-  that it fails, not charged.
+- Before Run, the line under the toolbar says when the result would be ready ("Ready in about 2 min", "Ready in
+  seconds" for light work such as a join or a trim). A run waiting for the studio's GPUs shows its place in line and
+  the same wait on its tile ("In line · 3rd · ready in about 2 min"). Once a GPU takes it, its tile says "Working ·
+  getting ready" while its model loads (the GPU had another one loaded), then "Working" with its progress.
+- A run is taken whatever the line, and Run stays on: while every GPU that could run it is paused, outside its hours,
+  silent or built from the catalog before an update, the run waits in line and says "starts when a GPU is free" (or
+  "starts in about 3 h" when the first is due back at a known time). An account whose runs go to the studio's GPUs is
+  never moved to its own GPU for that, nor while the billing service is quiet; only what those GPUs can't run at all
+  goes there. After a long wait (the policy's `limits.offerAfterS`, 20 minutes by default, or a wait with no end
+  known) an account with its own GPU, or a key that runs the item's cloud version, is offered it for that one run
+  ("Run it now on your GPU", "Run it now with your fal.ai key · ≈ $0.04"), and its pick of where runs go stays.
+- How long a run may wait before a GPU first takes it: the billing service's `limits.giveUpS` when its policy says
+  (0: as long as it takes), else what its reserve answer says, else `FUOBE_POOL_WAIT_MIN` minutes (30 by default).
+  Past that it fails with one plain sentence, not charged. A later step of a run (a chain's next step) keeps the run's
+  place in line and has no wait limit.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
 
 Two optional services can go with it:

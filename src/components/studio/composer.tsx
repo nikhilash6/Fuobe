@@ -891,6 +891,17 @@ export function Composer({ docked }: { docked: boolean }) {
       };
   // "Run on Our GPUs": this run, once, on this studio's GPUs; the account's pick stays as it was.
   const onRunOnSite = () => submitRef.current(undefined, undefined, "pool");
+  // A long wait on this studio's GPUs (past the policy's offer time, or until a GPU is free): an account with its own GPU,
+  // or a key that runs this item's cloud version (at its price, never without one), may run this run there now, once.
+  // Its pick stays as it was, and the run is taken in line all the same when it doesn't.
+  const waitOffer =
+    viewerInfo?.kind === "account" && poolState && !poolState.refused && poolState.long
+      ? viewerInfo.gpu.connected
+        ? { label: "Run it now on your GPU", run: () => submitRef.current(undefined, undefined, "own") }
+        : keyTwin && keyPrice
+          ? { label: `Run it now with your ${CLOUD_KEY[keyTwin.provider].label} key · ${keyPrice}`, run: () => submitRef.current(undefined, withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice)) }
+          : undefined
+      : undefined;
   // A choice before Run for an item this studio's GPUs can't run, for an account whose key runs its cloud version (and no
   // GPU): run it once on the key, at its price, or connect a GPU. Nothing runs until one is pressed.
   const [keyChoice, setKeyChoice] = useState(false);
@@ -1953,7 +1964,7 @@ export function Composer({ docked }: { docked: boolean }) {
           </p>
         )}
         {/* Folded (docked, not focused), the composer stays one line: the wait shows again once it opens. */}
-        {!blocker && !gpuSetup && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} />}
+        {!blocker && !gpuSetup && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} offer={waitOffer} />}
         {!blocker && priceNote && !poolRefused && (
           <p data-price-note className="px-2 text-[12px] font-medium text-foreground">
             {priceNote}

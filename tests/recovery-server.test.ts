@@ -73,8 +73,6 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { POOL_WORDS } = await import("@/lib/relay");
-const { hostedWords } = await import("@/server/hosted");
-const HOSTED_WORDS = hostedWords((await import("@/lib/place-name")).placeOf(null));
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 type TaskRow = import("@/server/computer/tasks").TaskRow;
@@ -641,7 +639,10 @@ describe("a run's preview picture while it works", () => {
       if (step === "claim" && !atClaim) atClaim = { ...taskOf(id)!, file: fs.existsSync(file) };
     });
     await workAll(d);
-    expect(atClaim).toMatchObject({ progress_json: null, preview_at: null, file: false });
+    expect(atClaim).toMatchObject({ preview_at: null, file: false });
+    // Only the new attempt's own mark (getting ready: its worker said no model was loaded), no step of the attempt before.
+    const fresh = JSON.parse(atClaim!.progress_json ?? "{}") as Record<string, unknown>;
+    expect(Object.keys(fresh).filter((k) => k !== "at" && k !== "cold")).toEqual([]);
     expect((await ended(id))?.status).toBe("succeeded");
   });
 
@@ -1045,19 +1046,17 @@ describe("the worker steps aside for another program", () => {
     expect(back.state).toBe("waiting");
     expect(back.requeues, "a step aside costs no attempt").toBe(0);
     // The game runs for 40 minutes, past the run's 20 minute wait limit. Near its end, another account presses Run: with
-    // the only worker stepped aside, no run is made that would wait for nothing (the price check says it starts soon).
+    // the only worker stepped aside, its run is taken all the same and waits in line behind this one (the price check
+    // lets it run and says it starts when a GPU is free).
     await pass(35 * MIN, [d], watch);
-    const all = () => (db().prepare('SELECT COUNT(*) AS n FROM generations').get() as { n: number }).n;
-    const rows = all();
-    const holds = svc.holds.size;
+    const check = await priceCheck(IMAGE, b1);
+    expect(check.body.quote).toMatchObject({ allowed: true });
+    expect((check.body as { line?: unknown }).line).toMatchObject({ unknown: true });
     const theirs = await run(IMAGE, b1);
-    expect(theirs.status, JSON.stringify(theirs.body)).toBe(503);
-    expect(theirs.body).toMatchObject({ error: billing.BILLING_WAIT.run, code: "busy" });
-    expect((await priceCheck(IMAGE, b1)).body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
-    expect(all()).toBe(rows);
-    expect(svc.holds.size).toBe(holds);
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
     await pass(5 * MIN, [d], watch);
-    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1, unknown: true } });
+    expect(getGeneration(theirs.body.items![0].id)).toMatchObject({ status: "queued", queue: { place: 2, unknown: true } });
     // The game ends: it runs first, in its place, and settles against the hold it was given at Run.
     const hold = holdOf(id);
     d.pause(null);
@@ -1180,18 +1179,20 @@ describe("a run that can never succeed here", () => {
 });
 
 describe("no worker online", () => {
-  it("with every worker paused, the price check says it starts soon, so Run is off", async () => {
+  it("with every worker paused, the price check lets the run go and says it starts when a GPU is free", async () => {
     standInWorker("paused", { paused: true });
     const q = await priceCheck(IMAGE);
     expect(q.status, JSON.stringify(q.body)).toBe(200);
     expect(q.body.place).toBe("pool");
-    expect(q.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
+    expect(q.body.quote).toMatchObject({ allowed: true, text: "Free" });
+    expect((q.body as { line?: unknown }).line).toMatchObject({ unknown: true, long: true });
     // A guest is told the same.
     const g = await priceCheck(IMAGE, "");
-    expect(g.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
+    expect(g.body.quote).toMatchObject({ allowed: true });
+    expect((g.body as { line?: unknown }).line).toMatchObject({ unknown: true });
   });
 
-  it("Run pressed while every worker is away makes no run that would wait for nothing, and promises no start; once one is back, Run works", async () => {
+  it("Run pressed while every worker is away is taken: In line, starts when one is back, and its result arrives", async () => {
     const away = [
       standInWorker("paused here", { connected: true }),
       standInWorker("never connected", { connected: false }),
@@ -1203,20 +1204,34 @@ describe("no worker online", () => {
     pool.patchWorker(away[3].id, { hours: { tz: "UTC", days: {} } });
     const rows = made();
     const holds = svc.holds.size;
-    const r = await run(IMAGE);
-    expect(r.status, JSON.stringify(r.body)).toBe(503);
-    // Plain words that promise no start (no run was made), and no billing card: the price check, asked again, says
-    // "Starting soon" with Run off.
-    expect(r.body).toEqual({ error: billing.BILLING_WAIT.run, code: "busy" });
-    expect(r.headers.get("x-fuobe-billing")).toBeNull();
-    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
-    expect(made()).toBe(rows);
-    expect(svc.holds.size).toBe(holds);
-    // The silent one beats again: Run is back on, and the run goes in line.
+    const { id } = await pressRun();
+    expect(made()).toBe(rows + 1);
+    expect(svc.holds.size).toBe(holds + 1);
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1, unknown: true } });
+    // The silent one beats again: the line has an estimate again, and the run is next.
     db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now(), away[2].id);
     expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: true, text: "Free" });
+    expect((getGeneration(id) as { queue?: { unknown?: boolean } }).queue?.unknown).toBeUndefined();
+  });
+
+  it("A1: every worker paused for 40 minutes under a policy that never gives up: the run waits In line, then its result arrives", async () => {
+    clock();
+    svc.policy = { ...svc.policy, limits: { ...(svc.policy.limits as Record<string, unknown>), giveUpS: 0 } };
+    const w = standInWorker();
+    const d = driver(w);
+    d.pause("here-now");
+    await d.beat();
     const { id } = await pressRun();
-    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+    const watch = watchOf(id);
+    // No wait limit on its task, whatever the reserve answer said.
+    expect(taskOf(id)!.not_after).toBeNull();
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1, unknown: true } });
+    await pass(40 * MIN, [d], watch);
+    expect(getGeneration(id)).toMatchObject({ status: "queued", queue: { place: 1 } });
+    d.pause(null);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { place: 1 });
   });
 
   it("a worker making room for local work first is on: the run goes in line", async () => {

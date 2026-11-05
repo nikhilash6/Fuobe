@@ -102,8 +102,24 @@ export interface Policy {
   /**
    * Limits on runs on this install's GPUs, counted on those runs only (never on runs on the account's own GPU or key).
    * 0 or absent: no such limit. `addressRunsPerHour`: runs there from one client address an hour.
+   *
+   * `giveUpS`: how long a run there may wait before it first starts (s; 0: as long as it takes). Present, it wins over
+   * the reserve answer's `maxWaitMs`; absent, that answer (else FUOBE_POOL_WAIT_MIN) says. `offerAfterS`: after how
+   * long a wait the line before Run offers an account its own GPU or key for that run, once (absent: POOL_OFFER_AFTER_S).
    */
-  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number; addressRunsPerHour?: number };
+  limits: {
+    activeRuns: number;
+    waiting: number;
+    runsPerHour: number;
+    outputsPerRun: number;
+    maxMegapixels: number;
+    maxSeconds: number;
+    keepDays: number;
+    spaceBytes: number;
+    addressRunsPerHour?: number;
+    giveUpS?: number;
+    offerAfterS?: number;
+  };
   /**
    * Where a run goes when the account could run it on its own GPU and on this install's: "pool" for this install's, "own"
    * (or absent) for its own GPU, as before. A place the request names always wins.
@@ -250,12 +266,16 @@ export const POLICY_RETRY_MS = { account: 5_000, guest: 60_000 };
  */
 export const POLICY_KEEP_MS = 10 * 60_000;
 
-/** A policy as kept: when it was read, how long it stands, and when the service last answered (`goodAt`). */
+/**
+ * A policy as kept: when it was read, how long it stands, when the service last answered (`goodAt`), and the place its
+ * last answer put first (`prefer`), kept for as long as the service doesn't answer (lastPrefer).
+ */
 interface PolicyEntry {
   at: number;
   ttlMs: number;
   policy: Policy | null;
   goodAt?: number;
+  prefer?: Policy["prefer"];
 }
 
 /**
@@ -277,7 +297,7 @@ export async function policy(accountId: string | null): Promise<Policy | null> {
   try {
     const p = await call<Policy>("GET", accountId ? `/v1/policy?account=${encodeURIComponent(accountId)}` : "/v1/policy", undefined, BILLING_TIMEOUTS.policy);
     const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
-    keep({ at: Date.now(), ttlMs, policy: p, goodAt: Date.now() });
+    keep({ at: Date.now(), ttlMs, policy: p, goodAt: Date.now(), ...(p.prefer && { prefer: p.prefer }) });
     return p;
   } catch (e) {
     logDown("policy", e);
@@ -286,9 +306,41 @@ export async function policy(accountId: string | null): Promise<Policy | null> {
     const last = goodAt !== undefined && now - goodAt < POLICY_KEEP_MS ? (hit?.policy ?? null) : null;
     // Never past the time the last answer may stand.
     const retryMs = accountId ? POLICY_RETRY_MS.account : POLICY_RETRY_MS.guest;
-    keep({ at: now, ttlMs: last && goodAt !== undefined ? Math.min(retryMs, goodAt + POLICY_KEEP_MS - now) : retryMs, policy: last, ...(goodAt !== undefined && { goodAt }) });
+    keep({ at: now, ttlMs: last && goodAt !== undefined ? Math.min(retryMs, goodAt + POLICY_KEEP_MS - now) : retryMs, policy: last, ...(goodAt !== undefined && { goodAt }), ...(hit?.prefer && { prefer: hit.prefer }) });
     return last;
   }
+}
+
+/**
+ * The place the service's last answer put first, however long ago it answered (kept while it doesn't): the account's,
+ * else a guest's. A run that would have gone to this install's GPUs keeps waiting for them while the service is quiet,
+ * never moved to the account's own GPU for that. Undefined: it never answered here, or put none first. No service:
+ * OPEN_POLICY's (none).
+ */
+export function lastPrefer(accountId: string | null): Policy["prefer"] {
+  if (!billingConfigured()) return OPEN_POLICY.prefer;
+  const cache = globalThis.__fuobeBillingPolicies;
+  const own = cache?.get(accountId ?? "");
+  // (Its own last answer, when the service ever answered for it; else a guest's.)
+  return own?.goodAt !== undefined ? own.prefer : cache?.get("")?.prefer;
+}
+
+/** After how long a wait the line before Run offers an account its own GPU or key for that run, when the policy says none (s). */
+export const POOL_OFFER_AFTER_S = 1200;
+
+/**
+ * How long a run on this install's GPUs may wait before it first starts, as the policy says (ms; 0: as long as it takes).
+ * Undefined when the policy says nothing: the reserve answer's `maxWaitMs`, else FUOBE_POOL_WAIT_MIN, decide as before.
+ */
+export function policyGiveUpMs(p: Pick<Policy, "limits"> | null | undefined): number | undefined {
+  const s = p?.limits?.giveUpS;
+  return typeof s === "number" && Number.isFinite(s) && s >= 0 ? Math.round(s * 1000) : undefined;
+}
+
+/** After how long a wait the line before Run offers an account its own GPU or key, as the policy says (s). */
+export function policyOfferAfterS(p: Pick<Policy, "limits"> | null | undefined): number {
+  const s = p?.limits?.offerAfterS;
+  return typeof s === "number" && Number.isFinite(s) && s >= 0 ? s : POOL_OFFER_AFTER_S;
 }
 
 /**

@@ -9,7 +9,7 @@ import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
 import { hostedRunsOn } from "../hosted-switch";
 import { catalogVersion } from "./catalog-version";
-import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
+import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteCold, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, taskCold, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
@@ -461,6 +461,9 @@ function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): Claimed
   // allows), puts it back as it was, so a task no worker ever ran keeps its wait limit.
   const before = t.ticket_json && t.state === "waiting" ? { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), claimedBefore: t.claimed_at ?? null, claimFor: now }) } : {};
   const c = takeTask(t, device, now, { worker_id: w.id, ...before, ...(t.state !== "waiting" && t.device === device && t.claimed_at && { claimed_at: t.claimed_at }) });
+  // A GPU job taken by a worker with another model loaded (or none) loads its model first: it is "getting ready" until
+  // its first step reports. A light CPU job and a finishing job load none.
+  if (t.state === "waiting" && t.pools && t.slot !== "cpu" && !t.finish_json && !!t.lane && w.warm_lane !== t.lane) noteCold(t.id, now);
   // A job given back once for running past its limit gets the whole run ceiling on its next try (a lane's times may
   // come from shorter jobs than this one); past that, it fails. Light CPU work has the same limits in either slot. A
   // finishing job has its lane's run ceiling (queue-settings.ts, the owner's to set).
@@ -827,13 +830,40 @@ function estFor(t: Pick<TaskRow, "lane" | "est_ms">, workers: WorkerRow[], typic
 }
 
 /**
+ * A place in line: 1 is next. `etaSeconds`: about how long until it is done (null: unknown). `unknown`: no GPU that
+ * could run it can take it now, so it starts when one is free; `returnAt` (epoch ms): when the first of them is due
+ * back, when one says.
+ */
+export interface LinePlace {
+  place: number;
+  etaSeconds: number | null;
+  unknown?: true;
+  returnAt?: number;
+}
+
+/**
+ * When a worker that can't take work now is due back, when it says (null: it doesn't, or it is on): the start of its
+ * hours, or the end of a pause on its PC that has one ("Paused here until 16:30"). One that is silent, paused on the
+ * website, draining or too old for job tickets says nothing of when.
+ */
+function backAt(w: WorkerRow, now: number): number | null {
+  if (w.revoked_at || w.paused_server || w.drain || (w.protocol ?? 0) < MIN_PROTOCOL || !w.seen_at || now - w.seen_at > RELAY_TIMES.poolSilentMs) return null;
+  const until = w.paused_local ? (w.local_until && w.local_until > now ? w.local_until : null) : null;
+  if (w.paused_local && until === null) return null;
+  const h = hoursAt(hoursOf(w), until ?? now);
+  if (h.inside) return until;
+  return h.nextChangeAt && h.nextChangeAt > now ? h.nextChangeAt : null;
+}
+
+/**
  * Where a waiting task is in line, and about how long until it is done. Every task ahead of it counts, whatever its lane,
  * in the order the workers serve them (LINE_ORDER), when a worker that may run this one may run that one too: one GPU
  * serves every lane it has in that order. The wait adds what is left of the jobs those workers are running now, the
  * load of its lane when none has it warm, and its own run. No worker able to run it right now (paused, outside its
- * hours): its place, with no estimate.
+ * hours, silent, built before this studio's update): its place, with no estimate (`unknown`), and the time the first of
+ * them is due back when one says (`returnAt`: its hours start, or the end of a pause on its PC).
  */
-export function placeInLine(t: TaskRow, now = Date.now()): { place: number; etaSeconds: number | null } {
+export function placeInLine(t: TaskRow, now = Date.now()): LinePlace {
   const d = db();
   const all = poolWorkers().filter((w) => sharePool({ pools: w.pool }, t));
   // Each worker serves a task in one of its slots (slotFor): a slot's own line is the tasks that slot would take.
@@ -844,7 +874,10 @@ export function placeInLine(t: TaskRow, now = Date.now()): { place: number; etaS
   // could run it at all).
   const able = workers.length ? workers : all.filter((w) => serves(t, w));
   const ahead = before.filter((x) => sharePool(x, t) && (!able.length || able.some((w) => serves(x, w))));
-  if (!workers.length) return { place: ahead.length + 1, etaSeconds: null };
+  if (!workers.length) {
+    const back = able.map((w) => backAt(w, now)).filter((at): at is number => at !== null);
+    return { place: ahead.length + 1, etaSeconds: null, unknown: true, ...(back.length && { returnAt: Math.min(...back) }) };
+  }
   const typical = memo(typicalPoolMs);
   const own = estFor(t, workers, typical);
   const warm = workers.some((w) => w.warm_lane === t.lane);
@@ -960,9 +993,9 @@ function onSoon(w: WorkerRow, now: number): boolean {
 /**
  * Is every worker that could run an account's job of this workflow (any workflow: null) away now: paused, draining,
  * outside its hours, silent, or never connected? Only workers that take job tickets now count (ticketReady), as an
- * account's run goes as one. A run made then would wait for nothing until its wait limit ended it, so the price check
- * says "Starting soon" (Run is off), and a press of Run makes nothing. False when no worker could run it at all
- * (workersCanRun refuses that) or one is on.
+ * account's run goes as one. A run made then is taken all the same and waits in line until one is back: the price check
+ * says it starts when a GPU is free, and Run stays on. False when no worker could run it at all (workersCanRun refuses
+ * that) or one is on.
  */
 export function workersAway(workflowId: string | null, now = Date.now()): boolean {
   const able = ableWorkers(workflowId, { tickets: true });
@@ -1003,9 +1036,10 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
   // online, count those workers only).
   const version = catalogVersion();
   const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify({ ...needs, ...(version && { catalogVersion: version }) }) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null, slot: workflowId && cpuWorkflow(workflowId) ? "cpu" : null, finish_json: null } as unknown as TaskRow;
-  const p = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
+  const p: LinePlace = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
   const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fitsSlot({ ...probe, created_at: 0 }, w, now, slotFor(probe, w)))).length;
-  return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: null };
+  // With none of them on now: when the first is due back, when one says.
+  return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: p.returnAt ?? null };
 }
 
 /**
@@ -1051,12 +1085,14 @@ const SAME_PRESS = "(CASE WHEN @hold IS NOT NULL THEN json_extract(g.request_jso
  *   start). Null for a run's first job: it waits from now.
  * - `started`: a worker took one of those jobs. The run's wait limit no longer applies then (it applies only before the
  *   run's first start).
+ * - `later`: the row is a later step of its run (it waits for a step the same press made). It has no wait limit: its run
+ *   was taken in line already, so it waits at the run's place for as long as it takes.
  *
  * A chain's later step and a finishing job keep the run's place this way, instead of going behind every run sent after
  * the run started. Only steps the same press made count (the same billing hold; with none, the same batch): a result
  * kept from an earlier run that a step uses gives it neither that run's place nor its start. Null: no such row.
  */
-export function runPlaceOf(generationId: string): { class: "paid" | "free"; rankAt: number | null; started: boolean } | null {
+export function runPlaceOf(generationId: string): { class: "paid" | "free"; rankAt: number | null; started: boolean; later: boolean } | null {
   const d = db();
   const g = d
     .prepare(
@@ -1080,10 +1116,21 @@ export function runPlaceOf(generationId: string): { class: "paid" | "free"; rank
     )
     .all(press) as Pick<TaskRow, "rank_at" | "claimed_at">[];
   const boost = Math.max(0, Math.min(Number(g.boost) || 0, 24 * 60 * 60_000));
+  const later =
+    !!g.depends_on &&
+    !!d
+      .prepare(
+        `SELECT 1 FROM generations s,
+           json_each(CASE WHEN substr(s.depends_on, 1, 1) = '[' AND json_valid(s.depends_on) THEN s.depends_on ELSE json_array(s.depends_on) END) d
+           JOIN generations g ON g.id = d.value
+         WHERE s.id = @id AND s.depends_on IS NOT NULL AND ${SAME_PRESS} LIMIT 1`,
+      )
+      .get(press);
   return {
     class: g.cls === "paid" ? "paid" : "free",
     rankAt: jobs[0]?.rank_at ?? (g.depends_on ? g.created_at - boost : null),
     started: jobs.some((t) => t.claimed_at !== null),
+    later,
   };
 }
 
@@ -1096,9 +1143,18 @@ export function cpuWorkflow(workflowId: string): boolean {
 }
 
 /** The queue block for GET /api/generations/<id>: the task's place in its lane and the estimated wait. Null when no pool task waits. */
-export function queueOfGeneration(generationId: string, now = Date.now()): { place: number; etaSeconds: number | null } | null {
+export function queueOfGeneration(generationId: string, now = Date.now()): LinePlace | null {
   const t = db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state = 'waiting' LIMIT 1").get(generationId) as TaskRow | undefined;
   return t ? placeInLine(t, now) : null;
+}
+
+/**
+ * Is a run's job with a worker still getting ready: taken by a worker that had another model loaded (or none), with no
+ * step reported yet (its model loads)?
+ */
+export function gettingReady(generationId: string): boolean {
+  const t = db().prepare("SELECT progress_json FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state IN ('sending','queued','running') ORDER BY created_at DESC LIMIT 1").get(generationId) as Pick<TaskRow, "progress_json"> | undefined;
+  return !!t && taskCold(t);
 }
 
 /** FUOBE_POOL_WAIT_MIN: how long a task for workers waits before it fails (30 minutes). */

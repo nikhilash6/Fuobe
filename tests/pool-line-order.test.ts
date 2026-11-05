@@ -316,7 +316,7 @@ describe("a run's later steps keep the run's place", () => {
     expect(served(w)).toEqual([two.id, ...line]);
   });
 
-  it("a step sent before any job of its run was taken keeps the run's place and still has the run's wait limit", async () => {
+  it("a step sent before any job of its run was taken keeps the run's place and has no wait limit: it never fails for a wait", async () => {
     standInWorker();
     const wait = 5 * MIN;
     const first = runRow({ batch: "chain-b" });
@@ -324,12 +324,12 @@ describe("a run's later steps keep the run's place", () => {
     const two = await sendStep(runRow({ batch: "chain-b", dependsOn: first }), { waitMs: wait });
     expect(two.rank_at).toBe(one.rank_at);
     expect(two.class).toBe("free");
-    expect(two.not_after).not.toBeNull();
-    pool.sweepPool(Date.now() + 2 * wait);
-    expect(rowOf(two.id).state).toBe("failed");
+    expect(two.not_after).toBeNull();
+    pool.sweepPool(Date.now() + 4 * wait);
+    expect(rowOf(two.id).state).toBe("waiting");
   });
 
-  it("a later step with no job of its run on the workers yet waits from the time its run was made", async () => {
+  it("a later step with no job of its run on the workers yet waits from the time its run was made, with no wait limit", async () => {
     standInWorker();
     const wait = 5 * MIN;
     const first = runRow({ batch: "chain-c" });
@@ -339,7 +339,75 @@ describe("a run's later steps keep the run's place", () => {
     const two = await sendStep(step, { waitMs: wait });
     const made = (db().prepare("SELECT created_at FROM generations WHERE id = ?").get(step) as { created_at: number }).created_at;
     expect(two.rank_at).toBe(made);
-    expect(two.not_after).not.toBeNull();
+    expect(two.not_after).toBeNull();
+  });
+
+  it("A5: a 3-step chain under load: each later step ranks with step 1, ahead of runs sent after it, and nothing fails after 20 minutes", async () => {
+    const w = standInWorker();
+    const wait = 5 * MIN;
+    const first = runRow({ batch: "chain-e" });
+    const one = await sendStep(first, { waitMs: wait });
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(one.id);
+    done(one.id);
+    const line = [lineTask({ account: other }), lineTask({ account: other }), lineTask({ account: other })];
+    const second = runRow({ batch: "chain-e", dependsOn: first });
+    const two = await sendStep(second, { waitMs: wait });
+    const three = await sendStep(runRow({ batch: "chain-e", dependsOn: second }), { waitMs: wait });
+    for (const t of [two, three]) {
+      expect(t.rank_at).toBe(one.rank_at);
+      expect(t.not_after).toBeNull();
+    }
+    pool.sweepPool(Date.now() + 20 * MIN);
+    expect([rowOf(two.id).state, rowOf(three.id).state]).toEqual(["waiting", "waiting"]);
+    expect(served(w).slice(0, 2).sort()).toEqual([two.id, three.id].sort());
+    expect(served(w)).toEqual([]);
+    for (const id of line) expect(rowOf(id).state).toBe("done");
+  });
+
+  it("a run's first job: the policy's wait limit wins over the reserve's (0: none at all), and with none the reserve's stands", async () => {
+    standInWorker();
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    const press = async (prompt: string) => {
+      const r = await generationsRoute.POST(
+        new Request(`http://${HOST}/api/generations`, {
+          method: "POST",
+          headers: { ...SITE_HEADERS, cookie, "content-type": "application/json" },
+          body: JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt, shown: { amount: 7, priceVersion: "v7" } }),
+        }),
+      );
+      const body = (await r.json()) as { items?: { id: string }[] };
+      expect(r.status, JSON.stringify(body)).toBe(201);
+      const id = body.items![0].id;
+      let t = taskOf(id);
+      for (let i = 0; i < 100 && !t; i++) {
+        await globalThis.__fuobeRunner?.tick();
+        await new Promise((res) => setTimeout(res, 20));
+        t = taskOf(id);
+      }
+      return { id, t: t! };
+    };
+    const limits = (fake.policy as { limits: Record<string, number> }).limits;
+    // No word from the policy: the reserve answer's (700 s in the stand-in service).
+    fake.policy = { ...fake.policy, hosted: true, ttlS: 0, limits: { ...limits } };
+    const a = await press("the reserve's wait");
+    expect(a.t.not_after! - a.t.created_at).toBeGreaterThanOrEqual(700_000 - 1000);
+    expect(a.t.not_after! - a.t.created_at).toBeLessThanOrEqual(700_000 + 1000);
+    // giveUpS 0: as long as it takes. No wait limit on its task, and the stored run says so for its later steps.
+    fake.policy = { ...fake.policy, hosted: true, ttlS: 0, limits: { ...limits, giveUpS: 0 } };
+    const b = await press("no wait limit");
+    expect(b.t.not_after).toBeNull();
+    const stored = JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(b.id) as { request_json: string }).request_json) as Record<string, unknown>;
+    expect(stored.waitMs).toBe(0);
+    expect((getGeneration(b.id) as unknown as { request?: Record<string, unknown> }).request?.waitMs).toBeUndefined();
+    pool.sweepPool(Date.now() + 10 * 3600_000);
+    expect(rowOf(b.t.id).state).toBe("waiting");
+    // giveUpS 600: ten minutes, whatever the reserve said.
+    fake.policy = { ...fake.policy, hosted: true, ttlS: 0, limits: { ...limits, giveUpS: 600 } };
+    const c = await press("ten minutes");
+    expect(c.t.not_after! - c.t.created_at).toBeGreaterThanOrEqual(600_000 - 1000);
+    expect(c.t.not_after! - c.t.created_at).toBeLessThanOrEqual(600_000 + 1000);
   });
 
   it("a step that uses a result kept from an earlier run waits as a new run: its own place, and the wait limit", async () => {
@@ -507,7 +575,34 @@ describe("the run ceiling", () => {
     await tick();
     const g = getGeneration(id)!;
     expect(g.status).toBe("running");
-    expect(g.message).toBe(POOL_WORDS.working);
+    // Taken afresh by a worker whose beats name no model loaded: Working, getting ready (no progress of the attempt before).
+    expect(g.message).toBe(POOL_WORDS.gettingReady);
+    expect(g.progress).toBeNull();
+  });
+
+  it("a worker with another model loaded: Working · getting ready until the first step reports; with its model loaded, Working at once", async () => {
+    const w = standInWorker();
+    const { id, t } = await accountRun("getting ready");
+    const lane = rowOf(t.id).lane!;
+    const beatWarm = (warmLane: string | null) =>
+      pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion(), warmLane }), Date.now());
+    beatWarm("another-lane");
+    const first = claimAs(w)!;
+    expect(first.id).toBe(t.id);
+    tasks.report(rowOf(t.id), { event: "sent", promptId: first.promptId }, () => ({ error: "unused" }));
+    await tick();
+    expect(getGeneration(id)).toMatchObject({ status: "running", message: POOL_WORDS.gettingReady, progress: null });
+    // Its first step: the model is loaded.
+    tasks.report(rowOf(t.id), { event: "running", value: 1, max: 4 }, () => ({ error: "unused" }));
+    await tick();
+    expect(getGeneration(id)?.message).toBe(POOL_WORDS.working);
+    // Given back, and taken by a worker that has its model loaded: Working, with no getting ready.
+    tasks.report(rowOf(t.id), { event: "give-back", why: "stalled" }, () => ({ error: "unused" }));
+    beatWarm(lane);
+    expect(claimAs(w)?.id).toBe(t.id);
+    tasks.report(rowOf(t.id), { event: "sent", promptId: first.promptId }, () => ({ error: "unused" }));
+    await tick();
+    expect(getGeneration(id)).toMatchObject({ status: "running", message: POOL_WORDS.working });
   });
 
   it("a poll that fails never ends a run in line by the runner's own wait, an account's or the owner's", async () => {

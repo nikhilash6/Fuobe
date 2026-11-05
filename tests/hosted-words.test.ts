@@ -109,7 +109,7 @@ afterEach(() => notePlaceName(null));
 
 /** Every sentence a visitor reads from the server's word tables, for a place. */
 function serverWords(place: ReturnType<typeof placeOf>): string[] {
-  const reasons = ["notOffered", "rtxCard", "loras", "inputs", "busy"] as const;
+  const reasons = ["notOffered", "rtxCard", "loras", "inputs"] as const;
   return [
     ...Object.values(hostedWords(place)),
     ...Object.values(hostedGuestWords()),
@@ -129,7 +129,7 @@ function serverWords(place: ReturnType<typeof placeOf>): string[] {
 function chipWords(place: ReturnType<typeof placeOf>): string[] {
   const out: string[] = [];
   for (const audience of ["account", "guest"] as const)
-    for (const pool of [undefined, { text: "" }, { text: "1 generation", wait: "Next in line · about 40 s" }, { text: "You have 2 runs going.", refused: true }])
+    for (const pool of [undefined, { text: "" }, { text: "1 generation", wait: "ready in about 40 s" }, { text: "Free", wait: "starts when a GPU is free" }, { text: "You have 2 runs going.", refused: true }])
       for (const p of [runPlace({ audience, engine: "open", hosted: true, models: ["Z-Image Turbo"], pool, place, format: String })]) out.push(p.label, p.price, p.title, p.tip, p.send);
   return out.filter(Boolean);
 }
@@ -196,7 +196,7 @@ describe("the pages a visitor reads while hosted runs are on", () => {
       render(createElement(StatusCover, { g: gen({ status: "running", message: POOL_WORDS.working, progress: 0.4 }) })),
       render(createElement(StatusCover, { g: gen({ status: "failed", error: POOL_WORDS.failed }) })),
     ].map(textOf);
-    expect(pages[3]).toContain("In line · 3rd · about 2 min");
+    expect(pages[3]).toContain("In line · 3rd · ready in about 2 min");
     expect(pages[4]).toContain("Working");
     expect(pages[5]).toContain("Sorry, this one couldn't be made.");
     expect(pages[5]).not.toContain("Couldn't generate this one");
@@ -241,7 +241,7 @@ describe("where runs go: the Run on list, Settings and the one-time note", () =>
     for (const place of [NAMED, DEFAULT]) {
       const viewer = { kind: "account" as const, hosted: true, prefer: "pool" as const, placeName: place.label, gpu };
       const rows = [
-        ...placeRows(viewer, { key: { provider: "fal", price: "≈ $0.04" } }, { text: "Free", wait: "Next in line · about 40 s" })!.rows,
+        ...placeRows(viewer, { key: { provider: "fal", price: "≈ $0.04" } }, { text: "Free", wait: "ready in about 40 s" })!.rows,
         ...placeRows({ ...viewer, runOn: "gpu", gpu: { connected: true, online: false } }, { key: { provider: "replicate" } })!.rows,
       ].flatMap((r) => [r.label, r.sub]);
       const note = placeRows({ ...viewer, runOn: "key" }, { key: null })!.note!;

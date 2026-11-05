@@ -25,7 +25,7 @@ import { connectNeeds } from "@/server/connect-refusal";
 import { BILLING_HEADER, BILLING_WAIT } from "@/server/billing";
 import { queueRelease } from "@/server/billing-outbox";
 import { runOnPool } from "@/server/hosted";
-import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
+import { decidePlace, moderateRun, policyWait, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { endTry, notePressRun, pressPrior, pressRun, pressTries, pressTry, readPressId } from "@/server/run-requests";
@@ -270,9 +270,9 @@ export async function POST(request: Request) {
       if (!mod.ok) return refusedBy(mod.refusal);
       if (onPool?.light) {
         // Light work only (joins, trims): free, so nothing is set aside, and it counts against none of the policy's limits.
-        stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
+        stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }), ...policyWait(onPool.policy) };
       } else if (onPool) {
-        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps, poolTry === null ? null : pressTry(account.id, pressId!, poolTry));
+        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps, poolTry === null ? null : pressTry(account.id, pressId!, poolTry), onPool.policy);
         if (!held.ok) return refusedBy(held.refusal);
         stamp = held.stamp;
       } else if (mod.checkOutputs) stamp = { checkOutputs: true };

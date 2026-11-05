@@ -18,19 +18,35 @@ const { lineWords } = await import("@/lib/pool-line");
 const { poolRunState } = await import("@/lib/hosted");
 const { checkedPool, runPlace } = await import("@/lib/run-place");
 const { PoolNote } = await import("@/components/studio/pool-note");
+const { waitWords } = await import("@/lib/pool-line");
 const { TooltipProvider } = await import("@/components/ui/tooltip");
 
 const render = (node: ReactNode) => renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(TooltipProvider, null, node)));
 
 describe("the words for a place in line", () => {
-  it("says next, or the place, with the wait about", () => {
+  it("says next, or the place, with when it would be ready", () => {
     expect(lineWords({ place: 1, etaSeconds: null })).toBe("Next in line");
-    expect(lineWords({ place: 1, etaSeconds: 38 })).toBe("Next in line · about 40 s");
-    expect(lineWords({ place: 3, etaSeconds: 130 })).toBe("In line · 3rd · about 2 min");
+    expect(lineWords({ place: 1, etaSeconds: 38 })).toBe("Next in line · ready in about 40 s");
+    expect(lineWords({ place: 3, etaSeconds: 130 })).toBe("In line · 3rd · ready in about 2 min");
     expect(lineWords({ place: 12, etaSeconds: null })).toBe("In line · 12th");
-    expect(lineWords({ place: 22, etaSeconds: 3 })).toBe("In line · 22nd · about 5 s");
+    expect(lineWords({ place: 22, etaSeconds: 3 })).toBe("In line · 22nd · ready in about 5 s");
+    expect(lineWords({ place: 2, etaSeconds: 3 * 3600 })).toBe("In line · 2nd · ready in about 3 h");
     // Never a place before the first, nor a wait that can't be.
     expect(lineWords({ place: 0, etaSeconds: -5 })).toBe("Next in line");
+  });
+  it("no GPU can take it now: it starts when one is free, or when the first is due back", () => {
+    const now = 1_000_000_000_000;
+    expect(lineWords({ place: 3, etaSeconds: null, unknown: true }, now)).toBe("In line · 3rd · starts when a GPU is free");
+    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now + 3 * 3600_000 }, now)).toBe("Next in line · starts in about 3 h");
+    // A return time already past says nothing it can't keep.
+    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now - 1000 }, now)).toBe("Next in line · starts when a GPU is free");
+  });
+  it("before Run: when the result would be ready, and nothing when nothing is known", () => {
+    expect(waitWords({ place: 3, etaSeconds: 130 })).toBe("ready in about 2 min");
+    expect(waitWords({ place: 1, etaSeconds: 40 })).toBe("ready in about 40 s");
+    expect(waitWords({ place: 4, etaSeconds: null, unknown: true })).toBe("starts when a GPU is free");
+    expect(waitWords({ place: 1, etaSeconds: null, light: true })).toBe("ready in seconds");
+    expect(waitWords({ place: 1, etaSeconds: null })).toBeNull();
   });
 });
 
@@ -39,10 +55,17 @@ describe("Run before it is pressed (the price check's answer)", () => {
     expect(poolRunState({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line: { place: 2, etaSeconds: 90 } })).toEqual({
       refused: false,
       text: "Free",
-      wait: "In line · 2nd · about 2 min",
+      wait: "ready in about 2 min",
     });
-    // No service: no words of its own (Run keeps its own), still the place.
-    expect(poolRunState({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "", text: "" }, line: { place: 1, etaSeconds: null } })).toEqual({ refused: false, text: "", wait: "Next in line" });
+    // No service: no words of its own (Run keeps its own); nothing known of the wait, nothing said.
+    expect(poolRunState({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "", text: "" }, line: { place: 1, etaSeconds: null } })).toEqual({ refused: false, text: "" });
+    // Every GPU away: Run stays on, the line says it starts when one is free, and the wait is long.
+    expect(poolRunState({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "", text: "Free" }, line: { place: 2, etaSeconds: null, unknown: true, long: true } })).toEqual({
+      refused: false,
+      text: "Free",
+      wait: "starts when a GPU is free",
+      long: true,
+    });
   });
   it("refused (busy, a limit, not offered, paused, a top-up): Run is off, with the words, the line under them and the link", () => {
     for (const code of ["busy", "limit", "not-offered", "closed", "paused", "top-up"]) {
@@ -62,16 +85,22 @@ describe("Run before it is pressed (the price check's answer)", () => {
     expect(off).toMatchObject({ where: "pool", refused: "You have 2 runs going. Start this one when one finishes.", send: "You have 2 runs going. Start this one when one finishes." });
     expect(off.needs).toBeUndefined();
     const ok = checkedPool({ place: "pool", quote: { allowed: true, text: "Free" }, line: { place: 1, etaSeconds: 40 } });
-    expect(ok).toEqual({ text: "Free", wait: "Next in line · about 40 s" });
+    expect(ok).toEqual({ text: "Free", wait: "ready in about 40 s" });
     const on = runPlace({ audience: "account", engine: "open", hosted: true, models: ["Qwen Image"], pool: ok, format: String });
     expect(on.refused).toBeUndefined();
-    expect(on.tip).toBe("Runs on our GPUs with Qwen Image. Next in line · about 40 s.");
+    expect(on.tip).toBe("Runs on our GPUs with Qwen Image. Ready in about 40 s.");
   });
   it("the line under the toolbar: the wait before Run, or the refusal's words with its link and offer", () => {
-    const wait = render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "Next in line · about 40 s" } }));
+    const wait = render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "ready in about 40 s" } }));
     expect(wait).toContain('data-pool-note="wait"');
-    expect(wait).toContain("Next in line · about 40 s");
+    expect(wait).toContain("Ready in about 40 s");
     expect(render(createElement(PoolNote, { state: { refused: false, text: "Free" } }))).toBe("");
+    // A long wait: the account's own GPU (or key, with its price) for this run, once; never on a short one.
+    const offer = { label: "Run it now on your GPU", run: () => {} };
+    const long = render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "starts when a GPU is free", long: true }, offer }));
+    expect(long).toContain("Starts when a GPU is free");
+    expect(long).toContain("Run it now on your GPU");
+    expect(render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "ready in about 40 s" }, offer }))).not.toContain("Run it now");
     const refused = render(
       createElement(PoolNote, { state: { refused: true, text: "Busy right now. Try again in about 10 min.", action: { label: "Get more", url: "javascript:alert(1)" }, offer: { key: "priority", text: "Skip the line", label: "Tell me when" } } }),
     );

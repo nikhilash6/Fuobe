@@ -1491,8 +1491,12 @@ export interface Generation {
   notCharged?: true;
   /** "checking": its outputs wait for the moderation service before they show (on this install's GPUs: "Working"). */
   stage?: "checking";
-  /** A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). */
-  queue?: { place: number; etaSeconds: number | null };
+  /**
+   * A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). `unknown`:
+   * no GPU that could run it can take it now, so it starts when one is free; `returnAt` (epoch ms): when the first of
+   * them is due back, when one says.
+   */
+  queue?: { place: number; etaSeconds: number | null; unknown?: true; returnAt?: number };
   /**
    * A run working on this install's GPUs: the address of its latest preview picture (a JPEG, for the run's own account
    * only), while there is one.

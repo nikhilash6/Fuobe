@@ -356,6 +356,18 @@ describe("losing a worker (checks 3, 4, 5)", () => {
     expect(state(id).state).toBe("failed");
     expect(state(id).error).toBe("The GPUs were busy. Not charged.");
   });
+
+  it("a person's task with no wait limit (the policy's 0) never fails for a wait: 40 minutes with every worker paused, it is still in line", () => {
+    const w = worker("paused");
+    pool.patchWorker(w.id, { paused: true });
+    const id = task({ account: "acct-no-limit" });
+    clock += 40 * MIN;
+    pool.sweepPool(clock);
+    expect(state(id).state).toBe("waiting");
+    clock += 24 * 60 * MIN;
+    pool.sweepPool(clock);
+    expect(state(id).state).toBe("waiting");
+  });
 });
 
 describe("order (checks 8, 9)", () => {

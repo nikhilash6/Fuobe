@@ -19,7 +19,7 @@ import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
 import { runOnPool } from "./hosted";
-import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
+import { decideToolPlace, GUEST_PLAN, madeRunProblem, moderateRun, policyWait, poolMayTake, poolOutputsCap, readWishes, reservePool, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
 import { cancelGeneration, captureRun } from "./generations";
 import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, closeAdmission, forgetAdmission, openAdmission, poolLimitRefusal } from "./pool-limits";
 import { hit, unhit } from "./rate";
@@ -550,10 +550,10 @@ async function startOnPool<T>(
   const claim = await claimToolPress();
   if (claim && "answer" in claim) return back(fromAnswer(claim.answer));
   let stamp: RunStamp;
-  if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
+  if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }), ...policyWait(pool.policy) };
   else {
     // One hold per try of a press of Run: every send of the try asks for it by the same request id.
-    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, claim?.press ?? null);
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, claim?.press ?? null, pool.policy);
     if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
     stamp = held.stamp;
   }

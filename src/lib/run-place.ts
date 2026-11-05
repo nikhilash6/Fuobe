@@ -1,7 +1,7 @@
 import { RUN_SHOWN_HEADER, shownHeader } from "./guest-access";
 import { ownSetupDetail, ownSetupLabel, type OwnSetup } from "./own-setup";
 import { placeOf, type Place } from "./place-name";
-import { lineWords } from "./pool-line";
+import { capitalFirst, waitWords, type LineFacts } from "./pool-line";
 import { deviceLabel } from "./gpu/readiness";
 import { billedTo, CLOUD_KEY, type CloudProvider } from "./your-keys";
 
@@ -144,7 +144,7 @@ export function runPlace(input: RunPlaceInput): RunPlace {
       ? "Placeholder results are on (Settings), so outputs are free stand-ins."
       : refused
         ? (input.pool?.sub ?? refused)
-        : `${input.pool?.sub ?? `Runs on ${place.text}${withModels}.`}${input.pool?.wait ? ` ${input.pool.wait}.` : ""}${signup ? " Free with an account." : ""}`;
+        : `${input.pool?.sub ?? `Runs on ${place.text}${withModels}.`}${input.pool?.wait ? ` ${capitalFirst(input.pool.wait)}.` : ""}${signup ? " Free with an account." : ""}`;
     return {
       where: "pool",
       label: place.label,
@@ -282,7 +282,7 @@ export interface RunOnRow {
   id: RunOnPick;
   /** "Our GPUs", "Your GPU", "Your fal.ai key". */
   label: string;
-  /** "Free · Next in line · about 40 s", "Free · RTX 4090", "≈ $0.04 · billed to your fal.ai account". */
+  /** "Free · ready in about 40 s", "Free · RTX 4090", "≈ $0.04 · billed to your fal.ai account". */
   sub: string;
   /** Your GPU: it answers now (a green dot). Not answering is said in `sub`; the row can still be picked. */
   online?: boolean;
@@ -364,7 +364,7 @@ export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "brows
  * `count`: runs one press starts (the quote is for one, said "each").
  */
 export function checkedPool(
-  check: { place?: "pool"; quote?: { text: string; sub?: string; allowed?: boolean; ownSetup?: OwnSetup }; line?: { place: number; etaSeconds: number | null } } | null | undefined,
+  check: { place?: "pool"; quote?: { text: string; sub?: string; allowed?: boolean; ownSetup?: OwnSetup }; line?: LineFacts } | null | undefined,
   count = 1,
 ): { text: string; sub?: string; refused?: boolean; wait?: string; setup?: OwnSetup } | undefined {
   if (check?.place !== "pool" || !check.quote) return undefined;
@@ -372,12 +372,13 @@ export function checkedPool(
   // Refused before Run (busy, a limit, not offered here): its words, never priced "each"; with the visitor's own setup
   // that runs it, when that is the answer.
   if (check.quote.allowed === false) return { text, ...(sub && { sub }), refused: true, ...(ownSetup && { setup: ownSetup }) };
-  return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }), ...(check.line && { wait: lineWords(check.line) }) };
+  const wait = check.line ? waitWords(check.line) : null;
+  return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }), ...(wait && { wait }) };
 }
 
 /** What a tool page's price slot and Run say for a run on this studio's GPUs (toolPoolPrice). */
 export interface ToolPoolPrice {
-  /** The service's words for the price, then where the run would stand in line ("Free · In line · 2nd · about 3 min"). */
+  /** The service's words for the price, then when the run would be ready ("Free · ready in about 3 min"). */
   text: string;
   /** The run wouldn't be taken now: Run is off, and `text` says why (unless `setup` runs it instead). */
   refused: boolean;
@@ -395,7 +396,7 @@ export interface ToolPoolPrice {
  */
 export function toolPoolPrice(check: unknown): ToolPoolPrice | null {
   if (!check || typeof check !== "object") return null;
-  const c = check as { place?: unknown; quote?: { allowed?: boolean; amount?: number; priceVersion?: string; text?: string; sub?: string; ownSetup?: OwnSetup }; line?: { place: number; etaSeconds: number | null } };
+  const c = check as { place?: unknown; quote?: { allowed?: boolean; amount?: number; priceVersion?: string; text?: string; sub?: string; ownSetup?: OwnSetup }; line?: LineFacts };
   if (c.place !== "pool" || !c.quote || typeof c.quote.text !== "string") return null;
   const pool = checkedPool({ place: "pool", quote: { ...c.quote, text: c.quote.text }, ...(c.line && { line: c.line }) });
   if (!pool) return null;

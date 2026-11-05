@@ -47,7 +47,7 @@ describe("the price check asks again by itself", () => {
       // Both runs finish; nothing about the draft changes: the check is asked again, and Run is on.
       await vi.advanceTimersByTimeAsync(15_000);
       expect(sent).toEqual([body, body]);
-      expect(poolRunState(observer.getCurrentResult().data)).toMatchObject({ refused: false, text: "Free", wait: "In line · 2nd · about 40 s" });
+      expect(poolRunState(observer.getCurrentResult().data)).toMatchObject({ refused: false, text: "Free", wait: "ready in about 40 s" });
       // A run starts or ends: asked again at once, not only on the next tick.
       refreshPriceChecks(qc);
       await vi.advanceTimersByTimeAsync(0);

@@ -129,7 +129,7 @@ import { FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { catalogVersion } from "./computer/catalog-version";
-import { poolLane, queueOfGeneration } from "./computer/pool";
+import { gettingReady, poolLane, queueOfGeneration, type LinePlace } from "./computer/pool";
 import { noteCatalogProcess, processStart } from "./computer/ticket-refresh";
 import { runPreviewAt } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
@@ -194,6 +194,9 @@ export function toGeneration(r: Row): Generation {
   // sentence when it can't finish: never the technical reason, which the owner reads in the accounts' runs.
   const pool = stored.place === "pool";
   const checking = r.stage === "checking";
+  // Working on the workers with its model still loading (taken by a worker that had another model loaded): "getting
+  // ready", with no progress yet.
+  const ready = pool && r.status === "running" && !checking && gettingReady(r.id);
   const model = getModel(r.model_id);
   const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
   // Rows read without the library join (the runner's own SELECTs) look the trash and folder up.
@@ -217,8 +220,8 @@ export function toGeneration(r: Row): Generation {
     kind: r.kind,
     status: r.status,
     // In line on this install's GPUs (again, after an attempt): no progress.
-    progress: pool && r.status === "queued" ? null : r.progress,
-    message: pool ? poolMessage(r) : r.message,
+    progress: (pool && r.status === "queued") || ready ? null : r.progress,
+    message: pool ? poolMessage(r, ready) : r.message,
     prompt: r.prompt,
     request,
     // Held for the moderation service's check: nothing of it is shown until it passes.
@@ -260,7 +263,7 @@ export function toGeneration(r: Row): Generation {
 }
 
 /** The owner's job waiting for the workers: its place in their line, as the Generation field. */
-function workerQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
+function workerQueue(id: string): { queue: LinePlace } | Record<string, never> {
   const q = queueOfGeneration(id);
   return q ? { queue: q } : {};
 }
@@ -299,10 +302,10 @@ export function shownError(id: string, raw: string | null): string | null {
   return stored.place === "pool" ? poolError(id, raw, !!stored.hold && !!stored.charged) : raw;
 }
 
-/** A pool row's words while it goes: in line, or working on it. */
-function poolMessage(r: Pick<Row, "status" | "message">): string | null {
+/** A pool row's words while it goes: in line, or working on it (`ready`: still getting ready, its model loading). */
+function poolMessage(r: Pick<Row, "status" | "message">, ready = false): string | null {
   if (r.status === "queued") return POOL_WORDS.inLine;
-  if (r.status === "running") return POOL_WORDS.working;
+  if (r.status === "running") return ready ? POOL_WORDS.gettingReady : POOL_WORDS.working;
   return null;
 }
 
@@ -351,7 +354,7 @@ const PLAIN_POOL_ERRORS = (() => {
 })();
 
 /** A pool row's place in line, as the Generation field (none once it has started). */
-function poolQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
+function poolQueue(id: string): { queue: LinePlace } | Record<string, never> {
   const q = placeInLine(id);
   return q ? { queue: q } : {};
 }

@@ -505,6 +505,60 @@ describe("where a run goes", () => {
     expect(lora.quote).toBeUndefined();
   });
 
+  it("A17: with this install's GPUs first, a run keeps waiting for them while every one is away, behind an update, or the service is quiet: never moved to the account's own GPU", async () => {
+    withBilling({ prefer: "pool", limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account({ gpu: "online" });
+    const acct = auth.accountById(a.id)!;
+    const req = { ...IMAGE, account: a.id } as never;
+    // Every worker here paused: taken on this install's GPUs; the line says it starts when one is free, and is long enough
+    // to offer the account's own GPU for that run (the composer's "Run it now on your GPU").
+    pool.patchWorker(worker.id, { paused: true });
+    expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
+    const away = await hostedRun.poolQuote(acct, req, undefined);
+    expect(away?.quote.allowed).toBe(true);
+    expect(away?.line).toMatchObject({ unknown: true, long: true });
+    const r = await post({ ...IMAGE, ...SHOWN }, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.items![0].place).toBe("pool");
+    expect(ownRuns(a.id)).toBe(0);
+    pool.patchWorker(worker.id, { paused: false });
+    beatWith(worker, catalogVersion());
+    // A short line offers nothing.
+    expect((await hostedRun.poolQuote(acct, req, undefined))?.line.long).toBeUndefined();
+    // Behind a catalog update: the same.
+    beatWith(worker, "e".repeat(64));
+    expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
+    expect((await hostedRun.poolQuote(acct, req, undefined))?.line).toMatchObject({ unknown: true });
+    beatWith(worker, catalogVersion());
+    // The service goes quiet for longer than its last answer stands: the run waits for it, never sent to the own GPU.
+    fake.down = "error";
+    try {
+      const kept = globalThis.__fuobeBillingPolicies!.get(a.id)!;
+      kept.at = 0;
+      kept.goodAt = Date.now() - billing.POLICY_KEEP_MS - 1000;
+      const quiet = await hostedRun.decidePlace(acct, req, undefined);
+      expect(quiet.kind).toBe("refuse");
+      expect(quiet.kind === "refuse" && quiet.refusal.body.code).toBe("paused");
+      expect((await hostedRun.decideToolPlace(acct, [{ request: req }], undefined)).kind).toBe("refuse");
+    } finally {
+      fake.down = false;
+    }
+    // A policy that puts the account's own GPU first keeps today's way while the service is quiet: its own GPU.
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const b = account({ gpu: "online" });
+    const bAcct = auth.accountById(b.id)!;
+    await hostedRun.poolQuote(bAcct, { ...IMAGE, account: b.id } as never, undefined);
+    fake.down = "error";
+    try {
+      const kept = globalThis.__fuobeBillingPolicies!.get(b.id)!;
+      kept.at = 0;
+      kept.goodAt = Date.now() - billing.POLICY_KEEP_MS - 1000;
+      expect((await hostedRun.decidePlace(bAcct, { ...IMAGE, account: b.id } as never, undefined)).kind).toBe("own");
+    } finally {
+      fake.down = false;
+    }
+  });
+
   it("an own GPU that doesn't answer: a run that named no place is asked about, never moved and charged", async () => {
     withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
     const a = account({ gpu: "offline" });
@@ -886,7 +940,7 @@ describe("the price check before Run and the run itself", async () => {
     expect((await hostedRun.poolQuote(acct, req, undefined))?.quote).toMatchObject({ allowed: false, text: OWN_GPU_TOOL_MESSAGE });
   });
 
-  it("while every worker that could run it is built from the catalog before the studio's update, Run is off with plain words, never a run that waits for nothing", async () => {
+  it("while every worker that could run it is built from the catalog before the studio's update, the run is taken and waits in line until one is updated; Run stays on", async () => {
     const a = account();
     const acct = auth.accountById(a.id)!;
     withBilling({ limits: NO_LIMITS });
@@ -897,15 +951,15 @@ describe("the price check before Run and the run itself", async () => {
     expect(hosted.queueFacts(a.id, endpoint).workersOnline).toBe(1);
     // The studio was updated; its only worker not yet.
     beatWith(worker, "e".repeat(64));
-    const before = db().prepare("SELECT COUNT(*) FROM generations").pluck().get();
     const run = await hostedRun.decidePlace(acct, req, undefined);
-    expect(run.kind).toBe("refuse");
-    expect(run.kind === "refuse" && run.refusal).toMatchObject({ status: 503, body: { code: "busy", error: HOSTED_WORDS.busy } });
-    expect((await hostedRun.poolQuote(acct, req, undefined))?.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.busy });
-    expect((await hostedRun.poolQuote(null, IMAGE as never, undefined))?.quote).toMatchObject({ allowed: false, text: HOSTED_GUEST_WORDS.busy });
+    expect(run.kind).toBe("pool");
+    // The price check lets it run, and says it starts when a GPU is free (for a guest too).
+    const q = await hostedRun.poolQuote(acct, req, undefined);
+    expect(q?.quote.allowed).toBe(true);
+    expect(q?.line).toMatchObject({ unknown: true, long: true });
+    expect((await hostedRun.poolQuote(null, IMAGE as never, undefined))?.line).toMatchObject({ unknown: true });
     // Its place in line and the workers there count only a worker that takes the run now.
     expect(hosted.queueFacts(a.id, endpoint).workersOnline).toBe(0);
-    expect(db().prepare("SELECT COUNT(*) FROM generations").pluck().get()).toBe(before);
     // The owner's own jobs still go to it: a worker built from another catalog takes those.
     expect(pool.workersCanRun(endpoint)).toBe(true);
     // Updated: Run is on again.

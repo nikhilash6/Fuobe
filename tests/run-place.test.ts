@@ -3,7 +3,6 @@ import { placeOf } from "@/lib/place-name";
 import { quoteBody } from "@/lib/hosted";
 import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, offersRunOnSite, openCheckPlace, placePrice, placeRows, refusedBeforeRun, retryRequest, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
 import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
-import { lineWords } from "@/lib/pool-line";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
 const fmt = (usd: number) => `$${usd.toFixed(2)}`;
@@ -266,7 +265,7 @@ describe("Retry and Run on <the place> on a run's tile", () => {
 describe("the Run on list", () => {
   const account = { kind: "account" as const, hosted: true, prefer: "pool" as const, placeName: "Studio North GPUs", gpu: { connected: false } };
   const gpu = { connected: true, online: true, device: "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync" };
-  const quote = { text: "Free", wait: "Next in line · about 40 s" };
+  const quote = { text: "Free", wait: "ready in about 40 s" };
   it("no control without a choice: none for a guest, hosted runs off, nothing of one's own, or an item only one's own runs", () => {
     expect(placeRows({ ...account, kind: "guest", gpu }, {}, quote)).toBeNull();
     expect(placeRows({ ...account, hosted: false, gpu }, {}, quote)).toBeNull();
@@ -279,7 +278,7 @@ describe("the Run on list", () => {
     expect(placeRows({ ...account, gpu }, {}, quote)).toEqual({
       on: "site",
       rows: [
-        { id: "site", label: "Studio North GPUs", sub: "Free · Next in line · about 40 s", selected: true },
+        { id: "site", label: "Studio North GPUs", sub: "Free · ready in about 40 s", selected: true },
         { id: "gpu", label: "Your GPU", sub: "Free · RTX 4090", online: true, selected: false },
       ],
     });
@@ -371,9 +370,13 @@ describe("checkedPool", () => {
 
 describe("a tool page's own price check, for a run on this studio's GPUs", () => {
   const line = { place: 2, etaSeconds: 180 };
-  it("says the service's price and the place in line instead of the page's own words, and carries the price shown", () => {
+  it("says the service's price and when the run would be ready instead of the page's own words, and carries the price shown", () => {
     const p = toolPoolPrice({ costUsd: 0, demo: false, notes: [], place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line });
-    expect(p?.text).toBe(`Free · ${lineWords(line)}`);
+    expect(p?.text).toBe("Free · ready in about 3 min");
+    // Every GPU away: Run stays on, and the chip says it starts when one is free.
+    expect(toolPoolPrice({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line: { place: 2, etaSeconds: null, unknown: true } })).toMatchObject({ text: "Free · starts when a GPU is free", refused: false });
+    // Light work: ready in seconds.
+    expect(toolPoolPrice({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "", text: "Free" }, line: { place: 1, etaSeconds: null, light: true } })?.text).toBe("Free · ready in seconds");
     expect(p?.text).not.toMatch(/GPU/);
     expect(p?.refused).toBe(false);
     expect(p?.headers).toEqual({ [RUN_SHOWN_HEADER]: shownHeader({ amount: 0, priceVersion: "v1" }) });

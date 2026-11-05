@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { GenerationRequest } from "./catalog/types";
-import { lineWords } from "./pool-line";
+import { lineWords, waitWords } from "./pool-line";
 import type { OwnSetup } from "./own-setup";
 
 /**
@@ -94,10 +94,19 @@ export function useSettled<T>(value: T, ms = 300): T {
   return v;
 }
 
-/** Where a new run would stand in line on this studio's GPUs right now (1: next), and the wait, about (null: unknown). */
+/**
+ * Where a new run would stand in line on this install's GPUs right now (1: next), and the wait, about (null: unknown).
+ * The run is taken whatever the line. `unknown`: no GPU that could run it can take it now, so it starts when one is free
+ * (`returnAt`: when the first is due back, when one says); `light`: light work, ready in seconds; `long`: a wait long
+ * enough that an account with its own GPU or key is offered it for this run, once.
+ */
 export interface HostedLine {
   place: number;
   etaSeconds: number | null;
+  unknown?: true;
+  returnAt?: number;
+  light?: true;
+  long?: true;
 }
 
 /** The price check's answer for a run on this studio's GPUs: the quote, and where the run would stand in line. */
@@ -157,17 +166,19 @@ export function refreshPriceChecks(qc: QueryClient): void {
  * - `refused`: the run wouldn't be taken now (busy, a limit, not offered here, closed, paused, a top-up): Run is off,
  *   and the price slot says the service's words (`text`), with its line under them (`sub`) and its link or offer;
  *   `setup`: it runs on the visitor's own setup, whose label is `text`, and Run opens that setup instead of staying off;
- * - otherwise the price (`text`: the service's words, empty when there is none) and, under it, where the run would stand
- *   in line and the wait (`wait`).
+ * - otherwise the price (`text`: the service's words, empty when there is none) and, under it, when the run would be
+ *   ready (`wait`, inside a sentence: "ready in about 2 min", "starts when a GPU is free", "ready in seconds"; none when
+ *   nothing is known), and whether the wait is long (`long`: an account's own GPU or key may be offered for this run).
  * Null while there is no answer yet.
  */
 export function poolRunState(
   check: HostedCheck | null | undefined,
-): { refused: boolean; text: string; sub?: string; wait?: string; action?: BillingAction; offer?: BillingOffer; setup?: OwnSetup } | null {
+): { refused: boolean; text: string; sub?: string; wait?: string; long?: boolean; action?: BillingAction; offer?: BillingOffer; setup?: OwnSetup } | null {
   const q = check?.quote;
   if (!q) return null;
   if (!q.allowed) return { refused: true, text: q.text, ...(q.sub && { sub: q.sub }), ...(q.action && { action: q.action }), ...(q.offer && { offer: q.offer }), ...(q.ownSetup && { setup: q.ownSetup }) };
-  return { refused: false, text: q.text, ...(q.sub && { sub: q.sub }), ...(check?.line && { wait: lineWords(check.line) }) };
+  const wait = check?.line ? waitWords(check.line) : null;
+  return { refused: false, text: q.text, ...(q.sub && { sub: q.sub }), ...(wait && { wait }), ...(check?.line?.long && { long: true }) };
 }
 
 /**

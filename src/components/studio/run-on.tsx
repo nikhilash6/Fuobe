@@ -101,7 +101,7 @@ const RunOnButton = forwardRef<HTMLButtonElement, React.ComponentProps<"button">
 
 /**
  * The composer's price chip with its Run on list: the price words and a caret; it opens a popover (desktop) or a bottom
- * sheet (phone) titled "Run on". `tooltip`: where the run goes and the wait ("Runs on our GPUs · Next in line").
+ * sheet (phone) titled "Run on". `tooltip`: where the run goes and the wait ("Runs on our GPUs · ready in about 2 min").
  */
 export function RunOnChip({
   rows,
