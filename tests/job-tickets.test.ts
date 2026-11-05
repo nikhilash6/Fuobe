@@ -317,6 +317,52 @@ describe("the catalog version", () => {
     expect(names.every((n: string) => n.startsWith("src/"))).toBe(true);
   });
 
+  it("stays the same after a change people only read or see, and changes with the composer's code or a workflow", async () => {
+    const fsMod = await import("node:fs");
+    const os = await import("node:os");
+    const dir = fsMod.mkdtempSync(path.join(os.tmpdir(), "fuobe-catalog-narrow-"));
+    try {
+      // A copy of the composer's files and the catalog.
+      for (const rel of composerFiles(ROOT)) {
+        fsMod.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fsMod.copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
+      }
+      const lib = path.join(ROOT, "workflows/comfyui");
+      fsMod.mkdirSync(path.join(dir, "workflows/comfyui"), { recursive: true });
+      for (const f of fsMod.readdirSync(lib).filter((x) => x.endsWith(".json"))) fsMod.copyFileSync(path.join(lib, f), path.join(dir, "workflows/comfyui", f));
+      const both = () => {
+        const built = builtVersion(dir);
+        expect(computeCatalogVersion(dir)).toBe(built);
+        return built;
+      };
+      expect(both()).toBe(VERSION);
+      const change = (rel: string, edit: (text: string) => string) => {
+        const file = path.join(dir, rel);
+        const before = fsMod.readFileSync(file, "utf8");
+        const after = edit(before);
+        expect(after, rel).not.toBe(before);
+        fsMod.writeFileSync(file, after);
+      };
+      // What people only read or see: a comment, a blank line and an indent in the composer, a model's one-line
+      // description, a tile's cover, the cloud models, the record of real renders.
+      change("src/lib/comfy-compose.ts", (t) => t.replace("/**", "// A note for whoever reads this.\n\n/**\n * One more line of its comment.").replace(/\n {2}if \(/, "\n      if ("));
+      change("src/lib/catalog/models.ts", (t) => t.replace(/tagline: "/, 'tagline: "Sharper. '));
+      change("src/lib/template-covers.generated.ts", (t) => t.replace("?v=", "?v=0"));
+      change("src/lib/catalog/cloud-models.generated.ts", (t) => t.replace('"name": "', '"name": "New '));
+      change("workflows/comfyui/gpu-tested.json", (t) => t.replace("{", '{\n  "a-note": "seen",'));
+      expect(both()).toBe(VERSION);
+      // The composer's code: a new version.
+      change("src/lib/comfy-compose.ts", (t) => `${t}\nexport const PROBE = 1;\n`);
+      const code = both();
+      expect(code).not.toBe(VERSION);
+      // A model's route or setting (not its description): a new one again.
+      change("src/lib/catalog/models.ts", (t) => t.replace(/routes: \[comfy\("/, 'routes: [comfy("x'));
+      expect(both()).not.toBe(code);
+    } finally {
+      fsMod.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("the composer as built into the worker composes the same graph as the studio's", async () => {
     const { spawnSync } = await import("node:child_process");
     const fsMod = await import("node:fs");

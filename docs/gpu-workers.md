@@ -415,9 +415,12 @@ graphs, and so do a person's own computer's jobs (Fuobe Connect and the browser)
 - **Files the graph makes.** A few graphs read a small file that the composer makes (a palette swatch, a fade curve).
   The worker makes it again, checks it against the SHA-256 in the ticket, and sends its own copy to its ComfyUI. It
   never reads the studio's copy.
-- **The catalog version.** One SHA-256 over the composer's files and the catalog's workflows. The worker's build writes
-  it (`dist/catalog-version.json`), and the studio computes the same from its own files (or reads
-  `FUOBE_CATALOG_VERSION`). Each beat says the worker's version. A ticket goes only to a worker with the same version.
+- **The catalog version.** One SHA-256 over what can change a composed graph: the composer's code and the catalog's
+  workflows. Comments, a model's one-line description, tile covers and cards, the counts, prices and licence words the
+  pages quote, the cloud models and the record of real renders are left out, so an update that changes only what people
+  read or see keeps the version, and the workers keep taking accounts' runs. The worker's build writes it
+  (`dist/catalog-version.json`), and the studio computes the same from its own files (or reads `FUOBE_CATALOG_VERSION`).
+  Each beat says the worker's version. A ticket goes only to a worker with the same version.
   A worker built from another catalog takes the owner's own jobs, and its state in Settings → Workers reads **Update
   the worker** while accounts' runs may come to the install's GPUs. Update it (see "Install and update").
 - **The PC is the ceiling.** `ceiling` in `worker.json` (setup asks for it) is the most the PC ever runs:

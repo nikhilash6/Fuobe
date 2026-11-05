@@ -1,7 +1,7 @@
 // The graph composer the worker builds in (docs/gpu-workers.md, "Job tickets"): the files of src/lib/ticket-compose.ts
-// and everything it imports, and the catalog version, one SHA-256 over those files and the catalog's workflows. The
-// studio computes the same version from its own copy (src/server/computer/catalog-version.ts), so a worker composes
-// a ticket only from the catalog the ticket was made for.
+// and everything it imports, and the catalog version, one SHA-256 over what of those files and the catalog's workflows
+// can change a composed graph. The studio computes the same version from its own copy
+// (src/server/computer/catalog-version.ts), so a worker composes a ticket only from the catalog the ticket was made for.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -52,18 +52,68 @@ export function composerFiles(root) {
   return [...seen].sort();
 }
 
-/** A text file's SHA-256 with its line ends made plain (a Windows checkout's CRLF counts as LF). */
-const textSha = (file) => crypto.createHash("sha256").update(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n")).digest("hex");
+/**
+ * The composer's files and catalog files the catalog version leaves out: they hold only what people read or see (tile
+ * covers and cards, the counts, prices and licence words the pages quote, the cloud models, Kinetic's motion groups,
+ * which graphs passed a real render), so a change to one never changes a composed graph. The worker still builds the
+ * composer's ones in (the composer imports them). The studio leaves out the same (src/server/computer/catalog-version.ts).
+ */
+export const VERSION_LEAVES_OUT = new Set([
+  "src/lib/catalog/cloud-models.generated.ts",
+  "src/lib/catalog/counts.ts",
+  "src/lib/catalog/promo.ts",
+  "src/lib/licences.ts",
+  "src/lib/motion/kinetic-groups.ts",
+  "src/lib/preset-cards.ts",
+  "src/lib/preset-peaks.generated.ts",
+  "src/lib/template-covers.generated.ts",
+  "src/lib/template-covers.ts",
+  "workflows/comfyui/gpu-tested.json",
+]);
 
 /**
- * The catalog version: one SHA-256 over each composer file's name and content, and each .json of the catalog's folder
- * (workflows/comfyui), with line ends made plain.
+ * A file's text as the catalog version reads it: line ends made plain (a Windows checkout's CRLF counts as LF), and in
+ * a script without its comment lines, comment blocks, blank lines, each line's indent and a model's one-line description
+ * (a `tagline:` line, which only pages show): none of them changes a composed graph.
+ */
+export function versionText(name, text) {
+  const plain = text.replace(/\r\n/g, "\n");
+  if (!/\.[cm]?[jt]sx?$/.test(name)) return plain;
+  const out = [];
+  let inBlock = false;
+  for (const line of plain.split("\n")) {
+    let t = line.trim();
+    if (inBlock) {
+      const end = t.indexOf("*/");
+      if (end < 0) continue;
+      inBlock = false;
+      t = t.slice(end + 2).trim();
+    } else if (t.startsWith("/*")) {
+      const end = t.indexOf("*/", 2);
+      if (end < 0) {
+        inBlock = true;
+        continue;
+      }
+      t = t.slice(end + 2).trim();
+    }
+    if (!t || t.startsWith("//") || /^tagline: /.test(t)) continue;
+    out.push(t);
+  }
+  return out.join("\n");
+}
+
+const versionSha = (name, file) => crypto.createHash("sha256").update(versionText(name, fs.readFileSync(file, "utf8"))).digest("hex");
+
+/**
+ * The catalog version: one SHA-256 over what changes a composed graph: each composer file's name and code, and each
+ * .json of the catalog's folder (workflows/comfyui), but for VERSION_LEAVES_OUT (versionText says what of a file counts).
  */
 export function catalogVersion(root, catalogDir = path.join(root, "workflows/comfyui")) {
   const entries = composerFiles(root).map((rel) => [rel, path.join(root, rel)]);
   for (const f of fs.readdirSync(catalogDir).filter((x) => x.endsWith(".json"))) entries.push([`workflows/comfyui/${f}`, path.join(catalogDir, f)]);
-  entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const kept = entries.filter(([name]) => !VERSION_LEAVES_OUT.has(name));
+  kept.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const all = crypto.createHash("sha256");
-  for (const [name, file] of entries) all.update(`${name}\u0000${textSha(file)}\n`);
+  for (const [name, file] of kept) all.update(`${name}\u0000${versionSha(name, file)}\n`);
   return all.digest("hex");
 }
