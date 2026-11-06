@@ -2,11 +2,15 @@
 
 import { ChevronDown, Diamond } from "lucide-react";
 import { useId, useState } from "react";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
+import type { Unavailable } from "@/lib/unavailable";
 import { cn } from "@/lib/utils";
 
 /**
  * Kinetic's small controls: segmented choices, a slider with its number field (and, for the numbers a track can
  * animate, a key button), and a collapsible panel. Every target is at least 44 px; sliders get a 44 px hit area.
+ * A choice's `unavailable` (one the current setup can't do) stays in view, muted; pressing it says why
+ * (src/components/ui/unavailable.tsx).
  */
 
 export const chipClass = (on: boolean) =>
@@ -18,6 +22,8 @@ export const chipClass = (on: boolean) =>
 export const iconButton =
   "grid size-11 shrink-0 place-items-center rounded-full text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40";
 
+type Choice<T> = { id: T; label: string; unavailable?: Unavailable | false | null };
+
 /** One choice of several (a radio group of chips). `value` null shows none chosen (a Pro value moved it). */
 export function Choices<T extends string>({
   label,
@@ -28,12 +34,14 @@ export function Choices<T extends string>({
   className,
 }: {
   label: string;
-  choices: readonly { id: T; label: string }[];
+  choices: readonly Choice<T>[];
   value: T | null;
   onChange: (v: T) => void;
   note?: string;
   className?: string;
 }) {
+  const items = choices.map((c) => ({ ...c, value: c.id }));
+  const said = useUnavailableNote(items);
   return (
     <div className={cn("min-w-0", className)}>
       <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">
@@ -41,12 +49,16 @@ export function Choices<T extends string>({
         {note && <span className="font-normal"> · {note}</span>}
       </p>
       <div role="radiogroup" aria-label={label} className="flex min-w-0 flex-wrap gap-1.5">
-        {choices.map((c) => (
-          <button key={c.id} type="button" role="radio" aria-checked={value === c.id} onClick={() => onChange(c.id)} className={chipClass(value === c.id)}>
-            {c.label}
-          </button>
-        ))}
+        {items.map((c) => {
+          const on = value === c.id && !said.isUnavailable(c);
+          return (
+            <button key={c.id} type="button" role="radio" aria-checked={on} {...said.optionProps(c)} onClick={() => said.press(c, onChange)} className={cn(chipClass(on), !on && said.isUnavailable(c) && UNAVAILABLE_OPTION)}>
+              {c.label}
+            </button>
+          );
+        })}
       </div>
+      <UnavailableNote {...said.noteProps} />
     </div>
   );
 }
@@ -60,31 +72,38 @@ export function Segmented<T extends string>({
   hideLabel,
 }: {
   label: string;
-  choices: readonly { id: T; label: string }[];
+  choices: readonly Choice<T>[];
   value: T | null;
   onChange: (v: T) => void;
   hideLabel?: boolean;
 }) {
+  const items = choices.map((c) => ({ ...c, value: c.id }));
+  const said = useUnavailableNote(items);
   return (
     <div className="min-w-0">
       {!hideLabel && <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">{label}</p>}
       <div role="radiogroup" aria-label={label} className="grid min-w-0 auto-cols-fr grid-flow-col gap-0.5 rounded-full bg-secondary p-0.5">
-        {choices.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            role="radio"
-            aria-checked={value === c.id}
-            onClick={() => onChange(c.id)}
-            className={cn(
-              "h-11 min-w-0 truncate rounded-full px-2 text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              value === c.id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {c.label}
-          </button>
-        ))}
+        {items.map((c) => {
+          const on = value === c.id && !said.isUnavailable(c);
+          return (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              {...said.optionProps(c)}
+              onClick={() => said.press(c, onChange)}
+              className={cn(
+                "h-11 min-w-0 truncate rounded-full px-2 text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                on ? "bg-foreground text-background" : said.isUnavailable(c) ? UNAVAILABLE_OPTION : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {c.label}
+            </button>
+          );
+        })}
       </div>
+      <UnavailableNote {...said.noteProps} />
     </div>
   );
 }

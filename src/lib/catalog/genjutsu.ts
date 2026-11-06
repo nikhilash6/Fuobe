@@ -17,6 +17,7 @@
  * comfyui-oss-4.md §c.
  */
 import { keepOffered } from "@/lib/model-access";
+import { listWords } from "@/lib/unavailable";
 import { silenceRef } from "./canvas";
 import {
   anchorAspect,
@@ -1070,6 +1071,81 @@ export function resolutionWords(m: Maker, quality: string): string | undefined {
   if (!res) return m.renders ?? "keeps your clip's size";
   if (res === quality) return undefined;
   return px(res) > px(quality) ? `renders ${res} (its lowest)` : `renders up to ${res}`;
+}
+
+/** Where a resolution the picked model can't render can be had: its other Quality tier, or another model in the list. */
+export interface ResolutionRoute {
+  /** The model in the picker to switch to (undefined: keep the one picked). */
+  pick?: string;
+  /** The Quality tier to switch to (undefined: keep it). */
+  tier?: GenjutsuTier;
+  /** The resolution asked for there. */
+  quality: GenjutsuQuality;
+  /** Its name in words: "High quality", "MiniMax H3", "Fuobe Genjutsu on High quality". */
+  words: string;
+}
+
+/** One resolution in the picker: the picked model renders it, or why not (plain words) and the way to get it. */
+export interface ResolutionChoice {
+  quality: GenjutsuQuality;
+  ok: boolean;
+  why?: string;
+  route?: ResolutionRoute;
+}
+
+const tierWords = (t: GenjutsuTier | undefined) => (t === "high" ? "High quality" : "Standard quality");
+
+/**
+ * The picker's resolutions for the picked model: the ones it renders are open; for each other one, the nearest way to
+ * get it (the same model's other tier first, then the other models in the list, each at the tier picked, then at its
+ * other tier), said in plain words. Resolutions with the same way are said together ("720p and 1080p need MiniMax
+ * H3"). One that no model here renders names the sharpest there is instead.
+ */
+export function resolutionChoices(
+  maker: Maker,
+  options: Maker[],
+  tier: GenjutsuTier,
+  on: (id: string) => boolean = () => true,
+  qualities: readonly GenjutsuQuality[] = GENJUTSU.qualities,
+): ResolutionChoice[] {
+  const renders = (m: Maker, q: string) => qualityFor(m, q) === q;
+  type Way = { m: Maker; pick?: string; tier?: GenjutsuTier; words: string };
+  const ways: Way[] = [];
+  const add = (w: Way) => {
+    if (on(w.m.id) && !ways.some((x) => x.m.id === w.m.id) && w.m.id !== maker.id) ways.push(w);
+  };
+  const other = maker.pair ? getMaker(maker.pair, maker.engine) : undefined;
+  if (other) add({ m: other, tier: other.tier, words: tierWords(other.tier) });
+  for (const o of options) {
+    if (o.id === maker.id || o.id === maker.pair) continue;
+    const pair = o.pair ? getMaker(o.pair, o.engine) : undefined;
+    const atTier = pair && o.tier !== tier ? pair : o;
+    const offTier = pair ? (atTier === o ? pair : o) : undefined;
+    add({ m: atTier, pick: o.id, words: o.label });
+    if (offTier) add({ m: offTier, pick: o.id, tier: offTier.tier, words: `${o.label} on ${tierWords(offTier.tier)}` });
+  }
+  const sharpest = [...qualities].sort((a, b) => px(b) - px(a)).find((q) => renders(maker, q) || ways.some((w) => renders(w.m, q)));
+
+  const rows = qualities.map((q) => {
+    if (renders(maker, q)) return { quality: q, ok: true as const };
+    const way = ways.find((w) => renders(w.m, q));
+    if (way) return { quality: q, ok: false as const, key: `to:${way.m.id}`, way, at: q };
+    // No model here renders it: the sharpest there is, and where (none: the picked model already is the sharpest).
+    const best = sharpest && !renders(maker, sharpest) ? ways.find((w) => renders(w.m, sharpest)) : undefined;
+    return { quality: q, ok: false as const, key: `none:${best?.m.id ?? ""}`, way: best, at: sharpest, none: true };
+  });
+
+  return rows.map((r) => {
+    if (r.ok) return { quality: r.quality, ok: true };
+    const same = rows.filter((x) => !x.ok && x.key === r.key).map((x) => x.quality);
+    const route = r.way && r.at ? { pick: r.way.pick, tier: r.way.tier, quality: r.at, words: r.way.words } : undefined;
+    let why: string;
+    if (!("none" in r)) why = `${listWords(same)} ${same.length > 1 ? "need" : "needs"} ${r.way!.words}`;
+    else if (!maker.qualities?.length && !route) why = `${maker.label} ${maker.renders ?? "keeps your clip's size"}`;
+    else if (route) why = `No model here renders ${listWords(same)} yet · the sharpest is ${route.quality}, with ${route.words}`;
+    else why = `No model here renders ${listWords(same)} yet · ${sharpest ?? qualityFor(maker, r.quality) ?? ""} is the sharpest`;
+    return { quality: r.quality, ok: false, why, route };
+  });
 }
 
 // ---------------------------------------------------------------------------
