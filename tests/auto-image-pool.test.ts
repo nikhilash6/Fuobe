@@ -170,7 +170,7 @@ describe("an account's free run of Auto on this install's GPUs", () => {
     const a = account();
     accountId = a.id;
     ideogram = [[card]];
-    const r = await post({ feature: "image", modelId: AUTO_IMAGE, prompt: "a red fox in deep snow", params: { aspectRatio: "4:5" } }, a.cookie);
+    const r = await post({ feature: "image", modelId: AUTO_IMAGE, prompt: "a poster of a red fox in deep snow that says \"WINTER\"", params: { aspectRatio: "4:5" } }, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const id = r.body.items![0].id;
     const g = await settled(id);
@@ -196,7 +196,7 @@ describe("an account's free run of Auto on this install's GPUs", () => {
     expect(JSON.stringify(getGeneration(id))).not.toContain("spread");
     const listed = listAccountRuns({ account: a.id }).items.find((x) => x.id === id)!;
     expect(listed.declinedCards).toHaveLength(1);
-    expect(listed.request.prompt).toBe("a red fox in deep snow");
+    expect(listed.request.prompt).toBe("a poster of a red fox in deep snow that says \"WINTER\"");
   });
 
   it("each next model only when the one before fails, still one run", async () => {
@@ -204,7 +204,7 @@ describe("an account's free run of Auto on this install's GPUs", () => {
     accountId = a.id;
     ideogram = [[card]];
     failing = new Set(["oss-krea2-realism", "oss-fibo2-dev"]);
-    const r = await post({ feature: "image", modelId: AUTO_IMAGE, prompt: "a lighthouse at dusk" }, a.cookie);
+    const r = await post({ feature: "image", modelId: AUTO_IMAGE, prompt: "a sign that says \"LIGHTHOUSE\" at dusk" }, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const g = await settled(r.body.items![0].id);
     expect(g.status, g.error ?? "").toBe("succeeded");
@@ -223,7 +223,7 @@ describe("an account's free run of Auto on this install's GPUs", () => {
     expect(price.status, JSON.stringify(price.body)).toBe(200);
     expect(price.body).toMatchObject({ place: "pool", modelId: "oss-krea2-realism", modelName: "Krea 2 Realism", quote: { allowed: true } });
     const plain = await post({ ...cat, prompt: "a koi pond at night" }, a.cookie, true);
-    expect(plain.body).toMatchObject({ place: "pool", modelId: "oss-ideogram-4", quote: { allowed: true } });
+    expect(plain.body).toMatchObject({ place: "pool", modelId: "oss-krea2-realism", quote: { allowed: true } });
     const r = await post(cat, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const g = await settled(r.body.items![0].id);

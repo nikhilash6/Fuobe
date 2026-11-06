@@ -105,6 +105,14 @@ describe("what Auto picks", () => {
       expect(pick(words), words).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "plain" });
   });
 
+  it("an account's plain prompt starts on Krea 2 Realism; its lettering and edits route as the owner's", () => {
+    const acct = (prompt: string, more: { op?: "t2i" | "edit"; images?: number } = {}) => autoCandidates({ prompt, ...more, account: true }, defaults);
+    for (const words of ["a koi pond at night, neon rain", "a woman in a red evening gown on a staircase"])
+      expect(acct(words), words).toMatchObject({ models: [...AUTO_FALLBACKS, "oss-ideogram-4"], why: "plain" });
+    expect(acct('a poster that says "OPEN LATE"')).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "text" });
+    expect(acct("make the dress red", { images: 1 }).why).toBe("edit");
+  });
+
   it("after Ideogram 4 declines: Krea 2 Realism, FIBO 2 Dev, MOSS-Image, then none", () => {
     expect(AUTO_FALLBACKS).toEqual(["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
     expect(nextAutoFallback(undefined)).toBe("oss-krea2-realism");

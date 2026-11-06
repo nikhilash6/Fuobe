@@ -1345,7 +1345,7 @@ function autoRouted(req: GenerationRequest): GenerationRequest {
     const op = req.op && m?.routes.some((r) => r.op === req.op) ? req.op : undefined;
     return { ...req, modelId: req.auto.model, op: op ?? (images ? "edit" : "t2i") };
   }
-  const c = autoCandidates({ prompt: req.prompt, op: req.op, images }, autoPatternsNow());
+  const c = autoCandidates({ prompt: req.prompt, op: req.op, images, account: !!req.account }, autoPatternsNow());
   const op: Operation = c.why === "edit" ? (req.op && req.op !== "t2i" ? req.op : "edit") : "t2i";
   const runs = (id: string) => {
     const m = getModel(id);

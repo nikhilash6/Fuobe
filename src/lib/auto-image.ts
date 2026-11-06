@@ -123,12 +123,17 @@ export interface AutoAsk {
   op?: Operation;
   /** Pictures the run works from (its references). */
   images?: number;
+  /**
+   * A signed-up account's run (not the owner's): a plain prompt starts on Krea 2 Realism, because Ideogram 4 can take
+   * minutes to decline and the account would wait for the fallback. Lettering still goes to Ideogram 4.
+   */
+  account?: boolean;
 }
 
 /**
  * The models Auto would plan a run on, best first, and why: a picture to work from → the studio's edit model for its
  * operation; lettering → Ideogram 4; a prompt the setting's patterns match → Krea 2 Realism (then FIBO 2 Dev and
- * MOSS-Image, then Ideogram 4); anything else → Ideogram 4 (then the others). The server plans the first one that is
+ * MOSS-Image, then Ideogram 4); an account's plain prompt → Krea 2 Realism first too; anything else → Ideogram 4 (then the others). The server plans the first one that is
  * switched on and runs the operation (src/server/generations.ts autoRouted).
  */
 export function autoCandidates(ask: AutoAsk, patterns: readonly { line: string; re: RegExp }[]): { models: string[]; why: AutoWhy; pattern?: string } {
@@ -138,6 +143,7 @@ export function autoCandidates(ask: AutoAsk, patterns: readonly { line: string; 
   if (asksForText(words)) return { models: [AUTO_TEXT_MODEL, ...AUTO_FALLBACKS], why: "text" };
   const pattern = matchedPattern(words, patterns);
   if (pattern) return { models: [...AUTO_FALLBACKS, AUTO_TEXT_MODEL], why: "trigger", pattern };
+  if (ask.account) return { models: [...AUTO_FALLBACKS, AUTO_TEXT_MODEL], why: "plain" };
   return { models: [AUTO_TEXT_MODEL, ...AUTO_FALLBACKS], why: "plain" };
 }
 
