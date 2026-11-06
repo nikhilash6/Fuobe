@@ -4,7 +4,7 @@ import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { accountsMaxBytes, accountTotalBytes } from "./account-files";
 import { listAccounts, type AccountInfo } from "./auth";
 import { db } from "./db";
-import { declinedCardsIn, listGenerations, type ListOptions } from "./generations";
+import { declinedCardsIn, getGeneration, listGenerations, type ListOptions } from "./generations";
 import { cursorFrom, HELPER_SQL, KINDS } from "./library";
 
 /**
@@ -198,19 +198,32 @@ export function listAccountRuns(o: ListOptions, show: { content: boolean; emails
   // The WHERE already leaves the owner's runs out; this keeps them out whatever a caller passes.
   const found = listGenerations(opts).filter((g) => g.request.account);
   const last = found.at(-1);
-  const raw = db().prepare("SELECT error FROM generations WHERE id = ?");
-  const detail = (g: Generation) => {
-    if (g.place !== "pool" || !g.error) return {};
-    const e = (raw.get(g.id) as { error: string | null } | undefined)?.error;
-    return e && e !== g.error ? { detail: e } : {};
-  };
   return {
     items: found.map((g) => {
-      const id = g.request.account!;
-      const account: AccountOfRun = show.emails ? { id, email: emails.get(id) ?? null } : { id, emailHidden: true };
-      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account, ...detail(g), ...declinedCardsIn(g.id) };
+      const run = asAccountRun(g, emails, show.emails);
       return show.content ? run : factsOnly(run);
     }),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,
   };
+}
+
+/** An account's run (`g.request.account` set) as the owner sees it: whose, each result's state, and a hosted run's technical reason. */
+function asAccountRun(g: Generation, emails: Map<string, string>, showEmails: boolean): AccountRun {
+  const id = g.request.account!;
+  const account: AccountOfRun = showEmails ? { id, email: emails.get(id) ?? null } : { id, emailHidden: true };
+  return { ...g, outputs: withStates(g.outputs), account, ...poolDetail(g), ...declinedCardsIn(g.id) };
+}
+
+/** A failed run on this install's GPUs: the stored reason, when it isn't the plain sentence the account reads. */
+function poolDetail(g: Generation): { detail?: string } {
+  if (g.place !== "pool" || !g.error) return {};
+  const e = (db().prepare("SELECT error FROM generations WHERE id = ?").get(g.id) as { error: string | null } | undefined)?.error;
+  return e && e !== g.error ? { detail: e } : {};
+}
+
+/** One account's run as the list gives it (null: no such run, or it is the owner's own). */
+export function accountRunById(id: string, showEmails = true): AccountRun | null {
+  const g = getGeneration(id, { includeDeleted: true });
+  if (!g?.request.account) return null;
+  return asAccountRun(g, new Map(listAccounts().map((a) => [a.id, a.email])), showEmails);
 }

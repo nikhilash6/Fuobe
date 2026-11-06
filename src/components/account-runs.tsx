@@ -1,13 +1,14 @@
 "use client";
 
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { ExternalLink, Filter, Loader2, MoreHorizontal, Trash2, UserCheck, UserX } from "lucide-react";
+import { ExternalLink, FileSearch, Filter, Loader2, MoreHorizontal, Trash2, UserCheck, UserX } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { adminCall, OffBadge, runsHref, Stat, useAdminAccounts, useAdminAction, type AccountRow } from "@/components/accounts-admin";
 import { StatusCover } from "@/components/library/asset-card";
 import { PageHeader } from "@/components/page-shell";
+import { runDetailsHref } from "@/components/run-details";
 import { GallerySkeleton } from "@/components/skeletons";
 import { DeclinedCards } from "@/components/studio/made-note";
 import { autoLine } from "@/lib/auto-image";
@@ -369,6 +370,11 @@ function RunCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href={runDetailsHref(g.id)}>
+                <FileSearch /> Run details
+              </Link>
+            </DropdownMenuItem>
             {files.map((f) => (
               <DropdownMenuItem key={f.index} asChild>
                 <a href={f.url} target="_blank" rel="noreferrer">
@@ -406,7 +412,11 @@ function RunCard({
             {row?.disabled && <OffBadge />}
           </div>
         )}
-        <p className="truncate text-[13px] font-medium">{g.presetName ?? featureName(g.feature)}</p>
+        <p className="truncate text-[13px] font-medium">
+          <Link href={runDetailsHref(g.id)} className="underline-offset-2 hover:underline" title="Run details">
+            {g.presetName ?? featureName(g.feature)}
+          </Link>
+        </p>
         <p className="truncate text-[12px] text-muted-foreground">
           {g.modelName ?? g.modelId} · {OPERATION_LABELS[g.op] ?? g.op}
         </p>

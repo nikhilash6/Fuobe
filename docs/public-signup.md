@@ -184,12 +184,28 @@ it ran. The owner can delete a run with its files, which gives the account its s
 switch the account off from there. The owner's own runs are never listed there, and accounts' runs
 never appear in the owner's Library, its counts or the live feed.
 
+**Run details** (`/settings/runs/<run id>`: a run's name or **Run details** in its menu) shows everything about
+one account's run. It shows what the account saw: its studio tile and its Library card, made by the same components
+the account's pages use, with the same words, details line and buttons (nothing on it can be pressed). It shows what
+went wrong: the stored error, the cause, the buttons the account was given, the files missing on its GPU, and the
+note kept when it failed (stage, code, the GPU's or provider's own words). It shows where the run went: its own GPU
+(a RunPod pod, a tunnel, a LAN or web address, its own computer), its own key, or this site's GPUs, and the graph.
+It shows the model, the app, preset or studio, the prompt and negative prompt, and each setting beside the default
+the composer would have started with (marked Default, Changed or Unknown default; a default that isn't known is
+never guessed). It shows the input files (an upload that was cleared after 14 days says Removed), the other runs of
+its batch, and the account's runs from 2 hours before to 6 hours after it. A Retry is the same request sent again,
+so it shows as **Same request again**; a change of model shows as the same words and files on another model. A
+collapsed section shows what was sent to the GPU or provider. Links show by their kind only, and keys, tokens,
+cookies and passwords are left out.
+
 The API, for the owner only (guests get 401, accounts 403): `GET /api/admin/accounts` (each account
 with `runs`, `runsDay`, `runsWeek`, `running`, `failedWeek`, `lastRunAt`, `bytes` and `capBytes`,
 and `totals`; `?format=csv` for the file), `PATCH /api/admin/accounts/<id>` with
 `{ "disabled": true | false }`, `DELETE /api/admin/accounts/<id>`, `GET /api/admin/generations`
 (`?account=<id>`, `status=finished|running|failed`, `kind=image|video|audio|model3d|text`,
-`before=<createdAt>:<id>` from the last page's `next`, `limit` up to 100) and
+`before=<createdAt>:<id>` from the last page's `next`, `limit` up to 100),
+`GET /api/admin/generations/<id>` (Run details for an account's run; 404 for the owner's own run; an admin token
+needs `runs:read` and `outputs:view`, and `accounts:read` for the email) and
 `DELETE /api/admin/generations/<id>` (an account's run only).
 
 An account can delete itself: `DELETE /api/auth/me` with `{ "password" }`. When an account is
