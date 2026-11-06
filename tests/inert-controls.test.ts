@@ -122,3 +122,12 @@ describe("Dub, Relight and Swap Studio", () => {
     expect(s).toContain("const modelId = models.find((m) => m.id === asked && m.offered)?.id ?? models.find((m) => m.offered)?.id");
   });
 });
+
+describe("Color grade", () => {
+  it("a value resets with one press, and reads as plain text at its default", () => {
+    const s = src("src/components/color-grade-view.tsx");
+    expect(s).toContain("onClick={() => grade[c.key] !== NEUTRAL[c.key] && set(c.key, NEUTRAL[c.key])}");
+    expect(s).not.toContain("Double-click to reset");
+    expect(s).toContain("aria-disabled={grade[c.key] === NEUTRAL[c.key] || undefined}");
+  });
+});

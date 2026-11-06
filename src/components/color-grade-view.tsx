@@ -565,13 +565,15 @@ function Grader() {
                   <div key={c.key} className="space-y-1.5">
                     <div className="flex items-center justify-between text-[13px]">
                       <span id={`grade-${c.key}`}>{c.label}</span>
+                      {/* The value resets with one press (a phone has no double-click); at its default it is a plain readout. */}
                       <button
                         type="button"
-                        onDoubleClick={() => set(c.key, NEUTRAL[c.key])}
-                        onKeyDown={(e) => (e.key === "Enter" || e.key === "Backspace") && set(c.key, NEUTRAL[c.key])}
-                        title="Double-click to reset"
-                        aria-label={`Reset ${c.label}`}
-                        className={cn("font-mono text-[12px] text-muted-foreground tabular-nums", grade[c.key] !== NEUTRAL[c.key] && "text-brand-text")}
+                        onClick={() => grade[c.key] !== NEUTRAL[c.key] && set(c.key, NEUTRAL[c.key])}
+                        onKeyDown={(e) => e.key === "Backspace" && set(c.key, NEUTRAL[c.key])}
+                        title={grade[c.key] !== NEUTRAL[c.key] ? "Reset" : undefined}
+                        aria-label={grade[c.key] !== NEUTRAL[c.key] ? `Reset ${c.label}` : `${c.label}: at its default`}
+                        aria-disabled={grade[c.key] === NEUTRAL[c.key] || undefined}
+                        className={cn("rounded font-mono text-[12px] text-muted-foreground tabular-nums", grade[c.key] !== NEUTRAL[c.key] ? "cursor-pointer text-brand-text hover:underline" : "cursor-default")}
                       >
                         {c.min < 0 && grade[c.key] > 0 ? "+" : ""}
                         {grade[c.key]}
