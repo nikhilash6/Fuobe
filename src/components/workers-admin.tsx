@@ -178,9 +178,28 @@ function LanesEditor({ w, lanes, onSave }: { w: WorkerView; lanes: Lane[]; onSav
           </li>
         ))}
       </ul>
-      <Button size="sm" variant="secondary" className="mt-2 h-8" onClick={() => onSave(allow)}>
-        Save lanes
-      </Button>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {/* One click for every lane the PC has the files for (each keeps a wait it already had), saved at once. */}
+        <Button
+          size="sm"
+          className="h-8"
+          disabled={!w.lanes.length}
+          onClick={() => {
+            const next: Record<string, { delayMs: number }> = {};
+            for (const lane of w.lanes) next[lane] = allow[lane] ?? { delayMs: 0 };
+            setAllow(next);
+            onSave(next);
+          }}
+        >
+          Allow all it can run ({w.lanes.length})
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8" disabled={!Object.keys(allow).length} onClick={() => setAllow({})}>
+          Clear
+        </Button>
+        <Button size="sm" variant="secondary" className="h-8" onClick={() => onSave(allow)}>
+          Save lanes
+        </Button>
+      </div>
     </details>
   );
 }
