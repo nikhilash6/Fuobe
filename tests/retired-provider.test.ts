@@ -165,6 +165,9 @@ describe("REPLACED_BY", () => {
     "genjutsu-lite-motion-transfer",
     "genjutsu-object-swap",
     "genjutsu-lite-object-swap",
+    // fal's Wan 2.1 / 2.2 line, removed 2027-01-04.
+    "wan-22-animate-replace",
+    "wan-vace-reframe",
     "genjutsu-restyle",
     "marketing-studio-image",
     "ads-studio",

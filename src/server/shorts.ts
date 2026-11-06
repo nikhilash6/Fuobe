@@ -5,6 +5,7 @@ import { getModel } from "@/lib/catalog";
 import { routeNotes } from "@/lib/catalog/fitted";
 import { maxRefsFor, reframes, resolutionFor, sourceSeconds } from "@/lib/catalog/shorts-models";
 import {
+  WAN_VACE_ENDS,
   clipLengthProblem,
   ENHANCE_COPY,
   clipShapeProblem,
@@ -495,6 +496,7 @@ function notesFor(input: ShortsPlanInput, segments: number): string[] {
     const fps = input.source.fps;
     if (input.engine === "cloud") {
       notes.push(`Fuobe Shorts draws each segment's first frame in the look (Qwen-Image-Edit 2511), then Wan 2.2 Fun VACE carries it through every frame by depth${segments > 1 ? `: ${segments} segments, joined with the clip's own sound` : ""}`);
+      notes.push(WAN_VACE_ENDS);
       if (fps && fps > SHORTS.original.billFps + 0.5) notes.push(`fal bills this clip's ${Math.round(fps)} fps as ${(fps / SHORTS.original.billFps).toFixed(1)}× its length (video seconds at ${SHORTS.original.billFps} fps)`);
       if (vaceDownsample(fps)) notes.push(`Wan 2.2 Fun VACE works this ${Math.round(fps!)} fps clip at ${Math.round(fps! / (vaceDownsample(fps) + 1))} fps and brings it back to its own rate`);
     } else notes.push("Fuobe Shorts on your GPU renders 480p at 16 fps, 5 s a segment");

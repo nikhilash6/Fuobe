@@ -74,7 +74,7 @@ describe("Genjutsu: estimates", () => {
     const res = await estimateRoute.POST(json(body({ source: { url: clip, ...src } })));
     expect(res.status).toBe(200);
     const e = await res.json();
-    expect(e).toMatchObject({ modelId: "fuobe-genjutsu-motion-lite", source: "original", tier: "standard", quality: "480p", pieces: 1, seconds: 12, demo: true });
+    expect(e).toMatchObject({ modelId: "fuobe-genjutsu-motion-lite", source: "original", tier: "standard", quality: "768p", pieces: 1, seconds: 12, demo: true });
     expect(Object.keys(e).filter((k) => mentionsRetiredName(k))).toEqual([]);
   });
 
@@ -82,19 +82,18 @@ describe("Genjutsu: estimates", () => {
     beforeAll(() => setSetting("falKey", "fal-test-key"));
     afterAll(() => setSetting("falKey", ""));
 
-    it("motion: Lite is Wan 2.2 Animate at 480p turbo; Quality: High is the full model at its own price per resolution", async () => {
-      // 12 s at 16 fps = 192 frames = 12 video seconds: $0.04 each, then the sound put back.
+    it("motion: Lite is MiniMax H3 Max Recast at 768p; Quality: High is the full model at 1080p, each at its own price per second", async () => {
+      // 12 s on Recast at 768p: $0.30 a second, the clip's sound kept by Recast (one step).
       const lite = await (await estimateRoute.POST(json(body({ source: { url: clip, ...src } })))).json();
-      expect(lite).toMatchObject({ modelId: "fuobe-genjutsu-motion-lite", tier: "standard", quality: "480p", pieces: 1, steps: 2, demo: false, providers: ["fal"] });
-      expect(lite.costUsd).toBeGreaterThanOrEqual(0.48);
-      expect(lite.costUsd).toBeLessThan(0.49);
-      const high = await (await estimateRoute.POST(json(body({ source: { url: clip, ...src }, tier: "high", quality: "720p" })))).json();
-      expect(high).toMatchObject({ modelId: "fuobe-genjutsu-motion", tier: "high", quality: "720p" });
-      expect(high.costUsd).toBeGreaterThanOrEqual(0.96);
-      expect(high.costUsd).toBeLessThan(0.97);
-      // fal bills frames ÷ 16: a 30 fps clip costs 1.9× its length, and says so.
+      expect(lite).toMatchObject({ modelId: "fuobe-genjutsu-motion-lite", tier: "standard", quality: "768p", pieces: 1, steps: 1, demo: false, providers: ["fal"] });
+      expect(lite.costUsd).toBeCloseTo(3.6, 2);
+      const high = await (await estimateRoute.POST(json(body({ source: { url: clip, ...src }, tier: "high", quality: "1080p" })))).json();
+      expect(high).toMatchObject({ modelId: "fuobe-genjutsu-motion", tier: "high", quality: "1080p" });
+      expect(high.costUsd).toBeCloseTo(5.4, 2);
+      // Recast bills seconds, not frames: a 30 fps clip costs the same.
       const fast = await (await estimateRoute.POST(json(body({ source: { url: clip, ...src, fps: 30 } })))).json();
-      expect(fast.notes.join(" ")).toMatch(/fal bills this clip's 30 fps as 1\.9× its length/);
+      expect(fast.costUsd).toBeCloseTo(3.6, 2);
+      expect(fast.notes.join(" ")).not.toMatch(/fal bills this clip's/);
     });
 
     it("Kling O3 swap at its edit price; the hosted VACE per 16-frame second", async () => {
@@ -176,7 +175,7 @@ describe("Genjutsu: estimates", () => {
 
     it("demo mode off and no keys: the key it needs, in words", async () => {
       setSetting("demoMode", "off");
-      expect(await say(body({ source: { url: clip, ...src } }))).toBe("Fuobe Genjutsu Lite · Motion runs on fal.ai, and putting the sound back runs on fal.ai — add a fal.ai key in Settings → Paid API configuration");
+      expect(await say(body({ source: { url: clip, ...src } }))).toBe("Fuobe Genjutsu Lite · Motion runs on fal.ai — add a fal.ai key in Settings → Paid API configuration");
       setSetting("demoMode", "auto");
     });
   });
@@ -324,9 +323,9 @@ describe("Genjutsu: runs (demo)", () => {
     expect(final.feature).toBe("genjutsu");
     expect(items.filter((g) => g.feature === "genjutsu")).toHaveLength(1);
     const rows = batchOf(final.id);
-    // Wan 2.2 Animate takes the whole 12 s selection in one call; the sound goes back on after.
+    // MiniMax H3 Max Recast takes the whole 12 s selection in one call and keeps the clip's sound.
     expect(rows.filter((r) => r.op === "motion-transfer").map((r) => r.model_id)).toEqual(["fuobe-genjutsu-motion-lite"]);
-    expect(rows.some((r) => r.op === "mux")).toBe(true);
+    expect(rows.some((r) => r.op === "mux")).toBe(false);
     expect((await settle(final.id)).status).toBe("succeeded");
   });
 

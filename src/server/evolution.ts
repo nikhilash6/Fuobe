@@ -18,7 +18,7 @@ import {
   type EvolutionPlanInput,
   type Intensity,
 } from "@/lib/catalog/evolution";
-import { SHORTS, vaceDownsample, type PlanStep } from "@/lib/catalog/shorts";
+import { SHORTS, vaceDownsample, WAN_VACE_ENDS, type PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
@@ -195,7 +195,7 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
     const k = Math.min(n, EVOLUTION.cloudReferences);
     notes.push(`${name} runs the GPU's model hosted on fal: each ≤10 s piece's first frame is taken toward the direction by Qwen-Image-Edit 2511${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE re-renders the piece by its depth with that frame as its reference, in your clip's shape`);
     if (n > EVOLUTION.cloudReferences) notes.push(`The other ${n - EVOLUTION.cloudReferences} reference${n - EVOLUTION.cloudReferences > 1 ? "s" : ""} shape the direction only`);
-    notes.push(EVOLUTION_CLOUD_NOTE);
+    notes.push(EVOLUTION_CLOUD_NOTE, WAN_VACE_ENDS);
     // fal bills frames ÷ 16 as video seconds; a clip above 30 fps is worked at a fraction of its rate (as in Shorts).
     const fps = source.fps;
     if (fps && fps > SHORTS.original.billFps + 0.5) notes.push(`fal bills this clip's ${Math.round(fps)} fps as ${(fps / SHORTS.original.billFps).toFixed(1)}× its length (video seconds at ${SHORTS.original.billFps} fps)`);

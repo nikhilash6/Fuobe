@@ -61,6 +61,8 @@ export const HOSTED_UNTESTED_ENDPOINTS: ReadonlySet<string> = new Set([
   // Bria: green-screen despill and the guided cut-out.
   "bria/video/background-removal/green-screen-despill",
   "bria/guided-remove-background",
+  // Wan 2.7 text to image: the hosted route of Wan 2.2 A14B Image since fal retires Wan 2.2 (2027-01-04).
+  "fal-ai/wan/v2.7/text-to-image",
 ]);
 
 /** Models whose hosted routes are new even where the endpoint isn't (Fuobe Animation's LoRA run on Wan 2.2 A14B). */

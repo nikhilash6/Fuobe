@@ -15,6 +15,7 @@
     "fal-ai/vidu/q4/reference-to-video",
     "fal-ai/wan/v2.2-a14b/image-to-video",
     "fal-ai/wan/v2.2-a14b/image-to-video/lora",
+    "fal-ai/wan/v2.7/text-to-image",
     "fal-ai/workflow-utilities/extract-audio",
     "google/lyria-3.5",
     "meshy/v6/retexture",

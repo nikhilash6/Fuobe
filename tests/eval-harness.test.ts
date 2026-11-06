@@ -370,7 +370,8 @@ describe("the runner on the demo provider", () => {
       expect(cloud(g).map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
         ["genjutsu/move", "kling-motion-control", null],
         // A case with no partner of its own runs its own models (the -lite tiers, the Original without its first frame).
-        ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", null],
+        // The fixture dance clip is under 5 s: MiniMax H3 Max Recast (the Original's cloud motion) takes 5 s or more.
+        ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", expect.stringMatching(/needs at least 5 s/)],
         // Character swap's partner: MiniMax's own Recast on fal.
         ["genjutsu/character", "h3-max-recast", null],
         ["genjutsu/character-plain", "fuobe-character-swap", null],
@@ -382,8 +383,8 @@ describe("the runner on the demo provider", () => {
       // The Originals on the cloud: their hosted open halves on fal.
       const o = await dry(["--suite", "genjutsu", "--engine", "cloud", "--variants", "original", "--allow-fixtures"]);
       expect(cloud(o).map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
-        ["genjutsu/move", "fuobe-genjutsu-motion", null],
-        ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", null],
+        ["genjutsu/move", "fuobe-genjutsu-motion", expect.stringMatching(/needs at least 5 s/)],
+        ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", expect.stringMatching(/needs at least 5 s/)],
         ["genjutsu/character", "fuobe-character-swap", null],
         ["genjutsu/character-plain", "fuobe-character-swap", null],
         ["genjutsu/swap", "fuobe-genjutsu-swap", null],

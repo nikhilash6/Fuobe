@@ -62,7 +62,7 @@ export const REPLACED_BY: Readonly<Record<string, Replacement>> = {
     withReferences: "ref2v",
     ops: { ref2v: { id: "seedance-2-5", note: "Cinema Studio's reference takes now run on Seedance 2.5 (Fuobe Cinema takes no references yet)" } },
   },
-  "genjutsu-motion-transfer": { id: "fuobe-genjutsu-motion", was: "Genjutsu Motion Transfer (earlier version)", note: "Motion transfer now runs on Fuobe Genjutsu (Wan Animate)", original: true },
+  "genjutsu-motion-transfer": { id: "fuobe-genjutsu-motion", was: "Genjutsu Motion Transfer (earlier version)", note: "Motion transfer now runs on Fuobe Genjutsu", original: true },
   "genjutsu-lite-motion-transfer": { id: "fuobe-genjutsu-motion-lite", was: "Genjutsu Lite Motion Transfer (earlier version)", note: "Motion transfer Lite now runs on Fuobe Genjutsu Lite", original: true },
   // Its v2v and video-swap routes were the same endpoint.
   "genjutsu-object-swap": { id: "fuobe-genjutsu-swap", was: "Genjutsu Object Swap (earlier version)", note: "Object swap now runs on Fuobe Genjutsu (SAM 3.1 + Wan VACE)", original: true, ops: { v2v: { op: "video-swap" } } },
@@ -74,6 +74,9 @@ export const REPLACED_BY: Readonly<Record<string, Replacement>> = {
   "ads-studio": { id: "fuobe-marketing-image", was: "Ads Studio (earlier version)", note: "Ads now come from Fuobe's Ads pipeline: written copy, a Fuobe Marketing Image visual and your fonts", original: true },
   // The AI Influencer sheet runs on Fuobe Soul (O10), as the builder's does: the Realistic look, a wide sheet.
   "ai-influencer": { id: "fuobe-soul", was: "AI Influencer (earlier version)", note: "The AI Influencer sheet now runs on Fuobe Soul (the Soul Cast sheet on your GPU)", original: true },
+  // fal removes its Wan 2.1 / 2.2 line on 2027-01-04 and names a MiniMax H3 Max successor for each of these.
+  "wan-22-animate-replace": { id: "h3-max-recast", was: "Wan 2.2 Animate Replace (hosted)", note: "Person swaps in the cloud now run on MiniMax H3 Max Recast, which keeps the clip's sound" },
+  "wan-vace-reframe": { id: "minimax-h3-max-reframe", was: "Wan VACE Reframe (hosted)", note: "Reframes in the cloud now run on MiniMax H3 Max Reframe, which keeps the clip's sound and timing" },
 };
 
 /** Retired training targets (the retired provider's Soul ID) → the trainer that makes a Fuobe Soul ID from the same photos. */

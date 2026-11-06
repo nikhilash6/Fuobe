@@ -32,7 +32,8 @@ export interface MotionModel {
 export const MOTION_MODELS: Record<Engine, MotionModel[]> = {
   cloud: [
     { id: "kling-o3", label: "Kling O3 edit", op: "v2v", min: 3, max: 10, maxRefs: 4 },
-    { id: "fuobe-genjutsu-motion", label: "Fuobe Genjutsu · Motion", op: "motion-transfer", min: 3, max: 10, maxRefs: 1 },
+    // MiniMax H3 Max Recast in the cloud: 5 to 30 s a call (a segment is one shot, never over 15 s).
+    { id: "fuobe-genjutsu-motion", label: "Fuobe Genjutsu · Motion", op: "motion-transfer", min: 5, max: 10, maxRefs: 1 },
     { id: "kling-motion-control", label: "Kling 3.0 Motion Control", op: "motion-transfer", min: 3, max: 10, maxRefs: 1 },
   ],
   open: [

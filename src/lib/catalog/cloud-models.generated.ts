@@ -2917,19 +2917,20 @@ export const CLOUD_MODELS: ModelDef[] = [
   },
   {
     "id": "wan-2-2-a14b-image-cloud",
-    "name": "Wan 2.2 A14B Image (hosted)",
+    "name": "Wan 2.2 A14B Image (hosted \u00b7 Wan 2.7)",
     "vendor": "Alibaba Wan",
     "family": "wan",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Open-weights Wan 2.2 stills that take Wan LoRAs",
+    "tagline": "Wan stills in the cloud, made by Wan 2.7 on fal; it takes no LoRAs",
     "routes": [
       {
         "op": "t2i",
         "provider": "fal",
-        "endpoint": "fal-ai/wan/v2.2-a14b/text-to-image/lora",
+        "endpoint": "fal-ai/wan/v2.7/text-to-image",
         "map": {
           "negativePrompt": "negative_prompt",
+          "numOutputs": "num_images",
           "seed": "seed",
           "aspectRatio": {
             "key": "image_size",
@@ -2946,17 +2947,9 @@ export const CLOUD_MODELS: ModelDef[] = [
               "4:5": "portrait_4_3"
             }
           },
-          "loras": {
-            "shape": "items",
-            "key": "loras",
-            "range": {
-              "min": 0,
-              "max": 4
-            },
-            "transformer": "high",
-            "weightName": true
-          }
-        }
+          "promptMax": 2000
+        },
+        "note": "Wan 2.7 on fal \u00b7 no LoRAs"
       }
     ],
     "options": {
@@ -2973,20 +2966,16 @@ export const CLOUD_MODELS: ModelDef[] = [
         "21:9",
         "5:4",
         "4:5"
-      ]
-    },
-    "licence": {
-      "licence": "Apache-2.0",
-      "commercial": true,
-      "note": "Wan 2.1 / 2.2 weights are Apache-2.0",
-      "checked": "2026-10-23"
+      ],
+      "maxOutputs": 4
     },
     "defaults": {
       "aspectRatio": "16:9"
     },
     "pricing": {
       "unit": "image",
-      "usd": 0.05
+      "usd": 0.03,
+      "note": "per image (Wan 2.7 on fal)"
     }
   },
   {
@@ -11879,58 +11868,6 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
-    "id": "wan-vace-reframe",
-    "name": "Wan VACE Reframe (hosted)",
-    "vendor": "Alibaba Wan",
-    "family": "wan",
-    "engine": "cloud",
-    "kind": "video",
-    "tagline": "Open-weights reframe: outpaints the new edges with a prompt",
-    "routes": [
-      {
-        "op": "reframe",
-        "provider": "fal",
-        "endpoint": "fal-ai/wan-vace-14b/reframe",
-        "map": {
-          "negativePrompt": "negative_prompt",
-          "image": "first_frame_url",
-          "endImage": "last_frame_url",
-          "video": "video_url",
-          "seed": "seed",
-          "aspectRatio": "aspect_ratio",
-          "resolution": "resolution"
-        }
-      }
-    ],
-    "options": {
-      "negativePrompt": true,
-      "seed": true,
-      "endFrame": true,
-      "aspectRatios": [
-        "auto",
-        "16:9",
-        "1:1",
-        "9:16"
-      ],
-      "resolutions": [
-        "auto",
-        "240p",
-        "360p",
-        "480p",
-        "580p",
-        "720p"
-      ],
-      "maxImages": 1
-    },
-    "defaults": {
-      "aspectRatio": "9:16"
-    },
-    "pricing": {
-      "unit": "video",
-      "usd": 0.08
-    }
-  },
-  {
     "id": "happy-horse-video-edit",
     "name": "Happy Horse Video Edit",
     "vendor": "Alibaba",
@@ -19429,7 +19366,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "wan",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Paint an area on the first frame: erase it, or swap or add something from a reference image",
+    "tagline": "Paint an area on the first frame: erase it, or swap or add something from a reference image \u00b7 Wan VACE runs on fal until 4 January 2027",
     "routes": [
       {
         "op": "remove-object",
@@ -19456,7 +19393,8 @@ export const CLOUD_MODELS: ModelDef[] = [
             "match_input_frames_per_second": true,
             "prompt": "The same shot with nothing there: the background continues naturally, matching the light, texture and motion around it"
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       },
       {
         "op": "video-swap",
@@ -19482,7 +19420,8 @@ export const CLOUD_MODELS: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       },
       {
         "op": "video-insert",
@@ -19508,7 +19447,8 @@ export const CLOUD_MODELS: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       }
     ],
     "options": {
@@ -19627,59 +19567,6 @@ export const CLOUD_MODELS: ModelDef[] = [
       "byResolution": {
         "720p": 0.03,
         "1080p": 0.06
-      }
-    }
-  },
-  {
-    "id": "wan-22-animate-replace",
-    "name": "Wan 2.2 Animate Replace (hosted)",
-    "vendor": "Alibaba Wan",
-    "family": "wan",
-    "engine": "cloud",
-    "kind": "video",
-    "tagline": "Swaps the person on camera for your character, lighting matched to the scene",
-    "routes": [
-      {
-        "op": "video-swap",
-        "provider": "fal",
-        "endpoint": "fal-ai/wan/v2.2-14b/animate/replace",
-        "map": {
-          "prompt": false,
-          "image": "image_url",
-          "video": "video_url",
-          "seed": "seed",
-          "resolution": {
-            "key": "resolution",
-            "accepts": [
-              "480p",
-              "580p",
-              "720p"
-            ]
-          }
-        }
-      }
-    ],
-    "options": {
-      "seed": true,
-      "resolutions": [
-        "480p",
-        "580p",
-        "720p"
-      ],
-      "maxImages": 1,
-      "promptless": true
-    },
-    "defaults": {
-      "resolution": "720p"
-    },
-    "pricing": {
-      "unit": "second",
-      "usd": 0.08,
-      "note": "720p; 580p $0.06, 480p $0.04 \u00b7 fal bills frames \u00f7 16 as video seconds: a 30 fps clip costs about 1.9\u00d7 its length",
-      "byResolution": {
-        "720p": 0.08,
-        "580p": 0.06,
-        "480p": 0.04
       }
     }
   },
@@ -24994,49 +24881,47 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "family": "fuobe-genjutsu",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Your character performs the clip's moves with its camera and framing: Wan 2.2 Animate",
+    "tagline": "Your character takes over the clip's performance, in the clip's own setting with its sound: MiniMax H3 Max Recast",
     "routes": [
       {
         "op": "motion-transfer",
         "provider": "fal",
-        "endpoint": "fal-ai/wan/v2.2-14b/animate/move",
+        "endpoint": "minimax/h3-max/recast",
         "map": {
-          "prompt": false,
-          "image": "image_url",
+          "omitEmptyPrompt": true,
+          "images": "reference_image_urls",
           "video": "video_url",
           "seed": "seed",
           "resolution": {
             "key": "resolution",
             "accepts": [
-              "480p",
-              "580p",
-              "720p"
+              "768P",
+              "1080P"
             ]
-          }
+          },
+          "promptMax": 2000
         }
       }
     ],
     "options": {
       "seed": true,
       "resolutions": [
-        "480p",
-        "580p",
-        "720p"
+        "768P",
+        "1080P"
       ],
-      "maxImages": 1,
-      "promptless": true
+      "maxImages": 4,
+      "promptOptional": true
     },
     "defaults": {
-      "resolution": "720p"
+      "resolution": "1080P"
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.08,
-      "note": "720p; 580p $0.06, 480p $0.04 \u00b7 fal bills frames \u00f7 16 as video seconds: a 30 fps clip costs about 1.9\u00d7 its length",
+      "usd": 0.45,
+      "note": "1080p; 768p $0.30/s \u00b7 5\u201330 s, no shot over 15 s",
       "byResolution": {
-        "720p": 0.08,
-        "580p": 0.06,
-        "480p": 0.04
+        "768p": 0.3,
+        "1080p": 0.45
       }
     }
   },
@@ -25047,40 +24932,40 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "family": "fuobe-genjutsu",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "The quick tier: Wan 2.2 Animate at 480p with fal's turbo pass",
+    "tagline": "The quick tier: MiniMax H3 Max Recast at 768p",
     "routes": [
       {
         "op": "motion-transfer",
         "provider": "fal",
-        "endpoint": "fal-ai/wan/v2.2-14b/animate/move",
+        "endpoint": "minimax/h3-max/recast",
         "map": {
-          "prompt": false,
-          "image": "image_url",
+          "omitEmptyPrompt": true,
+          "images": "reference_image_urls",
           "video": "video_url",
           "seed": "seed",
           "resolution": "resolution",
           "fixed": {
-            "use_turbo": true,
-            "resolution": "480p"
-          }
+            "resolution": "768P"
+          },
+          "promptMax": 2000
         }
       }
     ],
     "options": {
       "seed": true,
       "resolutions": [
-        "480p"
+        "768p"
       ],
-      "maxImages": 1,
-      "promptless": true
+      "maxImages": 4,
+      "promptOptional": true
     },
     "defaults": {
-      "resolution": "480p"
+      "resolution": "768p"
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.04,
-      "note": "480p \u00b7 fal bills frames \u00f7 16 as video seconds: a 30 fps clip costs about 1.9\u00d7 its length"
+      "usd": 0.3,
+      "note": "768p \u00b7 5\u201330 s, no shot over 15 s"
     }
   },
   {
@@ -25134,7 +25019,8 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       }
     ],
     "options": {
@@ -25207,7 +25093,8 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       }
     ],
     "options": {
@@ -25280,7 +25167,8 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       }
     ],
     "options": {
@@ -25500,7 +25388,8 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       }
     ],
     "options": {
@@ -25572,7 +25461,8 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             "match_input_num_frames": true,
             "match_input_frames_per_second": true
           }
-        }
+        },
+        "note": "Wan VACE runs on fal until 4 January 2027"
       }
     ],
     "options": {

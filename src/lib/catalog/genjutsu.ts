@@ -3,11 +3,12 @@
  * transfer (your character does what the clip's person does), Character swap (the person in a 5–15 s part becomes your
  * character, sound and performance kept: Openjutsu / Akatz Labs' H3 Character Swap), Object swap (a thing, a person or
  * an outfit becomes your reference), Restyle (every frame takes a look) and Insert (your reference is added where you
- * say). Each mode's default is a Fuobe Original — open weights on your GPU (ComfyUI) and the same open weights hosted on
- * fal in the cloud: Wan Animate for motion, MiniMax H3 + the Character Swap LoRA for characters, SAM 3.1 + Wan VACE for
- * swaps, a restyled first frame + Wan Fun VACE for looks. Lite is the cheaper, faster tier of the same Original. Other
- * hosted open models (SCAIL-2, Wan Motion, Wan 2.2 Animate Replace, hosted Wan 2.2 VACE) and partner models (Kling,
- * P-Video, H3 Max Recast, Gemini Omni, Happy Horse) stay as labelled alternatives. No retired provider's model or look.
+ * say). Each mode's default is a Fuobe Original — open weights on your GPU (ComfyUI) and hosted models on fal in the
+ * cloud: Wan Animate 2 for motion on your GPU and MiniMax H3 Max Recast in the cloud (fal's successor to Wan 2.2 Animate),
+ * MiniMax H3 + the Character Swap LoRA for characters, SAM 3.1 + Wan VACE for swaps, a restyled first frame + Wan Fun VACE
+ * for looks. Lite is the cheaper, faster tier of the same Original. Other hosted open models (SCAIL-2, Wan Motion, hosted
+ * Wan 2.2 VACE) and partner models (Kling, P-Video, H3 Max Recast, Gemini Omni, Happy Horse) stay as labelled
+ * alternatives. No retired provider's model or look.
  *
  * Every model takes a part of the clip (Kling 3–15 s, VACE 81 or 241 frames, H3 5–15 s…), so longer selections are cut
  * into pieces or windows, made one by one, joined, and the clip's own sound put back (the remove-object plumbing). Pure
@@ -59,7 +60,7 @@ import {
   type RemoveRange,
   type RemoveSource,
 } from "./remove-object";
-import { firstFramePrompt, getShortsPreset, lookFromPreset, planShorts, segmentPrompt, SHORTS_TOOLS, type PlanStep, type ShortsLook } from "./shorts";
+import { firstFramePrompt, getShortsPreset, lookFromPreset, planShorts, segmentPrompt, SHORTS_TOOLS, WAN_VACE_ENDS, type PlanStep, type ShortsLook } from "./shorts";
 import { getModel } from "./index";
 import { REPLACED_BY } from "./replaced";
 import { LOOK_IDS, lightWords, type LookId, type PaintKeyframe } from "../openjutsu-graphs";
@@ -381,6 +382,12 @@ export interface Maker {
 const VACE_CLOUD_WINDOW: FrameWindow = { cap: 241, step: 4, base: 1, min: 17 };
 const VACE_FUN_CLOUD = "wan-22-vace-inpaint";
 const FAL_RES = ["480p", "580p", "720p"];
+/**
+ * MiniMax H3 Max Recast on fal: "5 to 30 seconds long, with no single shot longer than 15 seconds"; 768P or 1080P. Motion
+ * transfer cuts 15 s pieces (`shot`), so a long take in one shot still fits.
+ */
+const RECAST_SECONDS = { min: 5, max: 30, shot: 15 } as const;
+const RECAST_RES = ["768p", "1080p"];
 
 /** Motion transfer on MiniMax H3 (your GPU): the character photo is the look, the part's normals the motion. */
 export const MOTION_H3 = "oss-h3-motion";
@@ -399,21 +406,22 @@ const ORIGINAL_IDS = new Set<string>([...Object.values(ORIGINALS), "fuobe-soul"]
 export const isOriginal = (id: string) => ORIGINAL_IDS.has(id);
 
 export const MAKERS: Maker[] = [
-  // Motion transfer.
+  // Motion transfer. In the cloud on MiniMax H3 Max Recast (fal's successor to Wan 2.2 Animate): the character takes the
+  // person's place in the clip's own setting, sound kept; 5–15 s a part (no shot over 15 s).
   {
     id: ORIGINALS.motionLite,
     engine: "cloud",
     modes: ["motion"],
     label: "Fuobe Genjutsu",
-    note: "Quick 480p takes · one character image · the clip's sound put back",
+    note: "768p · one character image, in the clip's own setting · the clip's sound kept · 5–15 s a part",
     source: "original",
     tier: "standard",
     pair: ORIGINALS.motion,
     refs: { min: 1, max: 1 },
-    maxSeconds: 30,
-    keepsSound: false,
-    qualities: ["480p"],
-    billFps: 16,
+    maxSeconds: RECAST_SECONDS.shot,
+    minSeconds: RECAST_SECONDS.min,
+    keepsSound: true,
+    qualities: ["768p"],
     promptOptional: true,
   },
   {
@@ -421,15 +429,15 @@ export const MAKERS: Maker[] = [
     engine: "cloud",
     modes: ["motion"],
     label: "Fuobe Genjutsu",
-    note: "Up to 720p · one character image · the clip's sound put back",
+    note: "Up to 1080p · one character image, in the clip's own setting · the clip's sound kept · 5–15 s a part",
     source: "original",
     tier: "high",
     pair: ORIGINALS.motionLite,
     refs: { min: 1, max: 1 },
-    maxSeconds: 30,
-    keepsSound: false,
-    qualities: FAL_RES,
-    billFps: 16,
+    maxSeconds: RECAST_SECONDS.shot,
+    minSeconds: RECAST_SECONDS.min,
+    keepsSound: true,
+    qualities: RECAST_RES,
     promptOptional: true,
   },
   {
@@ -544,26 +552,10 @@ export const MAKERS: Maker[] = [
     note: "MiniMax's own swap: 1–4 people from photos, across shots, sound kept · 5–30 s · $0.30/s",
     source: "partner",
     refs: { min: 1, max: 4 },
-    maxSeconds: 30,
-    minSeconds: 5,
+    maxSeconds: RECAST_SECONDS.max,
+    minSeconds: RECAST_SECONDS.min,
     keepsSound: true,
-    qualities: ["768p", "1080p"],
-    promptOptional: true,
-    people: true,
-  },
-  {
-    id: "wan-22-animate-replace",
-    engine: "cloud",
-    modes: ["character"],
-    targets: ["type"],
-    label: "Wan 2.2 Animate Replace",
-    note: "Replaces the person, lighting matched · one image · up to 720p",
-    source: "open",
-    refs: { min: 1, max: 1 },
-    maxSeconds: 30,
-    keepsSound: false,
-    qualities: FAL_RES,
-    billFps: 16,
+    qualities: RECAST_RES,
     promptOptional: true,
     people: true,
   },
@@ -603,7 +595,7 @@ export const MAKERS: Maker[] = [
     modes: ["swap"],
     targets: ["type", "click", "paint"],
     label: "Fuobe Genjutsu",
-    note: "Paints your reference in place of what you name · 480p, fast · up to 4 references",
+    note: `Paints your reference in place of what you name · 480p, fast · up to 4 references · ${WAN_VACE_ENDS}`,
     source: "original",
     tier: "standard",
     pair: ORIGINALS.swap,
@@ -619,7 +611,7 @@ export const MAKERS: Maker[] = [
     modes: ["swap"],
     targets: ["type", "click", "paint"],
     label: "Fuobe Genjutsu",
-    note: "Paints your reference in place of what you name · up to 720p · up to 4 references",
+    note: `Paints your reference in place of what you name · up to 720p · up to 4 references · ${WAN_VACE_ENDS}`,
     source: "original",
     tier: "high",
     pair: ORIGINALS.swapLite,
@@ -681,7 +673,7 @@ export const MAKERS: Maker[] = [
     modes: ["swap", "insert"],
     targets: ["click", "paint"],
     label: "Wan 2.2 VACE (hosted)",
-    note: "Changes only the area you mark on the first frame · up to 4 references · 241 frames a part",
+    note: `Changes only the area you mark on the first frame · up to 4 references · 241 frames a part · ${WAN_VACE_ENDS}`,
     source: "open",
     refs: { min: 1, max: 4 },
     window: VACE_CLOUD_WINDOW,
@@ -726,7 +718,7 @@ export const MAKERS: Maker[] = [
     engine: "cloud",
     modes: ["restyle"],
     label: "Fuobe Genjutsu",
-    note: "The first frame takes the look, then every frame follows it · 241 frames a part",
+    note: `The first frame takes the look, then every frame follows it · 241 frames a part · ${WAN_VACE_ENDS}`,
     source: "original",
     refs: { min: 0, max: 0 },
     window: VACE_CLOUD_WINDOW,
@@ -892,7 +884,8 @@ export const getMaker = (id: string | undefined, engine?: Engine) => MAKERS.find
  * round-4 open models: the Original that replaced each (the look and tier are kept where they still mean something).
  */
 export const LEGACY_MAKERS: Record<string, string> = {
-  ...Object.fromEntries(Object.entries(REPLACED_BY).flatMap(([id, r]) => (Object.values(ORIGINALS).includes(r.id as never) ? [[id, r.id]] : []))),
+  // A retired model whose replacement is a maker here (an Original, or H3 Max Recast for Wan 2.2 Animate Replace).
+  ...Object.fromEntries(Object.entries(REPLACED_BY).flatMap(([id, r]) => (Object.values(ORIGINALS).includes(r.id as never) || MAKERS.some((m) => m.id === r.id) ? [[id, r.id]] : []))),
   "oss-wan22-animate": ORIGINALS.motion,
   "oss-vace-swap": ORIGINALS.swap,
   "oss-wan22-vace-restyle": ORIGINALS.restyle,

@@ -73,7 +73,7 @@ describe("Genjutsu: which model runs", () => {
   it("partners and other open weights stay as labelled alternatives", () => {
     const sources = (engine: Engine, mode: "motion" | "character" | "swap" | "restyle" | "insert", target?: "type" | "click" | "paint") =>
       Object.fromEntries(makersFor(engine, mode, target).map((m) => [m.id, m.source]));
-    expect(sources("cloud", "character")).toEqual({ [ORIGINALS.character]: "original", "scail-2": "open", "h3-max-recast": "partner", "wan-22-animate-replace": "open", "kling-o3": "partner", "p-video-replace": "partner" });
+    expect(sources("cloud", "character")).toEqual({ [ORIGINALS.character]: "original", "scail-2": "open", "h3-max-recast": "partner", "kling-o3": "partner", "p-video-replace": "partner" });
     expect(sources("cloud", "swap", "type")).toEqual({ [ORIGINALS.swapLite]: "original", "kling-o3": "partner", "kling-4": "partner", "p-video-replace": "partner" });
     expect(sources("cloud", "insert", "type")).toMatchObject({ "kling-o3": "partner", "kling-4": "partner" });
     expect(sources("cloud", "swap", "paint")).toEqual({ [ORIGINALS.swapLite]: "original", "wan-22-vace-inpaint": "open" });
@@ -168,21 +168,21 @@ describe("Genjutsu: checks", () => {
 });
 
 describe("Genjutsu: plans", () => {
-  it("cloud motion on the Original: Wan 2.2 Animate on the whole selection, billed as frames ÷ 16, the sound put back", () => {
+  it("cloud motion on the Original: MiniMax H3 Max Recast in pieces of up to 15 s, billed per second, joined under the clip's sound", () => {
     const p = plan({ maker: maker(ORIGINALS.motion), prompt: "a knight in silver armour", quality: "1080p" });
-    expect(p.pieces).toBe(1);
+    // 20 s: two pieces (Recast takes no shot over 15 s).
+    expect(p.pieces).toBe(2);
     const make = step(p, "make0").request;
-    expect(make).toMatchObject({ modelId: ORIGINALS.motion, engine: "cloud", op: "motion-transfer", feature: "genjutsu-step", inputs: { video: clip.url, images: [ref] } });
-    // 20 s at 30 fps = 600 frames = 37.5 video seconds; 1080p goes to its top, 720p.
-    expect(make.params).toMatchObject({ resolution: "720p", duration: 37.5, sourceDuration: 20 });
+    expect(make).toMatchObject({ modelId: ORIGINALS.motion, engine: "cloud", op: "motion-transfer", feature: "genjutsu-step", inputs: { images: [ref] } });
+    expect(make.params).toMatchObject({ resolution: "1080p" });
     expect(p.final).toBe("final");
     expect(step(p, "final").request).toMatchObject({ op: "mux", feature: "genjutsu", inputs: { audio: clip.url } });
-    // $0.08 a video second at 720p: $3.00.
-    expect(estimateCost(onEngine(getModel(ORIGINALS.motion)!, "cloud"), make.params!, 1, "motion-transfer")).toBeCloseTo(3, 6);
-    // Lite: 480p turbo, $0.04.
+    // $0.45 a second at 1080p: a 10 s piece is $4.50.
+    expect(estimateCost(onEngine(getModel(ORIGINALS.motion)!, "cloud"), { ...make.params!, duration: 10 }, 1, "motion-transfer")).toBeCloseTo(4.5, 6);
+    // Lite: 768p, $0.30 a second.
     const lite = step(plan({ maker: maker(ORIGINALS.motionLite) }), "make0").request;
-    expect(lite.params).toMatchObject({ resolution: "480p" });
-    expect(estimateCost(onEngine(getModel(ORIGINALS.motionLite)!, "cloud"), lite.params!, 1, "motion-transfer")).toBeCloseTo(1.5, 6);
+    expect(lite.params).toMatchObject({ resolution: "768p" });
+    expect(estimateCost(onEngine(getModel(ORIGINALS.motionLite)!, "cloud"), { ...lite.params!, duration: 10 }, 1, "motion-transfer")).toBeCloseTo(3, 6);
   });
 
   it("open motion on the Original: Wan Animate 2 on the cut selection; Lite runs it in 4 steps at 480p", () => {
@@ -420,15 +420,16 @@ describe("Genjutsu: Character swap", () => {
     expect("maker" in both && both.maker.source).not.toBe("original");
   });
 
-  it("partners in Character swap: MiniMax's Recast, Wan Animate Replace, Kling O3 with who in words", () => {
+  it("partners in Character swap: MiniMax's Recast (also for an old setup on Wan Animate Replace), Kling O3 with who in words", () => {
     const r = ch({ maker: maker("h3-max-recast"), range: { start: 2, end: 20 }, quality: "1080p", character: { who: "leftmost", description: "a ronin" } });
     expect(r.steps.map((s) => s.key)).toEqual(["cut0", "make0"]);
     expect(step(r, "make0").request).toMatchObject({ modelId: "h3-max-recast", op: "video-swap", params: { resolution: "1080p" } });
     expect(step(r, "make0").request.prompt).toBe("The person on the left becomes the person in the photo, a ronin.");
     expect(r.final).toBe("make0");
-    const w = ch({ maker: maker("wan-22-animate-replace") });
-    expect(step(w, "make0").request).toMatchObject({ op: "video-swap", params: { resolution: "720p" } });
-    expect(w.final).toBe("final");
+    // fal retires Wan 2.2 Animate Replace (2027-01-04): an old setup naming it opens Recast, fal's named successor.
+    const retired = ["wan", "22", "animate", "replace"].join("-");
+    expect(chooseMaker({ engine: "cloud", mode: "character", modelId: retired })).toMatchObject({ maker: { id: "h3-max-recast" } });
+    expect(MAKERS.some((m) => m.id === retired)).toBe(false);
     expect(makerPrompt({ mode: "character", maker: maker("kling-o3"), refs: 1, character: { who: "rightmost" } })).toBe(
       "Replace the person on the right in @Video1 with @Image1. Keep everything else the same: the performance, camera, framing, light and timing.",
     );
@@ -496,7 +497,8 @@ describe("Genjutsu: the steps plan as catalog generations", () => {
 
   it("billed seconds: fal's video seconds count 16 (Wan Motion 24) frames a second at the clip's own rate", () => {
     const piece = { index: 0, start: 0, end: 10 };
-    expect(billedSeconds(maker(ORIGINALS.motion), piece, 30)).toBeCloseTo(18.75, 6);
+    // Recast (Genjutsu's cloud motion) bills the piece's own seconds.
+    expect(billedSeconds(maker(ORIGINALS.motion), piece, 30)).toBe(10);
     expect(billedSeconds(maker("wan-motion"), piece, 30)).toBeCloseTo(12.5, 6);
     expect(billedSeconds(maker("kling-motion-control"), piece, 30)).toBe(10);
     expect(billedSeconds(maker(ORIGINALS.swap), { ...piece, frames: 241 }, 30)).toBeCloseTo(241 / 16, 6);

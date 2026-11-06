@@ -3034,18 +3034,31 @@ const originals: ModelDef[] = [
   },
   // Fuobe Genjutsu (O5): the parity studio's Genjutsu rebuilt on open weights, one model per mode on both engines, and Lite as the
   // cheaper, faster tier of the same Original (src/lib/catalog/genjutsu.ts plans the pieces, masks, looks and sound).
-  original({
-    id: "fuobe-genjutsu-motion",
-    open: [comfy("motion-transfer", "wan-animate2", "Wan Animate 2: the whole selection in 81-frame fragments, the clip's fps and sound kept")],
-    tagline: "Your character performs the clip's moves · Wan Animate 2 free on your GPU (24 GB), Wan 2.2 Animate on fal",
-    options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1, promptOptional: true },
-  }),
-  original({
-    id: "fuobe-genjutsu-motion-lite",
-    open: [comfy("motion-transfer", "wan-animate2", "Wan Animate 2 at 480p with 4 distilled steps")],
-    tagline: "The quick tier: 480p · Wan Animate 2 in 4 steps on your GPU, Wan 2.2 Animate turbo on fal",
-    options: { seed: true, resolutions: ["480p"], maxImages: 1, promptOptional: true },
-  }),
+  // In the cloud on MiniMax H3 Max Recast, fal's successor to Wan 2.2 Animate: the character takes the person's place in the
+  // clip's own setting (on your GPU, Wan Animate 2 keeps its photo's setting).
+  {
+    ...original({
+      id: "fuobe-genjutsu-motion",
+      open: [comfy("motion-transfer", "wan-animate2", "Wan Animate 2: the whole selection in 81-frame fragments, the clip's fps and sound kept")],
+      tagline: "Your character performs the clip's moves · Wan Animate 2 free on your GPU (24 GB), MiniMax H3 Max Recast in the cloud",
+      options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1, promptOptional: true },
+    }),
+    // The cloud half's own defaults are Recast's; the model as a whole keeps a size both engines read.
+    defaults: { resolution: "720p" },
+    engineOptions: { cloud: { resolutions: ["768P", "1080P"] } },
+    engineDefaults: { cloud: { resolution: "1080P" } },
+  },
+  {
+    ...original({
+      id: "fuobe-genjutsu-motion-lite",
+      open: [comfy("motion-transfer", "wan-animate2", "Wan Animate 2 at 480p with 4 distilled steps")],
+      tagline: "The quick tier: 480p · Wan Animate 2 in 4 steps on your GPU, MiniMax H3 Max Recast at 768p in the cloud",
+      options: { seed: true, resolutions: ["480p"], maxImages: 1, promptOptional: true },
+    }),
+    defaults: { resolution: "480p" },
+    engineOptions: { cloud: { resolutions: ["768P"] } },
+    engineDefaults: { cloud: { resolution: "768P" } },
+  },
   {
     ...original({
       id: "fuobe-genjutsu-swap",

@@ -19,6 +19,13 @@ import { finishLengthProblem, REGEN_FINISH_TIER, REGEN_FPS, REGEN_SMOOTH_MODEL, 
 import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
 import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
+/**
+ * fal removes its Wan 2.1 / 2.2 line (Wan VACE among it) on 2027-01-04. Masked swaps and depth restyles have no hosted
+ * successor that does the same job, so the cloud routes on Wan VACE (Shorts, Evolution, Genjutsu's swap and restyle) stay
+ * and say so before a run.
+ */
+export const WAN_VACE_ENDS = "Wan VACE runs on fal until 4 January 2027";
+
 // ---------------------------------------------------------------------------
 // Limits (the parity studio's, from the upload dialog) and engine shapes
 
