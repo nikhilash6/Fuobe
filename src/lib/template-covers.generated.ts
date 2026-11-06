@@ -27,7 +27,7 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "fashion/red-room": {"poster":"/previews/templates/fashion/red-room.jpg?v=1a3e7b1b","frames":["/previews/templates/fashion/red-room-2.jpg?v=c7fad0ef","/previews/templates/fashion/red-room-3.jpg?v=560f362d"]},
   "fashion/street-style-paparazzi": {"poster":"/previews/templates/fashion/street-style-paparazzi.jpg?v=234bd621","frames":["/previews/templates/fashion/street-style-paparazzi-2.jpg?v=7a819d47","/previews/templates/fashion/street-style-paparazzi-3.jpg?v=50dd7234"]},
   "fashion/ultra-bold": {"poster":"/previews/templates/fashion/ultra-bold.jpg?v=f8fe8f25","frames":["/previews/templates/fashion/ultra-bold-2.jpg?v=f6e59833","/previews/templates/fashion/ultra-bold-3.jpg?v=7f62ff3b"]},
-  "fashion/view-from-the-top": {"poster":"/previews/templates/fashion/view-from-the-top.jpg?v=df7c92d1","frames":["/previews/templates/fashion/view-from-the-top-2.jpg?v=fd0e1af1","/previews/templates/fashion/view-from-the-top-3.jpg?v=d98022dd"]},
+  "fashion/view-from-the-top": {"poster":"/previews/templates/fashion/view-from-the-top.jpg?v=df7c92d1","frames":["/previews/templates/fashion/view-from-the-top-2.jpg?v=c4dc1eec","/previews/templates/fashion/view-from-the-top-3.jpg?v=d98022dd"]},
   "influencer/tier-birds": "3de65fe3",
   "influencer/tier-capybaras": "69e7c980",
   "influencer/tier-cats": "7990f28e",
