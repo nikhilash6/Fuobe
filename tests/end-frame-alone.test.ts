@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getModel, getPreset, MODELS } from "@/lib/catalog";
 import { endFrameAloneProblem, inferOperation, planGeneration, routesFor, takesEndAlone } from "@/lib/catalog/plan";
 import type { GenerationRequest } from "@/lib/catalog/types";
+import { slimModel } from "@/lib/studio-catalog";
 import { bodyProblems, END, handOverInput, IMG, inputSchema, PROMPT, routeRequest, SCHEMA_INDEX } from "./helpers/provider-schemas";
 
 /**
@@ -43,6 +44,19 @@ describe("an end frame alone on fal's H3 family", () => {
     }
   });
 
+  it("the browser's slimmed catalog (no field maps) plans it the same, with nothing said", () => {
+    for (const id of H3_FAMILY) {
+      const slim = slimModel(getModel(id)!);
+      expect(slim.routes.every((r) => !r.map), id).toBe(true);
+      expect(takesEndAlone(slim), id).toBe(true);
+      expect(inferOperation(slim, { inputs: { endImage: END } }), id).toBe("flf2v");
+      expect(endFrameAloneProblem(slim, { endImage: END }), id).toBeNull();
+      const p = planGeneration({ feature: "video", modelId: id, prompt: PROMPT, inputs: { endImage: END }, params: {} }, (m) => (m === id ? slim : getModel(m)), getPreset);
+      expect(p.op, id).toBe("flf2v");
+    }
+    expect(endFrameAloneProblem(slimModel(getModel("minimax-h3-lite")!), { endImage: END })).toMatch(/only after a start frame/);
+  });
+
   it("an API caller's start-and-end op with only the end frame runs too", () => {
     expect(plan("minimax-h3-max-turbo", { endImage: END }, "flf2v").op).toBe("flf2v");
   });
@@ -59,8 +73,8 @@ describe("an end frame alone on fal's H3 family", () => {
   });
 });
 
-describe("conformance: a route that takes an end frame alone (FieldMap.endAlone)", () => {
-  const flagged = MODELS.flatMap((m) => m.routes.filter((r) => r.map?.endAlone).map((r) => ({ id: m.id, route: r })));
+describe("conformance: a route that takes an end frame alone (ModelRoute.endAlone)", () => {
+  const flagged = MODELS.flatMap((m) => m.routes.filter((r) => r.endAlone).map((r) => ({ id: m.id, route: r })));
 
   it("is fal's H3 family's image to video, and nothing else", () => {
     expect([...new Set(flagged.map((f) => f.route.endpoint))].sort()).toEqual(["minimax/h3-max-turbo/image-to-video", "minimax/h3-max/image-to-video", "minimax/h3/image-to-video"]);

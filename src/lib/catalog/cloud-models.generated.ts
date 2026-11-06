@@ -8299,9 +8299,9 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 50000,
-          "endAlone": true
-        }
+          "promptMax": 50000
+        },
+        "endAlone": true
       },
       {
         "op": "flf2v",
@@ -8316,9 +8316,9 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 50000,
-          "endAlone": true
-        }
+          "promptMax": 50000
+        },
+        "endAlone": true
       },
       {
         "op": "ref2v",
@@ -8458,9 +8458,9 @@ export const CLOUD_MODELS: ModelDef[] = [
           "defaults": {
             "prompt_expansion_mode": "balanced"
           },
-          "promptMax": 50000,
-          "endAlone": true
-        }
+          "promptMax": 50000
+        },
+        "endAlone": true
       },
       {
         "op": "flf2v",
@@ -8485,9 +8485,9 @@ export const CLOUD_MODELS: ModelDef[] = [
           "defaults": {
             "prompt_expansion_mode": "balanced"
           },
-          "promptMax": 50000,
-          "endAlone": true
-        }
+          "promptMax": 50000
+        },
+        "endAlone": true
       },
       {
         "op": "ref2v",
@@ -9568,9 +9568,9 @@ export const CLOUD_MODELS: ModelDef[] = [
           "defaults": {
             "prompt_expansion_mode": "balanced"
           },
-          "promptMax": 50000,
-          "endAlone": true
-        }
+          "promptMax": 50000
+        },
+        "endAlone": true
       },
       {
         "op": "flf2v",
@@ -9595,9 +9595,9 @@ export const CLOUD_MODELS: ModelDef[] = [
           "defaults": {
             "prompt_expansion_mode": "balanced"
           },
-          "promptMax": 50000,
-          "endAlone": true
-        }
+          "promptMax": 50000
+        },
+        "endAlone": true
       }
     ],
     "options": {

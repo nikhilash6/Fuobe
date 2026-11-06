@@ -611,7 +611,7 @@ model("wan-2-5", "Wan 2.5", "Alibaba Wan", "wan", "video", "Audio-driven video u
       [("t2v", "fal-ai/wan-25-preview/text-to-video"), ("i2v", "fal-ai/wan-25-preview/image-to-video")],
       badges=["audio"], pricing=("second", 0.15, "1080p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
 # fal's H3, H3 Max and H3 Max Turbo image to video take an end frame alone ("It may be provided alone for end-only keyframe
-# generation; in that case the output canvas follows this image"): FieldMap.endAlone, so a run with only an end frame goes there.
+# generation; in that case the output canvas follows this image"): ModelRoute.endAlone, so a run with only an end frame goes there.
 END_ALONE = {"flf2v": True, "endAlone": True}
 # Hosted MiniMax H3 makes its own sound. fal takes a whole number of seconds from 5 to 15 and bills each second by the
 # resolution (its pricing record, docs/research/new-models-7.json): 480P $0.05, 768P $0.06, 2K $0.13, 4K $0.16. Without
@@ -2638,15 +2638,15 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # FieldMap.publicLinks, so the server sends each file as a public https link, never a data: URI or a Files API link.
     if ropts.get("publicLinks"):
         fmap["publicLinks"] = True
-    # An end frame the endpoint takes without a start frame (FieldMap.endAlone).
-    if ropts.get("endAlone"):
-        if "endImage" in fmap:
-            fmap["endAlone"] = True
-        else:
-            warn(f"{m['id']}: {ep} has no end frame field; no endAlone")
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
+    # An end frame the endpoint takes without a start frame (ModelRoute.endAlone, kept in the browser's slimmed catalog).
+    if ropts.get("endAlone"):
+        if "endImage" in fmap:
+            route["endAlone"] = True
+        else:
+            warn(f"{m['id']}: {ep} has no end frame field; no endAlone")
     # The most stills this route reads (ModelRoute.maxImages): set on every route of an op, the plan refuses more.
     if ropts.get("route_max_images"):
         route["maxImages"] = ropts["route_max_images"]

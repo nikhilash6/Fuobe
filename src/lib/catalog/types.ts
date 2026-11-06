@@ -391,12 +391,6 @@ export interface FieldMap {
   /** Array of images field, e.g. "image_urls" (receives every reference image). */
   images?: string;
   endImage?: string;
-  /**
-   * The endpoint takes the end frame without a start frame (fal's H3, H3 Max and H3 Max Turbo image to video: "It may be
-   * provided alone"; the clip then takes the end frame's shape). A run with only an end frame goes to its start-and-end
-   * route; on a model without it, the end frame needs a start frame (endFrameAloneProblem in plan.ts).
-   */
-  endAlone?: boolean;
   mask?: string;
   /** What the mask's paint means to this API: white (default), black or transparent = change. */
   maskFormat?: "white" | "black" | "alpha";
@@ -672,6 +666,13 @@ export interface ModelRoute {
   /** fal endpoint id, replicate "owner/name", or ComfyUI workflow id from the manifest. */
   endpoint: string;
   map?: FieldMap;
+  /**
+   * The endpoint takes the end frame without a start frame (fal's H3, H3 Max and H3 Max Turbo image to video: "It may be
+   * provided alone"; the clip then takes the end frame's shape). A run with only an end frame goes to its start-and-end
+   * route; on a model without it, the end frame needs a start frame (endFrameAloneProblem in plan.ts).
+   * A route field, not a map field, so the browser's slimmed catalog (slimModel) keeps it.
+   */
+  endAlone?: boolean;
   /**
    * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count, the canvas a
    * layout is compiled at), kept by slimModel when it drops the field maps for the browser. The server reads `map`.

@@ -82,10 +82,10 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
   return model.routes[0].op;
 }
 
-/** Every start-and-end route of the model takes the end frame without a start frame (FieldMap.endAlone: fal's H3 family). */
+/** Every start-and-end route of the model takes the end frame without a start frame (ModelRoute.endAlone: fal's H3 family). */
 export function takesEndAlone(model: Pick<ModelDef, "routes">): boolean {
   const routes = model.routes.filter((r) => r.op === "flf2v");
-  return routes.length > 0 && routes.every((r) => !!r.map?.endAlone);
+  return routes.length > 0 && routes.every((r) => !!r.endAlone);
 }
 
 /**
@@ -1088,7 +1088,7 @@ export function missingInputs(op: Operation, req: Pick<GenerationRequest, "input
   const n = NEEDS[op];
   if (!n) return null;
   const i = req.inputs ?? {};
-  // A start-and-end run with only the end frame, on routes that take it alone (FieldMap.endAlone).
+  // A start-and-end run with only the end frame, on routes that take it alone (ModelRoute.endAlone).
   const endAlone = op === "flf2v" && !!i.endImage && !i.images?.length && !!model && takesEndAlone(model);
   if (n.images && (i.images?.length ?? 0) < n.images && !endAlone) return n.msg;
   if (n.video && !i.video) return n.msg;
