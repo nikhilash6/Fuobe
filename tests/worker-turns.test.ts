@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GpuWatch } from "../bin/lib/worker/gpu.mjs";
-import { BASELINE_CAP_MB, measureBaseline, parseCounters, parseListeners, pickGpu, readLock, splitMemory, unknownHolder, workPids } from "../bin/lib/worker/local-work.mjs";
+import { BASELINE_CAP_MB, freeLocal, localIdle, measureBaseline, parseCounters, parseListeners, pickGpu, readLock, splitMemory, unknownHolder, workPids } from "../bin/lib/worker/local-work.mjs";
 import { readYielded, SiteTurns, TURNS, writeSite } from "../bin/lib/worker/turns.mjs";
 import { siteOf } from "../bin/lib/worker/run.mjs";
 import { tempDir } from "./helpers/temp-dir";
@@ -79,7 +79,34 @@ describe("the port table and the GPU counters", () => {
     expect(s.ownMb).toBe(2000);
     expect(s.workMb).toBe(9000);
     expect(s.othersMb).toBe(0);
-    expect(s.work).toEqual({ pids: [4242, 4400], port: 8188 });
+    expect(s.work).toEqual({ pids: [4242, 4400], port: 8188, ports: [8188, 8191] });
+  });
+
+  it("asks local ComfyUI work only whether it runs anything, and to free its memory: idle means both its lists are empty", async () => {
+    const calls: string[] = [];
+    const queues: Record<number, unknown> = { 8188: { queue_running: [], queue_pending: [] }, 8191: { queue_running: [], queue_pending: [[2, "p", {}, {}, []]] } };
+    const fetchFn = async (url: string, init: RequestInit = {}) => {
+      const u = new URL(url);
+      calls.push(`${init.method ?? "GET"} ${u.host}${u.pathname}${init.body ? ` ${String(init.body)}` : ""}`);
+      if (u.port === "8199") throw new Error("refused");
+      return u.pathname === "/queue" ? Response.json(queues[Number(u.port)] ?? {}) : new Response(null, { status: 200 });
+    };
+    expect(await localIdle(fetchFn, [8188])).toBe(true);
+    // One with a queued job, one that doesn't answer, one that answers something else: not idle.
+    expect(await localIdle(fetchFn, [8188, 8191])).toBe(false);
+    expect(await localIdle(fetchFn, [8199])).toBe(false);
+    expect(await localIdle(fetchFn, [8190])).toBe(false);
+    expect(await localIdle(fetchFn, [])).toBe(false);
+    await freeLocal(fetchFn, [8188, 8199]);
+    expect(calls).toEqual([
+      "GET 127.0.0.1:8188/queue",
+      "GET 127.0.0.1:8188/queue",
+      "GET 127.0.0.1:8191/queue",
+      "GET 127.0.0.1:8199/queue",
+      "GET 127.0.0.1:8190/queue",
+      'POST 127.0.0.1:8188/free {"unload_models":true,"free_memory":true}',
+      'POST 127.0.0.1:8199/free {"unload_models":true,"free_memory":true}',
+    ]);
   });
 
   it("a game holds memory: others above the busy line, and the game is named", () => {
@@ -308,12 +335,19 @@ describe("turns", () => {
   });
 
   it("reads only the beat's claimableNow (a count); absent, or anything else, means the studio doesn't say", () => {
-    expect(siteOf({ claimableNow: 2 })).toEqual({ claimable: 2 });
-    expect(siteOf({ claimableNow: 0 })).toEqual({ claimable: 0 });
+    expect(siteOf({ claimableNow: 2 })).toEqual({ claimable: 2, owner: 0 });
+    expect(siteOf({ claimableNow: 0 })).toEqual({ claimable: 0, owner: 0 });
     // Fields the protocol doesn't have are not read.
-    expect(siteOf({ worker: { claimableNow: 1, yieldInterrupt: true }, oldestWaitS: 40 })).toEqual({ claimable: null });
-    expect(siteOf({ waiting: 9, claimableNow: -1, worker: {} })).toEqual({ claimable: null });
+    expect(siteOf({ worker: { claimableNow: 1, yieldInterrupt: true }, oldestWaitS: 40 })).toEqual({ claimable: null, owner: 0 });
+    expect(siteOf({ waiting: 9, claimableNow: -1, worker: {} })).toEqual({ claimable: null, owner: 0 });
     expect(siteOf(null).claimable).toBeNull();
+  });
+
+  it("reads the beat's ownerWaitingNow (a count) apart: 0 when the studio doesn't say", () => {
+    expect(siteOf({ claimableNow: 0, ownerWaitingNow: 3 })).toEqual({ claimable: 0, owner: 3 });
+    expect(siteOf({ claimableNow: 1, ownerWaitingNow: -2 })).toEqual({ claimable: 1, owner: 0 });
+    expect(siteOf({ claimableNow: 1, ownerWaitingNow: "2" })).toEqual({ claimable: 1, owner: 0 });
+    expect(siteOf({ waiting: 4 }).owner).toBe(0);
   });
 
   it("the oldest wait: how long this worker has seen people's jobs waiting for it", () => {

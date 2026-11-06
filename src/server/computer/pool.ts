@@ -251,7 +251,7 @@ export function cleanBeat(b: unknown): WorkerBeat {
  * A worker says it is here: its own pause and why, its GPU, its facts, what it runs. The answer: whether it is paused on
  * the website, a stop-now, drain, its hours, the lanes it is allowed, and the prompts to take off its ComfyUI.
  */
-export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatAnswer & { worker: WorkerAnswer } {
+export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatAnswer & { worker: WorkerAnswer; ownerWaitingNow: number } {
   const d = db();
   const device = `wkr-${w.id}`;
   // With the write lock from the start (IMMEDIATE): what it reads of the line is still so when it writes, even while
@@ -313,6 +313,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       heldElsewhere: false,
       waiting,
       claimableNow: claimableNow(fresh, now),
+      ownerWaitingNow: ownerWaitingNow(fresh, now),
       stops,
       worker: {
         paused: !!fresh.paused_server,
@@ -341,11 +342,23 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
  * website, a drain, an older worker program or being outside its hours does.
  */
 export function claimableNow(w: WorkerRow, now = Date.now()): number {
+  return gpuClaimable(w, now, "people");
+}
+
+/**
+ * The owner's own tasks this worker may claim right now, by the same rules as claimableNow. They never ask local
+ * ComfyUI work to make room: its machine reads this only to let an idle local ComfyUI free the memory it keeps.
+ */
+export function ownerWaitingNow(w: WorkerRow, now = Date.now()): number {
+  return gpuClaimable(w, now, "owner");
+}
+
+function gpuClaimable(w: WorkerRow, now: number, whose: "people" | "owner"): number {
   if (w.kind !== "pool" || w.revoked_at || w.paused_server || w.drain || (w.protocol ?? 0) < MIN_PROTOCOL || !hoursAt(hoursOf(w), now).inside) return 0;
   // Only its GPU's: work its CPU slot takes never asks local ComfyUI work to make room (left out in the query, so a long
   // line of CPU work never hides the GPU's).
   const rows = db()
-    .prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS NOT NULL AND INSTR(',' || pools || ',', ?) > 0 ${slotWhere(w, "gpu")}ORDER BY ${LINE_ORDER} LIMIT ?`)
+    .prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS ${whose === "people" ? "NOT NULL" : "NULL"} AND INSTR(',' || pools || ',', ?) > 0 ${slotWhere(w, "gpu")}ORDER BY ${LINE_ORDER} LIMIT ?`)
     .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
   return rows.filter((t) => fitsSlot(t, w, now, "gpu") && retryOk(t, w, now) && beforeWindowEnds(t, w, now)).length;
 }

@@ -8,6 +8,8 @@
  * - A game holds the GPU: the busy pause, and no turn is asked for.
  * - The studio doesn't say what the worker can take: local ComfyUI work pauses it, as before.
  * - Me first: the pause shortcut during a turn writes siteWaiting 0, and the job keeps its place.
+ * - Only the owner's own job waits: no turn. Local ComfyUI work that runs a job is left alone; once it runs nothing, it
+ *   is asked to free its memory (its /queue read, then its /free) and the worker takes the job.
  * - The counters fail: a lock that names ComfyUI work leads to a turn.
  */
 import fs from "node:fs";
@@ -186,7 +188,27 @@ afterEach(async () => {
   }
 });
 
-function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { lockOwners?: string[]; studio?: { older: boolean } } = {}) {
+/**
+ * Local ComfyUI work as the worker reaches it (deps.localFetch, never a real port): its /queue says whether it runs a
+ * job (`busy`), its /free empties its memory (`onFree`). Every request is noted.
+ */
+function fakeLocal(o: { busy: boolean; onFree?: () => void }) {
+  const calls: string[] = [];
+  const fetch = async (url: string, init: RequestInit = {}) => {
+    const u = new URL(url);
+    calls.push(`${init.method ?? "GET"} ${u.host}${u.pathname}`);
+    if (u.pathname === "/queue" && (init.method ?? "GET") === "GET") return Response.json({ queue_running: o.busy ? [[1, "local-job", {}, {}, []]] : [], queue_pending: [] });
+    if (u.pathname === "/free" && init.method === "POST") {
+      expect(JSON.parse(String(init.body))).toEqual({ unload_models: true, free_memory: true });
+      o.onFree?.();
+      return new Response(null, { status: 200 });
+    }
+    return new Response("not here", { status: 404 });
+  };
+  return { o, calls, fetch };
+}
+
+function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { lockOwners?: string[]; studio?: { older: boolean }; local?: ReturnType<typeof fakeLocal> } = {}) {
   const ctrl = new AbortController();
   const cfg = {
     site: SITE,
@@ -219,6 +241,8 @@ function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { lockOwners?: s
     catalogVersion: "a".repeat(64),
     gpuEveryMs: 200,
     turnGraceMs: 1500,
+    // Local ComfyUI work is never a real port here: busy unless the test says otherwise.
+    localFetch: (o.local ?? fakeLocal({ busy: true })).fetch,
     ...gpu,
   });
   const r = { ctrl, done };
@@ -316,11 +340,12 @@ describe("studio jobs first", () => {
     expect(p.logs.some((l) => /no longer keeps it paused/.test(l))).toBe(true);
   });
 
-  it("only the owner's own job waits: the studio counts none, so no turn is asked for and local ComfyUI work goes on", async () => {
+  it("only the owner's own job waits: the studio counts none, so no turn is asked for and local ComfyUI work that runs a job goes on", async () => {
     const w = addWorker();
     const p = pc();
     const id = addTask({ owner: true });
-    start(w, p, fakeGpu(p, { workMb: 9000 }));
+    const local = fakeLocal({ busy: true });
+    start(w, p, fakeGpu(p, { workMb: 9000 }), { local });
     // The studio's real beat says 0 (not "unknown"): turns work, local ComfyUI work is no other program, and no
     // turn begins for the owner's own job.
     await until(() => comfyAnswers(p));
@@ -330,6 +355,32 @@ describe("studio jobs first", () => {
     expect(workerRow(w).local_why).toBeNull();
     expect(task(id).state).toBe("waiting");
     expect(p.logs.some((l) => /make room|Another program/.test(l))).toBe(false);
+    // It only looked at the local work's queue: never asked it to free anything while it works.
+    expect(local.calls.length).toBeGreaterThan(0);
+    expect(new Set(local.calls)).toEqual(new Set(["GET 127.0.0.1:8188/queue"]));
+    expect(p.logs.some((l) => /owner's job waits for local ComfyUI work to finish/.test(l))).toBe(true);
+  });
+
+  it("only the owner's own job waits and local ComfyUI work runs nothing: it is asked to free its memory, and the job runs", async () => {
+    const w = addWorker();
+    const p = pc();
+    const id = addTask({ owner: true });
+    const gpu = { workMb: 9000 };
+    const local = fakeLocal({ busy: true, onFree: () => (gpu.workMb = 400) });
+    start(w, p, fakeGpu(p, gpu), { local });
+    await until(() => comfyAnswers(p));
+    await sleep(1500);
+    expect(task(id).state).toBe("waiting");
+    // Its local job ends; the models stay loaded.
+    local.o.busy = false;
+    await until(() => task(id).state !== "waiting", 30_000);
+    expect(local.calls).toContain("POST 127.0.0.1:8188/free");
+    expect(local.calls.every((c) => c === "GET 127.0.0.1:8188/queue" || c === "POST 127.0.0.1:8188/free")).toBe(true);
+    expect(p.logs.some((l) => /runs nothing and keeps its models loaded/.test(l))).toBe(true);
+    expect((await until(() => ["done", "failed"].includes(task(id).state) && task(id), 60_000)).state).toBe("done");
+    // It never asked for room, and never paused; a minute after the job (shortened here) it writes 0 again.
+    expect(p.logs.some((l) => /make room|Another program/.test(l))).toBe(false);
+    await until(() => site(p)?.siteWaiting === 0, 20_000);
   });
 
   it("me first: the pause shortcut during a turn writes siteWaiting 0 and keeps the job in line; a resume asks again", async () => {

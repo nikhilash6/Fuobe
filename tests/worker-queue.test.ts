@@ -281,6 +281,20 @@ describe("the beat", () => {
     pool.patchWorker(w.id, { paused: true });
     expect(beatAs(w).claimableNow).toBe(0);
   });
+
+  it("says apart how many of the owner's own tasks this worker may claim now, by the same rules", () => {
+    const w = standInWorker();
+    accountTask();
+    const owner = accountTask();
+    const other = accountTask();
+    db().prepare("UPDATE relay_tasks SET principal = 'owner', account = NULL WHERE id IN (?, ?)").run(owner.id, other.id);
+    expect(beatAs(w)).toMatchObject({ claimableNow: 1, ownerWaitingNow: 2 });
+    // One it can't run (another pool) doesn't count.
+    db().prepare("UPDATE relay_tasks SET pools = 'elsewhere' WHERE id = ?").run(other.id);
+    expect(beatAs(w).ownerWaitingNow).toBe(1);
+    pool.patchWorker(w.id, { paused: true });
+    expect(beatAs(w)).toMatchObject({ claimableNow: 0, ownerWaitingNow: 0 });
+  });
 });
 
 describe("the workers' measured run reaches the billing service", () => {

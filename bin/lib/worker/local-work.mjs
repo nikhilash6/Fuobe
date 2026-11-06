@@ -1,5 +1,5 @@
-// Telling local ComfyUI work apart from other programs (docs/gpu-workers.md, "Studio jobs first"). The worker never
-// connects to another ComfyUI. It reads three things only:
+// Telling local ComfyUI work apart from other programs (docs/gpu-workers.md, "Studio jobs first"). To tell them apart,
+// the worker never connects to another ComfyUI. It reads three things only:
 //
 // - Windows' table of listening ports (Get-NetTCPConnection -State Listen). Reading the table never connects to a port.
 //   A python process that listens on a port in the local range (worker.json) is local ComfyUI work. The worker's own
@@ -11,6 +11,11 @@
 //
 // Others = the GPU's total used memory, minus the worker's own ComfyUI, minus local ComfyUI work, minus the desktop's
 // usual share (measured at setup).
+//
+// One exception, for the owner's own jobs, which ask local ComfyUI work for no turn: local ComfyUI work that holds the
+// GPU's memory is asked whether it runs anything (its /queue, read only). When it runs nothing and has nothing queued,
+// it is asked to free its memory (its /free: models unloaded, caches emptied; nothing stops, and it loads them again
+// for its next job). Never anything else, and never while it works.
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -159,7 +164,7 @@ export function unknownHolder(counters, listing, ownPid, minMb) {
 }
 
 /**
- * Split the GPU's used memory: { ownMb, workMb, othersMb, who, work: { pids, port }, source }.
+ * Split the GPU's used memory: { ownMb, workMb, othersMb, who, work: { pids, port (the first), ports (all of them) }, source }.
  * `who` names the biggest other program (for the busy pause). `source`: "counters", "lock" (the counters failed, the
  * lock decided) or "total" (neither: everything that isn't the worker's own counts as another program, which fails
  * safe). `o`: { usedMb, apps (nvidia-smi's, for names), counters, listing, own: { pid, port, running, mb }, ports,
@@ -182,7 +187,7 @@ export function splitMemory(o) {
     const top = others[0];
     const who = top ? (o.listing.names?.[top.pid] ?? o.apps?.find((a) => a.pid === top.pid)?.name ?? "another program") : "another program";
     const firstPort = [...work.values()][0] ?? null;
-    return { ownMb, workMb, othersMb, who, work: { pids: [...work.keys()], port: firstPort }, source: "counters" };
+    return { ownMb, workMb, othersMb, who, work: { pids: [...work.keys()], port: firstPort, ports: [...new Set(work.values())] }, source: "counters" };
   }
   const rest = Math.max(0, o.usedMb - torchOwn - base);
   const owners = (o.lockOwners ?? []).map((s) => String(s).toLowerCase()).filter(Boolean);
@@ -191,6 +196,35 @@ export function splitMemory(o) {
   }
   const named = o.apps?.find((a) => a.pid !== o.own.pid && (a.usedMb === null || a.usedMb > 0))?.name;
   return { ownMb: torchOwn, workMb: 0, othersMb: rest, who: o.lock !== null && o.lock !== undefined ? "another program" : (named ?? "another program"), work: { pids: [], port: null }, source: o.lock !== null && o.lock !== undefined ? "lock" : "total" };
+}
+
+/** How long a look at local ComfyUI work's /queue or a /free waits for its answer. */
+export const LOCAL_ASK_MS = 2000;
+
+/**
+ * Local ComfyUI work on these ports runs nothing and has nothing queued: each one's /queue (read only) answers with
+ * empty queue_running and queue_pending lists. False when any of them answers anything else or doesn't answer in time.
+ */
+export async function localIdle(fetchFn, ports, ms = LOCAL_ASK_MS) {
+  if (!ports?.length) return false;
+  for (const port of ports) {
+    try {
+      const r = await fetchFn(`http://127.0.0.1:${port}/queue`, { signal: AbortSignal.timeout(ms) });
+      if (!r.ok) return false;
+      const q = await r.json();
+      if (!Array.isArray(q?.queue_running) || !Array.isArray(q?.queue_pending) || q.queue_running.length || q.queue_pending.length) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Ask local ComfyUI work on these ports to free its memory (/free: models unloaded, caches emptied). */
+export async function freeLocal(fetchFn, ports, ms = LOCAL_ASK_MS) {
+  for (const port of ports ?? []) {
+    await fetchFn(`http://127.0.0.1:${port}/free`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true, free_memory: true }), signal: AbortSignal.timeout(ms) }).catch(() => null);
+  }
 }
 
 /** The most `fuobe worker baseline` saves: a desktop alone uses less, so more means another program was open. */

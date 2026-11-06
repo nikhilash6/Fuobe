@@ -28,7 +28,7 @@ import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, w
 import { GpuWatch, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
-import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
+import { freeLocal, localIdle, readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
 import { finishers } from "./finish.mjs";
 import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
@@ -90,6 +90,15 @@ export const CLAIM_GAP_MS = 1500;
  * before `idleMs` has gone by since, or CLAIM_GAP_MS while a person's job waits for it (`claimable`).
  */
 export const claimDue = (t, missedAt, claimable = 0, idleMs = IDLE_CLAIM_MS) => t - missedAt >= (claimable > 0 ? Math.min(CLAIM_GAP_MS, idleMs) : idleMs);
+
+/**
+ * While the owner's own job waits for this worker and local ComfyUI work keeps the GPU's memory, the worker looks at
+ * that work's /queue at most once in this long (ms).
+ */
+export const IDLE_LOOK_MS = 10_000;
+
+/** After it asked idle local ComfyUI work to free its memory, the worker may take the owner's job for this long (ms). */
+export const ROOM_MS = 30_000;
 
 /** A worker token as the studio makes them. */
 const NEXT_TOKEN = /^fuobe_wkr_[A-Za-z0-9_-]{43}$/;
@@ -168,11 +177,13 @@ const arrayBuffer = (buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + b
 const count = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 
 /**
- * What the beat says for studio jobs first: { claimable }, the beat's claimableNow (people's jobs this worker may take
- * now). It is null when the studio doesn't say, and then local ComfyUI work counts as another program, as before.
+ * What the beat says for studio jobs first: { claimable, owner }. `claimable` is the beat's claimableNow (people's jobs
+ * this worker may take now). It is null when the studio doesn't say, and then local ComfyUI work counts as another
+ * program, as before. `owner` is the beat's ownerWaitingNow (the owner's own jobs it may take now; 0 when it doesn't
+ * say): they ask for no turn, but idle local ComfyUI work is asked to free its memory for them.
  */
 export function siteOf(answer) {
-  return { claimable: count(answer?.claimableNow) };
+  return { claimable: count(answer?.claimableNow), owner: count(answer?.ownerWaitingNow) ?? 0 };
 }
 
 /**
@@ -297,6 +308,13 @@ async function work(saved, deps, owner) {
   let listedAt = -Infinity;
   let split = null;
   let turn = { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null, waitForYield: false, late: false, startsAt: null, ended: null };
+  // The owner's own job and local ComfyUI work that keeps memory: when its /queue was last looked at, when it was last
+  // asked to free its memory (it may take the owner's job for ROOM_MS after), and whether the log said it waits.
+  let idleLookAt = -Infinity;
+  let roomAt = -Infinity;
+  let ownerWaitSaid = false;
+  // Local ComfyUI work is asked with the plain fetch, never the one that carries the worker's token to the studio.
+  const localFetch = deps.localFetch ?? globalThis.fetch;
   let siteWritten = "";
   let siteAt = 0;
   let siteFailed = false;
@@ -895,8 +913,31 @@ async function work(saved, deps, owner) {
         if (turns.folderOk() && (beaten || JSON.stringify([turn.siteWaiting, turn.interruptAt]) !== siteWritten || t - siteAt >= 5000)) {
           writeTurn(t, { siteWaiting: turn.siteWaiting, oldestWaitS: turn.oldestWaitS, interrupt: turn.interrupt, interruptAt: turn.interruptAt });
         }
-        // No new job while local ComfyUI work holds the GPU, unless a turn has begun and it made room.
-        holdBack = turn.waitForYield || (turnsReady(t) && workHolds && turn.siteWaiting === 0) || gpu.busyInARow > 0;
+        // The owner's own job asks for no turn. Local ComfyUI work that runs nothing and only keeps its models loaded is
+        // asked to free its memory (its /queue read first, then its /free), and the worker takes the job. Work that runs
+        // a job, or that can't be asked (no port: the lock decided), is left alone, and the owner's job waits.
+        const ownerOnly = turnsReady(t) && workHolds && turn.siteWaiting === 0 && !turn.waitForYield && s.owner > 0 && gpu.busyInARow === 0;
+        let roomForOwner = false;
+        if (ownerOnly && !busyJob && comfy.ready && mayWork() && !stopNow) {
+          if (t - roomAt < ROOM_MS) roomForOwner = true;
+          else if (t - idleLookAt >= IDLE_LOOK_MS) {
+            idleLookAt = t;
+            const ports = split?.work?.ports ?? [];
+            if (ports.length && (await localIdle(localFetch, ports))) {
+              log(`Local ComfyUI work on port ${ports.join(", ")} runs nothing and keeps its models loaded: asking it to free its memory for the owner's job.`);
+              await freeLocal(localFetch, ports);
+              roomAt = now();
+              roomForOwner = true;
+              ownerWaitSaid = false;
+            } else if (!ownerWaitSaid) {
+              log("The owner's job waits for local ComfyUI work to finish.");
+              ownerWaitSaid = true;
+            }
+          }
+        } else if (!ownerOnly) ownerWaitSaid = false;
+        // No new job while local ComfyUI work holds the GPU, unless a turn has begun and it made room, or it was idle
+        // and freed its memory for the owner's job.
+        holdBack = turn.waitForYield || (turnsReady(t) && workHolds && turn.siteWaiting === 0 && !roomForOwner) || gpu.busyInARow > 0;
       }
       // Kept results go up before its ComfyUI starts (they need none, and a start can take minutes), unless the studio
       // said a moment ago that their job isn't this worker's now.

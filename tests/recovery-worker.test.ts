@@ -349,6 +349,8 @@ describe("the worker program's recovery (accounts' runs, end to end)", () => {
         log: (line: string) => void p.logs.push(line),
         composer,
         catalogVersion: program.catalogVersion,
+        // Local ComfyUI work is never a real port here (it answers nothing, so it is never taken for idle).
+        localFetch: async () => new Response("not here", { status: 404 }),
         // The folders are looked at again on both clocks: a full rescan, and the check for model folders that were missing.
         ...(o.rescanMs && { rescanMs: o.rescanMs, modelsCheckMs: o.rescanMs }),
         ...o.gpu,

@@ -288,7 +288,8 @@ A PC can also run ComfyUI work of its own: a ComfyUI that you use by hand, or a 
 ComfyUI work runs whenever no studio job waits. Any other program (a game, Blender, a video editor) still pauses the
 worker, as above.
 
-The worker never connects to your other ComfyUIs. It reads three things only:
+To tell local ComfyUI work apart, the worker never connects to your other ComfyUIs (the only exception is for the
+owner's own jobs, below). It reads three things only:
 
 1. **Windows' table of listening ports** (`Get-NetTCPConnection -State Listen`). Reading the table connects to
    nothing. A python process that listens on a port in `localComfyPorts` (8188 to 8199) is local ComfyUI work. The
@@ -337,6 +338,16 @@ When no studio job has come for a minute, the worker frees its own ComfyUI's mem
 and in its beat (`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line. While it waits,
 Settings → Workers shows "Waiting for local ComfyUI work to make room", with the helper's estimate of the start when
 there is one, never "Ready".
+
+**The owner's own jobs.** They ask for no turn, and `siteWaiting` does not count them. While one of them waits for
+this worker (the beat's `ownerWaitingNow`) and only local ComfyUI work holds the GPU, the worker reads that work's
+`/queue` on its port (at most once in 10 seconds). It never does anything else to it:
+
+- If it runs a job or has one queued, the worker leaves it alone, and the owner's job keeps its place in line.
+- If it runs nothing and has nothing queued, it only keeps its models loaded. The worker asks it to free its memory
+  (`POST /free` with `unload_models` and `free_memory`; nothing stops, and it loads its models again for its next
+  job), and then takes the owner's job.
+- With no port to ask (the GPU lock decided, because the counters can't be read), the owner's job waits.
 
 **Limits that only the PC sets.** The studio can never change these:
 
@@ -802,7 +813,8 @@ its target), at most once an hour each.
     with no answer, `why` is `"waiting-for-yield:no-answer"`. The worker may still take jobs, and its jobs keep their
     place.
   - The answer also carries `claimableNow`, for studio jobs first: the number of people's jobs (never the owner's own)
-    that this worker may take now. It counts the jobs in the worker's pool that it can run (its lanes, files and VRAM)
+    that this worker may take now. `ownerWaitingNow` is the same count for the owner's own jobs: they ask for no turn,
+    but idle local ComfyUI work is asked to free its memory for them. It counts the jobs in the worker's pool that it can run (its lanes, files and VRAM)
     and that end before its hours do. It is 0 while the worker is paused on the website, drains, is outside its hours
     or runs an older worker program. The worker's own pause on the PC does not change it. The answer has no wait time
     and no request to interrupt local work: the worker measures `oldestWaitS` itself.
