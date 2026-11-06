@@ -23,7 +23,7 @@ export const GUEST_LIBRARY_MESSAGE = "Sign up to see this.";
 export const GUEST_RUN_MESSAGE = "Create a free account to run this.";
 
 /** Catalog and status reads that hold nothing of the owner's library: a guest gets the real answer. */
-const GUEST_READS = new Set(["/api/status", "/api/examples", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
+const GUEST_READS = new Set(["/api/status", "/api/site/uploads", "/api/examples", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
 
 /** Catalogs mixed with the owner's own items: the route leaves the owner's part out for a guest (GUEST_HEADER). */
 const GUEST_FILTERED = new Set(["/api/moodboards", "/api/palettes", "/api/assist", "/api/assist/skills"]);

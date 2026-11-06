@@ -30,6 +30,12 @@ export interface AudioFitRule {
   maxSeconds?: number;
   /** The largest file a conversion may make. */
   outMaxBytes: number;
+  /**
+   * The owner's switches (src/lib/av/upload-switches.ts): false leaves a file that would be converted, or offered a part,
+   * as it is, so the tool's own check says why it can't take it, as before the step existed. On unless said.
+   */
+  convert?: boolean;
+  trim?: boolean;
 }
 
 /** The largest file read in the browser to fit it: the app's own upload limit (MAX_MB in media-slot.tsx, /api/uploads). */
@@ -99,6 +105,13 @@ export function fitMaxSeconds(rule: AudioFitRule): number {
  * length can't be read is refused in words.
  */
 export function planAudioFit(rule: AudioFitRule, file: { format?: string; bytes?: number; seconds?: number; video?: boolean }): FitPlan {
+  if (rule.convert === false && rule.trim === false) return { kind: "keep" };
+  const plan = planAll(rule, file);
+  if ((plan.kind === "convert" && rule.convert === false) || (plan.kind === "trim" && rule.trim === false)) return { kind: "keep" };
+  return plan;
+}
+
+function planAll(rule: AudioFitRule, file: { format?: string; bytes?: number; seconds?: number; video?: boolean }): FitPlan {
   const tooLong = !!rule.maxSeconds && !!file.seconds && file.seconds > rule.maxSeconds;
   const needs = !!file.video || (!!file.format && !rule.formats.includes(file.format)) || (!!rule.maxBytes && !!file.bytes && file.bytes > rule.maxBytes);
   if (!needs && !tooLong) return { kind: "keep" };

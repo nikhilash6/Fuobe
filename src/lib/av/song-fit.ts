@@ -14,9 +14,6 @@ export const SONG_FIT_OPS = new Set(["song-extend", "song-remix", "song-stems"])
 /** What a converted song may weigh: Extend's and Stems' 10 MB. */
 export const SONG_FIT_MAX_BYTES = Math.min(EXTEND_UPLOAD_MAX_BYTES, STEMS_MAX_BYTES);
 
-/** The song slot's file picker: any sound or video file (a phone offers its videos too). */
-export const SONG_ACCEPT = "audio/*,video/*";
-
 /** The rule for a song tool's song, or null for any other op. */
 export function murekaSongRule(op: string | undefined): AudioFitRule | null {
   if (op === "song-extend") return { for: "Mureka", tool: "Extend", formats: UPLOAD_FORMATS, maxBytes: EXTEND_UPLOAD_MAX_BYTES, outMaxBytes: SONG_FIT_MAX_BYTES };

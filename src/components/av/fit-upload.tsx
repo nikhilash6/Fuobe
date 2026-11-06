@@ -2,7 +2,7 @@
 
 import { Loader2, Scissors, X } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { useAskBeforeUpload, useIsGuest } from "@/lib/api";
 import { clock, convertedLine, fitSourceKind, FIT_SOURCE_MAX_BYTES, mp3Kbps, planAudioFit, type AudioFitRule, type FitPlan } from "@/lib/av/fit-upload";
@@ -10,6 +10,7 @@ import { songFormat } from "@/lib/lyrics";
 import { postFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { readSeconds, toMp3 } from "./fit-audio";
+import { useUploadSwitches } from "./use-upload-switches";
 
 /**
  * The fitting step on a sound slot (src/lib/av/fit-upload.ts): a file the tool can't take as it is becomes one it takes, in
@@ -28,7 +29,7 @@ type Offer = { source: Blob | string; name?: string; seconds: number; max: numbe
 const MARGIN = 0.5;
 
 export function useFitUpload({
-  rule,
+  rule: given,
   value,
   skip = false,
   seconds,
@@ -45,6 +46,14 @@ export function useFitUpload({
   /** The slot's own upload (it places the tile and swaps in the stored file, or keeps it for a guest). */
   upload: (f: File) => void;
 }) {
+  // The owner's switches: a step switched off leaves the file to the tool's own check; both off, the step is off.
+  const sw = useUploadSwitches();
+  const rule = useMemo(() => {
+    if (!given) return null;
+    const convert = sw.soundConvert && given.convert !== false;
+    const trim = sw.soundTrim && given.trim !== false;
+    return convert || trim ? { ...given, convert, trim } : null;
+  }, [given, sw.soundConvert, sw.soundTrim]);
   const guest = useIsGuest();
   const askFirst = useAskBeforeUpload();
   const [busy, setBusy] = useState(false);
@@ -176,8 +185,11 @@ export function useFitUpload({
     [convertFile, convertStored],
   );
 
-  /** True when this step takes the file (any sound or video file while a rule is on). */
-  const wants = useCallback((f: File) => !!rule && !!fitSourceKind(f), [rule]);
+  /** True when this step takes the file: any sound file while a rule is on, and a video file (its sound) while converting is. */
+  const wants = useCallback((f: File) => {
+    const kind = fitSourceKind(f);
+    return !!rule && (kind === "audio" || (kind === "video" && rule.convert !== false));
+  }, [rule]);
 
   /** A file picked, dropped or pasted: its length read from its header first (nothing else is read), then fitted. */
   const take = useCallback(
@@ -253,6 +265,8 @@ export function useFitUpload({
   return {
     on: !!rule,
     wants,
+    /** The slot's file picker while the step is on: sound, and video while converting is on. */
+    accept: rule ? (rule.convert !== false ? "audio/*,video/*" : "audio/*") : undefined,
     take,
     busy,
     line,

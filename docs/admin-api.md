@@ -48,6 +48,8 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
 | `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings` |
 | `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share, the pick allowance and the paused budget (`pausedBudgetS`: how long a run that has started may spend back in line) |
+| `site:read` | `GET /api/admin/site/uploads` |
+| `site:write` | `PATCH /api/admin/site/uploads`: the upload switches |
 | `audit:read` | `GET /api/admin/audit` |
 
 The read-only preset in Settings ticks `runs:read`, `reports:read`, `workers:read`, `queue:read` and `audit:read`:
@@ -113,6 +115,8 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/queue` | | `{ lanes }` |
 | `GET /api/admin/queue/settings` | | `{ settings: { runCeilingS: { default, lanes }, ownerWaitLimitS, fairShare, pickAllowanceMs, pausedBudgetS } }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
 | `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000), `pausedBudgetS` (seconds, 0 to 604800) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
+| `GET /api/admin/site/uploads` | | `{ switches: { soundConvert, soundTrim, videoTrim, photoConvert, photoCrop } }`: what a browser may do to a file that doesn't fit a tool before it is uploaded (convert a sound to MP3, offer a part of a sound or clip, convert or shrink a photo, offer a crop). All `true` by default. Every visitor reads the same values at `GET /api/site/uploads` |
+| `PATCH /api/admin/site/uploads` | any of the five, each `true` or `false` | `{ switches }`; 400 with the reason for an unknown switch or a value that isn't a boolean. A switch that is off leaves that kind of file as it is: the tool says why it can't take it, and the server's checks apply. Browsers pick it up when they next load a page |
 | `GET /api/admin/workers` | | `{ workers, lanes }` |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
 | `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
@@ -124,7 +128,7 @@ A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name }
 `token.name` is the name the token had at the time. Actions: `account.disable`, `account.enable`, `account.signout`,
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
 `worker.rotate`, `worker.revoke`, `worker.revoke_all` (Sign everyone out with every API token), `queue.settings` (with
-the values before and after), `token.create`, `token.revoke`,
+the values before and after), `site.uploads` (the upload switches, with the values before and after), `token.create`, `token.revoke`,
 `token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
 `accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
 every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account

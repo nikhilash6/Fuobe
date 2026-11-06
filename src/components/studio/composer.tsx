@@ -15,8 +15,7 @@ import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
-import { murekaSongRule, SONG_ACCEPT, SONG_FIT_OPS } from "@/lib/av/song-fit";
-import { fitSourceKind } from "@/lib/av/fit-upload";
+import { murekaSongRule, SONG_FIT_OPS } from "@/lib/av/song-fit";
 import { FitUploadNote, useFitUpload } from "@/components/av/fit-upload";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
@@ -1690,7 +1689,7 @@ export function Composer({ docked }: { docked: boolean }) {
                 value={draft.slots[s.key] ?? null}
                 onChange={(v) => attach.setSlotValue(s.key, v)}
                 onFile={(f) => (s.key === "audio" && songFit.wants(f) ? songFit.take(f) : attach.uploadToSlot(s.key, f, s.accept))}
-                {...(s.key === "audio" && songFit.on && { accept: SONG_ACCEPT, takes: (f: File) => !!fitSourceKind(f) })}
+                {...(s.key === "audio" && songFit.on && { accept: songFit.accept, takes: songFit.wants })}
               />
             ),
           )}

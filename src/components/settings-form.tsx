@@ -31,6 +31,7 @@ import { NotificationSettings } from "@/components/notification-settings";
 import { SecuritySettings } from "@/components/security-settings";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { AutoPatternsSetting } from "@/components/auto-patterns-setting";
+import { UploadSwitchesSettings } from "@/components/upload-switches-settings";
 
 function Section({
   id,
@@ -739,6 +740,14 @@ export function SettingsForm({ prices }: { prices?: string }) {
         description="Protect this studio with a password, and create API tokens for scripts and agents. Off by default for local use."
       >
         <SecuritySettings />
+      </Section>
+
+      <Section
+        id="uploads"
+        title="Uploads · fit in the browser"
+        description="When a file doesn't fit a tool, the visitor's browser can fix it before it is uploaded. Switch a step off if it causes trouble: that kind of file is then refused with the reason, as before, and the server's own checks still apply."
+      >
+        <UploadSwitchesSettings />
       </Section>
 
       <Section
