@@ -5,7 +5,7 @@ import { OPERATION_PLACE, routeDrops, routeTakes } from "./route-takes";
 import { tierWords, type MadeSettings, type SettingChange } from "./made";
 import type { GenParams, ModelDef, ModelRoute, Operation, ProviderId } from "./types";
 
-export { changeLine, shownSettings, tierWords, type FittedSetting, type MadeSettings, type SettingChange } from "./made";
+export { shownSettings, tierWords, type FittedSetting, type MadeSettings, type SettingChange } from "./made";
 
 /*
  * What a run is actually made at. A hosted route sends only the fields its map names and fits a value it doesn't take to

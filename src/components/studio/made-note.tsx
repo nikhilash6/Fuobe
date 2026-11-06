@@ -1,30 +1,25 @@
-import { changeLine } from "@/lib/catalog/made";
 import type { Generation } from "@/lib/catalog/types";
 import { autoLine } from "@/lib/auto-image";
 import { AddAutoPattern } from "@/components/add-auto-pattern";
 import { cn } from "@/lib/utils";
 
-type NoteRun = Pick<Generation, "made" | "declinedCards" | "status" | "modelId" | "modelName"> & {
+type NoteRun = Pick<Generation, "declinedCards" | "status" | "modelId" | "modelName"> & {
   request: Pick<Generation["request"], "notice" | "modelId" | "auto" | "prompt">;
 };
 
 /**
- * Under a run (the feed card, the run details): each setting it was made at differently from what it asked, in one small
- * muted line ("Quality: asked for 2K · made at 1080p (the most this model makes)"), what made a run of Auto ("Auto · made
+ * Under a run (the feed card, the run details): what made a run of Auto ("Auto · made
  * with Krea 2 Realism · Ideogram 4 declined this one"), what changed while it ran (its notice: "Made with Qwen-Image 2.1 ·
  * Ideogram 4 declined this one"), and, for the owner's eyes only, what Ideogram 4 returned in place of a picture, for
- * which words. Nothing when it made what it asked.
+ * which words. A setting a model makes differently is said before the run, where it can still be changed; after the run
+ * the views show only the value it was made at (shownSettings), never a value the studio didn't offer.
  */
 export function MadeNote({ g, className }: { g: NoteRun; className?: string }) {
-  const changes = g.made?.changes ?? [];
   const auto = autoLine(g);
   const notice = g.request.notice?.trim();
-  if (!changes.length && !auto && !notice && !g.declinedCards?.length) return null;
+  if (!auto && !notice && !g.declinedCards?.length) return null;
   return (
-    <ul className={cn("space-y-0.5 text-[11.5px] leading-snug text-pretty text-muted-foreground", className)} aria-label="Made differently from what was asked">
-      {changes.map((c) => (
-        <li key={c.setting + c.label}>{changeLine(c)}</li>
-      ))}
+    <ul className={cn("space-y-0.5 text-[11.5px] leading-snug text-pretty text-muted-foreground", className)} aria-label="How this run was made">
       {auto && <li>{auto}</li>}
       {notice && <li>{notice}</li>}
       {!!g.declinedCards?.length && (

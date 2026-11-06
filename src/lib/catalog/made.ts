@@ -15,7 +15,7 @@ export interface SettingChange {
   /** What was asked and what is made, as shown ("2K", "1080p"; "Its own" when the setting isn't sent). */
   asked: string;
   made: string;
-  /** Why, short, for after a run: "the most this model makes". */
+  /** Why, short: "the most this model makes" (API run records). */
   reason: string;
   /** The whole sentence, for before a run: "MiniMax H3 Max Turbo makes up to 1080p, so this is made at 1080p". */
   note: string;
@@ -47,7 +47,3 @@ export function shownSettings(g: { request: { params?: GenParams }; made?: MadeS
   return { aspectRatio: m.aspectRatio, resolution: m.resolution && tierWords(m.resolution), duration: m.duration, seed: m.seed };
 }
 
-/** "Asked for 2K · made at 1080p (the most this model makes)": one line per change, for under a finished run. */
-export function changeLine(c: SettingChange): string {
-  return `${c.label}: asked for ${c.asked} · made at ${c.made} (${c.reason})`;
-}

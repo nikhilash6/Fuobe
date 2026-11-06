@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getModel, getPreset, MODELS } from "@/lib/catalog";
-import { changeLine, fittedSettings, madeOfRun, shownSettings, tierWords } from "@/lib/catalog/fitted";
+import { fittedSettings, madeOfRun, shownSettings, tierWords } from "@/lib/catalog/fitted";
 import { buildPayload } from "@/lib/catalog/payload";
 import { planGeneration } from "@/lib/catalog/plan";
 import type { EnumField, ModelDef } from "@/lib/catalog/types";
@@ -18,7 +18,7 @@ const model = (id: string): ModelDef => {
 const turbo = model("minimax-h3-max-turbo");
 
 describe("quality", () => {
-  it("a size above the most a model makes is made at its most, and says so", () => {
+  it("a size above the most a model makes is made at its most, and says so before the run", () => {
     for (const asked of ["2K", "4K"]) {
       const made = fittedSettings(turbo, "t2v", { resolution: asked });
       expect(made.resolution).toBe("1080P");
@@ -33,7 +33,8 @@ describe("quality", () => {
           use: "1080P",
         }),
       ]);
-      expect(changeLine(made.changes[0])).toBe(`Quality: asked for ${asked} · made at 1080p (the most this model makes)`);
+      // After the run the views show only the made value: no line about what was asked.
+      expect(shownSettings({ request: { params: { resolution: asked } }, made }).resolution).toBe("1080p");
     }
   });
 
