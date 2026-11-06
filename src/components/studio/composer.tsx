@@ -17,6 +17,11 @@ import type { Engine, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetR
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
 import { murekaSongRule, SONG_FIT_OPS } from "@/lib/av/song-fit";
 import { FitUploadNote, useFitUpload } from "@/components/av/fit-upload";
+import { FitClipNote, useClipFit } from "@/components/av/fit-clip";
+import { FitCropNote, useCropFit } from "@/components/av/fit-crop";
+import { fitStill, stillEndpoint } from "@/components/av/fit-still";
+import { portraitRatio } from "@/lib/catalog/clip-windows";
+import { sampleFitRule, shortName, voiceFitRule } from "@/lib/av/voice-fit";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -65,6 +70,7 @@ import {
   blockerFor,
   blockerLine,
   clipBlocker,
+  clipFitWindow,
   clipOutcome,
   costLabel,
   engineSwitchModel,
@@ -811,7 +817,13 @@ export function Composer({ docked }: { docked: boolean }) {
   // browser instead: converted to an MP3, or a part of it offered (src/components/av/fit-upload.tsx); what's left is said
   // as before. One of Mureka's own songs goes by its id and is left alone.
   const fitOp = op ?? studioOp ?? model?.routes.find((r) => SONG_FIT_OPS.has(r.op))?.op;
-  const songRule = useMemo(() => (config.voiceFacts && model?.family === "mureka" ? murekaSongRule(fitOp) : null), [config.voiceFacts, model?.family, fitOp]);
+  // A talking avatar's voice outside its model's length (H3 Max lip sync 5 s to 15 min, OmniHuman 2 4 s to 5 min, P-Video up to
+  // 3 min), or a file its model doesn't take (OmniHuman 2: an MP3 or WAV up to 15 MB): the same step, with that model's rule.
+  const songRule = useMemo(() => {
+    if (!config.voiceFacts || !model) return null;
+    if (model.family === "mureka") return murekaSongRule(fitOp);
+    return (op ?? studioOp) === "avatar" ? voiceFitRule({ id: model.id, name: shortName(model.name) }) : null;
+  }, [config.voiceFacts, model, fitOp, op, studioOp]);
   const songFit = useFitUpload({
     rule: songRule,
     value: draft.slots.audio,
@@ -820,8 +832,37 @@ export function Composer({ docked }: { docked: boolean }) {
     setValue: (v) => attach.setSlotValue("audio", v),
     upload: (f) => attach.uploadToSlot("audio", f, "audio"),
   });
+  // A clip longer than the model's window (or a tool's longest source: Kandinsky VSR 5 s): a part of it offered, cut from a
+  // key frame without encoding it again (src/components/av/fit-clip.tsx).
+  const clipRule = useMemo(() => {
+    const w = config.clipFacts ? clipFitWindow(op ?? studioOp, model, facts?.fps) : undefined;
+    return w && model ? { for: shortName(model.name), tool: shortName(model.name), minSeconds: w.min, maxSeconds: w.max } : null;
+  }, [config.clipFacts, op, studioOp, model, facts?.fps]);
+  const clipFit = useClipFit({
+    rule: clipRule,
+    value: draft.slots.video,
+    seconds: facts?.duration,
+    setValue: (v) => attach.setSlotValue("video", v),
+    upload: (f) => attach.uploadToSlot("video", f, "video"),
+  });
+  // A portrait outside the shapes its model takes (H3 Max lip sync: 0.4:1 to 2.5:1): a crop offered.
+  const cropRule = useMemo(() => {
+    const ratio = model && (op ?? studioOp) === "avatar" ? portraitRatio(model.id) : undefined;
+    return ratio && model ? { tool: shortName(model.name), ratio } : null;
+  }, [model, op, studioOp]);
+  const cropFit = useCropFit({ rule: cropRule, value: draft.slots.image, setValue: (v) => attach.setSlotValue("image", v) });
+  // A picture for a cloud endpoint with limits of its own (Qwen Image 3 edit, Recraft Crisp…): fitted here before it goes up.
+  const stillEp = stillEndpoint(model, op ?? studioOp);
+  // AuK's voice sample (under 20 s): a part of a longer one offered.
+  const sampleRule = useMemo(() => (model?.id === "oss-auk" ? sampleFitRule() : null), [model?.id]);
+  const sampleFit = useFitUpload({
+    rule: sampleRule,
+    value: draft.slots.voiceAudio,
+    setValue: (v) => setSlot("voiceAudio", v),
+    upload: (f) => attach.uploadToSlot("voiceAudio", f, "audio"),
+  });
   useEffect(() => {
-    songRoute.current = (f) => songFit.wants(f) && (songFit.take(f), true);
+    songRoute.current = (f) => (songFit.wants(f) && (songFit.take(f), true)) || (clipFit.wants(f) && (clipFit.take(f), true));
   });
   const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }, songById) : null;
   if (songProblem && !planError) planError = songProblem;
@@ -1688,7 +1729,15 @@ export function Composer({ docked }: { docked: boolean }) {
                 caption
                 value={draft.slots[s.key] ?? null}
                 onChange={(v) => attach.setSlotValue(s.key, v)}
-                onFile={(f) => (s.key === "audio" && songFit.wants(f) ? songFit.take(f) : attach.uploadToSlot(s.key, f, s.accept))}
+                onFile={(f) =>
+                  s.key === "audio" && songFit.wants(f)
+                    ? songFit.take(f)
+                    : s.key === "video" && clipFit.wants(f)
+                      ? clipFit.take(f)
+                      : s.key === "image" && stillEp && model
+                        ? void fitStill(f, stillEp, model.name).then((g) => attach.uploadToSlot(s.key, g, s.accept))
+                        : attach.uploadToSlot(s.key, f, s.accept)
+                }
                 {...(s.key === "audio" && songFit.on && { accept: songFit.accept, takes: songFit.wants })}
               />
             ),
@@ -1742,6 +1791,9 @@ export function Composer({ docked }: { docked: boolean }) {
         <ReferenceOrder images={refImages} clips={refClips.length} audios={refAudios.length} problem={refProblem} />
       )}
       {showAttachments && !collapsed && !framesOn && <FitUploadNote fit={songFit} className="px-3" />}
+      {showAttachments && !collapsed && !framesOn && <FitClipNote fit={clipFit} className="px-3" />}
+      {showAttachments && !collapsed && !framesOn && <FitUploadNote fit={sampleFit} className="px-3" />}
+      {showAttachments && !collapsed && !framesOn && <FitCropNote fit={cropFit} className="px-3" />}
       {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
       {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
       {showAttachments && !collapsed && !framesOn && voiceFirstShown && voiceFirstKind && (

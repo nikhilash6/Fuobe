@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
+import { SoundAloneButton } from "@/components/av/sound-alone";
 import {
   BED_LEVELS,
   CLEANERS,
@@ -18,6 +19,7 @@ import {
   DEFAULT_CLEANER,
   OPEN_NOTE,
   RELATION_NOTE,
+  soundAloneHelps,
   type BedLevel,
   type Cleaner,
 } from "@/lib/av/clean-dialogue";
@@ -52,6 +54,7 @@ export function CleanDialoguePanel({
   engine,
   blocker,
   onMixer,
+  onSoundAlone,
 }: {
   /** The soundtrack, once it's uploaded. */
   source: CleanSource | null;
@@ -61,6 +64,8 @@ export function CleanDialoguePanel({
   blocker: string | null;
   /** Switch to Split into stems (the mixer opens on the Clean dialogue preset). */
   onMixer: () => void;
+  /** Clean the video's sound alone instead (an MP3 made in the browser), when the video is too big for the cloud. */
+  onSoundAlone?: (file: { url: string; name: string }) => void;
 }) {
   const [bed, setBed] = useState<BedLevel>(DEFAULT_BED);
   const [quality, setQuality] = useState<SplitQuality | null>(null);
@@ -197,6 +202,9 @@ export function CleanDialoguePanel({
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Clean it
           </Button>
         </div>
+        {source?.kind === "video" && engine === "cloud" && !blocker && soundAloneHelps(error) && onSoundAlone && (
+          <SoundAloneButton src={source.ref} name={source.name} label="Clean the sound alone (MP3)" onDone={onSoundAlone} />
+        )}
       </div>
 
       {g && (g.status === "queued" || g.status === "running") && (

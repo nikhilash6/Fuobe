@@ -341,3 +341,40 @@ export function clipWindowProblem(model: { id: string; name: string; engine?: st
   const takes = min !== undefined && max !== undefined ? `${min}–${max} s` : max !== undefined ? `up to ${max} s` : `${min} s or longer`;
   return `${model.name} takes ${takes} clips, and this one is ${secs(seconds)}: ${long ? "trim it first" : "use a longer one"}`;
 }
+
+// ---------------------------------------------------------------------------
+// The same windows, for the browser's fitting step (src/components/av): what a sound, clip or picture is fitted to.
+
+/** The voice length a model takes (the longest any size takes), or undefined. */
+export function voiceWindow(modelId: string): { min: number; max: number } | undefined {
+  const w = VOICE_SECONDS[modelId];
+  return w && { min: w.min, max: Math.max(w.max, ...Object.values(w.byResolution ?? {})) };
+}
+
+/** The voice files a model documents ("mp3", "wav" and a size), or undefined when it takes any. */
+export function voiceFile(modelId: string): { formats: string[]; bytes: number } | undefined {
+  const a = CLIP_FILE[modelId]?.audio;
+  if (!a) return undefined;
+  const formats = [...new Set(a.types.map((t) => (t === "audio/mpeg" ? "mp3" : t.includes("wav") ? "wav" : t.split("/")[1])))];
+  return { formats, bytes: a.bytes };
+}
+
+/** The picture shape a model takes (width ÷ height), or undefined. */
+export const portraitRatio = (modelId: string): [number, number] | undefined => PORTRAIT_RATIO[modelId];
+
+/** The voice-clip length a model's references take, or undefined. */
+export const referenceVoiceWindow = (modelId: string): { min: number; max: number } | undefined => REFERENCE_VOICE_SECONDS[modelId];
+
+/**
+ * The clip length a model takes for an edit (its window, or its frames at `fps`, 30 when not known, for a frame-billed
+ * route), or undefined.
+ */
+export function clipWindow(model: { id: string; engine?: string }, fps?: number): { min?: number; max?: number } | undefined {
+  const f = sourceFrames(model.id, model.engine);
+  if (f) {
+    const rate = fps && fps > 0 ? fps : f.assumeFps;
+    return { min: f.minFrames / rate, max: f.maxFrames / rate };
+  }
+  const w = sourceSeconds(model.id);
+  return w.min !== undefined || w.max !== undefined ? w : undefined;
+}

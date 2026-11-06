@@ -22,6 +22,8 @@ import {
   type RetextureModel,
 } from "@/lib/av/model3d";
 import { toastError } from "@/lib/refusals";
+import { fitImage } from "@/components/av/fit-image";
+import { uploadSwitchesNow } from "@/components/av/use-upload-switches";
 import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 
 const SIZE_LABEL: Record<(typeof RETEXTURE_SIZES)[number], string> = { "2k": "2K textures", "4k": "4K textures", "8k": "8K textures" };
@@ -66,14 +68,21 @@ export function RetextureDialog({
   const req = ready ? retextureRequest({ glb, prompt, style: style?.url, model, size, keepUv }) : null;
   const preview = useRunPreview(open ? req : null);
   const price = priceLine(preview.data);
-  const pickStyle = async (f: File | undefined) => {
-    if (!f) return;
-    if (f.size > RETEXTURE_STYLE_MAX_BYTES) {
-      toast.error("The style picture must be 20 MB or less");
-      return;
-    }
+  const pickStyle = async (picked: File | undefined) => {
+    if (!picked) return;
     setUploading(true);
     try {
+      // Over 20 MB, or not a PNG, JPEG or WebP (a HEIC photo): made into one here when the owner's switch allows, else said.
+      let f = picked;
+      const fits = picked.size <= RETEXTURE_STYLE_MAX_BYTES && RETEXTURE_STYLE_TYPES.split(",").includes(picked.type);
+      if (!fits) {
+        if (!(await uploadSwitchesNow()).photoConvert) {
+          toast.error("The style picture must be a PNG, JPEG or WebP of 20 MB or less");
+          return;
+        }
+        f = (await fitImage(picked, { name: picked.name, maxBytes: RETEXTURE_STYLE_MAX_BYTES, maxPixels: 40_000_000, keepAlpha: /png|webp|heic|heif|avif/i.test(picked.type || picked.name) })).file;
+        toast.success("Made the style picture fit (20 MB at most)");
+      }
       const asset = await uploadFile(f);
       setStyle({ url: asset.url, preview: URL.createObjectURL(f) });
     } catch (e) {
@@ -141,7 +150,7 @@ export function RetextureDialog({
                   {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />} Style picture
                 </Button>
               )}
-              <input ref={file} type="file" accept={RETEXTURE_STYLE_TYPES} className="hidden" onChange={(e) => void pickStyle(e.target.files?.[0])} />
+              <input ref={file} type="file" accept={`${RETEXTURE_STYLE_TYPES},image/heic,image/heif,image/avif,.heic,.heif,.avif`} className="hidden" onChange={(e) => void pickStyle(e.target.files?.[0])} />
               <Select value={model} onValueChange={(v) => setModel(v as RetextureModel)}>
                 <SelectTrigger size="sm" className="rounded-full" aria-label="Model">
                   <SelectValue />

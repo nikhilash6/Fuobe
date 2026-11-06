@@ -9,7 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import type { SlotValue } from "@/components/studio/media-slot";
+import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
+import { FitClipNote, useClipFit } from "@/components/av/fit-clip";
+import { getModel } from "@/lib/catalog";
+import { clipWindowProblem, sourceSeconds } from "@/lib/catalog/clip-windows";
 import { CueEditor, useCueEditor } from "@/components/av/cue-editor";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { SourceLanguageSelect, TargetLanguages } from "@/components/av/language-picker";
@@ -159,7 +162,13 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
     setMode("oneshot");
   };
   const connectGpu = () => window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { gpuOnly: true, needs: "gpu" } }));
-  const blocker = !video ? "Add the video to translate" : video.uploading ? "Uploading…" : !usable.length ? "Pick a language to dub into" : null;
+  // One shot's own limit (HeyGen Translate: up to 480 s), said before the run, with a part of a longer video offered.
+  const modelName = getModel(model)?.name ?? "HeyGen Translate";
+  const longest = oneShot ? sourceSeconds(model).max : undefined;
+  const tooLong = longest && duration ? clipWindowProblem({ id: model, name: modelName }, duration) : null;
+  const clipRule = longest ? { for: modelName, tool: modelName, maxSeconds: longest } : null;
+  const clipFit = useClipFit({ rule: clipRule, value: video, seconds: duration, setValue: setVideo, upload: (f) => void fileToSlot(f, setVideo, "video") });
+  const blocker = !video ? "Add the video to translate" : video.uploading ? "Uploading…" : !usable.length ? "Pick a language to dub into" : tooLong;
   const body =
     video && !video.uploading && usable.length && !needsGpu
       ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration, ...(engine === "open" && { voiceSplit: split }) }
@@ -201,6 +210,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
             hint="MP4, MOV or WebM up to 200 MB · one clear speaker works best"
             compact
           />
+          <FitClipNote fit={clipFit} className="pt-2" />
         </div>
         <Panel title="How">
           <div role="radiogroup" aria-label="How to dub" className="grid gap-2 sm:grid-cols-2">

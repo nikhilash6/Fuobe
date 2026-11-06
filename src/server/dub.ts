@@ -20,6 +20,7 @@ import {
 } from "@/lib/av/dub";
 import { normalizeCues } from "@/lib/av/cue-edit";
 import { getModel } from "@/lib/catalog";
+import { clipWindowProblem } from "@/lib/catalog/clip-windows";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { ACCOUNT_PROJECT_LIMITS, createAccountProject, deleteAccountProject, getAccountProject, listAccountProjects, updateAccountProject } from "./account-projects";
 import type { ToolStep } from "./account-tool-run";
@@ -171,6 +172,16 @@ export function dubVoiceSplit(input: Pick<CreateDubInput, "engine" | "mode" | "v
   return input.engine === "open" && input.mode === "steps" ? pickVoiceSplit(input.voiceSplit, (id) => isOffered(id, "open")) : undefined;
 }
 
+/**
+ * Why a one-shot dub's video is longer than its model takes (HeyGen Translate: up to 480 s), in Generate's words, or null.
+ * Checked before anything is sent or priced, so a clip the service would refuse is never billed. A length that can't be
+ * read (no header, nothing measured) is left to the service.
+ */
+export function oneShotLengthProblem(model: OneShotModel, seconds: number | undefined): string | null {
+  if (!seconds) return null;
+  return clipWindowProblem({ id: model, name: getModel(model)?.name ?? model }, seconds);
+}
+
 /** A dub planned, not started: the session it will be, and its one-shot jobs or its prepare pipeline. */
 export interface DubPlan {
   base: DubSession;
@@ -204,6 +215,8 @@ export function planDub(input: CreateDubInput): DubPlan {
   };
   if (input.mode === "oneshot") {
     const model = input.model ?? "heygen-translate";
+    const long = oneShotLengthProblem(model, duration);
+    if (long) throw new Error(long);
     return { base, oneshot: { model, jobs: oneShotRequests({ model, video: input.video, source: input.source, targets: base.targets, title }) } };
   }
   const gpu = tenantAccount() ? ({ translator: "gpu", seconds: duration } as const) : {};
@@ -339,6 +352,8 @@ export function previewDub(input: CreateDubInput): DubPrice {
   const seconds = videoLength(input.video, input.duration);
   const targets = [...new Set(input.targets)];
   if (input.mode === "oneshot") {
+    const long = oneShotLengthProblem(input.model ?? "heygen-translate", seconds);
+    if (long) throw new Error(long);
     const jobs = oneShotRequests({ model: input.model ?? "heygen-translate", video: input.video, source: input.source, targets });
     return priceSteps(input.engine, jobs.map((j, i) => ({ key: `dub:${i}`, request: j.request })), seconds);
   }

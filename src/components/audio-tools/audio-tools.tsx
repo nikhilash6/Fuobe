@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Slider } from "@/components/ui/slider";
 import { Feed } from "@/components/studio/feed";
 import { ACCEPT, fileToList, fileToSlot, kindOfFile, LibraryGrid, wrongKindMessage, type SlotValue } from "@/components/studio/media-slot";
+import { SoundAloneButton } from "@/components/av/sound-alone";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useDraft } from "@/components/av/use-draft";
@@ -360,6 +361,10 @@ export function AudioLoopTool() {
             }
           >
             <AudioPlayer clip={clip} onDuration={(duration) => setClip((c) => (c ? { ...c, duration } : c))} />
+            {/* A clip whose length can't be read: an MP3 of it (made here) can be. */}
+            {ready && preview.error && /length can't be read/.test((preview.error as Error).message) && (
+              <SoundAloneButton src={ready.ref} name={ready.name} label="Convert to MP3" className="pt-2" onDone={(f) => setClip({ ref: f.url, preview: f.url, kind: "audio", name: f.name })} />
+            )}
           </Panel>
         )}
         {clip && (

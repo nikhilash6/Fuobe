@@ -7,7 +7,7 @@ import { FORMAT_INFO } from "./av/formats";
 import { fpsPlan, fpsSummary } from "./av/fps";
 import { sideMultipleProblem, targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
 import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
-import { clipFpsProblem, clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipWindow, clipWindowProblem } from "./catalog/clip-windows";
 import { clipBilling, sourceLengthProblem } from "./catalog/plan";
 import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type FrameSupport } from "./catalog/keyframes";
 import { keyTimes, totalSeconds, type InbetweenTiming } from "./inbetween";
@@ -1336,4 +1336,21 @@ export function relatedHref(related: { href: string; models?: Partial<Record<Eng
   const model = related.models?.[engine];
   if (!model) return related.href;
   return `${related.href}${related.href.includes("?") ? "&" : "?"}model=${encodeURIComponent(model)}`;
+}
+
+/**
+ * The clip length the attached clip is fitted to before Generate (a part offered: src/components/av/fit-clip.tsx): a clip
+ * edit's window, or a tool's longest source (Kandinsky VSR 5 s, FLUX video upscale 20 s). Undefined when nothing limits it.
+ */
+export function clipFitWindow(
+  op: Operation | undefined,
+  model: (Pick<ModelDef, "options"> & Partial<Pick<ModelDef, "id" | "engine">>) | undefined,
+  fps?: number,
+): { min?: number; max: number } | undefined {
+  if (!model) return undefined;
+  const windowed = op === "v2v" || op === "relight-video" || op === "insert-moment" || op === "extend" || op === "reframe" || op === "remove-object" || op === "motion-transfer";
+  const w = windowed && model.id ? clipWindow({ id: model.id, engine: model.engine }, fps) : undefined;
+  if (w?.max) return { min: w.min, max: w.max };
+  const max = model.options.maxSourceSeconds;
+  return max ? { max } : undefined;
 }

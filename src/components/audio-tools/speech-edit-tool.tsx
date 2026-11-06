@@ -37,6 +37,7 @@ import {
   PROMPT_HELPER_NOTE,
   QUALITY_HINTS,
   SPEECH_EDIT_FEATURE,
+  SPEECH_EDIT_MAX_SECONDS,
   VOLUME_STEPS,
   type AukQuality,
   type EffectKind,
@@ -46,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { BeforeAfterAudio } from "./before-after-audio";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 import { uploadSource } from "./split-tool";
+import { SourceFit } from "@/components/av/fit-source";
 
 /**
  * Audio → Edit speech (nm10-speech-edit): add a recording or a video, transcribe it, then change its words (AuK re-speaks
@@ -411,6 +413,7 @@ export function SpeechEditTool({ setup }: { setup?: OwnSetup | null } = {}) {
         ) : (
           <SourcePanel source={source} onDuration={(duration) => setSource((s) => (s ? { ...s, duration } : s))} onRemove={clear} />
         )}
+        <SourceFit source={source} kind={source?.kind ?? "audio"} tool="Edit speech" maxSeconds={SPEECH_EDIT_MAX_SECONDS} setSource={setSource} />
         {source && engine === "cloud" && (
           <Panel>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

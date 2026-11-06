@@ -820,6 +820,7 @@ export function SplitSoundtrackTool() {
               setGoal("split");
               setMixPreset(mixPresetFor("split", true));
             }}
+            onSoundAlone={(f) => setSource({ ref: f.url, preview: f.url, kind: "audio", id: nanoid(8), name: f.name })}
           />
         )}
         {goal === "split" && source && engine === "cloud" && (

@@ -38,10 +38,11 @@ export interface SlotValue {
   sketch?: { mode: SketchMode; strokes: Stroke[] };
 }
 
+// HEIC, AVIF, AAC, Opus and the like are converted in this browser before they are uploaded (src/lib/av/fit-file.ts).
 export const ACCEPT: Record<MediaKind, string> = {
-  image: "image/png,image/jpeg,image/webp,image/gif",
+  image: "image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,image/avif,.heic,.heif,.avif",
   video: "video/mp4,video/webm,video/quicktime",
-  audio: "audio/mpeg,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/mp4,audio/webm",
+  audio: "audio/mpeg,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/mp4,audio/webm,audio/x-m4a,audio/aac,audio/opus,audio/aiff,.m4a,.aac,.opus,.aif,.aiff,.caf",
   text: "text/plain,.txt,.srt,.vtt",
   model3d: ".glb,.gltf,model/gltf-binary",
 };
@@ -51,7 +52,7 @@ export const MAX_MB = 200;
 
 const EXT_KIND: [RegExp, MediaKind][] = [
   [/\.(mp4|webm|mov|m4v)$/i, "video"],
-  [/\.(mp3|wav|ogg|flac|m4a|aac|opus)$/i, "audio"],
+  [/\.(mp3|wav|ogg|flac|m4a|aac|opus|aif|aiff|caf|wma|amr)$/i, "audio"],
   [/\.(txt|srt|vtt)$/i, "text"],
   [/\.(glb|gltf)$/i, "model3d"],
 ];

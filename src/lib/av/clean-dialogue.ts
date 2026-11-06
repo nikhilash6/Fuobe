@@ -118,6 +118,9 @@ export interface CleanDialoguePlan extends ToolPlan {
 
 const nameOf = (i: Pick<CleanDialogueInput, "name" | "kind">) => i.name?.trim() || (i.kind === "video" ? "video soundtrack" : "recording");
 
+/** A video too big for the cloud to take its sound from: its sound alone (an MP3 made in the browser) fits. */
+export const soundAloneHelps = (problem: string | null | undefined): boolean => !!problem && /files up to (100|512) MB/.test(problem);
+
 /** What's in the way of a run (in words the page shows), or null. */
 export function cleanDialogueProblem(i: Pick<CleanDialogueInput, "engine" | "media" | "kind" | "silent" | "seconds" | "cleaner" | "bytes">): string | null {
   if (!i.media) return `Add the ${i.kind === "video" ? "video" : "audio"} to clean`;

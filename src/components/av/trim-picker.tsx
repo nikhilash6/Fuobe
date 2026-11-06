@@ -58,7 +58,8 @@ export function stamp(t: number, tenths = false): string {
 function lengthWords(t: number, tenths: boolean): string {
   if (t < 60) return `${tenths ? t.toFixed(1) : Math.round(t)} s`;
   const m = Math.floor(t / 60);
-  return `${m} min ${String(Math.round(t - m * 60)).padStart(2, "0")} s`;
+  const s = Math.round(t - m * 60);
+  return s ? `${m} min ${String(s).padStart(2, "0")} s` : `${m} min`;
 }
 
 type Drag = { mode: "start" | "end" | "move"; grab: number } | null;

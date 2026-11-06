@@ -38,6 +38,7 @@ import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
 import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
+import { SourceFit } from "@/components/av/fit-source";
 import {
   CLOUD_ONLY_REMOVE_PROBLEM,
   CLOUD_REMOVE_PROBLEM,
@@ -46,6 +47,7 @@ import {
   LOWER_MIN_DB,
   OUTCOMES,
   REMOVE_DIALOGUE_FEATURE,
+  REMOVE_DIALOGUE_MAX_SECONDS,
   REMOVED_STEM,
   requestedOutcome,
   type DialogueOutcome,
@@ -521,6 +523,7 @@ export function RemoveDialogueTool() {
             )}
           </Panel>
         )}
+        <SourceFit source={source} kind="video" tool="Remove dialogue" maxSeconds={REMOVE_DIALOGUE_MAX_SECONDS} setSource={setSource} />
         {source && engine === "cloud" && (
           <Panel>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
