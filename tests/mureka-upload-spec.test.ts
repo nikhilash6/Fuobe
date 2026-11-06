@@ -67,8 +67,7 @@ async function run(modelId: string, audio: string, extra: Record<string, unknown
   return getGeneration(g.id)!;
 }
 
-// Skipped until the server side lands: src/lib/lyrics.ts songToolProblem, src/server/generations.ts prepSong and src/server/providers/fal.ts uploadSong (retry on X-Fal-Needs-Retry). It fails without that change.
-describe.skip("a song Mureka's files/upload takes", () => {
+describe("a song Mureka's files/upload takes", () => {
   it("refuses a WAV for Extend and Remix before anything reaches fal.ai, and sends one of Mureka's own by its id", async () => {
     fal.log.length = 0;
     fal.script = null;
@@ -87,7 +86,7 @@ describe.skip("a song Mureka's files/upload takes", () => {
   });
 });
 
-describe.skip("fal.ai's synchronous upload", () => {
+describe("fal.ai's synchronous upload", () => {
   it("is sent again when fal.ai marks the failure temporary (X-Fal-Needs-Retry: 1), and not when it doesn't", async () => {
     fal.log.length = 0;
     let first = true;

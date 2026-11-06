@@ -3373,14 +3373,16 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
       });
     };
     // A song tool's song (Mureka): its length read as a voice's is, and one Mureka refuses (Stems: MP3 or M4A, 10 MB; Remix:
-    // 10 to 350 seconds) refused here, before it's sent to Mureka or paid for.
+    // 10 to 350 seconds; Extend and Remix of a song Mureka didn't make, which goes through its files/upload first: MP3 or M4A,
+    // and 10 MB for Extend) refused here, before it's sent to Mureka or paid for. One of Mureka's own goes by its id.
+    const songById = typeof plan.params.extra?.songId === "string" && plan.params.extra.songId.trim() !== "";
     const prepSong = async (ref?: string) => {
       if (!ref) return undefined;
       return gate(async () => {
         const f = await readRef(ref);
         const facts = mediaFacts(f.data);
         if (facts.duration && !source.sourceDuration) source = { ...source, sourceDuration: facts.duration };
-        const problem = providerId === "mock" ? null : songToolProblem(plan.op, { format: songFormat(f.contentType, f.name), bytes: f.data.length, seconds: facts.duration });
+        const problem = providerId === "mock" ? null : songToolProblem(plan.op, { format: songFormat(f.contentType, f.name), bytes: f.data.length, seconds: facts.duration }, songById);
         if (problem) throw new Error(problem);
         return upload(`file:${ref}`, f.data, f.contentType, f.name);
       });
@@ -3498,7 +3500,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     // Extending a song (Mureka): the new part starts at its end (or, before its start, at 0) unless the run says where.
     if (plan.op === "song-extend" && input.startTime === undefined) {
       const head = input.extra?.extend_type === "head";
-      if (!head && !(input.sourceDuration && input.sourceDuration > 0)) throw new Error("The song's length couldn't be read: add it again as an MP3, WAV or M4A file");
+      if (!head && !(input.sourceDuration && input.sourceDuration > 0)) throw new Error("The song's length couldn't be read: add it again as an MP3 or M4A file");
       input.startTime = head ? 0 : input.sourceDuration;
     }
     // A talking avatar renders as long as its voice: priced for it once its header is read (an API call that didn't say).

@@ -775,9 +775,11 @@ export function Composer({ docked }: { docked: boolean }) {
   // A voice outside what a hosted talking-avatar model takes (H3 Max lip sync: 5 s to 15 min), as the server would say.
   const voiceProblem = op === "avatar" && voiceRef && voice?.duration && model ? voiceWindowProblem(model, voice.duration) : null;
   if (voiceProblem && !planError) planError = voiceProblem;
-  // A song Mureka's tools refuse (Stems: MP3 or M4A; Remix: 10 s to 5:50), from its name and header, as the server does.
-  const songRef = config.voiceFacts && (op === "song-stems" || op === "song-remix") ? draft.slots.audio?.ref : undefined;
-  const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }) : null;
+  // A song Mureka's tools refuse (Stems: MP3 or M4A; Remix: 10 s to 5:50; Extend and Remix of a song Mureka didn't make: MP3
+  // or M4A), from its name and header, as the server does. One of Mureka's own goes by its id (withSongId), never as a file.
+  const songRef = config.voiceFacts && (op === "song-stems" || op === "song-remix" || op === "song-extend") ? draft.slots.audio?.ref : undefined;
+  const songById = model?.family === "mureka" && !!draft.song && !!songRef && draft.song.url === songRef;
+  const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }, songById) : null;
   if (songProblem && !planError) planError = songProblem;
   if (signed.blocker) planError = signed.blocker;
   // References mode: Pika's limits (12 files, 2-15 s each, 15 s a group), checked on the clips' lengths before anything runs.
