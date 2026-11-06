@@ -103,7 +103,8 @@ import { qwen21Note } from "@/lib/qwen21-speed";
 import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
-import { addKeyLabel, billedTo, CLOUD_KEY, cloudVersion, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
+import { addKeyLabel, billedTo, CLOUD_KEY, cloudVersion, isCloudProvider, needsKey, paidThrough, startingModel, type CloudProvider } from "@/lib/your-keys";
+import { anywayKeys, anywaySaid, likelyProvider, routeNotice } from "@/lib/catalog/route-notice";
 import { beforeRunTail, gpuBeforeRun, onCloudKey, runOnceOnKey } from "@/lib/before-run";
 import { BILLING_URL, ISOLATED_ON_GPU_WHY, withKeyAction, type TroubleAction } from "@/lib/diagnose";
 import { openModelPicker } from "@/lib/open-model-picker";
@@ -222,6 +223,26 @@ function lookCleared(from: ModelDef | undefined, to: ModelDef): Partial<Draft> {
 
 /** Docked and collapsed, the composer hides its tiles: this event asks it to open first. */
 const EXPAND_EVENT = "composer:expand";
+
+/** "Run anyway" pressed this session (route-notice.ts anywayKeys), kept in this tab's session storage. */
+const ANYWAY_KEY = "fuobe:route-anyway";
+
+function readAnyway(): string[] {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(ANYWAY_KEY) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function keepAnyway(keys: string[]) {
+  try {
+    sessionStorage.setItem(ANYWAY_KEY, JSON.stringify(keys.slice(-50)));
+  } catch {
+    // Storage off (a private window): asked again next time.
+  }
+}
 
 /** Point at an attachment tile: scroll it into view and pulse its outline. */
 function pulseSlot(root: HTMLElement | null, key: string, retried = false) {
@@ -730,6 +751,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const engineError =
     (lockedModel && preset && !appIds.length ? `${preset.name} has no ${engine === "open" ? "open-source" : "cloud"} version yet` : null) ?? accessError ?? comfyBlock;
   let op: Operation | undefined;
+  // The model the plan runs (a preset's may be another): the one whose routes the run picks from.
+  let planModel: ModelDef | undefined;
   let cost: number | null = null;
   // The run goes to a LoRA endpoint whose price isn't published (fal's MOSS-Image /lora).
   let loraPriceUnknown = false;
@@ -755,6 +778,7 @@ export function Composer({ docked }: { docked: boolean }) {
       });
       const plan = planGeneration({ ...planned, prompt: planned.prompt || (config.promptOptional ? " " : "") }, catalog.getModel, catalog.getPreset);
       op = plan.op;
+      planModel = plan.model;
       laid = plan.layout;
       // A run with LoRAs (a Soul look) goes to the route's LoRA endpoint, which has its own price.
       const withLoras = plan.loras.length > 0 && routesFor(plan.model, plan.op).some((r) => !!r.loraEndpoint);
@@ -921,13 +945,40 @@ export function Composer({ docked }: { docked: boolean }) {
   // GPU): run it once on the key, at its price, or connect a GPU. Nothing runs until one is pressed.
   const [keyChoice, setKeyChoice] = useState(false);
 
+  // A paid route that can't honour a setting another route of the model takes (Replicate's Wan 2.2 makes 16:9 or 9:16 only
+  // and reads no negative prompt): said before the run (src/lib/catalog/route-notice.ts), with "Run anyway" (there, the
+  // shape fitted and the setting left out; the run says what changed) and, when it runs for this person, the route that
+  // makes everything as asked ("Use fal.ai"). Nothing runs until one is pressed. "Run anyway" isn't asked again this
+  // session for the same settings on the same route, and those runs stay on that route.
+  const usableRoute = (p: string) =>
+    !!status?.providers[p]?.configured && (viewerInfo?.kind !== "account" || (isCloudProvider(p) && (viewerInfo.usableKeys ?? viewerInfo.keys ?? []).includes(p)));
+  const routeAsk = { params: signed.request.params, negativePrompt: signed.request.negativePrompt, prefer: signed.request.prefer };
+  const routeCheck =
+    planModel && op && !placeholdersOn(status?.demoMode)
+      ? routeNotice(planModel, op, likelyProvider(planModel, op, routeAsk, { ready: usableRoute, preferred: status?.cloudProvider }), routeAsk, usableRoute)
+      : null;
+  const [routeChoice, setRouteChoice] = useState(false);
+  // (A draft changed so its route makes everything as asked: the choice goes.)
+  if (routeChoice && !routeCheck) setRouteChoice(false);
+  const [anyway, setAnyway] = useState<string[]>(readAnyway);
+  const anywayHere = !!routeCheck && !!planModel && !!op && anywaySaid(anyway, planModel.id, op, routeCheck);
+  const runAnyway = () => {
+    if (!routeCheck || !planModel || !op) return;
+    const next = [...new Set([...anyway, ...anywayKeys(planModel.id, op, routeCheck)])];
+    setAnyway(next);
+    keepAnyway(next);
+    submitRef.current(undefined, undefined, undefined, undefined, { prefer: isCloudProvider(routeCheck.provider) ? routeCheck.provider : undefined });
+  };
+
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here). `withKey`: this run
   // only, on the cloud version that action names and the account's key (hosted runs on; see onRunWithKey). `once`: a
   // place for this run only (hosted runs: "Run on Our GPUs", or the account's GPU for what only it runs). `signedUp`: the
-  // run a guest pressed, started by itself back from sign-up (its note says so once the run is made).
-  const submit = (skip?: unknown, withKey?: TroubleAction, once?: "own" | "pool", signedUp?: boolean): void => {
+  // run a guest pressed, started by itself back from sign-up (its note says so once the run is made). `picked`: the route
+  // chosen before the run ("Run anyway" on the route it goes to, or "Use fal.ai"), named in the request.
+  const submit = (skip?: unknown, withKey?: TroubleAction, once?: "own" | "pool", signedUp?: boolean, picked?: { prefer?: CloudProvider }): void => {
     const skipGpu = skip === true;
     setKeyChoice(false);
+    setRouteChoice(false);
     if (exact) {
       // An exact orbit: the still filmed along the orbit's numbers (Fly around), priced in its panel.
       const stop = !exactImage ? "Add a start frame to film an exact orbit" : fly.preview.data?.blocker;
@@ -967,6 +1018,10 @@ export function Composer({ docked }: { docked: boolean }) {
       }
       return;
     }
+    // A route that can't honour a setting: the choice first, unless "Run anyway" was pressed for it this session.
+    if (routeCheck && !picked && !withKey && !once && !anywayHere) return void setRouteChoice(true);
+    const route = picked ?? (routeCheck && anywayHere && isCloudProvider(routeCheck.provider) ? { prefer: routeCheck.provider } : undefined);
+    const withRoute = <R extends object>(r: R): R => (route?.prefer ? { ...r, prefer: route.prefer } : r);
     toast.dismiss("composer-blocker");
     setPriceNote(null);
     // A guest (hosted runs on): the draft, its kept files and this run wait for the sign-up, with the price shown; back
@@ -991,7 +1046,7 @@ export function Composer({ docked }: { docked: boolean }) {
     // Open palette lock: the images are recoloured to the palette by a chained step (POST /api/palettes/lock).
     // (An account's lock runs on this studio's GPUs only: sent there by name.)
     if (sent.lock) {
-      const request = withKey ? onCloudKey(sent.request, withKey) : sent.request;
+      const request = withKey ? onCloudKey(sent.request, withKey) : withRoute(sent.request);
       return signature.lock.mutate({ request, colors: sent.lock.colors, ...hosted, ...(poolPrice && !withKey && once !== "own" && { place: "pool" as const }) }, { onError: (e) => toastError(e) });
     }
     // If the server's pre-flight stops it (409 gpu-setup), the guided fix that opens can try again, or run it anyway.
@@ -1002,7 +1057,7 @@ export function Composer({ docked }: { docked: boolean }) {
         model?.kind,
       );
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
-    const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withVoiceFirst;
+    const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withRoute(withVoiceFirst);
     const body = { ...onKey, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time). Back from sign-up, the
@@ -2095,6 +2150,34 @@ export function Composer({ docked }: { docked: boolean }) {
             >
               Connect your GPU
             </button>
+          </div>
+        </div>
+      )}
+      {/* A route that can't honour a setting another route takes: run it there anyway, or where everything is made as asked. */}
+      {routeChoice && routeCheck && (
+        <div role="note" aria-live="polite" data-route-notice className="mx-1 mt-2 space-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+          <p className="font-medium text-foreground">{routeCheck.words}</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={runAnyway}
+              disabled={create.isPending}
+              className="inline-flex h-7 w-fit items-center rounded-full bg-highlight px-2.5 text-[12px] font-medium text-highlight-foreground hover:opacity-90 disabled:opacity-70"
+            >
+              Run anyway
+            </button>
+            {routeCheck.instead && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => submitRef.current(undefined, undefined, undefined, undefined, { prefer: routeCheck.instead })}
+                disabled={create.isPending}
+                className="inline-flex h-7 w-fit items-center rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent disabled:opacity-70"
+              >
+                Use {CLOUD_KEY[routeCheck.instead].label}
+              </button>
+            )}
           </div>
         </div>
       )}

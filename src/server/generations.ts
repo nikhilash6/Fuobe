@@ -10,6 +10,7 @@ import { NO_SUBJECT_MESSAGE, withFrontView } from "./any-angle";
 import { applyMentions } from "@/lib/catalog/elements";
 import { madeOfRun } from "@/lib/catalog/fitted";
 import { routeDrops } from "@/lib/catalog/route-takes";
+import { pickRoute, routeShortfalls, shortfallNote } from "@/lib/catalog/route-notice";
 import { listWords } from "@/lib/unavailable";
 import { migrateRequest, replacedBy } from "@/lib/catalog/replaced";
 import { directorFieldWords } from "@/lib/catalog/cinema";
@@ -981,6 +982,7 @@ export function deleteGeneration(id: string): void {
  * Imagine Image takes 5 on fal) gives way to one that takes them all, or says so.
  * `loras` and `seconds` (the clip length asked for) prefer a route that carries every LoRA and makes that
  * length (Replicate's Wan 2.2 fast renders only 81–121 frames, fal's 17–161).
+ * `prefer` (GenerationRequest.prefer) is the provider the request names: its route runs while it is ready.
  */
 export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef[] = [], seconds?: number, forceDemo = false, prefer?: CloudProvider): { route: ModelRoute; demo: boolean } {
   // Honour the preferred cloud aggregator (Settings → API configuration) when a model is on several.
@@ -997,12 +999,12 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
   // anything a studio starts inside runAsDemo (a skill's dry run of a studio step, src/server/demo-scope.ts).
   if (demo === "on" || forceDemo || inDemoScope()) return { route: routes[0], demo: true };
   const takes = (r: ModelRoute) => !r.map?.maxImages || images <= r.map.maxImages;
-  // A route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix), then one
-  // that makes the length asked; otherwise the first ready one runs and the plan's notes say what it changes.
+  // A route asked for by name (the person's pick before the run: "Run anyway" or "Use fal.ai") runs there while it is
+  // ready. Otherwise a route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix),
+  // then one that makes the length asked; otherwise the first ready one runs and the plan's notes say what it changes.
+  // (The composer reads the same pick: src/lib/catalog/route-notice.ts.)
   const ok = (r: ModelRoute) => routeReady(r) && takes(r);
-  const long = (r: ModelRoute) => framedLength(r.map?.numFrames, seconds) === undefined;
-  const real =
-    routes.find((r) => ok(r) && lorasFit(r, loras) && long(r)) ?? routes.find((r) => ok(r) && lorasFit(r, loras)) ?? routes.find((r) => ok(r) && long(r)) ?? routes.find(ok);
+  const real = pickRoute(routes, { ok, fits: (r) => lorasFit(r, loras), seconds, prefer });
   if (real) return { route: real, demo: false };
   const short = routes.find(routeReady);
   if (short) {
@@ -1224,7 +1226,8 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  const prefer = tenantAccount() && isCloudProvider(worded.prefer) ? worded.prefer : undefined;
+  // The provider the request names (an account's "Run with your fal.ai key", the person's pick before the run).
+  const prefer = isCloudProvider(worded.prefer) ? worded.prefer : undefined;
   const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo, prefer);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
@@ -1313,6 +1316,15 @@ function prepare(original: GenerationRequest) {
   // split into one job per result just above, so it isn't one.)
   const drops = demo ? [] : routeDrops(route, plan.model.id, { negativePrompt: req.negativePrompt, params: plan.params });
   if (drops.length) notes.push(`${plan.model.name} on ${provider(route.provider).label} doesn't take ${listWords(drops)}: this run goes without`);
+  // What this route makes differently that another route of the model makes as asked (Replicate's Wan 2.2 makes 16:9 or
+  // 9:16 and reads no negative prompt; fal's makes 1:1 and reads one): the composer says so before the run, the payload
+  // fits the shape to the closest one the route makes, and the run carries a note of it (its notice). A shape or size it
+  // fits is said in the notes too (a dropped setting is, just above).
+  const shortfalls = demo ? [] : routeShortfalls(plan.model, plan.op, route.provider, { params: req.params, negativePrompt: req.negativePrompt });
+  for (const s of shortfalls)
+    if ((s.setting === "aspectRatio" || s.setting === "resolution") && s.did.includes(" in place of "))
+      notes.push(`${plan.model.name} on ${provider(route.provider).label} doesn't make ${s.asked}: this run is made at ${s.made}`);
+  const notice = shortfalls.length ? shortfallNote(plan.model, route.provider, shortfalls) : undefined;
   const providerId: ProviderId = demo ? "mock" : route.provider;
   // A text step that runs on a local model is free; only Claude costs money.
   const free = demo || (route.provider === "llm" && !llmUsesClaude(route));
@@ -1333,6 +1345,7 @@ function prepare(original: GenerationRequest) {
     gpu: gpu?.gpu,
     h3: h3 && { gpuTier: h3.gpuTier, ...(h3.unet && { unet: h3.unet }) },
     cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras),
+    notice,
     // Auto's pick, which the stored request keeps.
     ...(routed.auto && { auto: routed.auto }),
   };
@@ -1583,7 +1596,9 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   const p = waits ? prepare(withChainInputs(original, slotsFor(original, deps.length).map(placeholderFor))) : prepare(original);
   const { req, plan, route, demo, providerId, cost } = p;
   // Auto keeps its pick with the run: planned again, the run goes to the same model, and its tile names it.
-  const kept = p.auto ? { ...original, auto: p.auto } : original;
+  const picked = p.auto ? { ...original, auto: p.auto } : original;
+  // What the route made differently (routeShortfalls) stays with the run, said under it once it is made.
+  const kept = p.notice && !picked.notice?.includes(p.notice) ? { ...picked, notice: [picked.notice, p.notice].filter(Boolean).join(" · ") } : picked;
   // A preset whose recipe edited the start frame into an end frame first: two steps (the edit, then the clip).
   if (!opts.dependsOn && plan.end) return createEndFrameClip(original, plan.end);
   const notes = moved.note ? [moved.note, ...p.notes] : p.notes;
