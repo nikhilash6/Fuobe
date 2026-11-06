@@ -76,6 +76,8 @@ export class SiteTurns {
     this.interrupt = false;
     this.waitSince = null;
     this.waitingSince = null;
+    /** When the helper's last fresh "yielding" for this turn was seen (null: none while it waits). */
+    this.answeredAt = null;
     this.savedAt = 0;
     this.saved = this.load();
   }
@@ -145,6 +147,7 @@ export class SiteTurns {
         this.neededYield = false;
         this.interrupt = false;
         this.waitingSince = null;
+        this.answeredAt = null;
       }
       this.lastWantAt = t;
     } else if (this.active && (!may || t - this.lastWantAt >= (this.o.graceMs ?? TURNS.graceMs))) {
@@ -153,6 +156,7 @@ export class SiteTurns {
       this.active = false;
       this.interrupt = false;
       this.waitingSince = null;
+      this.answeredAt = null;
       this.save(t);
     }
     if (!this.active) {
@@ -174,6 +178,7 @@ export class SiteTurns {
       }
     } else {
       this.waitingSince = null;
+      this.answeredAt = null;
       if (yielded) this.interrupt = false;
     }
     // The helper answered after the interrupt was allowed (it is making room, or has): the interrupt has been seen.
@@ -187,6 +192,9 @@ export class SiteTurns {
     this.waitSince = claimable > 0 ? (this.waitSince ?? t) : null;
     const oldestWaitS = this.waitSince === null ? 0 : Math.round((t - this.waitSince) / 1000);
     const y = waitForYield ? readYielded(this.o.folder) : null;
+    // The helper is making room: a "yielding" for this turn, written within freshMs (it writes one every few seconds
+    // while local work finishes its job). "No answer" only after lateMs with no such answer at all.
+    if (y?.state === "yielding" && y.at >= this.startAt - 1000 && y.at <= t + 60_000 && t - y.at <= TURNS.freshMs) this.answeredAt = t;
     return {
       // Jobs it may not take now (paused, with one still finishing) don't count.
       siteWaiting: Math.max(1, (may ? claimable : 0) + (f.busy ? 1 : 0)),
@@ -194,7 +202,7 @@ export class SiteTurns {
       interrupt: this.interrupt,
       interruptAt: this.interrupt ? this.saved.lastInterruptAt : null,
       waitForYield,
-      late: waitForYield && t - this.waitingSince >= TURNS.lateMs,
+      late: waitForYield && t - Math.max(this.waitingSince, this.answeredAt ?? -Infinity) >= TURNS.lateMs,
       startsAt: y?.state === "yielding" && y.at >= this.startAt - 1000 ? y.startsAt : null,
       ended,
     };

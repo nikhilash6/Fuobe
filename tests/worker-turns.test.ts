@@ -227,6 +227,26 @@ describe("turns", () => {
     expect(turns.step(T0 + 4000 + TURNS.graceMs, { ...facts, claimable: 0 })).toMatchObject({ siteWaiting: 0, ended: "idle" });
   });
 
+  it("a helper that keeps answering \"yielding\" is never 'no answer', however long local work's job runs; silence is", () => {
+    const { folder, turns } = setup();
+    expect(turns.step(T0, facts)).toMatchObject({ waitForYield: true, late: false });
+    // Local work's job runs 10 minutes; the helper writes "yielding" with its estimate every 5 s all along.
+    for (let t = T0 + 5000; t <= T0 + 10 * 60_000; t += 5000) {
+      answer(folder, { state: "yielding", at: t - 1000, startsAt: T0 + 11 * 60_000 });
+      expect(turns.step(t, facts)).toMatchObject({ waitForYield: true, late: false, startsAt: T0 + 11 * 60_000 });
+    }
+    // Then the helper goes quiet: its last answer stops counting after 15 s, and 3 minutes after it, "no answer".
+    const last = T0 + 10 * 60_000;
+    expect(turns.step(last + TURNS.lateMs - 1000, facts).late).toBe(false);
+    expect(turns.step(last + TURNS.lateMs, facts).late).toBe(true);
+    // An answer from before this turn, however fresh it was then, never counts: 3 minutes of silence is late.
+    const other = setup();
+    answer(other.folder, { state: "yielding", at: T0 - 2000, startsAt: T0 + 60_000 });
+    other.turns.step(T0, facts);
+    expect(other.turns.step(T0 + 10_000, facts).late).toBe(false);
+    expect(other.turns.step(T0 + TURNS.lateMs, facts).late).toBe(true);
+  });
+
   it("the GPU free of local work: no waiting, and siteWaiting still says the studio wants it", () => {
     const { turns } = setup();
     expect(turns.step(T0, { ...facts, workHolds: false, workThere: true })).toMatchObject({ siteWaiting: 2, waitForYield: false });
