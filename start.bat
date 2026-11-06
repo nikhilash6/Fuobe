@@ -13,10 +13,18 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem pnpm: installed when missing, and updated when it is older than the releases with the security fixes
+rem (10.34.5 in 10.x, 11.11.0 in 11.x). package.json names the version the project uses.
+set "PNPM_V="
 where pnpm >nul 2>nul
-if errorlevel 1 (
-  echo Installing pnpm...
-  call npm install -g pnpm@10.28.0 || goto :fail
+if not errorlevel 1 for /f "delims=" %%v in ('pnpm --version 2^>nul') do set "PNPM_V=%%v"
+set "PNPM_OK=0"
+if defined PNPM_V (
+  node -e "const [a,b,c]=process.argv[1].split(/[.-]/).map(Number);process.exit(a>11||(a===11&&b>=11)||(a===10&&(b>34||(b===34&&c>=5)))?0:1)" "%PNPM_V%" && set "PNPM_OK=1"
+)
+if "%PNPM_OK%"=="0" (
+  if defined PNPM_V (echo Updating pnpm %PNPM_V% to 10.34.9...) else (echo Installing pnpm...)
+  call npm install -g pnpm@10.34.9 || goto :fail
 )
 
 echo Checking dependencies...
