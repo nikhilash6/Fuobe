@@ -52,7 +52,7 @@ export const putItIn = (f: Pick<FileStep, "folder" | "path">): string => `Put it
 
 /** What the readiness line says. `files`: the files it names (one gets its own Get it). Null: no line. */
 export interface ReadinessLine {
-  state: "ready" | "files" | "setup" | "gpu";
+  state: "ready" | "files" | "setup" | "gpu" | "problem";
   words: string;
   files: FileStep[];
 }
@@ -70,6 +70,9 @@ export function readinessLine(badge: Badge | null | undefined, plan: Pick<FixPla
   if (s === "u") return null;
   // The plan is the server's newer read: once it says ready, so does the line.
   if (plan?.state === "ready") return { state: "ready", words: "Ready on your GPU", files: [] };
+  // A known problem of this ComfyUI on this system (known-problems.ts) comes first: nothing runs there until it is fixed.
+  const known = plan?.steps.find((x) => x.problem);
+  if (known) return { state: "problem", words: `Your ComfyUI needs an update: ${known.label.replace(/^Update ComfyUI to /, "")}`, files: [] };
   const files = fileSteps(plan);
   const others = (plan?.steps ?? []).filter((x) => !x.download && x.kind !== "restart" && x.kind !== "hf-licence" && x.kind !== "civitai-key").length;
   if (files.length && !others) {

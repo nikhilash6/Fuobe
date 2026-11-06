@@ -115,6 +115,8 @@ export interface ComfyFlags {
   enableManager: boolean;
   managerLegacyUi: boolean;
   lowvram: boolean;
+  /** ComfyUI's dynamic VRAM is off (--disable-dynamic-vram, --highvram, --gpu-only, --novram, --cpu). Older checks lack it. */
+  dynamicVramOff?: boolean;
   cpuOnly: boolean;
 }
 
@@ -141,6 +143,8 @@ export interface GpuInventory {
     version: string;
     os: string;
     python?: string;
+    /** The Python build's compiler, from system_stats ("Clang 20.1.4", "GCC 13.3.0", "MSC v.1942 64 bit"): known problems read it. */
+    pythonBuild?: string;
     torch?: string;
     embeddedPython: boolean;
     deployEnv: string;
@@ -217,6 +221,8 @@ export interface Need {
   lora?: string;
   /** The node classes it is about (missing core classes). */
   classes?: string[];
+  /** A known problem of this ComfyUI on this system (known-problems.ts) that this step fixes. */
+  problem?: string;
   /** Text read from the viewer's ComfyUI (a traceback): shown as plain text only. */
   remote?: string;
 }

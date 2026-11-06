@@ -53,6 +53,7 @@ const ICONS: Record<TroubleActionKind, typeof Play> = {
   "send-smaller": Minimize2,
   "try-smaller": Minimize2,
   "get-file": Download,
+  "update-comfy": RefreshCw,
 };
 
 /** The first button stands out (the one most likely to help); the rest are quieter. One line each, cut short when narrow. */
@@ -79,7 +80,7 @@ export interface TroubleHandlers {
  * When some buttons must go (a small tile), the ones that help least go first: Settings (Check my GPU leads there too),
  * Pair with a code, then the rest. The first button (the one most likely to help) always stays, and the order is kept.
  */
-const DROP_FIRST: TroubleActionKind[] = ["gpu-settings", "pair", "use-computer", "pick-model", "retry", "check-gpu", "key-settings", "try-smaller", "send-smaller", "add-credit", "run-with-key", "get-file", "start-gpu"];
+const DROP_FIRST: TroubleActionKind[] = ["gpu-settings", "pair", "use-computer", "pick-model", "retry", "check-gpu", "key-settings", "try-smaller", "send-smaller", "add-credit", "run-with-key", "get-file", "update-comfy", "start-gpu"];
 
 export function fitActions(actions: TroubleAction[], max?: number): TroubleAction[] {
   if (!max || actions.length <= max) return actions;
@@ -140,7 +141,7 @@ export function TroubleActions({
     if (a.kind === "send-smaller") return !!handlers.onSendSmaller;
     if (a.kind === "try-smaller") return !!handlers.onTrySmaller;
     // Where a model file downloads from: only an https link.
-    if (a.kind === "get-file") return !!a.target && HTTPS.test(a.target);
+    if (a.kind === "get-file" || a.kind === "update-comfy") return !!a.target && HTTPS.test(a.target);
     // On a tile, Check my GPU leads to Settings when that is what helps: one button fewer.
     if (compact && a.kind === "gpu-settings" && actions.some((x) => x.kind === "check-gpu") && a.label.startsWith("Open Settings")) return false;
     return true;
@@ -182,7 +183,7 @@ export function TroubleActions({
         const cls = cn(PILL, i === 0 && a.kind !== "retry" ? MAIN : QUIET);
         const words = <span className="truncate">{compact ? shortLabel(a) : a.label}</span>;
         const stop = (e: React.MouseEvent) => e.stopPropagation();
-        if ((a.kind === "start-gpu" || a.kind === "add-credit" || a.kind === "get-file") && a.target) {
+        if ((a.kind === "start-gpu" || a.kind === "add-credit" || a.kind === "get-file" || a.kind === "update-comfy") && a.target) {
           return (
             <a key={a.kind} href={a.target} target="_blank" rel="noopener noreferrer" onClick={stop} title={a.label} className={cls}>
               <Icon className="size-3 shrink-0" /> {words}

@@ -1,4 +1,5 @@
 import { compareVersions, formatBytes, nameKey, splitKey, vramGb } from "./requirements";
+import { knownProblemNeed, knownProblems } from "./known-problems";
 import { cardFits, GPU_NEED_TEXT, readCard, type GpuNeed } from "./rtx";
 import type { Badge, FileKey, GpuInventory, IndexFile, InventorySummary, Need, Readiness, RequirementIndex, ToolReadiness, ToolRef, VramFit } from "./types";
 
@@ -220,6 +221,9 @@ export function workflowReadiness(id: string, inv: GpuInventory, idx: Requiremen
           },
     );
   }
+  // A known problem of this ComfyUI on this system (memfd on ComfyUI 0.43 with a standalone Linux Python): every graph
+  // that loads a model stops the same way, so its fix is a step of each, before Run (Run anyway stays).
+  if (w.files.length && !out.needs.some((n) => n.kind === "comfy-update")) for (const p of knownProblems(inv)) out.needs.push(knownProblemNeed(p));
   // Add-ons.
   const packNeeds = new Set<string>();
   for (const [name, classes] of Object.entries(w.packs)) {

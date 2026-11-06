@@ -6,10 +6,13 @@
  *
  * Only an account's own GPU and keys are read this way. The owner's runs and runs on the studio's GPUs keep their words.
  */
+import { knownProblemOf } from "./gpu/known-problems";
 import { balanceMessage, CLOUD_KEY, keyRejectedMessage, type CloudProvider } from "./your-keys";
 
 /** RunPod's list of pods, where a stopped pod is started again. */
 export const RUNPOD_CONSOLE_URL = "https://console.runpod.io/pods";
+/** ComfyUI's own guide to updating it (every install kind: portable, Desktop, git). */
+export const COMFY_UPDATE_URL = "https://docs.comfy.org/installation/update_comfyui";
 
 /** Where a provider account gets credit. */
 export const BILLING_URL: Record<CloudProvider, string> = { fal: "https://fal.ai/dashboard/billing", replicate: "https://replicate.com/account/billing" };
@@ -43,6 +46,11 @@ export type TroubleCause =
   | "gpu-job-error"
   /** A model file a loader can't read (damaged, cut short) or doesn't have: words name the file. */
   | "gpu-model-file"
+  /**
+   * A known problem of the person's ComfyUI version on their system (src/lib/gpu/known-problems.ts: ComfyUI 0.43 on a Linux
+   * Python without memfd_create): every run stops the same way until ComfyUI is updated, so never Retry.
+   */
+  | "gpu-comfy-known"
   | "gpu-restarted"
   | "gpu-moved"
   | "gpu-went-away"
@@ -85,12 +93,14 @@ export type TroubleActionKind =
   /** Run it again one size or length smaller (out of memory), on a click. */
   | "try-smaller"
   /** Open where a model file downloads from (an https link: the file, or a gated file's Hugging Face page). */
-  | "get-file";
+  | "get-file"
+  /** Open how to update ComfyUI (an https link: ComfyUI's own guide). */
+  | "update-comfy";
 
 export interface TroubleAction {
   kind: TroubleActionKind;
   label: string;
-  /** A link (start-gpu, add-credit, gpu-settings, key-settings, pair, get-file) or the provider (run-with-key). */
+  /** A link (start-gpu, add-credit, gpu-settings, key-settings, pair, get-file, update-comfy) or the provider (run-with-key). */
   target?: string;
   /** run-with-key: the model that runs this tool on that key (its cloud version), and its operation there. */
   modelId?: string;
@@ -216,6 +226,7 @@ const A = {
   trySmaller: (): TroubleAction => ({ kind: "try-smaller", label: "Try one size smaller" }),
   connectGpu: (): TroubleAction => ({ kind: "gpu-settings", label: "Connect your GPU", target: "/settings#your-gpu" }),
   getFile: (url: string): TroubleAction => ({ kind: "get-file", label: "Get the file", target: url }),
+  updateComfy: (): TroubleAction => ({ kind: "update-comfy", label: "How to update ComfyUI", target: COMFY_UPDATE_URL }),
 };
 
 /**
@@ -668,6 +679,9 @@ export function diagnoseGpuJob(e: GpuJobTrouble, place: GpuPlace): Diagnosis {
     case "error": {
       const msg = (e.message ?? "").trim();
       if (isOutOfMemoryText(msg)) return { cause: "gpu-out-of-memory", words: OUT_OF_MEMORY_WORDS, details: joinDetails(e.nodeType, cleanDetails(msg, 120)), actions: [A.trySmaller(), A.retry(), A.pick()], retryable: false };
+      // A known problem of this ComfyUI on this system: named, with its fix; Retry would stop the same way.
+      const known = knownProblemOf(msg);
+      if (known) return { cause: "gpu-comfy-known", words: known.words, details: joinDetails(e.nodeType, cleanDetails(msg, 160)), actions: [A.updateComfy(), ...(place.kind === "link" ? [A.check()] : [])], retryable: false };
       const file = modelFileProblem(e.nodeType, msg);
       if (file) return modelFileTrouble(file, e, place);
       return {

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Cpu, Download, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle2, Cpu, Download, ExternalLink, Loader2, RefreshCw, Wrench } from "lucide-react";
 import { openGpuSetup, useGpuCheck, useGpuPlan } from "@/hooks/use-gpu";
 import { fileSteps, getItLabel, putItIn, readinessLine, type FileStep } from "@/lib/gpu/file-steps";
 import type { Badge, FixPlan } from "@/lib/gpu/types";
@@ -117,7 +117,7 @@ export function GpuReadinessLine({ badge, gpuRef, name, className }: { badge: Ba
   const one = line.files.length === 1 ? line.files[0] : undefined;
   return (
     <div role="status" className={cn("flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl bg-muted/60 px-3 py-2 text-[12px]", className)}>
-      {line.state === "gpu" ? <Cpu aria-hidden className="size-3.5 shrink-0" /> : <Download aria-hidden className="size-3.5 shrink-0" />}
+      {line.state === "gpu" ? <Cpu aria-hidden className="size-3.5 shrink-0" /> : line.state === "problem" ? <Wrench aria-hidden className="size-3.5 shrink-0" /> : <Download aria-hidden className="size-3.5 shrink-0" />}
       <button type="button" onClick={open} className="min-w-0 flex-1 basis-48 text-left font-medium underline-offset-2 hover:underline">
         {line.words}
         {one?.size && <span className="font-normal text-muted-foreground"> · {one.size}</span>}
