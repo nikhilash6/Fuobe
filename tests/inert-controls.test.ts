@@ -46,3 +46,54 @@ describe("buttons that answer every press", () => {
     expect(src("src/components/kinetic/editor.tsx")).toContain('waiting={plan ? null : "Getting the scene ready…"}');
   });
 });
+
+describe("studio pickers say what the picked model can't do", () => {
+  it("Storyboard: 21:9 on the cloud's own frame models needs a look or a partner", async () => {
+    const { boardShapeProblem } = await import("@/lib/catalog/storyboard");
+    expect(boardShapeProblem({ engine: "cloud", aspectRatio: "21:9" })).toMatch(/16:9 at their widest/);
+    expect(boardShapeProblem({ engine: "cloud", aspectRatio: "21:9", look: "noir" })).toBeUndefined();
+    expect(boardShapeProblem({ engine: "cloud", aspectRatio: "16:9" })).toBeUndefined();
+    expect(boardShapeProblem({ engine: "open", aspectRatio: "21:9" })).toBeUndefined();
+    // The reason holds: the cloud's frame models draw 21:9 as their 16:9 size.
+    const { getModel } = await import("@/lib/catalog");
+    const { STORYBOARD_MODELS } = await import("@/lib/catalog/storyboard");
+    for (const id of [STORYBOARD_MODELS.cloud.first, STORYBOARD_MODELS.cloud.next]) {
+      const route = getModel(id)!.routes.find((r) => r.map?.aspectRatio)!;
+      const f = route.map!.aspectRatio as { values?: Record<string, unknown> };
+      expect(f.values?.["21:9"]).toBe(f.values?.["16:9"]);
+    }
+  });
+
+  it("Layout: FLUX.3 reads no canvas type or style tags, Ideogram no canvas type", async () => {
+    const { layoutReads } = await import("@/lib/layout-prompt");
+    expect(layoutReads({ options: { layout: "flux3" } })).toEqual({ canvas: false, tags: false });
+    expect(layoutReads({ options: { layout: "ideogram" } })).toEqual({ canvas: false, tags: true });
+    expect(layoutReads({ options: { layout: "moss" } })).toEqual({ canvas: true, tags: true });
+    expect(layoutReads(undefined)).toEqual({ canvas: true, tags: true });
+  });
+
+  it("Captions: the open burner's preview draws its own font", async () => {
+    const { BURN_CAPS, burnNote } = await import("@/lib/av/captions");
+    expect(BURN_CAPS.open.fonts).toBe(false);
+    expect(BURN_CAPS.veed.fonts).toBe(true);
+    expect(burnNote("open")).toMatch(/one font/);
+  });
+
+  it("Ad Multiplier: Quality knows what each recreate model makes", async () => {
+    const { marketingModelInfo } = await import("@/components/marketing/model-info");
+    const info = marketingModelInfo();
+    // Kling O3's edit sends no size (it keeps the reference's); Genjutsu on your GPU is sent none either.
+    expect(info["kling-o3"]?.editSizes).toBe(false);
+    expect(info["fuobe-genjutsu-motion"]?.editSizes).toBe(false);
+    const hh = info["happy-horse-video-edit"]?.editSizes;
+    expect(Array.isArray(hh) && !hh.includes("480p")).toBe(true);
+  });
+
+  it("Turnaround: Landscape on WorldCast says it films portrait", () => {
+    expect(src("src/components/turnaround/turnaround-dialog.tsx")).toContain('why: "WorldCast films portrait only"');
+  });
+
+  it("Mixed Media: 2K and 4K per frame on your GPU say the 1536 px limit", () => {
+    expect(src("src/components/mixed-media/mixed-studio.tsx")).toContain("const gpuCap = !cloud && r !== \"1K\";");
+  });
+});

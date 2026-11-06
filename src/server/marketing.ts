@@ -49,6 +49,7 @@ import {
 } from "@/lib/catalog/marketing";
 import { dualEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
+import { opTakes } from "@/lib/catalog/route-takes";
 import { themeFrom, type AdLayout } from "@/components/ads/layout";
 import { adDraft } from "@/lib/layout-surfaces";
 import { LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -415,6 +416,10 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     const productShot = open && modelId === MARKETING_IMAGE_MODEL && f.id === "product-standalone" && op === "edit" && images.length === 1;
     if (productShot) notes.push("Your product is cut out and relit into the scene, so it stays as it is");
     else if (open && op === "edit") notes.push("Qwen-Image 2.1 keeps your first photo's shape on your GPU");
+    // Settings the picked model doesn't take are said before the run, never dropped without a word.
+    else if (!open && !opTakes(model, op).aspect && !model.options.aspectRatios?.length) notes.push(`${model.name} keeps your photo's shape: Aspect ratio doesn't change it`);
+    else if (aspect && input.aspectRatio && aspect !== input.aspectRatio) notes.push(`${model.name} makes ${aspect}, the closest to ${input.aspectRatio}`);
+    if (model.options.promptless && prompt) notes.push(`${model.name} works from your photos alone: the words aren't used`);
     return {
       feature,
       engine: input.engine,
@@ -464,6 +469,8 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     const steps: Step[] = [];
     const { after: frameAfter, ...frame } = op === "i2v" ? startFrame(steps, refs[0], aspect, model, `${feature}-step`) : { after: undefined };
     if (frameAfter) notes.push(`${model.name} keeps its first frame's shape: the photo is grown to ${aspect} on Qwen-Image 2.1 first`);
+    else if (!open && op === "i2v" && !opTakes(model, "i2v").aspect) notes.push(`${model.name} keeps your photo's shape: Aspect ratio doesn't change it`);
+    else if (aspect && input.aspectRatio && aspect !== input.aspectRatio) notes.push(`${model.name} makes ${aspect}, the closest to ${input.aspectRatio}`);
     steps.push(
       ...shots.map(
         (d, i): Step => ({
@@ -1043,7 +1050,8 @@ export function planMultiplier(input: MultiplierInput, ctx: MultiplierContext): 
           inputs: { ...src.inputs, ...(m.images.length && { images: m.images }) },
           // The clip's length prices the edit (a v2v route sends none); the reference's own sound is kept (Kling's
           // keep_audio, Happy Horse's audio_setting "origin").
-          params: { resolution, duration: round(end - start), ...(KEEP_SOUND[model.id] && { extra: KEEP_SOUND[model.id] }) },
+          // A size the model makes (Happy Horse: 720p or 1080p), never one it would refuse.
+          params: { resolution: nearestRes(resolution, model), duration: round(end - start), ...(KEEP_SOUND[model.id] && { extra: KEEP_SOUND[model.id] }) },
           chain: src.chain,
           title,
           batchTitle: title,

@@ -35,6 +35,8 @@ import { formatCost } from "@/lib/format";
 import { toolPoolPrice } from "@/lib/run-place";
 import { useOpenFree } from "@/components/studio/run-place-chip";
 import { cn } from "@/lib/utils";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
+import type { Unavailable } from "@/lib/unavailable";
 import { responseError, toastError } from "@/lib/refusals";
 
 /** The body /api/turnaround takes (src/server/turnaround.ts TurnaroundSchema). */
@@ -230,6 +232,20 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
   const usedRoute = p?.route ?? route;
   const camera = usedRoute === "camera";
   const stills = usedRoute === "stills";
+  // A route on this engine that films landscape, for WorldCast's Landscape note (camera and stills have no Shape).
+  const wide = p?.routes.find((r) => r !== "worldcast" && r !== "camera" && r !== "stills");
+  const landscapeOff: Unavailable = {
+    why: "WorldCast films portrait only",
+    ...(wide && {
+      fix: {
+        label: `Switch to ${TURN_ROUTES[wide].name}`,
+        run: () => {
+          setRoute(wide);
+          setAspect("16:9");
+        },
+      },
+    }),
+  };
   // QMA · 96 views is offered on your GPU when this install has it (its Stills route is listed then).
   const qmaHere = engine === "open" && !!p?.routes.includes("stills");
   const slotUrl = (k: SlotKey) => (k === "sheet" ? sheet : views[k]);
@@ -350,7 +366,8 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
             value={aspectRatio}
             options={[
               { value: "9:16", label: "Portrait" },
-              { value: "16:9", label: "Landscape" },
+              // WorldCast films portrait only (480 × 832): Landscape says so, and offers a route that films it.
+              { value: "16:9", label: "Landscape", unavailable: usedRoute === "worldcast" ? landscapeOff : undefined },
             ]}
             onChange={(v) => setAspect(v as "9:16" | "16:9")}
           />
@@ -418,25 +435,46 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
   );
 }
 
-function Chips({ label, value, options, onChange, hint }: { label: string; value?: string; options: { value: string; label: string }[]; onChange: (v: string) => void; hint?: string }) {
+function Chips({
+  label,
+  value,
+  options,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value?: string;
+  /** `unavailable`: a choice this route can't make (src/lib/unavailable.ts): muted, and pressing it says why. */
+  options: { value: string; label: string; unavailable?: Unavailable }[];
+  onChange: (v: string) => void;
+  hint?: string;
+}) {
+  const note = useUnavailableNote(options);
+  const held = options.find((o) => o.value === value)?.unavailable;
   return (
     <div className="min-w-0 space-y-1.5">
       <p className="text-[12.5px] font-medium">{label}</p>
       <div role="radiogroup" aria-label={label} onKeyDown={radioKeys} className="flex flex-wrap gap-1.5">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={value === o.value}
-            tabIndex={radioTab(value === o.value)}
-            onClick={() => onChange(o.value)}
-            className={cn("h-8 rounded-full border px-3 text-[12.5px] font-medium transition-colors", value === o.value ? "border-primary bg-brand-faint text-brand-text" : "text-muted-foreground hover:bg-accent")}
-          >
-            {o.label}
-          </button>
-        ))}
+        {options.map((o) => {
+          const off = note.isUnavailable(o);
+          const on = value === o.value && !off;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={radioTab(value === o.value)}
+              onClick={() => note.press(o, onChange)}
+              {...note.optionProps(o)}
+              className={cn("h-8 rounded-full border px-3 text-[12.5px] font-medium transition-colors", on ? "border-primary bg-brand-faint text-brand-text" : "text-muted-foreground hover:bg-accent", off && UNAVAILABLE_OPTION, off && "hover:bg-transparent")}
+            >
+              {o.label}
+            </button>
+          );
+        })}
       </div>
+      <UnavailableNote {...note.noteProps} reason={note.reason ?? held} />
       {hint && <p className="text-[11.5px] text-muted-foreground">{hint}</p>}
     </div>
   );

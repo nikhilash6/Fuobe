@@ -72,6 +72,16 @@ export const STORYBOARD_LOOK_MODEL = "fuobe-soul";
 export const STORYBOARD_ASPECTS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] as const;
 export const LOOK_CROPPED = "21:9";
 
+/**
+ * Why a board can't make its frames in this shape, or undefined when it can: the cloud's own frame models (hosted Z-Image
+ * Turbo and Qwen-Image-Edit, whose widest is fal's landscape_16_9) draw 21:9 as 16:9, and only a look's grade crops the
+ * frames to 21:9. A partner model takes 21:9 itself.
+ */
+export function boardShapeProblem(o: { engine: Engine; partner?: StoryboardPartner; look?: string; aspectRatio: string }): string | undefined {
+  if (o.aspectRatio !== LOOK_CROPPED || o.engine !== "cloud" || o.partner || o.look) return undefined;
+  return "Cloud frames come out 16:9 at their widest: pick a look and they're cropped to 21:9, or pick a partner model";
+}
+
 const SHOTS = [
   "establishing wide shot",
   "medium shot",

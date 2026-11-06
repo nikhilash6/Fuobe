@@ -697,6 +697,12 @@ export interface CompiledLayout {
 }
 
 /** True when the model places boxes by their coordinates (MOSS-Image, FLUX.3, Ideogram 4.x). */
+/** Which of a layout's summary settings the model's layout form reads: the canvas type (single, panels, collage) and the style tags. */
+export function layoutReads(model: { options?: { layout?: LayoutFormat } } | undefined): { canvas: boolean; tags: boolean } {
+  const f = model?.options?.layout;
+  return { canvas: f !== "flux3" && f !== "ideogram", tags: f !== "flux3" };
+}
+
 export const readsBoxes = (model: { options?: { layout?: LayoutFormat } } | undefined): boolean => !!model?.options?.layout && BOX_READING_FORMATS.includes(model.options.layout);
 
 /** The compiler a model reads layouts with (ModelOptions.layout), plain sentences for the rest. */

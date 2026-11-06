@@ -25,6 +25,7 @@ import { COMPUTER_KICK_EVENT, useCreateGeneration, useEngine, useGenerationActio
 import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import {
   MAX_FRAMES,
+  boardShapeProblem,
   ONE_SHEET_GPU_TEST,
   sheetCrop,
   sheetPanelLimit,
@@ -38,6 +39,7 @@ import {
 } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
 import { timeAgo } from "@/lib/format";
 import { BOARD_TITLES_KEY, boardTitle, filmReady, rememberTitle } from "@/lib/storyboard-board";
 import { animateHref, MAX_KEYS } from "@/lib/inbetween";
@@ -109,21 +111,35 @@ async function startRun<T>(url: string, body: unknown): Promise<T> {
   return b;
 }
 
-function RatioPill({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+/** The board's shape; a shape these frames can't be made in stays in view, muted, and says why (src/lib/unavailable.ts). */
+function RatioPill({ value, onChange, problem }: { value: string; onChange: (v: string) => void; problem?: (a: string) => string | undefined }) {
+  const opts = ASPECTS.map((a) => {
+    const why = problem?.(a);
+    return { value: a, unavailable: why ? { why } : undefined };
+  });
+  const note = useUnavailableNote(opts);
+  const held = opts.find((o) => o.value === value)?.unavailable;
   return (
-    <div role="radiogroup" aria-label="Aspect ratio" className="flex flex-wrap gap-1 rounded-full bg-muted p-0.5">
-      {ASPECTS.map((a) => (
-        <button
-          key={a}
-          type="button"
-          role="radio"
-          aria-checked={value === a}
-          onClick={() => onChange(a)}
-          className={cn("h-7 rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap text-muted-foreground transition", value === a && "bg-background text-foreground shadow-soft")}
-        >
-          {a}
-        </button>
-      ))}
+    <div className="contents">
+      <div role="radiogroup" aria-label="Aspect ratio" className="flex flex-wrap gap-1 rounded-full bg-muted p-0.5">
+        {opts.map((o) => {
+          const off = note.isUnavailable(o);
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={value === o.value && !off}
+              onClick={() => note.press(o, onChange)}
+              {...note.optionProps(o)}
+              className={cn("h-7 rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap text-muted-foreground transition", value === o.value && !off && "bg-background text-foreground shadow-soft", off && UNAVAILABLE_OPTION)}
+            >
+              {o.value}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} reason={note.reason ?? held} />
     </div>
   );
 }
@@ -728,7 +744,7 @@ export function StoryboardView({
               )}
               {sheetLimit > 0 && <SheetPill value={sheet} onChange={setSheet} />}
               {!sheet && <LookChip value={look} strength={lookStrength} onChange={(id) => setLook(id)} onStrength={setLookStrength} none="No look" />}
-              <RatioPill value={aspect} onChange={setAspect} />
+              <RatioPill value={aspect} onChange={setAspect} problem={sheet ? undefined : (a) => boardShapeProblem({ engine, partner, look, aspectRatio: a })} />
               {!sheet && engine === "cloud" && <PartnerPill value={partner} onChange={setPartner} names={modelNames} />}
               {!sheet && engine === "open" && <NextScenePill value={nextScene} onChange={setNextScene} />}
               <div className="ml-auto flex shrink-0 items-center gap-2">

@@ -1429,6 +1429,8 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
       notes.push(`${model.name} renders up to ${params.resolution}`);
     }
   }
+  // A hosted model with no sizes to pick (Kling 3.0, Seedream 5 Pro) makes its own: said, rather than the choice dropped.
+  if (res && !tiers.length && model.engine === "cloud") notes.push(`${model.name} makes one size: Resolution doesn't change it`);
   if (kind === "video" && model.engine === "open" && typeof params.resolution === "string" && params.resolution.toLowerCase() === "2k") notes.push(H3_2K_OPEN_NOTE);
   if (kind === "video" && model.kind === "video") {
     const want = Math.max(DURATION.min, Math.min(DURATION.max, Math.round(input.duration ?? DURATION.default)));

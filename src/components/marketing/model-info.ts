@@ -1,5 +1,6 @@
 import { getModel } from "@/lib/catalog";
 import { FORMATS, formatModels, MULTIPLIER_MODELS, UGC_MODELS, type FormatId } from "@/lib/catalog/marketing";
+import { opTakes } from "@/lib/catalog/route-takes";
 import type { Engine, ModelDef } from "@/lib/catalog/types";
 
 /**
@@ -15,6 +16,11 @@ export interface ModelInfo {
   voices?: { id: string; name: string; hint?: string }[];
   voiceClone?: boolean;
   maxImages?: number;
+  /**
+   * The sizes its video edit makes (Ad Multiplier's recreate): false when the edit sends no size (Kling O3 keeps the
+   * reference's; Fuobe Genjutsu on your GPU makes its own), a list when it makes only those. Unset: no video edit.
+   */
+  editSizes?: string[] | false;
 }
 
 const slim = (m: ModelDef): ModelInfo => ({
@@ -25,7 +31,17 @@ const slim = (m: ModelDef): ModelInfo => ({
   ...(m.options.voices?.length && { voices: m.options.voices.map((v) => ({ id: v.id, name: v.name, hint: v.hint })) }),
   ...(m.options.voiceClone && { voiceClone: true }),
   ...(m.options.maxImages != null && { maxImages: m.options.maxImages }),
+  ...editSizes(m),
 });
+
+/** What its video edit does with Quality (ModelInfo.editSizes). */
+function editSizes(m: ModelDef): Pick<ModelInfo, "editSizes"> {
+  const op = m.routes.some((r) => r.op === "v2v") ? "v2v" : m.routes.some((r) => r.op === "motion-transfer") ? "motion-transfer" : undefined;
+  if (!op) return {};
+  // The open recreate (motion transfer) is sent no size: its graph makes its own.
+  if (m.engine === "open" || !opTakes(m, op).resolution) return { editSizes: false };
+  return m.options.resolutions?.length ? { editSizes: [...m.options.resolutions] } : {};
+}
 
 /** Every model a marketing flow can name, by id. */
 export function marketingModelInfo(): Record<string, ModelInfo> {

@@ -14,8 +14,10 @@ import { useLikelyVisitor } from "@/lib/api";
 import { responseError, toastError } from "@/lib/refusals";
 import type { ModelDef } from "@/lib/catalog/types";
 import { boxesAt, drawnBox, inkOn, keyResizedBox, KIND_COLOR, movedBox, newBox, nudgedBox, pickBox, resizedBox, type Handle } from "@/lib/layout-edit";
-import { layoutCompilerFor, parseLayout, readsBoxes, type LayoutBox, type LayoutCanvas as CanvasType, type LayoutDraft, type LayoutItem, type LayoutLabel, type LayoutSource } from "@/lib/layout-prompt";
+import { layoutCompilerFor, layoutReads, parseLayout, readsBoxes, type LayoutBox, type LayoutCanvas as CanvasType, type LayoutDraft, type LayoutItem, type LayoutLabel, type LayoutSource } from "@/lib/layout-prompt";
 import { cn } from "@/lib/utils";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
+import type { Unavailable } from "@/lib/unavailable";
 import { radioKeys, radioTab } from "./radio-keys";
 
 /**
@@ -155,6 +157,9 @@ function LayoutBoard({
 }: Parameters<typeof LayoutEditor>[0] & { escapeRef: React.RefObject<() => boolean>; keepRef: React.RefObject<() => void> }) {
   const [items, setItems] = useState<LayoutItem[]>(layout.items);
   const [canvasType, setCanvasType] = useState<CanvasType>(layout.summary.canvas);
+  // What the picked model's layout form reads (layout-prompt.ts): FLUX.3's table is the caption and the boxes alone, and
+  // Ideogram's JSON prompt takes the style tags but no canvas type. Plain sentences, MOSS and FIBO read both.
+  const summaryReads = layoutReads(model);
   const [tags, setTags] = useState(layout.summary.meta.join(", "));
   const [caption, setCaption] = useState(startCaption);
   const [aspect, setAspect] = useState(startAspect ?? layout.aspect ?? "1:1");
@@ -402,9 +407,22 @@ function LayoutBoard({
           <span id="layout-canvas-label" className="text-[12px] text-muted-foreground">
             Canvas
           </span>
-          <Segmented label="Canvas" labelledBy="layout-canvas-label" options={CANVASES} value={canvasType} onChange={setCanvasType} />
+          <Segmented
+            label="Canvas"
+            labelledBy="layout-canvas-label"
+            options={CANVASES.map((c) => ({ ...c, unavailable: c.value !== "single" && !summaryReads.canvas && model ? { why: `${model.name} reads the boxes and the caption only: ask for ${c.label.toLowerCase()} in the caption` } : undefined }))}
+            value={canvasType}
+            onChange={setCanvasType}
+          />
         </div>
-        <Input aria-label="Style tags (optional, comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Style tags (optional): poster, flat design" className="h-8 text-[13px]" />
+        <Input
+          aria-label="Style tags (optional, comma separated)"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          disabled={!summaryReads.tags}
+          placeholder={summaryReads.tags || !model ? "Style tags (optional): poster, flat design" : `${model.name} reads no style tags: put the style in the caption`}
+          className="h-8 text-[13px] disabled:cursor-not-allowed"
+        />
       </div>
       {items.length === 0 && <p className="px-1 text-[13px] text-muted-foreground">Drag on the picture to draw a box for each thing to place: a headline, a product, a person.</p>}
       {items.map((it, i) => (
@@ -594,29 +612,50 @@ function downloadJson(draft: LayoutDraft) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function Segmented<T extends string>({ label, labelledBy, options, value, onChange }: { label: string; labelledBy?: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+function Segmented<T extends string>({
+  label,
+  labelledBy,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  labelledBy?: string;
+  /** `unavailable`: a choice the picked model doesn't read (src/lib/unavailable.ts): muted, and pressing it says why. */
+  options: { value: T; label: string; unavailable?: Unavailable }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  const note = useUnavailableNote(options);
+  const held = options.find((o) => o.value === value)?.unavailable;
   return (
-    <div role="radiogroup" aria-label={labelledBy ? undefined : label} aria-labelledby={labelledBy} onKeyDown={radioKeys} className="inline-flex rounded-full bg-muted p-0.5">
-      {options.map((o) => {
-        const on = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            tabIndex={radioTab(on)}
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "h-7 rounded-full px-2.5 text-[12px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
-              on ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div role="radiogroup" aria-label={labelledBy ? undefined : label} aria-labelledby={labelledBy} onKeyDown={radioKeys} className="inline-flex rounded-full bg-muted p-0.5">
+        {options.map((o) => {
+          const off = note.isUnavailable(o);
+          const on = o.value === value && !off;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={radioTab(o.value === value)}
+              onClick={() => note.press(o, onChange)}
+              {...note.optionProps(o)}
+              className={cn(
+                "h-7 rounded-full px-2.5 text-[12px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                on ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
+                off && UNAVAILABLE_OPTION,
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} reason={note.reason ?? held} />
+    </>
   );
 }
 

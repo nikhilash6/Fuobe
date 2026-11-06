@@ -21,6 +21,8 @@ import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
+import { listWords, type Unavailable } from "@/lib/unavailable";
 import { toastError } from "@/lib/refusals";
 import { addRuns, send, useEstimate } from "@/components/marketing/hooks";
 import type { ModelInfo } from "@/components/marketing/model-info";
@@ -30,15 +32,35 @@ import { uploadFrame } from "./frames";
 
 type Quality = (typeof MULTIPLIER.qualities)[number];
 
-const Seg = <T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string; title?: string }[]; onChange: (v: T) => void; label: string }) => (
-  <div role="radiogroup" aria-label={label} className="inline-flex rounded-full bg-muted p-0.5">
-    {options.map((o) => (
-      <button key={o.id} type="button" role="radio" aria-checked={value === o.id} title={o.title} onClick={() => onChange(o.id)} className={cn("h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground", value === o.id && "bg-background text-foreground shadow-soft")}>
-        {o.label}
-      </button>
-    ))}
-  </div>
-);
+/** A segmented choice; an option the picked model can't make stays in view, muted, and says why (src/lib/unavailable.ts). */
+function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string; title?: string; unavailable?: Unavailable }[]; onChange: (v: T) => void; label: string }) {
+  const opts = options.map((o) => ({ ...o, value: o.id }));
+  const note = useUnavailableNote(opts);
+  const held = opts.find((o) => o.value === value)?.unavailable;
+  return (
+    <div>
+      <div role="radiogroup" aria-label={label} className="inline-flex rounded-full bg-muted p-0.5">
+        {opts.map((o) => {
+          const off = note.isUnavailable(o);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={value === o.id && !off}
+              onClick={() => note.press(o, onChange)}
+              {...note.optionProps(o)}
+              className={cn("h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground", value === o.id && !off && "bg-background text-foreground shadow-soft", off && UNAVAILABLE_OPTION)}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} reason={note.reason ?? held} />
+    </div>
+  );
+}
 
 /** The reference ad: drop, upload or pick a clip (4–30 s). */
 function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: (v: SlotValue) => void }) {
@@ -209,6 +231,15 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
   const modelId = picked && choices.some((c) => c.id === picked) ? picked : choices[0].id;
   const model = models[modelId];
   const maxImages = engine === "open" ? 1 : (model?.maxImages ?? 0);
+  // Recreate (no section changes) runs the picked model's video edit: a size it doesn't make says so, with the closest it does.
+  const qualityOff = (q: Quality): Unavailable | undefined => {
+    const sizes = model?.editSizes;
+    if (!model || sizes === undefined) return undefined;
+    if (sizes === false) return { why: engine === "open" ? `${model.name} makes its own size when it recreates an ad` : `${model.name} keeps the reference's size when it recreates an ad` };
+    if (sizes.some((s) => s.toLowerCase() === q.toLowerCase())) return undefined;
+    const use = MULTIPLIER.qualities.find((x) => sizes.some((s) => s.toLowerCase() === x.toLowerCase()));
+    return { why: `${model.name} makes ${listWords(sizes)}`, ...(use && { fix: { label: `Use ${use}`, run: () => setQuality(use) } }) };
+  };
   const cut = range ?? (duration ? initialClip(duration) : null);
   const length = cut ? cut.end - cut.start : 0;
   const ready = !!video && !video.uploading && !!video.ref && duration != null && !!cut;
@@ -458,9 +489,9 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
                   label="Quality"
                   value={quality}
                   onChange={setQuality}
-                  options={MULTIPLIER.qualities.map((q) => ({ id: q, label: q, title: engine === "open" && q === "1080p" ? "Made at 720p here" : undefined }))}
+                  options={MULTIPLIER.qualities.map((q) => ({ id: q, label: q, title: engine === "open" && q === "1080p" ? "Made at 720p here" : undefined, unavailable: sections ? undefined : qualityOff(q) }))}
                 />
-                {engine === "open" && quality === "1080p" && <p className="mt-1 text-[11px] text-muted-foreground">Made at {multiplierResolution(quality, engine)} on open-source models</p>}
+                {engine === "open" && quality === "1080p" && (sections || model?.editSizes !== false) && <p className="mt-1 text-[11px] text-muted-foreground">Made at {multiplierResolution(quality, engine)} on open-source models</p>}
               </div>
               <div className="min-w-0">
                 <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Versions</p>

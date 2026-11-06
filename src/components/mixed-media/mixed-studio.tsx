@@ -384,7 +384,15 @@ function Editor({
   const resOptions = MIXED.resolutions.map((r, i) => {
     if (frameMode) {
       const capped = r === "4K" && cloud && (modelId === "seedream-5-flash" || original);
-      return { value: r, label: r, hint: undefined, disabled: capped, title: capped ? `${model?.name} draws frames up to 2K` : `Each frame at ${r}` };
+      // Your GPU's per-frame graph draws up to 1536 px on the long side: 2K and 4K would come out the same as 1K.
+      const gpuCap = !cloud && r !== "1K";
+      return {
+        value: r,
+        label: r,
+        hint: undefined,
+        disabled: capped || gpuCap,
+        title: gpuCap ? "Your GPU draws each frame up to 1536 px: 2K and 4K are per frame in the cloud" : capped ? `${model?.name} draws frames up to 2K` : `Each frame at ${r}`,
+      };
     }
     const at = fast ? nearestResolution(model?.resolutions, r) : undefined;
     const prev = i > 0 && fast ? nearestResolution(model?.resolutions, MIXED.resolutions[i - 1]) : undefined;

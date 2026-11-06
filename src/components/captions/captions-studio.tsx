@@ -389,8 +389,9 @@ function Preview({
           <span
             className={cn("leading-tight", box && "rounded-md bg-black/60 px-2 py-0.5")}
             style={{
-              fontFamily: `${style.font}, var(--font-sans), sans-serif`,
-              fontWeight: style.weight,
+              // What the burner draws: the open burner's one font, not the style's.
+              fontFamily: BURN_CAPS[route].fonts ? `${style.font}, var(--font-sans), sans-serif` : "var(--font-sans), sans-serif",
+              fontWeight: BURN_CAPS[route].fonts ? style.weight : 600,
               fontSize: Math.max(11, (h * OPEN_FONT_SIZE[look.size]) / 100),
               color,
               textShadow: box ? undefined : "0 0 3px #000, 0 0 3px #000, 0 1px 2px #000",
@@ -432,7 +433,7 @@ function StylePanel({ look, route, onChange }: { look: CaptionLook; route: BurnR
             onClick={() => onChange({ ...look, style: s.id, color: undefined })}
             className={cn("flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors", look.style === s.id ? "border-primary bg-brand-faint" : "hover:bg-accent")}
           >
-            <span aria-hidden className={cn("grid h-9 w-full place-items-center rounded-md bg-[oklch(0.3_0.02_260)] text-[13px] leading-none", s.box && caps.box && "px-1")} style={{ fontWeight: s.weight, fontFamily: `${s.font}, var(--font-sans), sans-serif` }}>
+            <span aria-hidden className={cn("grid h-9 w-full place-items-center rounded-md bg-[oklch(0.3_0.02_260)] text-[13px] leading-none", s.box && caps.box && "px-1")} style={caps.fonts ? { fontWeight: s.weight, fontFamily: `${s.font}, var(--font-sans), sans-serif` } : { fontWeight: 600 }}>
               <span className={cn(s.box && caps.box && "rounded bg-black/70 px-1 py-0.5")} style={{ color: s.color, textShadow: s.box && caps.box ? undefined : "0 0 2px #000" }}>
                 {s.upper ? "AA" : "Aa"}
                 {s.karaoke && <span style={caps.highlight !== "none" ? { color: s.highlight } : undefined}>a</span>}

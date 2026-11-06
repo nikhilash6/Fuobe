@@ -111,12 +111,14 @@ export interface BurnCaps {
   highlight: "spoken" | "keywords" | "none";
   /** Karaoke styles show this many words at a time (0: the whole line). */
   karaokeWords: number;
+  /** It draws each style's own font and weight (the open burner has one font of its own). */
+  fonts: boolean;
 }
 
 export const BURN_CAPS: Record<BurnRoute, BurnCaps> = {
-  open: { positions: ["top", "bottom"], sizes: true, box: false, highlight: "none", karaokeWords: 3 },
-  veed: { positions: ["top", "center", "bottom"], sizes: false, box: true, highlight: "keywords", karaokeWords: 0 },
-  auto: { positions: ["top", "center", "bottom"], sizes: true, box: true, highlight: "spoken", karaokeWords: 3 },
+  open: { positions: ["top", "bottom"], sizes: true, box: false, highlight: "none", karaokeWords: 3, fonts: false },
+  veed: { positions: ["top", "center", "bottom"], sizes: false, box: true, highlight: "keywords", karaokeWords: 0, fonts: true },
+  auto: { positions: ["top", "center", "bottom"], sizes: true, box: true, highlight: "spoken", karaokeWords: 3, fonts: true },
 };
 
 /** The look a burner will actually draw: a position it lacks falls back to the bottom. */
@@ -139,7 +141,7 @@ export function burnPricePerMinute(route: BurnRoute, style: string, translated =
 
 /** What the style controls mean on this burner, in one line. */
 export function burnNote(route: BurnRoute): string {
-  if (route === "open") return "The open burner draws outlined text at the top or the bottom; karaoke styles show 3 words at a time, without a highlight.";
+  if (route === "open") return "The open burner draws outlined text in one font of its own, at the top or the bottom: a style sets the colour and capitals, and karaoke styles show 3 words at a time, without a highlight.";
   if (route === "veed") return "Text size follows the style. Karaoke styles highlight key words, not each spoken one.";
   return "Auto Subtitle shows 3 words at a time and highlights the spoken word in karaoke styles.";
 }
