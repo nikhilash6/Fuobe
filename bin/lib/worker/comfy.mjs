@@ -16,6 +16,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { twinFolders } from "./inventory.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,14 +73,19 @@ export const folders = (workDir) => ({
  * extra_model_paths.yaml: the model folders, for reading. With `o.first` (a ComfyUI that knows `is_default`), its search
  * looks in them before anywhere else, in the order given: before its own models folder and the folders that its own
  * extra_model_paths.yaml adds. ComfyUI puts each `is_default` folder at the front of its list, so they are written in
- * reverse. The worker checks the copy that this search finds first (inventory.mjs).
+ * reverse. A folder name with an older twin (text_encoders and clip, diffusion_models and unet: ComfyUI reads both as
+ * one) gets both subfolders, the name's own first (twinFolders), so a file under clip/ or unet/ is found too. The worker
+ * checks the copy that this search finds first (inventory.mjs).
  */
 export function modelPathsYaml(modelDirs, folderNames, o = {}) {
   const lines = [];
   const entries = modelDirs.map((dir, i) => [dir, i]);
+  // Each subfolder once, under its own name (ComfyUI maps an older name to the folder it stands for).
+  const subs = [...new Set(folderNames.flatMap((f) => twinFolders(f)))];
   for (const [dir, i] of o.first ? entries.reverse() : entries) {
     lines.push(`fuobe_worker_${i}:`, `  base_path: ${JSON.stringify(dir)}`, ...(o.first ? ["  is_default: true"] : []));
-    for (const f of folderNames) lines.push(`  ${f}: ${f}`);
+    // is_default puts each one at the front: the twin is written before the name's own, so the name's own comes first.
+    for (const f of o.first ? [...subs].reverse() : subs) lines.push(`  ${f}: ${f}`);
   }
   return `${lines.join("\n")}\n`;
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { inputRules } from "../bin/lib/worker/checks.mjs";
 import { comfyArgs, comfyEnv, defaultPathsFlag, modelPathsYaml, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
-import { modelFiles, nodePacks, packFolders, yamlModelDirs } from "../bin/lib/worker/inventory.mjs";
+import { modelFiles, nodePacks, packFolders, twinFolders, yamlModelDirs } from "../bin/lib/worker/inventory.mjs";
 import { minVramBytesFor, needsOf, VRAM_TOLERANCE } from "@/lib/lanes";
 import type { RequirementIndex } from "@/lib/gpu/types";
 import { tempDir } from "./helpers/temp-dir";
@@ -112,6 +112,35 @@ describe("the worker's model files", () => {
     expect((await modelFiles([b, a], index, cache, pins)).map((f) => f.name).sort()).toEqual(["x.safetensors", "y.safetensors"]);
   });
 
+  it("finds a file under the folder's older twin (clip for text_encoders, unet for diffusion_models), the name's own first", async () => {
+    const a = tempDir("fuobe-worker-twins-a-");
+    const b = tempDir("fuobe-worker-twins-b-");
+    for (const d of ["clip", "unet", "text_encoders"]) fs.mkdirSync(path.join(a, d));
+    fs.mkdirSync(path.join(b, "text_encoders"));
+    // Only under the twin: found there.
+    fs.writeFileSync(path.join(a, "clip", "t.safetensors"), "GOOD!");
+    fs.writeFileSync(path.join(a, "unet", "u.safetensors"), "GOOD!");
+    // Under both names in one folder: the name's own copy is the one ComfyUI finds first, and it decides.
+    fs.writeFileSync(path.join(a, "text_encoders", "w.safetensors"), "EVIL!");
+    fs.writeFileSync(path.join(a, "clip", "w.safetensors"), "GOOD!");
+    // The twin of an earlier folder comes before a later folder: its wrong copy isn't made up for by the good one.
+    fs.writeFileSync(path.join(a, "clip", "v.safetensors"), "EVIL!");
+    fs.writeFileSync(path.join(b, "text_encoders", "v.safetensors"), "GOOD!");
+    type F = { folder: string; file: string; sizeBytes: number };
+    const f = (folder: string, file: string): F => ({ folder, file, sizeBytes: 5 });
+    const index = { files: { t: f("text_encoders", "t.safetensors"), u: f("diffusion_models", "u.safetensors"), w: f("text_encoders", "w.safetensors"), v: f("text_encoders", "v.safetensors") } };
+    const pins = Object.fromEntries(Object.values(index.files).map((x) => [`${x.folder}/${x.file}`, sha("GOOD!")]));
+    const cache = path.join(tempDir("fuobe-worker-cache-"), "hash-cache.json");
+    const found = await modelFiles([a, b], index, cache, pins);
+    expect(found).toEqual([
+      { folder: "text_encoders", name: "t.safetensors", size: 5, sha256: sha("GOOD!") },
+      { folder: "diffusion_models", name: "u.safetensors", size: 5, sha256: sha("GOOD!") },
+    ]);
+    expect(twinFolders("text_encoders")).toEqual(["text_encoders", "clip"]);
+    expect(twinFolders("diffusion_models")).toEqual(["diffusion_models", "unet"]);
+    expect(twinFolders("loras")).toEqual(["loras"]);
+  });
+
   it("refuses a file that ComfyUI's own models folder or its own extra_model_paths.yaml has with other content", async () => {
     const models = tempDir("fuobe-worker-models-");
     const comfyDir = tempDir("fuobe-worker-comfy-");
@@ -185,6 +214,36 @@ describe("the worker's model files", () => {
     fs.mkdirSync(path.join(comfyDir, "utils"));
     fs.writeFileSync(path.join(comfyDir, "utils", "extra_config.py"), 'is_default = False\nif "is_default" in conf:\n    is_default = conf.pop("is_default")\n');
     expect(defaultPathsFlag(comfyDir)).toBe(true);
+  });
+
+  it("lists each folder's older twin too, so its ComfyUI looks where the inventory looks, in the same order", () => {
+    // ComfyUI's extra_config.py and folder_paths.add_model_folder_path: each line's name through map_legacy, an
+    // is_default path put at the front, any other one at the end.
+    const legacy: Record<string, string> = { clip: "text_encoders", unet: "diffusion_models" };
+    const searchOf = (yaml: string) => {
+      const lists: Record<string, string[]> = { text_encoders: ["<own>/text_encoders", "<own>/clip"], diffusion_models: ["<own>/unet", "<own>/diffusion_models"], loras: ["<own>/loras"] };
+      for (const block of yaml.split(/^(?=\S)/m).filter(Boolean)) {
+        const base = /base_path: "(.+)"/.exec(block)![1];
+        const first = /is_default: true/.test(block);
+        for (const m of block.matchAll(/^ {2}(\w+): (\w+)$/gm)) {
+          if (m[1] === "is_default") continue;
+          const list = (lists[legacy[m[1]] ?? m[1]] ??= []);
+          const p = `${base}/${m[2]}`;
+          if (first) list.unshift(p);
+          else list.push(p);
+        }
+      }
+      return lists;
+    };
+    const folders = ["diffusion_models", "loras", "text_encoders"];
+    const first = searchOf(modelPathsYaml(["D:/a", "E:/b"], folders, { first: true }));
+    expect(first.text_encoders).toEqual(["D:/a/text_encoders", "D:/a/clip", "E:/b/text_encoders", "E:/b/clip", "<own>/text_encoders", "<own>/clip"]);
+    expect(first.diffusion_models).toEqual(["D:/a/diffusion_models", "D:/a/unet", "E:/b/diffusion_models", "E:/b/unet", "<own>/unet", "<own>/diffusion_models"]);
+    expect(first.loras).toEqual(["D:/a/loras", "E:/b/loras", "<own>/loras"]);
+    // An older ComfyUI: after its own folders, each model folder's name and then its twin.
+    const older = searchOf(modelPathsYaml(["D:/a", "E:/b"], folders));
+    expect(older.text_encoders).toEqual(["<own>/text_encoders", "<own>/clip", "D:/a/text_encoders", "D:/a/clip", "E:/b/text_encoders", "E:/b/clip"]);
+    expect(older.diffusion_models.slice(2)).toEqual(["D:/a/diffusion_models", "D:/a/unet", "E:/b/diffusion_models", "E:/b/unet"]);
   });
 });
 

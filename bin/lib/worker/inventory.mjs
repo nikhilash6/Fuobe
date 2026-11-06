@@ -77,6 +77,16 @@ const LEGACY = { unet: "diffusion_models", clip: "text_encoders" };
 const OWN_SUBFOLDERS = { diffusion_models: ["unet", "diffusion_models"], text_encoders: ["text_encoders", "clip"] };
 const canonical = (folder) => LEGACY[folder] ?? folder;
 
+/**
+ * The subfolders of one of the worker's model folders where its ComfyUI looks for a folder name's files, in the order it
+ * looks: the name itself, then its older twin (text_encoders also reads clip, diffusion_models also reads unet), as the
+ * worker's extra_model_paths.yaml lists them (comfy.mjs modelPathsYaml).
+ */
+export function twinFolders(folder) {
+  const name = canonical(folder);
+  return [name, ...Object.keys(LEGACY).filter((old) => LEGACY[old] === name)];
+}
+
 /** A path from an extra_model_paths.yaml with ~ and environment variables ($X, ${X}, and %X% on Windows) filled in. */
 function expand(p, env, home) {
   const vars = (name, whole) => env[name] ?? env[Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase()) ?? ""] ?? whole;
@@ -187,7 +197,8 @@ const samePath = (a, b) => (process.platform === "win32" ? path.resolve(a).toLow
  * The verified files: for every file the catalog names with a pinned SHA-256 (`pins`, else the index's own), the copy
  * that ComfyUI finds first, with the exact size and that hash. ComfyUI looks in the model folders in order and takes the
  * first one that has the file, so only that copy counts: one of the wrong size or with another hash isn't reported,
- * even when a later folder has a good copy. Every copy where ComfyUI itself also looks (`o.comfyDir`: its own models
+ * even when a later folder has a good copy. In each model folder it looks under the folder's name and then under its
+ * older twin (twinFolders: text_encoders/x and then clip/x). Every copy where ComfyUI itself also looks (`o.comfyDir`: its own models
  * folder and its extra_model_paths.yaml) must be the same file too, or it isn't reported. A file with no pin isn't
  * reported at all, so no job that needs it comes here.
  */
@@ -223,12 +234,15 @@ export async function modelFiles(modelDirs, index, cacheFile, pins = filePins(),
     if (typeof want !== "string" || !/^[0-9a-f]{64}$/.test(want)) continue;
     let first = null;
     let firstPath = null;
-    for (const root of modelDirs ?? []) {
-      const p = path.join(root, f.folder, f.file);
-      first = await look(p, f, want);
-      if (first) {
-        firstPath = p;
-        break;
+    // In each model folder, the folder's own name first, then its older twin (as the worker's ComfyUI looks).
+    search: for (const root of modelDirs ?? []) {
+      for (const sub of twinFolders(f.folder)) {
+        const p = path.join(root, sub, f.file);
+        first = await look(p, f, want);
+        if (first) {
+          firstPath = p;
+          break search;
+        }
       }
     }
     if (!first?.ok) continue;

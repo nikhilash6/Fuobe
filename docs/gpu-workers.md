@@ -554,6 +554,9 @@ The worker checks the copy that its ComfyUI loads:
   worker's `extra_model_paths.yaml`), and takes the first folder that has the file. So the worker checks only that
   first copy. If that copy has the wrong size or hash, the file is not reported, even when a later folder has a good
   copy.
+- ComfyUI reads an older folder name as the same folder: `clip` for `text_encoders`, and `unet` for
+  `diffusion_models`. In each model folder, the worker looks under the folder's own name first and then under its older
+  name, and its `extra_model_paths.yaml` lists both in that order. So a text encoder in `models/clip` is found.
 - Some node packs read ComfyUI's own `models` folder directly. And an older ComfyUI that does not know `is_default`
   looks in its own folders first. So a copy with the same name in ComfyUI's own `models` folder (`unet` and `clip`
   count for `diffusion_models` and `text_encoders`), or in a folder that ComfyUI's own `extra_model_paths.yaml` adds,
