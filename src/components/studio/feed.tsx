@@ -40,6 +40,8 @@ import { LayersStack, MediaThumb } from "./result-media";
 import { useNow } from "./use-now";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { Viewer } from "./viewer";
+import { MadeNote } from "./made-note";
+import { shownSettings } from "@/lib/catalog/made";
 import { NextSteps } from "@/components/nav/next-steps";
 import { reservedRowHeight, useArrival, useEnter, useFollowRow, useLiveRun } from "./feed-motion";
 import { AiTag, useAiTag } from "./ai-tag";
@@ -51,7 +53,8 @@ export { downloadName } from "@/lib/library";
 export function tileRatio(g: Generation): number {
   if (g.kind === "audio") return 1.6;
   if (g.kind === "text") return 0.85;
-  const ar = g.request.params?.aspectRatio ?? g.aspectRatio ?? undefined;
+  // The shape it was made at (a 5:4 run on a model that makes 4:3 is 4:3).
+  const ar = (g.made ? g.made.aspectRatio : g.request.params?.aspectRatio) ?? g.aspectRatio ?? undefined;
   return ratioValue(ar && ar !== "auto" ? ar : undefined, g.kind === "video" ? 16 / 9 : 1);
 }
 
@@ -428,6 +431,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest, first 
   const single = g.status === "succeeded" && shown.length === 1 ? g.outputs[shown[0]] : null;
   const singleName = single ? downloadName(g, single, shown[0]) : "";
   const p = g.request.params ?? {};
+  const made = shownSettings(g);
   // A layout run says so, with its box count (Edit layout reopens them).
   const boxes = (p.extra?.layout as { items?: unknown[] } | undefined)?.items?.length;
   const meta = [
@@ -436,9 +440,10 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest, first 
     g.presetName,
     g.modelName ?? g.modelId,
     OPERATION_LABELS[g.op],
-    p.aspectRatio,
-    p.resolution,
-    p.duration ? `${p.duration >= 1000 ? p.duration / 1000 : p.duration}s` : undefined,
+    // What it was made at (a 2K run on a model that makes up to 1080p reads 1080p; the line under says so).
+    made.aspectRatio,
+    made.resolution,
+    made.duration ? `${made.duration >= 1000 ? made.duration / 1000 : made.duration}s` : undefined,
   ].filter((x, i, all) => x && all.indexOf(x) === i);
 
   return (
@@ -474,6 +479,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest, first 
               <span className="font-mono before:mr-1.5 before:content-['·']">{formatCost(g.costUsd)}</span>
             ) : null}
           </p>
+          <MadeNote g={g} className="mt-0.5" />
         </div>
         <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/gen:opacity-100 sm:focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {feed.reuse && (

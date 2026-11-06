@@ -19,6 +19,8 @@ import { placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { CompareSlider } from "./compare-slider";
+import { MadeNote } from "./made-note";
+import { shownSettings } from "@/lib/catalog/made";
 import { ACTION_ICONS, downloadUrl, SaveElementForm, useActionRunner } from "./result-actions";
 import { OwnSetupChip } from "@/components/own-setup";
 import { LayersStack, ModelViewer, TextReader, VideoFileCard } from "./result-media";
@@ -61,6 +63,7 @@ function metaText(o: OutputFile | undefined, key: string): string | undefined {
 
 function Details({ g, index }: { g: Generation; index: number }) {
   const p = g.request.params ?? {};
+  const made = shownSettings(g);
   const title = userTitle(g);
   const aiTag = useAiTag();
   // A run on this studio's GPUs says their place name ("Made on: Our GPUs").
@@ -102,15 +105,17 @@ function Details({ g, index }: { g: Generation; index: number }) {
         {isLayered(g) && <Row label="Layer" value={`${layerInfo(g.outputs[index], index).name} · ${index + 1} of ${g.outputs.length}`} />}
         <Row label="Stem" value={metaText(g.outputs[index], "stem")} />
         <Row label="Language" value={metaText(g.outputs[index], "language") ?? p.targetLanguage} />
-        <Row label="Aspect ratio" value={p.aspectRatio ?? g.aspectRatio} />
-        <Row label="Quality" value={p.resolution} />
-        <Row label="Duration" value={p.duration ? `${p.duration}s` : undefined} />
-        <Row label="Seed" value={p.seed} mono />
+        {/* What it was made at; where that differs from what it asked, the line under the details says so. */}
+        <Row label="Aspect ratio" value={made.aspectRatio ?? g.aspectRatio} />
+        <Row label="Quality" value={made.resolution} />
+        <Row label="Duration" value={made.duration ? `${made.duration}s` : undefined} />
+        <Row label="Seed" value={made.seed} mono />
         <Row label="Cost" value={g.costUsd != null ? formatCost(g.costUsd) : undefined} mono />
         <Row label="Made" value={timeAgo(g.createdAt)} />
         {g.deletedAt && <Row label="In Trash" value={`${trashDaysLeft(g.deletedAt)} days left`} />}
         {!g.deletedAt && <Row label="Review" center value={<ReviewSelect g={g} />} />}
       </div>
+      <MadeNote g={g} />
       {g.request.negativePrompt && <p className="text-[12px] text-muted-foreground">Negative: {g.request.negativePrompt}</p>}
     </div>
   );
