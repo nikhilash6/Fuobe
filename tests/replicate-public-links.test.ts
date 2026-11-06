@@ -64,8 +64,7 @@ const refsRun = (): Req => ({
   inputs: { images: [saveFile({ data: png(200_000), contentType: "image/png", source: "upload" }).url], videos: [saveFile({ data: mp4(1_500_000), contentType: "video/mp4", source: "upload" }).url] },
 } as Req);
 
-// Skipped until the server side lands: FieldMap.publicLinks from scripts/gen-cloud-models.py and src/server/providers/replicate.ts prepareFile sending public links. It fails without that change.
-describe.skip("H3 Lite references on Replicate go as public links", () => {
+describe("H3 Lite references on Replicate go as public links", () => {
   it("with a fal.ai key, each reference file goes to fal's storage and its public link is sent", async () => {
     setSetting("falKey", "fal_standin");
     const [g] = gens.createGenerations(refsRun());

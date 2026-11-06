@@ -2883,7 +2883,9 @@ function accountTrouble(e: unknown, account: string, providerId: string, stage: 
   // The provider's own words (provider-keys.ts accountKeyError keeps them, without the key) tell a refused key from a
   // model the key may not run.
   const said = (e as { said?: unknown } | null)?.said;
-  if (typeof status === "number" && status > 0) return diagnoseKey({ stage, status, text: typeof said === "string" ? said : message }, ctx);
+  // How long the provider asked to wait (a 429's Retry-After, kept by the adapter): the next try waits that long.
+  const retryAfterS = (e as { retryAfterS?: unknown } | null)?.retryAfterS;
+  if (typeof status === "number" && status > 0) return diagnoseKey({ stage, status, text: typeof said === "string" ? said : message, ...(typeof retryAfterS === "number" && retryAfterS > 0 && { retryAfterS }) }, ctx);
   const net = networkReason(e);
   if (net) return diagnoseKey({ stage, error: net }, ctx);
   // A step at the provider that failed in words of its own (a voice it couldn't clone): plain words already, its own in details.
@@ -4189,7 +4191,9 @@ async function pollOne(r: Row): Promise<void> {
   // whose copy broke off (it is copied again at the next poll).
   const healing = own ? pollHeals().get(r.id) : undefined;
   if (healing && Date.now() < healing.next) return;
-  if (own && typeof ctx.meta.saveNext === "number" && Date.now() < ctx.meta.saveNext) return;
+  // (The owner's Replicate run too: Replicate deletes the file an hour after it is made, so its copy is tried again.)
+  const copyHeals = !!own || (!account && r.provider === "replicate");
+  if (copyHeals && typeof ctx.meta.saveNext === "number" && Date.now() < ctx.meta.saveNext) return;
   try {
     res = await adapterFor(r.provider, account).poll(ctx);
   } catch (e) {
@@ -4382,8 +4386,8 @@ async function pollOne(r: Row): Promise<void> {
       try {
         // An account's own GPU or key: a copy that breaks off is tried again (the result is made, and paid). The files a
         // result links to are kept once, before (never fetched again with each try of the main file).
-        const linked = own ? await persistArtifacts(o.meta, r.id, o.url) : undefined;
-        outputs.push(await (own ? persistWithRetry(o, r.id, linked) : persistOutput(o, r.id)));
+        const linked = copyHeals ? await persistArtifacts(o.meta, r.id, o.url) : undefined;
+        outputs.push(await (copyHeals ? persistWithRetry(o, r.id, linked) : persistOutput(o, r.id)));
         // Still saving: the turn is still this process's.
         claimFinish(r.id);
       } catch (e) {
@@ -4422,6 +4426,30 @@ async function pollOne(r: Row): Promise<void> {
             const kept = keptFix(undefined, trouble);
             updateLive(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
           }
+          return;
+        }
+        // The owner's Replicate run: a link to Replicate's file is no result to keep (Replicate deletes it an hour after it
+        // is made). A copy that broke off for a passing reason is tried again at a later poll, with a growing wait, for 15
+        // minutes; one that can't be saved fails the run in words.
+        // https://replicate.com/docs/topics/predictions/data-retention
+        if (copyHeals && /^https?:\/\//.test(o.url ?? "")) {
+          for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+          const at = Date.now();
+          const since = typeof ctx.meta.saveSince === "number" ? ctx.meta.saveSince : at;
+          const tries = (typeof ctx.meta.saveTries === "number" ? ctx.meta.saveTries : 0) + 1;
+          if (passingSave(e) && at - since < SAVE_HEAL_MS * SELF_HEAL.scale) {
+            const next = at + backoffMs(tries, { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 }) * SELF_HEAL.scale;
+            db()
+              .prepare(
+                `UPDATE generations SET message = @words, updated_at = @at,
+                   external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.saveSince', @since, '$.saveTries', @tries, '$.saveNext', @next)
+                 WHERE id = @id AND status = 'running'`,
+              )
+              .run({ id: r.id, words: "Your result is made. Copying it from Replicate", at, since, tries, next });
+            return;
+          }
+          const expired = /^download (403|404|410)$/.test((e as Error).message ?? "");
+          updateLive(r.id, { status: "failed", error: expired ? resultExpired().words : "We couldn't save this result. Press Retry.", completed_at: Date.now(), message: null });
           return;
         }
         outputs.push({ url: o.url, kind: o.kind ?? r.kind, ...inlineText(o.text, o.meta), ...(o.draftId ? { draftId: o.draftId } : {}) });
