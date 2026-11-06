@@ -9,6 +9,8 @@ import { ANY_ANGLE } from "@/lib/catalog/any-angle";
 import { NO_SUBJECT_MESSAGE, withFrontView } from "./any-angle";
 import { applyMentions } from "@/lib/catalog/elements";
 import { madeOfRun } from "@/lib/catalog/fitted";
+import { routeDrops } from "@/lib/catalog/route-takes";
+import { listWords } from "@/lib/unavailable";
 import { migrateRequest, replacedBy } from "@/lib/catalog/replaced";
 import { directorFieldWords } from "@/lib/catalog/cinema";
 import { withSignatureWords } from "@/lib/catalog/palettes";
@@ -1305,6 +1307,11 @@ function prepare(original: GenerationRequest) {
   if (!demo && !route.map?.numOutputs && plan.perJobOutputs > 1) {
     plan = { ...plan, jobs: plan.jobs * plan.perJobOutputs, perJobOutputs: 1, params: { ...plan.params, numOutputs: 1 } };
   }
+  // A setting the composer offers because another route of the model reads it (Nano Banana Pro's seed on fal), dropped by the
+  // route this run goes to (Replicate's): said in the run's notes, never dropped without a word. (A count it can't take was
+  // split into one job per result just above, so it isn't one.)
+  const drops = demo ? [] : routeDrops(route, plan.model.id, { negativePrompt: req.negativePrompt, params: plan.params });
+  if (drops.length) notes.push(`${plan.model.name} on ${provider(route.provider).label} doesn't take ${listWords(drops)}: this run goes without`);
   const providerId: ProviderId = demo ? "mock" : route.provider;
   // A text step that runs on a local model is free; only Claude costs money.
   const free = demo || (route.provider === "llm" && !llmUsesClaude(route));
