@@ -14,6 +14,8 @@ import { mergeScanReports, qualityOf } from "@/lib/watermark";
 import { H3_LATENT_DRAFT_WORKFLOW, REGEN_COPY, REGEN_LATENT_WORKFLOW, REGEN_WORKFLOW } from "@/lib/catalog/regenerate";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
+import type { FileNeed } from "@/lib/lanes";
+import { graphLoraNames, runtimeNeeds } from "@/lib/runtime-files";
 import { installedDbs, type DbsModel } from "@/lib/av/split";
 import { installedReuse, type ReuseModel } from "@/lib/av/clean-voice";
 import { RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW, RTX_MISSING } from "@/lib/catalog/rtx-video";
@@ -291,7 +293,7 @@ export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this mach
  * limit (the run was taken in line once; the wait limit applies only before its first start). The run's wait limit is
  * the one stamped on it (0: as long as it takes), else the install's own (FUOBE_POOL_WAIT_MIN).
  */
-function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string }) {
+function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string; runtime?: FileNeed[] }) {
   const stamp = runStamp();
   const run = generationId ? runPlaceOf(generationId) : null;
   // A run that waited to enter the line (pool-holds.ts) enters where its release says (stamp.rankAt): for the system's
@@ -307,6 +309,7 @@ function accountPoolFields(workflowId: string, account: string, generationId: st
     waitMs: run?.started || run?.later ? undefined : (stamp?.waitMs ?? poolWaitMs()),
     size: o.size,
     catalogVersion: o.catalogVersion,
+    runtime: o.runtime,
   });
 }
 
@@ -315,6 +318,16 @@ export const NO_WORKER_FOR_SIZE = "No worker may run a job this large: each PC's
 
 /** Said to an account when its run is larger than this install's GPUs ever make (refused before it is queued). */
 export const POOL_TOO_BIG = "This size isn't offered here yet. Pick a smaller size, a shorter clip or fewer results.";
+
+/**
+ * Said to the owner when no worker that may run the job's workflow verified a file the job adds at run time (a look's or
+ * a motion's LoRA), naming the files.
+ */
+export const noWorkerForFiles = (files: readonly string[]): string =>
+  `No worker has ${files.length > 1 ? "these files" : "this file"} yet: ${files.join(", ")}. Put ${files.length > 1 ? "them" : "it"} in a worker's loras folder (a library LoRA is verified by its pinned size and SHA-256), then run it again.`;
+
+/** Said to an account when its run adds a file no GPU here verified (refused before it is queued; the price check said so first). */
+export const POOL_NO_FILES = "This style runs on your own GPU. Connect your GPU to use it, or pick another one.";
 
 /** Said to the owner when no worker is allowed the lane of a job sent to the workers. */
 export const NO_WORKER_FOR_LANE = "No worker can run this model yet. Allow its lane for a worker that has its model files, in Settings → Open-source engine · ComfyUI → Workers.";
@@ -1960,6 +1973,14 @@ export const comfyProvider: ProviderAdapter = {
       // A job larger than every PC that could run it may ever make (its ceiling) would never be taken: refused now, the
       // owner's and an account's alike, before it waits in line.
       if (forPool && workersCanRun(manifest.id) && !workersCanRun(manifest.id, { size: prepared.size })) throw new ProviderError(computer === "owner" ? NO_WORKER_FOR_SIZE : POOL_TOO_BIG);
+      // The files the graph loads beyond its workflow's own (a look's, a motion's or a recipe's LoRAs): only a worker that
+      // verified each one takes the task, and a job no worker could take is refused now, never left to wait for nothing
+      // (or refused by a worker for a file it hasn't verified).
+      const runtime = forPool ? runtimeNeeds(graphLoraNames(wf), loadIndex(), manifest.id) : null;
+      if (runtime && workersCanRun(manifest.id) && (runtime.unknown.length || !workersCanRun(manifest.id, { files: runtime.files }))) {
+        const lacking = [...runtime.unknown, ...runtime.files.filter((f) => !workersCanRun(manifest.id, { files: [f] })).map((f) => f.name)];
+        throw new ProviderError(computer === "owner" ? noWorkerForFiles(lacking.length ? lacking : runtime.files.map((f) => f.name)) : POOL_NO_FILES);
+      }
       const outputs = Math.max(1, manifest.outputs.length) * Math.max(1, Math.round(Number(input.numOutputs) || 1));
       // An account's run on the workers: a job ticket, and the worker composes the graph (the owner's own jobs keep theirs).
       const ticket = forPool && computer !== "owner" ? accountTicket(prepared, computer, { outputs, kind: model?.kind }) : undefined;
@@ -1984,11 +2005,11 @@ export const comfyProvider: ProviderAdapter = {
             computer === "owner"
               ? // The owner's jobs on the workers: the lane and files they need, after every person's run (the owner's
                 // class), with the owner's own wait limit (none unless the owner sets one: queue-settings.ts).
-                poolFields(manifest.id, { class: "owner", waitMs: ownerWaitMs(), size: prepared.size })
+                poolFields(manifest.id, { class: "owner", waitMs: ownerWaitMs(), size: prepared.size, runtime: runtime?.files })
               : // An account's: the lane and files they need, in its class (paid before free), in the order they came
                 // (with the billing service's head start inside the class), with the wait set for the run.
                 // A ticket's task goes only to a worker built for its catalog, and inside that PC's ceiling.
-                accountPoolFields(manifest.id, computer.slice(5), generationId, { size: prepared.size, catalogVersion: ticket?.catalogVersion }),
+                accountPoolFields(manifest.id, computer.slice(5), generationId, { size: prepared.size, catalogVersion: ticket?.catalogVersion, runtime: runtime?.files }),
         }),
       });
       // (`workers`: the run keeps its task's clocks, pool.ts, even when a poll of it fails.)

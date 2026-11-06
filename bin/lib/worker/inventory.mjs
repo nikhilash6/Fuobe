@@ -20,6 +20,22 @@ export function filePins(file = path.join(here, "dist", "file-pins.json")) {
   }
 }
 
+/**
+ * The files a run may add beyond its workflow's own, built into this worker (dist/runtime-files.json: every LoRA library
+ * entry with a pinned size and SHA-256, src/lib/runtime-files.ts): [{ folder, file, sizeBytes, sha256 }]. None when the
+ * build has no such list (a build from before it): the worker then reports the catalog's own files only.
+ */
+export function runtimeFileList(file = path.join(here, "dist", "runtime-files.json")) {
+  try {
+    const list = JSON.parse(fs.readFileSync(file, "utf8")).files;
+    return Array.isArray(list)
+      ? list.filter((f) => f && typeof f.folder === "string" && typeof f.file === "string" && Number.isInteger(f.sizeBytes) && typeof f.sha256 === "string" && /^[0-9a-f]{64}$/.test(f.sha256))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function sha256File(file) {
   return new Promise((resolve, reject) => {
     const h = crypto.createHash("sha256");
@@ -201,6 +217,9 @@ const samePath = (a, b) => (process.platform === "win32" ? path.resolve(a).toLow
  * older twin (twinFolders: text_encoders/x and then clip/x). Every copy where ComfyUI itself also looks (`o.comfyDir`: its own models
  * folder and its extra_model_paths.yaml) must be the same file too, or it isn't reported. A file with no pin isn't
  * reported at all, so no job that needs it comes here.
+ *
+ * `o.runtime`: the run-time files (runtimeFileList), checked the same way after the catalog's own (a file the catalog
+ * names already counts once), so a look's or a motion's LoRA on this PC is verified and a job that loads it may come.
  */
 export async function modelFiles(modelDirs, index, cacheFile, pins = filePins(), o = {}) {
   const cache = (() => {
@@ -229,7 +248,10 @@ export async function modelFiles(modelDirs, index, cacheFile, pins = filePins(),
     return { ok: sha === want, size: st.size, sha };
   };
   const out = [];
-  for (const f of Object.values(index.files ?? {})) {
+  const catalog = Object.values(index.files ?? {});
+  const named = new Set(catalog.map((f) => `${f.folder}/${f.file}`));
+  const runtime = (o.runtime ?? []).filter((f) => !named.has(`${f.folder}/${f.file}`));
+  for (const f of [...catalog, ...runtime]) {
     const want = pins[`${f.folder}/${f.file}`] ?? f.sha256;
     if (typeof want !== "string" || !/^[0-9a-f]{64}$/.test(want)) continue;
     let first = null;

@@ -9,6 +9,8 @@
 //     into it;
 //   - file-pins.json: the SHA-256 of every model file the catalog names. A worker reports a file only when its own
 //     hash matches;
+//   - runtime-files.json: the files a run may add beyond its workflow's own (src/lib/runtime-files.ts: every LoRA
+//     library entry with a pinned size and SHA-256). A worker verifies and reports them as it does the catalog's files;
 //   - compose/: the graph composer (src/lib/ticket-compose.ts and every file it imports: bin/lib/worker/composer-files.mjs),
 //     transpiled the same way, so the worker composes a job ticket's graph with the studio's own code;
 //   - catalog-version.json: the catalog version those files and the catalog give. A worker takes a ticket only for it;
@@ -17,6 +19,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import ts from "typescript";
 import { builtName, catalogVersion, composerFiles, resolveSpec } from "../../bin/lib/worker/composer-files.mjs";
 import { buildStamp, STAMP_FILE } from "../../bin/lib/worker/stamp.mjs";
@@ -41,6 +44,32 @@ export function workerParts(catalog, root = ROOT) {
 }
 
 const TRANSPILE = { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: false, isolatedModules: true };
+
+/** The LoRA library a run's run-time files come from (data only: it imports nothing but types). */
+export const LORA_LIBRARY_FILE = "src/lib/catalog/lora-library.generated.ts";
+
+/**
+ * The run-time files a worker verifies (src/lib/runtime-files.ts runtimeFiles, which the tests hold this to): each LoRA
+ * library entry with a pinned SHA-256 and size, once by name, sorted. The library is read by transpiling its file and
+ * running it alone (it imports types only), so nothing else of the studio runs here.
+ */
+export function runtimeFilePins(root = ROOT) {
+  const src = fs.readFileSync(path.join(root, LORA_LIBRARY_FILE), "utf8");
+  const { outputText } = ts.transpileModule(src, { compilerOptions: { ...TRANSPILE, module: ts.ModuleKind.CommonJS }, fileName: path.basename(LORA_LIBRARY_FILE) });
+  const mod = { exports: {} };
+  const require = (name) => {
+    throw new Error(`${LORA_LIBRARY_FILE} imports ${name}: it may hold data only`);
+  };
+  vm.runInNewContext(outputText, { module: mod, exports: mod.exports, require }, { filename: LORA_LIBRARY_FILE });
+  const library = mod.exports.LORA_LIBRARY;
+  if (!Array.isArray(library)) throw new Error(`${LORA_LIBRARY_FILE} has no LORA_LIBRARY`);
+  const out = new Map();
+  for (const e of library) {
+    if (!e?.file || out.has(e.file) || typeof e.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(e.sha256) || !Number.isInteger(e.sizeBytes) || e.sizeBytes <= 0) continue;
+    out.set(e.file, { folder: "loras", file: e.file, sizeBytes: e.sizeBytes, sha256: e.sha256 });
+  }
+  return [...out.values()].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
 
 /**
  * The graph composer as plain .mjs files under compose/ (src/lib/x.ts → compose/lib/x.mjs; a .json it imports →
@@ -98,10 +127,12 @@ export function workerFiles({ root = ROOT, catalogDir } = {}) {
   files["allowed-nodes.json"] = json({ nodes });
   files["input-rules.json"] = json(rules);
   files["file-pins.json"] = json({ files: pins });
+  const runtime = runtimeFilePins(root);
+  files["runtime-files.json"] = json({ files: runtime });
   const composer = composerParts(root);
   Object.assign(files, composer);
   files["catalog-version.json"] = json({ version: catalogVersion(root, catalogDir) });
   files[STAMP_FILE] = json({ stamp: buildStamp(root, catalogDir) });
   const ruled = Object.values(rules.inputs).reduce((n, r) => n + Object.keys(r).length, 0);
-  return { files, summary: `worker: ${SOURCES.length} modules, ${Object.keys(composer).length} composer files, ${nodes.length} allowed node types, ${ruled} input rules, ${Object.keys(pins).length} file hashes` };
+  return { files, summary: `worker: ${SOURCES.length} modules, ${Object.keys(composer).length} composer files, ${nodes.length} allowed node types, ${ruled} input rules, ${Object.keys(pins).length} file hashes, ${runtime.length} run-time files` };
 }

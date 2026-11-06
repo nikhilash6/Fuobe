@@ -27,7 +27,7 @@ import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
-import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
+import { inventoryHash, missingModelDirs, modelFiles, packFolders, runtimeFileList } from "./inventory.mjs";
 import { freeLocal, localIdle, readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
 import { finishers } from "./finish.mjs";
@@ -189,10 +189,11 @@ export function siteOf(answer) {
 /**
  * Run until `signal` aborts or the studio stops it. Returns why it ended: "aborted" (Ctrl+C, the scheduled task's end),
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
- * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
- * options), readCounters, readListeners, gpuEveryMs, readGpuGen, idleClaimMs (IDLE_CLAIM_MS), canCleanPictures, and for
- * job tickets: composer (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes, and codeWatch (update.mjs's
- * CodeWatch: new code on disk ends it with "update" once its jobs are done) }.
+ * signal, requirements, ComputerRunner, rules, pins, runtime (the run-time files it verifies: inventory.mjs
+ * runtimeFileList), allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own options), readCounters,
+ * readListeners, gpuEveryMs, readGpuGen, idleClaimMs (IDLE_CLAIM_MS), canCleanPictures, and for job tickets: composer
+ * (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes, and codeWatch (update.mjs's CodeWatch: new
+ * code on disk ends it with "update" once its jobs are done) }.
  */
 export async function runWorker(saved, deps) {
   // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
@@ -377,9 +378,11 @@ async function work(saved, deps, owner) {
     log(`Saved its next token in worker.json${Number.isFinite(next.expiresAt) ? ` (it lasts until ${new Date(next.expiresAt).toISOString().slice(0, 10)})` : ""}.`);
   };
 
+  // The run-time files it verifies beside the catalog's own (a look's or a motion's LoRAs), as its build lists them.
+  const runtime = deps.runtime ?? runtimeFileList();
   async function scan() {
     packs = packFolders(cfg.comfyDir, index);
-    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir, fileCheck: cfg.fileCheck }), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
+    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir, fileCheck: cfg.fileCheck, runtime }), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
     invHash = inventoryHash(inv);
   }
   // One look at a time; the next beat carries a changed hash, and the studio then asks for the list.

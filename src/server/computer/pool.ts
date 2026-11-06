@@ -2,8 +2,9 @@ import "server-only";
 import crypto from "node:crypto";
 import { FINISH_KINDS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
-import { allLanes, laneLabel, lanesFor, MEDIA_KINDS, needsOf, partLanes, type Inventory, type Needs } from "@/lib/lanes";
+import { allLanes, hasFiles, laneLabel, lanesFor, MEDIA_KINDS, needsOf, partLanes, type FileNeed, type Inventory, type Needs } from "@/lib/lanes";
 import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
+import { runtimeFileKeys } from "@/lib/runtime-files";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
@@ -140,6 +141,17 @@ interface Allow {
 const allowOf = (w: WorkerRow) => json<Record<string, Allow>>(w.allow_json, {});
 const capableOf = (w: WorkerRow) => json<{ lanes: string[]; workflows: string[] }>(w.lanes_json, { lanes: [], workflows: [] });
 const factsOf = (w: WorkerRow) => json<ComputerFacts>(w.facts_json, {});
+/** The worker's verified files as its last list said (inventory_json), read once for each list it sends. */
+const inventories = new Map<string, { hash: string | null; inv: Inventory }>();
+export function inventoryOf(w: Pick<WorkerRow, "id" | "inventory_json" | "inventory_hash">): Inventory {
+  const kept = inventories.get(w.id);
+  if (kept && kept.hash === (w.inventory_hash ?? null) && w.inventory_hash) return kept.inv;
+  const raw = json<Partial<Inventory>>(w.inventory_json, {});
+  const inv: Inventory = { files: Array.isArray(raw.files) ? raw.files : [], nodePacks: Array.isArray(raw.nodePacks) ? raw.nodePacks : [], ...(Array.isArray(raw.media) && { media: raw.media }) };
+  inventories.set(w.id, { hash: w.inventory_hash ?? null, inv });
+  if (inventories.size > 500) inventories.delete(inventories.keys().next().value!);
+  return inv;
+}
 const hoursOf = (w: WorkerRow): Hours | null => parseHours(json<unknown>(w.hours_json, null));
 const benchOf = (w: WorkerRow) => json<Record<string, { medianMs?: number; p90Ms?: number; loadMs?: number; peakVramBytes?: number }>>(w.bench_json, {});
 /** What its PC may ever run, as its last beat said (null: no ceiling of its own). */
@@ -373,13 +385,16 @@ function gpuClaimable(w: WorkerRow, now: number, whose: "people" | "owner"): num
  */
 const fileNameOk = (name: string) => name.length <= 256 && !/[\\\0-\x1f]|^\/|^[a-z]:|(^|\/)\.{1,2}(\/|$)|\/\/|\/$/i.test(name);
 
-/** The index's files, as "folder/name" (loadIndex keeps one index until its file changes). */
+/**
+ * The files a worker may report, as "folder/name": the index's (loadIndex keeps one index until its file changes), and the
+ * run-time files a run may add beyond its workflow's own (src/lib/runtime-files.ts: the LoRA library's pinned files).
+ */
 const indexFileKeys = new WeakMap<ReturnType<typeof loadIndex>, Set<string>>();
 function knownFiles(): Set<string> {
   const index = loadIndex();
   let keys = indexFileKeys.get(index);
   if (!keys) {
-    keys = new Set(Object.values(index.files).map((f) => `${f.folder}/${f.file}`));
+    keys = new Set([...Object.values(index.files).map((f) => `${f.folder}/${f.file}`), ...runtimeFileKeys()]);
     indexFileKeys.set(index, keys);
   }
   return keys;
@@ -387,8 +402,9 @@ function knownFiles(): Set<string> {
 
 /**
  * The worker's verified files and node packs: what it can run now, and what each other lane lacks. Only the files the
- * requirements index names are kept (by folder and name, subfolders and all), but the hash is of the list as the worker
- * sent it, so it equals the hash the worker computes and the studio asks for the list again only when it changed.
+ * requirements index names and the run-time files (knownFiles) are kept (by folder and name, subfolders and all), but
+ * the hash is of the list as the worker sent it, so it equals the hash the worker computes and the studio asks for the
+ * list again only when it changed. The run-time files it verified decide which runs that add them it may take (fits).
  */
 export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; workflows: string[]; missing: { lane: string; label: string; files: string[]; bytes: number }[] } {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -505,7 +521,7 @@ function estOn(t: TaskRow, w: WorkerRow): number | null {
 /**
  * May this worker run this task: its pool, its lane allowed and capable, its PC's ceiling (the lanes or workflows it
  * may ever run, the largest picture, the longest clip, the most results), its build's catalog for a job ticket, its
- * files, its VRAM, and the delays.
+ * files (the run-time files the run adds too), its VRAM, and the delays.
  */
 function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   if (!(t.pools ?? "").split(",").includes(w.pool)) return false;
@@ -522,6 +538,8 @@ function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   if (needs?.catalogVersion && (w.protocol ?? 0) < TICKET_PROTOCOL) return false;
   if (refusedBy(t).includes(refusalKey(w))) return false;
   if (needs?.workflowId ? !cap.workflows.includes(needs.workflowId) : !cap.lanes.includes(lane)) return false;
+  // The files the run adds beyond its workflow's own (a look's LoRAs): only a worker that verified each one.
+  if (needs?.runtime?.length && !hasFiles(inventoryOf(w), needs.runtime)) return false;
   const vram = factsOf(w).vramBytes ?? 0;
   if ((needs?.minVramBytes ?? 0) > vram) return false;
   if (now - t.created_at < w.claim_after_ms + (allow[lane]?.delayMs ?? 0)) return false;
@@ -963,7 +981,7 @@ export function poolLane(workflowId: string): string {
  * an account's run needs; without it, a worker built from another catalog counts too (the owner's own jobs, and
  * whether this install's GPUs could ever run it).
  */
-export function workersCanRun(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean } = {}): boolean {
+export function workersCanRun(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean; files?: readonly FileNeed[] } = {}): boolean {
   return ableWorkers(workflowId, o).length > 0;
 }
 
@@ -985,8 +1003,11 @@ export function workersMost(workflowId: string): { maxMegapixels?: number; maxSe
   return out;
 }
 
-/** The workers that may and can run this workflow (any workflow: null), whatever their state now (workersCanRun). */
-function ableWorkers(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean } = {}): WorkerRow[] {
+/**
+ * The workers that may and can run this workflow (any workflow: null), whatever their state now (workersCanRun). `files`:
+ * the run-time files a run adds (src/lib/runtime-files.ts), each one the worker verified.
+ */
+function ableWorkers(workflowId: string | null, o: { size?: Needs["size"]; tickets?: boolean; files?: readonly FileNeed[] } = {}): WorkerRow[] {
   const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
   const lane = workflowId ? poolLane(workflowId) : null;
   // (Runs made here go to the "pool" pool: poolFields.)
@@ -998,6 +1019,7 @@ function ableWorkers(workflowId: string | null, o: { size?: Needs["size"]; ticke
     const ceiling = ceilingOf(w);
     if (workflowId === null) return cap.workflows.some((id) => poolLane(id) in allow && insideCeiling(ceiling, { workflowId: id, lane: poolLane(id) }));
     if (!needs || !(lane! in allow) || !cap.workflows.includes(workflowId) || ceilingProblem(ceiling, { workflowId, lane, size: o.size })) return false;
+    if (o.files?.length && !hasFiles(inventoryOf(w), o.files)) return false;
     return needs.minVramBytes <= (factsOf(w).vramBytes ?? 0);
   });
 }
@@ -1081,13 +1103,14 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
  */
 export function poolFields(
   workflowId: string,
-  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; rankAt?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string } = {},
+  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; rankAt?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string; runtime?: FileNeed[] } = {},
   now = Date.now(),
 ) {
   const index = loadIndex();
   const found = needsOf(index, workflowId);
   // How big the job is (a PC's ceiling reads it), and a job ticket's catalog version (only a worker built for it takes it).
-  const extra = { ...(o.size && { size: o.size }), ...(o.catalogVersion && { catalogVersion: o.catalogVersion }) };
+  // And the files the run adds beyond its workflow's own (a look's LoRAs): only a worker that verified them takes it.
+  const extra = { ...(o.size && { size: o.size }), ...(o.catalogVersion && { catalogVersion: o.catalogVersion }), ...(o.runtime?.length && { runtime: o.runtime }) };
   const needs = found && { ...found, ...extra };
   const lane = poolLane(workflowId);
   return {

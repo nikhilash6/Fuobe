@@ -1383,6 +1383,16 @@ const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined
   ...pikaFlexGraphLoras(endpoint, extra),
 ];
 
+/**
+ * The LoRA files a planned ComfyUI run loads (by name, once each): the ones its plan adds (a look's, a motion's, a
+ * recipe's, the person's own) and the ones its graph picks by option. Whatever of them is a workflow's own file its lane
+ * covers; the rest are its run-time files (src/lib/runtime-files.ts). None off ComfyUI.
+ */
+export function runLoraFiles(p: { route: { provider: string; endpoint: string }; loras: { applied: LoraRef[] } }, extra: Record<string, unknown> | undefined): string[] {
+  if (p.route.provider !== "comfyui") return [];
+  return [...new Set([...p.loras.applied, ...graphLoras(p.route.endpoint, extra)].map((l) => l.file).filter(Boolean))];
+}
+
 /** Operations whose clip length is the duration picked (made, or added by extend), not an input video's. */
 const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "extend", "keyframes"]);
 
@@ -1697,7 +1707,10 @@ function isParked(id: string, now = Date.now()): boolean {
   return false;
 }
 
-/** One row a run would make: its model, operation, provider, kind and app, and the earlier steps it waits for. */
+/**
+ * One row a run would make: its model, operation, provider, kind and app, and the earlier steps it waits for. `loras`:
+ * the LoRA files a planned ComfyUI row loads (runLoraFiles), when plannedSteps could plan it.
+ */
 export interface PlannedStep {
   id: string;
   modelId: string;
@@ -1706,13 +1719,15 @@ export interface PlannedStep {
   kind: string;
   presetId: string | null;
   waits: boolean;
+  loras?: string[];
 }
 
 const ROLLED_BACK = Symbol("rolled back");
 
 /**
  * Every row `fn` (createGenerations) would make, made and thrown away inside one transaction: nothing is kept and
- * nothing is sent. A chain's later steps are planned exactly as the real run plans them.
+ * nothing is sent. A chain's later steps are planned exactly as the real run plans them, each ComfyUI row with the LoRA
+ * files it loads (a look's, a motion's, a relit start frame's), so a gate checks them all.
  */
 export function plannedSteps(fn: () => unknown): PlannedStep[] {
   const d = db();
@@ -1721,13 +1736,28 @@ export function plannedSteps(fn: () => unknown): PlannedStep[] {
     d.transaction(() => {
       const run = captureRun(fn);
       run.settle();
-      steps = stepsOf(run.ids);
+      steps = stepsOf(run.ids).map(withRowLoras);
       throw ROLLED_BACK;
     })();
   } catch (e) {
     if (e !== ROLLED_BACK) throw e;
   }
   return steps;
+}
+
+/** A ComfyUI row with the LoRA files it loads, planned from its request as createGenerations planned it (else as it was). */
+function withRowLoras(s: PlannedStep): PlannedStep {
+  if (s.provider !== "comfyui") return s;
+  const r = db().prepare("SELECT request_json, depends_on FROM generations WHERE id = ?").get(s.id) as { request_json: string; depends_on: string | null } | undefined;
+  if (!r) return s;
+  try {
+    const req = JSON.parse(r.request_json) as GenerationRequest;
+    const deps = !r.depends_on ? 0 : r.depends_on.startsWith("[") ? (JSON.parse(r.depends_on) as unknown[]).length : 1;
+    const loras = runLoraFiles(previewChained(req, deps), req.params?.extra);
+    return loras.length ? { ...s, loras } : s;
+  } catch {
+    return s;
+  }
 }
 
 /** The rows of a run (by id) as steps. */

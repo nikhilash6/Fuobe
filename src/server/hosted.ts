@@ -5,6 +5,7 @@ import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
 import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import type { Place } from "@/lib/place-name";
+import { runtimeNeeds } from "@/lib/runtime-files";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
 import { lineFacts, poolLane, queueOfGeneration, workersAway, workersCanRun, workersMost, type LinePlace } from "./computer/pool";
 import { db } from "./db";
@@ -84,6 +85,25 @@ export function poolTakes(endpoint: string | undefined): boolean {
   if (!endpoint.includes("{")) return workersCanRun(endpoint);
   const picks = workflowPicks(endpoint);
   return picks.length > 0 && picks.every((id) => workersCanRun(id));
+}
+
+/**
+ * Has a worker that may run this workflow verified every run-time file a run of it loads (`names`: the LoRA files it adds
+ * beyond its workflow's own, src/lib/runtime-files.ts)? A file with no pin (a person's own LoRA) no worker can verify. A
+ * workflow that picks its graph at run time: every graph it may pick. No such files, or not on the workers (this install's
+ * own ComfyUI downloads into its own LoRA folder, or says what it lacks): yes.
+ */
+export function poolHasFiles(endpoint: string | undefined, names: readonly string[]): boolean {
+  if (!endpoint || !names.length || !poolOnWorkers()) return true;
+  const index = loadIndex();
+  const picks = endpoint.includes("{") ? workflowPicks(endpoint) : [endpoint];
+  return (
+    picks.length > 0 &&
+    picks.every((id) => {
+      const r = runtimeNeeds(names, index, id);
+      return !r.unknown.length && (!r.files.length || workersCanRun(id, { files: r.files }));
+    })
+  );
 }
 
 /** The size of one job, as a PC's ceiling reads it: its pictures' or frames' megapixels, a clip's seconds, its results. */
@@ -184,6 +204,7 @@ export function hostedWords(place: Place) {
   return {
     notOffered: "Runs on your own GPU",
     loras: "LoRAs run on your own GPU",
+    files: "This style runs on your own GPU",
     inputs: "This file runs on your own GPU",
     rtxCard: "Runs on your own RTX GPU",
     size: "This size runs on your own GPU",
@@ -199,6 +220,7 @@ export function hostedDetails(place: Place, most?: string | null) {
   return {
     notOffered: "Connect your GPU to run this one, or pick another model.",
     loras: "Connect your GPU to use them, or run without them.",
+    files: "Connect your GPU to use this style, or pick another one.",
     inputs: "Connect your GPU to use it, or use a picture.",
     rtxCard: "This one needs an NVIDIA RTX card.",
     size: `${most ? `Up to ${most} on ${place.text}. ` : ""}Pick a smaller size, or run it on your own GPU.`,
@@ -207,8 +229,8 @@ export function hostedDetails(place: Place, most?: string | null) {
 
 /** The labels for a guest: the same as an account's (Run opens the sign-up for that label). */
 export function hostedGuestWords() {
-  const { notOffered, rtxCard, loras, inputs, size } = hostedWords({ label: "", text: "" });
-  return { notOffered, rtxCard, loras, inputs, size };
+  const { notOffered, rtxCard, loras, files, inputs, size } = hostedWords({ label: "", text: "" });
+  return { notOffered, rtxCard, loras, files, inputs, size };
 }
 
 /**

@@ -16,7 +16,7 @@ import { redactKey } from "./provider-keys";
 import { networkCode, recordRunEvent } from "./run-events";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
-import { poolReady, poolTakes } from "./hosted";
+import { poolHasFiles, poolReady, poolTakes } from "./hosted";
 import { placeName } from "./place-name";
 import { poolOwnModels, poolOwnPresets, type PresetPress } from "./pool-own-setup";
 import { ranOwnFirst, runOnOf, type RunOn } from "./run-on";
@@ -395,13 +395,17 @@ const presetModels = (): PresetModel[] =>
     return { id: p.id, model: { id: m.id, kind: operationOutput(p.open.op, m.kind) }, ...(step && end && { steps: [{ id: end.id, kind: operationOutput(step.op, end.kind) }] }) };
   }));
 
-/** Every preset's press on its open route, step by step (its end frame's edit first, then its clip to that frame): made once. */
+/**
+ * Every preset's press on its open route, step by step (its end frame's edit first, then its clip to that frame, with the
+ * LoRA files it adds): made once.
+ */
 const presetPresses = (): PresetPress[] =>
   (globalThis.__fuobePresetPresses ??= PRESETS.flatMap((p) => {
     const route = openRoute(p);
     if (!route) return [];
     const end = route.end;
-    return [{ id: p.id, steps: [...(end ? [{ modelId: end.modelId, op: end.op }] : []), { modelId: route.modelId, op: end ? "flf2v" : route.op }] }];
+    const loras = (route.loras ?? []).map((l) => l.file).filter(Boolean);
+    return [{ id: p.id, steps: [...(end ? [{ modelId: end.modelId, op: end.op }] : []), { modelId: route.modelId, op: end ? "flf2v" : route.op, ...(loras.length && { loras }) }] }];
   }));
 
 /** Keys whose balance ran out on a run, as the status says them. */
@@ -465,7 +469,7 @@ export async function visitorStatus(account: Account | null) {
     // What this studio's GPUs keep off, the open models they can't run right now among it: shown in the pickers with
     // what the visitor needs to run them on its own setup. For every viewer, a GPU of its own or not: its runs go
     // there first too, and the label says what runs on its own GPU instead.
-    const rules = p?.hosted ? poolRulesOf(p, presetModels(), poolOwnModels(), poolOwnPresets(presetPresses(), poolTakes)) : undefined;
+    const rules = p?.hosted ? poolRulesOf(p, presetModels(), poolOwnModels(), poolOwnPresets(presetPresses(), poolTakes, poolHasFiles)) : undefined;
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;

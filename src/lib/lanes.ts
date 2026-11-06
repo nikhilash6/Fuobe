@@ -29,6 +29,11 @@ export interface Needs {
   size?: { megapixels: number; seconds: number; outputs: number };
   /** A job ticket's catalog version (src/lib/job-ticket.ts): only a worker built for that catalog takes the task. */
   catalogVersion?: string;
+  /**
+   * The files the run adds beyond its workflow's own (a look's, a motion's or a recipe's LoRAs: src/lib/runtime-files.ts):
+   * only a worker that verified each one takes the task.
+   */
+  runtime?: FileNeed[];
 }
 
 /**
@@ -123,6 +128,9 @@ const fileKey = (f: Pick<FileNeed, "folder" | "name">) => `${f.folder}/${f.name}
 export function hasFile(inv: Inventory, need: FileNeed): boolean {
   return inv.files.some((f) => fileKey(f) === fileKey(need) && f.size === need.size && (!need.sha256 || f.sha256 === need.sha256));
 }
+
+/** Has the worker every one of these files (none asked: yes)? */
+export const hasFiles = (inv: Inventory, needs: readonly FileNeed[] | undefined): boolean => !needs?.length || needs.every((n) => hasFile(inv, n));
 
 /**
  * What a worker can run with what it has: the workflows whose files and packs are all there, the lanes whose every

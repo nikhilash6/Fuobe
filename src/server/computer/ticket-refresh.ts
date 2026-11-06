@@ -1,8 +1,10 @@
 import "server-only";
 import crypto from "node:crypto";
 import type { JobTicket, TicketInput } from "@/lib/job-ticket";
+import { graphLoraNames, runtimeNeeds } from "@/lib/runtime-files";
 import { composeTicket, inputKind } from "@/lib/ticket-compose";
 import { db } from "../db";
+import { loadIndex } from "../gpu/index-file";
 import { getWorkflow, loadManifest } from "../providers/comfyui";
 import { catalogVersion } from "./catalog-version";
 import { GAVE_BACK_WORDS, poolFields } from "./pool";
@@ -105,9 +107,10 @@ export async function refreshTickets(o: { version?: string; startedAt?: number; 
         });
         for (const gone of wasMade.slice(r.made.length)) swapTaskInput(t, gone.name, null);
         const fresh: JobTicket = { ...ticket, inputs: [...ticket.inputs.filter((i) => !i.slot.startsWith("made.")), ...made], size: r.size };
-        // Its lane and what it needs, from this catalog (the workflow may have moved to other files); its rank, class and
-        // wait as they were.
-        const fields = poolFields(r.workflowId, { size: r.size, catalogVersion: version });
+        // Its lane and what it needs, from this catalog (the workflow may have moved to other files), with the files its
+        // graph adds at run time (a look's LoRAs); its rank, class and wait as they were.
+        const runtime = runtimeNeeds(graphLoraNames(r.graph), loadIndex(), r.workflowId).files;
+        const fields = poolFields(r.workflowId, { size: r.size, catalogVersion: version, runtime });
         // A new ticket: a worker that refused the old one may take it.
         const { refusedBy: _refused, ...extra } = json<Record<string, unknown>>(t.extra_json, {});
         void _refused;

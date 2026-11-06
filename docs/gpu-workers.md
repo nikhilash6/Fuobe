@@ -399,6 +399,7 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
 - the job is in its pool, in a lane that the owner allows for it, after the lane's delay and `claim_after_ms`;
 - it has the workflow's files and packs (from its inventory) and enough VRAM. A workflow's need is its whole GB less
   3%, because a card reports a little less than its size (a 32 GB card shows about 31.8 GiB);
+- it verified every run-time file the job loads (see "Run-time files" below);
 - the retry rule allows it: a worker that lost or failed the job gets it again only when no other worker that can run
   the job was heard from in the last 10 minutes;
 - near the end of its hours, the job's estimate fits before the window closes;
@@ -560,6 +561,27 @@ is not reported, so no job that needs it comes to the worker. The worker keeps t
 does not read the files again. The catalog's files that still have no pin are listed in `UNPINNED_FILES`
 (`scripts/lib/worker-catalog.mjs`), the one list of them. A test fails when a catalog file has no pin and is not on
 that list, and when a file on the list gets a pin, so the list only gets shorter.
+
+#### Run-time files
+
+Some runs load model files that are not among their workflow's own files: a Soul look's LoRAs, Soul Cinema's, a DoP
+motion's or effect's, a model recipe's, and a LoRA that a graph picks by an option. These are run-time files
+(`src/lib/runtime-files.ts`). A worker verifies them the same way, and reports them in its inventory with the catalog's
+files:
+
+- Its build writes `bin/lib/worker/dist/runtime-files.json`: every LoRA library entry
+  (`src/lib/catalog/lora-library.generated.ts`) that has a pinned size and SHA-256, in the `loras` folder. A LoRA
+  with no pin (a person's own trained LoRA, or a map LoRA with no pin) is never verified.
+- The studio keeps these files from an inventory too, and they decide which runs go to the workers. The price check and
+  the run plan every row of the run with the LoRA files it loads (`runLoraFiles`). A run goes to the workers only when
+  a worker that may run its workflow verified each run-time file (`poolHasFiles`). Otherwise the price check says
+  "This style runs on your own GPU", and Run opens the visitor's own GPU, as for a workflow that no worker runs. The
+  LoRAs are never left out to make the run fit. Preset cards say the same before the press.
+- A task stores its run-time files (`needs.runtime`, read from its graph's LoRA loaders), and only a worker that
+  verified each one claims it. A job that no worker could take is refused before it waits in line. The owner's error
+  names the files.
+
+A worker program from before run-time files reports none, so runs that add them do not go to it.
 
 The worker checks the copy that its ComfyUI loads:
 
@@ -831,8 +853,9 @@ its target), at most once an hour each.
   → `{ lanes, workflows, missing }`. `media` lists the kinds of input that the worker takes (`image`, `video`,
   `audio`). With no `media` (a worker from before it was added, which doesn't make clips and sound again), the studio
   counts pictures only. A file's `name` is the requirements index's name for it inside its folder, subfolders and all
-  (`bigvgan_vocoder/config.json`). The studio keeps only the files the index names, and hashes the list as it was
-  sent, so its hash equals the worker's `inventoryHash`.
+  (`bigvgan_vocoder/config.json`). The studio keeps only the files the index names and the run-time files (the LoRA
+  library's pinned files, as `loras/<file>`), and hashes the list as it was sent, so its hash equals the worker's
+  `inventoryHash`.
 - `POST /api/gpu/computer/claim`: the browser's claimed task plus
   `{ lane, estMs, runLimitMs, stallMs, notAfter, attempt, models, class, workflowId }`. An account's job carries
   `ticket` in place of `graph`, with its run and stall limits in it too. `class` is `owner` for the owner's own job,

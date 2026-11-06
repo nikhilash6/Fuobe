@@ -39,12 +39,12 @@ import {
 import { getModel } from "@/lib/catalog";
 import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER } from "@/lib/guest-access";
 import { db } from "./db";
-import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, stepsOf, type PlannedStep } from "./generations";
+import { AccountRunError, createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, runLoraFiles, stepsOf, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
 import { poolFinishes3d } from "./computer/finish";
 import { holdTiming } from "./queue-settings";
-import { hostedDetails, hostedGuestWords, hostedWords, inputCounts, isOutputsWords, outputsWords, poolAllows, poolAllowsRun, poolAway, poolFitsSize, poolMostWords, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks, type JobSize } from "./hosted";
+import { hostedDetails, hostedGuestWords, hostedWords, inputCounts, isOutputsWords, outputsWords, poolAllows, poolAllowsRun, poolAway, poolFitsSize, poolHasFiles, poolMostWords, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks, type JobSize } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -349,14 +349,15 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
 
 /**
  * Why this install's GPUs won't take a run: a 3D model no worker finishes (computer/finish.ts poolFinishes3d), a model
- * or kind not offered there, a model their card can't run, LoRAs, a kind of file, more outputs at once than a run there
- * makes (`outputs`: a tool's run, which can't be cut down the way the studios' own runs are), one that runs on the
- * visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or a workflow none of this install's GPUs can
- * run right now: none holds its files, serves its lane, or has the memory). Each is a label the visitor reads before
- * Run, with the setup that runs it. A run these GPUs take but can't start right now (every one that could is away, or
- * being updated) is no reason: it waits in line (runWaits).
+ * or kind not offered there, a model their card can't run, LoRAs, a style's files no GPU there holds (`files`: the
+ * LoRAs a look, a motion or a recipe adds at run time, src/lib/runtime-files.ts), a kind of file, more outputs at once
+ * than a run there makes (`outputs`: a tool's run, which can't be cut down the way the studios' own runs are), one
+ * that runs on the visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or a workflow none of this
+ * install's GPUs can run right now: none holds its files, serves its lane, or has the memory). Each is a label the
+ * visitor reads before Run, with the setup that runs it. A run these GPUs take but can't start right now (every one
+ * that could is away, or being updated) is no reason: it waits in line (runWaits).
  */
-export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs" | "size" | "outputs" | "ownSetup";
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "files" | "inputs" | "size" | "outputs" | "ownSetup";
 
 /**
  * A gate's refusal: its reason, and the visitor's own setup that would run it (`setup`: always with "ownSetup" and
@@ -396,8 +397,9 @@ export function gateDetail(gate: GateRefusal, place: Place): string | undefined 
  * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
  * before Run (poolQuote), so the two always agree: its output kind (3D only where a worker finishes it), the policy's
  * model, app and kind lists (for the run's own model and every other model it makes a step with, such as a 2K take's
- * finish), a worker allowed its lane, a card that can run it, LoRAs, the kinds of file it sends, and every later step
- * of a chain (planned only once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs
+ * finish), a worker allowed its lane, a card that can run it, LoRAs, the files it adds at run time (a look's, a motion's
+ * or a recipe's LoRAs: a worker allowed its lane must have verified each one), the kinds of file it sends, and every
+ * later step of a chain (planned only once the cheaper checks pass), its run-time files too. `p` null: the billing service didn't answer, so only what needs
  * no policy is checked. Passed, it gives the planned steps for the run's one price.
  *
  * First of all, every step's own setup (own-setup.ts): a model, mode or option that runs on a visitor's own GPU or key
@@ -423,6 +425,9 @@ export function poolGate(
   if (!poolTakes(planned.route.endpoint)) return { ok: false, reason: "ownSetup", setup: gpu };
   if (poolCardRefuses(planned.model.id)) return { ok: false, reason: "rtxCard", setup: gpu };
   if (req.loras?.length && !req.lorasOff) return { ok: false, reason: "loras", setup: gpu };
+  // The files it adds at run time (a look's, a motion's or a recipe's LoRAs): a run whose worker would refuse it for a
+  // file it hasn't verified runs on the visitor's own GPU instead, said before Run (never dropped without a word).
+  if (!poolHasFiles(planned.route.endpoint, runLoraFiles(planned, req.params?.extra))) return { ok: false, reason: "files", setup: gpu };
   if (p) {
     const inputs = inputCounts(req);
     const takes = poolUploads(p);
@@ -444,6 +449,8 @@ export function poolGate(
     // visitor's own GPU, labelled with what that step needs, as the run's own step is. Never a first step run here
     // and a later one that can't go on.
     if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return { ok: false, reason: "ownSetup", setup: needsGpu(stepEndpoint(s)) };
+    // A step that adds files at run time (a relit start frame's LoRA, a Mixed Media still's look) that no worker verified.
+    if (s.provider === "comfyui" && s.loras?.length && !poolHasFiles(stepEndpoint(s), s.loras)) return { ok: false, reason: "files", setup: needsGpu(stepEndpoint(s)) };
   }
   const problem = steps && p ? stepsProblem(p, steps) : null;
   if (problem) return { ok: false, reason: problem === hostedWords(placeFor(p)).rtxCard ? "rtxCard" : "notOffered", setup: gpu };
