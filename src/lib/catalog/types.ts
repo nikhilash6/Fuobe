@@ -1290,10 +1290,7 @@ export interface GenerationRequest {
    * Unset: the install's engine mode, else the first one connected (your GPU before the cloud).
    */
   engine?: Engine;
-  /**
-   * An account's cloud run on this provider's key when the model is on several ("Run with your Replicate key"): its
-   * routes there go first. Without a key for it the run asks for one.
-   */
+  /** The provider a cloud run goes on when the model is on several; its route runs while ready (an account without its key is asked for one). */
   prefer?: "fal" | "replicate";
   /** Chained jobs: where the previous job's image goes among `inputs.images` (one dependency). */
   chainFrom?: "first" | "last";

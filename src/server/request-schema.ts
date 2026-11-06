@@ -129,7 +129,7 @@ export const GenerationRequestSchema = z.object({
   engine: z.enum(["open", "cloud"]).optional(),
   // "Run without LoRAs": an @element with a trained LoRA goes in as its photos instead.
   lorasOff: z.literal(true).optional(),
-  // The provider whose key a cloud run goes on when the model is on several ("Run with your Replicate key").
+  // The provider a cloud run goes on when the model is on several; its route runs while ready.
   prefer: z.enum(["fal", "replicate"]).optional(),
   // A recipe's LoRAs (the evaluation harness, scripts/eval): added after the preset's own. On ComfyUI `file` must
   // already be in models/loras (ComfyUI checks the name against its list); a cloud LoRA endpoint takes `url`.

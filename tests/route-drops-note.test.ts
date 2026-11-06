@@ -66,12 +66,7 @@ describe("a setting the chosen route has no field for", () => {
   });
 });
 
-/**
- * A shape or a setting the route a run goes to can't take, when another route of the model makes it (Wan 2.2 text to
- * video: Replicate's makes 16:9 or 9:16 and reads no negative prompt, fal's makes 1:1 and reads one). The API takes the run
- * either way: on Replicate it is made at the closest shape with the negative prompt left out, and the run says so; a run
- * that names fal.ai (`prefer`, the composer's "Use fal.ai") goes there with everything as asked.
- */
+/** Wan 2.2 t2v: Replicate takes 16:9/9:16 and no negative prompt; fal takes 1:1 and one. */
 describe("a run whose route can't honour a setting", () => {
   const wan = { feature: "video" as const, modelId: "wan-2-2-a14b-cloud", engine: "cloud" as const, prompt: "a slow dolly past a quiet harbour", negativePrompt: "blur", params: { aspectRatio: "1:1" } };
   const sent = (log: { method: string; path: string; body: string }[]) => log.filter((r) => r.method === "POST" && /predictions|wan/.test(r.path)).map((r) => JSON.parse(r.body || "{}"));

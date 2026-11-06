@@ -224,7 +224,7 @@ function lookCleared(from: ModelDef | undefined, to: ModelDef): Partial<Draft> {
 /** Docked and collapsed, the composer hides its tiles: this event asks it to open first. */
 const EXPAND_EVENT = "composer:expand";
 
-/** "Run anyway" pressed this session (route-notice.ts anywayKeys), kept in this tab's session storage. */
+/** "Run anyway" keys (route-notice.ts anywayKeys) for this tab's session. */
 const ANYWAY_KEY = "fuobe:route-anyway";
 
 function readAnyway(): string[] {
@@ -240,7 +240,6 @@ function keepAnyway(keys: string[]) {
   try {
     sessionStorage.setItem(ANYWAY_KEY, JSON.stringify(keys.slice(-50)));
   } catch {
-    // Storage off (a private window): asked again next time.
   }
 }
 
@@ -751,7 +750,6 @@ export function Composer({ docked }: { docked: boolean }) {
   const engineError =
     (lockedModel && preset && !appIds.length ? `${preset.name} has no ${engine === "open" ? "open-source" : "cloud"} version yet` : null) ?? accessError ?? comfyBlock;
   let op: Operation | undefined;
-  // The model the plan runs (a preset's may be another): the one whose routes the run picks from.
   let planModel: ModelDef | undefined;
   let cost: number | null = null;
   // The run goes to a LoRA endpoint whose price isn't published (fal's MOSS-Image /lora).
@@ -945,11 +943,7 @@ export function Composer({ docked }: { docked: boolean }) {
   // GPU): run it once on the key, at its price, or connect a GPU. Nothing runs until one is pressed.
   const [keyChoice, setKeyChoice] = useState(false);
 
-  // A paid route that can't honour a setting another route of the model takes (Replicate's Wan 2.2 makes 16:9 or 9:16 only
-  // and reads no negative prompt): said before the run (src/lib/catalog/route-notice.ts), with "Run anyway" (there, the
-  // shape fitted and the setting left out; the run says what changed) and, when it runs for this person, the route that
-  // makes everything as asked ("Use fal.ai"). Nothing runs until one is pressed. "Run anyway" isn't asked again this
-  // session for the same settings on the same route, and those runs stay on that route.
+  // Route notice (route-notice.ts): shown on Run; nothing runs until "Run anyway" or "Use <provider>" is pressed.
   const usableRoute = (p: string) =>
     !!status?.providers[p]?.configured && (viewerInfo?.kind !== "account" || (isCloudProvider(p) && (viewerInfo.usableKeys ?? viewerInfo.keys ?? []).includes(p)));
   const routeAsk = { params: signed.request.params, negativePrompt: signed.request.negativePrompt, prefer: signed.request.prefer };
@@ -958,7 +952,6 @@ export function Composer({ docked }: { docked: boolean }) {
       ? routeNotice(planModel, op, likelyProvider(planModel, op, routeAsk, { ready: usableRoute, preferred: status?.cloudProvider }), routeAsk, usableRoute)
       : null;
   const [routeChoice, setRouteChoice] = useState(false);
-  // (A draft changed so its route makes everything as asked: the choice goes.)
   if (routeChoice && !routeCheck) setRouteChoice(false);
   const [anyway, setAnyway] = useState<string[]>(readAnyway);
   const anywayHere = !!routeCheck && !!planModel && !!op && anywaySaid(anyway, planModel.id, op, routeCheck);
@@ -973,8 +966,8 @@ export function Composer({ docked }: { docked: boolean }) {
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here). `withKey`: this run
   // only, on the cloud version that action names and the account's key (hosted runs on; see onRunWithKey). `once`: a
   // place for this run only (hosted runs: "Run on Our GPUs", or the account's GPU for what only it runs). `signedUp`: the
-  // run a guest pressed, started by itself back from sign-up (its note says so once the run is made). `picked`: the route
-  // chosen before the run ("Run anyway" on the route it goes to, or "Use fal.ai"), named in the request.
+  // run a guest pressed, started by itself back from sign-up (its note says so once the run is made). `picked`: route chosen
+  // in the route notice, sent as `prefer`.
   const submit = (skip?: unknown, withKey?: TroubleAction, once?: "own" | "pool", signedUp?: boolean, picked?: { prefer?: CloudProvider }): void => {
     const skipGpu = skip === true;
     setKeyChoice(false);
@@ -1018,9 +1011,8 @@ export function Composer({ docked }: { docked: boolean }) {
       }
       return;
     }
-    // A route that can't honour a setting: the choice first, unless "Run anyway" was pressed for it this session.
     if (routeCheck && !picked && !withKey && !once && !anywayHere) return void setRouteChoice(true);
-    const route = picked ?? (routeCheck && anywayHere && isCloudProvider(routeCheck.provider) ? { prefer: routeCheck.provider } : undefined);
+    const route = withKey ? undefined : picked ?? (routeCheck && anywayHere && isCloudProvider(routeCheck.provider) ? { prefer: routeCheck.provider } : undefined);
     const withRoute = <R extends object>(r: R): R => (route?.prefer ? { ...r, prefer: route.prefer } : r);
     toast.dismiss("composer-blocker");
     setPriceNote(null);
@@ -1057,8 +1049,8 @@ export function Composer({ docked }: { docked: boolean }) {
         model?.kind,
       );
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
-    const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withRoute(withVoiceFirst);
-    const body = { ...onKey, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
+    const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withVoiceFirst;
+    const body = { ...withRoute(onKey), ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time). Back from sign-up, the
       // line says the run is on its way (hosted runs: its tile shows "In line" too).
@@ -2153,7 +2145,6 @@ export function Composer({ docked }: { docked: boolean }) {
           </div>
         </div>
       )}
-      {/* A route that can't honour a setting another route takes: run it there anyway, or where everything is made as asked. */}
       {routeChoice && routeCheck && (
         <div role="note" aria-live="polite" data-route-notice className="mx-1 mt-2 space-y-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] leading-snug text-muted-foreground">
           <p className="font-medium text-foreground">{routeCheck.words}</p>

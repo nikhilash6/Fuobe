@@ -4,11 +4,7 @@ import { anywayKeys, anywaySaid, likelyProvider, pickRoute, routeNotice, routeSh
 import type { ModelDef, ProviderId } from "@/lib/catalog/types";
 import { slimModel } from "@/lib/studio-catalog";
 
-/**
- * The notice before a run whose route can't honour a setting another route of the model takes: Wan 2.2 text to video on
- * Replicate makes 16:9 or 9:16 only and reads no negative prompt, on fal.ai it makes 1:1 and reads one. Said from the
- * browser's catalog (no field maps) the same way the server fits the run, with "Use fal.ai" only where fal.ai runs.
- */
+/** Route notice from the server catalog and the browser's slim catalog. */
 const model = (id: string): ModelDef => {
   const m = getModel(id);
   if (!m) throw new Error(`no ${id}`);

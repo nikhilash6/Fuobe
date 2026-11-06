@@ -999,10 +999,8 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
   // anything a studio starts inside runAsDemo (a skill's dry run of a studio step, src/server/demo-scope.ts).
   if (demo === "on" || forceDemo || inDemoScope()) return { route: routes[0], demo: true };
   const takes = (r: ModelRoute) => !r.map?.maxImages || images <= r.map.maxImages;
-  // A route asked for by name (the person's pick before the run: "Run anyway" or "Use fal.ai") runs there while it is
-  // ready. Otherwise a route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix),
-  // then one that makes the length asked; otherwise the first ready one runs and the plan's notes say what it changes.
-  // (The composer reads the same pick: src/lib/catalog/route-notice.ts.)
+  // A route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix), then one
+  // that makes the length asked; otherwise the first ready one runs and the plan's notes say what it changes.
   const ok = (r: ModelRoute) => routeReady(r) && takes(r);
   const real = pickRoute(routes, { ok, fits: (r) => lorasFit(r, loras), seconds, prefer });
   if (real) return { route: real, demo: false };
@@ -1226,7 +1224,6 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  // The provider the request names (an account's "Run with your fal.ai key", the person's pick before the run).
   const prefer = isCloudProvider(worded.prefer) ? worded.prefer : undefined;
   const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo, prefer);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
@@ -1316,10 +1313,7 @@ function prepare(original: GenerationRequest) {
   // split into one job per result just above, so it isn't one.)
   const drops = demo ? [] : routeDrops(route, plan.model.id, { negativePrompt: req.negativePrompt, params: plan.params });
   if (drops.length) notes.push(`${plan.model.name} on ${provider(route.provider).label} doesn't take ${listWords(drops)}: this run goes without`);
-  // What this route makes differently that another route of the model makes as asked (Replicate's Wan 2.2 makes 16:9 or
-  // 9:16 and reads no negative prompt; fal's makes 1:1 and reads one): the composer says so before the run, the payload
-  // fits the shape to the closest one the route makes, and the run carries a note of it (its notice). A shape or size it
-  // fits is said in the notes too (a dropped setting is, just above).
+  // Settings another route of the model would honour: fitted shape/size noted here, all kept as the run's notice.
   const shortfalls = demo ? [] : routeShortfalls(plan.model, plan.op, route.provider, { params: req.params, negativePrompt: req.negativePrompt });
   for (const s of shortfalls)
     if ((s.setting === "aspectRatio" || s.setting === "resolution") && s.did.includes(" in place of "))
@@ -1597,7 +1591,6 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   const { req, plan, route, demo, providerId, cost } = p;
   // Auto keeps its pick with the run: planned again, the run goes to the same model, and its tile names it.
   const picked = p.auto ? { ...original, auto: p.auto } : original;
-  // What the route made differently (routeShortfalls) stays with the run, said under it once it is made.
   const kept = p.notice && !picked.notice?.includes(p.notice) ? { ...picked, notice: [picked.notice, p.notice].filter(Boolean).join(" · ") } : picked;
   // A preset whose recipe edited the start frame into an end frame first: two steps (the edit, then the clip).
   if (!opts.dependsOn && plan.end) return createEndFrameClip(original, plan.end);
