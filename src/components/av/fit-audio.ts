@@ -71,6 +71,60 @@ async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
   }
 }
 
+/**
+ * The last file decoded, kept while its part is picked (the waveform) so the cut that follows doesn't decode it again.
+ * One at a time: a phone holds one decoded sound.
+ */
+let decoded: { src: Blob; audio: Promise<AudioBuffer> } | null = null;
+
+async function decodeBlob(src: Blob): Promise<AudioBuffer> {
+  if (decoded?.src !== src) {
+    decoded = null;
+    const audio = src.arrayBuffer().then(decode);
+    decoded = { src, audio };
+    audio.catch(() => {
+      if (decoded?.audio === audio) decoded = null;
+    });
+  }
+  return decoded.audio;
+}
+
+/** Forget the decoded sound (the picker closed). */
+export function forgetDecoded(src?: Blob) {
+  if (!src || decoded?.src === src) decoded = null;
+}
+
+/**
+ * The sound's loudness in `bars` steps (0 to 1, the loudest 1) for a waveform. Throws in plain words when the browser
+ * can't read it.
+ */
+export async function soundPeaks(src: Blob, bars: number): Promise<number[]> {
+  if (src.size > FIT_SOURCE_MAX_BYTES) throw unreadable();
+  const audio = await decodeBlob(src);
+  const data = Array.from({ length: Math.min(2, audio.numberOfChannels) }, (_, c) => audio.getChannelData(c));
+  const step = audio.length / bars;
+  const out: number[] = [];
+  for (let b = 0; b < bars; b++) {
+    const from = Math.floor(b * step);
+    const to = Math.min(audio.length, Math.floor((b + 1) * step));
+    // Loudness (RMS) from every few samples: enough for a bar's height.
+    const stride = Math.max(1, Math.floor((to - from) / 2000));
+    let sum = 0;
+    let count = 0;
+    for (const ch of data) {
+      for (let i = from; i < to; i += stride) {
+        sum += ch[i] * ch[i];
+        count++;
+      }
+    }
+    out.push(Math.sqrt(sum / Math.max(1, count)));
+  }
+  // Scaled to the loud parts (not the one loudest moment), so a quiet stretch reads as quiet.
+  const sorted = [...out].sort((a, b) => a - b);
+  const top = Math.max(sorted[Math.floor(sorted.length * 0.98)] ?? 0, 1e-4);
+  return out.map((x) => Math.min(1, x / top));
+}
+
 /** The encoder: a worker when one starts, else the main thread (yielding between blocks). */
 interface Encoder {
   push(block: Float32Array[]): Promise<void>;
@@ -150,7 +204,7 @@ function mainEncoder(channels: number, kbps: number): Encoder {
  */
 export async function toMp3(src: Blob, opts: { kbps: number; name?: string; from?: number; to?: number; signal?: AbortSignal }): Promise<File> {
   if (src.size > FIT_SOURCE_MAX_BYTES) throw new Error(`The largest file this takes is ${Math.round(FIT_SOURCE_MAX_BYTES / 1024 / 1024)} MB. Use a shorter clip`);
-  const audio = await decode(await src.arrayBuffer());
+  const audio = await decodeBlob(src);
   stopIfAsked(opts.signal);
   if (audio.duration > FIT_READ_MAX_SECONDS + 1) throw new Error("This file is too long to cut here: use a shorter clip");
   const a = Math.max(0, Math.round((opts.from ?? 0) * audio.sampleRate));
@@ -169,5 +223,6 @@ export async function toMp3(src: Blob, opts: { kbps: number; name?: string; from
     return new File(parts as BlobPart[], mp3Name(opts.name), { type: "audio/mpeg" });
   } finally {
     enc.close();
+    forgetDecoded(src);
   }
 }

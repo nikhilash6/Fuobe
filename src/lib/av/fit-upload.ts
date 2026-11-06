@@ -36,6 +36,8 @@ export interface AudioFitRule {
    */
   convert?: boolean;
   trim?: boolean;
+  /** False: a video file is not this slot's (its sound isn't taken from it). */
+  fromVideo?: boolean;
 }
 
 /** The largest file read in the browser to fit it: the app's own upload limit (MAX_MB in media-slot.tsx, /api/uploads). */
@@ -113,7 +115,7 @@ export function planAudioFit(rule: AudioFitRule, file: { format?: string; bytes?
 
 function planAll(rule: AudioFitRule, file: { format?: string; bytes?: number; seconds?: number; video?: boolean }): FitPlan {
   const tooLong = !!rule.maxSeconds && !!file.seconds && file.seconds > rule.maxSeconds;
-  const needs = !!file.video || (!!file.format && !rule.formats.includes(file.format)) || (!!rule.maxBytes && !!file.bytes && file.bytes > rule.maxBytes);
+  const needs = !!file.video || (!!file.format && !rule.formats.includes(file.format) && !rule.formats.includes("*")) || (!!rule.maxBytes && !!file.bytes && file.bytes > rule.maxBytes);
   if (!needs && !tooLong) return { kind: "keep" };
   if (file.bytes && file.bytes > FIT_SOURCE_MAX_BYTES) {
     return { kind: "refuse", line: `The largest file this takes is ${Math.round(FIT_SOURCE_MAX_BYTES / 1024 / 1024)} MB. Use a shorter clip` };

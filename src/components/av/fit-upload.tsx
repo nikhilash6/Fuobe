@@ -1,15 +1,16 @@
 "use client";
 
-import { Loader2, Scissors, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { useAskBeforeUpload, useIsGuest } from "@/lib/api";
-import { clock, convertedLine, fitSourceKind, FIT_SOURCE_MAX_BYTES, mp3Kbps, planAudioFit, type AudioFitRule, type FitPlan } from "@/lib/av/fit-upload";
+import { convertedLine, fitSourceKind, FIT_SOURCE_MAX_BYTES, mp3Kbps, planAudioFit, type AudioFitRule, type FitPlan } from "@/lib/av/fit-upload";
 import { songFormat } from "@/lib/lyrics";
 import { postFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
-import { readSeconds, toMp3 } from "./fit-audio";
+import { forgetDecoded, readSeconds, toMp3 } from "./fit-audio";
+import { TrimPicker } from "./trim-picker";
 import { useUploadSwitches } from "./use-upload-switches";
 
 /**
@@ -23,7 +24,7 @@ import { useUploadSwitches } from "./use-upload-switches";
  * its id).
  */
 
-type Offer = { source: Blob | string; name?: string; seconds: number; max: number; line: string; stored?: SlotValue };
+type Offer = { source: Blob | string; name?: string; seconds: number; max: number; min?: number; line: string; stored?: SlotValue };
 
 /** A part a hair shorter than the tool's limit, so the file's own header never reads a frame over it. */
 const MARGIN = 0.5;
@@ -59,7 +60,6 @@ export function useFitUpload({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ line: string; at: string | null } | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
-  const [start, setStart] = useState(0);
   const [made, setMade] = useState<Set<string>>(() => new Set());
   const failed = useRef(new Set<string>());
   const latest = useRef(value);
@@ -176,8 +176,7 @@ export function useFitUpload({
       if (plan.kind === "trim") {
         if (stored) offered.current.add(stored.ref);
         else cb.current.setValue(null);
-        setStart(0);
-        return setOffer({ source, name, seconds: plan.seconds, max: plan.max, line: plan.line, stored });
+        return setOffer({ source, name, seconds: plan.seconds, max: plan.max, min: r.minSeconds, line: plan.line, stored });
       }
       if (stored) convertStored(stored, { kbps: plan.kbps });
       else convertFile(source as Blob, name, { kbps: plan.kbps });
@@ -188,7 +187,7 @@ export function useFitUpload({
   /** True when this step takes the file: any sound file while a rule is on, and a video file (its sound) while converting is. */
   const wants = useCallback((f: File) => {
     const kind = fitSourceKind(f);
-    return !!rule && (kind === "audio" || (kind === "video" && rule.convert !== false));
+    return !!rule && (kind === "audio" || (kind === "video" && rule.convert !== false && rule.fromVideo !== false));
   }, [rule]);
 
   /** A file picked, dropped or pasted: its length read from its header first (nothing else is read), then fitted. */
@@ -248,15 +247,23 @@ export function useFitUpload({
     if (offerGone) setOffer(null);
   }
 
-  const usePart = useCallback(() => {
-    const r = cb.current.rule;
-    if (!offer || !r || askFirst()) return;
-    const from = Math.min(start, Math.max(0, offer.seconds - offer.max));
-    const opts = { kbps: mp3Kbps(offer.max, r.outMaxBytes) ?? 96, from, to: from + offer.max - MARGIN };
+  const usePart = useCallback(
+    (from: number, to: number) => {
+      const r = cb.current.rule;
+      if (!offer || !r || askFirst()) return;
+      const end = Math.min(to, from + offer.max - MARGIN);
+      const opts = { kbps: mp3Kbps(end - from, r.outMaxBytes) ?? 96, from, to: end };
+      setOffer(null);
+      if (offer.stored) convertStored(offer.stored, opts);
+      else convertFile(offer.source as Blob, offer.name, opts);
+    },
+    [offer, askFirst, convertFile, convertStored],
+  );
+
+  const cancelOffer = useCallback((o: Offer) => {
+    if (o.source instanceof Blob) forgetDecoded(o.source);
     setOffer(null);
-    if (offer.stored) convertStored(offer.stored, opts);
-    else convertFile(offer.source as Blob, offer.name, opts);
-  }, [offer, start, askFirst, convertFile, convertStored]);
+  }, []);
 
   // A file refused before it landed is said while the slot stays empty; a stored one's while it is in the slot.
   const shownError = error && (error.at === null ? !value : error.at === landed) ? error.line : null;
@@ -266,12 +273,12 @@ export function useFitUpload({
     on: !!rule,
     wants,
     /** The slot's file picker while the step is on: sound, and video while converting is on. */
-    accept: rule ? (rule.convert !== false ? "audio/*,video/*" : "audio/*") : undefined,
+    accept: rule ? (rule.convert !== false && rule.fromVideo !== false ? "audio/*,video/*" : "audio/*") : undefined,
     take,
     busy,
     line,
     failedNow: !!shownError && !busy,
-    offer: offer && !offerGone ? { ...offer, start, setStart, use: usePart, cancel: () => setOffer(null) } : null,
+    offer: offer && !offerGone ? { ...offer, use: usePart, cancel: () => cancelOffer(offer) } : null,
   };
 }
 
@@ -279,7 +286,6 @@ export function useFitUpload({
 export function FitUploadNote({ fit, className }: { fit: ReturnType<typeof useFitUpload>; className?: string }) {
   const o = fit.offer;
   if (!fit.line && !o) return null;
-  const last = o ? Math.max(0, Math.floor(o.seconds - o.max)) : 0;
   return (
     <div className={cn("space-y-1.5 pb-2 text-xs text-muted-foreground", className)}>
       {fit.line && (
@@ -288,29 +294,7 @@ export function FitUploadNote({ fit, className }: { fit: ReturnType<typeof useFi
           {fit.line}
         </p>
       )}
-      {o && (
-        <div className="space-y-1.5 rounded-xl border bg-muted/40 p-2.5">
-          <p className="text-foreground">{o.line}</p>
-          {last > 0 && (
-            <label className="flex items-center gap-2">
-              <span className="w-24 shrink-0 tabular-nums">
-                {clock(Math.min(o.start, last))}–{clock(Math.min(o.start, last) + o.max)}
-              </span>
-              <input type="range" min={0} max={last} step={1} value={Math.min(o.start, last)} onChange={(e) => o.setStart(Number(e.target.value))} aria-label="Where the part starts" className="h-9 min-w-0 flex-1 accent-primary" />
-            </label>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={o.use} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-foreground px-3.5 font-medium text-background">
-              <Scissors className="size-3.5" />
-              Use this part
-            </button>
-            <button type="button" onClick={o.cancel} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 font-medium text-foreground hover:bg-accent">
-              <X className="size-3.5" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      {o && <TrimPicker source={o.source} kind="audio" seconds={o.seconds} max={o.max} min={o.min} line={o.line} onUse={o.use} onCancel={o.cancel} />}
     </div>
   );
 }
