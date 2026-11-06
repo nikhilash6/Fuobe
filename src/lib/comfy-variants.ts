@@ -130,7 +130,9 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   const latentDraft = H3_LATENT_DRAFT_GRAPH[endpoint];
   // The 2K tier's text-to-video draft that keeps its latent (never a Flex take's: h3TwoKRequests drafts that on Flex's graph).
   if (latentDraft && r.extra.latentDraft === true && r.has(latentDraft)) endpoint = latentDraft;
-  else if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
+  // An orbit is only ever the Orbit graph: the plain graph with the orbit's words makes a clip where nothing moves. A library
+  // without it fails the run by name instead (the GPU pre-flight names the Orbit LoRA when a GPU lacks it).
+  else if (orbit && r.extra.orbit === true) endpoint = orbit;
   else if (flex && r.extra.quality === "flex" && r.has(flex)) endpoint = flex;
   else if (small) endpoint = small;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;

@@ -322,6 +322,12 @@ export interface FixStep extends Need {
   commands: { bash: string; powershell: string };
   /** A page to open first (a gated model's Hugging Face page, a LoRA's civitai page). */
   link?: string;
+  /**
+   * A file to put on the GPU (a model or LoRA step): its name, where it goes and where it downloads from. `url` is https
+   * only: the file itself, or its page when the download needs a sign-in, a licence or a key (`page`). A one-click install
+   * through Fuobe Connect (with its SHA-256 check) would set `via` "helper" and use `sha256`; P1 leaves it by hand.
+   */
+  download?: { file: string; folder: string; path?: string; url?: string; page?: true; sha256?: string };
 }
 
 export interface FixPlan {

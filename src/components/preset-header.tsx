@@ -1,6 +1,7 @@
 "use client";
 
 import { Cloud, Cpu, Info, Sparkles, X } from "lucide-react";
+import { GpuReadinessLine } from "@/components/gpu/file-steps";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
 import { openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
@@ -57,6 +58,9 @@ export function PresetHeader({
   const badges = useGpuBadges().data;
   const [engine] = useEngine();
   const gpu = gpuKey && engine === "open" ? (badges?.presets[gpuKey] ?? null) : null;
+  // Something to add on the GPU (or a card too small): the readiness line under the card says what, with Get it; the pill
+  // stays for Ready. Neither stops Render.
+  const lineFirst = !!gpu && (gpu[0] === "a" || gpu[0] === "s" || gpu[0] === "g");
   return (
     <div className={cn("mx-auto w-full max-w-[760px] rounded-2xl border bg-background p-2 pr-3 text-left shadow-soft", examples && "p-3", className)}>
     <div className="flex w-full items-center gap-3">
@@ -76,7 +80,7 @@ export function PresetHeader({
         <p className="truncate font-heading text-[19px] leading-snug">{preset.name}</p>
         <p className="line-clamp-2 text-[13px] text-muted-foreground max-sm:line-clamp-3">{presetHowTo(preset)}</p>
       </div>
-      {gpu && <HeaderPill badge={gpu} gpu={badges?.gpu} compact onOpen={() => openGpuSetup({ ref: `preset:${gpuKey}`, name: preset.name })} />}
+      {gpu && !lineFirst && <HeaderPill badge={gpu} gpu={badges?.gpu} compact onOpen={() => openGpuSetup({ ref: `preset:${gpuKey}`, name: preset.name })} />}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -130,6 +134,7 @@ export function PresetHeader({
         </button>
       )}
     </div>
+    {lineFirst && gpuKey && <GpuReadinessLine badge={gpu} gpuRef={`preset:${gpuKey}`} name={preset.name} className="mt-2" />}
     {examples && <div className="mt-3">{examples}</div>}
     </div>
   );

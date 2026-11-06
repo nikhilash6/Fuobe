@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronRight, Circle, Cpu, Download, Layers, Loader2, Wre
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CommandTabs } from "@/components/gpu/command-block";
+import { FileStepRows } from "@/components/gpu/file-steps";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -111,20 +112,25 @@ interface Actions {
 
 function PlanState({ plan, kind, actions, checking, onCheck, checkError }: { plan: FixPlan; kind?: string; actions: Actions; checking: boolean; onCheck: () => void; checkError: string | null }) {
   const real = plan.steps.filter((s) => s.kind !== "restart" && s.kind !== "hf-licence" && s.kind !== "civitai-key");
-  const shown = real.length ? real : plan.steps;
+  // Files get rows of their own (name, size, folder, Get it); the list keeps the other steps and what is already there.
+  const files = real.filter((s) => s.download);
+  const shown = files.length ? real.filter((s) => !s.download) : real.length ? real : plan.steps;
   const why = WHY[plan.why] ?? WHY["manual-only"]!;
   const [lo, hi] = plan.etaMin;
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-muted-foreground">{intro(plan, kind)}</p>
-      <ul className="divide-y rounded-lg border px-3">
-        {shown.map((s) => (
-          <StepRow key={s.id} n={s} />
-        ))}
-        {plan.have.slice(0, 6).map((h) => (
-          <StepRow key={h.key} n={h} done />
-        ))}
-      </ul>
+      {files.length > 0 && <FileStepRows plan={plan} />}
+      {(shown.length > 0 || plan.have.length > 0) && (
+        <ul className="divide-y rounded-lg border px-3">
+          {shown.map((s) => (
+            <StepRow key={s.id} n={s} />
+          ))}
+          {plan.have.slice(0, 6).map((h) => (
+            <StepRow key={h.key} n={h} done />
+          ))}
+        </ul>
+      )}
       {plan.downloadBytes > 0 && (
         <p className="text-[13px]">
           {formatBytes(plan.downloadBytes)} from Hugging Face · about {lo === hi ? lo : `${lo}–${hi}`} min on fast internet.{" "}
