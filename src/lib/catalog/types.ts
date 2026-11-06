@@ -1579,6 +1579,19 @@ export interface Generation {
    * request whenever it is read, so older runs carry it too.
    */
   made?: MadeSettings;
+  /**
+   * The owner's eyes only (their own runs, and Accounts' runs): what Ideogram 4 returned in place of a picture, the grey
+   * "blocked" card (src/server/safety-card.ts), kept as a held file nobody else can open, with its measures (`spread`:
+   * how far its colours spread; `grey`: the share of neutral mid-grey pixels), so a false catch can be told from the card.
+   */
+  declinedCards?: DeclinedCard[];
+}
+
+/** A picture Ideogram 4 returned that was taken for its "blocked" card (Generation.declinedCards). */
+export interface DeclinedCard {
+  url: string;
+  spread: number;
+  grey: number;
 }
 
 /** Why a ComfyUI run failed, when the GPU was missing something (generations.fix_json). */

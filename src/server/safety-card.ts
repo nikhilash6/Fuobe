@@ -43,11 +43,33 @@ function thumb(img: { width: number; height: number; data: Buffer }, w: number, 
 
 /** Whether a PNG is the grey card. A picture that can't be read is not (it is kept, for a person to look at). */
 export function looksBlocked(png: Buffer): boolean {
+  return blockedMeasures(png)?.blocked ?? false;
+}
+
+/**
+ * An Ideogram 4 run whose every picture was the card is made again once with a new seed (its refusals are often
+ * random), then with Qwen-Image 2.1, before it fails (src/server/generations.ts declinedAgain): the model of the second
+ * try, the words each try shows while it works, and the line a run the second try made carries (its request's notice).
+ */
+export const DECLINED_FALLBACK_MODEL = "oss-qwen-image-21";
+export const DECLINED_WORDS = {
+  retry: "Ideogram 4 is trying again",
+  fallback: "Making it with Qwen-Image 2.1",
+} as const;
+export const DECLINED_NOTICE = "Made with Qwen-Image 2.1 · Ideogram 4 declined this one";
+
+/**
+ * The card's measures of a picture, for the owner's note on a declined run: `spread`, how far its colours spread (the mean
+ * RGB standard deviation on the 128×170 thumbnail: the card's is about 9, real photographs' 26 and up), and `grey`, the
+ * share of its pixels that are neutral mid-grey (the card's is over 0.85). `blocked`: whether the two rules call it the
+ * card. Null for a picture that can't be read.
+ */
+export function blockedMeasures(png: Buffer): { spread: number; grey: number; blocked: boolean } | null {
   let img: ReturnType<typeof decodePng>;
   try {
     img = decodePng(png);
   } catch {
-    return false;
+    return null;
   }
   // Rule A's measures (luminance as PIL's "L" conversion).
   const a = thumb(img, 64, 64);
@@ -83,5 +105,6 @@ export function looksBlocked(png: Buffer): boolean {
     if (Math.abs(r - g) < 8 && Math.abs(g - b) < 8 && r > 90 && r < 140) grey++;
   }
   const rgbStd = s.map((v, c) => Math.sqrt(Math.max(0, s2[c] / m - (v / m) ** 2))).reduce((x, y) => x + y) / 3;
-  return rgbStd < 20 && grey / m > 0.85 && spread < 6 && lumStd < 14 && lumMean > 95 && lumMean < 135;
+  const blocked = rgbStd < 20 && grey / m > 0.85 && spread < 6 && lumStd < 14 && lumMean > 95 && lumMean < 135;
+  return { spread: Math.round(rgbStd * 10) / 10, grey: Math.round((grey / m) * 1000) / 1000, blocked };
 }

@@ -116,6 +116,18 @@ export function parseCaption(text: string): string | null {
 }
 
 /**
+ * A caption's words as plain text, for a model that reads plain words (Qwen-Image 2.1 making a run Ideogram 4 declined):
+ * its lead, its scene, then each element's words. Plain words come back as they are.
+ */
+export function captionWords(text: string): string {
+  const c = readCaption(text);
+  if (!c) return text;
+  const cd = c.compositional_deconstruction;
+  const parts = [c.high_level_description, cd.background, ...cd.elements.map((e) => (e.type === "text" && e.text ? `${e.desc} The text reads "${e.text}".` : e.desc))];
+  return [...new Set(parts.map((p) => p?.trim()).filter((p): p is string => !!p))].join(" ");
+}
+
+/**
  * The caption when no LLM can write one: the words as the lead and as one element. No style block (a style is never
  * invented) and one element, since a caption without elements invites the safety card.
  */

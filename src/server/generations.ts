@@ -31,7 +31,7 @@ import { imageSize } from "@/lib/image-size";
 import { finishSteps, mosaicPixels, unionMasks } from "@/lib/soul-post";
 import { ANGLES_ORIGINAL, MOSAIC_SCALE } from "@/lib/catalog/open-tools";
 import { computeDimensions } from "@/lib/comfy";
-import { captionFromWords, parseCaption } from "@/lib/ideogram-caption";
+import { captionFromWords, captionWords, parseCaption } from "@/lib/ideogram-caption";
 import { h3Frames, h3Prompt, inH3Layout } from "@/lib/h3-prompt";
 import { h3ReferenceTags, h3TalkPrompt } from "@/lib/h3-references";
 import {
@@ -39,6 +39,7 @@ import {
   LAST_FRAME_CHAIN,
   operationOutput,
   type ChainSlot,
+  type DeclinedCard,
   type Engine,
   type Generation,
   type GenerationFix,
@@ -62,7 +63,7 @@ import { qwen21Gpu } from "./qwen21-gpu";
 import { h3Gpu } from "./h3-gpu";
 import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
-import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
+import { BLOCKED_CARD_MESSAGE, blockedMeasures, DECLINED_FALLBACK_MODEL, DECLINED_NOTICE, DECLINED_WORDS } from "./safety-card";
 import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
@@ -219,6 +220,10 @@ export function toGeneration(r: Row): Generation {
             "SELECT (SELECT deleted_at FROM generation_trash WHERE generation_id = ?) AS deleted_at, (SELECT folder_id FROM folder_items WHERE generation_id = ?) AS folder_id",
           )
           .get(r.id, r.id) as { deleted_at: number | null; folder_id: string | null });
+  // An Ideogram 4 run that returned its "blocked" card (declinedAgain), made again in its place: Working, saying which try
+  // it is on (never In line: nobody pressed Run again). One that waits for the account's own GPU to come back shows that.
+  const meta = r.external_meta_json?.includes('"declined"') ? readMeta(r.external_meta_json) : undefined;
+  const again = (r.status === "queued" || r.status === "running") && !(r.status === "queued" && !r.external_id && meta?.heal) ? declinedWords(meta ?? {}) : undefined;
   return {
     id: r.id,
     batchId: r.batch_id,
@@ -229,10 +234,10 @@ export function toGeneration(r: Row): Generation {
     provider: r.provider,
     op: r.op,
     kind: r.kind,
-    status: r.status,
+    status: again ? "running" : r.status,
     // In line on this install's GPUs (again, after an attempt): no progress.
     progress: (pool && r.status === "queued") || ready ? null : r.progress,
-    message: pool ? poolMessage(r, ready) : r.message,
+    message: again ?? (pool ? poolMessage(r, ready) : r.message),
     prompt: r.prompt,
     request,
     // Held for the moderation service's check: nothing of it is shown until it passes.
@@ -267,13 +272,27 @@ export function toGeneration(r: Row): Generation {
     // On this install's GPUs the output check is part of "Working": no word of its own.
     ...(checking && !pool && { stage: "checking" as const }),
     // Waiting in line on this install's GPUs: its place and the wait, about.
-    ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
+    ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && !again && poolQueue(r.id)),
     // The owner's own job on the workers, waiting: its place in their line (in the list as after a refresh).
-    ...(stored.place !== "pool" && r.status === "queued" && r.provider === "comfyui" && workerQueue(r.id)),
+    ...(stored.place !== "pool" && r.status === "queued" && r.provider === "comfyui" && !again && workerQueue(r.id)),
     // Working on this install's GPUs: the address of its latest preview picture, while there is one. None for a run
     // whose outputs the moderation service sees first (a preview would show what its check holds back).
     ...(r.status === "running" && r.provider === "comfyui" && !checking && !stored.checkOutputs && livePreview(r.id)),
+    // The owner's own run: what Ideogram 4 returned in place of a picture (an account's run shows it in Accounts' runs).
+    ...(!stored.account && declinedCardsOf(meta)),
   };
+}
+
+/** What Ideogram 4 returned in place of a picture, kept with the run for the owner (Generation.declinedCards). */
+export function declinedCardsOf(meta: { declined?: unknown } | undefined): { declinedCards: DeclinedCard[] } | Record<string, never> {
+  const cards = (meta?.declined as DeclinedMeta | undefined)?.cards;
+  return Array.isArray(cards) && cards.length ? { declinedCards: cards } : {};
+}
+
+/** declinedCardsOf for a stored row (Accounts' runs). */
+export function declinedCardsIn(id: string): { declinedCards: DeclinedCard[] } | Record<string, never> {
+  const json = db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id) as string | null | undefined;
+  return json?.includes('"declined"') ? declinedCardsOf(readMeta(json)) : {};
 }
 
 /** The owner's job waiting for the workers: its place in their line, as the Generation field. */
@@ -487,7 +506,24 @@ interface PendingMeta {
   sendingTask?: boolean;
   /** Who holds the run as the release before this one marked it (OLD_LEASE), and until when. */
   lease?: { by?: unknown; until?: unknown };
+  /**
+   * An Ideogram 4 run that returned only its "blocked" card (declinedAgain): which try it is on now (`stage`: made again
+   * with a new seed, then with Qwen-Image 2.1), and the cards it returned (kept for the owner). Kept through every hand-over.
+   */
+  declined?: DeclinedMeta;
 }
+
+/** What an Ideogram 4 run that returned its "blocked" card keeps (PendingMeta.declined). */
+interface DeclinedMeta {
+  stage?: keyof typeof DECLINED_WORDS;
+  cards?: DeclinedCard[];
+  /** Made with Qwen-Image 2.1 now: the run as Ideogram 4's, put back when that fails too (declinedFails). */
+  was?: DeclinedRun;
+}
+
+/** The columns of a run that Qwen-Image 2.1 changes when it makes a run Ideogram 4 declined. */
+type DeclinedRun = Pick<Row, "request_json" | "model_id" | "engine" | "op" | "kind" | "prompt" | "cost_usd">;
+const declinedRun = (r: Row): DeclinedRun => ({ request_json: r.request_json, model_id: r.model_id, engine: r.engine, op: r.op, kind: r.kind, prompt: r.prompt, cost_usd: r.cost_usd });
 
 /** A run's wait for its own GPU or key, kept with it (survives a restart). */
 interface HealState {
@@ -806,7 +842,7 @@ export const ASSET_FREE: Record<string, string> = {
     "what a failed ComfyUI run was missing (model file names, node classes and packs), and what an account's GPU or key ran into: a cause, a details line and its buttons' links",
   "gpu_snapshots.inventory_json": "what a GPU's ComfyUI has (class names, model file names and sizes), never a Fuobe file",
   "gpu_snapshots.report_json": "readiness built from that inventory",
-  "generations.external_meta_json": "the provider's job handles",
+  "generations.external_meta_json": "the provider's job handles, and the run's own held files (Ideogram 4's declined cards), which go with the run",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
   "run_requests.ids_json": "the ids of the runs one press of Run made, never a file",
   "run_requests.answer_json": "a copy of the answer one press of a tool's Run got, for a resend of it: its runs' own rows keep their files",
@@ -2602,6 +2638,9 @@ async function pause(id: string, ms: number): Promise<boolean> {
  * account's own run, logged and noted for the owner (run-events.ts).
  */
 function failRun(id: string, e: unknown, trouble: Diagnosis | undefined, account: string | undefined, facts?: RunFacts, own = !!facts): boolean {
+  // Qwen-Image 2.1 making a run Ideogram 4 declined: it fails as the declined run.
+  const declined = declinedFails(id, trouble?.words ?? String((e as Error | null)?.message ?? e));
+  if (declined !== null) return declined;
   const fix = (e as { fix?: GenerationFix } | null)?.fix;
   const kept = keptFix(fix, trouble);
   // What the GPU was missing (a model, a node class) is kept, so the tile offers "Fix it", and its GPU check counts as stale.
@@ -2890,7 +2929,7 @@ function resend(r: Row, account: string, words: string): boolean {
     // again meanwhile is left as it is.) It takes its turn to be sent in the same step: a run waiting to be sent again is
     // never sent by another app process too.
     const again = db().transaction((): boolean => {
-      const meta = JSON.stringify({ resent: true, jobIndex: index });
+      const meta = JSON.stringify({ resent: true, jobIndex: index, ...(was.declined && { declined: was.declined }) });
       if (!updateLive(r.id, { external_id: null, external_meta_json: meta, status: "queued", progress: null, message: words }, " AND external_id = @__ext", { __ext: r.external_id })) return false;
       db().prepare("DELETE FROM generation_runs WHERE id = ?").run(r.id);
       noteSubmitTurn(r.id);
@@ -2904,6 +2943,132 @@ function resend(r: Row, account: string, words: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** The words an Ideogram 4 run made again after it declined shows while it works; undefined for any other run. */
+function declinedWords(meta: PendingMeta | Record<string, unknown>): string | undefined {
+  const stage = (meta as PendingMeta).declined?.stage;
+  return stage && Object.hasOwn(DECLINED_WORDS, stage) ? DECLINED_WORDS[stage] : undefined;
+}
+
+/**
+ * Files a run returned that are none of its results (Ideogram 4's "blocked" card): held, so no account and no link
+ * serves them (only the owner opens them), never in a Library or the account's space, and deleted with the run (its
+ * generation_id stays).
+ */
+function keepForOwner(assetIds: readonly string[]): void {
+  const hold = db().prepare("UPDATE assets SET held = 1, account_id = NULL, source = 'derived' WHERE id = ?");
+  for (const id of assetIds) hold.run(id);
+}
+
+/**
+ * What Qwen-Image 2.1 is asked when it makes a run Ideogram 4 declined: the same words in plain text (a caption given as
+ * the prompt becomes its words), the same pictures, aspect ratio, size and count, and Qwen-Image 2.1's own settings.
+ */
+function declinedFallback(stored: GenerationRequest): GenerationRequest {
+  const p = stored.params ?? {};
+  return {
+    ...stored,
+    modelId: DECLINED_FALLBACK_MODEL,
+    op: stored.inputs?.images?.length ? "edit" : "t2i",
+    ...(stored.prompt && { prompt: captionWords(stored.prompt) }),
+    params: {
+      ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
+      ...(p.resolution && { resolution: p.resolution }),
+      ...(p.numOutputs && { numOutputs: p.numOutputs }),
+    },
+    negativePrompt: undefined,
+  };
+}
+
+/**
+ * An Ideogram 4 run whose every picture was its "blocked" card is made again in its place: the same run (its id, its
+ * place, its turn in the line, its billing hold), as the same job of its batch, through the same submit as every run
+ * (this install's workers, the owner's ComfyUI, an account's own GPU). First Ideogram 4 once more, with the same caption
+ * and a new seed (its refusals are often random); then Qwen-Image 2.1 (declinedFallback), and the run names the model
+ * that made it (its model and its request's notice). Neither is a new press of Run: no limit counts it again, and no new
+ * row or hold is made. The run's tile says which try it is on. False when both were made already, or a try can't go
+ * where the run went: the run fails as before.
+ */
+function declinedAgain(r: Row, declined: DeclinedMeta): boolean {
+  const next = !declined.stage ? "retry" : declined.stage === "retry" ? "fallback" : null;
+  if (!next) return false;
+  try {
+    const stored = JSON.parse(r.request_json) as GenerationRequest;
+    const account = stored.account;
+    // Planned where the run went: this install's GPUs (its stamp: place, class, hold), the account's own, or the owner's.
+    const planned = (req: GenerationRequest) =>
+      account && stored.place === "pool"
+        ? runOnPool(account, () => withRunStamp(stampOf(stored), () => prepare(req)))
+        : account
+          ? asAccount(account, () => prepare(req))
+          : prepare(req);
+    let asked = stored;
+    let p: ReturnType<typeof prepare>;
+    if (next === "retry") {
+      p = planned(stored);
+      // The caption it ran with (never written again), and a new seed.
+      const caption = r.prompt ? parseCaption(r.prompt) : null;
+      p = { ...p, plan: { ...p.plan, ...(caption && { prompt: caption }), params: { ...p.plan.params, seed: crypto.randomInt(0, 2 ** 31) } } };
+    } else {
+      asked = declinedFallback(stored);
+      try {
+        p = planned(asked);
+      } catch {
+        // A preset with no Qwen-Image 2.1 version: its words as they were planned, without the preset.
+        const words = captionWords(planned(stored).plan.prompt);
+        asked = { ...asked, presetId: undefined, presetOptions: undefined, signature: undefined, prompt: words };
+        p = planned(asked);
+      }
+    }
+    if (p.providerId !== r.provider) return false;
+    const was = readMeta(r.external_meta_json);
+    const index = jobIndexOf(r, was);
+    const fields: Partial<Row> = {
+      external_id: null,
+      external_meta_json: JSON.stringify({ jobIndex: index, declined: { ...declined, stage: next, ...(next === "fallback" && { was: declinedRun(r) }) } }),
+      // (Working, as it was: not a new run in line.)
+      status: "running",
+      progress: null,
+      message: DECLINED_WORDS[next],
+      ...(next === "fallback" && {
+        model_id: p.plan.model.id,
+        engine: p.plan.model.engine,
+        op: p.plan.op,
+        kind: outputKind(p.plan.op, p.plan.model),
+        prompt: p.plan.prompt,
+        cost_usd: p.cost,
+        request_json: JSON.stringify({ ...asked, notice: [stored.notice, DECLINED_NOTICE].filter(Boolean).join(" · ") }),
+      }),
+    };
+    // (Only while the run still goes and is still the job that declined: one another app process saved, ended or sent
+    // again meanwhile is left as it is.) It takes its turn to be sent in the same step, and its finish turn goes.
+    const again = db().transaction((): boolean => {
+      if (!updateLive(r.id, fields, " AND external_id = @__ext", { __ext: r.external_id })) return false;
+      db().prepare("DELETE FROM generation_runs WHERE id = ?").run(r.id);
+      noteSubmitTurn(r.id);
+      return true;
+    })();
+    if (!again) return true;
+    submitting().add(r.id);
+    void submit(r.id, p.route, p.providerId, p.plan, p.req, index);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Qwen-Image 2.1 couldn't make a run Ideogram 4 declined either: the run fails as Ideogram 4's (its model, request and
+ * words put back, so Retry runs what was asked), saying what to try, whether its job failed or couldn't be sent. What
+ * Qwen-Image 2.1 said goes to the log. Null: not such a run; else whether the run was failed here (it still went).
+ */
+function declinedFails(id: string, said: string, metaJson?: string | null): boolean | null {
+  const json = metaJson !== undefined ? metaJson : (db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id) as string | null | undefined);
+  const was = readMeta(json).declined;
+  if (was?.stage !== "fallback") return null;
+  console.warn(`[generations] ${id}: Qwen-Image 2.1 after Ideogram 4 declined: ${said.slice(0, 500)}`);
+  return updateLive(id, { ...(was.was ?? {}), status: "failed", error: BLOCKED_CARD_MESSAGE, completed_at: Date.now(), message: null });
 }
 
 /**
@@ -3331,10 +3496,17 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
           id,
           now,
           external_id: res.externalId,
-          meta: JSON.stringify({ ...(res.meta ?? {}), ...(sentTo && { sentTo: addressKey(sentTo) }), jobIndex: index, ...(before.resent && { resent: true }) }),
+          meta: JSON.stringify({
+            ...(res.meta ?? {}),
+            ...(sentTo && { sentTo: addressKey(sentTo) }),
+            jobIndex: index,
+            ...(before.resent && { resent: true }),
+            ...(before.declined && { declined: before.declined }),
+          }),
           payload: res.payload ? JSON.stringify(res.payload).slice(0, 200_000) : null,
-          // A run sent again after its GPU lost it says so until its GPU reports on it.
-          message: before.resent || resentRuns().has(id) ? RESENT_WORDS : "Queued",
+          // A run sent again after its GPU lost it says so until its GPU reports on it; an Ideogram 4 run made again after
+          // it declined says that while it works.
+          message: declinedWords(before) ?? (before.resent || resentRuns().has(id) ? RESENT_WORDS : "Queued"),
         }).changes;
       if (changed) recordSubmission(id, now);
       return changed > 0;
@@ -3945,12 +4117,15 @@ async function pollOne(r: Row): Promise<void> {
     }
     if (startsNow) db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now(), r.id);
     // Back in line (a worker paused, went quiet or gave it back): no progress of the attempt before is kept.
-    updateLive(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: res.message ?? null });
+    // (An Ideogram 4 run made again after it declined says so while it works.)
+    updateLive(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: declinedWords(ctx.meta) ?? res.message ?? null });
     return;
   }
   if (res.state === "failed") {
     // Its GPU restarted and lost the job: an account's run is sent again once, as a computer's tab does.
     if (own && res.lost && resend(r, own, RESENT_WORDS)) return;
+    // Qwen-Image 2.1 making a run Ideogram 4 declined: it fails as the declined run.
+    if (declinedFails(r.id, res.error, r.external_meta_json) !== null) return;
     // An account's run: its own GPU's words (comfyui.ts), or its key's provider's read plainly; the provider's own words
     // go in the details line. The owner's runs keep the provider's words.
     const trouble =
@@ -4067,16 +4242,27 @@ async function pollOne(r: Row): Promise<void> {
       }
     }
   }
-  // Ideogram 4's grey "blocked by safety filter" card is no picture (src/server/safety-card.ts): it is deleted, and a run
-  // left with nothing else fails, saying what to try.
+  // Ideogram 4's grey "blocked by safety filter" card is no picture (src/server/safety-card.ts): it is left out of the
+  // results and kept for the owner only (keepForOwner), with its measures. A run that got some real pictures keeps them.
+  // A run whose every picture was the card is made again in its place (declinedAgain: a new seed, then Qwen-Image 2.1);
+  // only when it can't be does it fail, saying what to try.
   if (model.options.promptFormat === "ideogram4") {
-    const cards = new Set<OutputFile>();
+    const cards = new Map<OutputFile, DeclinedCard>();
     for (const o of outputs) {
       const png = o.kind === "image" && o.assetId ? await readRef(o.url).catch(() => null) : null;
-      if (png && looksBlocked(png.data)) cards.add(o);
+      const m = png ? blockedMeasures(png.data) : null;
+      if (m?.blocked) cards.set(o, { url: o.url, spread: m.spread, grey: m.grey });
     }
-    for (const o of cards) deleteAsset(o.assetId!);
+    const was = readMeta(r.external_meta_json).declined;
+    const declined: DeclinedMeta = { ...was, cards: [...(was?.cards ?? []), ...cards.values()].slice(-8) };
+    if (cards.size) {
+      keepForOwner([...cards.keys()].map((o) => o.assetId!));
+      db()
+        .prepare(`UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.declined', json(?)) WHERE id = ?`)
+        .run(JSON.stringify(declined), r.id);
+    }
     if (cards.size && cards.size === outputs.length) {
+      if (declinedAgain(r, declined)) return;
       updateLive(r.id, { status: "failed", error: BLOCKED_CARD_MESSAGE, completed_at: Date.now(), message: null });
       return;
     }

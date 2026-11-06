@@ -4,7 +4,7 @@ import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { accountsMaxBytes, accountTotalBytes } from "./account-files";
 import { listAccounts, type AccountInfo } from "./auth";
 import { db } from "./db";
-import { listGenerations, type ListOptions } from "./generations";
+import { declinedCardsIn, listGenerations, type ListOptions } from "./generations";
 import { cursorFrom, HELPER_SQL, KINDS } from "./library";
 
 /**
@@ -208,7 +208,7 @@ export function listAccountRuns(o: ListOptions, show: { content: boolean; emails
     items: found.map((g) => {
       const id = g.request.account!;
       const account: AccountOfRun = show.emails ? { id, email: emails.get(id) ?? null } : { id, emailHidden: true };
-      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account, ...detail(g) };
+      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account, ...detail(g), ...declinedCardsIn(g.id) };
       return show.content ? run : factsOnly(run);
     }),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,

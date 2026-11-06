@@ -297,6 +297,8 @@ export const AssetCard = memo(function AssetCard({
             {/* "Rendering", as the Status filter calls it: "In progress" is a review status. */}
             {!stack && g.status !== "succeeded" && ` · ${listStatus(g)}`}
           </p>
+          {/* What changed while it ran ("Made with Qwen-Image 2.1 · Ideogram 4 declined this one"). */}
+          {!stack && g.request.notice && <p className="truncate text-[12px] text-muted-foreground">{g.request.notice}</p>}
           {/* An account's own GPU or key: the way out, in the row (its thumbnail is too small for it). */}
           {!stack && !trashed && (g.status === "failed" ? g.trouble : g.status === "queued" ? g.waiting : undefined) && (
             <RunTroubleActions g={g} className="mt-1" actions={(g.status === "failed" ? g.trouble : g.waiting)!.actions} skip={["retry"]} max={1} compact context={g.status === "failed" ? "run" : "other"} />

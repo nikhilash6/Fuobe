@@ -9,6 +9,7 @@ import { adminCall, OffBadge, runsHref, Stat, useAdminAccounts, useAdminAction, 
 import { StatusCover } from "@/components/library/asset-card";
 import { PageHeader } from "@/components/page-shell";
 import { GallerySkeleton } from "@/components/skeletons";
+import { DeclinedCards } from "@/components/studio/made-note";
 import { MediaThumb } from "@/components/studio/result-media";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -422,7 +423,10 @@ function RunCard({
   );
 }
 
-/** The prompt, two lines until "More" opens it whole, with a failed run's whole error. */
+/**
+ * The prompt, two lines until "More" opens it whole, with a failed run's whole error, what changed while it ran (its
+ * notice), and what Ideogram 4 returned in place of a picture.
+ */
 function RunWords({ g }: { g: AdminRun }) {
   const [open, setOpen] = useState(false);
   const prompt = g.request.prompt?.trim() || g.prompt?.trim();
@@ -431,6 +435,8 @@ function RunWords({ g }: { g: AdminRun }) {
     <div className="text-[12px]">
       {prompt ? <p className={cn("break-words", open ? "whitespace-pre-wrap" : "line-clamp-2")}>{prompt}</p> : <p className="text-muted-foreground italic">No prompt</p>}
       {open && error && <p className="mt-1 break-words whitespace-pre-wrap text-destructive">{error}</p>}
+      {g.request.notice && <p className="mt-1 break-words text-muted-foreground">{g.request.notice}</p>}
+      {!!g.declinedCards?.length && <DeclinedCards cards={g.declinedCards} className="mt-1 block break-words text-muted-foreground" />}
       {((prompt?.length ?? 0) > 120 || error) && (
         <button type="button" className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? "Less" : "More"}
