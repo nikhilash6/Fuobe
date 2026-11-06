@@ -123,6 +123,9 @@ importers:
       '@types/three':
         specifier: 0.183.1
         version: 0.183.1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       eslint:
         specifier: ^9
         version: 9.39.5(jiti@2.7.0)

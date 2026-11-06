@@ -1,0 +1,309 @@
+{
+  "components": {
+    "schemas": {
+      "ApiFilesUploadInput": {
+        "properties": {
+          "file_url": {
+            "_fal_ui_field": "url",
+            "description": "Public HTTPS URL or data URI of the file to upload.",
+            "title": "File Url",
+            "type": "string"
+          },
+          "purpose": {
+            "description": "Intended use of the uploaded file. The returned ID can only be used in parameters that accept this purpose.",
+            "enum": [
+              "reference",
+              "melody",
+              "instrumental",
+              "voice",
+              "audio",
+              "remix",
+              "soundtrack",
+              "lyrics-video"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_url",
+          "purpose"
+        ],
+        "title": "FileUploadInput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "file_url",
+          "purpose"
+        ]
+      },
+      "ApiFilesUploadOutput": {
+        "properties": {
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "id": {
+            "description": "Uploaded-file ID. Pass this value to the matching ID parameter for the selected upload purpose.",
+            "title": "Id",
+            "type": "string"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "FileUploadOutput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "id",
+          "bytes",
+          "created_at",
+          "filename",
+          "purpose"
+        ]
+      },
+      "QueueStatus": {
+        "properties": {
+          "cancel_url": {
+            "description": "The cancel url.",
+            "type": "string"
+          },
+          "logs": {
+            "additionalProperties": true,
+            "description": "The logs.",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "The metrics.",
+            "type": "object"
+          },
+          "queue_position": {
+            "description": "The queue position.",
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The request id.",
+            "type": "string"
+          },
+          "response_url": {
+            "description": "The response url.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "IN_QUEUE",
+              "IN_PROGRESS",
+              "COMPLETED"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "description": "The status url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "Fal Key",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "The OpenAPI schema for the mureka/api/files/upload queue.",
+    "title": "Queue OpenAPI for mureka/api/files/upload",
+    "version": "1.0.0",
+    "x-fal-metadata": {
+      "about": "Upload a media file and return an ID reusable by other audio endpoints.\n\nChoose a purpose that matches the endpoint where the returned ID will be\nused, such as reference music, melody, audio, remix, or soundtrack input.",
+      "category": "unknown",
+      "documentationUrl": "https://fal.ai/models/mureka/api/files/upload/api",
+      "endpointId": "mureka/api/files/upload",
+      "playgroundUrl": "https://fal.ai/models/mureka/api/files/upload",
+      "thumbnailUrl": "https://v3b.fal.media/files/b/0aaff3b7/6heMUaFj3_JE4vj1FhtbV.jpg"
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/mureka/api/files/upload": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiFilesUploadInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    },
+    "/mureka/api/files/upload/requests/{request_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFilesUploadOutput"
+                }
+              }
+            },
+            "description": "Result of the request."
+          }
+        }
+      }
+    },
+    "/mureka/api/files/upload/requests/{request_id}/cancel": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "Whether the request was cancelled successfully.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request was cancelled."
+          }
+        }
+      }
+    },
+    "/mureka/api/files/upload/requests/{request_id}/status": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "logs",
+            "required": false,
+            "schema": {
+              "description": "Whether to include logs (`1`) in the response or not (`0`).",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://queue.fal.run"
+    }
+  ]
+}

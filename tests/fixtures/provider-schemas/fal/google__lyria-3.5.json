@@ -1,0 +1,362 @@
+{
+  "components": {
+    "schemas": {
+      "File": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The mime type of the file.",
+            "examples": [
+              "image/png"
+            ],
+            "title": "Content Type"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the file. It will be auto-generated if not provided.",
+            "examples": [
+              "z9RV14K95DvU.png"
+            ],
+            "title": "File Name"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The size of the file in bytes.",
+            "examples": [
+              4404019
+            ],
+            "title": "File Size"
+          },
+          "url": {
+            "description": "The URL where the file can be downloaded from.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "File",
+        "type": "object",
+        "x-fal-order-properties": [
+          "url",
+          "content_type",
+          "file_name",
+          "file_size"
+        ]
+      },
+      "Lyria35Input": {
+        "properties": {
+          "enable_safety_checker": {
+            "default": true,
+            "description": "Authorized callers may set false to request relaxed screening.",
+            "title": "Enable Safety Checker",
+            "type": "boolean"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional image URL to use as visual inspiration for music generation. The model will create music that matches the mood and theme of the image.",
+            "examples": [
+              "https://v3b.fal.media/files/b/0a93b559/qjT9o0CId1B65PbD6Yp06_9c94501900464c5aa98f302fa4b00375.png"
+            ],
+            "title": "Image Url"
+          },
+          "negative_prompt": {
+            "default": "",
+            "deprecated": true,
+            "description": "Negative prompting is not supported by Lyria 3.5.",
+            "title": "Negative Prompt",
+            "type": "string"
+          },
+          "prompt": {
+            "description": "The text prompt describing the music you want to generate. Include genre, mood, instrumentation, tempo, vocals, and structure for best results. Lyria 3.5 supports full-length songs up to a few minutes — use timestamps or duration hints in your prompt to control song length, e.g. 'a 2-minute track' or section markers like '[0:00-0:30] Intro: ...' / '[0:30-1:00] Verse: ...'. Supports English, German, Spanish, French, Hindi, Japanese, Korean, and Portuguese.",
+            "examples": [
+              "An uplifting pop song with driving electric guitar, energetic drums, and a catchy chorus singing 'Rise up and shine today'. 120 BPM. Two minutes long with a verse-chorus-verse-chorus-bridge-chorus structure."
+            ],
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "TextToMusicInput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "prompt",
+          "negative_prompt",
+          "image_url",
+          "enable_safety_checker"
+        ]
+      },
+      "Lyria35Output": {
+        "properties": {
+          "audio": {
+            "$ref": "#/components/schemas/File",
+            "description": "The generated music as an MP3 file.",
+            "examples": [
+              "https://v3b.fal.media/files/b/0a93b550/klduxmeWsmi304M3zsAlr_output.mp3"
+            ]
+          },
+          "lyrics": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The generated or provided lyrics for the track, if applicable.",
+            "examples": [
+              "[[A0]]\n[[B1]]\n[12.0:] Dust motes dancing in the light,\n[:] Morning breaks so soft and white."
+            ],
+            "title": "Lyrics"
+          }
+        },
+        "required": [
+          "audio"
+        ],
+        "title": "TextToMusicOutput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "audio",
+          "lyrics"
+        ]
+      },
+      "QueueStatus": {
+        "properties": {
+          "cancel_url": {
+            "description": "The cancel url.",
+            "type": "string"
+          },
+          "logs": {
+            "additionalProperties": true,
+            "description": "The logs.",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "The metrics.",
+            "type": "object"
+          },
+          "queue_position": {
+            "description": "The queue position.",
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The request id.",
+            "type": "string"
+          },
+          "response_url": {
+            "description": "The response url.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "IN_QUEUE",
+              "IN_PROGRESS",
+              "COMPLETED"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "description": "The status url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "Fal Key",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "The OpenAPI schema for the google/lyria-3.5 queue.",
+    "title": "Queue OpenAPI for google/lyria-3.5",
+    "version": "1.0.0",
+    "x-fal-metadata": {
+      "about": "Generate full-length songs using Google's Lyria 3.5 model.\n\nLyria 3.5 is Google's most capable music generation model, producing\ncomplete, structured songs up to a few minutes long from text or image\nprompts. It includes advanced controls for fully timed lyrics, precise\ntempo, and complex arrangement structure.\n\nFor best results, prompts should include:\n- Genre/Style: e.g., \"pop ballad\", \"jazz fusion\", \"cinematic orchestral\"\n- Mood/Emotion: e.g., \"triumphant\", \"intimate\", \"nostalgic\"\n- Instrumentation: e.g., \"full orchestra\", \"acoustic band\", \"electronic production\"\n- Tempo: e.g., \"90 BPM\", \"allegro\", \"moderate groove\"\n- Structure: use timestamp markers like '[0:00-0:30] Intro: soft piano...'\nor describe duration e.g. \"a 2-minute track\"\n- Vocal style: e.g., \"soulful female vocals\", \"male baritone\", \"choir\"\n- Language: supports English, German, Spanish, French, Hindi, Japanese,\nKorean, and Portuguese\n\nThe model outputs:\n- Full-length MP3 audio (44.1 kHz stereo)\n- Optional generated or user-specified lyrics\n- SynthID watermarking for content provenance\n\nSafety filters prevent generation of content mimicking real artists' voices.",
+      "category": "text-to-audio",
+      "documentationUrl": "https://fal.ai/models/google/lyria-3.5/api",
+      "endpointId": "google/lyria-3.5",
+      "playgroundUrl": "https://fal.ai/models/google/lyria-3.5",
+      "thumbnailUrl": "https://v3b.fal.media/files/b/0aaa8afe/VbJWL93MNQf7eBuxjBEJO.jpg"
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/google/lyria-3.5": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lyria35Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    },
+    "/google/lyria-3.5/requests/{request_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lyria35Output"
+                }
+              }
+            },
+            "description": "Result of the request."
+          }
+        }
+      }
+    },
+    "/google/lyria-3.5/requests/{request_id}/cancel": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "Whether the request was cancelled successfully.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request was cancelled."
+          }
+        }
+      }
+    },
+    "/google/lyria-3.5/requests/{request_id}/status": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "logs",
+            "required": false,
+            "schema": {
+              "description": "Whether to include logs (`1`) in the response or not (`0`).",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://queue.fal.run"
+    }
+  ]
+}

@@ -1033,7 +1033,16 @@ export function hostedInputProblem(model: Pick<ModelDef, "name" | "routes" | "op
   }
   const refs = referenceProblem(model, op, req);
   if (refs) return refs;
-  if (op === "insert-moment") return insertRangeProblem(params.startTime, params.endTime, params.sourceDuration);
+  if (op === "insert-moment") {
+    // fal's insert-video takes a new moment of 5-13 s (duration: minimum 5, maximum 13); the composer offers only those, an API
+    // call or Assist may ask for any length.
+    const d = model.options.durations ?? [];
+    const [lo, hi] = [Math.min(...d), Math.max(...d)];
+    if (params.duration !== undefined && d.length && (params.duration < lo || params.duration > hi)) {
+      return `${model.name} makes a new moment of ${lo}–${hi} s, and this run asks for ${params.duration} s: pick a length in that range`;
+    }
+    return insertRangeProblem(params.startTime, params.endTime, params.sourceDuration);
+  }
   if (op === "relight-video" && model.options.lightSphere && !req.inputs?.images?.length) return `Pick a light: ${model.name} matches the light on a sphere you choose`;
   if (op === "retexture-3d" && !prompt.trim() && !req.inputs?.images?.length) return "Describe the new look, or add a style picture";
   return null;
@@ -1044,10 +1053,17 @@ const REFERENCE_OPS = new Set<Operation>(["ref2v", "insert-moment", "extend"]);
 const plural = (n: number, [one, many]: readonly [string, string]) => `${n} ${n === 1 ? one : many}`;
 
 /**
+ * Endpoints whose reference sound clips work only beside a reference picture or clip in the same run (Replicate's H3 Lite and
+ * HighSpeed READMEs: "Reference audio needs to be combined with a reference image or video").
+ */
+const REFERENCE_AUDIO_NEEDS_VISUAL = new Set(["replicate:minimax/h3-lite", "replicate:minimax/h3-highspeed"]);
+
+/**
  * Reference lists past what the endpoint's lists take (their schema's maxItems, or the count its description gives: H3 Max insert
  * 9 pictures and 3 clips, Vidu Q4 12 pictures and 3 voices), past a total across the lists (ModelOptions.maxReferences: H3 Max
- * Turbo's 12 files), or a voice in a format the endpoint doesn't read (ModelOptions.referenceAudio: Vidu Q4's mp3). Only lists a
- * route of `op` sends whole, so a start frame or an element's pictures are never counted; needs the routes' field maps.
+ * Turbo's 12 files), sound clips alone where the endpoint needs a picture or clip beside them (REFERENCE_AUDIO_NEEDS_VISUAL), or a
+ * voice in a format the endpoint doesn't read (ModelOptions.referenceAudio: Vidu Q4's mp3). Only lists a route of `op` sends whole,
+ * so a start frame or an element's pictures are never counted; needs the routes' field maps.
  */
 function referenceProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
   if (!REFERENCE_OPS.has(op)) return null;
@@ -1065,6 +1081,9 @@ function referenceProblem(model: Pick<ModelDef, "name" | "routes" | "options">, 
   const total = counts.images + counts.videos + counts.audios;
   const cap = model.options.maxReferences;
   if (cap !== undefined && total > cap) return `${model.name} takes up to ${cap} references in all — pictures, clips and sound together — and this run has ${total}: remove ${total - cap}`;
+  if (counts.audios && !counts.images && !counts.videos && routes.some((r) => REFERENCE_AUDIO_NEEDS_VISUAL.has(`${r.provider}:${r.endpoint.split(":")[0]}`))) {
+    return `${model.name} uses sound clips together with a reference picture or clip: add one of those too`;
+  }
   const format = model.options.referenceAudio;
   if (format && counts.audios) {
     const ext = (u: string) => (u.startsWith("data:") ? (/^data:audio\/(mpeg|mp3)[;,]/i.test(u) ? "mp3" : "other") : /\.([a-z0-9]{2,5})(?:[?#]|$)/i.exec(u)?.[1]?.toLowerCase());

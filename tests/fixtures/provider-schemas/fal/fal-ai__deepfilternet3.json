@@ -1,0 +1,443 @@
+{
+  "components": {
+    "schemas": {
+      "AudioFile": {
+        "properties": {
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bitrate of the audio (e.g., '192k' or 192000)",
+            "title": "Bitrate"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number of channels in the audio",
+            "title": "Channels"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The mime type of the file.",
+            "examples": [
+              "image/png"
+            ],
+            "title": "Content Type"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The duration of the audio",
+            "title": "Duration"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the file. It will be auto-generated if not provided.",
+            "examples": [
+              "z9RV14K95DvU.png"
+            ],
+            "title": "File Name"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The size of the file in bytes.",
+            "examples": [
+              4404019
+            ],
+            "title": "File Size"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sample rate of the audio",
+            "title": "Sample Rate"
+          },
+          "url": {
+            "description": "The URL where the file can be downloaded from.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "AudioFile",
+        "type": "object",
+        "x-fal-order-properties": [
+          "url",
+          "content_type",
+          "file_name",
+          "file_size",
+          "duration",
+          "channels",
+          "sample_rate",
+          "bitrate"
+        ]
+      },
+      "DeepFilterNetTimings": {
+        "properties": {
+          "inference": {
+            "description": "Inference time.",
+            "title": "Inference",
+            "type": "number"
+          },
+          "postprocess": {
+            "description": "Postprocessing time.",
+            "title": "Postprocess",
+            "type": "number"
+          },
+          "preprocess": {
+            "description": "Preprocessing time.",
+            "title": "Preprocess",
+            "type": "number"
+          }
+        },
+        "required": [
+          "preprocess",
+          "inference",
+          "postprocess"
+        ],
+        "title": "DeepFilterNetTimings",
+        "type": "object",
+        "x-fal-order-properties": [
+          "preprocess",
+          "inference",
+          "postprocess"
+        ]
+      },
+      "Deepfilternet3Input": {
+        "properties": {
+          "audio_format": {
+            "default": "mp3",
+            "description": "The format for the output audio.",
+            "enum": [
+              "mp3",
+              "aac",
+              "m4a",
+              "ogg",
+              "opus",
+              "flac",
+              "wav"
+            ],
+            "title": "Audio Format",
+            "type": "string"
+          },
+          "audio_url": {
+            "description": "The URL of the audio to enhance.",
+            "examples": [
+              "https://v3b.fal.media/files/b/0a8a4022/DLoZhabKeVjd3urncoRE4_dirty.mp3"
+            ],
+            "title": "Audio URL",
+            "type": "string"
+          },
+          "bitrate": {
+            "default": "192k",
+            "description": "The bitrate of the output audio.",
+            "title": "Bitrate",
+            "type": "string"
+          },
+          "sync_mode": {
+            "default": false,
+            "description": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history.",
+            "title": "Sync Mode",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "audio_url"
+        ],
+        "title": "DeepFilterNet3Input",
+        "type": "object",
+        "x-fal-order-properties": [
+          "audio_url",
+          "sync_mode",
+          "audio_format",
+          "bitrate"
+        ]
+      },
+      "Deepfilternet3Output": {
+        "properties": {
+          "audio_file": {
+            "$ref": "#/components/schemas/AudioFile",
+            "description": "The audio file that was enhanced.",
+            "examples": [
+              {
+                "bitrate": "192k",
+                "channels": 1,
+                "content_type": "audio/mpeg",
+                "duration": 6.9544375,
+                "file_name": "-2cD9CyGEjYsyVQ5lEERh_9qwIkJjf.mp3",
+                "sample_rate": 48000,
+                "url": "https://v3b.fal.media/files/b/0a8a4024/-2cD9CyGEjYsyVQ5lEERh_9qwIkJjf.mp3"
+              }
+            ]
+          },
+          "timings": {
+            "$ref": "#/components/schemas/DeepFilterNetTimings",
+            "description": "Timings for each step in the pipeline."
+          }
+        },
+        "required": [
+          "audio_file",
+          "timings"
+        ],
+        "title": "DeepFilterNet3Output",
+        "type": "object",
+        "x-fal-order-properties": [
+          "audio_file",
+          "timings"
+        ]
+      },
+      "QueueStatus": {
+        "properties": {
+          "cancel_url": {
+            "description": "The cancel url.",
+            "type": "string"
+          },
+          "logs": {
+            "additionalProperties": true,
+            "description": "The logs.",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "The metrics.",
+            "type": "object"
+          },
+          "queue_position": {
+            "description": "The queue position.",
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The request id.",
+            "type": "string"
+          },
+          "response_url": {
+            "description": "The response url.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "IN_QUEUE",
+              "IN_PROGRESS",
+              "COMPLETED"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "description": "The status url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "Fal Key",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "The OpenAPI schema for the fal-ai/deepfilternet3 queue.",
+    "title": "Queue OpenAPI for fal-ai/deepfilternet3",
+    "version": "1.0.0",
+    "x-fal-metadata": {
+      "about": "Enhance an audio file using the DeepFilterNet3 model.",
+      "category": "audio-to-audio",
+      "documentationUrl": "https://fal.ai/models/fal-ai/deepfilternet3/api",
+      "endpointId": "fal-ai/deepfilternet3",
+      "playgroundUrl": "https://fal.ai/models/fal-ai/deepfilternet3",
+      "thumbnailUrl": "https://v3b.fal.media/files/b/0a897e1b/SwkqYGPNn2Yyk6Cc-BBvO_a988f255be3a41c0a47b5cdc3568453c.jpg"
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/fal-ai/deepfilternet3": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Deepfilternet3Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    },
+    "/fal-ai/deepfilternet3/requests/{request_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deepfilternet3Output"
+                }
+              }
+            },
+            "description": "Result of the request."
+          }
+        }
+      }
+    },
+    "/fal-ai/deepfilternet3/requests/{request_id}/cancel": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "Whether the request was cancelled successfully.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request was cancelled."
+          }
+        }
+      }
+    },
+    "/fal-ai/deepfilternet3/requests/{request_id}/status": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "logs",
+            "required": false,
+            "schema": {
+              "description": "Whether to include logs (`1`) in the response or not (`0`).",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://queue.fal.run"
+    }
+  ]
+}

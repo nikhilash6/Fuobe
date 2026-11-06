@@ -586,7 +586,10 @@ export function guessKind(url: string, contentType?: string, hint?: string): Med
  * carries status_url and cancel_url next to the media, fal's queue receipts carry response_url.
  */
 const LIFECYCLE_KEYS = new Set(["status_url", "cancel_url", "response_url", "logs_url", "webhook_url", "request_id"]);
-const SKIP_KEYS = new Set(["seed", "timings", "has_nsfw_concepts", "logs", ...LIFECYCLE_KEYS]);
+// A still the API makes beside a video (fal's Vidu Q4 cover_image) is no result of its own, and neither is the prompt it echoes
+// (fal's Wan 2.2 returns `prompt` next to the video): words that happen to be a media link are never taken for a file.
+const PROMPT_ECHOES = ["prompt", "negative_prompt", "actual_prompt", "revised_prompt", "expanded_prompt"];
+const SKIP_KEYS = new Set(["seed", "timings", "has_nsfw_concepts", "logs", "cover_image", ...PROMPT_ECHOES, ...LIFECYCLE_KEYS]);
 
 /**
  * Extract media URLs from an arbitrary provider response. Handles the common shapes:
@@ -615,7 +618,7 @@ export function extractMedia(response: unknown): { url: string; kind: MediaKind;
       const obj = node as Record<string, unknown>;
       if (typeof obj.url === "string" && !seen.has(obj.url)) {
         seen.add(obj.url);
-        const ct = typeof obj.content_type === "string" ? obj.content_type : undefined;
+        const ct = fileType(obj.content_type);
         found.push({ url: obj.url, kind: guessKind(obj.url, ct, keyHint), contentType: ct });
         return;
       }
@@ -665,10 +668,19 @@ export function textDataUri(text: string): string {
   return `data:text/plain;base64,${btoa(bin)}`;
 }
 
+/**
+ * A result file's type as the API gives it. fal's generic "application/octet-stream" (extract-audio's documented answer for
+ * its MP3) says nothing about the file: it is left out, so the file is typed by its download or its name, not kept as .bin.
+ */
+function fileType(v: unknown): string | undefined {
+  const t = typeof v === "string" ? v.trim() : "";
+  return t && t.split(";")[0].trim().toLowerCase() !== "application/octet-stream" ? t : undefined;
+}
+
 /** A file object ({url, content_type}) or a bare URL string. */
 function fileOf(v: unknown): { url: string; contentType?: string } | undefined {
   if (typeof v === "string" && /^(https?:|data:)/.test(v)) return { url: v };
-  if (isObj(v) && typeof v.url === "string") return { url: v.url, contentType: str(v.content_type) };
+  if (isObj(v) && typeof v.url === "string") return { url: v.url, contentType: fileType(v.content_type) };
   return undefined;
 }
 
@@ -1064,6 +1076,13 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
     case "face-mosaic":
       out = faceMaskOutputs(response);
       break;
+    case "insert-moment":
+    case "extend": {
+      // fal's H3 Max insert and Turbo extend return `source`, the clip that went in (its size, frame rate, length): never a result.
+      const r = body(response);
+      out = extractMedia(isObj(r) && "source" in r ? { ...r, source: undefined } : response);
+      break;
+    }
     default:
       out = extractMedia(response);
   }
@@ -1075,6 +1094,10 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
   if (!out.length && (op === undefined || OPERATION_OUTPUT[op] === "text") && textOf(response)?.trim()) out = transcriptOutputs(response);
   const r = body(response);
   if (isObj(r)) {
+    // fal's safety checker (Z-Image, FLUX and others: has_nsfw_concepts, one flag per picture in images[]) sends a flagged
+    // picture back black: it is no result. When every picture was flagged, noOutputsError says so.
+    const flagged = flaggedUrls(r);
+    if (flagged.size) out = out.filter((o) => !flagged.has(o.url));
     // Recraft makes a style from reference images on the fly and returns its id: keep it to reuse the style.
     const styleId = str(r.style_id);
     if (styleId) out = out.map((o) => ({ ...o, meta: { ...o.meta, styleId } }));
@@ -1099,8 +1122,20 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
   return out;
 }
 
+/** The pictures a response's safety flags mark (has_nsfw_concepts[i] for images[i]): fal returns them black. */
+function flaggedUrls(r: Obj): Set<string> {
+  const flags = r.has_nsfw_concepts;
+  const images = r.images;
+  if (!Array.isArray(flags) || !Array.isArray(images) || flags.length !== images.length) return new Set();
+  return new Set(images.flatMap((im, i) => (flags[i] === true ? [fileOf(im)?.url ?? ""] : [])).filter(Boolean));
+}
+
 /** The job's error when a response held no result: the model's own words when it answered in text. */
 export function noOutputsError(response: unknown): string {
+  const r = body(response);
+  if (isObj(r) && Array.isArray(r.has_nsfw_concepts) && r.has_nsfw_concepts.length && r.has_nsfw_concepts.every((f) => f === true)) {
+    return "The safety checker flagged every picture, so none came back. Try different words or another picture.";
+  }
   const text = textOf(response)?.trim();
   if (text) return `The model replied: ${text.length > 300 ? `${text.slice(0, 300)}…` : text}`;
   return `No media in response: ${JSON.stringify(response).slice(0, 300)}`;

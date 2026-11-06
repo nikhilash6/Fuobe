@@ -17,6 +17,8 @@ export const LENGTH_RANGES: Readonly<Record<string, readonly [number, number]>> 
   "oss-minimax-h3": [3, 15],
   // Kling 4.0 in the cloud: any whole second from 3 to 30 (fal's and Replicate's duration field).
   "kling-4": [3, 30],
+  // MiniMax H3 Max Turbo on fal: duration is any number from 0.92 to 15 s (its text-to-video and image-to-video schemas).
+  "minimax-h3-max-turbo": [1, 15],
 };
 
 /** The clip lengths a studio plans with on a model: PLANNED_DURATIONS, else the catalog's own. */

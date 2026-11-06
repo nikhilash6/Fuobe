@@ -1,0 +1,361 @@
+{
+  "components": {
+    "schemas": {
+      "Audio": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The mime type of the file.",
+            "examples": [
+              "image/png"
+            ],
+            "title": "Content Type"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the file. It will be auto-generated if not provided.",
+            "examples": [
+              "z9RV14K95DvU.png"
+            ],
+            "title": "File Name"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The size of the file in bytes.",
+            "examples": [
+              4404019
+            ],
+            "title": "File Size"
+          },
+          "url": {
+            "description": "The URL where the file can be downloaded from.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "Audio",
+        "type": "object",
+        "x-fal-order-properties": [
+          "url",
+          "content_type",
+          "file_name",
+          "file_size"
+        ]
+      },
+      "CleanAudioInput": {
+        "properties": {
+          "audio_url": {
+            "description": "The recording to clean. Any audio or video ffmpeg can decode (wav, mp3, m4a, aac, ogg, mp4, mov, webm, ...); a video's audio track is used (call /video to get the video back with the cleaned track) and multi-channel input is mixed down to mono. Up to 30 minutes and 512 MB. A public URL or a data URI.",
+            "examples": [
+              "https://v3b.fal.media/files/b/0aaaa91c/5KspxZ3psz3KmDvSeYVk__noisy_example.m4a"
+            ],
+            "title": "Audio",
+            "type": "string"
+          },
+          "output_format": {
+            "default": "flac",
+            "description": "Container for the 48 kHz mono 16-bit output. FLAC is lossless at about half the size of WAV.",
+            "enum": [
+              "flac",
+              "wav"
+            ],
+            "title": "Output format",
+            "type": "string"
+          },
+          "strength": {
+            "default": 0.874,
+            "description": "How much of the original is allowed to remain under speech: the suppression floor is 1 - strength (the default 0.874 is the validated -18 dB). Lower keeps more room tone behind the voice; silence between words is always fully cleaned.",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Strength",
+            "type": "number"
+          },
+          "target_lufs": {
+            "anyOf": [
+              {
+                "maximum": -8,
+                "minimum": -40,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": -19,
+            "description": "Integrated loudness of the output (ITU-R BS.1770). The default -19 LUFS is the level the VEED editor delivers; true peak is capped at -1.1 dBTP. Pass null through the API to skip loudness normalization and keep the input level.",
+            "title": "Target loudness (LUFS)"
+          }
+        },
+        "required": [
+          "audio_url"
+        ],
+        "title": "DenoiseInput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "audio_url",
+          "strength",
+          "target_lufs",
+          "output_format"
+        ]
+      },
+      "CleanAudioOutput": {
+        "properties": {
+          "audio": {
+            "$ref": "#/components/schemas/Audio",
+            "description": "The denoised recording: 48 kHz mono 16-bit, same duration as the input, loudness-normalized.",
+            "examples": [
+              {
+                "content_type": "audio/flac",
+                "file_name": "denoised.flac",
+                "url": "https://v3b.fal.media/files/b/0aaaa933/tYOEy9H8r67qdQEC33yMe_denoised.flac"
+              }
+            ],
+            "title": "Cleaned audio"
+          },
+          "audio_duration": {
+            "description": "Input duration in seconds. Billing: whole seconds rounded up to full minutes, minimum 1 unit.",
+            "title": "Audio duration",
+            "type": "number"
+          }
+        },
+        "required": [
+          "audio",
+          "audio_duration"
+        ],
+        "title": "DenoiseOutput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "audio",
+          "audio_duration"
+        ]
+      },
+      "QueueStatus": {
+        "properties": {
+          "cancel_url": {
+            "description": "The cancel url.",
+            "type": "string"
+          },
+          "logs": {
+            "additionalProperties": true,
+            "description": "The logs.",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "The metrics.",
+            "type": "object"
+          },
+          "queue_position": {
+            "description": "The queue position.",
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The request id.",
+            "type": "string"
+          },
+          "response_url": {
+            "description": "The response url.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "IN_QUEUE",
+              "IN_PROGRESS",
+              "COMPLETED"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "description": "The status url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "Fal Key",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Removes background noise from speech while keeping quiet and distant words intact. The same model that powers Clean Audio in the VEED editor, processing thousands of recordings a day. Any audio or video file up to 30 minutes in, 48 kHz loudness-normalized audio out.",
+    "title": "Queue OpenAPI for veed/clean-audio",
+    "version": "1.0.0",
+    "x-fal-metadata": {
+      "about": "# VEED Clean Audio\n\nRemoves background noise from speech recordings. This is the model behind the **Clean Audio** toggle in\nthe VEED editor, where it has processed every recording since August 2026: MossFormer2 speech\nenhancement at 48 kHz, followed by VEED's post chain — a speech-gated suppression floor that keeps quiet\nand distant words instead of cutting them, presence/air EQ, and BS.1770 loudness normalization.\n\n## Input\n- **audio_url**: any audio or video ffmpeg can decode (wav, mp3, m4a, aac, ogg, mp4, mov, webm, ...).\nA video's audio track is used (to get the video back with the cleaned track, call **/video**);\nmulti-channel input is mixed down to mono.\n- Up to **30 minutes** of audio and **512 MB** per file. Public URLs only (private networks and\ncloud metadata addresses are refused; redirects are not followed) or a data URI.\n- Processing takes roughly 0.2–0.5× the audio duration: a 10-minute file returns in 2–5 minutes.\n\n## Output\n- 48 kHz mono 16-bit PCM in **FLAC** (default) or **WAV**, same duration as the input.\n- Integrated loudness **−19 LUFS**, true peak **≤ −1.1 dBTP** (skip by passing target_lufs = null).\n\n## Pricing\n**1 unit = 1 minute of input audio.** The duration is rounded to whole seconds, then up to the next\nfull minute; minimum 1 unit. A 5:00.011 file is 5 units, a 5:01 file is 6. Failed requests are not\nbilled.\n\n## Errors\nInvalid input returns HTTP 422 with the offending field: unreachable or non-public audio_url, no\naudio track, more than 30 minutes or 512 MB, undecodable audio.",
+      "category": "audio-to-audio",
+      "documentationUrl": "https://fal.ai/models/veed/clean-audio/api",
+      "endpointId": "veed/clean-audio",
+      "playgroundUrl": "https://fal.ai/models/veed/clean-audio",
+      "thumbnailUrl": "https://v3b.fal.media/files/b/0aab6e5b/ZKvDjaHYYnJDJrJz4WyOu.jpg"
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/veed/clean-audio": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanAudioInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    },
+    "/veed/clean-audio/requests/{request_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanAudioOutput"
+                }
+              }
+            },
+            "description": "Result of the request."
+          }
+        }
+      }
+    },
+    "/veed/clean-audio/requests/{request_id}/cancel": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "Whether the request was cancelled successfully.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request was cancelled."
+          }
+        }
+      }
+    },
+    "/veed/clean-audio/requests/{request_id}/status": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "logs",
+            "required": false,
+            "schema": {
+              "description": "Whether to include logs (`1`) in the response or not (`0`).",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://queue.fal.run"
+    }
+  ]
+}

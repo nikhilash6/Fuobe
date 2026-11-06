@@ -2872,6 +2872,12 @@ function original(spec: { id: string; open: ModelRoute[]; options: ModelOptions;
   };
 }
 
+/**
+ * Fuobe Animation's hosted gap clip (fal's Wan 2.2 A14B start/end-frame route): the cloud film's chained route takes
+ * LoRAs the way each gap's clip does, so the run keeps AniSora when it is planned and each gap sends it to `/lora`.
+ */
+const ANIMATION_GAP = ORIGINAL_HALVES.get("fuobe-animation")?.routes.find((r) => r.op === "flf2v" && r.provider === "fal");
+
 /** Fuobe DoP on both engines: a start frame (and an end frame for a transition), 3 or 5 s (49 or 81 frames at 16 fps on Wan). */
 const DOP_OPTIONS: ModelOptions = {
   aspectRatios: ["auto", ...VID_AR],
@@ -2976,7 +2982,15 @@ const originals: ModelDef[] = [
     routes: [
       comfy("keyframes", "wan22-inbetween-anisora", "every gap on one set of loaders: AniSora 3.2 + lightx2v 4 steps, every Nth frame, one video"),
       ...(ORIGINAL_HALVES.get("fuobe-animation")?.routes ?? []),
-      { op: "keyframes", provider: "fal", endpoint: "fal-ai/wan/v2.2-a14b/image-to-video", chained: true, note: "one hosted clip per gap with AniSora, joined" },
+      {
+        op: "keyframes",
+        provider: "fal",
+        endpoint: "fal-ai/wan/v2.2-a14b/image-to-video",
+        chained: true,
+        note: "one hosted clip per gap with AniSora, joined",
+        // Without a LoRA field here the planner leaves AniSora out of the film and refuses it (prepare's lost-LoRA check).
+        ...(ANIMATION_GAP?.map?.loras && { loraEndpoint: ANIMATION_GAP.loraEndpoint, map: { loras: ANIMATION_GAP.map.loras } }),
+      },
     ],
     engineDefaults: { open: { resolution: "720p" } },
     // The GPU graph needs two keyframes; in the cloud each gap's clip runs on its own (a start and an end frame).

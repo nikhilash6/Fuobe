@@ -30,8 +30,24 @@ const VOICE_SECONDS: Record<string, { min: number; max: number }> = { "minimax-h
 export function voiceWindowProblem(model: { id: string; name: string }, seconds: number): string | null {
   const w = VOICE_SECONDS[model.id];
   if (!w || !(seconds > 0)) return null;
-  if (seconds < w.min - 0.05) return `${model.name} needs at least ${w.min} s of audio, and this is ${secs(seconds)}: use a longer recording`;
+  // fal: "at least 5 seconds long". No slack below: a header runs past the cut, never short of it, so 4.95-4.99 s is short.
+  if (seconds < w.min) return `${model.name} needs at least ${w.min} s of audio, and this is ${Math.floor(seconds * 100) / 100} s: use a longer recording`;
   if (seconds > w.max + 0.05) return `${model.name} takes up to ${w.max / 60} minutes of audio, and this is ${minutes(seconds)}: trim it first`;
+  return null;
+}
+
+/** How long each reference voice a model takes (fal's Vidu Q4 reference to video: "mp3 reference audio clips (3-12 seconds each)"). */
+const REFERENCE_VOICE_SECONDS: Record<string, { min: number; max: number }> = { "vidu-q4": { min: 3, max: 12 } };
+
+/** Whether the model holds each reference voice to a length (REFERENCE_VOICE_SECONDS): its headers are read before the run. */
+export const hasReferenceVoiceWindow = (model: { id: string }): boolean => model.id in REFERENCE_VOICE_SECONDS;
+
+/** Why reference voice `n` (1-based), `seconds` long, is outside what the model takes, in Generate's words, or null. */
+export function referenceVoiceProblem(model: { id: string; name: string }, seconds: number, n = 1): string | null {
+  const w = REFERENCE_VOICE_SECONDS[model.id];
+  if (!w || !(seconds > 0)) return null;
+  if (seconds < w.min - 0.05) return `${model.name} needs voice clips of at least ${w.min} s, and Voice ${n} is ${secs(seconds)}: use a longer one`;
+  if (seconds > w.max + 0.05) return `${model.name} takes voice clips up to ${w.max} s, and Voice ${n} is ${secs(seconds)}: trim it first`;
   return null;
 }
 
@@ -94,9 +110,17 @@ const SOURCE_FRAME: Record<string, { min: number; max: number; ratio: [number, n
   "kling-4": { min: 700, max: 4553, ratio: [0.4, 2.5], fps: [23.9, 60.05] },
 };
 
+/**
+ * The shape a clip must have where only its shape is held, width ÷ height (fal's H3 Max Turbo extend, video_url: "aspect
+ * ratio between 0.4 and 2.5"), and the file size it may have (the same field: "up to 50 MB", read as 50,000,000 bytes).
+ */
+const SOURCE_RATIO: Record<string, [number, number]> = { "minimax-h3-max-turbo-extend": [0.4, 2.5] };
+const SOURCE_BYTES: Record<string, number> = { "minimax-h3-max-turbo-extend": 50_000_000 };
+
 /** Why a clip `width`×`height` is outside the sides or shape the model takes, in Generate's words, or null. */
 export function clipSizeProblem(model: { id: string; name: string }, width: number, height: number): string | null {
-  const s = SOURCE_FRAME[model.id];
+  const shape = SOURCE_RATIO[model.id];
+  const s = SOURCE_FRAME[model.id] ?? (shape && { min: 0, max: Infinity, ratio: shape });
   if (!s || !(width > 0) || !(height > 0)) return null;
   if (Math.min(width, height) < s.min) return `${model.name} needs a clip at least ${s.min} px on each side, and this one is ${width}×${height}: upscale it first or pick another model`;
   if (Math.max(width, height) > s.max) return `${model.name} takes clips up to ${s.max} px on a side, and this one is ${width}×${height}: scale it down first`;
@@ -113,6 +137,50 @@ export function clipFpsProblem(model: { id: string; name: string }, fps: number)
   if (!s || !(fps > 0) || (fps >= s.fps[0] && fps <= s.fps[1])) return null;
   const range = `${Math.round(s.fps[0])}–${Math.round(s.fps[1])} fps`;
   return `${model.name} takes clips at ${range}, and this one is ${Math.round(fps * 100) / 100} fps: save it at ${fps < s.fps[0] ? Math.round(s.fps[0]) : Math.round(s.fps[1])} fps first`;
+}
+
+/** Why a clip file of `bytes` is larger than the model takes (fal's H3 Max Turbo extend: 50 MB), or null. */
+export function clipBytesProblem(model: { id: string; name: string }, bytes: number | undefined): string | null {
+  const max = SOURCE_BYTES[model.id];
+  if (max === undefined || bytes === undefined || bytes <= max) return null;
+  return `${model.name} takes clips up to ${max / 1e6} MB, and this one is ${Math.round(bytes / 1e5) / 10} MB: trim it or save it smaller first`;
+}
+
+/**
+ * Reference clips and sound a hosted route holds to a window, per kind (fal's MiniMax H3 and H3 Max Turbo reference to video,
+ * reference_video_urls and reference_audio_urls: "2-15 seconds each, combined duration at most 15 seconds"; the H3 Max Turbo
+ * extend's reference_audio_urls: "2–15 seconds each, 15 seconds combined"). A header's length can run a frame or so past the
+ * cut that made it, so a few hundredths over are let through.
+ */
+type ReferenceWindow = { min: number; max: number; total: number; kinds: readonly ("videos" | "audios")[] };
+const H3_REFERENCES: ReferenceWindow = { min: 2, max: 15, total: 15, kinds: ["videos", "audios"] };
+const REFERENCE_SECONDS: Record<string, ReferenceWindow> = {
+  "minimax-h3": H3_REFERENCES,
+  "minimax-h3-max-turbo-refs": H3_REFERENCES,
+  "minimax-h3-max-turbo-extend": { ...H3_REFERENCES, kinds: ["audios"] },
+};
+
+/** The window a model holds its reference clips and sound to, or undefined. */
+export function referenceSeconds(modelId: string): ReferenceWindow | undefined {
+  return REFERENCE_SECONDS[modelId];
+}
+
+/**
+ * Why reference clips (`kind` "videos") or sound clips ("audios") this long are outside the model's window, in Generate's
+ * words, or null. A length not known (undefined) is let through.
+ */
+export function referenceClipsProblem(model: { id: string; name: string }, kind: "videos" | "audios", seconds: readonly (number | undefined)[]): string | null {
+  const w = REFERENCE_SECONDS[model.id];
+  if (!w || !w.kinds.includes(kind)) return null;
+  const one = kind === "videos" ? "Reference clip" : "Sound clip";
+  for (const [i, s] of seconds.entries()) {
+    if (s === undefined || !(s > 0)) continue;
+    if (s < w.min - 0.05) return `${one} ${i + 1} is ${secs(s)}, and ${model.name} needs at least ${w.min} s: use a longer one`;
+    if (s > w.max + 0.05) return `${one} ${i + 1} is ${secs(s)}, and ${model.name} takes up to ${w.max} s: trim it first`;
+  }
+  const sum = seconds.reduce<number>((a, s) => a + (s ?? 0), 0);
+  if (sum > w.total + 0.05) return `${kind === "videos" ? "The reference clips" : "The sound clips"} add up to ${secs(sum)}, and ${model.name} takes ${w.total} s of them together: trim them first`;
+  return null;
 }
 
 /** How long a clip given as one of the model's elements may be (Kling 4.0's video elements: 3–8 s). */

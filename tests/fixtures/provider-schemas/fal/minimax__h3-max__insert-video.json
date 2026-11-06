@@ -1,0 +1,539 @@
+{
+  "components": {
+    "schemas": {
+      "H3MaxInsertVideoInput": {
+        "additionalProperties": false,
+        "properties": {
+          "color_match": {
+            "default": true,
+            "title": "Color Match",
+            "type": "boolean"
+          },
+          "duration": {
+            "default": 5,
+            "maximum": 13,
+            "minimum": 5,
+            "title": "Duration",
+            "type": "number"
+          },
+          "enable_prompt_expansion": {
+            "default": true,
+            "title": "Enable Prompt Expansion",
+            "type": "boolean"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "reference_image_urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 9,
+            "title": "Reference Image Urls",
+            "type": "array"
+          },
+          "reference_video_urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Reference Video Urls",
+            "type": "array"
+          },
+          "resolution": {
+            "default": "768p",
+            "enum": [
+              "480p",
+              "768p"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          },
+          "resume_time": {
+            "exclusiveMinimum": 1.625,
+            "maximum": 60,
+            "title": "Resume Time",
+            "type": "number"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "start_time": {
+            "maximum": 60,
+            "minimum": 1.625,
+            "title": "Start Time",
+            "type": "number"
+          },
+          "video_url": {
+            "minLength": 1,
+            "title": "Video Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_url",
+          "start_time",
+          "resume_time"
+        ],
+        "title": "InjectVideoInput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "video_url",
+          "prompt",
+          "reference_image_urls",
+          "reference_video_urls",
+          "start_time",
+          "resume_time",
+          "duration",
+          "resolution",
+          "seed",
+          "enable_prompt_expansion",
+          "color_match"
+        ]
+      },
+      "H3MaxInsertVideoOutput": {
+        "properties": {
+          "duration": {
+            "title": "Duration",
+            "type": "number"
+          },
+          "expanded_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expanded Prompt"
+          },
+          "frame_count": {
+            "title": "Frame Count",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "injected_duration": {
+            "title": "Injected Duration",
+            "type": "number"
+          },
+          "resume_time": {
+            "title": "Resume Time",
+            "type": "number"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "object"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "number"
+          },
+          "timings": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Timings",
+            "type": "object"
+          },
+          "video": {
+            "$ref": "#/components/schemas/VideoFile"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video",
+          "seed",
+          "width",
+          "height",
+          "frame_count",
+          "duration",
+          "start_time",
+          "resume_time",
+          "injected_duration",
+          "source",
+          "timings"
+        ],
+        "title": "InjectVideoOutput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "video",
+          "seed",
+          "width",
+          "height",
+          "frame_count",
+          "duration",
+          "start_time",
+          "resume_time",
+          "injected_duration",
+          "expanded_prompt",
+          "source",
+          "timings"
+        ]
+      },
+      "QueueStatus": {
+        "properties": {
+          "cancel_url": {
+            "description": "The cancel url.",
+            "type": "string"
+          },
+          "logs": {
+            "additionalProperties": true,
+            "description": "The logs.",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "The metrics.",
+            "type": "object"
+          },
+          "queue_position": {
+            "description": "The queue position.",
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The request id.",
+            "type": "string"
+          },
+          "response_url": {
+            "description": "The response url.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "IN_QUEUE",
+              "IN_PROGRESS",
+              "COMPLETED"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "description": "The status url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "VideoFile": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The mime type of the file.",
+            "examples": [
+              "image/png"
+            ],
+            "title": "Content Type"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The duration of the video",
+            "title": "Duration"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the file. It will be auto-generated if not provided.",
+            "examples": [
+              "z9RV14K95DvU.png"
+            ],
+            "title": "File Name"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The size of the file in bytes.",
+            "examples": [
+              4404019
+            ],
+            "title": "File Size"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The FPS of the video",
+            "title": "Fps"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The height of the video",
+            "title": "Height"
+          },
+          "num_frames": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number of frames in the video",
+            "title": "Num Frames"
+          },
+          "url": {
+            "description": "The URL where the file can be downloaded from.",
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The width of the video",
+            "title": "Width"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "VideoFile",
+        "type": "object",
+        "x-fal-order-properties": [
+          "url",
+          "content_type",
+          "file_name",
+          "file_size",
+          "width",
+          "height",
+          "fps",
+          "duration",
+          "num_frames"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "Fal Key",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "H3 Max Insert Video generates a new scene between two selected points in an existing video. Set a start time and a resume time, describe the new action or provide visual references, and receive a complete video that combines the opening footage, the generated scene, and the remaining source footage.\n",
+    "title": "Queue OpenAPI for minimax/h3-max/insert-video",
+    "version": "1.0.0",
+    "x-fal-metadata": {
+      "about": "Inject Video",
+      "category": "video-to-video",
+      "documentationUrl": "https://fal.ai/models/minimax/h3-max/insert-video/api",
+      "endpointId": "minimax/h3-max/insert-video",
+      "playgroundUrl": "https://fal.ai/models/minimax/h3-max/insert-video",
+      "thumbnailUrl": "https://v3b.fal.media/files/b/0aac45ed/CUlIKgQ55O4HiSkSG0OEL.jpg"
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/minimax/h3-max/insert-video": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/H3MaxInsertVideoInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    },
+    "/minimax/h3-max/insert-video/requests/{request_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/H3MaxInsertVideoOutput"
+                }
+              }
+            },
+            "description": "Result of the request."
+          }
+        }
+      }
+    },
+    "/minimax/h3-max/insert-video/requests/{request_id}/cancel": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "Whether the request was cancelled successfully.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request was cancelled."
+          }
+        }
+      }
+    },
+    "/minimax/h3-max/insert-video/requests/{request_id}/status": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "logs",
+            "required": false,
+            "schema": {
+              "description": "Whether to include logs (`1`) in the response or not (`0`).",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://queue.fal.run"
+    }
+  ]
+}

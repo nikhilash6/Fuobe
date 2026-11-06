@@ -1,0 +1,269 @@
+{
+  "components": {
+    "schemas": {
+      "ApiSongStemInput": {
+        "properties": {
+          "audio_url": {
+            "_fal_ui_field": "url",
+            "description": "Public HTTPS URL or data URI for an MP3 or M4A song to separate, up to 10 MB.",
+            "title": "Audio Url",
+            "type": "string"
+          },
+          "model": {
+            "default": "audio-separation-3",
+            "description": "Stem-separation model, which determines available stems and MIDI output.",
+            "enum": [
+              "audio-separation-1",
+              "audio-separation-2",
+              "audio-separation-3"
+            ],
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "audio_url"
+        ],
+        "title": "StemSongInput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "model",
+          "audio_url"
+        ]
+      },
+      "ApiSongStemOutput": {
+        "properties": {
+          "midi_zip_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The generated archive of separated MIDI stems, when available.",
+            "title": "Midi Zip Url"
+          },
+          "zip_url": {
+            "description": "The generated archive of separated audio stems.",
+            "title": "Zip Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zip_url"
+        ],
+        "title": "StemSongOutput",
+        "type": "object",
+        "x-fal-order-properties": [
+          "zip_url",
+          "midi_zip_url"
+        ]
+      },
+      "QueueStatus": {
+        "properties": {
+          "cancel_url": {
+            "description": "The cancel url.",
+            "type": "string"
+          },
+          "logs": {
+            "additionalProperties": true,
+            "description": "The logs.",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "The metrics.",
+            "type": "object"
+          },
+          "queue_position": {
+            "description": "The queue position.",
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The request id.",
+            "type": "string"
+          },
+          "response_url": {
+            "description": "The response url.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "IN_QUEUE",
+              "IN_PROGRESS",
+              "COMPLETED"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "description": "The status url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "Fal Key",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "The OpenAPI schema for the mureka/api/song/stem queue.",
+    "title": "Queue OpenAPI for mureka/api/song/stem",
+    "version": "1.0.0",
+    "x-fal-metadata": {
+      "about": "Separate a song into individual instrumental and vocal stems.\n\nReturns an archive containing the separated vocals and instrumental audio.",
+      "category": "audio-to-audio",
+      "documentationUrl": "https://fal.ai/models/mureka/api/song/stem/api",
+      "endpointId": "mureka/api/song/stem",
+      "playgroundUrl": "https://fal.ai/models/mureka/api/song/stem",
+      "thumbnailUrl": "https://v3b.fal.media/files/b/0aaa6214/x2KU6ElS5zAlLVic8_wMj.jpg"
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/mureka/api/song/stem": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiSongStemInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    },
+    "/mureka/api/song/stem/requests/{request_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSongStemOutput"
+                }
+              }
+            },
+            "description": "Result of the request."
+          }
+        }
+      }
+    },
+    "/mureka/api/song/stem/requests/{request_id}/cancel": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "Whether the request was cancelled successfully.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request was cancelled."
+          }
+        }
+      }
+    },
+    "/mureka/api/song/stem/requests/{request_id}/status": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "description": "Request ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "logs",
+            "required": false,
+            "schema": {
+              "description": "Whether to include logs (`1`) in the response or not (`0`).",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "The request status."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://queue.fal.run"
+    }
+  ]
+}
