@@ -781,8 +781,10 @@ export interface KeyContext {
 }
 
 const BALANCE = /exhausted balance|insufficient (credit|balance|funds)|out of credit|top up your balance|payment required|balance has run out/i;
-const CONTENT = /content (checker|policy|moderation)|flagged|nsfw|safety (checker|filter|system)|E005|sensitive/i;
-const PERMISSION = /(do not|don't) have (permission|access)|not authori[sz]ed to (access|use|run)|no access to (this )?(model|app|endpoint)|not allowed to (use|run)/i;
+const CONTENT = /content[ _](checker|policy|moderation)|flagged|nsfw|safety (checker|filter|system)|E005|sensitive/i;
+// fal.ai's 403 also says why in its `type` (providers/fal.ts keeps it): permission_denied, resource_restricted (a model
+// restriction on the key, a spending limit). Only rejected_key is a key to replace.
+const PERMISSION = /(do not|don't) have (permission|access)|not authori[sz]ed to (access|use|run)|no access to (this )?(model|app|endpoint)|not allowed to (use|run)|\b(permission_denied|resource_restricted)\b/i;
 /** The provider's words without its "fal 422: " or "replicate 404: " start. */
 const providerText = (t: string | undefined) => (t ?? "").replace(/^(fal|replicate)\s+(\d{3}|upload):\s*/i, "");
 /** A request field fal or Replicate named in a refusal ("body.image_url", "input.image"), as the person knows it. */
@@ -836,6 +838,12 @@ export function diagnoseKey(f: KeyFailure, ctx: KeyContext): Diagnosis {
       actions: [A.pick(), ...other],
       retryable: false,
     };
+  }
+  if (status === 404 && (f.stage === "poll" || f.stage === "result")) {
+    // A 404 on a run's status or result is about the run, not the model: the provider has no such job for this key (it
+    // belongs to another account, as when the key was replaced by another account's) or keeps it no longer (fal.ai docs:
+    // Queue API, status and result; Replicate: Get a prediction). Asking again can't bring it back.
+    return { cause: "provider-stopped", words: `${name} no longer has this run for your key. Press Retry to run it again.`, details, actions: [A.retry(), ...other], retryable: false };
   }
   if (status === 404) {
     return { cause: "model-unavailable", words: `This model isn't available on ${name} right now. Pick another model.`, details, actions: [A.pick(), ...other], retryable: false };

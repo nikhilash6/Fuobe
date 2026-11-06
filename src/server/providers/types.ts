@@ -77,7 +77,8 @@ export interface ProviderAdapter {
   prepareFile(data: Buffer, contentType: string, name: string, route?: ModelRoute): Promise<string>;
   submit(ctx: SubmitContext): Promise<SubmitResult>;
   poll(ctx: PollContext): Promise<PollResult>;
-  cancel?(ctx: PollContext): Promise<void>;
+  /** Stop the job there. fal.ai says what it did (CancelOutcome); the other providers say nothing. */
+  cancel?(ctx: PollContext): Promise<CancelOutcome | void>;
   /**
    * Lightweight connectivity check for the settings page. `focus` is the setting the person is
    * checking (the Anthropic key, the isolated worker's address…), for a provider whose settings
@@ -85,6 +86,13 @@ export interface ProviderAdapter {
    */
   test?(opts?: { focus?: string }): Promise<{ ok: boolean; detail: string }>;
 }
+
+/**
+ * What a provider did with a cancel, when it says (fal.ai): took the job off its queue (it never runs), asked a running job
+ * to stop (it may still finish, and be charged), found it finished already (its result is there), had no such job for this
+ * key, or answered something else.
+ */
+export type CancelOutcome = "removed" | "requested" | "finished" | "gone" | "unknown";
 
 export class ProviderError extends Error {
   constructor(

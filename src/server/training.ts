@@ -86,6 +86,8 @@ interface Row {
 interface Meta {
   statusUrl?: string;
   responseUrl?: string;
+  /** fal's cancel address (PUT): a queued training is removed, a running one is told to stop. */
+  cancelUrl?: string;
   name?: string;
   family?: TrainingFamily;
   photos?: number;
@@ -393,10 +395,11 @@ async function submit(id: string, el: StudioElement, t: TrainingTarget, trigger:
       request_id: string;
       status_url: string;
       response_url: string;
+      cancel_url?: string;
     };
     update(id, {
       external_id: res.request_id,
-      meta_json: JSON.stringify({ ...meta, statusUrl: res.status_url, responseUrl: res.response_url }),
+      meta_json: JSON.stringify({ ...meta, statusUrl: res.status_url, responseUrl: res.response_url, ...(res.cancel_url && { cancelUrl: res.cancel_url }) }),
       status: "running",
       message: "Queued on fal",
       cost_usd: t.costUsd,
@@ -521,9 +524,16 @@ function trainedLora(r: Row, t: TrainingTarget, file: string, fields: Partial<El
 async function pollOne(r: Row) {
   const t = getTrainingTarget(r.target);
   if (!t) return fail(r.id, r.element_id, retiredTraining(r.target) ?? `Unknown training target ${r.target}`);
-  if (Date.now() - r.created_at > MAX_TRAINING_MS) return fail(r.id, r.element_id, `Training didn't finish within ${MAX_TRAINING_MS / 3_600_000} hours`);
   const meta = metaOf(r);
   const el = getElement(r.element_id);
+  // A fal training Fuobe gives up on (too long, or its element was deleted) is stopped on fal too: fal removes a queued
+  // request and signals a running one (PUT cancel_url), so it isn't trained and billed for a LoRA nobody collects.
+  const giveUp =
+    Date.now() - r.created_at > MAX_TRAINING_MS ? `Training didn't finish within ${MAX_TRAINING_MS / 3_600_000} hours` : r.provider === "fal" && !el ? "Its element was deleted" : undefined;
+  if (giveUp) {
+    if (r.provider === "fal" && meta.cancelUrl) await falFetch(meta.cancelUrl, { method: "PUT" }).catch(() => {});
+    return fail(r.id, r.element_id, giveUp);
+  }
   const file = trainedFileName(el?.handle ?? r.element_id, r.id);
 
   if (r.provider === "demo") {
@@ -542,8 +552,9 @@ async function pollOne(r: Row) {
 
   if (r.provider === "fal") {
     const s = (await falFetch(`${meta.statusUrl}?logs=1`)) as { status: string; logs?: { message: string }[]; error?: string };
+    // A failed or cancelled job is COMPLETED too, with `error` (the queue's only statuses are IN_QUEUE, IN_PROGRESS and
+    // COMPLETED: fal.ai docs, Queue API, QueueStatus).
     if (s.error) return fail(r.id, r.element_id, `fal couldn't train this: ${s.error}`);
-    if (s.status === "FAILED" || s.status === "ERROR" || s.status === "CANCELLED") return fail(r.id, r.element_id, `fal training ${s.status.toLowerCase()}`);
     if (s.status !== "COMPLETED") {
       const last = s.logs?.at(-1)?.message;
       const step = last && /(\d+)\s*\/\s*(\d+)/.exec(last);

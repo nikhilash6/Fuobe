@@ -6,11 +6,12 @@ import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payl
 import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
 import { tenant, tenantAccount } from "../tenant";
 import { unzip } from "../unzip";
-import { ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "../account-files";
+import { ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage, RETENTION_MS } from "../account-files";
 import { discardBody, fetchPublic, RemoteFetchError } from "../remote-fetch";
 import { newScratchOutput } from "../storage";
 import type { FieldMap } from "@/lib/catalog/types";
-import { ProviderError, type ProviderAdapter } from "./types";
+import { resultExpired } from "@/lib/diagnose";
+import { ProviderError, type CancelOutcome, type ProviderAdapter } from "./types";
 
 /**
  * fal.ai queue API.
@@ -46,10 +47,26 @@ const falRun = () => standIn("fal") ?? RUN;
  * $0.01, priced as Pricing.uploadUsd): the id the tool then takes.
  */
 async function uploadSong(upload: { endpoint: string; purpose: string }, fileUrl: string): Promise<string> {
-  const res = (await falFetch(`${falRun()}/${upload.endpoint}`, { method: "POST", body: JSON.stringify({ file_url: fileUrl, purpose: upload.purpose }) })) as { id?: unknown };
-  if (typeof res?.id !== "string" || !res.id) throw Object.assign(new ProviderError("We couldn't send the song. Press Retry."), { said: "Mureka gave no file id" });
-  return res.id;
+  for (let attempt = 0; ; attempt++) {
+    let res: { id?: unknown };
+    try {
+      res = (await falFetch(`${falRun()}/${upload.endpoint}`, { method: "POST", body: JSON.stringify({ file_url: fileUrl, purpose: upload.purpose }) })) as { id?: unknown };
+    } catch (e) {
+      // fal.ai never retries a synchronous run: one it marks temporary (X-Fal-Needs-Retry: 1, its sync API reference: a busy
+      // runner, a concurrency limit, a timeout before it started) is sent again, twice at most.
+      if ((e as { needsRetry?: boolean } | null)?.needsRetry && attempt < UPLOAD_RETRY_MS.length) {
+        await new Promise((r) => setTimeout(r, UPLOAD_RETRY_MS[attempt]));
+        continue;
+      }
+      throw e;
+    }
+    if (typeof res?.id !== "string" || !res.id) throw Object.assign(new ProviderError("We couldn't send the song. Press Retry."), { said: "Mureka gave no file id" });
+    return res.id;
+  }
 }
+
+/** The waits before a song's upload is sent again after fal.ai marks it temporary (X-Fal-Needs-Retry: 1). */
+const UPLOAD_RETRY_MS = [1000, 3000];
 
 /** The most a stems download may be, and how long it may take: past either, it stops and the run fails. */
 const STEMS_MAX_BYTES = 256 * 1024 * 1024;
@@ -164,6 +181,17 @@ function key(): string {
  */
 export const FAL_CALL_MS = { long: 60_000, short: 20_000 };
 
+/**
+ * How long fal.ai keeps the files Fuobe puts on its CDN, in seconds: an upload as long as Fuobe keeps an upload, the files
+ * a job makes as long as Fuobe keeps a run (account-files.ts RETENTION_MS, as the Privacy page says). Unset, fal.ai keeps
+ * them public to anyone with the link, with no end (its default; fal.ai docs: Platform Headers,
+ * X-Fal-Object-Lifecycle-Preference). Fuobe copies a result as soon as it is made, and sends a mirrored LoRA again well
+ * inside both (loras.ts MIRROR_TTL_MS). A training's LoRA gets none (training.ts): fal's copy may be the only one.
+ */
+export const FAL_KEEP_S = { upload: RETENTION_MS.upload / 1000, result: RETENTION_MS.run / 1000 };
+/** The queue submit's header that sets it for the files the job makes. */
+const RESULT_LIFECYCLE = { "X-Fal-Object-Lifecycle-Preference": JSON.stringify({ expiration_duration_seconds: FAL_KEEP_S.result }) };
+
 export async function falFetch(url: string, init: RequestInit = {}): Promise<unknown> {
   const k = key();
   if (!k && tenant()) throw missingKeyError("fal");
@@ -183,7 +211,10 @@ export async function falFetch(url: string, init: RequestInit = {}): Promise<unk
   if (!res.ok) {
     // A provider's error may echo the request: the key never reaches a message, a row or a log.
     const said = redactKey(`fal ${res.status}: ${describeError(body)}`, k);
-    throw accountKeyError("fal", res.status, said, k) ?? new ProviderError(said, res.status);
+    const err = accountKeyError("fal", res.status, said, k) ?? new ProviderError(said, res.status);
+    // fal.ai's mark of a temporary failure that a retry can get past (X-Fal-Needs-Retry: 1): read by the synchronous upload.
+    if (res.headers.get("x-fal-needs-retry") === "1") Object.assign(err, { needsRetry: true });
+    throw err;
   }
   return body;
 }
@@ -203,14 +234,40 @@ const clientFetch: typeof fetch = (input, init) => {
 
 function describeError(body: unknown): string {
   if (typeof body === "string") return body.slice(0, 500);
-  const b = body as { detail?: unknown; error?: unknown; message?: unknown };
+  const b = body as { detail?: unknown; error?: unknown; message?: unknown; type?: unknown; error_type?: unknown };
   const d = b.detail ?? b.error ?? b.message ?? body;
   if (Array.isArray(d)) {
     return d
-      .map((e: { loc?: unknown[]; msg?: string }) => `${(e.loc ?? []).join(".")}: ${e.msg ?? JSON.stringify(e)}`)
+      // Each error's `type` too (fal.ai Model Errors: content_policy_violation, image_too_large...): fal.ai says to rely on it,
+      // never on `msg`, whose words change from model to model.
+      .map((e: { loc?: unknown[]; msg?: string; type?: unknown }) => `${(e.loc ?? []).join(".")}: ${e.msg ?? JSON.stringify(e)}${errorKind(e.type)}`)
       .join("; ");
   }
-  return typeof d === "string" ? d : JSON.stringify(d).slice(0, 500);
+  // fal.ai's machine-readable reason, when it gives one (DetailError.type: rejected_key, permission_denied,
+  // resource_restricted; RequestError.error_type: startup_timeout, runner_disconnected...): it tells a refused key from a key
+  // that may not run this model, and a passing failure from one to fix (src/lib/diagnose.ts).
+  return (typeof d === "string" ? d : JSON.stringify(d).slice(0, 500)) + errorKind(b.type ?? b.error_type);
+}
+
+/** fal.ai's category of an error, as " (content_policy_violation)", or "" when it gives none that reads as one. */
+function errorKind(kind: unknown): string {
+  return typeof kind === "string" && /^[a-z_.]{3,60}$/.test(kind) ? ` (${kind})` : "";
+}
+
+/**
+ * Why a job fal.ai finished as failed (status COMPLETED with `error`): its result, which fal.ai answers with the job's own
+ * error (a model's 422 detail[]: a content flag, an image too large; a timeout's detail). The status's `error` is only
+ * "Invalid status code: 422" for those. The status's words when the result says nothing more or can't be read.
+ */
+async function failedJobWords(responseUrl: unknown, statusError: string): Promise<string> {
+  if (typeof responseUrl !== "string" || !responseUrl) return statusError;
+  try {
+    await falFetch(responseUrl);
+  } catch (e) {
+    // The job's own error, not a passing one (the key, busy, a gateway) nor no answer: those keep the status's words.
+    if (e instanceof ProviderError && typeof e.status === "number" && ![401, 402, 403, 404, 429, 502, 503].includes(e.status)) return e.message;
+  }
+  return statusError;
 }
 
 /** A plain file name with an extension to upload under ("x.safetensors", "dataset.zip"), or undefined. */
@@ -228,16 +285,25 @@ const CLONE_WAIT_MS = 3 * 60 * 1000;
  */
 export async function cloneVoice(cf: NonNullable<FieldMap["cloneFirst"]>, audio: string, transcript?: string, waitMs = CLONE_WAIT_MS): Promise<string> {
   const body = { [cf.audio]: audio, ...(cf.text && transcript?.trim() && { [cf.text]: transcript.trim() }) };
-  const job = (await falFetch(`${falQueue()}/${cf.endpoint}`, { method: "POST", body: JSON.stringify(body) })) as { status_url: string; response_url: string };
+  const job = (await falFetch(`${falQueue()}/${cf.endpoint}`, { method: "POST", body: JSON.stringify(body), headers: RESULT_LIFECYCLE })) as {
+    status_url: string;
+    response_url: string;
+    cancel_url?: string;
+  };
   const until = Date.now() + waitMs;
   for (let wait = 500; ; wait = Math.min(wait * 1.5, 3000)) {
     const st = (await falFetch(job.status_url)) as { status?: string; error?: string };
     if (st.status === "COMPLETED") {
-      // fal.ai's own words go to the run's details line; the sentence is plain.
-      if (st.error) throw Object.assign(new ProviderError("We couldn't copy this voice. Try a longer, clearer sample, or press Retry."), { said: st.error });
+      // fal.ai's own words go to the run's details line (the job's result holds the model's own); the sentence is plain.
+      if (st.error) throw Object.assign(new ProviderError("We couldn't copy this voice. Try a longer, clearer sample, or press Retry."), { said: await failedJobWords(job.response_url, st.error) });
       break;
     }
-    if (Date.now() + wait > until) throw new ProviderError("Cloning the voice took too long. Try again.");
+    if (Date.now() + wait > until) {
+      // Still queued or running: cancelled on fal.ai (its queue API: PUT cancel_url), so it isn't billed while the run fails
+      // and a retry clones the sample again.
+      if (job.cancel_url) await falFetch(job.cancel_url, { method: "PUT" }).catch(() => {});
+      throw new ProviderError("Cloning the voice took too long. Try again.");
+    }
     await new Promise((r) => setTimeout(r, wait));
   }
   const result = (await falFetch(job.response_url)) as Record<string, unknown>;
@@ -262,10 +328,13 @@ export const falProvider: ProviderAdapter = {
     // extension (fal's LTX-2.3 quality takes only .safetensors URLs) refuse.
     const blob = fileName(name) ? new File([new Uint8Array(data)], fileName(name)!, { type: contentType }) : new Blob([new Uint8Array(data)], { type: contentType });
     try {
-      return await client.storage.upload(blob);
+      // Kept on fal.ai's CDN as long as Fuobe keeps an upload, not for ever (the client sends it with the upload's start).
+      return await client.storage.upload(blob, { lifecycle: { expiresIn: FAL_KEEP_S.upload } });
     } catch (e) {
       const status = (e as { status?: number }).status ?? 0;
-      const said = redactKey(`fal ${status || "upload"}: ${(e as Error).message}`, k);
+      // fal.ai's reason is in the error body's `detail`; the client's message is only `message` or the status text.
+      const body = (e as { body?: unknown }).body;
+      const said = redactKey(`fal ${status || "upload"}: ${body != null && typeof body === "object" ? describeError(body) : (e as Error).message}`, k);
       throw accountKeyError("fal", status, said, k) ?? new ProviderError(said, status || undefined);
     }
   },
@@ -301,7 +370,7 @@ export const falProvider: ProviderAdapter = {
     }
     let res: { request_id: string; status_url: string; response_url: string; cancel_url: string };
     try {
-      res = (await falFetch(`${falQueue()}/${endpoint}`, { method: "POST", body: JSON.stringify(payload) })) as typeof res;
+      res = (await falFetch(`${falQueue()}/${endpoint}`, { method: "POST", body: JSON.stringify(payload), headers: RESULT_LIFECYCLE })) as typeof res;
     } catch (e) {
       // The voice it cloned (a billed step) goes with the error: a try again of this run uses it, never clones twice.
       throw embedding && e && typeof e === "object" ? Object.assign(e, { voiceEmbedding: embedding }) : e;
@@ -319,6 +388,7 @@ export const falProvider: ProviderAdapter = {
       queue_position?: number;
       logs?: { message: string }[];
       error?: string;
+      error_type?: string;
     };
     if (status.status === "IN_QUEUE") {
       return { state: "queued", ...(status.queue_position != null && { position: status.queue_position }), message: status.queue_position != null ? `In queue · position ${status.queue_position + 1}` : "In queue" };
@@ -329,7 +399,9 @@ export const falProvider: ProviderAdapter = {
       return { state: "running", progress: pct ? Number(pct) / 100 : undefined, message: last ?? "Generating" };
     }
     if (status.status === "COMPLETED") {
-      if (status.error) return { state: "failed", error: status.error };
+      // A failed or cancelled job is COMPLETED too, with `error` and `error_type`, its category (fal.ai docs: Request Error
+      // Types). Its result holds fal.ai's words for it (never asked again: the job won't change).
+      if (status.error) return { state: "failed", error: await failedJobWords(meta.responseUrl, status.error + errorKind(status.error_type)) };
       try {
         const result = await falFetch(meta.responseUrl as string);
         // A song's stems come back as one zip (Mureka): each track becomes a result of its own.
@@ -342,6 +414,10 @@ export const falProvider: ProviderAdapter = {
         const draftId = /"draft_id"\s*:\s*"([^"]+)"/.exec(JSON.stringify(result))?.[1];
         return { state: "succeeded", outputs: draftId ? outputs.map((o) => ({ ...o, draftId })) : outputs };
       } catch (e) {
+        // A finished job whose result fal.ai no longer has: 404, kept 1 hour after it ends (6 minutes from 10 KB) when the
+        // fal.ai account doesn't store payloads, or the job is another fal.ai account's (the key was replaced meanwhile).
+        // Made, maybe paid, and gone: asking again can't bring it back (fal.ai docs: Queue API, Get request result).
+        if (e instanceof ProviderError && e.status === 404) return { state: "failed", error: e.message, trouble: resultExpired() };
         // An account's finished (and paid) job isn't failed for a passing problem collecting it (busy, down, no answer):
         // the runner asks again with a growing wait (generations.ts healPoll).
         const s = (e as { status?: number }).status;
@@ -355,8 +431,21 @@ export const falProvider: ProviderAdapter = {
     return { state: "running", message: status.status };
   },
 
-  async cancel({ meta }) {
-    if (meta.cancelUrl) await falFetch(meta.cancelUrl as string, { method: "PUT" }).catch(() => {});
+  async cancel({ meta }): Promise<CancelOutcome | void> {
+    if (!meta.cancelUrl) return;
+    // fal.ai's answer says what happened (fal.ai docs: Queue, "Cancel a Request"): 200 OK took it off the queue (it never
+    // runs); 202 CANCELLATION_REQUESTED sent a stop to a running job, which may still finish (and be charged); 400
+    // ALREADY_COMPLETED: it finished before the cancel came, so its result is there to collect; 404 NOT_FOUND: no such job
+    // for this key.
+    try {
+      const said = (await falFetch(meta.cancelUrl as string, { method: "PUT" })) as { status?: unknown } | null;
+      return said?.status === "OK" ? "removed" : "requested";
+    } catch (e) {
+      const status = (e as { status?: unknown } | null)?.status;
+      if (status === 400 && /ALREADY_COMPLETED/.test(String((e as Error).message))) return "finished";
+      if (status === 404) return "gone";
+      return "unknown";
+    }
   },
 
   async test() {

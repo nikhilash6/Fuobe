@@ -67,8 +67,7 @@ async function failedRun() {
   return falProvider.poll({ externalId: sent.externalId, meta: sent.meta!, route, model, createdAt: Date.now() });
 }
 
-// Skipped until the server side lands: src/server/providers/fal.ts poll() and cloneVoice() read a failed job's result for the model's own error. It fails without that change.
-describe.skip("a job fal.ai finished as failed keeps fal.ai's reason", () => {
+describe("a job fal.ai finished as failed keeps fal.ai's reason", () => {
   it("the owner's run says what the model refused", async () => {
     failingJobs({ status: 422, body: FLAGGED });
     const r = await failedRun();

@@ -28,8 +28,17 @@ export class LoraError extends Error {
 }
 
 const CIVITAI_API = "https://civitai.com/api/v1";
-/** fal and Replicate don't document how long an upload lives (unverified): mirrors are made again after this. */
-const MIRROR_TTL_MS: Record<string, number> = { fal: 7 * 86_400_000, replicate: 86_400_000 };
+/**
+ * How long Fuobe uses its copy of a LoRA on a provider before it sends a new one. Fuobe's uploads to fal.ai expire with
+ * its upload retention (providers/fal.ts FAL_KEEP_S: 14 days), so a week there is safe. Replicate's Files API keeps a
+ * file 24 hours ("Files uploaded to Replicate using this endpoint expire after 24 hours",
+ * https://github.com/replicate/replicate-javascript#replicatefilescreate; `expires_at` in
+ * https://api.replicate.com/openapi.json), and Replicate reads it only when the prediction starts, up to 4 hours later
+ * (generations.ts QUEUE_TIMEOUT_MS): so a copy there is used for 20 hours at most.
+ */
+const MIRROR_TTL_MS: Record<string, number> = { fal: 7 * 86_400_000, replicate: 20 * 3_600_000 };
+/** Replicate's Files API takes files under 100 MB (https://api.replicate.com/openapi.json: POST /files, 413). */
+const REPLICATE_LORA_FILE_MAX = 100 * 1000 * 1000;
 /** Where Fuobe keeps a LoRA it downloaded only to mirror it (ComfyUI's folder is used when it has the file). */
 export const LORA_CACHE_DIR = path.join(DATA_DIR, "loras");
 
@@ -573,6 +582,10 @@ async function sendOwnLora(l: LoraRef, target: "fal" | "replicate", upload: (dat
     }
   })();
   const local = ownCopy(l.file) ?? inComfy;
+  // Replicate's Files API takes files under 100 MB (POST /v1/files answers 413 "Files must be less than 100MB in size")
+  // and deletes an upload after 24 h. A LoRA fal trained has a public fal.media URL, which Replicate's LoRA fields take as
+  // it is, so a large one goes by that URL.
+  if (local && target === "replicate" && l.url && fs.statSync(/*turbopackIgnore: true*/ local).size >= REPLICATE_LORA_FILE_MAX) return { ...l, hostedUrl: l.url };
   if (local) {
     onProgress?.(`Sending ${name} to ${target === "fal" ? "fal.ai" : "Replicate"} (once)`);
     const data = fs.readFileSync(/*turbopackIgnore: true*/ local);

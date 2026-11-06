@@ -53,8 +53,7 @@ async function refusedSubmit(status: number, body: unknown, asAccount: boolean) 
 
 const PARTNER_REFUSAL = { detail: [{ loc: ["body", "prompt"], msg: "Request rejected by the partner.", type: "content_policy_violation", url: "https://docs.fal.ai/errors#content_policy_violation" }] };
 
-// Skipped until the server side lands: src/server/providers/fal.ts describeError (each detail's type, a request's error_type) and src/lib/diagnose.ts (content_policy_violation). It fails without that change.
-describe.skip("fal.ai's error kinds are kept", () => {
+describe("fal.ai's error kinds are kept", () => {
   it("the owner's 422 names each error's type", async () => {
     const e = await refusedSubmit(422, PARTNER_REFUSAL, false);
     expect(e.message).toBe("fal 422: body.prompt: Request rejected by the partner. (content_policy_violation)");

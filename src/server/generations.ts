@@ -2669,6 +2669,19 @@ export const OWN_QUEUE = { scale: 1 };
 const OWN_QUEUE_CAP_MS = 2 * 60 * 60_000;
 
 /**
+ * Whether another of the account's runs on this provider has started there. fal.ai starts a key's jobs a few at a time
+ * (its concurrency limit: 2 on a new account, more as it buys credit) and keeps the others IN_QUEUE until one of those
+ * ends (fal.ai docs: Concurrency Limits): their place doesn't move meanwhile, but their queue does.
+ */
+function ownRunStarted(id: string, account: string, provider: string): boolean {
+  return !!db()
+    .prepare(
+      "SELECT 1 FROM generations g JOIN generation_runs t ON t.id = g.id WHERE g.id != ? AND g.provider = ? AND g.status = 'running' AND t.started_at IS NOT NULL AND json_extract(g.request_json, '$.account') = ? LIMIT 1",
+    )
+    .get(id, provider, account);
+}
+
+/**
  * The words a waiting run's tile shows, its wait kept with it (external_meta_json `heal`). False: it isn't waiting any more,
  * or this process no longer holds its turn (it stalled, and another took the wait over: that one's wait, and its mark of
  * a send, stay as they are).
@@ -2964,7 +2977,7 @@ const RESENT_WORDS = "Your GPU restarted, so we sent this run again";
 const resentRuns = () => (globalThis.__fuobeResent ??= new Set());
 
 /** What a poll can't wait out: a key refused, credit gone, no access; a GPU that wants a password or a sign-in. */
-const FINAL_AT_POLL: ReadonlySet<string> = new Set(["key-rejected", "key-balance", "key-permission", "gpu-password", "gpu-password-wrong", "gpu-sign-in", "address-local"]);
+const FINAL_AT_POLL: ReadonlySet<string> = new Set(["key-rejected", "key-balance", "key-permission", "provider-stopped", "gpu-password", "gpu-password-wrong", "gpu-sign-in", "address-local"]);
 
 /** How long an account's run's polls on its own GPU may keep failing before it stops (its key's provider: the run's own clock). */
 const POLL_HEAL_MS = { comfyui: 15 * 60_000 };
@@ -4175,8 +4188,11 @@ async function pollOne(r: Row): Promise<void> {
         )
         .run({ id: r.id, place, movedAt, busyWith: busyWith ?? null });
     }
+    // A job on the account's fal.ai key behind its own started jobs there waits for one of them to end, its place
+    // unmoved (ownRunStarted).
+    const ownAhead = ownQueue && !busyWith && r.provider === "fal" && res?.state === "queued" && ownRunStarted(r.id, own!, r.provider);
     // While a job runs ahead of it, that one job may take its own time (45 minutes) before the queue counts as stuck.
-    const stillMs = ownQueue && busyWith ? Math.max(queueMs, TIMEOUT_MS) : queueMs;
+    const stillMs = ownQueue && (busyWith || ownAhead) ? Math.max(queueMs, TIMEOUT_MS) : queueMs;
     const queueOver = ownQueue
       ? now - Math.max(run.submitted_at, movedAt) > stillMs * OWN_QUEUE.scale || now - run.submitted_at > OWN_QUEUE_CAP_MS * OWN_QUEUE.scale
       : now - run.submitted_at > queueMs;

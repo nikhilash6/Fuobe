@@ -49,8 +49,7 @@ async function refusedSubmit(type: string, asAccount: boolean) {
   return e;
 }
 
-// Skipped until the server side lands: src/server/providers/fal.ts describeError keeps a 403's type, and src/lib/diagnose.ts reads permission_denied and resource_restricted. It fails without that change.
-describe.skip("fal.ai's 403 keeps its reason", () => {
+describe("fal.ai's 403 keeps its reason", () => {
   it("the owner's error names it", async () => {
     const e = await refusedSubmit("permission_denied", false);
     expect(e.message).toBe("fal 403: Forbidden (permission_denied)");
