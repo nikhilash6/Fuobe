@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { Box } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,8 @@ export function usePlanPrice(plan: CinemaPlan): { cost: number | null; label: st
   const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
   // Free on the GPU says where it runs, like every other price on it.
-  const free = plan.model.engine === "open" ? "Free · your GPU" : "Free";
+  const openFree = useOpenFree();
+  const free = plan.model.engine === "open" ? openFree("Free · your GPU") : "Free";
   return { cost, demo, label: demo ? "Placeholder · free" : cost === 0 ? free : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown" };
 }
 

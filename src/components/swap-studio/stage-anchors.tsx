@@ -15,11 +15,12 @@ import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useMakeAnchor, useStopJob, useSwapEdit } from "./hooks";
-import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
+import { GenChip, JobError, Note, SavedText, usePriceText } from "./parts";
 import type { StageProps } from "./workbench";
 
 /** Make (with the engine's image edit) or import an anchor: the shot's scene anchor, or a segment's own reference. */
 export function AnchorMaker({ id, project, clip, shotId, segment, estimate }: Pick<StageProps, "id" | "project" | "clip" | "estimate"> & { shotId: string; segment?: SwapSegment }) {
+  const priceText = usePriceText();
   const make = useMakeAnchor(id);
   const importer = useSwapEdit(id);
   const engine = project.engine;

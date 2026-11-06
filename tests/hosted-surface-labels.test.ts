@@ -4,7 +4,7 @@ import { OWN_GPU_TOOL_HOSTED, OWN_GPU_TOOL_MESSAGE, ownGpuToolMessage } from "@/
 import { KEPT_RUN_WORDS, setupCardWords } from "@/lib/own-setup-card";
 import { answerPickModel, canPickModel, pickAnotherModel } from "@/lib/pick-model";
 import { placeOf } from "@/lib/place-name";
-import { runPlace } from "@/lib/run-place";
+import { openCheckPlace, openFreeWords, runPlace } from "@/lib/run-place";
 
 /*
  * What the site's GPUs can't run is a label, never a refusal (hosted runs on): the card a press on a labelled item opens
@@ -85,5 +85,34 @@ describe("the surfaces that don't run here yet", () => {
     expect(ownGpuToolMessage(false)).toBe(OWN_GPU_TOOL_MESSAGE);
     expect(ownGpuToolMessage(true)).toBe(OWN_GPU_TOOL_HOSTED);
     expect(OWN_GPU_TOOL_HOSTED).not.toMatch(/isn't available here/);
+  });
+});
+
+describe("a tool page's free words (4.7)", () => {
+  const site = (v: Parameters<typeof openCheckPlace>[0]) => openCheckPlace(v) !== null;
+  const account = { audience: "account" as const, gpu: false, hosted: true, preferPool: true };
+
+  it("an open run that goes to the site's GPUs is just Free: the page's place chip or price check says where", () => {
+    expect(openFreeWords("Free · your GPU", true)).toBe("Free");
+    expect(openFreeWords("Free on your GPU", true)).toBe("Free");
+    expect(openFreeWords("Free · on your GPU, about 20 GB", true)).toBe("Free");
+    expect(openFreeWords("Free · GPU", true)).toBe("Free");
+    expect(openFreeWords(" · free on your GPU", true)).toBe(" · free");
+    expect(openFreeWords("Free on your GPU · about 4 min", true)).toBe("Free · about 4 min");
+    // Prices and other words stay.
+    expect(openFreeWords("≈ $0.38", true)).toBe("≈ $0.38");
+    expect(openFreeWords("Placeholder · free", true)).toBe("Placeholder · free");
+  });
+
+  it("runs on the person's own GPU, the owner's, and every install with hosted runs off keep the page's words", () => {
+    expect(openFreeWords("Free · your GPU", false)).toBe("Free · your GPU");
+    expect(site(account)).toBe(true);
+    expect(site({ ...account, gpu: true })).toBe(true);
+    expect(site({ ...account, gpu: true, runOn: "gpu" })).toBe(false);
+    expect(site({ ...account, gpu: true, preferPool: false })).toBe(false);
+    expect(site({ ...account, gpu: true, preferPool: false, runOn: "site" })).toBe(true);
+    expect(site({ ...account, audience: "owner" })).toBe(false);
+    expect(site({ ...account, hosted: false })).toBe(false);
+    expect(site(null)).toBe(false);
   });
 });

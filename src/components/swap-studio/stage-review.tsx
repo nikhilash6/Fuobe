@@ -34,7 +34,8 @@ import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { decisionsHref, useAssemble, useSharpen, useStopJob } from "./hooks";
-import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
+import { GenChip, JobError, Note, SavedText, usePriceText } from "./parts";
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import type { StageProps } from "./workbench";
 
 const DECISIONS = Object.keys(DECISION_LABELS) as Decision[];
@@ -149,6 +150,8 @@ function FinishVersion({ take, gens, onUse }: { take: SwapTake; gens: Record<str
 
 /** Assemble → Finish: "Sharpen to 1080p / 2K / 4K" (runnable: the size, its price or GPU time, Run). */
 function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id" | "project" | "clip" | "gens" | "estimate">) {
+  const priceText = usePriceText();
+  const openFree = useOpenFree();
   const sharpen = useSharpen(id);
   // Your GPU's sharpen regenerates with Open-H3 Regenerate: a 48 GB card (own-setup.ts), said beside the title.
   const press = useOwnSetupPress();
@@ -174,7 +177,7 @@ function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id
   const seconds = est?.seconds ?? chosen.reduce((n, p) => n + (p.end - p.start) / SWAP_STUDIO.fps, 0);
   const cost = tier ? est?.costUsd[tier] : undefined;
   const problem = "problem" in found ? SHARPEN_COPY.none : !tier ? (options.find((o) => o.reason)?.reason ?? SHARPEN_COPY.small) : null;
-  const priceLine = engine === "open" ? (estimate?.demo ? priceText(0, { demo: true, engine }) : `Free on your GPU · ${gpuMinutes(seconds)}`) : priceText(cost, { demo: estimate?.demo, engine });
+  const priceLine = engine === "open" ? (estimate?.demo ? priceText(0, { demo: true, engine }) : openFree(`Free on your GPU · ${gpuMinutes(seconds)}`)) : priceText(cost, { demo: estimate?.demo, engine });
   const join = joinNote(film);
   const shownTier = tier ?? (engine === "cloud" ? "2K" : "1080p");
   // Why a size can't be picked, said under the picker (a turned-off button can't take focus or show a tooltip on touch).
@@ -321,6 +324,7 @@ export function ReviewStage(props: StageProps) {
 
 /** Assemble: the chosen takes over the original timeline with the clip's own sound, and Finish (Sharpen). */
 export function AssembleStage({ id, project, clip, gens, estimate }: StageProps) {
+  const priceText = usePriceText();
   const assemble = useAssemble(id);
   const stop = useStopJob(id);
   const found = assemblyPieces(project, clip);

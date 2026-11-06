@@ -14,13 +14,14 @@ import type { PixelPoint } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useMakeMask, useStopJob } from "./hooks";
-import { GenChip, grabFrame, JobError, Note, priceText } from "./parts";
+import { GenChip, grabFrame, JobError, Note, usePriceText } from "./parts";
 import type { StageProps } from "./workbench";
 
 const WORDS = { positive: "include", negative: "exclude", ask: "Click the person to swap", frame: "The shot's frame" };
 
 /** Who to swap: SAM 3.1's words and pick, clicks on any frame of the shot, Track shot / Update frame, mask versions to approve. */
 export function WhoStage({ id, project, clip, shot, gens, estimate, edit, src }: StageProps) {
+  const priceText = usePriceText();
   const make = useMakeMask(id);
   const stop = useStopJob(id);
   const [at24, setAt24] = useState(0);

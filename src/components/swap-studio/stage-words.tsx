@@ -10,7 +10,7 @@ import { Panel } from "@/components/av/tool-shell";
 import { buildShotPrompt, ROLE_LABELS, secondsLabel, shotDialogue, shotSpeaker, SWAP_STUDIO, voiceLabel, voicesOf, type SwapRole } from "@/lib/catalog/swap-studio";
 import { toastError } from "@/lib/refusals";
 import { useTranscribe } from "./hooks";
-import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
+import { GenChip, JobError, Note, SavedText, usePriceText } from "./parts";
 import type { StageProps } from "./workbench";
 
 const ROLES = Object.keys(ROLE_LABELS) as SwapRole[];
@@ -36,6 +36,7 @@ function RoleSelect({ value, onChange, label, auto }: { value: SwapRole | null; 
 
 /** Words: the clip's transcript (both engines' speech to text), who each voice is, and each shot's speaker, words and prompt. */
 export function WordsStage({ id, project, clip, gens, estimate, edit }: StageProps) {
+  const priceText = usePriceText();
   const transcribe = useTranscribe(id);
   // "Clean the voice first": on for the clip's speech on your GPU, off in the cloud (a paid step there).
   const voiceFirstShown = useVoiceFirstShown(true);

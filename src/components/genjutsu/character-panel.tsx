@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
 import { AudioLines, Cpu, Drama, Loader2, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
@@ -101,6 +102,7 @@ export function CharacterControls({
   /** "Clean the voice first" for that transcription (shown when given). */
   voiceFirst?: { on: boolean; onChange: (on: boolean) => void; seconds?: number };
 }) {
+  const openFree = useOpenFree();
   const set = (patch: Partial<CharacterOptions>) => onChange({ ...value, ...patch });
   const h3 = !!maker?.h3;
   // Each engine's sizes (the cloud has no 1080p); a size the other engine offered shows as the swap's own.
@@ -163,7 +165,7 @@ export function CharacterControls({
       )}
 
       {h3 && (
-        <Field label="Quality" hint={qualityShort(engine, shown)}>
+        <Field label="Quality" hint={openFree(qualityShort(engine, shown))}>
           <Segmented
             label="Quality"
             value={shown}
@@ -173,7 +175,7 @@ export function CharacterControls({
           />
           {/* Your GPU's 1080p / 2K / 4K regenerate with Open-H3 Regenerate: a 48 GB card, and the choice says so. */}
           {engine === "open" && characterFinish(shown) && <OwnSetupChip setup="regenerate:swap-sharpen" />}
-          {characterFinish(shown) && <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{qualityHint(engine, shown)}</p>}
+          {characterFinish(shown) && <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{openFree(qualityHint(engine, shown))}</p>}
           {offReasons.length > 0 && (
             <p id="character-quality-off" className="text-[12px] leading-snug text-pretty text-muted-foreground">
               {offReasons.map((o) => `${o.q}: ${o.reason}.`).join(" ")}

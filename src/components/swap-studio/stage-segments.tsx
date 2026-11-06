@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useQueue, useStopJob, useStopTake } from "./hooks";
 import { AnchorGrid, AnchorMaker } from "./stage-anchors";
-import { JobChip, Note, NumberField, priceText, SavedText } from "./parts";
+import { JobChip, Note, NumberField, SavedText, usePriceText } from "./parts";
 import type { StageProps } from "./workbench";
 
 const STATE_TEXT: Record<SegmentState["status"], string> = { ready: "Current", stale: "Out of date", empty: "No take yet" };
@@ -165,6 +165,7 @@ function TakeRow({
 }
 
 function SegmentCard(props: StageProps & { shot: SwapShot; seg: SwapSegment; index: number; state: SegmentState; count: number }) {
+  const priceText = usePriceText();
   const { id, project, clip, shot, seg, index, state, gens, estimate, edit } = props;
   const queue = useQueue(id);
   const stopTake = useStopTake(id);
@@ -352,6 +353,7 @@ function SegmentCard(props: StageProps & { shot: SwapShot; seg: SwapSegment; ind
 
 /** Segments: the shot's layout (5/10/15 s, split, merge, move), each segment's settings, queueing, and its takes. */
 export function SegmentsStage(props: StageProps) {
+  const priceText = usePriceText();
   const { id, project, clip, shot, estimate, edit } = props;
   const queue = useQueue(id);
   const [splitAt, setSplitAt] = useState<number | null>(null);

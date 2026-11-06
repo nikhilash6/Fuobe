@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { AlertTriangle, Info, Loader2 } from "lucide-react";
 import { useId, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -81,9 +82,10 @@ export const usd = (n: number) => (n >= 10 ? `$${n.toFixed(0)}` : `$${n.toFixed(
  * the viewer's own GPU (an account's own ComfyUI), free.
  */
 export function EstimateLine({ data, loading, engine, className, quiet }: { data: EstimateResult | undefined; loading?: boolean; engine: Engine; className?: string; quiet?: boolean }) {
+  const openFree = useOpenFree();
   const [open, setOpen] = useState(false);
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
-  const price = data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
+  const price = data.demo ? "Placeholder · free" : engine === "open" ? openFree("Free · your GPU") : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
   const parts = Object.entries(data.estimate.parts).filter(([, v]) => (v ?? 0) > 0) as [StepPart, number][];
   const notes = !data.error ? (data.notes ?? []) : [];
   return (

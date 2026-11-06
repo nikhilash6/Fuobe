@@ -3,7 +3,7 @@
 import { Cloud, Cpu, Lock, MonitorPlay, Server } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { openAddKey } from "@/components/keys/your-keys";
 import { useOwnSetupPress } from "@/components/own-setup";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { CONNECT_GPU_EVENT, signInHref, useHydrated, useStatus, useViewer } from
 import { formatCost } from "@/lib/format";
 import { placeOf, type Place } from "@/lib/place-name";
 import { quoteBody, useHostedQuote, useSettled } from "@/lib/hosted";
-import { checkedPool, openCheckPlace, placeRows, runPlace, type RunAudience, type RunOnPick, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, openCheckPlace, openFreeWords, placeRows, runPlace, type RunAudience, type RunOnPick, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
 import { useSetRunOn } from "@/lib/run-on";
 import { cn } from "@/lib/utils";
 import { chipBase, chipIdle } from "./chip";
@@ -46,6 +46,15 @@ export function useRunViewer(): { audience: RunAudience; gpu: boolean; hosted: b
     payer: keys.includes("fal") ? "fal" : (keys[0] ?? null),
     place: placeOf(status?.viewer?.hosted ? status.viewer.placeName : null),
   };
+}
+
+/**
+ * A tool page's own "free on your GPU" words as this viewer reads them (openFreeWords): just "Free" while its open runs
+ * go to this studio's GPUs; the page's words otherwise (hosted runs off, the owner, runs on the person's own GPU).
+ */
+export function useOpenFree(): (text: string) => string {
+  const site = openCheckPlace(useRunViewer()) !== null;
+  return useCallback((text: string) => openFreeWords(text, site), [site]);
 }
 
 /** The place and price for this viewer (null until the viewer is known). */

@@ -32,6 +32,8 @@ import {
 } from "@/lib/catalog/turnaround";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
+import { toolPoolPrice } from "@/lib/run-place";
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
 
@@ -166,6 +168,7 @@ function Thumb({ url, className }: { url?: string; className?: string }) {
 
 function TurnaroundForm({ pictures, name, realPerson: realDefault = false, elementId, engine: fixedEngine, onRun, title, flyAround, fictional, route: startRoute, onStarted }: Props & { onStarted: (run: Run) => void }) {
   const [appEngine, setAppEngine, engineMode] = useEngine();
+  const openFree = useOpenFree();
   const engine = fixedEngine ?? appEngine;
   // The note about your GPU is for the studio's own install with both engines: guests and accounts run in the cloud.
   const visitor = useLikelyVisitor();
@@ -234,7 +237,8 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     if (k === "sheet") setSheet(url);
     else setViews((v) => ({ ...v, [k]: url }));
   };
-  const price = !p ? "" : p.demo ? "Placeholder · free" : engine === "open" ? `Free · on your GPU${p.gpuGb ? `, about ${p.gpuGb} GB` : ""}` : p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "";
+  // On this studio's GPUs: the service's price and the place in line ("Free · your GPU" is for the person's own GPU).
+  const price = toolPoolPrice(p)?.text ?? openFree(!p ? "" : p.demo ? "Placeholder · free" : engine === "open" ? `Free · on your GPU${p.gpuGb ? `, about ${p.gpuGb} GB` : ""}` : p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "");
   const heading = headingOf({ title, flyAround, name });
 
   return (

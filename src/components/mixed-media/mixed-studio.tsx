@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
 import type { OriginalSound } from "@/lib/av/original-sound";
 import { ArrowDown, Cloud, Cpu, Download, ImageIcon, Info, Loader2, Search, Sparkles, Wand2, X } from "lucide-react";
@@ -153,6 +154,7 @@ export function MixedStudio({
 }
 
 function How({ onStart, cloud, reveal }: { onStart: () => void; cloud: boolean; reveal?: StudioExampleRow }) {
+  const openFree = useOpenFree();
   return (
     <div className="mx-auto max-w-[920px] pt-10">
       <h2 className="text-center font-heading text-[34px] leading-tight">How it works</h2>
@@ -173,7 +175,7 @@ function How({ onStart, cloud, reveal }: { onStart: () => void; cloud: boolean; 
         <p className="font-medium text-foreground">Cost</p>
         <p className="mt-1">
           A render is counted in frames: seconds × frame rate (10 s at 8 fps = 80 frames; at most 240). Fuobe Mixed Media draws every frame again in the
-          look, free on your GPU
+          look, {openFree("free on your GPU")}
           {cloud ? ", or in the cloud at about a cent a frame. Nano Banana 2.1 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
           first frame in the look, then every frame follows it{cloud ? ", priced per second. Fast restyles the clip in one pass, priced by the model" : ""}. You see
           the estimate before you generate.
@@ -317,6 +319,7 @@ function Editor({
   /** Whether a clip is loaded (the phone bar says what's next). */
   onClip?: (has: boolean) => void;
 }) {
+  const openFree = useOpenFree();
   const source = useSourceClip(MIXED.maxBytes);
   const { clip } = source;
   const hasClip = !!clip;
@@ -551,7 +554,7 @@ function Editor({
 
       <Field
         label="Restyle"
-        hint={frameMode ? `Every frame drawn again${cloud ? " · priced per frame" : " · free on your GPU"}` : smooth ? `First frame, then carried through${cloud ? " · priced per second" : " · free on your GPU"}` : "One video-to-video pass · priced by the model"}
+        hint={frameMode ? `Every frame drawn again${cloud ? " · priced per frame" : openFree(" · free on your GPU")}` : smooth ? `First frame, then carried through${cloud ? " · priced per second" : openFree(" · free on your GPU")}` : "One video-to-video pass · priced by the model"}
       >
         <Segmented<MixedMode> label="Restyle" value={mode} onChange={setMode} options={MODE_OPTIONS.filter((o) => MIXED_MODES[engine].includes(o.value))} />
       </Field>

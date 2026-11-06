@@ -1,5 +1,7 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
+import { toolPoolPrice } from "@/lib/run-place";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import type { CameraKey } from "@/lib/camera-path";
@@ -56,6 +58,7 @@ export function flyPrice(p: FlyAroundPreview | undefined, compact = false): stri
 /** A fly-around's live price (enabled while `body` is set) and its run, which puts the new cards in the feeds. */
 export function useFlyAround(body: FlyAroundBody | null) {
   const qc = useQueryClient();
+  const openFree = useOpenFree();
   const preview = useQuery({
     queryKey: ["fly-around-preview", body],
     queryFn: () => post<FlyAroundPreview>("/api/fly-around?preview=1", body),
@@ -74,5 +77,6 @@ export function useFlyAround(body: FlyAroundBody | null) {
     },
     onError: (e) => toastError(e),
   });
-  return { preview, run, price: flyPrice(preview.data), compactPrice: flyPrice(preview.data, true) };
+  // On this studio's GPUs: the service's price and the place in line ("Free · your GPU" is for the person's own GPU).
+  return { preview, run, price: toolPoolPrice(preview.data)?.text ?? openFree(flyPrice(preview.data)), compactPrice: openFree(flyPrice(preview.data, true)) };
 }

@@ -1,13 +1,24 @@
 "use client";
 
+import { useCallback } from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, CircleSlash, Loader2, Pause } from "lucide-react";
 import { openVideo, releaseVideo, sampleFrames } from "@/components/av/frame-sampler";
 import { frameFromBlob, type Frame } from "@/components/remove-object/frame-stage";
 import { jobState, type GenSummary, type JobStatus } from "@/lib/catalog/swap-studio";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { useOpenFree } from "@/components/studio/run-place-chip";
 
 /** Small pieces shared by Character Swap Studio's stages. */
+
+/**
+ * priceText as this viewer reads it: "Free" while its open runs go to this studio's GPUs ("Free · your GPU" is for the
+ * person's own GPU).
+ */
+export function usePriceText(): typeof priceText {
+  const openFree = useOpenFree();
+  return useCallback((costUsd: number | null | undefined, o: { demo?: boolean; engine: Engine }) => openFree(priceText(costUsd, o)), [openFree]);
+}
 
 /** "≈ $0.38", "Free · your GPU", "Placeholder · free", "Price unknown". */
 export function priceText(costUsd: number | null | undefined, o: { demo?: boolean; engine: Engine }): string {

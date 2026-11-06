@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { decisionsHref, useAddClip, usePrepareClip, useSwapEdit, useSwapEstimate, useSwapProject, type EditInput } from "./hooks";
-import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
+import { GenChip, JobError, Note, SavedText, usePriceText } from "./parts";
 import { AnchorsStage } from "./stage-anchors";
 import { AssembleStage, ReviewStage } from "./stage-review";
 import { SegmentsStage } from "./stage-segments";
@@ -202,6 +202,7 @@ export function SwapWorkbench({ id }: { id: string }) {
 }
 
 function ProjectPanel({ project, estimate, edit }: { project: SwapProject; estimate: StudioEstimate | undefined; edit: StageProps["edit"] }) {
+  const priceText = usePriceText();
   const nameId = useId();
   return (
     <Panel title="Project">

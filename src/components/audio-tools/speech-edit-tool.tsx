@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { AudioLines, Clapperboard, Cpu, Download, FileVideo, Library, Loader2, Mic2, RotateCcw, Sparkles, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { nanoid } from "nanoid";
@@ -270,6 +271,7 @@ function EffectOptions({ effect, onChange }: { effect: SpeechEffect; onChange: (
  * GPU, when the label leaves; left out, the static entry.
  */
 export function SpeechEditTool({ setup }: { setup?: OwnSetup | null } = {}) {
+  const openFree = useOpenFree();
   const item = setup === undefined ? OWN_SETUP : setup;
   const [engine, setEngine, mode] = useEngine();
   // A guest or an account: its own setup's label beside the title (after hydration, so it matches the server HTML),
@@ -427,7 +429,7 @@ export function SpeechEditTool({ setup }: { setup?: OwnSetup | null } = {}) {
         {source && engine === "open" && !cues && (
           <Panel title="1 · Transcribe">
             <div className="flex flex-wrap items-center gap-3">
-              <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">Fuobe writes down what was said, line by line, so you can change it like text. Free on your GPU.</p>
+              <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">Fuobe writes down what was said, line by line, so you can change it like text. {openFree("Free on your GPU.")}</p>
               <Button className="rounded-full" onClick={transcribe} disabled={!ready || transcribing}>
                 {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Transcribe
               </Button>

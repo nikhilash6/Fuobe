@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { AudioLines, Check, Loader2, Mic, RotateCcw, Save, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -127,6 +128,7 @@ function Take({ g, index, description, line, canSave }: { g: Generation; index: 
 }
 
 export function DesignVoiceTool() {
+  const openFree = useOpenFree();
   const [engine, setEngine, mode] = useEngine();
   const visitor = useIsVisitor();
   const create = useCreateGeneration();
@@ -143,7 +145,7 @@ export function DesignVoiceTool() {
   const model = modelId ? getModel(modelId) : undefined;
   const blocker = designBlocker(key, engine) ?? (!description ? "Describe the voice, or pick a few chips" : !line.trim() ? "Write a line for it to say" : null);
   const usd = model ? stepCostUsd(model, { feature: VOICE_FEATURE, modelId: model.id, prompt: line }) : null;
-  const price = money(engine, usd === null ? null : usd * VOICE_TAKES);
+  const price = openFree(money(engine, usd === null ? null : usd * VOICE_TAKES));
 
   const all = useGenerations({ features: [VOICE_FEATURE], limit: 24 });
   const takes = useMemo(() => {

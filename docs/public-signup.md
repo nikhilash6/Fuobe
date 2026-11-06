@@ -713,6 +713,10 @@ With it on:
 - A run on this install's GPUs that failed on the person's own files ("A clip or sound in this run couldn't be read.",
   "This run couldn't finish with these files or settings.") offers **Reuse** first (the draft comes back to change),
   and Retry second.
+- Tool pages (Cinema, Turnaround, Fly-around, Character Swap Studio, Faceless, Content Factory, Genjutsu, Mixed
+  Media, Speech edit, Design a voice) say "Free" for an open run that goes to this install's GPUs, and show that
+  run's price and wait where their price check gives it (`toolPoolPrice`). "Free · your GPU" stays for runs that go
+  to the person's own GPU (`openFreeWords` in `src/lib/run-place.ts`).
 - When a billing service names the models that may run on the studio's GPUs, that applies to every model a run uses,
   not only its main one.
 - An account can upload pictures for these runs. Clips and sound go to the workers only when the install allows them

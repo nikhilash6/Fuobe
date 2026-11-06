@@ -272,6 +272,20 @@ export function openCheckPlace(
 }
 
 /**
+ * A tool page's own words for a free open-model run ("Free · your GPU", "Free on your GPU, about 20 GB", "free on your
+ * GPU"), as a viewer whose open runs go to this studio's GPUs reads them (`site`: hosted runs on and openCheckPlace
+ * names a place): "Free", with no place, since the page's place chip or price check says where. Runs that go to the
+ * person's own GPU, the owner's, and every install with hosted runs off keep the page's words.
+ */
+export function openFreeWords(text: string, site: boolean): string {
+  if (!site) return text;
+  return text
+    .replace(/\bFree(?: ·)?(?: on)? your GPU(?:, about \d+ GB)?/g, "Free")
+    .replace(/\bfree(?: ·)?(?: on)? your GPU\b/g, "free")
+    .replace(/\bFree · GPU\b/g, "Free");
+}
+
+/**
  * A run's request to send again (Retry): with hosted runs on, to the place it ran, named, so it never moves (a run on this
  * studio's GPUs stays there, one on the person's own GPU or key stays there), whatever the account's pick says now.
  * Hosted runs off: the request as it was.

@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { AlertTriangle, Check, ChevronDown, Copy, Film, Info, Loader2, Pencil, RotateCcw, Sparkles, Terminal, X } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -299,10 +300,11 @@ export function PresetTile({ p, on, tabStop, onPick }: { p: StylePreset; on: boo
  * "≈ $4.20 · 3 episodes × $1.40" / "Placeholder · free" / "Free · your GPU", with the research's pricing note.
  */
 export function SeriesPriceLine({ data, loading, engine, className }: { data: SeriesEstimate | undefined; loading?: boolean; engine: Engine; className?: string }) {
+  const openFree = useOpenFree();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
   const p = data.price;
   const each = p.episodes > 1 ? ` · ${p.episodes} × ${usd(p.perEpisode)}` : "";
-  const price = data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
+  const price = data.demo ? "Placeholder · free" : engine === "open" ? openFree("Free · your GPU") : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
   return (
     <span className={cn("inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5", className)}>
       <Popover>

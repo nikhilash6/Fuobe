@@ -1,5 +1,6 @@
 "use client";
 
+import { useOpenFree } from "@/components/studio/run-place-chip";
 import { Box, Clapperboard, Layers, Loader2, Plus, RotateCcw, Trash2, Upload, Volume2, VolumeX } from "lucide-react";
 import { nanoid } from "nanoid";
 import Link from "next/link";
@@ -185,6 +186,7 @@ export interface BlockoutPanelProps {
 
 export function BlockoutPanel(props: BlockoutPanelProps) {
   const { open, onOpenChange, projectId, folderId, engine, settings, brief, context, draft, setDraft, onBuild } = props;
+  const openFree = useOpenFree();
   const generate = useCinemaGenerate(projectId);
   const status = useStatus().data;
   const demo = placeholdersOn(status?.demoMode);
@@ -204,7 +206,7 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
   const seconds = s?.seconds ?? 0;
   const set = (patch: Partial<BlockoutDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const cost = plan.costUsd;
-  const price = demo ? "Placeholder · free" : cost === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  const price = demo ? "Placeholder · free" : cost === 0 ? (engine === "open" ? openFree("Free · your GPU") : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
   const model = getModel(engine === "cloud" ? draft.modelId : BLOCKOUT_MODELS.open);
   const resolutions = engine === "cloud" ? (getModel(draft.modelId)?.options.resolutions ?? []) : ["480p", "720p"];
   const resolution = draft.resolution && resolutions.some((r) => r.toLowerCase() === draft.resolution!.toLowerCase()) ? draft.resolution : (engine === "cloud" ? getModel(draft.modelId)?.defaults?.resolution : "480p");
