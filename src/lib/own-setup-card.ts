@@ -6,7 +6,7 @@ import type { Place } from "./place-name";
  * your own GPU · 48 GB", "Use your own fal.ai key"): what it needs, and the way there. A guest reads how signing up
  * leads there, never that the run starts once signed in (nothing can start before the GPU or key exists); an account
  * reads how connecting its GPU runs it. Both read that everything else runs on the place (`place`: the name visitors
- * read for this install's GPUs). Pure: tests/own-setup-card.test.ts.
+ * read for this install's GPUs). Pure: tests/hosted-surface-labels.test.ts.
  */
 
 /** What a GPU item needs, as a sentence's object: "a GPU with 48 GB of memory", "a Linux computer with …". */
