@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Heart, Layers, MoreHorizontal, Pin, RotateCcw } from "lucide-react";
+import { Check, ChevronDown, Heart, Layers, Loader2, MoreHorizontal, Pin, RotateCcw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { tileRatio } from "@/components/studio/feed";
 import { TileActions, useCanHover, type RunnerOptions } from "@/components/studio/result-actions";
@@ -9,7 +9,7 @@ import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
 import { elapsed, timeAgo } from "@/lib/format";
 import { cardStateWords, coverOf, trashDaysLeft, userTitle, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
-import { lineWords } from "@/lib/pool-line";
+import { pendingWords } from "@/lib/pending-words";
 import { POOL_WORDS } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { PlaceholderChip } from "@/components/demo-mode";
@@ -63,14 +63,18 @@ export function StatusCover({ g, small, actionable }: { g: Generation; small?: b
   const pool = g.place === "pool";
   if (g.status === "queued" || g.status === "running") {
     const pct = g.progress != null ? Math.round(g.progress * 100) : null;
-    const label = pool ? (g.status === "queued" ? (g.queue ? lineWords(g.queue) : POOL_WORDS.inLine) : (g.message ?? POOL_WORDS.working)) : (g.message ?? (g.status === "queued" ? "Queued" : "Generating…"));
+    const { label, place } = pendingWords(g);
     const waiting = g.status === "queued" ? g.waiting : undefined;
     return (
       <div className="relative size-full bg-muted">
         <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
         {!small && (
           <div className="absolute inset-x-0 bottom-0 space-y-1 p-3">
-            <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{label}</p>
+            <p className="flex items-center gap-1.5 text-[13px] font-medium">
+              <Loader2 aria-hidden data-run-spinner className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+              <span className="shimmer-text animate-shimmer-text truncate">{label}</span>
+            </p>
+            {place && <p className="truncate text-[11px] text-muted-foreground">{place}</p>}
             <p className="font-mono text-[11px] text-muted-foreground">
               {pct != null ? `${pct}% · ` : ""}
               {elapsed(g.createdAt)}

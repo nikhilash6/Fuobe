@@ -1,8 +1,8 @@
 "use client";
 
-import { Cloud, Copy, Cpu, Download, FolderDown, Heart, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { Cloud, Copy, Cpu, Download, FolderDown, Heart, Loader2, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { lineWords } from "@/lib/pool-line";
+import { pendingWords } from "@/lib/pending-words";
 import { refreshPriceChecks } from "@/lib/hosted";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
@@ -91,13 +91,7 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // so a refusal for runs going (or the line's wait) doesn't outlast it.
   const qc = useQueryClient();
   useEffect(() => (pool ? () => refreshPriceChecks(qc) : undefined), [pool, qc]);
-  const label = pool
-    ? inLine
-      ? g.queue
-        ? lineWords(g.queue)
-        : POOL_WORDS.inLine
-      : (g.message ?? POOL_WORDS.working)
-    : ((local && jobWords(local.job, g.kind, g.message ?? undefined, local.comfy)) ?? (g.status === "queued" ? (g.message ?? "Queued") : (g.message ?? "Generating…")));
+  const { label, place } = pendingWords(g, local && jobWords(local.job, g.kind, g.message ?? undefined, local.comfy));
   const steps = local ? jobFraction(local.job) : null;
   const saving = local && (local.job.phase === "saving" || local.job.phase === "done");
   const fraction = local ? (saving ? null : steps) : inLine ? null : g.progress;
@@ -136,9 +130,16 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
       )}
       <div className={cn("absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3", frame && "bg-gradient-to-t from-background/85 to-transparent pt-8")}>
         <div className="min-w-0">
-          <p title={label} className="shimmer-text animate-shimmer-text line-clamp-2 text-[13px] font-medium">
-            {label}
+          {/* Always a sign it is on its way (a turning ring), with the run's own words beside it. */}
+          <p title={label} className="flex items-start gap-1.5 text-[13px] font-medium">
+            <Loader2 aria-hidden data-run-spinner className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+            <span className="shimmer-text animate-shimmer-text line-clamp-2">{label}</span>
           </p>
+          {place && (
+            <p title={place} className="line-clamp-2 text-[11px] text-muted-foreground">
+              {place}
+            </p>
+          )}
           {where && (
             <p title={where} className="line-clamp-2 text-[11px] text-muted-foreground">
               {where}
