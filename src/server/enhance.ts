@@ -20,7 +20,16 @@ Rules:
 - For edits (an input image is attached), write an instruction that says what to change and what to keep.
 - One paragraph, under 90 words, no preamble, no quotes around the answer, no lists.`;
 
-function instruction(prompt: string, kind: MediaKind, op: Operation): string {
+/**
+ * What the model a rewrite is for does by itself. ownStyle: it puts its own look on whatever the prompt describes (fal's H3
+ * Max looks, whose prompt field says "Describe the scene, action, camera and sound. The … style is applied automatically."),
+ * so the rewrite names no style, light, lens or film look, as Soul's enhancer does.
+ */
+export interface EnhanceHints {
+  ownStyle?: boolean;
+}
+
+function instruction(prompt: string, kind: MediaKind, op: Operation, hints: EnhanceHints = {}): string {
   const what =
     op === "edit" || op === "inpaint"
       ? "an image-editing instruction"
@@ -29,7 +38,10 @@ function instruction(prompt: string, kind: MediaKind, op: Operation): string {
           ? "a text-to-video prompt"
           : "an image-to-video motion prompt (the first frame is already given; focus on motion and camera)"
         : "a text-to-image prompt";
-  return `Rewrite this as ${what}:\n\n${prompt}`;
+  const own = hints.ownStyle
+    ? "\n\nThe model applies its own visual style. Describe only the scene, the action, the camera and the sounds. Name no art style, lighting, lens or film look."
+    : "";
+  return `Rewrite this as ${what}:\n\n${prompt}${own}`;
 }
 
 /** A picture for a model that can see (Content Factory's reference frames): JPEG, PNG, GIF or WebP. */
@@ -155,9 +167,13 @@ export async function llmSeesImages(o: { ollamaOnly?: boolean } = {}): Promise<b
 }
 
 /** Deterministic fallback so the toggle always does something useful offline. */
-export function heuristicEnhance(prompt: string, kind: MediaKind, op: Operation): string {
+export function heuristicEnhance(prompt: string, kind: MediaKind, op: Operation, hints: EnhanceHints = {}): string {
   const p = prompt.trim().replace(/[.\s]+$/, "");
   if (op === "edit" || op === "inpaint") return `${p}. Keep everything else unchanged: identity, pose, framing, lighting and background.`;
+  // A model with its own look gets motion and camera only: Fuobe's light, lens and film look would fight it.
+  if (kind === "video" && hints.ownStyle) {
+    return op === "t2v" ? `${p}. Natural motion, smooth camera movement.` : `${p}. Natural, fluid motion that stays consistent with the first frame, smooth camera movement.`;
+  }
   if (kind === "video") {
     return op === "t2v"
       ? `${p}. Cinematic shot, natural motion, smooth camera movement, realistic physics, soft volumetric light, shallow depth of field, rich detail, 24fps film look.`
@@ -213,8 +229,8 @@ export function trimLyrics(words: string, max: number): string {
   return out.length > max ? out.slice(0, max).trimEnd() : out;
 }
 
-export async function enhancePrompt(prompt: string, kind: MediaKind, op: Operation): Promise<string> {
-  return (await llmText(SYSTEM, instruction(prompt, kind, op))) ?? heuristicEnhance(prompt, kind, op);
+export async function enhancePrompt(prompt: string, kind: MediaKind, op: Operation, hints: EnhanceHints = {}): Promise<string> {
+  return (await llmText(SYSTEM, instruction(prompt, kind, op, hints))) ?? heuristicEnhance(prompt, kind, op, hints);
 }
 
 /**

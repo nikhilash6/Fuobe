@@ -1094,13 +1094,13 @@ export function useClipFacts(url: string | undefined) {
   });
 }
 
-export async function enhance(prompt: string, kind: MediaKind, op: string): Promise<string> {
+export async function enhance(prompt: string, kind: MediaKind, op: string, modelId?: string): Promise<string> {
   return (
     await json<{ prompt: string }>(
       await fetch("/api/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, kind, op }),
+        body: JSON.stringify({ prompt, kind, op, modelId }),
       }),
     )
   ).prompt;

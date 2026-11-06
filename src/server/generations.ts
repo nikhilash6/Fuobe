@@ -130,6 +130,7 @@ import { fitStill } from "./fit-still";
 import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
+import { appliesOwnStyle } from "@/lib/catalog/applied-style";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
 import { finishTask, pathOnWorker, poolFinishes3d, startWorkerModelFinish, stopWorkerFinish } from "./computer/finish";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
@@ -3462,7 +3463,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
         // Soul: only the user's words are expanded (60–120 words of subject, wardrobe, place, light); the look stays as it is.
         const longer = await enhanceSoulWords(words).catch(() => words);
         prompt = prompt.slice(0, at) + longer + prompt.slice(at + words.length);
-      } else prompt = await enhancePrompt(prompt, plan.model.kind, plan.op).catch(() => prompt);
+      } else prompt = await enhancePrompt(prompt, plan.model.kind, plan.op, { ownStyle: appliesOwnStyle(route) }).catch(() => prompt);
       update(id, { prompt });
     }
     // Ideogram 4 reads a JSON caption (src/lib/ideogram-caption.ts): one given as the prompt (a reused run) is kept, plain

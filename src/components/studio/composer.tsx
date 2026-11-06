@@ -1021,7 +1021,7 @@ export function Composer({ docked }: { docked: boolean }) {
     if (!draft.prompt.trim()) return toast("Write a short idea first, then enhance it");
     setEnhancing(true);
     try {
-      const p = await enhance(draft.prompt, config.kind, op ?? (config.kind === "video" ? "t2v" : "t2i"));
+      const p = await enhance(draft.prompt, config.kind, op ?? (config.kind === "video" ? "t2v" : "t2i"), draft.modelId);
       setDraft({ prompt: p });
     } catch (e) {
       toastError(e);
