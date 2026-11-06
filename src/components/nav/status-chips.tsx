@@ -2,23 +2,26 @@
 
 import dynamic from "next/dynamic";
 import { cloneElement } from "react";
-import { Cpu } from "lucide-react";
+import { ChevronDown, Cpu, KeyRound, Server } from "lucide-react";
 import { PlaceholdersOnChip } from "@/components/demo-mode";
 import { IntentLink } from "@/components/intent-link";
 import { awayFix, openConnect, useComputerSupport } from "@/components/gpu/open-connect";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { useHadItems } from "@/components/use-had-items";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ownGpuOf, signInHref, useEngineMode, useHydrated, useStatus, useViewer, type EngineMode, type StatusInfo } from "@/lib/api";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { shortState } from "@/lib/diagnose";
 import { safeLink, useInterest } from "@/lib/hosted";
 import type { ViewerKind } from "@/lib/nav-model";
+import { barRuns, type BarRuns, type RunOnPick } from "@/lib/run-place";
+import { useSetRunOn } from "@/lib/run-on";
 import { cn } from "@/lib/utils";
-import { MENU_ROW_1, NavMenuItem } from "./nav-row";
+import { MENU_HEADING, MENU_ROW_1, MENU_ROW_2, NavMenuItem, ROW_LINE, ROW_NAME } from "./nav-row";
 
 /*
  * What the sidebar's footer said about GPUs, keys and balance, moved here unchanged in what it says and to whom: the
@@ -144,12 +147,13 @@ export function refillWords(at: number, now = Date.now()): string {
  * The balance's menu items (a studio with a billing service, src/server/billing.ts): the service's own words for what
  * the account has left, its detail lines, its links, its offer, and the way to run for free on one's own GPU or keys.
  */
-function BalanceItems({ viewer }: { viewer: Viewer }) {
+function BalanceItems({ viewer, runs }: { viewer: Viewer; runs?: BarRuns }) {
   const b = viewer.balance!;
   const interest = useInterest();
   const action = safeLink(b.action?.url);
   return (
     <>
+      {runs && <RunsChoice viewer={viewer} runs={runs} />}
       <DropdownMenuLabel className="px-2.5 text-[12px] font-normal text-muted-foreground">{b.text}</DropdownMenuLabel>
       {b.detail.map((d, i) => (
         <div key={i} className="flex justify-between gap-3 px-2.5 py-1 text-[12px]">
@@ -191,40 +195,110 @@ function BalanceItems({ viewer }: { viewer: Viewer }) {
  */
 export const balanceGoes = (b: Pick<NonNullable<Viewer["balance"]>, "amount" | "refillAt" | "offer" | "action">): boolean => b.amount > 0 || (!b.refillAt && !b.offer && !b.action);
 
-function balanceLabel(viewer: Viewer): { chip: string; refill: string | null } {
+function balanceLabel(viewer: Viewer): { refill: string | null; runs: BarRuns } {
   const b = viewer.balance!;
-  return { chip: b.chip, refill: b.refillAt ? refillWords(b.refillAt) : null };
+  const refill = b.refillAt ? refillWords(b.refillAt) : null;
+  return { refill, runs: barRuns(viewer, b.chip, refill) };
+}
+
+const RUNS_ICON: Record<RunOnPick, typeof Cpu> = { site: Server, gpu: Cpu, key: KeyRound };
+
+/** Green while runs go where they are sent: the balance has some (or runs are free), its GPU answers, or its key. */
+const runsGo = (viewer: Viewer, on: RunOnPick): boolean => (on === "site" ? balanceGoes(viewer.balance!) : on === "gpu" ? !!viewer.gpu.online : true);
+
+/** The menu's first section: where the runs go, and a pick of the place when the account has its own GPU or key. */
+function RunsChoice({ viewer, runs }: { viewer: Viewer; runs: BarRuns }) {
+  const setRunOn = useSetRunOn();
+  const row = (Icon: typeof Cpu, name: string, sub: string, online?: boolean) => (
+    <>
+      <Icon aria-hidden className="size-4 text-muted-foreground" />
+      <span className="flex min-w-0 flex-col">
+        <span className={ROW_NAME}>{name}</span>
+        <span className={cn(ROW_LINE, "flex items-center gap-1.5")}>
+          {online && <StatusDot ok />}
+          <span className="truncate">{sub}</span>
+        </span>
+      </span>
+    </>
+  );
+  return (
+    <>
+      <DropdownMenuLabel className={MENU_HEADING}>Where your runs go</DropdownMenuLabel>
+      {runs.rows ? (
+        <DropdownMenuRadioGroup value={runs.on} onValueChange={(id) => setRunOn.mutate({ runOn: id as RunOnPick, ...(id === "key" && runs.key && { key: runs.key }) })}>
+          {runs.rows.map((r) => (
+            <DropdownMenuRadioItem key={r.id} value={r.id} disabled={setRunOn.isPending} className={cn("nav-row gap-3 rounded-[10px] pl-2.5 text-[13.5px]", MENU_ROW_2)}>
+              {row(RUNS_ICON[r.id], r.label, r.sub, r.online)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      ) : (
+        <div className={cn("flex items-center gap-3 px-2.5", MENU_ROW_2)}>{row(RUNS_ICON[runs.on], runs.short, viewer.balance!.chip)}</div>
+      )}
+      <DropdownMenuSeparator className="mx-2.5 my-1.5" />
+    </>
+  );
 }
 
 /**
- * The balance chip with its own menu. `pill`: the bar's compact form (one line, 36 px); otherwise the footer-style block
- * (the You sheet, and inside the account menu it is a submenu-free block with the same items).
+ * The balance chip with its own menu: where the runs go and at what price ("Free · Our GPUs"), a caret, and a tooltip.
+ * `pill`: the bar's compact form (one line, 36 px; the place alone below xl); otherwise the footer-style block (the You
+ * sheet, and inside the account menu it is a submenu-free block with the same items).
  */
 export function BalanceChip({ viewer, pill, className }: { viewer: Viewer; pill?: boolean; className?: string }) {
   const b = viewer.balance!;
-  const { chip, refill } = balanceLabel(viewer);
+  const { refill, runs } = balanceLabel(viewer);
+  const Icon = RUNS_ICON[runs.on];
+  const icon = <Icon aria-hidden className={cn("size-4 shrink-0", runsGo(viewer, runs.on) ? "text-success" : "text-muted-foreground")} />;
+  const caret = <ChevronDown aria-hidden className="size-3.5 shrink-0 opacity-70 motion-safe:transition-transform group-aria-expanded/runs:rotate-180" />;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={`${chip}${refill ? `, ${refill}` : ""}`}
-          className={cn(
-            pill
-              ? "inline-flex h-9 max-w-56 items-center gap-2 rounded-full [@media(pointer:coarse)]:h-11 border border-sidebar-border px-3 text-[12.5px] text-muted-foreground nav-row"
-              : cn(CHIP, "-mx-2 rounded-xl px-2"),
-            className,
-          )}
-        >
-          <span className={cn("flex min-w-0 items-center", pill ? "gap-2" : "gap-3")}>
-            {pill ? <StatusDot ok={balanceGoes(b)} /> : <DotSlot ok={balanceGoes(b)} />} <span className="truncate font-medium text-foreground">{chip}</span>
-            {refill && <span className={cn("ml-auto shrink-0", pill && "hidden xl:inline")}>{refill}</span>}
-          </span>
-          {!pill && b.sub && <span className="truncate pl-7 text-[11px]">{b.sub}</span>}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side={pill ? "bottom" : "top"} align={pill ? "end" : "start"} className="w-64">
-        <BalanceItems viewer={viewer} />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${runs.tip}. Change`}
+              data-runs={runs.on}
+              className={cn(
+                "group/runs",
+                pill
+                  ? "inline-flex h-9 items-center gap-1.5 rounded-full border border-sidebar-border pr-2.5 pl-3 text-[12.5px] font-medium text-foreground/85 nav-row nav-hover:border-border-strong nav-hover:text-foreground aria-expanded:border-border-strong aria-expanded:text-foreground [@media(pointer:coarse)]:h-11"
+                  : cn(CHIP, "-mx-2 rounded-xl px-2"),
+                className,
+              )}
+            >
+              {pill ? (
+                <>
+                  {icon}
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    <span className="xl:hidden">{runs.short}</span>
+                    <span className="hidden xl:inline">{runs.text}</span>
+                  </span>
+                  {caret}
+                </>
+              ) : (
+                <>
+                  <span className="flex w-full min-w-0 items-center gap-3">
+                    <span aria-hidden className="grid w-[var(--nav-icon,16px)] shrink-0 place-items-center">
+                      {icon}
+                    </span>
+                    <span className="truncate font-medium text-foreground">{runs.text}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                      {refill}
+                      {caret}
+                    </span>
+                  </span>
+                  {b.sub && <span className="truncate pl-7 text-[11px]">{b.sub}</span>}
+                </>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{runs.tip}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent side={pill ? "bottom" : "top"} align={pill ? "end" : "start"} className="w-72">
+        <BalanceItems viewer={viewer} runs={viewer.hosted ? runs : undefined} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -233,12 +307,12 @@ export function BalanceChip({ viewer, pill, className }: { viewer: Viewer; pill?
 /** The balance inside the account menu: the chip's words as a label, then its items, at the same level as the menu's. */
 export function BalanceSection({ viewer }: { viewer: Viewer }) {
   const b = viewer.balance!;
-  const { chip, refill } = balanceLabel(viewer);
+  const { refill, runs } = balanceLabel(viewer);
   return (
     <>
       <DropdownMenuLabel className="flex flex-col gap-0.5 px-2.5 font-normal">
         <span className="flex items-center gap-3 text-[12.5px]">
-          <DotSlot ok={balanceGoes(b)} /> <span className="font-medium text-foreground">{chip}</span>
+          <DotSlot ok={runsGo(viewer, runs.on)} /> <span className="font-medium text-foreground">{runs.text}</span>
           {refill && <span className="ml-auto text-[12px] text-muted-foreground">{refill}</span>}
         </span>
         {b.sub && <span className="pl-7 text-[11px] text-muted-foreground">{b.sub}</span>}
@@ -449,4 +523,4 @@ export function BarPills({ kind }: { kind: ViewerKind | undefined }) {
 }
 
 /** Each pill's fixed width: the kept room before the status is known is exactly what the pill takes after. */
-export const PILL_W = { balance: "w-40", computer: "w-9 xl:w-[140px]", placeholders: "w-[136px]" } as const;
+export const PILL_W = { balance: "w-40 xl:w-[184px]", computer: "w-9 xl:w-[140px]", placeholders: "w-[136px]" } as const;

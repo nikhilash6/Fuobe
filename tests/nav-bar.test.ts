@@ -39,13 +39,14 @@ const { AccountSections } = await import("@/components/nav/account-menu");
 const { avatarDot, refillWords } = await import("@/components/nav/status-chips");
 const { COVER_SIZES, CoverThumb } = await import("@/components/nav/cover-thumb");
 const { NavUiProvider } = await import("@/components/nav/nav-ui");
+const { TooltipProvider } = await import("@/components/ui/tooltip");
 const { navCovers } = await import("@/lib/nav-covers");
 const { entriesFor, entry, launcherColumns, NAV_ENTRIES, studioCount } = await import("@/lib/nav-model");
 const { studiosMenu } = await import("@/lib/mega-menus");
 
 const covers = navCovers();
 const Nav = NavUiProvider as (p: { covers: typeof covers; children?: ReactNode }) => ReactNode;
-const render = (node: ReactNode) => renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Nav, { covers }, node)));
+const render = (node: ReactNode) => renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(TooltipProvider, null, createElement(Nav, { covers }, node))));
 /** Every link in the markup: its tag (attributes) and its href (React escapes & as &amp;). */
 const anchors = (html: string) => [...html.matchAll(/<a\s[^>]*>/g)].map((m) => ({ tag: m[0], href: (/href="([^"]*)"/.exec(m[0])?.[1] ?? "").replaceAll("&amp;", "&") }));
 const hrefs = (html: string) => anchors(html).map((a) => a.href);
@@ -374,6 +375,19 @@ describe("the account menu's sections (as the phone's You sheet shows them)", ()
     state.status = install({ viewer: { kind: "account", gpu: { connected: false }, balance: { amount: 3, chip: "3 runs left", text: "Free runs", detail: [] } } });
     const html = sheet();
     expect(words(html)).toContain("3 runs left");
+  });
+
+  it("says where the runs go beside the balance, in the bar and the sheet, as a button that opens its menu", () => {
+    state.hydrated = true;
+    state.viewer = ACCOUNT;
+    const balance = { amount: 1, chip: "Free", text: "Free runs", detail: [] };
+    state.status = install({ viewer: { kind: "account", gpu: { connected: false }, hosted: true, placeName: "Fuobe Cloud", balance } });
+    const bar = render(createElement(TopBar));
+    const pill = /<button[^>]*data-runs="site"[^>]*>/.exec(bar)?.[0] ?? "";
+    expect(pill).toContain('aria-label="Where your runs go: Free on Fuobe Cloud. Change"');
+    expect(pill).toContain('aria-haspopup="menu"');
+    expect(words(bar)).toContain("Free · Fuobe Cloud");
+    expect(words(sheet())).toContain("Free · Fuobe Cloud");
   });
 
   it("shows the owner the install's status as the sidebar's footer did", () => {

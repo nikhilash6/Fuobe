@@ -390,6 +390,50 @@ export function placeRows(
   return { rows, on, ...(note && { note }) };
 }
 
+/** The top bar's balance pill: where an account's runs go now, in the pill's words. */
+export interface BarRuns {
+  on: RunOnPick;
+  /** From xl: the price, then the place ("Free · Our GPUs"). */
+  text: string;
+  /** Below xl: the place alone. */
+  short: string;
+  /** The button's name and its tooltip ("Where your runs go: Free on our GPUs"). */
+  tip: string;
+  /** The Run on list, when the account has its own GPU or key to pick. */
+  rows: RunOnRow[] | null;
+  /** The key a pick of "key" runs on. */
+  key?: CloudProvider;
+}
+
+/**
+ * The balance pill's words (an account while the studio bills): the billing service's `chip` for runs on this studio's
+ * GPUs, with the place, or the account's own GPU (free) or key (its provider bills) when its runs go there, as Settings →
+ * Your GPU shows them. Hosted runs off for it: the chip alone.
+ */
+export function barRuns(
+  viewer: RunOnViewer & { keys?: readonly CloudProvider[]; runKey?: CloudProvider; paidAllowed?: boolean },
+  chip: string,
+  refill?: string | null,
+): BarRuns {
+  if (!viewer.hosted) return { on: "site", text: chip, short: chip, tip: refill ? `${chip}, ${refill}` : chip, rows: null };
+  const keys = viewer.paidAllowed === false ? [] : (viewer.keys ?? []);
+  const key = viewer.runKey && keys.includes(viewer.runKey) ? viewer.runKey : keys.includes("fal") ? "fal" : keys[0];
+  const list = placeRows(viewer, { key: key ? { provider: key } : null, cloud: true }, { text: chip });
+  const on = list?.on ?? "site";
+  const place = placeOf(viewer.placeName);
+  const [price, name, inText] =
+    on === "gpu" ? ["Free", "Your GPU", "your GPU"] : on === "key" && key ? [null, `Your ${CLOUD_KEY[key].label} key`, `your ${CLOUD_KEY[key].label} key`] : [chip, place.label, place.text];
+  const where = price ? `${price} on ${inText}` : inText;
+  return {
+    on,
+    text: price ? `${price} · ${name}` : name,
+    short: name,
+    tip: `Where your runs go: ${where}${on === "site" && refill ? `, ${refill}` : ""}`,
+    rows: list?.rows ?? null,
+    ...(key && { key }),
+  };
+}
+
 /** Drawn in this browser (a Kinetic template, Click to Ad's end card): the same place and price whoever looks. */
 export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "browser", format: String });
 

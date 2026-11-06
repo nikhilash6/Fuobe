@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { placeOf } from "@/lib/place-name";
 import { quoteBody } from "@/lib/hosted";
-import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, keyOnlyChip, mainModel, openCheckPlace, placePrice, placeRows, refusedBeforeRun, retryRequest, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
+import { barRuns, checkedPool, composerOnPool, composerPlace, IN_BROWSER, keyOnlyChip, mainModel, openCheckPlace, placePrice, placeRows, refusedBeforeRun, retryRequest, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
 import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
@@ -303,6 +303,34 @@ describe("the Run on list", () => {
   });
   it("this studio's row says Free when the check has no words yet, and the name falls back to Our GPUs", () => {
     expect(placeRows({ ...account, placeName: undefined, gpu }, {})!.rows[0]).toEqual({ id: "site", label: "Our GPUs", sub: "Free", selected: true });
+  });
+});
+
+describe("the top bar's balance pill", () => {
+  const account = { kind: "account" as const, hosted: true, placeName: "Fuobe Cloud", gpu: { connected: false } };
+  const gpu = { connected: true, online: true, device: "NVIDIA GeForce RTX 4090" };
+  it("never a bare price: the price and where the runs go, the place alone below xl, and a name that says what it does", () => {
+    const r = barRuns(account, "Free");
+    expect(r).toMatchObject({ on: "site", text: "Free · Fuobe Cloud", short: "Fuobe Cloud", tip: "Where your runs go: Free on Fuobe Cloud", rows: null });
+    expect(barRuns(account, "3 runs left", "refills in 5 h").tip).toBe("Where your runs go: 3 runs left on Fuobe Cloud, refills in 5 h");
+    // The default name reads lower case inside a sentence.
+    expect(barRuns({ ...account, placeName: undefined }, "Free")).toMatchObject({ text: "Free · Our GPUs", tip: "Where your runs go: Free on our GPUs" });
+  });
+  it("an account's own GPU or key when its runs go there, with the Run on rows to change it", () => {
+    const own = barRuns({ ...account, gpu, runOn: "gpu" }, "Free", "refills in 5 h");
+    expect(own).toMatchObject({ on: "gpu", text: "Free · Your GPU", short: "Your GPU", tip: "Where your runs go: Free on your GPU" });
+    expect(own.rows?.map((r) => [r.id, r.selected])).toEqual([
+      ["site", false],
+      ["gpu", true],
+    ]);
+    const keyed = barRuns({ ...account, keys: ["replicate", "fal"], runOn: "key" }, "Free");
+    expect(keyed).toMatchObject({ on: "key", key: "fal", text: "Your fal.ai key", tip: "Where your runs go: your fal.ai key" });
+    expect(barRuns({ ...account, keys: ["replicate", "fal"], runKey: "replicate", runOn: "key" }, "Free").text).toBe("Your Replicate key");
+    // A studio with paid models off takes no keys: its runs stay here.
+    expect(barRuns({ ...account, keys: ["fal"], runOn: "key", paidAllowed: false }, "Free")).toMatchObject({ on: "site", rows: null });
+  });
+  it("hosted runs off for the account: the chip as the service says it", () => {
+    expect(barRuns({ ...account, hosted: false }, "Free")).toMatchObject({ text: "Free", short: "Free", rows: null });
   });
 });
 
