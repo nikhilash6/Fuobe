@@ -158,7 +158,7 @@ describe("hosted runs on", () => {
 
   it("a tool's run reaches its route for an account with no GPU of its own; other tools still say so", async () => {
     expect(passed(await viaProxy("/api/storyboards", "none"))).toBe(true);
-    const other = await viaProxy("/api/enhance", "none");
+    const other = await viaProxy("/api/restore/prompt", "none");
     expect(other.status).toBe(403);
     expect(((await other.json()) as { code: string }).code).toBe("own-gpu-tool");
   });

@@ -97,7 +97,7 @@ describe("hosted runs on", () => {
   it("a studio run reaches the route; other tools still need the account's own GPU", async () => {
     const r = await viaProxy("/api/generations");
     expect(r.status).not.toBe(403);
-    const other = await viaProxy("/api/enhance");
+    const other = await viaProxy("/api/restore/prompt");
     expect(other.status).toBe(403);
     expect(((await other.json()) as { code: string }).code).toBe("own-gpu-tool");
   });
