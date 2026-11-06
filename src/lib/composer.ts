@@ -98,7 +98,8 @@ export function settingsShape(
     aspect: !sized || shaped || op === "i2v" || op === "flf2v" || !takes.aspect ? null : many(o.aspectRatios),
     // With the tiers a finishing pass reaches (MiniMax H3's 2K on your GPU: a 768p draft redrawn by Open-H3 Regenerate).
     resolution: sized && takes.resolution ? many(studioResolutions(o)) : null,
-    duration: params.shots || !takes.duration ? null : many(o.durations),
+    // None of the model's lengths taken here (Veo 3.1 extend makes 7 s only): the routes' own lengths are the choice.
+    duration: params.shots || !takes.duration ? null : many(takes.durations && !o.durations?.some((d) => takes.durations!.includes(d)) ? takes.durations : o.durations),
     count: (kind === "image" || kind === "video") && !single,
     draft: !!o.draft,
     audio: o.audio === true,

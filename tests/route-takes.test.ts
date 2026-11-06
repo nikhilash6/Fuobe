@@ -57,6 +57,15 @@ describe("what a route sends", () => {
     expect(settingUnavailable(m, "i2v", "duration", 10, takes)).toBeUndefined();
   });
 
+  it("offers the routes' own lengths when none of the model's is taken (Veo 3.1 extend: 7 s)", () => {
+    const veo = slimModel(model("veo-3-1"));
+    const takes = opTakes(veo, "extend");
+    if (!takes.durations?.length) return; // the catalog lists no lengths for it yet
+    const shape = settingsShape(veo, "extend", "video", true);
+    const offered = shape.duration ?? [];
+    expect(offered.every((d) => takes.durations!.includes(d))).toBe(true);
+  });
+
   it("knows a sound switch and a seed the route doesn't send", () => {
     const vidu = model("vidu-q4");
     expect(opTakes(vidu, "i2v").audio).toBe(false);
