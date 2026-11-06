@@ -1,7 +1,7 @@
 "use client";
 
 import { ImagePlus, Loader2, Paintbrush, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { OwnSetupNote } from "@/components/own-setup";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { uploadFile } from "@/lib/api";
-import { MODEL3D_KEY, RETEXTURE_MODELS, RETEXTURE_PROMPT_MAX, RETEXTURE_SIZES, retextureRequest, type RetextureModel } from "@/lib/av/model3d";
+import {
+  glbHasUv,
+  MODEL3D_KEY,
+  RETEXTURE_MODELS,
+  RETEXTURE_PROMPT_MAX,
+  RETEXTURE_SIZES,
+  RETEXTURE_STYLE_MAX_BYTES,
+  RETEXTURE_STYLE_TYPES,
+  retextureRequest,
+  type RetextureModel,
+} from "@/lib/av/model3d";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 
@@ -40,13 +50,28 @@ export function RetextureDialog({
   const [uploading, setUploading] = useState(false);
   const [model, setModel] = useState<RetextureModel>(RETEXTURE_MODELS[0].id);
   const [size, setSize] = useState<(typeof RETEXTURE_SIZES)[number]>("2k");
+  // A model without UVs (a vertex-coloured mesh) asks for new ones; unknown keeps fal's default (the model's own).
+  const [keepUv, setKeepUv] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (!open) return;
+    const ctl = new AbortController();
+    fetch(glb, { headers: { Range: "bytes=0-4194303" }, signal: ctl.signal })
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then((b) => setKeepUv(glbHasUv(new Uint8Array(b))))
+      .catch(() => setKeepUv(undefined));
+    return () => ctl.abort();
+  }, [glb, open]);
   const file = useRef<HTMLInputElement>(null);
   const ready = cloudAllowed && !uploading && (!!prompt.trim() || !!style);
-  const req = ready ? retextureRequest({ glb, prompt, style: style?.url, model, size }) : null;
+  const req = ready ? retextureRequest({ glb, prompt, style: style?.url, model, size, keepUv }) : null;
   const preview = useRunPreview(open ? req : null);
   const price = priceLine(preview.data);
   const pickStyle = async (f: File | undefined) => {
     if (!f) return;
+    if (f.size > RETEXTURE_STYLE_MAX_BYTES) {
+      toast.error("The style picture must be 20 MB or less");
+      return;
+    }
     setUploading(true);
     try {
       const asset = await uploadFile(f);
@@ -116,7 +141,7 @@ export function RetextureDialog({
                   {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />} Style picture
                 </Button>
               )}
-              <input ref={file} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => void pickStyle(e.target.files?.[0])} />
+              <input ref={file} type="file" accept={RETEXTURE_STYLE_TYPES} className="hidden" onChange={(e) => void pickStyle(e.target.files?.[0])} />
               <Select value={model} onValueChange={(v) => setModel(v as RetextureModel)}>
                 <SelectTrigger size="sm" className="rounded-full" aria-label="Model">
                   <SelectValue />

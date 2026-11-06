@@ -192,7 +192,7 @@ describe("payloads match the stored schemas", () => {
     const { plan, payload } = payloadFor(req.modelId, req);
     expect(plan.op).toBe("retexture-3d");
     expect(payload).toMatchObject({ model_url: GLB, text_style_prompt: "weathered bronze", image_style_url: IMG, texture_resolution: "4k", enable_pbr: true });
-    expect(retextureRequest({ glb: GLB, prompt: "x".repeat(900) }).prompt).toHaveLength(600);
+    expect(retextureRequest({ glb: GLB, prompt: "x".repeat(900) }).prompt).toHaveLength(800);
     expect(RETEXTURE_MODELS.map((m) => m.id)).toEqual(["meshy-7-retexture", "meshy-6-retexture"]);
   });
 

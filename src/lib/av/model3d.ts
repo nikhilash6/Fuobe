@@ -601,20 +601,55 @@ export const RETEXTURE_MODELS = [
   { id: "meshy-6-retexture", label: "Meshy 6" },
 ] as const;
 export type RetextureModel = (typeof RETEXTURE_MODELS)[number]["id"];
-/** Meshy's style prompt: "Maximum 600 characters". */
-export const RETEXTURE_PROMPT_MAX = 600;
+/** Meshy's style prompt: "Maximum 800 characters" (fal's schema and Meshy's own API, 2026-11-06). */
+export const RETEXTURE_PROMPT_MAX = 800;
 export const RETEXTURE_SIZES = ["2k", "4k", "8k"] as const;
+/** fal's image_style_url: max_file_size 20 MB; .jpg, .jpeg, .png or .webp. */
+export const RETEXTURE_STYLE_MAX_BYTES = 20 * 1024 * 1024;
+export const RETEXTURE_STYLE_TYPES = "image/png,image/jpeg,image/webp";
 
-/** Retexture a finished model: the words, or a style picture (which wins when both go), at a texture size. */
-export function retextureRequest(o: { glb: string; prompt?: string; style?: string; model?: RetextureModel; size?: (typeof RETEXTURE_SIZES)[number] }): GenerationRequest {
+/**
+ * Retexture a finished model: the words, or a style picture (which wins when both go), at a texture size. keepUv false
+ * (a model without UVs, glbHasUv) asks Meshy for new UVs: fal keeps the model's own by default, and says "If the model
+ * has no original UV, output quality may be reduced".
+ */
+export function retextureRequest(o: {
+  glb: string;
+  prompt?: string;
+  style?: string;
+  model?: RetextureModel;
+  size?: (typeof RETEXTURE_SIZES)[number];
+  keepUv?: boolean;
+}): GenerationRequest {
+  const extra = { ...(o.size && o.size !== "2k" && { texture_resolution: o.size }), ...(o.keepUv === false && { enable_original_uv: false }) };
   return {
     feature: MODEL3D_FEATURE,
     modelId: o.model ?? RETEXTURE_MODELS[0].id,
     op: "retexture-3d",
     prompt: (o.prompt ?? "").trim().slice(0, RETEXTURE_PROMPT_MAX),
     inputs: { model3d: o.glb, ...(o.style && { images: [o.style] }) },
-    ...(o.size && o.size !== "2k" && { params: { extra: { texture_resolution: o.size } } }),
+    ...(Object.keys(extra).length > 0 && { params: { extra } }),
   };
+}
+
+/**
+ * Whether a GLB's meshes carry UVs (TEXCOORD_0 on every primitive), read from its JSON chunk; undefined when the bytes
+ * are not a GLB 2.0 file or stop before the chunk ends (the first bytes of a large file).
+ */
+export function glbHasUv(bytes: Uint8Array): boolean | undefined {
+  if (bytes.length < 20) return undefined;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2) return undefined; // "glTF", version 2
+  const length = view.getUint32(12, true);
+  if (view.getUint32(16, true) !== 0x4e4f534a || 20 + length > bytes.length) return undefined; // "JSON"
+  let doc: { meshes?: { primitives?: { attributes?: Record<string, unknown> }[] }[] };
+  try {
+    doc = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + length)));
+  } catch {
+    return undefined;
+  }
+  const prims = (doc.meshes ?? []).flatMap((m) => m.primitives ?? []);
+  return prims.length > 0 && prims.every((p) => !!p.attributes && "TEXCOORD_0" in p.attributes);
 }
 
 /** What Make it 3D (quick) on an image result does: shown in the studio with the picture handed over (never "2 s"). */
