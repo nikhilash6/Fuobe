@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FAKE_PNG } from "./helpers/fake-local-comfy";
 import { loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
@@ -123,18 +124,34 @@ async function claimed(who: "a" | "b" | "owner", device = DEVICE): Promise<{ id:
   return { id: task.id, lease: task.lease, promptId: task.promptId };
 }
 
-/** A claimed job of A's that ComfyUI finished with these outputs: what the server now wants uploaded. */
-async function collecting(outputs: Record<string, unknown>, graph = SAVE) {
-  const t = waitingTask(`acct:${a}`, graph);
-  const c = await claimed("a");
+/** A claimed job of A's (or the owner's) that ComfyUI finished with these outputs: what the server now wants uploaded. */
+async function collecting(outputs: Record<string, unknown>, graph = SAVE, who: "a" | "owner" = "a") {
+  const t = waitingTask(who === "owner" ? "owner" : `acct:${a}`, graph);
+  const c = await claimed(who);
   expect(c.id).toBe(t.id);
-  expect((await call("a", "POST", `/api/gpu/computer/tasks/${c.id}/report`, { headers: { "x-fuobe-lease": c.lease }, body: { event: "sent", promptId: c.promptId } })).status).toBe(200);
-  const fin = await call("a", "POST", `/api/gpu/computer/tasks/${c.id}/report`, {
+  expect((await call(who, "POST", `/api/gpu/computer/tasks/${c.id}/report`, { headers: { "x-fuobe-lease": c.lease }, body: { event: "sent", promptId: c.promptId } })).status).toBe(200);
+  const fin = await call(who, "POST", `/api/gpu/computer/tasks/${c.id}/report`, {
     headers: { "x-fuobe-lease": c.lease },
     body: { event: "finished", entry: { status: { status_str: "success", completed: true }, outputs } },
   });
   expect(fin.status).toBe(200);
   return { ...c, generationId: t.generationId, answer: (await fin.json()) as { wanted?: { n: number; kind: string; maxBytes: number }[]; state?: string } };
+}
+
+/** An SVG as VTracer writes it (what ComfyUI's SVG save node keeps, its <metadata> taken out by the worker). */
+const VTRACER_SVG = Buffer.from(
+  `<?xml version="1.0" encoding="UTF-8"?>\n<!-- Generator: visioncortex VTracer 0.6.4 -->\n<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="4" height="4">\n<path d="M0 0 C1 1 2 2 4 4 Z" fill="#336699" transform="translate(0,0)"/>\n</svg>\n`,
+);
+const PLY = "ply\nformat binary_little_endian 1.0\n";
+
+/** A Niantic splat (.spz) as ComfyUI writes it: gzip, its header "NGSP", version 2, the points, then their arrays. */
+function spz(version = 2, points = 3): Buffer {
+  const head = Buffer.alloc(16);
+  head.writeUInt32LE(0x5053474e, 0);
+  head.writeUInt32LE(version, 4);
+  head.writeUInt32LE(points, 8);
+  head[13] = 12;
+  return zlib.gzipSync(Buffer.concat([head, Buffer.alloc(points * 20, 7)]));
 }
 
 const ONE_PNG = { "9": { images: [{ filename: "x_00001_.png", subfolder: "fuobe", type: "output" }] } };
@@ -560,6 +577,58 @@ describe("results are checked like uploads", () => {
     const res = await put("a", c.id, want[0].n, c.lease, Buffer.from([0x68, 0x69, 0xff, 0xfe, 0x00, 0x41]));
     expect(res.status).toBe(415);
     expect(state(c.id)).toBe("failed");
+  });
+
+  it("a last result that turns out wrong once it has all arrived fails the run, not a run done without it", async () => {
+    const c = await collecting({ "9": { text_files: [{ filename: "x_00001_.txt", subfolder: "fuobe", type: "output" }] } }, { "9": { class_type: "SaveText|pysssss", inputs: { filename_prefix: "fuobe/x" } } } as never);
+    const res = await put("a", c.id, 0, c.lease, Buffer.concat([Buffer.from("hello ".repeat(20)), Buffer.from([0xff, 0xfe])]));
+    expect(res.status).toBe(415);
+    expect(state(c.id)).toBe("failed");
+    expect(tasks.receivedFile(`acct:${a}`, c.id, 0)).toBeNull();
+  });
+
+  it("an SVG and a splat from the owner's ComfyUI are kept as what their bytes say", async () => {
+    setSetting("comfyWhere", "computer");
+    const c = await collecting({ "4": { images: [{ filename: "v_00001_.svg", subfolder: "fuobe", type: "output" }] }, "51": { "3d": [{ filename: "m_00001_.spz", subfolder: "fuobe", type: "output" }] } }, SAVE, "owner");
+    expect(c.answer.wanted).toEqual([expect.objectContaining({ kind: "image" }), expect.objectContaining({ kind: "model3d" })]);
+    expect((await put("owner", c.id, 0, c.lease, VTRACER_SVG)).status).toBe(200);
+    expect((await put("owner", c.id, 1, c.lease, spz())).status).toBe(200);
+    expect(state(c.id)).toBe("done");
+    expect(tasks.receivedFile("owner", c.id, 0)?.contentType).toBe("image/svg+xml");
+    expect(tasks.receivedFile("owner", c.id, 1)?.contentType).toBe("model/x-spz");
+  });
+
+  it("an SVG or a splat that isn't one is refused, and the run fails", async () => {
+    setSetting("comfyWhere", "computer");
+    const svgRun = { "4": { images: [{ filename: "v_00001_.svg", subfolder: "fuobe", type: "output" }] } };
+    const spzRun = { "51": { "3d": [{ filename: "m_00001_.spz", subfolder: "fuobe", type: "output" }] } };
+    const svgPage = (body: string) => Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>\n<!-- Generator: visioncortex VTracer -->\n${body}`);
+    for (const bad of [
+      Buffer.from("<!doctype html><html><body>hi</body></html>"),
+      svgPage(`<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="4" height="4" onload="alert(1)"><path d="M0 0"/></svg>`),
+      svgPage(`<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="4" height="4"><script>alert(1)</script></svg>`),
+      svgPage(`<html xmlns="http://www.w3.org/1999/xhtml"><body>hi</body></html>`),
+      svgPage(`<svg version="1.1" width="4" height="4"><path d="M0 0"/></svg>`),
+      svgPage(`<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="4" height="4"><path d="M0 0"/>`),
+    ]) {
+      const c = await collecting(svgRun, SAVE, "owner");
+      expect((await put("owner", c.id, 0, c.lease, bad)).status, bad.toString().slice(-60)).toBe(415);
+      expect(state(c.id)).toBe("failed");
+    }
+    for (const bad of [zlib.gzipSync(Buffer.from("not a splat at all, just words")), spz(9), spz(2, 0), FAKE_PNG]) {
+      const c = await collecting(spzRun, SAVE, "owner");
+      expect((await put("owner", c.id, 0, c.lease, bad)).status).toBe(415);
+      expect(state(c.id)).toBe("failed");
+    }
+  });
+
+  it("an account's splat is kept only from the workers, and never a PLY", async () => {
+    const { outputType } = await import("@/server/computer/http");
+    const want = { n: 0, filename: "m_00001_.spz", subfolder: "", type: "output" as const, kind: "model3d" as const, maxBytes: 1e6 };
+    expect(outputType(spz(), want, false, { glb: true })).toBe("model/x-spz");
+    expect(() => outputType(spz(), want, false)).toThrow(/3D model/);
+    expect(() => outputType(spz(), { ...want, filename: "m_00001_.glb" }, false, { glb: true })).toThrow(/3D model/);
+    expect(() => outputType(Buffer.from(PLY), { ...want, filename: "m_00001_.ply" }, false, { glb: true })).toThrow(/3D model/);
   });
 
   it("past a file's limit, or past the room the account's files have, is refused and the run fails", async () => {

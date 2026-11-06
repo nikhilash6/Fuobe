@@ -994,7 +994,8 @@ export const SNIFF_BYTES = 64;
 /**
  * Take part of a wanted output: only while collecting, only a file the server asked for, at exactly the offset already
  * received, never past its size limit, and only once (a finished file can't be sent again). `check` reads the first part
- * and says what the file is (or throws); `write` appends the part.
+ * and says what the file is (or throws); `whole` reads the whole file once it has arrived, before it counts as saved
+ * (or throws); `write` appends the part.
  */
 export async function receivePart(
   t: TaskRow,
@@ -1002,6 +1003,7 @@ export async function receivePart(
   o: { offset: number; total: number; length: number },
   write: (file: string, append: boolean) => Promise<{ bytes: number; head: Buffer }>,
   check: (head: Buffer, w: WantedFile, total: number) => string,
+  whole?: (file: string, w: WantedFile, contentType: string | undefined) => void,
 ): Promise<Received> {
   if (t.state !== "collecting") throw new RelayError(409, "This run isn't saving results now");
   const wanted = json<WantedFile[]>(t.wanted_json, []).find((w) => w.n === n);
@@ -1040,7 +1042,15 @@ export async function receivePart(
   }
   const bytes = o.offset + got.bytes;
   const done = bytes === o.total;
-  if (done) fs.renameSync(part, file);
+  if (done) {
+    try {
+      whole?.(part, wanted, contentType);
+    } catch (e) {
+      fs.rmSync(part, { force: true });
+      throw new RelayError(415, (e as Error).message, { fail: true });
+    }
+    fs.renameSync(part, file);
+  }
   const fresh = taskById(t.id);
   const list = json<Received[]>(fresh?.received_json ?? null, all).map((r) => (r.n === n ? { n, bytes, total: o.total, done, ...(contentType && { contentType }) } : r));
   setTask(t.id, { received_json: JSON.stringify(list), device_seen_at: Date.now() });

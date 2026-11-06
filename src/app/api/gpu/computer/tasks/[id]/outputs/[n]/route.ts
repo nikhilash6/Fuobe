@@ -2,9 +2,9 @@ import fs from "node:fs";
 import { connection } from "next/server";
 import { RELAY_LIMITS } from "@/lib/relay";
 import { gateAsProxy } from "@/server/direct-gate";
-import { callerKey, isUtf8File, outputType, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
+import { callerKey, checkWholeOutput, outputType, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { glbFileSelfContained } from "@/server/computer/finish";
-import { failTask, getTask, leased, outputFile, outputStatus, receivePart, RelayError, SNIFF_BYTES, wantedOf, type TaskRow } from "@/server/computer/tasks";
+import { failTask, getTask, leased, outputStatus, receivePart, RelayError, SNIFF_BYTES, type TaskRow } from "@/server/computer/tasks";
 import { enter } from "@/server/rate";
 
 /** Nothing arriving for this long ends a part. */
@@ -91,21 +91,16 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/gpu/computer
   try {
     const owner = t.principal === "owner";
     // An account's 3D model on the workers (its GPU job's model, or a finishing job's web GLB, src/lib/finish-ticket.ts):
-    // a binary glTF only, whose every buffer and picture is inside the file.
+    // a binary glTF whose every buffer and picture is inside the file, or a splat.
     const glb = !owner && !!t.pools;
-    const r = await receivePart(t, n, { offset, total, length }, (file, append) => writeBody(request, file, append, length), (head, w) => outputType(head, w, owner, { glb }));
-    // A text result is UTF-8 through to its end.
-    const w = wantedOf(t).find((x) => x.n === n);
-    if (r.done && glb && w?.kind === "model3d" && !glbFileSelfContained(outputFile(t.id, n))) {
-      fs.rmSync(outputFile(t.id, n), { force: true });
-      failTask(getTask(principal, t.id) ?? t, "Couldn't save a result from your ComfyUI: it isn't a 3D model.");
-      return no(415, "That isn't a 3D model.");
-    }
-    if (r.done && w?.kind === "text" && !isUtf8File(outputFile(t.id, n))) {
-      fs.rmSync(outputFile(t.id, n), { force: true });
-      failTask(getTask(principal, t.id) ?? t, "Couldn't save a result from your ComfyUI: it isn't text.");
-      return no(415, "That isn't text.");
-    }
+    const r = await receivePart(
+      t,
+      n,
+      { offset, total, length },
+      (file, append) => writeBody(request, file, append, length),
+      (head, w) => outputType(head, w, owner, { glb }),
+      (file, w, type) => checkWholeOutput(file, w, type, glb ? glbFileSelfContained : undefined),
+    );
     return Response.json({ received: r.bytes, total: r.total, done: r.done }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     if (e instanceof RelayError && e.extra.fail) {

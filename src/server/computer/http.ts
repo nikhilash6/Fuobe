@@ -1,5 +1,6 @@
 import "server-only";
 import fs from "node:fs";
+import zlib from "node:zlib";
 import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, GUEST_HEADER, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import type { WantedFile } from "@/lib/relay";
 import { sniffMedia } from "@/lib/sniff";
@@ -102,20 +103,32 @@ export function relayAnswer(e: unknown): Response {
 
 const KIND_WORDS: Record<WantedFile["kind"], string> = { image: "a picture", video: "a clip", audio: "sound", text: "text", model3d: "a 3D model", frame: "an EXR frame" };
 
+const notWhatWasAsked = (w: WantedFile) => `Couldn't save a result from your ComfyUI: it isn't ${KIND_WORDS[w.kind] ?? "what this run makes"}.`;
+
+/** An SVG's first bytes: a byte order mark and white space, then its XML declaration, a comment or its <svg> tag. */
+const SVG_HEAD = /^﻿?\s*(<\?xml[\s?]|<!--|<svg[\s>/])/;
+/** What a kept SVG never holds: scripts, event handlers, a page inside it, entities. */
+const SVG_ACTIVE = /<script\b|<foreignObject\b|<!ENTITY|\son[a-z]+\s*=|javascript:/i;
+const SVG_MAX_BYTES = 64 * 2 ** 20;
+/** A Niantic splat's header, inside its gzip: "NGSP" (little-endian). */
+const SPZ_MAGIC = 0x5053474e;
+
 /** A text result's type, by its name. */
 const textType = (name: string, owner: boolean) => (/\.srt$/i.test(name) ? "application/x-subrip" : /\.vtt$/i.test(name) ? "text/vtt" : owner && /\.json$/i.test(name) ? "application/json" : "text/plain");
 
 /**
  * What a result from someone's ComfyUI is, from its first bytes (as an upload's type is: lib/sniff.ts), and whether it
  * is what the server asked for. Never a page or a script: a picture that is really HTML is refused. Throws the words.
- * A 3D model comes only from the owner's own jobs, or as a binary glTF when `o.glb` (a run on the workers whose 3D
- * finish runs on a worker: the route checks the whole file's parts once it has arrived).
+ * A 3D model comes only from the owner's own jobs, or as a binary glTF or a splat (.spz) when `o.glb` (an account's
+ * run on the workers). An SVG or a splat is taken only where the server asked for one by name, and checkWholeOutput
+ * reads the whole file once it has arrived.
  */
 export function outputType(head: Buffer, w: WantedFile, owner: boolean, o: { glb?: boolean } = {}): string {
   const s = head.length >= 4 ? sniffMedia(head, undefined, { gif: true }) : null;
   switch (w.kind) {
     case "image":
       if (s?.kind === "image") return s.contentType;
+      if (/\.svg$/i.test(w.filename) && !head.includes(0) && SVG_HEAD.test(head.toString("utf8"))) return "image/svg+xml";
       break;
     case "video":
       // VideoHelperSuite also saves animations as GIF or WebP.
@@ -135,9 +148,63 @@ export function outputType(head: Buffer, w: WantedFile, owner: boolean, o: { glb
     case "model3d":
       if ((owner || o.glb) && head.subarray(0, 4).toString("latin1") === "glTF") return "model/gltf-binary";
       if (owner && /^ply\r?\n/.test(head.subarray(0, 8).toString("latin1"))) return "model/ply";
+      if ((owner || o.glb) && /\.spz$/i.test(w.filename) && head[0] === 0x1f && head[1] === 0x8b && head[2] === 8) return "model/x-spz";
       break;
   }
-  throw new Error(`Couldn't save a result from your ComfyUI: it isn't ${KIND_WORDS[w.kind] ?? "what this run makes"}.`);
+  throw new Error(notWhatWasAsked(w));
+}
+
+/**
+ * A whole result, once it has all arrived (outputType read only its first bytes): text is UTF-8 to its end, an SVG and
+ * a splat are real ones, and a binary glTF passes `glb` when given. Throws the words.
+ */
+export function checkWholeOutput(file: string, w: WantedFile, contentType: string | undefined, glb?: (file: string) => boolean): void {
+  const ok =
+    w.kind === "text"
+      ? isUtf8File(file)
+      : contentType === "image/svg+xml"
+        ? isSvgFile(file)
+        : contentType === "model/x-spz"
+          ? isSpzFile(file)
+          : contentType === "model/gltf-binary" && glb
+            ? glb(file)
+            : true;
+  if (!ok) throw new Error(notWhatWasAsked(w));
+}
+
+/**
+ * A real SVG: UTF-8, its root an <svg> in the SVG namespace after at most an XML declaration, comments and a DOCTYPE
+ * with no internal subset, closed at its end, with nothing active in it (SVG_ACTIVE).
+ */
+export function isSvgFile(file: string): boolean {
+  try {
+    if (fs.statSync(file).size > SVG_MAX_BYTES) return false;
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(fs.readFileSync(file));
+    const body = text.replace(/^(?:\s|<\?xml[^>]*\?>|<!--[\s\S]*?-->|<!DOCTYPE\s+svg\b[^[>]*>)*/, "");
+    const root = /^<svg\b[^>]*>/.exec(body)?.[0];
+    return !!root && /\sxmlns\s*=\s*["']http:\/\/www\.w3\.org\/2000\/svg["']/.test(root) && /<\/svg\s*>\s*$/.test(body) && !SVG_ACTIVE.test(body);
+  } catch {
+    return false;
+  }
+}
+
+/** A real splat (.spz): gzip, and inside it the header: "NGSP", version 1 to 3, at least one point, SH degree 0 to 3. */
+export function isSpzFile(file: string): boolean {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(file, "r");
+    const start = Buffer.alloc(4096);
+    const got = fs.readSync(fd, start, 0, start.length, 0);
+    // The first part of the stream is enough for the header (the rest may not have been read).
+    const raw = zlib.gunzipSync(start.subarray(0, got), { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: 8 * 2 ** 20 });
+    if (raw.length < 16 || raw.readUInt32LE(0) !== SPZ_MAGIC) return false;
+    const version = raw.readUInt32LE(4);
+    return version >= 1 && version <= 3 && raw.readUInt32LE(8) > 0 && raw[12] <= 3;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== null) fs.closeSync(fd);
+  }
 }
 
 /** A whole text result is UTF-8 (checked once it has all arrived). */
