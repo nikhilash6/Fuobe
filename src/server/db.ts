@@ -1185,6 +1185,8 @@ function open(): Database.Database {
   db.exec(ADMIN_TABLES);
   // The runs let in whose rows are still being made (pool-limits.ts openAdmission): not a numbered migration either.
   db.exec(ADMISSION_TABLES);
+  // The free text helper's line and the workers' text slots (text-helper.ts): not a numbered migration either.
+  db.exec(HELPER_TABLES);
   // Skills: the runs that wait across studios. A data folder that ran claude/fuobe-parity-4's earlier build of this
   // feature (its numbered migration at place 27, a skill_runs with no engine column and runs kept in another shape)
   // keeps that table under another name, so these runs start from an empty table. Nothing is deleted.
@@ -1294,6 +1296,32 @@ const ADMISSION_TABLES = `CREATE TABLE IF NOT EXISTS open_admissions (
     at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS open_admissions_account ON open_admissions(account, at);`;
+
+/** Text jobs for the workers' text slots, and when each slot last asked for one (src/server/text-helper.ts). */
+const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
+    id TEXT PRIMARY KEY,
+    who TEXT NOT NULL,
+    task TEXT NOT NULL,
+    system TEXT NOT NULL,
+    user TEXT NOT NULL,
+    max_tokens INTEGER NOT NULL,
+    json INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL,
+    worker_id TEXT,
+    lease TEXT,
+    created_at INTEGER NOT NULL,
+    claimed_at INTEGER,
+    done_at INTEGER,
+    text TEXT,
+    error TEXT
+  );
+  CREATE INDEX IF NOT EXISTS helper_jobs_line ON helper_jobs(state, created_at);
+  CREATE TABLE IF NOT EXISTS helper_slots (
+    worker_id TEXT PRIMARY KEY,
+    seen_at INTEGER NOT NULL,
+    model TEXT,
+    device TEXT
+  );`;
 
 export function db(): Database.Database {
   globalThis.__fuobeDb ??= open();

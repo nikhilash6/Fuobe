@@ -18,6 +18,7 @@ import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolHasFiles, poolReady, poolTakes } from "./hosted";
 import { placeName } from "./place-name";
+import { helperKnown } from "./text-helper";
 import { poolOwnModels, poolOwnPresets, type PresetPress } from "./pool-own-setup";
 import { ranOwnFirst, runOnOf, type RunOn } from "./run-on";
 import { poolRulesOf, type PoolRules, type PresetModel } from "@/lib/pool-rules";
@@ -345,6 +346,8 @@ export interface VisitorView {
   prefer?: "pool";
   /** The name visitors read for this install's GPUs ("Runs on Our GPUs"; src/server/place-name.ts). Only with `hosted`. */
   placeName?: string;
+  /** The free text helper writes for this visitor ("Write the lyrics", "Rewrite my prompt now"). Only with `hosted`. */
+  helper?: true;
   /**
    * Where the account's runs go, as it picked (run-on.ts; only with `hosted`, only to that account). Absent: the
    * install's default. `runKey`: with "key", the provider whose key runs them.
@@ -455,6 +458,8 @@ export async function visitorStatus(account: Account | null) {
     if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
     // What the visitor reads for this install's GPUs ("Runs on {name}"): the policy's name, else the install's.
     if (p?.hosted) viewer.placeName = placeName(p);
+    // The free text helper (lyrics, a prompt rewrite) on this install's workers.
+    if (p?.hosted && helperKnown()) viewer.helper = true;
     const card = p?.hosted && typeof p.cardText === "string" ? p.cardText.trim().slice(0, 40) : "";
     if (card) viewer.cardText = card;
     // The account's own pick of where its runs go, and whether the one-time note is for it (it had runs on its own GPU

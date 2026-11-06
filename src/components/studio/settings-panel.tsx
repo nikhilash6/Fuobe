@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useLikelyVisitor } from "@/lib/api";
+import { useLikelyVisitor, useTextHelper } from "@/lib/api";
 import { OwnSetupChip } from "@/components/own-setup";
 import { wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { FORMAT_INFO } from "@/lib/av/formats";
@@ -324,8 +324,9 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
   const opts = model?.options ?? {};
   const d = model?.defaults ?? {};
   const [advanced, setAdvanced] = useState(p.seed !== undefined || !!negativePrompt);
-  // "Rewrite my prompt now" uses the install's AI helper, which guests and accounts can't call.
   const visitor = useLikelyVisitor();
+  // "Rewrite my prompt now": the owner's AI helper, or for a visitor the studio's free helper.
+  const helper = useTextHelper();
   // What this operation's routes send (route-takes.ts): a ratio, size or length they don't make stays in view, muted, and
   // says why with the closest one they do; a seed, negative prompt or sound switch they don't read says so.
   const takes: OpTakes = useMemo(() => opTakes(model, op), [model, op]);
@@ -445,7 +446,7 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
           )}
           {shape.enhance && (
             <Toggle label="Enhance prompt" hint="Rewrites your prompt with more detail before it runs" checked={!!p.enhancePrompt} onChange={(v) => setP({ enhancePrompt: v })}>
-              {!visitor && (
+              {helper && (
                 <button
                   type="button"
                   onClick={onRewrite}

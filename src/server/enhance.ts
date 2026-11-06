@@ -6,10 +6,12 @@ import { normalizeLyrics } from "@/lib/lyrics";
 import { activeLocal, aiHelper, chatLocal, type JsonSpec } from "./llm";
 import { engineMode, getSetting } from "./settings";
 import { tenant } from "./tenant";
+import { askHelper, freeHelperOn, helperWho, type HelperAnswer, type HelperTask } from "./text-helper";
 
 /**
  * "Enhance prompt": rewrite a short idea into a rich, model-friendly prompt.
- * Order: Claude (if an Anthropic key is set) → a local model (Ollama, LM Studio, Unsloth Studio…) → offline heuristic.
+ * Order: Claude (if an Anthropic key is set) → a local model (Ollama, LM Studio, Unsloth Studio…) → the free helper on
+ * the workers' text slots (src/server/text-helper.ts) → offline heuristic.
  */
 
 const SYSTEM = `You rewrite short creative ideas into prompts for image and video generation models.
@@ -83,6 +85,14 @@ export interface LlmTextOptions {
   timeoutMs?: number;
   /** The open engine: a local model, never Claude (the AI helper set to Offline still means none). */
   ollamaOnly?: boolean;
+  /** A task the free helper takes: with one, a visitor's call and an install with nothing else set may use it. */
+  task?: HelperTask;
+  /** A guest's address key, for the free helper's limits. */
+  guestKey?: string;
+  /** How long a free helper's job may wait for a text slot. */
+  waitMs?: number;
+  /** Hears why the free helper gave no text. */
+  onHelper?: (a: Exclude<HelperAnswer, { text: string }>) => void;
 }
 
 /** The local model in use (Ollama, LM Studio, Unsloth Studio or the custom server), thinking off where the server allows it. */
@@ -106,12 +116,16 @@ async function viaLocal(system: string, user: string, images: LlmImage[], opts: 
  * Which LLM llmText would ask right now (Claude is the one that costs money). "ollama" means a local
  * model, whichever server runs it (Ollama, LM Studio, Unsloth Studio or the custom one: Settings → AI helper).
  */
-export function llmTextBackend(): "claude" | "ollama" | null {
-  // An account's run or a visitor's price check never uses the install's AI helper (its LLM, its Claude key): the
-  // offline wording (heuristicEnhance) is used instead.
-  if (tenant()) return null;
+export function llmTextBackend(): "claude" | "ollama" | null;
+export function llmTextBackend(task?: HelperTask): "claude" | "ollama" | "free" | null;
+export function llmTextBackend(task?: HelperTask): "claude" | "ollama" | "free" | null {
+  // An account's run or a visitor's price check never uses the install's AI helper (its LLM, its Claude key): the free
+  // helper for a task it takes, else the offline wording (heuristicEnhance).
+  const free = !!task && freeHelperOn();
+  if (tenant()) return free ? "free" : null;
   const choice = aiHelper();
   if (choice === "none") return null;
+  if (choice === "free") return free ? "free" : "ollama";
   if (choice === "anthropic" || (choice === "auto" && engineMode() !== "open" && !!getSetting("anthropicKey"))) return "claude";
   return "ollama";
 }
@@ -128,9 +142,22 @@ export async function llmText(system: string, user: string, a: LlmImage[] | LlmT
   const images: LlmImage[] = Array.isArray(a) ? a : [];
   const opts: LlmTextOptions = Array.isArray(a) ? b : a;
   // The open engine never calls a paid API: a local model, unless the AI helper is off.
-  const backend = opts.ollamaOnly && llmTextBackend() === "claude" ? "ollama" : llmTextBackend();
+  const first = llmTextBackend(opts.task);
+  const backend = opts.ollamaOnly && first === "claude" ? "ollama" : first;
   if (backend === "claude") return viaClaude(system, user, images).catch(() => null);
-  if (backend === "ollama") return viaLocal(system, user, images, opts).catch(() => null);
+  if (backend === "ollama") {
+    const local = await viaLocal(system, user, images, opts).catch(() => null);
+    // Automatic (or the free helper, set but not answering a moment ago): the free helper when no local model answers.
+    if (local !== null || !opts.task || !["auto", "free"].includes(aiHelper()) || !freeHelperOn()) return local;
+  } else if (backend !== "free") return null;
+  return viaFree(system, user, opts);
+}
+
+/** The free helper's answer (it reads the words only), or null with the reason told to `onHelper`. */
+async function viaFree(system: string, user: string, opts: LlmTextOptions): Promise<string | null> {
+  const a = await askHelper({ task: opts.task!, system, user, json: !!opts.json, who: helperWho(opts.guestKey), waitMs: opts.waitMs }).catch((): HelperAnswer => ({ error: "failed" }));
+  if ("text" in a) return a.text;
+  opts.onHelper?.(a);
   return null;
 }
 
@@ -195,7 +222,7 @@ const SOUL_SYSTEM =
 export async function enhanceSoulWords(words: string): Promise<string> {
   const w = words.trim();
   if (!w || w.split(/\s+/).length >= 60) return words;
-  const out = (await llmText(SOUL_SYSTEM, w))?.trim().replace(/^["“]|["”]$/g, "").replace(/[.\s]+$/, "");
+  const out = (await llmText(SOUL_SYSTEM, w, { task: "soul", waitMs: 30_000 }))?.trim().replace(/^["“]|["”]$/g, "").replace(/[.\s]+$/, "");
   return out && out.length > w.length ? out : words;
 }
 
@@ -212,11 +239,11 @@ Rules:
  * Lyrics for a song described in `idea`, about as long as `seconds` of music and at most `max` characters, from whichever
  * LLM the install allows (Claude or a local model); null when none answers. Tags are normalized (src/lib/lyrics.ts).
  */
-export async function writeLyrics(idea: string, o: { seconds?: number; max?: number } = {}): Promise<string | null> {
+export async function writeLyrics(idea: string, o: { seconds?: number; max?: number; helper?: Pick<LlmTextOptions, "guestKey" | "onHelper"> } = {}): Promise<string | null> {
   const seconds = o.seconds && o.seconds > 0 ? Math.min(600, o.seconds) : 120;
   const sections = seconds <= 45 ? "one verse and one chorus" : seconds <= 100 ? "a verse, a chorus, a second verse and the chorus again" : "a full song (two or three verses, the chorus after each, a bridge)";
   const room = o.max ? ` Stay under ${Math.floor(o.max * 0.9)} characters.` : "";
-  const text = await llmText(LYRICS_SYSTEM, `Write lyrics for this song, about ${Math.round(seconds / 60 * 10) / 10} minutes long: ${sections}.${room}\n\n${idea.trim()}`);
+  const text = await llmText(LYRICS_SYSTEM, `Write lyrics for this song, about ${Math.round(seconds / 60 * 10) / 10} minutes long: ${sections}.${room}\n\n${idea.trim()}`, { task: "lyrics", waitMs: 75_000, ...o.helper });
   const words = normalizeLyrics(text?.replace(/^```\w*\n?|```$/g, ""));
   if (!words) return null;
   return o.max && words.length > o.max ? trimLyrics(words, o.max) : words;
@@ -229,8 +256,8 @@ export function trimLyrics(words: string, max: number): string {
   return out.length > max ? out.slice(0, max).trimEnd() : out;
 }
 
-export async function enhancePrompt(prompt: string, kind: MediaKind, op: Operation, hints: EnhanceHints = {}): Promise<string> {
-  return (await llmText(SYSTEM, instruction(prompt, kind, op, hints))) ?? heuristicEnhance(prompt, kind, op, hints);
+export async function enhancePrompt(prompt: string, kind: MediaKind, op: Operation, hints: EnhanceHints = {}, helper: Pick<LlmTextOptions, "guestKey" | "waitMs"> = {}): Promise<string> {
+  return (await llmText(SYSTEM, instruction(prompt, kind, op, hints), { task: "enhance", waitMs: 30_000, ...helper })) ?? heuristicEnhance(prompt, kind, op, hints);
 }
 
 /**

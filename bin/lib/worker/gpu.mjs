@@ -63,6 +63,13 @@ export async function readGpu(cmd = "nvidia-smi") {
   return { ...g, apps };
 }
 
+/** The first GPU's memory in MB (`--query-gpu=memory.total`), or null when nvidia-smi can't say. */
+export async function readGpuTotal(cmd = "nvidia-smi") {
+  const [bin, ...pre] = Array.isArray(cmd) ? cmd : [cmd];
+  const line = String((await run(bin, [...pre, "--query-gpu=memory.total", "--format=csv,noheader,nounits"])) ?? "").split(/\r?\n/).find((l) => l.trim());
+  return num(line);
+}
+
 /** `nvidia-smi --query-gpu=compute_cap --format=csv,noheader` → the first GPU's generation ("8.9"), or null. */
 export function parseGpuGen(text) {
   const line = String(text ?? "").split(/\r?\n/).map((l) => l.trim()).find(Boolean);
@@ -96,10 +103,12 @@ export function isDesktop(name) {
  * torch's allocator aren't in it, and the read gives null when ComfyUI is slow to answer.
  */
 export function ownOf(own, apps = []) {
-  if (!own.running) return { mb: 0, sure: true };
+  // The text slot's server (text.mjs) is the worker's own too: its own number when nvidia-smi gives one, else what it said.
+  const extra = (own.extraPids ?? []).reduce((n, pid) => n + (apps.find((a) => a.pid === pid && a.usedMb !== null)?.usedMb ?? 0), 0) || (own.extraMb ?? 0);
+  if (!own.running) return { mb: extra, sure: true };
   const app = own.pid ? apps.find((a) => a.pid === own.pid && a.usedMb !== null) : null;
-  if (app) return { mb: app.usedMb, sure: true };
-  return { mb: (own.mb ?? 0) + CONTEXT_ALLOWANCE_MB, sure: false };
+  if (app) return { mb: app.usedMb + extra, sure: true };
+  return { mb: (own.mb ?? 0) + CONTEXT_ALLOWANCE_MB + extra, sure: false };
 }
 
 /**
@@ -111,7 +120,7 @@ export function ownOf(own, apps = []) {
 export function othersOf(reading, own, busyVramMb) {
   const mine = ownOf(own, reading.apps);
   const othersMb = Math.max(0, reading.usedMb - mine.mb);
-  const others = reading.apps.filter((a) => a.pid !== own.pid && !isDesktop(a.name));
+  const others = reading.apps.filter((a) => a.pid !== own.pid && !(own.extraPids ?? []).includes(a.pid) && !isDesktop(a.name));
   const loud = others.find((a) => a.usedMb !== null && a.usedMb > busyVramMb);
   const busy = othersMb > busyVramMb || !!loud;
   const who = loud?.name ?? others.find((a) => a.usedMb === null || a.usedMb > 0)?.name ?? (busy ? "another program" : null);

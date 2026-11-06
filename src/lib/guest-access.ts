@@ -419,6 +419,11 @@ export function ownGpuRun(method: string, pathname: string): boolean {
  */
 const POOL_TOOL_RUNS: readonly RegExp[] = [/^\/api\/palettes\/lock$/];
 
+/** The free text helper's routes (src/server/text-helper.ts): a visitor may call them while hosted runs are on, within the route's own limits. */
+const HELPER_ROUTES: readonly RegExp[] = [/^\/api\/enhance$/];
+
+export const helperRoute = (method: string, pathname: string): boolean => method === "POST" && HELPER_ROUTES.some((r) => r.test(pathname));
+
 export function poolToolRun(method: string, pathname: string): boolean {
   return method === "POST" && POOL_TOOL_RUNS.some((r) => r.test(pathname));
 }

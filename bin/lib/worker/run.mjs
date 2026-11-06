@@ -17,6 +17,9 @@
 // light CPU work (joins, trims, adding sound, loops, Ken Burns, filters) on a second ComfyUI of its own that runs on the
 // CPU only, and finishing jobs (finish.mjs: the 3D finish, camera paths) with its own code. Every picture of an account's
 // job is made again from its pixels before anything reads it (picture.mjs).
+//
+// The text slot (worker.json `textSlot`, text.mjs): the studio's free text helper, answered by a llama.cpp server the
+// worker starts itself, on the GPU when there is room, else on the CPU. Its memory counts as the worker's own.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -25,7 +28,7 @@ import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
-import { BRIEF_COOL_DOWN_MS, BRIEF_EVERY_MS, BRIEF_PAUSE_MS, GpuWatch, MID_JOB_GRACE_MS, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
+import { BRIEF_COOL_DOWN_MS, BRIEF_EVERY_MS, BRIEF_PAUSE_MS, GpuWatch, MID_JOB_GRACE_MS, othersOf, readGpu, readGpuGen, readGpuTotal } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders, runtimeFileList } from "./inventory.mjs";
 import { freeLocal, localIdle, readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
@@ -37,6 +40,7 @@ import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
 import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
+import { TextSlot, textSlotOf } from "./text.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
 import { CodeWatch } from "./update.mjs";
 
@@ -540,6 +544,19 @@ async function work(saved, deps, owner) {
     };
     log(`It has a CPU slot: light CPU work${finish.kinds.length ? ` and finishing jobs (${finish.kinds.join(", ")})` : ""} run beside its GPU's job.`);
   }
+  // The text slot: its own claims for the studio's text jobs, beside the GPU's job and the CPU slot's.
+  const textCfg = textSlotOf(cfg.textSlot);
+  if (textCfg?.problem) log(`${textCfg.problem}: its text slot is off.`);
+  const text = textCfg && !textCfg.problem ? (deps.textSlot ?? new TextSlot(textCfg, { call, log, workDir: cfg.workDir, home: deps.home, now, sleep, env: deps.env, ...deps.text })) : null;
+  const gpuTotalMb = text ? await (deps.readGpuTotal ?? (deps.readGpu ? async () => null : () => readGpuTotal(cfg.nvidiaSmi)))().catch(() => null) : null;
+  let lastUsedMb = null;
+  /** Where a new start of the text slot's server may run: the GPU while nothing else holds it and there is room, else the CPU. */
+  const textRoom = () => {
+    const held = gpu.paused || gpu.busyInARow > 0 || (!!turns && (split?.workMb ?? 0) > busyMb && turn.siteWaiting === 0);
+    if (held) return "cpu";
+    if (text.server?.device === "gpu") return "gpu";
+    return gpuTotalMb !== null && lastUsedMb !== null && gpuTotalMb - lastUsedMb >= textCfg.gpuMinFreeMb ? "gpu" : "cpu";
+  };
   let cpuRunner = null;
   let busyCpu = false;
   let cpuJob = Promise.resolve();
@@ -808,7 +825,7 @@ async function work(saved, deps, owner) {
         updating = true;
         log("New worker code is installed: restarting after this job.");
       }
-      if (updating && !busyJob && !busyCpu) break;
+      if (updating && !busyJob && !busyCpu && !text?.busy) break;
       // Its own switch, and --for running out.
       let control = readControl(deps.home);
       if (control.paused && control.until && t >= control.until) {
@@ -826,7 +843,9 @@ async function work(saved, deps, owner) {
         lastGpuAt = t;
         const reading = await (deps.readGpu ?? readGpu)(cfg.nvidiaSmi);
         if (reading) {
-          const own = { running: comfy.alive(), mb: await comfy.vramMb(), pid: comfy.pid, port: comfy.alive() ? comfy.port : null, job: busyJob && jobUsesGpu };
+          const mine = text?.own() ?? { pids: [], mb: 0 };
+          const own = { running: comfy.alive(), mb: await comfy.vramMb(), pid: comfy.pid, port: comfy.alive() ? comfy.port : null, job: busyJob && jobUsesGpu, extraPids: mine.pids, extraMb: mine.mb };
+          lastUsedMb = reading.usedMb;
           let verdict;
           if (turns) {
             split = await splitNow(t, reading, own);
@@ -1016,6 +1035,11 @@ async function work(saved, deps, owner) {
           await cpuComfy.stop();
         }
       }
+      // The text slot: never while paused by hand, on the website, outside its hours or ending for new code.
+      if (text) {
+        const byHand = pause.paused && /^here/.test(pause.why ?? "");
+        text.tick(t, { may: !updating && !byHand && !!answer?.worker && !answer.worker.paused && !!answer.worker.insideHours && !answer.worker.drain, room: textRoom() });
+      }
       // Kept results the studio never took are deleted after a day.
       if (t - holdCheckedAt >= 60_000) {
         holdCheckedAt = t;
@@ -1049,6 +1073,7 @@ async function work(saved, deps, owner) {
     runner.stop();
     cpuRunner?.stop();
     await Promise.race([Promise.all([job, cpuJob]), new Promise((r) => setTimeout(r, 10_000).unref?.())]);
+    await text?.end();
     awake.set(false);
     // No turn any more: local ComfyUI work may go on at once.
     if (turns?.folderOk()) writeTurn(now(), { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null });

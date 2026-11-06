@@ -945,7 +945,9 @@ export interface StatusInfo {
   cloudProvider: string;
   /** The text LLM: Settings → AI helper, whether Claude takes text steps, and the local model server in use. */
   llm?: {
-    helper: "auto" | "anthropic" | "local" | "none";
+    helper: "auto" | "anthropic" | "local" | "free" | "none";
+    /** The free helper on the workers' text slots: answering now, seen today, and the name for it. */
+    free?: { live: boolean; known: boolean; label: string };
     claude: boolean;
     /** Settings' local server: "auto" or the one pinned. */
     provider: string;
@@ -990,6 +992,8 @@ export interface StatusInfo {
     prefer?: "pool";
     /** The name visitors read for this install's GPUs ("Runs on Our GPUs", src/lib/place-name.ts). Only with `hosted`. */
     placeName?: string;
+    /** The free text helper writes for this visitor ("Write the lyrics", "Rewrite my prompt now"). Only with `hosted`. */
+    helper?: true;
     /**
      * Where the account's runs go, as it picked (only with `hosted`, only to that account; none: the install's GPUs).
      * "key" starts its engine switch on Cloud (src/lib/engine-pref.ts).
@@ -1071,6 +1075,16 @@ export function useStatus() {
 export function usePlaceName(): Place | null {
   const v = useStatus().data?.viewer;
   return v?.hosted ? placeOf(v.placeName) : null;
+}
+
+/**
+ * May this viewer use the text helper's buttons ("Write the lyrics", "Rewrite my prompt now"): the owner always (the
+ * server says what to set up when nothing answers), a visitor when the studio's free helper writes for it.
+ */
+export function useTextHelper(): boolean {
+  const s = useStatus().data;
+  const visitor = useLikelyVisitor();
+  return visitor ? !!s?.viewer?.helper : true;
 }
 
 /** What an uploaded clip's header says: length, size, frame rate and sound (empty for formats the server can't read). */

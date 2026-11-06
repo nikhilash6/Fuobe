@@ -6,7 +6,10 @@ import { cueText, parseCues, toSrt, type Cue } from "@/lib/cues";
 import type { GenInput, ModelRoute, Operation } from "@/lib/catalog/types";
 import { HOSTED_PROVIDERS, testHosted } from "../llm/hosted";
 import { aiHelper, chatLocal, checkLocal, emptyReply, LOCAL_LABELS, localLabel, localProblem, localReady, localServers, localWhat, pinnedKind, probeLocal, type JsonSpec, type LocalKind, type Ready } from "../llm";
+import { placeName } from "../place-name";
 import { engineMode, getSetting } from "../settings";
+import { tenant } from "../tenant";
+import { askHelper, freeHelperOn, type HelperAnswer } from "../text-helper";
 import { toDataUri } from "../storage";
 import { comfyProvider } from "./comfyui";
 import type { PollResult, ProviderAdapter, RemoteOutput } from "./types";
@@ -22,7 +25,7 @@ import type { PollResult, ProviderAdapter, RemoteOutput } from "./types";
  * loses a job that was still writing (it fails as interrupted and can be retried).
  */
 
-type Backend = "claude" | "local" | "comfyui";
+type Backend = "claude" | "local" | "free" | "comfyui";
 
 /** The ComfyUI model and workflow open-source translations fall back to without Ollama. */
 export const COMFY_TRANSLATE_MODEL = "oss-qwen35-translate";
@@ -66,8 +69,13 @@ export function llmBackends(route: LlmRoute): Backend[] {
   const out: Backend[] = [];
   const claude = route.endpoint !== "ollama" && !!getSetting("anthropicKey") && (choice === "anthropic" || (choice === "auto" && engineMode() !== "open"));
   if (claude) out.push("claude");
-  if ((route.endpoint === "ollama" || choice !== "anthropic") && localReady()) out.push("local");
-  else if (route.endpoint === "ollama" && route.op === "translate" && comfyProvider.isConfigured()) out.push("comfyui");
+  const local = (route.endpoint === "ollama" || choice !== "anthropic") && !!localReady();
+  // The free helper on the workers' text slots: Automatic's after a local model, first when picked, and a visitor's.
+  const free = (choice === "auto" || choice === "free" || !!tenant()) && freeHelperOn();
+  if (free && choice === "free") out.push("free");
+  if (local) out.push("local");
+  if (free && choice !== "free") out.push("free");
+  if (!local && route.endpoint === "ollama" && route.op === "translate" && comfyProvider.isConfigured()) out.push("comfyui");
   return out;
 }
 
@@ -93,8 +101,8 @@ export const llmUsesClaude = (route: Pick<ModelRoute, "endpoint">) => llmBackend
 // ---------------------------------------------------------------------------
 // Calls
 
-const BACKEND_LABEL: Record<Exclude<Backend, "local">, string> = { claude: "Claude", comfyui: "Qwen3.5 on ComfyUI" };
-const backendLabel = (b: Backend, job?: LlmJob) => (b === "local" ? (job?.local?.server.label ?? localLabel()) : BACKEND_LABEL[b]);
+const BACKEND_LABEL: Record<Exclude<Backend, "local" | "free">, string> = { claude: "Claude", comfyui: "Qwen3.5 on ComfyUI" };
+const backendLabel = (b: Backend, job?: LlmJob) => (b === "local" ? (job?.local?.server.label ?? localLabel()) : b === "free" ? placeName() : BACKEND_LABEL[b]);
 
 async function viaClaude(system: string, user: string, signal: AbortSignal): Promise<string> {
   const client = new Anthropic({ apiKey: getSetting("anthropicKey") });
@@ -195,9 +203,24 @@ async function viaComfy(system: string, user: string, signal: AbortSignal): Prom
   }
 }
 
+/** Words for a free helper's answer that came without text. */
+function helperTrouble(a: Exclude<HelperAnswer, { text: string }>): string {
+  if (a.error === "blocked") return a.message || "This text can't be written here.";
+  if (a.error === "busy") return "The writer is busy right now. Press Retry in a moment.";
+  return "The writer couldn't finish this text. Press Retry.";
+}
+
+/** The free helper (src/server/text-helper.ts): a run's step, counted by the run's own limits. */
+async function viaFree(system: string, user: string, job: LlmJob, json?: JsonSpec): Promise<string> {
+  const a = await askHelper({ task: job.task ?? "write", system, user, json: !!json, counted: false, waitMs: 120_000, signal: job.abort.signal });
+  if ("text" in a) return a.text;
+  throw new Error(helperTrouble(a));
+}
+
 const CALL: Record<Backend, (system: string, user: string, job: LlmJob, json?: JsonSpec) => Promise<string>> = {
   claude: (system, user, job) => viaClaude(system, user, job.abort.signal),
   local: viaLocal,
+  free: viaFree,
   comfyui: (system, user, job) => viaComfy(system, user, job.abort.signal),
 };
 
@@ -319,6 +342,8 @@ interface LlmJob {
   backend?: Backend;
   /** The local server the job runs on (chosen when it starts). */
   local?: Ready | null;
+  /** The free helper's task for its calls. */
+  task?: "write" | "translate";
   outputs?: RemoteOutput[];
   error?: string;
   abort: AbortController;
@@ -430,7 +455,7 @@ export const llmProvider: ProviderAdapter = {
     const id = `llm_${nanoid(10)}`;
     // The local server is fixed when the job starts: its calls all go to the same one.
     const local = backends.includes("local") ? localReady() : null;
-    const job: LlmJob = { state: "running", abort: new AbortController(), at: Date.now(), backend: backends[0], local };
+    const job: LlmJob = { state: "running", abort: new AbortController(), at: Date.now(), backend: backends[0], local, task: route.op === "translate" ? "translate" : "write" };
     all.set(id, job);
     runJob(route.op, input, backends, job).then(
       (outputs) => Object.assign(job, { state: "succeeded", outputs }),

@@ -115,7 +115,7 @@ export const SETTINGS = {
    */
   demoMode: { key: "demo.mode", env: "FUOBE_DEMO_MODE", default: "off", options: ["off", "on", "auto"] },
   /** Settings → AI helper: Claude, a local model, or offline. "ollama" is the old name of "local" and still means it. */
-  enhanceProvider: { key: "enhance.provider", env: "FUOBE_ENHANCE_PROVIDER", default: "auto", options: ["auto", "anthropic", "local", "ollama", "none"] },
+  enhanceProvider: { key: "enhance.provider", env: "FUOBE_ENHANCE_PROVIDER", default: "auto", options: ["auto", "anthropic", "local", "ollama", "free", "none"] },
   /** Which local model server: "auto" uses the first that answers (Ollama, LM Studio, Unsloth Studio, then the custom URL). */
   llmProvider: { key: "llm.provider", env: "FUOBE_LLM_PROVIDER", default: "auto", options: ["auto", "ollama", "lmstudio", "unsloth", "custom"] },
   ollamaUrl: { key: "ollama.url", env: "OLLAMA_URL", default: "http://127.0.0.1:11434" },

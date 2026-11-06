@@ -8,6 +8,8 @@ import { llmBackends } from "@/server/providers/llm";
 import { nothingConnected, type EngineModeName } from "@/lib/connections";
 import { getSetting, setSetting } from "@/server/settings";
 import { offeredSummary } from "@/server/model-access";
+import { placeName } from "@/server/place-name";
+import { helperKnown, helperLive } from "@/server/text-helper";
 
 /** Which providers are usable right now — drives badges, the demo-mode notice and Home's first-run guide. */
 export async function GET(request?: Request) {
@@ -46,7 +48,8 @@ export async function GET(request?: Request) {
     ...(ownerGpu && { ownerGpu }),
     // Settings → Models & licences: the models switched off, so pickers leave them out (absent while everything is on).
     ...(access && { access }),
-    // The text LLM: the AI helper setting, whether Claude takes text steps, and the local server (no keys).
-    llm: { helper: aiHelper(), claude: llmBackends({ endpoint: "auto" })[0] === "claude", ...local },
+    // The text LLM: the AI helper setting, whether Claude takes text steps, the local server (no keys), and the free
+    // helper on the workers' text slots (with the name visitors read for them).
+    llm: { helper: aiHelper(), claude: llmBackends({ endpoint: "auto" })[0] === "claude", ...local, free: { live: helperLive(), known: helperKnown(), label: placeName() } },
   });
 }

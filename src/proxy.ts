@@ -26,6 +26,7 @@ import {
   LIBRARY_MESSAGE,
   ownGpuToolMessage,
   ownerOnly,
+  helperRoute,
   ownGpuRun,
   poolToolRun,
 } from "@/lib/guest-access";
@@ -216,6 +217,8 @@ function guest(request: NextRequest): NextResponse {
   if (isPriceCheck(method, pathname, search, hostedRunsOn())) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
   if (isAssistChange(method, pathname)) return assistOwner();
   if (anyoneMayReport(method, pathname)) return pass(request);
+  // The free text helper (lyrics, a prompt rewrite): while hosted runs are on, its route counts a guest's own limits.
+  if (helperRoute(method, pathname) && hostedRunsOn()) return pass(request);
   // What an account may send, the library, the owner's settings and the studios' runs: signing up is the next step.
   // A tool run made only on this install's GPUs counts as one of them with hosted runs on, and as a tool that isn't
   // available here without them.
@@ -292,6 +295,7 @@ function account(request: NextRequest, who: Account): NextResponse {
   if (accountMayChange(request.method, pathname, search)) return pass(request);
   if (isAssistChange(request.method, pathname)) return assistOwner();
   if (isLibraryChange(request.method, pathname)) return NextResponse.json({ error: LIBRARY_MESSAGE, code: "library" }, { status: 403 });
+  if (helperRoute(request.method, pathname) && hostedRunsOn()) return pass(request);
   // A tool its own GPU or key wouldn't run says so first: "Connect your GPU" only for what a GPU or a key unlocks. A tool
   // run made only on this install's GPUs (the palette lock) goes to its route with hosted runs on, and is refused so
   // without them, as before.

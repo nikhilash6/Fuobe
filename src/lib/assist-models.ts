@@ -44,7 +44,7 @@ export interface World {
   /** Settings → Engine: Open source only. */
   openOnly: boolean;
   /** Settings → AI helper → Use: "none" turns Assist's models off; "local" makes Free (local first) the default; "anthropic" allows Claude on Open source only. */
-  helper: "auto" | "anthropic" | "local" | "none";
+  helper: "auto" | "anthropic" | "local" | "free" | "none";
   /** Settings → AI helper → Smart plans with: "auto", or "provider|model". */
   smartPlan: string;
   /** Settings → AI helper → Free uses. */

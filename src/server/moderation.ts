@@ -81,7 +81,7 @@ export async function checkRun(input: RunCheckInput): Promise<CheckRunAnswer> {
 }
 
 /** Check one output. No service: show. No answer: wait (asked again later). */
-export async function checkOutput(file: { bytes: Buffer; contentType: string; generationId: string; account: string | null; assetId: string; kind: "image" | "video" | "audio"; sha256: string }): Promise<CheckOutputAnswer> {
+export async function checkOutput(file: { bytes: Buffer; contentType: string; generationId: string; account: string | null; assetId: string; kind: "image" | "video" | "audio" | "text"; sha256: string }): Promise<CheckOutputAnswer> {
   const t = target();
   if (!t) return { decision: "show" };
   try {

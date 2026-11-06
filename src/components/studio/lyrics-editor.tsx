@@ -1,9 +1,10 @@
 "use client";
 
 import { Loader2, Music2, PenLine, Sparkles, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useLikelyVisitor, writeLyrics } from "@/lib/api";
+import { useTextHelper, writeLyrics } from "@/lib/api";
 import type { ModelDef } from "@/lib/catalog/types";
 import { INSTRUMENTAL, insertTag, isInstrumental, normalizeLyrics, promptWithLyrics, SECTION_TAGS, songLength, structureOf } from "@/lib/lyrics";
 import { toastError } from "@/lib/refusals";
@@ -14,7 +15,7 @@ const CHIPS = ["Verse", "Chorus", "Pre-Chorus", "Bridge", "Intro", "Outro", "Ins
 
 /**
  * Audio → Music's lyrics, for a model that sings them (ModelOptions.lyrics): the words with their section tags, chips that
- * put a tag on a line of its own at the cursor, "Write the lyrics" (the install's AI helper, from the song's description),
+ * put a tag on a line of its own at the cursor, "Write the lyrics" (the AI helper, from the song's description),
  * and how many characters the model takes. The draft keeps the words while you switch models; only one that sings gets them.
  */
 export function LyricsEditor({
@@ -35,8 +36,9 @@ export function LyricsEditor({
   const id = useId();
   const area = useRef<HTMLTextAreaElement>(null);
   const [writing, setWriting] = useState(false);
-  // "Write the lyrics" uses the install's AI helper, which guests and accounts can't call.
-  const visitor = useLikelyVisitor();
+  // "Write the lyrics": the owner's AI helper, or for a visitor the studio's free helper.
+  const helper = useTextHelper();
+  const router = useRouter();
   const spec = model.options.lyrics ?? {};
   // Lyrics read after the description (Lyria 3.5) count with it.
   const length = spec.inPrompt && value.trim() ? promptWithLyrics(idea, value).length : normalizeLyrics(value).length;
@@ -62,7 +64,9 @@ export function LyricsEditor({
     try {
       onChange(await writeLyrics(idea, { seconds, max: spec.max }));
     } catch (e) {
-      toastError(e);
+      // Nothing set up to write them: one click to Settings → AI helper.
+      if ((e as { code?: string }).code === "no-llm") toast.error((e as Error).message, { action: { label: "Set up", onClick: () => router.push("/settings#text-ai") } });
+      else toastError(e);
     } finally {
       setWriting(false);
     }
@@ -76,7 +80,7 @@ export function LyricsEditor({
           {!spec.required && <span className="font-normal text-muted-foreground">optional</span>}
         </label>
         <span className="ml-auto flex items-center gap-1">
-          {!visitor && (
+          {helper && (
             <button
               type="button"
               onClick={write}

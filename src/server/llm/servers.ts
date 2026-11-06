@@ -8,9 +8,9 @@ export const LOCAL_LABELS: Record<LocalKind, string> = { ollama: "Ollama", lmstu
 export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Settings → AI helper. The old value "ollama" means a local model only, whichever server runs it. */
-export function aiHelper(): "auto" | "anthropic" | "local" | "none" {
+export function aiHelper(): "auto" | "anthropic" | "local" | "free" | "none" {
   const v = getSetting("enhanceProvider");
-  return v === "ollama" ? "local" : (v as "auto" | "anthropic" | "local" | "none");
+  return v === "ollama" ? "local" : (v as "auto" | "anthropic" | "local" | "free" | "none");
 }
 
 /** The local server Settings pins (null: Automatic). */

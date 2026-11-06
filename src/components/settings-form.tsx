@@ -705,7 +705,16 @@ export function SettingsForm({ prices }: { prices?: string }) {
           value={(get("enhanceProvider")?.value || "auto").replace(/^ollama$/, "local")}
           onChange={set("enhanceProvider")}
           options={[
-            { value: "auto", label: "Automatic", hint: "Claude when a key is set, then a local model, then the offline rewriter." },
+            {
+              value: "auto",
+              label: "Automatic",
+              hint: status?.llm?.free?.known
+                ? `Claude when a key is set, then a local model, then ${status.llm.free.label} (free), then the offline rewriter.`
+                : "Claude when a key is set, then a local model, then the offline rewriter.",
+            },
+            ...(status?.llm?.free?.known || get("enhanceProvider")?.value === "free"
+              ? [{ value: "free", label: `${status?.llm?.free?.label ?? "Your workers"} (free)`, hint: "A small open model on your workers' text slots. Nothing goes to a paid API." }]
+              : []),
             { value: "anthropic", label: "Claude", hint: "Claude through your Anthropic key (paid per use)." },
             { value: "local", label: "Local model only", hint: "A local, open-source model (Ollama, LM Studio, Unsloth Studio or your own server). Claude is never called." },
             { value: "none", label: "Offline rewriter", hint: "Built-in rules, no LLM. Text steps (translate, write) are off." },

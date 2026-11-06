@@ -132,7 +132,7 @@ const isPython = (name) => /^python(w|3(\.\d+)?)?(\.exe)?$/i.test(String(name ??
  */
 export function workPids(listing, o) {
   const [lo, hi] = Array.isArray(o.ports) && o.ports.length === 2 ? o.ports.map(Number) : DEFAULT_PORTS;
-  const own = new Set([o.ownPid].filter(Boolean));
+  const own = new Set([o.ownPid, ...(o.extraPids ?? [])].filter(Boolean));
   for (const l of listing?.listeners ?? []) if (o.ownPort && l.port === o.ownPort) own.add(l.pid);
   const excludePorts = new Set((o.excludePorts ?? []).map(Number));
   const excludePids = new Set((o.excludePids ?? []).map(Number));
@@ -176,7 +176,7 @@ export function splitMemory(o) {
   const fallback = ownOf(o.own, o.apps);
   const fallbackMb = fallback.mb;
   if (o.counters && o.listing) {
-    const { own, work } = workPids(o.listing, { ports: o.ports, ownPid: o.own.pid, ownPort: o.own.port, excludePorts: o.excludePorts, excludePids: o.excludePids });
+    const { own, work } = workPids(o.listing, { ports: o.ports, ownPid: o.own.pid, ownPort: o.own.port, extraPids: o.own.extraPids, excludePorts: o.excludePorts, excludePids: o.excludePids });
     const gpu = pickGpu(o.counters, o.gpu);
     const mine = o.counters.filter((c) => c.gpu === gpu);
     const sum = (pids) => mine.filter((c) => pids.has(c.pid)).reduce((n, c) => n + c.mb, 0);
@@ -196,7 +196,7 @@ export function splitMemory(o) {
   if (o.lock !== null && o.lock !== undefined && owners.some((w) => String(o.lock).toLowerCase().startsWith(w))) {
     return { ownMb: fallbackMb, ownSure: fallback.sure, workMb: rest, othersMb: 0, who: null, work: { pids: [], port: null, lock: true }, source: "lock" };
   }
-  const named = o.apps?.find((a) => a.pid !== o.own.pid && (a.usedMb === null || a.usedMb > 0) && !isDesktop(a.name))?.name;
+  const named = o.apps?.find((a) => a.pid !== o.own.pid && !(o.own.extraPids ?? []).includes(a.pid) && (a.usedMb === null || a.usedMb > 0) && !isDesktop(a.name))?.name;
   return { ownMb: fallbackMb, ownSure: fallback.sure, workMb: 0, othersMb: rest, who: o.lock !== null && o.lock !== undefined ? "another program" : (named ?? "another program"), work: { pids: [], port: null }, source: o.lock !== null && o.lock !== undefined ? "lock" : "total" };
 }
 
