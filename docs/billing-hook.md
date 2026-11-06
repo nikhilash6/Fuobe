@@ -85,7 +85,7 @@ as it takes (the run never fails for a wait). Present, it wins over the reserve 
 answer says, and with none `FUOBE_POOL_WAIT_MIN`. `limits.offerAfterS` is the wait (in seconds, as the price check
 estimates it) after which the line before Run offers an account its own GPU, or a key that runs the item's cloud
 version at its price, for that one run. Absent: 1200. A wait with no end known (every GPU that could run it is away)
-counts as past it.
+counts as past it. 0 turns the offer off for waits: it shows only at the daily cap and while runs there are paused.
 
 `limits.held` says runs wait instead of being refused. Present (0 or more), a press past `limits.activeRuns`,
 `limits.waiting` or an hourly limit is taken: the run is made, its tile says "In line", and it enters the line when
@@ -102,7 +102,10 @@ the run is expected to wait before it enters the line at all (behind the account
 given); a service adds it to the hold's life.
 
 While the service doesn't answer, a run that would go to this install's GPUs because the service's last answer put them
-first (`prefer: "pool"`) waits for the service; it is never moved to the account's own GPU for that.
+first (`prefer: "pool"`) waits for the service; it is never moved to the account's own GPU for that. Fuobe keeps the
+service's last policy answer in its database while hosted runs are on, so after a restart, or an outage longer than
+it keeps an answer in memory, a press is still taken and waits for the service in line under that answer (when it says
+runs wait: `limits.held`). With no answer ever kept, or one without `limits.held`, the press is refused as before.
 
 `queue.nextOpenAt` is when the first GPU that could run the run is due back (the start of its hours, or the end of a
 pause on its PC that has one), when every such GPU is away and one says; otherwise null.

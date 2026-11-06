@@ -72,6 +72,15 @@ describe("applyMentions", () => {
     expect(planGeneration(request, getModel, getPreset).loras.map((l) => l.file)).toEqual(["maya.safetensors"]);
   });
 
+  it("asked without LoRAs (Run without LoRAs): a trained element goes in as its photos, and the request carries none", () => {
+    const m = getModel("oss-z-image-turbo")!;
+    const trained = el({ loras: [{ engine: "open", modelId: m.id, file: "maya.safetensors", trigger: "mya woman" }] });
+    const { request } = applyMentions({ feature: "image", modelId: m.id, prompt: "@Maya on a beach", lorasOff: true }, m, [trained]);
+    expect(request.loras).toBeUndefined();
+    const own = applyMentions({ feature: "image", modelId: m.id, prompt: "a beach", lorasOff: true, loras: [{ file: "x.safetensors" }] }, m, [trained]).request;
+    expect(own.loras).toBeUndefined();
+  });
+
   it("leaves requests without mentions untouched", () => {
     const nb = getModel("nano-banana-pro")!;
     const req = { feature: "image", modelId: nb.id, prompt: "email me@example.com" };

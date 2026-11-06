@@ -14,7 +14,10 @@ import { cn } from "@/lib/utils";
  * account, on any device. `onKeep`: what the page does besides (the composer moves its engine to Cloud for a key).
  */
 
-function useIntro(run: string): {
+function useIntro(
+  run: string,
+  chip?: string,
+): {
   intro: Intro | null;
   keep: (runOn: RunOnPick) => void;
   busy: boolean;
@@ -22,7 +25,7 @@ function useIntro(run: string): {
   const hydrated = useHydrated();
   const v = useStatus().data?.viewer;
   const setRunOn = useSetRunOn();
-  const intro = hydrated ? placeIntro(v, run) : null;
+  const intro = hydrated ? placeIntro(v, run, chip) : null;
   return {
     intro,
     keep: (runOn) =>
@@ -74,10 +77,10 @@ export function PlaceIntro({ run, onKeep, className }: { run: string; onKeep?: (
 
 /**
  * A tool page's note (its place chip has no line above its Run): the same words and buttons, once per page, as a note
- * that stays until one is pressed.
+ * that stays until one is pressed. `chip`: the place chip's words, which the note points at.
  */
-export function PlaceIntroNote({ run }: { run: string }) {
-  const { intro, keep } = useIntro(run);
+export function PlaceIntroNote({ run, chip }: { run: string; chip?: string }) {
+  const { intro, keep } = useIntro(run, chip);
   const lead = intro?.lead;
   useEffect(() => {
     if (!intro) return;

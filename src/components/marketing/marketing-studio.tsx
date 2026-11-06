@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ChevronDown, Globe, Image as ImageIcon, LayoutTemplate, Loader2, SlidersHorizontal, Type, Video, X } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,7 +10,7 @@ import { chipBase, chipIdle, chipOn } from "@/components/studio/chip";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
-import { mainModel } from "@/lib/run-place";
+import { mainModel, ownerOnlyWay } from "@/lib/run-place";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { withoutOwnGpu } from "@/lib/catalog/engines";
@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, isCodeTemplate, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, visibleTemplate, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { StarterSection } from "@/components/starters/starter-section";
-import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { useIsOwner, useLikelyVisitor, useModelAccess, usePlaceName } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import type { StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
@@ -337,6 +337,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   // (useIsOwner), so a visitor never sees them and then gone.
   const visitor = useLikelyVisitor();
   const isOwner = useIsOwner();
+  const router = useRouter();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
   const found = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
@@ -389,8 +390,13 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   );
   const est = useEstimate<RunEstimate>("/api/marketing/estimate", draft.avatar?.uploading || draft.voiceSample?.uploading ? null : body);
   const badSite = !!f.oneOf?.includes("website") && !!draft.website.trim() && !looksLikeWebsite(draft.website);
+  // While hosted runs are on, a visitor's Generate opens the studio that makes it now, on this studio's GPUs.
+  const site = usePlaceName();
+  const way = visitor && site ? ownerOnlyWay("image") : null;
   const blocker = visitor
-    ? "Marketing Studio isn't available here"
+    ? way
+      ? `${way.label} · runs on ${site!.text}`
+      : "Marketing Studio isn't available here"
     : draft.product === null && f.product === "required"
       ? "Attach a product to generate"
       : badSite
@@ -426,7 +432,10 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
     });
 
   const generate = async () => {
-    if (visitor) return;
+    if (visitor) {
+      if (way) router.push(way.href);
+      return;
+    }
     if (blocker) {
       setEngaged(true);
       toast(blocker, { id: "marketing-blocker" });

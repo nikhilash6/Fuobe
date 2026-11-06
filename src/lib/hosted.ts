@@ -39,6 +39,8 @@ export interface HostedQuote {
    * your GPU, Add your key, or a guest's sign-up) instead of staying off.
    */
   ownSetup?: OwnSetup;
+  /** Refused only for its LoRAs (an element's trained LoRA): the same run without them runs there ("Run without LoRAs"). */
+  withoutLoras?: true;
 }
 
 /** The billing service's words for an account's balance (the top bar's chip and the account menu). */
@@ -62,6 +64,8 @@ export interface BillingRefusalDetail {
   quote?: HostedQuote;
   /** A changed price: the same run sent again at the new price (true when it started). */
   runAgain?: () => Promise<boolean>;
+  /** The same run sent again on the account's own GPU (true when it started). */
+  runOwn?: () => Promise<boolean>;
 }
 
 /** Fired for every refusal marked x-fuobe-billing (watchGuestRefusals): the billing card opens. */
@@ -190,10 +194,20 @@ export function poolRunState(check: HostedCheck | null | undefined): {
   action?: BillingAction;
   offer?: BillingOffer;
   setup?: OwnSetup;
+  withoutLoras?: true;
 } | null {
   const q = check?.quote;
   if (!q) return null;
-  if (!q.allowed) return { refused: true, text: q.text, ...(q.sub && { sub: q.sub }), ...(q.action && { action: q.action }), ...(q.offer && { offer: q.offer }), ...(q.ownSetup && { setup: q.ownSetup }) };
+  if (!q.allowed)
+    return {
+      refused: true,
+      text: q.text,
+      ...(q.sub && { sub: q.sub }),
+      ...(q.action && { action: q.action }),
+      ...(q.offer && { offer: q.offer }),
+      ...(q.ownSetup && { setup: q.ownSetup }),
+      ...(q.withoutLoras && { withoutLoras: true as const }),
+    };
   const line = check?.line;
   const wait = line ? waitWords(line) : null;
   // A run pressed now would wait to enter the line: the line under the toolbar says why, as a sentence of its own.

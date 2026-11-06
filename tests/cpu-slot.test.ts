@@ -649,6 +649,18 @@ describe("finishing jobs and their run", () => {
     finish.stopWorkerFinish(gid);
   });
 
+  it("a run stamped to wait as long as it takes (0): its finishing job has no wait limit either", async () => {
+    const { saveFile } = await import("@/server/storage");
+    const gid = generation(accountId, "image-to-3d");
+    db().prepare("UPDATE generations SET request_json = ? WHERE id = ?").run(JSON.stringify({ account: accountId, place: "pool", waitMs: 0 }), gid);
+    const raw = saveFile({ data: Buffer.from("glTF raw model"), contentType: "model/gltf-binary", name: "model.glb", source: "generation", generationId: gid, accountId });
+    const outputs = [{ url: raw.url, kind: "model3d" as const, contentType: "model/gltf-binary", assetId: raw.id }];
+    finish.startWorkerModelFinish(gid, outputs, { op: "image-to-3d", provider: "comfyui", account: accountId, done: () => {} });
+    const t = finish.finishTask(gid, "model3d")!;
+    expect(t.not_after).toBeNull();
+    finish.stopWorkerFinish(gid);
+  });
+
   it("count only a CPU slot heard from lately, on a worker built for this studio's catalog", () => {
     const w = addWorker();
     beat(w, { cpuSlot: { finishes: ["model3d"] }, catalogVersion: "e".repeat(64) });

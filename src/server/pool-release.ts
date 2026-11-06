@@ -1,7 +1,7 @@
 import "server-only";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { accountById } from "./auth";
-import { accountFacts, billingConfigured, forgetBalance, policy as billingPolicy, policyGiveUpMs, reserve, serviceAnsweredAt } from "./billing";
+import { accountFacts, billingConfigured, forgetBalance, keptPolicy, policy as billingPolicy, policyGiveUpMs, reserve, serviceAnsweredAt, type Policy } from "./billing";
 import { db } from "./db";
 import { failWaiting, previewGeneration, restampRows, sendHeld } from "./generations";
 import { queueFacts, runOnPool } from "./hosted";
@@ -75,15 +75,15 @@ function sayServiceWait(heads: HoldRow[], now: number): void {
 }
 
 /**
- * How many more of an account's runs may enter the line now (pool-limits.ts lineRoom: held runs don't count). Null when
- * its policy isn't known (the service is quiet and nothing is kept): its runs wait.
+ * The account's policy for its room among its runs going (pool-limits.ts lineRoom: held runs don't count), read once a
+ * turn. Null when it isn't known (the service is quiet and nothing is kept, here or across restarts): its runs wait, as
+ * they are.
  */
-async function roomFor(accountId: string, kept: Map<string, number | null>): Promise<number | null> {
+async function policyFor(accountId: string, kept: Map<string, Policy | null>): Promise<Policy | null> {
   if (kept.has(accountId)) return kept.get(accountId)!;
-  const p = await billingPolicy(accountId);
-  const left = p ? lineRoom(p, poolRunCounts(accountId)) : null;
-  kept.set(accountId, left);
-  return left;
+  const p = (await billingPolicy(accountId)) ?? keptPolicy(accountId);
+  kept.set(accountId, p);
+  return p;
 }
 
 /** Ask again later: one more try, and the next one after a growing wait (`paused`: the service said runs are paused). */
@@ -179,20 +179,27 @@ export async function releaseHeldRuns(now = Date.now()): Promise<number> {
   const heads = heldRunHeads();
   if (!heads.length) return 0;
   sayServiceWait(heads, now);
-  const room = new Map<string, number | null>();
+  const policies = new Map<string, Policy | null>();
+  // Accounts whose earlier press couldn't enter this turn (no room, or another app process is releasing it): their later
+  // presses wait too, so they enter in the order they were made.
+  const blocked = new Set<string>();
   let released = 0;
   let serviceCalls = 0;
   let serviceDown = false;
   for (const h of heads) {
     // Not before its time.
     if (h.start_at !== null && h.start_at > now) continue;
+    if (!h.counted && blocked.has(h.account_id)) continue;
     const needsService = !h.reserved || !h.checked;
     if (needsService) {
       if (serviceDown || serviceCalls >= SERVICE_TRIES_PER_TURN) continue;
       const due = h.next_at === null || h.next_at <= now || (h.tried_at !== null && serviceAnsweredAt() > h.tried_at);
       if (!due) continue;
     }
-    if (!leaseRun(h.run_id, now)) continue;
+    if (!leaseRun(h.run_id, now)) {
+      blocked.add(h.account_id);
+      continue;
+    }
     try {
       if (needsService) {
         serviceCalls++;
@@ -200,18 +207,29 @@ export async function releaseHeldRuns(now = Date.now()): Promise<number> {
         if (step === "down") serviceDown = true;
         if (step !== "ready") continue;
       }
+      let p: Policy | null = null;
       if (!h.counted) {
-        const left = await roomFor(h.account_id, room);
-        if (left === null || left <= 0) {
+        p = await policyFor(h.account_id, policies);
+        // No policy to count by: it waits as it is, its tile unchanged.
+        if (!p) {
+          blocked.add(h.account_id);
+          continue;
+        }
+        if (lineRoom(p, poolRunCounts(h.account_id)) <= 0) {
           // Its own reason cleared, but the account's runs going fill its room: it waits behind them, as its tile says.
           if (h.reason !== "mine") setRunHold(h.run_id, { reason: "mine", start_at: null, paused: 0 });
+          blocked.add(h.account_id);
           continue;
         }
       }
-      const taken = takeRun(h.run_id);
-      if (!taken) continue;
+      const limits = p;
+      // The room is counted again in the step that takes the run (another app process may have released one meanwhile).
+      const taken = takeRun(h.run_id, Date.now(), limits ? () => lineRoom(limits, poolRunCounts(h.account_id)) > 0 : undefined);
+      if (!taken) {
+        if (!h.counted) blocked.add(h.account_id);
+        continue;
+      }
       for (const s of taken.send) sendHeld(s.id, s.job, taken.rankAt);
-      if (!h.counted) room.set(h.account_id, (room.get(h.account_id) ?? 1) - 1);
       released++;
     } finally {
       endRunLease(h.run_id);

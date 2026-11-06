@@ -380,11 +380,16 @@ describe("service blips (H3)", () => {
       expect(taskOf(id)).toBeUndefined();
       const requestId = heldOf(id)!.request_id;
       expect(requestId).toBeTruthy();
-      // Back: it reserves under its press's request id (one hold for the press) and enters the line.
+      // Back, a while after the press: it reserves under its press's request id (one hold for the press) and enters the
+      // line at its press-time place, never at the time it was let in.
+      await new Promise((r) => setTimeout(r, 40));
+      const backAt = Date.now();
       fake.down = false;
       const t = await until(() => taskOf(id));
       expect(t).toBeTruthy();
+      expect(t!.created_at).toBeGreaterThanOrEqual(backAt);
       expect(t!.rank_at).toBeLessThanOrEqual(before);
+      expect(t!.rank_at).toBeLessThan(backAt);
       const made = [...fake.holds.values()].filter((h) => h.requestId === requestId);
       expect(made.length).toBe(1);
       const g = db().prepare("SELECT json_extract(request_json, '$.hold') AS hold FROM generations WHERE id = ?").get(id) as { hold: string | null };
@@ -621,5 +626,80 @@ describe("hold shapes", () => {
     expect(holds.holdShape({ unchecked: true })).toMatchObject({ reason: "service", checked: false, reserved: true });
     expect(holds.startReason(2 * 86_400_000)).toBe("today");
     expect(holds.startReason(2 * 86_400_000 + 60_000)).toBe("hour");
+  });
+});
+
+describe("review fixes: holds that stay held, a cold service, and hosted runs switched off", () => {
+  it("a held run whose row waits on an earlier result stays unsent until it is released", async () => {
+    const a = account();
+    const [one, two] = [await press(a.cookie), await press(a.cookie)];
+    const third = await press(a.cookie);
+    expect(third.body.held).toEqual({ reason: "mine" });
+    const id = idOf(third);
+    // An earlier result it waits on, already done (a film's shots after its board).
+    const done = `done-${++n}`;
+    db()
+      .prepare(
+        `INSERT INTO generations (id, batch_id, feature, preset_id, model_id, engine, provider, op, kind, status, progress, message, prompt, request_json, outputs_json, cost_usd, favorite, created_at, updated_at)
+         SELECT ?, NULL, feature, preset_id, model_id, engine, provider, op, kind, 'succeeded', NULL, NULL, prompt, request_json, '[]', NULL, 0, created_at, updated_at FROM generations WHERE id = ?`,
+      )
+      .run(done, idOf(one));
+    db().prepare("UPDATE generations SET depends_on = ? WHERE id = ?").run(JSON.stringify([done]), id);
+    for (let i = 0; i < 5; i++) await tick();
+    expect(taskOf(id)).toBeUndefined();
+    expect(getGeneration(id)!.status).toBe("queued");
+    expect(heldOf(id)).toBeTruthy();
+    // Room opens: it enters the line then.
+    await stop([idOf(one), idOf(two)]);
+    expect(await until(() => taskOf(id))).toBeTruthy();
+  });
+
+  it("the step that takes a run counts the account's room again: no room, it stays held", async () => {
+    const a = account();
+    await press(a.cookie);
+    await press(a.cookie);
+    const third = await press(a.cookie);
+    const run = heldOf(idOf(third))!.run_id;
+    expect(holds.leaseRun(run)).toBe(true);
+    try {
+      expect(holds.takeRun(run, Date.now(), () => false)).toBeNull();
+      expect(heldOf(idOf(third))).toBeTruthy();
+    } finally {
+      holds.endRunLease(run);
+    }
+  });
+
+  it("A3 cold: after a restart while the service is down, a press is held for it (its last answer kept), and Run stays on", async () => {
+    const a = account();
+    // The service answered once; then the app restarts (nothing in memory) and the service stops.
+    expect((await check(a.cookie)).status).toBe(200);
+    billing.resetBillingCache();
+    fake.down = "error";
+    const quiet = await check(a.cookie);
+    expect(quiet.body.quote?.allowed, JSON.stringify(quiet.body)).not.toBe(false);
+    const r = await press(a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.held).toEqual({ reason: "service" });
+    fake.down = false;
+    expect(await until(() => taskOf(idOf(r)))).toBeTruthy();
+  });
+
+  it("hosted runs switched off while runs wait: they end in today's words and their holds go", async () => {
+    const a = account();
+    await press(a.cookie);
+    await press(a.cookie);
+    const third = await press(a.cookie);
+    const id = idOf(third);
+    expect(heldOf(id)).toBeTruthy();
+    delete process.env.FUOBE_HOSTED_RUNS;
+    try {
+      await tick();
+      const g = db().prepare("SELECT status, error FROM generations WHERE id = ?").get(id);
+      expect(g).toEqual({ status: "failed", error: "This run stopped before it started. Press Retry." });
+      expect(heldOf(id)).toBeUndefined();
+      expect(holds.anyHeld()).toBe(false);
+    } finally {
+      process.env.FUOBE_HOSTED_RUNS = "1";
+    }
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { placeOf } from "@/lib/place-name";
 import { quoteBody } from "@/lib/hosted";
-import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, offersRunOnSite, openCheckPlace, placePrice, placeRows, refusedBeforeRun, retryRequest, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, keyOnlyChip, mainModel, openCheckPlace, placePrice, placeRows, refusedBeforeRun, retryRequest, runPlace, toolPoolPrice, withPoolRefusal, type RunPlaceInput } from "@/lib/run-place";
 import { RUN_SHOWN_HEADER, shownHeader } from "@/lib/guest-access";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
@@ -253,13 +253,6 @@ describe("Retry and Run on <the place> on a run's tile", () => {
     expect(retryRequest({ request, place: "pool" }, false)).toBe(request);
     expect(retryRequest({ request }, false)).toBe(request);
   });
-  it("Run on <the place>: an open run that failed on the person's own GPU, while hosted runs are on", () => {
-    expect(offersRunOnSite({ engine: "open", status: "failed" }, true)).toBe(true);
-    expect(offersRunOnSite({ engine: "open", status: "failed", place: "pool" }, true)).toBe(false);
-    expect(offersRunOnSite({ engine: "cloud", status: "failed" }, true)).toBe(false);
-    expect(offersRunOnSite({ engine: "open", status: "canceled" }, true)).toBe(false);
-    expect(offersRunOnSite({ engine: "open", status: "failed" }, false)).toBe(false);
-  });
 });
 
 describe("the Run on list", () => {
@@ -433,5 +426,22 @@ describe("Run on a tool page (Character Sheet, AI Influencer) after its price ch
       expect(src, page).toContain("refusedBeforeRun(preview.data, preview.isPlaceholderData)");
       expect(src, page).not.toMatch(/if (preview.data?.error) return/);
     }
+  });
+});
+
+describe("an item only an own setup runs, for an account whose runs go to its key", () => {
+  const key = { provider: "fal" as const, price: "≈ $0.04" };
+  const base = { ownSetup: true, key, gpu: false, picked: "key" as const, rows: false };
+  it("the chip says the key's price first, and who bills it", () => {
+    expect(keyOnlyChip(base)).toEqual({ text: "≈ $0.04 · your key", tip: "Runs with your fal.ai key · billed to your fal.ai account" });
+  });
+  it("never without a price, with a GPU, with another pick, with the Run on list, or for an item the GPUs take", () => {
+    expect(keyOnlyChip({ ...base, key: { ...key, price: null } })).toBeNull();
+    expect(keyOnlyChip({ ...base, key: null })).toBeNull();
+    expect(keyOnlyChip({ ...base, gpu: true })).toBeNull();
+    expect(keyOnlyChip({ ...base, picked: "site" })).toBeNull();
+    expect(keyOnlyChip({ ...base, picked: null })).toBeNull();
+    expect(keyOnlyChip({ ...base, rows: true })).toBeNull();
+    expect(keyOnlyChip({ ...base, ownSetup: false })).toBeNull();
   });
 });

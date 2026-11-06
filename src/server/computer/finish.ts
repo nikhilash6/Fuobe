@@ -61,10 +61,14 @@ export function finishTask(generationId: string, kind: FinishKind, step = 0): Ta
   return rows.find((t) => ticketOf(t)?.kind === kind && (json<{ step?: number }>(t.extra_json, {}).step ?? 0) === step) ?? null;
 }
 
-/** The wait the run was stamped with (the billing service's limit), else this install's (FUOBE_POOL_WAIT_MIN). */
-function runWaitMs(generationId: string): number {
+/**
+ * The wait the run was stamped with (the billing service's limit; 0: as long as it takes, so none), else this
+ * install's (FUOBE_POOL_WAIT_MIN). Undefined: no limit.
+ */
+function runWaitMs(generationId: string): number | undefined {
   const r = db().prepare("SELECT json_extract(request_json, '$.waitMs') AS w FROM generations WHERE id = ?").get(generationId) as { w: unknown } | undefined;
-  const w = Number(r?.w);
+  const w = r?.w === null || r?.w === undefined ? NaN : Number(r.w);
+  if (w === 0) return undefined;
   return Number.isFinite(w) && w > 0 ? w : poolWaitMs();
 }
 
@@ -72,7 +76,7 @@ function runWaitMs(generationId: string): number {
  * Queue a finishing job for an account's run: its files staged as the account's (a picture with what it carries besides
  * its pixels blanked, as for a run's job), its ticket checked as the worker will check it, in the run's class and at the
  * run's place in line. It waits for a worker's CPU slot as long as the run was allowed to wait in line (its stamped wait,
- * else this install's): a job no CPU slot took by then fails, and the run ends without what it would have made (a 3D
+ * else this install's; stamped 0: as long as it takes): a job no CPU slot took by then fails, and the run ends without what it would have made (a 3D
  * model keeps its raw GLB; a camera path's step says one plain sentence). Once a CPU slot took it, it waits in its place
  * after any recovery, as every job does. Once a run (and step): while a job of this kind for it is in line, running or
  * done, its id comes back and nothing new is queued, in one locked step even while another app process (a deploy's
@@ -116,6 +120,7 @@ export function queueFinish(o: {
       // job of its own yet, and keeps the place of the steps of its run before it.
       const run = runPlaceOf(o.generationId);
       const now = Date.now();
+      const wait = runWaitMs(o.generationId);
       const t = createTask({
         principal,
         generationId: o.generationId,
@@ -131,7 +136,7 @@ export function queueFinish(o: {
           rankAt: run?.rankAt ?? now,
           lane: "small",
           needs: { workflowId: `finish-${o.kind}`, files: [], packs: [], minVramBytes: 0 },
-          notAfter: now + runWaitMs(o.generationId),
+          ...(wait !== undefined && { notAfter: now + wait }),
           slot: "cpu",
         },
       });

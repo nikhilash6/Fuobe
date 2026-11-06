@@ -270,7 +270,7 @@ function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onTok
 export function useWorkers(enabled: boolean) {
   return useQuery({
     queryKey: ["admin", "workers"],
-    queryFn: () => call<{ workers: WorkerView[]; lanes: Lane[]; held?: HeldCounts }>("GET", "/api/admin/workers"),
+    queryFn: () => call<{ workers: WorkerView[]; lanes: Lane[]; held?: HeldCounts; hosted?: boolean }>("GET", "/api/admin/workers"),
     enabled,
     refetchInterval: 10_000,
   });
@@ -317,7 +317,8 @@ export function WorkersAdmin() {
           Run this studio&apos;s ComfyUI jobs on the workers
         </label>
       </div>
-      <PlaceNameField saved={where.data?.find((s) => s.name === "hostedPlaceName")} />
+      {/* The name visitors read for these GPUs: asked for only while hosted runs are on. */}
+      {q.data?.hosted && <PlaceNameField saved={where.data?.find((s) => s.name === "hostedPlaceName")} />}
       {token && <TokenOnce token={token} onDone={() => setToken(null)} />}
       <form
         className="flex flex-wrap items-center gap-2"

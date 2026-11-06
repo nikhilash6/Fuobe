@@ -218,7 +218,7 @@ export function hostedGuestWords() {
 export function outputsWords(cap: number, guest: boolean, place: Place): string {
   const most = cap === 1 ? "one at a time" : `up to ${cap} at a time`;
   const pick = cap === 1 ? "Pick one" : `Pick ${cap} or fewer`;
-  return guest ? `Makes ${most}. ${pick}.` : `Makes ${most} on ${place.text}. ${pick}, or connect your own GPU in Settings.`;
+  return guest ? `Makes ${most}. ${pick}.` : `Makes ${most} on ${place.text}. ${pick}, or run it on your own GPU.`;
 }
 
 /** Are these words outputsWords (a run past the outputs a run here makes: the person picks fewer), not a label? */
@@ -355,17 +355,30 @@ function ownServerPlace(pressedAt: number): LinePlace {
 }
 
 /**
- * About when a run held behind the account's runs going would be ready: when the first of them still in line is due
- * done, plus a new run's wait now. Null when that isn't known (none of them waits in line with an estimate).
+ * About when a run held behind the account's runs going would be ready: when the first of them is due done (one in line:
+ * its wait; one working: its time left, from its GPU task's estimate, else a typical run's), plus a new run's wait now.
+ * Null when that isn't known (none of them has an estimate).
  */
-function mineEta(accountId: string, workflow: string | null): number | null {
+function mineEta(accountId: string, workflow: string | null, now = Date.now()): number | null {
   const going = db()
-    .prepare(`SELECT g.id FROM generations g WHERE ${POOL_ROWS} AND json_extract(g.request_json, '$.account') = ? AND ${NOT_HELD("g")}`)
-    .all(accountId) as { id: string }[];
+    .prepare(
+      `SELECT g.id, r.started_at FROM generations g LEFT JOIN generation_runs r ON r.id = g.id
+       WHERE ${POOL_ROWS} AND json_extract(g.request_json, '$.account') = ? AND ${NOT_HELD("g")}`,
+    )
+    .all(accountId) as { id: string; started_at: number | null }[];
   let first: number | null = null;
+  let typical: number | null | undefined;
   for (const g of going) {
-    const q = placeInLine(g.id);
-    if (q?.etaSeconds != null) first = first === null ? q.etaSeconds : Math.min(first, q.etaSeconds);
+    let eta: number | null = null;
+    if (g.started_at !== null) {
+      const task = db().prepare("SELECT est_ms, started_at FROM relay_tasks WHERE generation_id = ? AND state = 'running' ORDER BY created_at DESC LIMIT 1").get(g.id) as
+        | { est_ms: number | null; started_at: number | null }
+        | undefined;
+      const est = task?.est_ms ?? (typical === undefined ? (typical = typicalRunMs()) : typical);
+      const since = task?.started_at ?? g.started_at;
+      if (est !== null && est > 0) eta = Math.max(5, Math.round((est - (now - since)) / 1000));
+    } else eta = placeInLine(g.id)?.etaSeconds ?? null;
+    if (eta !== null) first = first === null ? eta : Math.min(first, eta);
   }
   if (first === null) return null;
   const own = queueFacts(accountId, workflow).etaS;

@@ -23,7 +23,8 @@ import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { useCreateGeneration, useGenerationActions, useMakingPoolRuns, usePlaceName, useStatus } from "@/lib/api";
 import { knownPlace } from "@/lib/place-name";
 import { runOnSiteAction } from "@/lib/diagnose";
-import { offersRunOnSite, retryRequest } from "@/lib/run-place";
+import { retryRequest } from "@/lib/run-place";
+import { shownTroubleActions, siteRunOf, siteRunRequest } from "@/lib/site-run";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
@@ -179,9 +180,12 @@ const FILE_TROUBLE: readonly string[] = Object.values(FILE_TROUBLE_WORDS);
 export function FailedTile({ g, ratio, onRetry, onReuse }: { g: Generation; ratio: number; onRetry: () => void; onReuse?: () => void }) {
   const create = useCreateGeneration();
   const trouble = g.status === "failed" ? g.trouble : undefined;
-  // Hosted runs: a run that failed on the person's own GPU can run once on this studio's GPUs instead.
+  // Hosted runs: a run that failed on the person's own GPU or key can run once on this studio's GPUs instead, when they
+  // take it (on its key: its open version).
   const site = usePlaceName();
-  const onSite = !!trouble && offersRunOnSite(g, !!site);
+  const pool = useStatus().data?.viewer?.pool;
+  const siteRun = trouble ? siteRunOf(g, !!site, pool) : null;
+  const actions = trouble ? shownTroubleActions(trouble.actions, !!site) : [];
   // A run on this studio's GPUs that couldn't finish: one plain sentence (the server's), nothing technical.
   const poolFailed = g.place === "pool" && g.status === "failed";
   const reuseFirst = poolFailed && !!onReuse && FILE_TROUBLE.includes(g.error ?? "");
@@ -202,12 +206,12 @@ export function FailedTile({ g, ratio, onRetry, onReuse }: { g: Generation; rati
       {trouble && (
         <TroubleActions
           className="mt-2"
-          actions={onSite && site ? [runOnSiteAction(site.label), ...trouble.actions] : trouble.actions}
+          actions={siteRun && site ? [runOnSiteAction(site.label), ...actions] : actions}
           skip={["retry"]}
           max={3}
           handlers={{
             onRunWithKey: (a) => create.mutate(onCloudKey(g.request, a), { onError: (e) => toastError(e) }),
-            onRunOnSite: () => create.mutate({ ...g.request, place: "pool" } as Generation["request"], { onError: (e) => toastError(e) }),
+            onRunOnSite: () => siteRun && create.mutate(siteRunRequest(g, siteRun), { onError: (e) => toastError(e) }),
           }}
         />
       )}

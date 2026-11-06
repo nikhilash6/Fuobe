@@ -1,6 +1,8 @@
 import "server-only";
 import type { Account } from "./auth";
+import { db } from "./db";
 import { HookDown, hookCall, hookTarget, type HookTarget } from "./hook-client";
+import { hostedRunsOn } from "./hosted-switch";
 
 /**
  * The billing hook (docs/billing-hook.md): an install can connect an external billing service at FUOBE_BILLING_URL.
@@ -321,6 +323,7 @@ export async function policy(accountId: string | null): Promise<Policy | null> {
     const p = await call<Policy>("GET", accountId ? `/v1/policy?account=${encodeURIComponent(accountId)}` : "/v1/policy", undefined, BILLING_TIMEOUTS.policy);
     const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
     keep({ at: Date.now(), ttlMs, policy: p, goodAt: Date.now(), ...(p.prefer && { prefer: p.prefer }) });
+    savePolicy(key, p);
     return p;
   } catch (e) {
     logDown("policy", e);
@@ -344,8 +347,48 @@ export function lastPrefer(accountId: string | null): Policy["prefer"] {
   if (!billingConfigured()) return OPEN_POLICY.prefer;
   const cache = globalThis.__fuobeBillingPolicies;
   const own = cache?.get(accountId ?? "");
-  // (Its own last answer, when the service ever answered for it; else a guest's.)
-  return own?.goodAt !== undefined ? own.prefer : cache?.get("")?.prefer;
+  // (Its own last answer, when the service ever answered for it here; else the one kept across restarts; else a guest's.)
+  if (own?.goodAt !== undefined) return own.prefer;
+  const kept = savedPolicy(accountId ?? "");
+  return kept ? kept.prefer : cache?.get("")?.prefer;
+}
+
+/** Keep the service's answer across restarts (hosted runs on only): the key's own, and an account's as the last any got. */
+function savePolicy(key: string, p: Policy): void {
+  if (!hostedRunsOn()) return;
+  try {
+    const put = db().prepare("INSERT INTO billing_policies (key, policy_json, at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET policy_json = excluded.policy_json, at = excluded.at");
+    const json = JSON.stringify(p);
+    const now = Date.now();
+    put.run(key, json, now);
+    if (key) put.run("*", json, now);
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't keep the billing policy: ${(e as Error).message}`);
+  }
+}
+
+/** The answer kept for this key across restarts, or null. */
+function savedPolicy(key: string): Policy | null {
+  if (!hostedRunsOn()) return null;
+  try {
+    const r = db().prepare("SELECT policy_json FROM billing_policies WHERE key = ?").get(key) as { policy_json: string } | undefined;
+    return r ? (JSON.parse(r.policy_json) as Policy) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * While the billing service doesn't answer and nothing recent is kept in memory (a restart, an outage past
+ * POLICY_KEEP_MS, an account it never answered for here): its last answer kept across restarts, the account's own, else
+ * the last any account got (a guest's for a guest). Only one under which runs wait instead of being refused (holdsOn):
+ * a run pressed now is taken and waits for the service in line, and is reserved and checked when it answers. Null
+ * otherwise (the press is refused as before). No service: OPEN_POLICY.
+ */
+export function keptPolicy(accountId: string | null): Policy | null {
+  if (!billingConfigured()) return OPEN_POLICY;
+  const p = accountId ? (savedPolicy(accountId) ?? savedPolicy("*")) : savedPolicy("");
+  return p && holdsOn(p) ? p : null;
 }
 
 /** After how long a wait the line before Run offers an account its own GPU or key for that run, when the policy says none (s). */
@@ -374,10 +417,14 @@ export function heldCap(p: Pick<Policy, "limits"> | null | undefined): number {
   return holdsOn(p) ? Math.floor(p!.limits.held!) : 0;
 }
 
-/** After how long a wait the line before Run offers an account its own GPU or key, as the policy says (s). */
+/**
+ * After how long a wait the line before Run offers an account its own GPU or key, as the policy says (s). 0 turns the
+ * offer off for waits (Infinity): it shows only at the daily cap and while runs there are paused.
+ */
 export function policyOfferAfterS(p: Pick<Policy, "limits"> | null | undefined): number {
   const s = p?.limits?.offerAfterS;
-  return typeof s === "number" && Number.isFinite(s) && s >= 0 ? s : POOL_OFFER_AFTER_S;
+  if (s === 0) return Infinity;
+  return typeof s === "number" && Number.isFinite(s) && s > 0 ? s : POOL_OFFER_AFTER_S;
 }
 
 /**

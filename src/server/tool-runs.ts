@@ -30,6 +30,7 @@ export function dryRunSteps(start: () => unknown): ToolStep[] {
   try {
     d.transaction(() => {
       const made = captureRun(start);
+      made.settle();
       if (made.value && typeof (made.value as { then?: unknown }).then === "function") throw new Error("A run that waits before it starts can't be planned here.");
       const q = d.prepare("SELECT request_json, depends_on FROM generations WHERE id = ?");
       steps = made.ids.flatMap((id) => {

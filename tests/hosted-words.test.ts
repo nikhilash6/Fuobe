@@ -167,7 +167,7 @@ describe("the words for runs on this install's GPUs", () => {
   it("say the place by its name, as a label and inside a sentence, with no verb that agrees with it", () => {
     expect(hostedWords(NAMED).notHosted).toBe("Your account can't run on Studio North GPUs right now. Your own GPU or key still works.");
     expect(hostedWords(DEFAULT).notHosted).toBe("Your account can't run on our GPUs right now. Your own GPU or key still works.");
-    expect(outputsWords(3, false, NAMED)).toBe("Makes up to 3 at a time on Studio North GPUs. Pick 3 or fewer, or connect your own GPU in Settings.");
+    expect(outputsWords(3, false, NAMED)).toBe("Makes up to 3 at a time on Studio North GPUs. Pick 3 or fewer, or run it on your own GPU.");
     expect(outputsWords(1, true, NAMED)).toBe("Makes one at a time. Pick one.");
     expect(runPlace({ audience: "account", engine: "open", hosted: true, pool: { text: "" }, place: NAMED, format: String })).toMatchObject({ label: "Studio North GPUs", title: "Runs on Studio North GPUs" });
     const agrees = new RegExp(`(Studio North GPUs|our GPUs|Our GPUs)\\s+(is|are|was|were|make|makes|run|runs|has|have)\\b`);

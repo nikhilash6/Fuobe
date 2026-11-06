@@ -16,6 +16,8 @@ export interface PlaceIntroViewer {
   ranOwn?: boolean;
   gpu: { connected: boolean };
   keys?: CloudProvider[];
+  /** The policy's card words ("Try free"): runs there cost this account nothing, so the note may say "free". */
+  cardText?: string;
 }
 
 export interface PlaceIntro {
@@ -26,14 +28,19 @@ export interface PlaceIntro {
   keep: { label: string; runOn: "gpu" | "key"; key?: CloudProvider };
 }
 
-/** The note for this viewer, or null. `run`: the page's own button ("Generate", "Render", "Run"). */
-export function placeIntro(v: PlaceIntroViewer | undefined | null, run: string): PlaceIntro | null {
+/**
+ * The note for this viewer, or null. `run`: the page's own button ("Generate", "Render", "Run"), beside the composer's
+ * price chip. `chip`: a tool page's place chip instead (its words, such as "Our GPUs"), which opens the same list.
+ */
+export function placeIntro(v: PlaceIntroViewer | undefined | null, run: string, chip?: string): PlaceIntro | null {
   if (!v?.hosted || v.kind !== "account" || !v.ranOwn || v.runOn) return null;
   const place = placeOf(v.placeName);
+  // "Free" only while runs there cost this account nothing (the policy's card words say so).
+  const free = !!v.cardText?.trim();
   if (v.gpu.connected) {
     return {
-      lead: `Runs now go to ${place.text}, free.`,
-      rest: `Your GPU is one tap away: Free ▾, next to ${run}.`,
+      lead: free ? `Runs now go to ${place.text}, free.` : `Runs now go to ${place.text}.`,
+      rest: chip ? `Your GPU is one tap away: tap ${chip} to pick it.` : `Your GPU is one tap away: ${free ? "Free ▾" : "the price"}, next to ${run}.`,
       keep: { label: "Keep my GPU as the default", runOn: "gpu" },
     };
   }
@@ -41,7 +48,7 @@ export function placeIntro(v: PlaceIntroViewer | undefined | null, run: string):
   const key = keys.includes("fal") ? "fal" : keys[0];
   if (!key) return null;
   return {
-    lead: `Open models now run free on ${place.text}.`,
+    lead: free ? `Open models now run free on ${place.text}.` : `Open models now run on ${place.text}.`,
     rest: `Your ${CLOUD_KEY[key].label} key still runs the cloud models: pick Cloud in the model list.`,
     keep: { label: "Keep my key as the default", runOn: "key", key },
   };

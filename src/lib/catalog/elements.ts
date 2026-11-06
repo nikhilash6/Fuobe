@@ -166,7 +166,9 @@ function elementPlan(req: GenerationRequest, model: ModelDef, mentioned: StudioE
  * prompt that tells the model which image is which. Leaves the request alone when nothing
  * is mentioned.
  */
-export function applyMentions(req: GenerationRequest, model: ModelDef, elements: StudioElement[]): MentionResolution {
+export function applyMentions(asked: GenerationRequest, model: ModelDef, elements: StudioElement[]): MentionResolution {
+  // "Run without LoRAs": none of the request's own either.
+  const req = asked.lorasOff && asked.loras ? { ...asked, loras: undefined } : asked;
   // Shots (multi-shot) can mention elements too.
   const shots = req.params?.shots;
   // Voices are picked in the voice menu, not mentioned in visual prompts.
@@ -191,7 +193,8 @@ export function applyMentions(req: GenerationRequest, model: ModelDef, elements:
   // LoRAs win over references for the model they were trained on.
   const loras: LoraRef[] = [...(req.loras ?? [])];
   const viaLora = new Set<string>();
-  for (const el of mentioned) {
+  // (Asked without LoRAs: every element goes in as its photos.)
+  for (const el of req.lorasOff ? [] : mentioned) {
     // A trained LoRA of this model's family, on the engine it runs on (Fuobe Soul ID). An older Soul ID kept only by
     // a reference id runs nowhere: the element is retrained on its photos.
     const l = identityFor(el.loras, model);

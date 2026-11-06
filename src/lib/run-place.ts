@@ -31,6 +31,8 @@ export interface RunPlaceInput {
   demo?: boolean;
   /** The tool's name when it runs for the studio's owner only (the Marketing suite): anyone else is told so. */
   ownerOnly?: string;
+  /** The studio that makes what such a tool makes now (hosted runs on: the way on from its chip). Default: Image. */
+  ownerOnlyStudio?: "image" | "video";
   /** An account's own GPU is connected (Your GPU). */
   gpu?: boolean;
   /** Hosted runs are on: an open model may run on this studio's GPUs when the viewer has no GPU of its own. */
@@ -65,6 +67,8 @@ export interface RunPlace {
   tip: string;
   /** After "Generate · " on the send button's tooltip: the price and the place, "Free · your GPU", "≈ $0.04 · cloud". */
   send: string;
+  /** A tool open to the owner only, while hosted runs are on: the studio that makes it now (a button in the chip's panel). */
+  way?: { label: string; href: string };
   /** What this viewer does before the run can start: create an account, connect a GPU, or add a key. */
   needs?: "signup" | "gpu" | "key";
   /** The run can't start now (this studio's GPUs refused it before Run): the send button is off, and these words say why. */
@@ -88,6 +92,11 @@ const uniq = (names: readonly string[] | undefined) => [...new Set((names ?? [])
  */
 const OWNER_ONLY_HOSTED: Omit<RunPlace, "tip"> = { where: "unavailable", label: "Coming soon", price: "", title: "Coming soon", send: "" };
 export const ownerOnlyTip = (tool: string): string => `${tool} isn't open to accounts yet. Try the Image, Video or Audio studio.`;
+
+/** The way on from such a tool: the studio that makes it now, on this studio's GPUs ("Make it in the Image studio"). */
+export function ownerOnlyWay(studio: "image" | "video" = "image"): { label: string; href: string } {
+  return studio === "video" ? { label: "Make it in the Video studio", href: "/video" } : { label: "Make it in the Image studio", href: "/image" };
+}
 
 /** The price's words (the studio composer's costLabel, without the place: the chip says that). */
 export function placePrice(s: { demo?: boolean; costUsd?: number | null; open: boolean }, format: (usd: number) => string): string {
@@ -113,7 +122,7 @@ export function runPlace(input: RunPlaceInput): RunPlace {
   }
   if (input.ownerOnly && audience !== "owner") {
     // Hosted runs on: said as what is coming, with the way on now (no visitor's own GPU or key runs it yet, so no setup).
-    if (input.hosted) return { ...OWNER_ONLY_HOSTED, tip: ownerOnlyTip(input.ownerOnly) };
+    if (input.hosted) return { ...OWNER_ONLY_HOSTED, tip: ownerOnlyTip(input.ownerOnly), way: ownerOnlyWay(input.ownerOnlyStudio) };
     return {
       where: "unavailable",
       label: "Not available here",
@@ -294,12 +303,6 @@ export function retryRequest<R extends object>(g: { request: R; place?: "pool" }
   return hosted ? { ...g.request, place: g.place === "pool" ? "pool" : "own" } : g.request;
 }
 
-/**
- * "Run on Our GPUs" on a run that failed on the person's own GPU (hosted runs): an open run that ran there. One-off: it
- * is sent again here, named, and the account's pick stays as it was.
- */
-export const offersRunOnSite = (g: { place?: "pool"; engine: string; status: string }, hosted: boolean): boolean => hosted && g.place !== "pool" && g.engine === "open" && g.status === "failed";
-
 /** One row of the Run on list: a place, the line under it, and whether this item's runs go there now. */
 export interface RunOnRow {
   id: RunOnPick;
@@ -334,6 +337,16 @@ export interface RunOnViewer {
 
 /** The footer under the list: a pick holds for later runs too. */
 export const RUN_ON_FOOTER = "Your next runs go here too.";
+
+/**
+ * An item this studio's GPUs can't run, for an account with no GPU whose runs go to its key (hosted runs): Generate runs
+ * it on the key's cloud version, so the price chip says the key's price first, and its tooltip who bills it. Null in any
+ * other case, and with no price known (a key is never billed by a press that showed none: Run then opens the choice).
+ */
+export function keyOnlyChip(o: { ownSetup: boolean; key: { provider: CloudProvider; price: string | null } | null; gpu: boolean; picked: RunOnPick | null | undefined; rows: boolean }): { text: string; tip: string } | null {
+  if (!o.ownSetup || !o.key?.price || o.gpu || o.picked !== "key" || o.rows) return null;
+  return { text: `${o.key.price} · your key`, tip: `Runs with your ${CLOUD_KEY[o.key.provider].label} key · billed to ${billedTo(o.key.provider)}` };
+}
 
 /** The words of a key's row: its price first when known, and who bills it. */
 export const keyRowSub = (p: CloudProvider, price?: string | null): string => (price ? `${price} · billed to ${billedTo(p)}` : `Billed to ${billedTo(p)}`);

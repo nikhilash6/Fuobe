@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { StatusInfo } from "./api";
+import { useEngine, type StatusInfo } from "./api";
 import { refreshPriceChecks } from "./hosted";
 import type { Place } from "./place-name";
 import type { RunOnPick } from "./run-place";
@@ -38,6 +38,12 @@ export function noteRunOn(qc: QueryClient, runOn: RunOnPick | null, runKey?: Clo
   });
 }
 
+/**
+ * The engine the studios move to when the account's pick is kept: Cloud for its key, Open source when it moves away
+ * from its key, none otherwise (the person's own switch stays).
+ */
+export const keyEngine = (was: RunOnPick | null | undefined, now: RunOnPick | null): "cloud" | "open" | null => (now === "key" ? "cloud" : was === "key" ? "open" : null);
+
 /** Keep the account's pick (PUT /api/account/run-on). Throws the server's words when it can't. */
 export async function putRunOn(runOn: RunOnPick, key?: CloudProvider): Promise<{ runOn: RunOnPick | null; runKey?: CloudProvider }> {
   const res = await fetch(RUN_ON_PATH, {
@@ -60,10 +66,21 @@ export async function putRunOn(runOn: RunOnPick, key?: CloudProvider): Promise<{
  */
 export function useSetRunOn() {
   const qc = useQueryClient();
+  const [, setEngine] = useEngine();
   return useMutation({
     mutationFn: ({ runOn, key }: { runOn: RunOnPick; key?: CloudProvider }) => putRunOn(runOn, key),
-    onMutate: ({ runOn, key }) => noteRunOn(qc, runOn, key),
-    onSuccess: (r) => noteRunOn(qc, r.runOn, r.runKey),
+    onMutate: ({ runOn, key }) => {
+      const was = qc.getQueryData<StatusInfo>(["status"])?.viewer?.runOn;
+      noteRunOn(qc, runOn, key);
+      return { was };
+    },
+    onSuccess: (r, _asked, ctx) => {
+      noteRunOn(qc, r.runOn, r.runKey);
+      // The studios follow a pick made anywhere (Settings, a tool page's note): a key runs on Cloud, and a pick away
+      // from the key back on Open source.
+      const next = keyEngine(ctx?.was, r.runOn);
+      if (next) setEngine(next);
+    },
     onError: (e) => toast((e as Error).message, { id: "run-on" }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["status"] });

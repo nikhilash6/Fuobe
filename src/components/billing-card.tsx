@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useStatus } from "@/lib/api";
 import { BILLING_EVENT, refreshPriceChecks, safeLink, useInterest, type BillingRefusalDetail } from "@/lib/hosted";
 
 /**
@@ -36,10 +37,15 @@ export function BillingCard() {
   const changed = r?.code === "price-changed";
   const [sending, setSending] = useState(false);
   const runAgain = changed ? r?.runAgain : undefined;
-  const sendAgain = async () => {
-    if (!runAgain) return;
+  // Hosted runs: the way to the account's own GPU says what it does. Connected: the same run, sent there now; else the
+  // way to connect one. (Off hosted runs: as it always was.)
+  const viewer = useStatus().data?.viewer;
+  const hosted = !!viewer?.hosted && viewer.kind === "account";
+  const runOwn = hosted && viewer.gpu.connected ? r?.runOwn : undefined;
+  const sendAgain = async (send = runAgain) => {
+    if (!send) return;
     setSending(true);
-    const started = await runAgain().finally(() => setSending(false));
+    const started = await send().finally(() => setSending(false));
     if (started) {
       setOpen(false);
       void qc.invalidateQueries({ queryKey: ["generations"] });
@@ -63,11 +69,17 @@ export function BillingCard() {
           {r?.offer && <p className="text-[13px] text-muted-foreground">{r.offer.text}</p>}
         </DialogHeader>
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button asChild variant="ghost" size="sm" onClick={() => setOpen(false)}>
-            <Link href="/connect">
-              <Cpu /> Use your own GPU (free)
-            </Link>
-          </Button>
+          {runOwn ? (
+            <Button variant="ghost" size="sm" disabled={sending} onClick={() => void sendAgain(runOwn)}>
+              <Cpu /> Run on your GPU
+            </Button>
+          ) : (
+            <Button asChild variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              <Link href="/connect">
+                <Cpu /> {hosted ? "Connect your GPU" : "Use your own GPU (free)"}
+              </Link>
+            </Button>
+          )}
           <div className="flex gap-2">
             {r?.offer && (
               <Button size="sm" variant="secondary" disabled={interest.isPending} onClick={() => interest.mutate(r.offer!.key, { onSuccess: () => setOpen(false) })}>

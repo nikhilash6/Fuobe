@@ -1198,6 +1198,8 @@ function open(): Database.Database {
   db.exec(RUN_ON_TABLES);
   // Runs on this install's GPUs waiting to enter the line (pool-holds.ts): empty unless hosted runs are on.
   db.exec(POOL_HOLD_TABLES);
+  // The billing service's last policy answer (billing.ts keptPolicy): empty unless hosted runs are on.
+  db.exec(KEPT_POLICY_TABLES);
   // Its list reads this small summary, never every board's pages (a table made before it had the column gets it).
   if (!(db.prepare("PRAGMA table_info(account_canvases)").all() as { name: string }[]).some((c) => c.name === "summary_json")) {
     addColumn(db, "ALTER TABLE account_canvases ADD COLUMN summary_json TEXT");
@@ -1270,6 +1272,16 @@ const POOL_HOLD_TABLES = `CREATE TABLE IF NOT EXISTS pool_holds (
   );
   CREATE INDEX IF NOT EXISTS pool_holds_account ON pool_holds(account_id, pressed_at);
   CREATE INDEX IF NOT EXISTS pool_holds_run ON pool_holds(run_id);`;
+
+/**
+ * The billing service's last policy answer, kept across restarts (billing.ts keptPolicy): by account id, '' for a
+ * guest's, '*' for the last any account got. Written only while hosted runs are on. Not a numbered migration.
+ */
+const KEPT_POLICY_TABLES = `CREATE TABLE IF NOT EXISTS billing_policies (
+    key TEXT PRIMARY KEY,
+    policy_json TEXT NOT NULL,
+    at INTEGER NOT NULL
+  );`;
 
 /**
  * The runs let in whose rows are still being made (a tool's start that awaits before it makes them), counted until they

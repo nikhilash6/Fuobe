@@ -670,7 +670,14 @@ With it on:
   (or key) and **OK**. Both keep a pick, so the note shows once for the account, on any device.
 - A connected GPU runs what this install's GPUs don't take with the first press ("Free · your GPU"). A key runs such an
   item only when the key is the account's pick; otherwise the press shows "Run with your fal.ai key · ≈ $0.04" (one run,
-  its price first) and Connect your GPU. A key is never billed by a press that showed "Free".
+  its price first) and Connect your GPU. A key is never billed by a press that showed "Free": with the key as the pick,
+  the price chip says the key's price first ("≈ $0.04 · your key"), and every key offer on a failed run's tile carries
+  its price (one with no price known is not shown).
+- A run that failed on the account's own GPU or key offers **Run on …** once, only when this install's GPUs take it
+  (on a key: the item's open version), and the account's pick stays. When its key turned the last run down (out of
+  credit, not accepted), the composer says so before the next press, with the same **Run on …**.
+- A tool open to the owner only (Marketing Studio, Ads Studio, Ad Multiplier, Click to Ad) reads "Coming soon" to
+  accounts, with a press to the studio that makes it now ("Make it in the Image studio").
 - Visitors read this install's GPUs by one place name: "Runs on our GPUs", "Made on: Our GPUs", "Run on Our GPUs".
   The billing service's policy sets it (`placeName`); without one, Settings → Workers → Name for your GPUs, else
   `FUOBE_PLACE_NAME`, else "Our GPUs". It is never sent while hosted runs are off.
@@ -734,7 +741,7 @@ With it on:
   "starts in about 3 h" when the first is due back at a known time). An account whose runs go to the studio's GPUs is
   never moved to its own GPU for that, nor while the billing service is quiet; only what those GPUs can't run at all
   goes there. After a long wait (the policy's `limits.offerAfterS`, 20 minutes by default, or a wait with no end
-  known) an account with its own GPU, or a key that runs the item's cloud version, is offered it for that one run
+  known; 0 turns this offer off) an account with its own GPU, or a key that runs the item's cloud version, is offered it for that one run
   ("Run it now on your GPU", "Run it now with your fal.ai key · ≈ $0.04"), and its pick of where runs go stays.
 - How long a run may wait before a GPU first takes it: the billing service's `limits.giveUpS` when its policy says
   (0: as long as it takes), else what its reserve answer says, else `FUOBE_POOL_WAIT_MIN` minutes (30 by default).

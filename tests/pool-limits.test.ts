@@ -536,7 +536,8 @@ describe("where a run goes", () => {
     expect((await hostedRun.decidePlace(acct, req, undefined)).kind).toBe("pool");
     expect((await hostedRun.poolQuote(acct, req, undefined))?.line).toMatchObject({ unknown: true });
     beatWith(worker, catalogVersion());
-    // The service goes quiet for longer than its last answer stands: the run waits for it, never sent to the own GPU.
+    // The service goes quiet for longer than its last answer stands: never sent to the own GPU. Under a policy without
+    // runs that wait (`held`) it is refused as before; with them it is held for the service (pool-holds.test.ts, A3 cold).
     fake.down = "error";
     try {
       const kept = globalThis.__fuobeBillingPolicies!.get(a.id)!;
@@ -713,6 +714,43 @@ describe("where a run goes", () => {
     // No billing service: as any account.
     delete process.env.FUOBE_BILLING_URL;
     expect((await visitorStatus(null)).viewer.hosted).toBe(true);
+  });
+  it("a run refused there only for its LoRAs says so, and runs there without them", async () => {
+    withBilling({ prefer: "pool", limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const LORA = { loras: [{ file: "x.safetensors", url: "https://huggingface.co/x/x.safetensors" }] };
+    type Check = { place?: string; quote?: { allowed: boolean; withoutLoras?: true } };
+    const refused = (await preview({ ...IMAGE, ...LORA, place: "pool" }, a.cookie)).body as Check;
+    expect(refused.quote).toMatchObject({ allowed: false, withoutLoras: true });
+    const without = (await preview({ ...IMAGE, ...LORA, place: "pool", lorasOff: true }, a.cookie)).body as Check;
+    expect(without.quote).toMatchObject({ allowed: true });
+    expect(without.quote?.withoutLoras).toBeUndefined();
+  });
+
+  it("offer_after_s 0 turns the wait offer off: an unknown wait is not long, and a known one never is", async () => {
+    expect(billing.policyOfferAfterS({ limits: { offerAfterS: 0 } } as never)).toBe(Infinity);
+    expect(billing.policyOfferAfterS({ limits: { offerAfterS: 1200 } } as never)).toBe(1200);
+    expect(billing.policyOfferAfterS({ limits: {} } as never)).toBe(billing.POOL_OFFER_AFTER_S);
+    withBilling({ prefer: "pool", limits: { activeRuns: 0, waiting: 0, runsPerHour: 0, offerAfterS: 0 } });
+    const a = account({ gpu: "online" });
+    const req = { ...IMAGE, account: a.id } as never;
+    pool.patchWorker(worker.id, { paused: true });
+    try {
+      const away = await hostedRun.poolQuote(auth.accountById(a.id)!, req, undefined);
+      expect(away?.line).toMatchObject({ unknown: true });
+      expect(away?.line.long).toBeUndefined();
+    } finally {
+      pool.patchWorker(worker.id, { paused: false });
+      beatWith(worker, catalogVersion());
+    }
+    withBilling({ prefer: "pool", limits: { activeRuns: 0, waiting: 0, runsPerHour: 0, offerAfterS: 1200 } });
+    pool.patchWorker(worker.id, { paused: true });
+    try {
+      expect((await hostedRun.poolQuote(auth.accountById(a.id)!, req, undefined))?.line.long).toBe(true);
+    } finally {
+      pool.patchWorker(worker.id, { paused: false });
+      beatWith(worker, catalogVersion());
+    }
   });
 });
 

@@ -1238,6 +1238,8 @@ export interface GenerationRequest {
   mix?: { presetId: string; strength: number };
   /** LoRAs added by @element mentions (trained identities, server-side), or a recipe's LoRAs sent by the evaluation harness. */
   loras?: LoraRef[];
+  /** "Run without LoRAs" (hosted runs): an @element with a trained LoRA goes in as its photos instead. */
+  lorasOff?: true;
   /**
    * The engine a model that runs on both (a Fuobe Original, ModelDef.engines) runs on: the composer's switch.
    * Unset: the install's engine mode, else the first one connected (your GPU before the cloud).

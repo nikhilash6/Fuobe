@@ -181,14 +181,16 @@ export const endRunLease = (runId: string): void => endLease("pool_holds", runId
 /**
  * The run enters the line now: its holds go, in one step that only this app process's lease may take, and only for the
  * rows that still wait (one cancelled meanwhile is left out). Returns its rows to send (job index set) and the rank they
- * enter at, or null when it isn't this process's to release any more.
+ * enter at, or null when it isn't this process's to release any more. `room`: asked in the same locked step, so two app
+ * processes releasing an account's runs at once never pass its room among its runs going (false: it waits).
  */
-export function takeRun(runId: string, now = Date.now()): { send: { id: string; job: number }[]; rankAt: number | undefined } | null {
+export function takeRun(runId: string, now = Date.now(), room?: () => boolean): { send: { id: string; job: number }[]; rankAt: number | undefined } | null {
   const d = db();
   return d
     .transaction(() => {
       const rows = d.prepare(`SELECT * FROM pool_holds WHERE run_id = ? AND ${MINE_NOW}`).all(runId, leaseToken(), now) as HoldRow[];
       if (!rows.length) return null;
+      if (room && !room()) return null;
       d.prepare("DELETE FROM pool_holds WHERE run_id = ?").run(runId);
       const live = d.prepare("SELECT 1 FROM generations WHERE id = ? AND status = 'queued' AND external_id IS NULL");
       const send = rows.filter((r) => r.job !== null && live.get(r.generation_id)).map((r) => ({ id: r.generation_id, job: r.job! }));

@@ -19,6 +19,7 @@ import { sideMultipleProblem, upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, sourceLengthProblem, withoutTriggers } from "@/lib/catalog/plan";
+import { formatCost } from "@/lib/format";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
 import { dualEngine, onEngine, pickEngine } from "@/lib/catalog/engines";
@@ -126,7 +127,7 @@ import { engineMode, getSetting, withCandidates, withoutCandidates } from "./set
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp, type RunStamp } from "./run-stamp";
-import { anyHeld, dropHold, holdRun, NOT_HELD } from "./pool-holds";
+import { anyHeld, dropGone, dropHold, HELD, holdRun, NOT_HELD } from "./pool-holds";
 import { ACTIVE_STATES, FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { heldLine, placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
@@ -1311,6 +1312,9 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
     created.push(notes.length ? { ...toGeneration(row), notes } : toGeneration(row));
     const capture = captureStore().getStore();
     capture?.ids.push(id);
+    // A later step made inside a capture waits for the capture's start too: one whose earlier steps finished in an
+    // earlier run (a film's shots after its board) is otherwise sent before its run is kept or made to wait.
+    if (capture && waits) parked().set(id, Date.now() + PARK_MS);
     if (!waits) {
       const start = () => void submit(id, route, providerId, plan, req, i);
       if (capture) {
@@ -1343,17 +1347,41 @@ const captureStore = () => (globalThis.__fuobeRunCapture ??= new AsyncLocalStora
  * it (null: a later step, sent once its earlier steps are done), for a run that waits to enter the line instead
  * (pool-holds.ts): its rows are sent later from what is stored (sendHeld). (An awaiting `fn` adds rows as it goes.)
  */
-export function captureRun<T>(fn: () => T): { value: T; ids: string[]; readonly rows: { id: string; job: number | null }[]; start: () => void } {
+export function captureRun<T>(fn: () => T): { value: T; ids: string[]; readonly rows: { id: string; job: number | null }[]; start: () => void; settle: () => void } {
   const cap: RunCapture = { ids: [], submits: [], jobs: new Map() };
   const value = captureStore().run(cap, fn);
+  const settle = () => cap.ids.forEach((id) => parked().delete(id));
   return {
     value,
     ids: cap.ids,
     get rows() {
       return cap.ids.map((id) => ({ id, job: cap.jobs.get(id) ?? null }));
     },
-    start: () => cap.submits.splice(0).forEach((s) => s()),
+    start: () => {
+      settle();
+      cap.submits.splice(0).forEach((s) => s());
+    },
+    settle,
   };
+}
+
+declare global {
+  var __fuobeParkedSteps: Map<string, number> | undefined;
+}
+/**
+ * Later steps made inside a capture that is not started or settled yet (captureRun), with when they stop waiting for it
+ * at the latest (a caller that never settles leaves nothing parked for long). advanceDependents leaves them alone.
+ */
+const parked = (): Map<string, number> => (globalThis.__fuobeParkedSteps ??= new Map<string, number>());
+const PARK_MS = 10 * 60_000;
+
+/** Is this later step still waiting for its capture (captureRun) to start or settle? */
+function isParked(id: string, now = Date.now()): boolean {
+  const until = parked().get(id);
+  if (until === undefined) return false;
+  if (until > now) return true;
+  parked().delete(id);
+  return false;
 }
 
 /** One row a run would make: its model, operation, provider, kind and app, and the earlier steps it waits for. */
@@ -1378,7 +1406,9 @@ export function plannedSteps(fn: () => unknown): PlannedStep[] {
   let steps: PlannedStep[] = [];
   try {
     d.transaction(() => {
-      steps = stepsOf(captureRun(fn).ids);
+      const run = captureRun(fn);
+      run.settle();
+      steps = stepsOf(run.ids);
       throw ROLLED_BACK;
     })();
   } catch (e) {
@@ -1603,7 +1633,8 @@ const SENT_ELSEWHERE = (table: string) =>
  * failed, was canceled or is gone (so they fail now, not after the others finish). A per-frame render keeps
  * hundreds of steps waiting for its lanes, and a plain "oldest 50 waiting" would hold every chain started after
  * it until its backlog drained. The steps this process is handing to a provider right now are still "queued":
- * the limit makes room for them. A step another app process is handing over is left to it.
+ * the limit makes room for them. A step another app process is handing over is left to it, and so is a step of a run
+ * that waits to enter the line (pool-holds.ts): it moves once its run is released.
  */
 const READY_DEPENDENTS = `SELECT g.* FROM generations g
   WHERE g.status = 'queued' AND g.external_id IS NULL AND g.depends_on IS NOT NULL
@@ -1611,7 +1642,7 @@ const READY_DEPENDENTS = `SELECT g.* FROM generations g
       NOT EXISTS (SELECT 1 FROM ${DEP_IDS} JOIN generations dep ON dep.id = d.value WHERE dep.status IN ('queued', 'running'))
       OR EXISTS (SELECT 1 FROM ${DEP_IDS} LEFT JOIN generations dep ON dep.id = d.value WHERE dep.id IS NULL OR dep.status IN ('failed', 'canceled'))
     )
-    AND NOT ${SENT_ELSEWHERE("g")}
+    AND NOT ${SENT_ELSEWHERE("g")} AND ${NOT_HELD("g")}
   ORDER BY g.created_at ASC LIMIT @limit`;
 
 /** The error a waiting step gets when an input failed (framesProgress tells these from a step's own failure). */
@@ -1681,11 +1712,11 @@ export const COMFY_WAIT = { ms: 60_000 };
 async function advanceDependents(): Promise<void> {
   const rows = db()
     .prepare(READY_DEPENDENTS)
-    .all({ limit: 50 + submitting().size, me: runnerToken(), quiet: Date.now() - QUIET_MS }) as Row[];
+    .all({ limit: 50 + submitting().size + parked().size, me: runnerToken(), quiet: Date.now() - QUIET_MS }) as Row[];
   // A forced look at ComfyUI, at most one a sweep, for the steps that found it not answering.
   let lookedAgain: Promise<boolean> | undefined;
   for (const r of rows) {
-    if (submitting().has(r.id)) continue;
+    if (submitting().has(r.id) || isParked(r.id)) continue;
     // A step queued before its model was retired runs on what replaced it (and its row says so).
     const moved = currentRequest(JSON.parse(r.request_json) as GenerationRequest);
     const stored = moved.request;
@@ -2216,18 +2247,36 @@ export function cloudTwin(req: Pick<GenerationRequest, "presetId" | "modelId">, 
   return null;
 }
 
-/** A GPU trouble's buttons, with "Run with your … key" when one of the account's keys runs this tool's cloud version. */
-function withKeyOffer(actions: TroubleAction[], account: string, req: Pick<GenerationRequest, "presetId" | "modelId">): TroubleAction[] {
+/**
+ * A GPU trouble's buttons, with "Run with your … key" when one of the account's keys runs this tool's cloud version.
+ * While hosted runs are on, only with its price (a key is never billed by a press that showed none).
+ */
+function withKeyOffer(actions: TroubleAction[], account: string, req: Pick<GenerationRequest, "presetId" | "modelId" | "params" | "op">): TroubleAction[] {
   if (actions.some((a) => a.kind === "run-with-key")) return actions;
   const twin = cloudTwin(req, account);
-  return twin ? [...actions, withKeyAction(twin.provider, twin.modelId, twin.op)] : actions;
+  if (!twin) return actions;
+  if (!hostedRunsOn()) return [...actions, withKeyAction(twin.provider, twin.modelId, twin.op)];
+  const price = keyRunPrice(twin, req);
+  return price ? [...actions, withKeyAction(twin.provider, twin.modelId, twin.op, price)] : actions;
+}
+
+/** A run's price on its cloud version (one run, at the request's settings), as a key offer says it ("≈ $0.04"), or null. */
+function keyRunPrice(twin: { modelId: string; op?: string }, req: Pick<GenerationRequest, "params" | "op">): string | null {
+  const m = getModel(twin.modelId);
+  if (!m) return null;
+  try {
+    const usd = estimateCost(dualEngine(m) ? onEngine(m, "cloud") : m, req.params ?? {}, 1, (twin.op ?? req.op) as Operation | undefined, false);
+    return usd != null && usd > 0 ? `≈ ${formatCost(usd)}` : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * What an account's run ran into, as diagnose.ts reads it: its own GPU's words (comfyui.ts troubleError), or its key's
  * provider's status and words. Undefined for anything else (a request's own problem, already in plain words).
  */
-function accountTrouble(e: unknown, account: string, providerId: string, stage: KeyStage, req?: Pick<GenerationRequest, "presetId" | "modelId">): Diagnosis | undefined {
+function accountTrouble(e: unknown, account: string, providerId: string, stage: KeyStage, req?: Pick<GenerationRequest, "presetId" | "modelId" | "params" | "op">): Diagnosis | undefined {
   const own = (e as { trouble?: Diagnosis } | null)?.trouble;
   if (own) return providerId === "comfyui" && req && own.cause.startsWith("gpu-") ? { ...own, actions: withKeyOffer(own.actions, account, req) } : own;
   if (!isCloudProvider(providerId)) return undefined;
@@ -2826,6 +2875,19 @@ function sweepInterrupted(): void {
 }
 
 /**
+ * Hosted runs were switched off while runs waited to enter the line: nothing will release them, so they end as a run cut
+ * off before it started does (the sweep's words), and their holds go. What the billing service set aside for them goes
+ * back (each ended row's report closes its hold; a run whose reserve was never answered is released by its request id).
+ */
+function endHeldRuns(): void {
+  const rows = db()
+    .prepare(`SELECT g.id FROM generations g WHERE g.status = 'queued' AND g.external_id IS NULL AND ${HELD("g")}`)
+    .all() as { id: string }[];
+  for (const r of rows) updateLive(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null });
+  dropGone();
+}
+
+/**
  * A run on this install's GPUs cut off between its row and its GPU task: it waits to enter the line again, at its
  * press-time place (its row's time), as the job it was in its run (its seed's offset). Its rows counted against the
  * account's limits already, so it enters as soon as it can. False for any other row.
@@ -2950,6 +3012,12 @@ async function tick(): Promise<void> {
     if (hostedRunsOn() && anyHeld()) {
       try {
         await (await import("./pool-release")).releaseHeldRuns();
+      } catch (e) {
+        console.warn(`[generations] runs waiting to enter the line: ${(e as Error).message}`);
+      }
+    } else if (anyHeld()) {
+      try {
+        endHeldRuns();
       } catch (e) {
         console.warn(`[generations] runs waiting to enter the line: ${(e as Error).message}`);
       }

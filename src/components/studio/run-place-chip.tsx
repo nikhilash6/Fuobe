@@ -134,7 +134,7 @@ export function RunPlaceChip({
   if (!place) return null;
   const Icon = ICONS[place.where];
   // Once, for an account whose runs moved to this studio's GPUs when hosted runs went on (a tool page starts runs too).
-  const intro = openRun ? <PlaceIntroNote run={runLabel} /> : null;
+  const intro = openRun ? <PlaceIntroNote run={runLabel} chip={place.label} /> : null;
   const price = pending && !place.price ? "…" : place.price;
   const canSwitch = !!(engine && onEngine && (place.where === "cloud" || place.where === "gpu" || place.where === "pool"));
   const many = (steps?.length ?? 0) > 1;
@@ -195,6 +195,11 @@ export function RunPlaceChip({
               <span>{many ? "In all" : "Price"}</span>
               <span className="font-mono tabular-nums">{place.price}</span>
             </p>
+          )}
+          {place.way && (
+            <Button asChild size="sm" className="w-full">
+              <Link href={place.way.href}>{place.way.label}</Link>
+            </Button>
           )}
           {place.needs === "signup" && (
             <Button asChild size="sm" className="w-full">

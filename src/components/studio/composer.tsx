@@ -20,7 +20,7 @@ import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
-import { composerOnPool, composerPlace, placeRows, type RunOnPick } from "@/lib/run-place";
+import { composerOnPool, composerPlace, keyOnlyChip, placeRows, type RunOnPick } from "@/lib/run-place";
 import { useSetRunOn } from "@/lib/run-on";
 import { RunOnChip } from "./run-on";
 import { PlaceIntro } from "./place-intro";
@@ -36,7 +36,8 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { placeOf } from "@/lib/place-name";
-import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
+import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useNewestRun, useStatus } from "@/lib/api";
+import { keyTurnedDown, keyTurnedDownWords, siteRunOf, siteRunRequest } from "@/lib/site-run";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -651,9 +652,12 @@ export function Composer({ docked }: { docked: boolean }) {
   // check last said this run goes (poolPrice, below).
   const [lockOnPool, setLockOnPool] = useState(false);
   const signature = useSignature(!!config.signature, draft.signature, lockOnPool);
+  // Hosted runs: "Run without LoRAs" pressed (a run refused there only for its LoRAs): the next run goes without them.
+  const [lorasOff, setLorasOff] = useState(false);
+  const offLoras = <R extends object>(r: R): R => (lorasOff ? { ...r, lorasOff: true as const } : r);
   const prepare = (draftIn: typeof draft) => {
     const d = songDraft(draftIn, catalog.getModel(draftIn.modelId), config.slots);
-    const signed = signature.apply(buildRequest(config.feature, d, studioOp, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(d.modelId)));
+    const signed = signature.apply(offLoras(buildRequest(config.feature, d, studioOp, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(d.modelId))));
     // Planned with the signature's sentences in the prompt (as the server runs it); sent with them apart.
     const raw = signed.worded;
     const m = catalog.getModel(raw.modelId) ?? model;
@@ -844,8 +848,9 @@ export function Composer({ docked }: { docked: boolean }) {
   // it spends the person's own credit).
   // Hosted runs: the key that runs this item's cloud version (a row of the Run on list, "Run with your fal.ai key"), and
   // its price there, so a key is offered with its price and a press that showed "Free" never bills it.
+  // (Not for an exact orbit: it runs as a fly-around, at its own price.)
   const keyTwin =
-    viewerInfo?.hosted && viewerInfo.kind === "account" && viewerInfo.paidAllowed !== false && model ? cloudVersion(preset, model, viewerInfo.keys ?? [], has, catalog.getModel) : null;
+    viewerInfo?.hosted && viewerInfo.kind === "account" && viewerInfo.paidAllowed !== false && model && !exact ? cloudVersion(preset, model, viewerInfo.keys ?? [], has, catalog.getModel) : null;
   const keyPrice = (() => {
     const m = keyTwin ? catalog.getModel(keyTwin.modelId) : undefined;
     if (!m) return null;
@@ -895,13 +900,14 @@ export function Composer({ docked }: { docked: boolean }) {
   // or a key that runs this item's cloud version (at its price, never without one), may run this run there now, once.
   // Its pick stays as it was, and the run is taken in line all the same when it doesn't. While the day's GPU time is used
   // up, or runs there are paused, an account with nothing of its own gets the quiet way to connect its own GPU.
+  // ("Now" on its GPU only while it answers.)
   const waitOffer =
     viewerInfo?.kind === "account" && poolState && !poolState.refused && poolState.long
-      ? viewerInfo.gpu.connected
+      ? viewerInfo.gpu.connected && viewerInfo.gpu.online
         ? { label: "Run it now on your GPU", run: () => submitRef.current(undefined, undefined, "own") }
         : keyTwin && keyPrice
           ? { label: `Run it now with your ${CLOUD_KEY[keyTwin.provider].label} key · ${keyPrice}`, run: () => submitRef.current(undefined, withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice)) }
-          : poolState.held === "today" || poolState.held === "service"
+          : !viewerInfo.gpu.connected && (poolState.held === "today" || poolState.held === "service")
             ? { label: "Or connect your own GPU", run: () => void pressSetup({ need: "gpu" }) }
             : undefined
       : undefined;
@@ -968,9 +974,9 @@ export function Composer({ docked }: { docked: boolean }) {
     setRecent((r) => pushRecent(r, draft.modelId));
     // The server resolves @mentions and drawings itself; only pin the operation when there are none.
     // No "Queued" toast: the new card (and the "1 generating ↑" pill when it's off-screen) says it.
-    const sent = signature.apply(
-      buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
-    );
+    const built = buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId));
+    // (Without LoRAs only where they were the reason: never on the account's own GPU or key.)
+    const sent = signature.apply(withKey || once === "own" ? built : offLoras(built));
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
     // A run on the account's key names neither: the key is where it goes.
     const placeNow = once ?? runPlace;
@@ -997,6 +1003,7 @@ export function Composer({ docked }: { docked: boolean }) {
       // line says the run is on its way (hosted runs: its tile shows "In line" too).
       onSuccess: () => {
         dropGpuRetry();
+        setLorasOff(false);
         if (signedUp && viewerInfo?.hosted) setPriceNote(PENDING_WORDS.made);
       },
       // Stopped by the GPU pre-flight, or refused with its own card: the guided fix or the card is open already, so no error toast on top.
@@ -1141,7 +1148,21 @@ export function Composer({ docked }: { docked: boolean }) {
           ? placeRows(viewerInfo, { key: { provider: viewerInfo.runKey ?? payer, price: cost ? `≈ ${formatCost(cost)}` : null }, cloud: true })
           : null;
   const ownGpuHere = hostedHere && !!viewerInfo?.gpu.connected && siteMissed && !runOnRows;
-  const runOnText = runOnRows?.on === "gpu" || ownGpuHere ? "Free · your GPU" : runOnRows?.on === "key" ? `${costText} · your key` : costText;
+  // Refused there only for its LoRAs: the same run without them runs there (the price check asks again, then Generate).
+  const withoutLoras = poolState?.refused && poolState.withoutLoras && !lorasOff ? { label: "Run without LoRAs", run: () => setLorasOff(true) } : undefined;
+  // An item that runs on an own setup only, for an account whose runs go to its key (and no GPU): Generate runs it on the
+  // key's cloud version, so the chip says the key's price first.
+  const keyChip = keyOnlyChip({ ownSetup: !!poolSetup, key: keyTwin ? { provider: keyTwin.provider, price: keyPrice } : null, gpu: !!viewerInfo?.gpu.connected, picked: runOnPicked, rows: !!runOnRows });
+  const ownKeyHere = !!keyChip;
+  const keyTip = keyChip?.tip ?? "";
+  const runOnText = runOnRows?.on === "gpu" || ownGpuHere ? "Free · your GPU" : keyChip ? keyChip.text : runOnRows?.on === "key" ? `${costText} · your key` : costText;
+  // What Generate's tooltip says it costs.
+  const pressCost = ownKeyHere ? runOnText : costText;
+  // Hosted runs, runs going to the account's key: its key turned the last run down (out of credit, not accepted). Said
+  // before the next press, with that run once on {Place} when it takes its open version.
+  const newestRun = useNewestRun();
+  const turnedDown = viewerInfo?.hosted && viewerInfo.kind === "account" && engine === "cloud" && newestRun ? keyTurnedDown([newestRun]) : null;
+  const siteAgain = turnedDown ? siteRunOf(turnedDown.run, true, viewerInfo?.pool) : null;
   const runOnTip =
     runOnRows?.on === "gpu"
       ? `Runs on your own GPU${viewerInfo?.gpu.online ? "" : " · not answering right now"}`
@@ -1909,10 +1930,14 @@ export function Composer({ docked }: { docked: boolean }) {
         {!runOnRows && costText && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className={cn("shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums", poolRefused && "min-w-0 shrink truncate max-sm:hidden")} data-pool-refused={poolRefused || undefined}>
-                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : keyOnly && cost == null ? ownSetupShort(keyOnly) : costLabel({ demo, cost: cost ?? freeHere, compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
+              <span
+                className={cn("shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums", poolRefused && !ownKeyHere && "min-w-0 shrink truncate max-sm:hidden")}
+                data-pool-refused={(poolRefused && !ownKeyHere) || undefined}
+                data-key-price={ownKeyHere || undefined}
+              >
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : ownKeyHere ? runOnText : poolPrice ? costText : keyOnly && cost == null ? ownSetupShort(keyOnly) : costLabel({ demo, cost: cost ?? freeHere, compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
                 <span className="hidden sm:inline">
-                  {ownGpuHere ? runOnText : costText}
+                  {ownGpuHere || ownKeyHere ? runOnText : costText}
                   {payerText}
                 </span>
               </span>
@@ -1920,6 +1945,8 @@ export function Composer({ docked }: { docked: boolean }) {
             <TooltipContent className="max-w-72">
               {ownGpuHere
                 ? "This one runs on your own GPU."
+                : ownKeyHere
+                ? keyTip
                 : poolPrice
                 ? poolState?.refused
                   ? (poolState.sub ?? poolState.text)
@@ -1946,7 +1973,7 @@ export function Composer({ docked }: { docked: boolean }) {
               size="icon"
               onClick={submit}
               disabled={create.isPending || signature.lock.isPending || (poolRefused && !poolSetup)}
-              aria-label={blocker ? `Generate — ${blocker.message}` : poolRefused && poolState ? `Generate — ${poolState.text}` : "Generate"}
+              aria-label={blocker ? `Generate — ${blocker.message}` : ownKeyHere ? `Generate — ${runOnText}` : poolRefused && poolState ? `Generate — ${poolState.text}` : "Generate"}
               aria-busy={create.isPending || signature.lock.isPending || undefined}
               // Blocked, it stays the brand colour (paler, the arrow still 3:1 or more): pressing it still says what's missing and points at it.
               className={cn("size-10 shrink-0 rounded-full", blocker && "bg-primary/70 hover:bg-primary/80")}
@@ -1966,7 +1993,7 @@ export function Composer({ docked }: { docked: boolean }) {
             {blocker?.message ?? (
               <span className="flex items-center gap-1.5">
                 Generate <Kbd>↵</Kbd>
-                {costText && <span className="text-muted-foreground tabular-nums">· {costText}</span>}
+                {pressCost && <span className="text-muted-foreground tabular-nums">· {pressCost}</span>}
               </span>
             )}
           </TooltipContent>
@@ -1992,7 +2019,23 @@ export function Composer({ docked }: { docked: boolean }) {
           </p>
         )}
         {/* Folded (docked, not focused), the composer stays one line: the wait shows again once it opens. */}
-        {!blocker && !gpuSetup && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} offer={waitOffer} />}
+        {!blocker && !gpuSetup && !ownKeyHere && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} offer={waitOffer} alt={withoutLoras} />}
+        {!blocker && turnedDown && (
+          <p data-key-turned-down className="flex flex-wrap items-center gap-x-2 px-2 text-[12px] text-muted-foreground">
+            <span>{keyTurnedDownWords(turnedDown.provider)}</span>
+            {siteAgain && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={create.isPending}
+                onClick={() => create.mutate(siteRunRequest(turnedDown.run, siteAgain), { onError: (e) => toastError(e) })}
+                className="inline-flex min-h-6 items-center font-medium text-brand-text underline-offset-2 hover:underline"
+              >
+                Run on {sitePlace.label}
+              </button>
+            )}
+          </p>
+        )}
         {!blocker && priceNote && !poolRefused && (
           <p data-price-note className="px-2 text-[12px] font-medium text-foreground">
             {priceNote}

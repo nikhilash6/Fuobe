@@ -286,7 +286,7 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
   const priced = est.data && !est.data.blocker ? est.data : undefined;
   // Before the run is priced (no product yet, or a key to add), the chip names the clip's model, never a bare "Cloud".
   const clipModel = models[withPresenter ? UGC_MODELS[engine].talk : UGC_MODELS[engine].clip]?.name;
-  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps) ?? clipModel, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Click to Ad" });
+  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps) ?? clipModel, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Click to Ad", ownerOnlyStudio: "video" });
 
   const writeScript = async () => {
     if (!productId) return;

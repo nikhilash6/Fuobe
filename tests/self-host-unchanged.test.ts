@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createElement, type ReactNode } from "react";
+import { createElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StatusInfo, ViewerInfo } from "@/lib/api";
@@ -23,6 +23,7 @@ const state = vi.hoisted(() => ({
   hydrated: true,
   viewer: undefined as ViewerInfo | undefined,
   status: undefined as StatusInfo | undefined,
+  engine: undefined as "open" | "cloud" | undefined,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -30,13 +31,18 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/image",
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("@/lib/api", async (load) => ({
-  ...(await load<typeof import("@/lib/api")>()),
+vi.mock("@/lib/api", async (load) => {
+  const real = await load<typeof import("@/lib/api")>();
+  return {
+  ...real,
+  // The engine switched to, for the composer's snapshot (else the browser's own, as before).
+  useEngine: () => (state.engine ? ([state.engine, () => {}, "both"] as const) : real.useEngine()),
   useHydrated: () => state.hydrated,
   useViewer: () => ({ data: state.viewer }),
   useStatus: () => ({ data: state.status }),
   useEngineMode: () => "both",
-}));
+  };
+});
 
 const { PendingTile, FailedTile, Feed } = await import("@/components/studio/feed");
 const { StatusCover } = await import("@/components/library/asset-card");
@@ -48,7 +54,7 @@ const { TooltipProvider } = await import("@/components/ui/tooltip");
 const { runPlace } = await import("@/lib/run-place");
 const { accountEngine } = await import("@/lib/your-keys");
 const { againWhere } = await import("@/lib/demo-mode");
-const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
+const { ACCOUNT_LIMITS, ACCOUNT_MESSAGES } = await import("@/server/account-files");
 const auth = await import("@/server/auth");
 const { visitorStatus } = await import("@/server/account-gpu");
 
@@ -114,6 +120,7 @@ beforeEach(() => {
   state.hydrated = true;
   state.viewer = undefined;
   state.status = undefined;
+  state.engine = undefined;
 });
 
 describe("a self-hosted install with hosted runs off", () => {
@@ -294,5 +301,80 @@ describe("a self-hosted install with hosted runs off", () => {
       expect(g).toEqual({ status: "failed", error: "This run stopped before it started. Press Retry." });
     }
     expect((db().prepare("SELECT COUNT(*) AS n FROM pool_holds").get() as { n: number }).n).toBe(0);
+  });
+
+  it("the composer for an account, in the Image and Video studios, on each engine", async () => {
+    const { Composer } = await import("@/components/studio/composer");
+    const { StudioProvider } = await import("@/components/studio/studio-context");
+    const { CatalogProvider } = await import("@/components/studio/catalog");
+    const { initialDraft } = await import("@/components/studio/draft");
+    const { studioCatalog } = await import("@/lib/studio-catalog");
+    const { IMAGE_STUDIO, VIDEO_STUDIO } = await import("@/lib/studios");
+    const catalog = await import("@/lib/catalog");
+    state.viewer = accountViewer;
+    const out: string[] = [];
+    for (const config of [IMAGE_STUDIO, VIDEO_STUDIO])
+      for (const [engine, status] of [
+        ["open", statusOf({ gpu: { connected: true, mode: "link", online: true } })],
+        ["open", statusOf()],
+        ["cloud", statusOf({ keys: ["fal"] })],
+      ] as const) {
+        state.engine = engine;
+        state.status = status;
+        const initial = initialDraft(config, new URLSearchParams(), engine, catalog);
+        const html = render(
+          createElement(
+            CatalogProvider,
+            { catalog: studioCatalog(config), config } as ComponentProps<typeof CatalogProvider>,
+            createElement(StudioProvider, { config, initial } as ComponentProps<typeof StudioProvider>, createElement(Composer, { docked: false })),
+          ),
+        );
+        // (React's generated ids change with the render order, never with the words.)
+        out.push(lines(html.replace(/ (id|for|aria-controls|aria-labelledby|aria-describedby)="[^"]*"/g, ' $1="_"')));
+      }
+    await expect(out.join("\n\n")).toMatchFileSnapshot(`${GOLDEN}/composer.html`);
+  });
+
+  it("a fifth run at once on the account's own place is turned down in today's words", async () => {
+    vi.doMock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
+    const { db } = await import("@/server/db");
+    const { saveAccountKey } = await import("@/server/account-keys");
+    const route = await import("@/app/api/generations/route");
+    const a = auth.createAccount("self-host-fifth@example.com", "long enough");
+    saveAccountKey(a.id, "fal", "self-host-key");
+    const cookie = `${auth.SESSION_COOKIE}=${auth.createSession(a.id).value}`;
+    const now = Date.now();
+    for (let i = 0; i < ACCOUNT_LIMITS.activeRuns; i++)
+      db()
+        .prepare(
+          `INSERT INTO generations (id, batch_id, feature, preset_id, model_id, engine, provider, op, kind, status, progress, message, prompt, request_json, outputs_json, cost_usd, favorite, created_at, updated_at, external_id)
+           VALUES (?, NULL, 'image', NULL, 'nano-banana-pro', 'cloud', 'fal', 'generate', 'image', 'running', NULL, 'Generating', 'a fox', ?, '[]', NULL, 0, ?, ?, ?)`,
+        )
+        .run(`self-host-fifth-${i}`, JSON.stringify({ feature: "image", modelId: "nano-banana-pro", prompt: "a fox", account: a.id }), now, now, `ext-${i}`);
+    const text = JSON.stringify({ feature: "image", modelId: "nano-banana-pro", engine: "cloud", prompt: "a quiet harbour" });
+    const res = await route.POST(
+      new Request("http://localhost:3000/api/generations", { method: "POST", headers: { cookie, host: "localhost:3000", "content-type": "application/json", "content-length": String(text.length) }, body: text }),
+    );
+    expect(res.status).toBe(429);
+    expect(((await res.json()) as { error: string }).error).toBe(ACCOUNT_MESSAGES.activeRuns);
+    db().prepare("UPDATE generations SET status = 'canceled' WHERE id LIKE 'self-host-fifth-%'").run();
+  });
+
+  it("the ways on added for hosted runs are all behind the switch", async () => {
+    const { siteRunOf, shownTroubleActions, keyTurnedDown } = await import("@/lib/site-run");
+    const { placeIntro } = await import("@/lib/place-intro");
+    const { withKeyAction } = await import("@/lib/diagnose");
+    const trouble = { cause: "key-balance", words: "Your fal.ai key is out of credit.", actions: [], retryable: false } as unknown as Generation["trouble"];
+    // "Run on {Place}" on a failed tile, and the line about a key that turned the last run down: never.
+    expect(siteRunOf(gen({ status: "failed", trouble }), false, undefined)).toBeNull();
+    // A failed tile's key offer: as it was, priced or not.
+    const actions = [withKeyAction("fal", "nano-banana-pro")];
+    expect(shownTroubleActions(actions, false)).toBe(actions);
+    // The one-time note: never.
+    expect(placeIntro({ kind: "account", ranOwn: true, gpu: { connected: true } }, "Generate")).toBeNull();
+    // A tool for the owner only: no way on to another studio.
+    expect(runPlace({ audience: "account", engine: "cloud", ownerOnly: "Ad Multiplier", ownerOnlyStudio: "video", format: String }).way).toBeUndefined();
+    // (keyTurnedDown is read only while viewer.hosted, which a self-hoster's status never carries: above.)
+    expect(typeof keyTurnedDown).toBe("function");
   });
 });

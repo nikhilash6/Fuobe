@@ -77,6 +77,10 @@ describe("the surfaces that don't run here yet", () => {
     expect(hosted).toMatchObject({ where: "unavailable", label: "Coming soon", title: "Coming soon", price: "", send: "", tip: "Ad Multiplier isn't open to accounts yet. Try the Image, Video or Audio studio." });
     const off = runPlace({ audience: "guest", engine: "cloud", ownerOnly: "Ad Multiplier", format: String });
     expect(off).toMatchObject({ label: "Not available here", tip: "Ad Multiplier isn't available here. Try the Image, Video or Audio studio." });
+    // A press that leads on: the studio that makes it now (the Image studio unless the tool names another).
+    expect(hosted.way).toEqual({ label: "Make it in the Image studio", href: "/image" });
+    expect(runPlace({ audience: "account", engine: "cloud", hosted: true, ownerOnly: "Ad Multiplier", ownerOnlyStudio: "video", format: String }).way).toEqual({ label: "Make it in the Video studio", href: "/video" });
+    expect(off.way).toBeUndefined();
     // The owner runs it as always.
     expect(runPlace({ audience: "owner", engine: "cloud", hosted: true, ownerOnly: "Ad Multiplier", format: String }).where).toBe("cloud");
   });

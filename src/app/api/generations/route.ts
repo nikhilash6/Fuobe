@@ -362,7 +362,10 @@ export async function POST(request: Request) {
               return { ...run, held: shape?.reason };
             },
           );
-          if (r.ok && !r.value.held) r.value.start();
+          if (r.ok) {
+            if (r.value.held) r.value.settle();
+            else r.value.start();
+          }
           return r;
         });
         if (!admitted.ok && "prior" in admitted) {

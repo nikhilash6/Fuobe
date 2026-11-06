@@ -14,7 +14,7 @@ import { accountInputProblem } from "./account-inputs";
 import { checkAccountLoras } from "./account-loras";
 import { requestViewer, type Account } from "./auth";
 import { accountRun, AccountRunError, asAccount, asVisitor, outputKind, previewChained, type AccountRunRefusal } from "./generations";
-import type { Quote } from "./billing";
+import { holdsOn, type Quote } from "./billing";
 import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
@@ -582,7 +582,14 @@ async function startOnPool<T>(
   }
   const kind = outputKind(pool.main.planned.op, pool.main.planned.model);
   const mod = await moderateRun(account, checkedRequest(steps, files), null, "pool", { kind, place: "pool" });
-  if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
+  // While runs here wait for the services (the policy says so), one the moderation service didn't answer for is taken,
+  // and checked before it enters the line (as a studio's run is).
+  let unchecked = false;
+  if (!mod.ok) {
+    if (!pool.light && holdsOn(pool.policy) && mod.refusal.body.code === "paused") unchecked = true;
+    else return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
+  }
+  const checkOutputs = mod.ok && mod.checkOutputs;
   // The press of Run, kept from here (run-requests.ts): another server process may have started or answered it meanwhile.
   const claim = await claimToolPress();
   if (claim && "answer" in claim) return back(fromAnswer(claim.answer));
@@ -590,11 +597,11 @@ async function startOnPool<T>(
   // Why the run waits for the billing service, when it does, and what its reserve then sends.
   let wait: ReserveWait | undefined;
   let facts: ReserveFacts | undefined;
-  if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }), ...policyWait(pool.policy) };
+  if (pool.light) stamp = { place: "pool", light: true, ...(checkOutputs && { checkOutputs: true }), ...policyWait(pool.policy) };
   else {
     // One hold per try of a press of Run: every send of the try asks for it by the same request id.
     const limit = plan && "hold" in plan ? { reason: plan.hold, ...(plan.startAt !== undefined && { startAt: plan.startAt }) } : undefined;
-    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps, claim?.press ?? null, pool.policy, { heldMs: heldGuessMs(limit) });
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, checkOutputs, pool.steps, claim?.press ?? null, pool.policy, { heldMs: heldGuessMs(limit) });
     if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
     stamp = held.stamp;
     wait = held.wait;
@@ -648,6 +655,7 @@ async function startOnPool<T>(
    * hold goes back by itself only when no row was made.
    */
   const undo = () => {
+    made.cap.settle();
     for (const g of ids) void cancelGeneration(g);
     if (!ids.length) release();
   };
@@ -678,8 +686,10 @@ async function startOnPool<T>(
   }
   // Past a limit it can wait out, or while the billing service doesn't answer: its tiles show "In line" now, and it
   // enters the line when its reason clears (pool-holds.ts), nothing sent until then.
-  const shape = pool.light ? null : holdShape({ limit: made.admit.hold, wait });
-  if (shape) holdRun({ accountId: id, rows: made.cap.rows, pressedAt, ...shape, ...(facts && { facts }) });
-  else made.cap.start();
+  const shape = pool.light ? null : holdShape({ limit: made.admit.hold, wait, unchecked });
+  if (shape) {
+    holdRun({ accountId: id, rows: made.cap.rows, pressedAt, ...shape, ...(facts && { facts }) });
+    made.cap.settle();
+  } else made.cap.start();
   return { ok: true, value };
 }

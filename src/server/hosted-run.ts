@@ -16,6 +16,7 @@ import {
   forgetBalance,
   FREE_QUOTE,
   holdsOn,
+  keptPolicy,
   lastPrefer,
   lastQuote,
   policy as billingPolicy,
@@ -421,7 +422,7 @@ export function poolGate(
   // needs): a run that would wait for nothing, so it runs on the visitor's own GPU instead.
   if (!poolTakes(planned.route.endpoint)) return { ok: false, reason: "ownSetup", setup: gpu };
   if (poolCardRefuses(planned.model.id)) return { ok: false, reason: "rtxCard", setup: gpu };
-  if (req.loras?.length) return { ok: false, reason: "loras", setup: gpu };
+  if (req.loras?.length && !req.lorasOff) return { ok: false, reason: "loras", setup: gpu };
   if (p) {
     const inputs = inputCounts(req);
     const takes = poolUploads(p);
@@ -559,8 +560,12 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   if (p === undefined) p = await billingPolicy(account.id);
   // The billing service doesn't answer: a run whose own GPU goes first goes there as before; one that goes to this
   // install's GPUs (the service's last answer put them first, or the account picked them) is never moved to its own GPU
-  // for that: it waits for the service.
-  if (!p) return ownFallback && !poolFirst(p, picked, account.id) ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  // for that: it waits for the service, in line, under the service's last answer kept here (billing.ts keptPolicy).
+  if (!p) {
+    if (ownFallback && !poolFirst(p, picked, account.id)) return OWN;
+    p = keptPolicy(account.id);
+    if (!p) return { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  }
   // Closed to this account: its own GPU (or today's "Connect your GPU"); asked for by name, said so.
   if (!p.hosted) return wish === "pool" ? notOffered(hostedWords(placeFor(p)).notHosted) : OWN;
   // Planned, checked and priced for the outputs it would make there (the policy's cap per run).
@@ -848,7 +853,9 @@ function poolLine(facts: Pick<QueueFacts, "ahead" | "etaS" | "nextOpenAt">, o: {
   const afterMs = policyOfferAfterS(o.p) * 1000;
   if (o.waits) {
     const back = facts.nextOpenAt && facts.nextOpenAt > now ? facts.nextOpenAt : undefined;
-    return { place, etaSeconds: null, unknown: true, ...(back && { returnAt: back }), ...((!back || back - now > afterMs) && { long: true }) };
+    // An unknown wait is long, unless the offer is off for waits (offerAfterS 0).
+    const long = back ? back - now > afterMs : Number.isFinite(afterMs);
+    return { place, etaSeconds: null, unknown: true, ...(back && { returnAt: back }), ...(long && { long: true as const }) };
   }
   const eta = o.q?.etaS ?? facts.etaS ?? null;
   return { place, etaSeconds: eta, ...(eta !== null && eta * 1000 > afterMs && { long: true }) };
@@ -870,10 +877,13 @@ const notOfferedQuote = (text: string, setup?: OwnSetup, sub?: string): Quote & 
 
 /**
  * A gate's refusal as the price check's quote: its label (gateText), the sentence under it (`sub`: the tooltip), and the
- * own setup Run opens. A run past the outputs a run here makes has no setup: the person picks fewer.
+ * own setup Run opens. A run past the outputs a run here makes has no setup: the person picks fewer. One refused only for
+ * its LoRAs (an element's trained LoRA) says so (`withoutLoras`): the page offers the same run without them.
  */
-const gateQuote = (gate: GateRefusal, guest: boolean, place: Place): Quote & { ownSetup?: OwnSetup } =>
-  notOfferedQuote(gateText(gate, guest, place), gate.reason === "outputs" ? undefined : (gate.setup ?? needsGpu()), gateDetail(gate, place));
+const gateQuote = (gate: GateRefusal, guest: boolean, place: Place): Quote & { ownSetup?: OwnSetup; withoutLoras?: true } => ({
+  ...notOfferedQuote(gateText(gate, guest, place), gate.reason === "outputs" ? undefined : (gate.setup ?? needsGpu()), gateDetail(gate, place)),
+  ...(gate.reason === "loras" && { withoutLoras: true as const }),
+});
 
 /**
  * A price check on this install's GPUs (hosted runs on): the plan there, the billing service's quote (no service: free,
@@ -898,7 +908,8 @@ export async function poolQuote(
   const picked = pickedPlace(account, wish);
   if (picked === "own") return null;
   // A guest is priced under the billing service's policy for guests (none set: as an account would be, once signed up).
-  const p = await billingPolicy(account?.id ?? null);
+  // A quiet service: its last answer kept here, so Run stays on and a press waits for it in line (billing.ts keptPolicy).
+  const p = (await billingPolicy(account?.id ?? null)) ?? keptPolicy(account?.id ?? null);
   // Priced for the outputs it would make: the studio's cap per run, and the policy's when lower (as the run is).
   const { req } = poolRequest(asked, p);
   let planned: Planned;
@@ -1037,7 +1048,11 @@ export async function decideToolPlace(account: Account, steps: ToolRunStep[], wi
   }
   if (p === undefined) p = await billingPolicy(account.id);
   // As decidePlace: a run that goes to this install's GPUs waits for a quiet service, never moved to its own GPU for it.
-  if (!p) return ownFallback && !poolFirst(p, picked, account.id) ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  if (!p) {
+    if (ownFallback && !poolFirst(p, picked, account.id)) return OWN;
+    p = keptPolicy(account.id);
+    if (!p) return { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  }
   if (!p.hosted) return wish === "pool" ? notOffered(hostedWords(placeFor(p)).notHosted) : OWN;
   // What these GPUs can't take (a label) goes to its own GPU; what they take is taken, even while every GPU that could
   // run it is away or being updated: it waits in line until one is free.
@@ -1065,7 +1080,7 @@ export async function toolPoolQuote(
   if (!hostedRunsOn() || wish === "own" || !poolReady() || !steps.length) return null;
   const picked = pickedPlace(account, wish);
   if (picked === "own") return null;
-  const p = await billingPolicy(account?.id ?? null);
+  const p = (await billingPolicy(account?.id ?? null)) ?? keptPolicy(account?.id ?? null);
   const hasGpu = !!account && !!accountGpu(account.id);
   if (account && hasGpu && wish !== "pool" && !poolFirst(p, picked, account.id) && (await ownGpuOnline(account.id))) return null;
   if (p && !p.hosted) return null;

@@ -11,9 +11,20 @@ type PoolState = NonNullable<ReturnType<typeof poolRunState>>;
  * ("Ready in about 2 min", "Starts when a GPU is free", "Ready in seconds", "Starts after your other runs", "Lots of
  * runs today · starts in about 7 h"), with `offer` after a long wait (the account's own GPU or key for this run, once:
  * "Run it now on your GPU"); or, when the price check refused it, the words (the
- * toolbar's price slot has no room for them on a phone), with the link or offer the answer carries.
+ * toolbar's price slot has no room for them on a phone), with the link or offer the answer carries, and `alt`: the same
+ * run another way that does run there ("Run without LoRAs").
  */
-export function PoolNote({ state, offer, className }: { state: PoolState; offer?: { label: string; run: () => void }; className?: string }) {
+export function PoolNote({
+  state,
+  offer,
+  alt,
+  className,
+}: {
+  state: PoolState;
+  offer?: { label: string; run: () => void };
+  alt?: { label: string; run: () => void };
+  className?: string;
+}) {
   const interest = useInterest();
   const href = safeLink(state.action?.url);
   if (!state.refused) {
@@ -37,7 +48,7 @@ export function PoolNote({ state, offer, className }: { state: PoolState; offer?
       </p>
     );
   }
-  const more = !!(href || state.offer || state.sub);
+  const more = !!(href || state.offer || state.sub || alt);
   return (
     <p data-pool-note="refused" className={cn("flex flex-wrap items-center gap-x-2 px-2 text-[12px] text-muted-foreground", !more && "sm:hidden", className)}>
       <span className="sm:hidden">{state.text}</span>
@@ -56,6 +67,17 @@ export function PoolNote({ state, offer, className }: { state: PoolState; offer?
           className="font-medium text-brand-text underline-offset-2 hover:underline"
         >
           {state.offer.label}
+        </button>
+      )}
+      {alt && (
+        <button
+          type="button"
+          data-pool-alt
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={alt.run}
+          className="font-medium text-brand-text underline-offset-2 hover:underline"
+        >
+          {alt.label}
         </button>
       )}
     </p>

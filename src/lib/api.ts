@@ -547,6 +547,24 @@ export function useMakingPoolRuns(): { at: number; request: GenerationRequest }[
   return pending.filter((p): p is { at: number; request: GenerationRequest } => goesToPool(p.request));
 }
 
+/**
+ * The newest run any list on this page has loaded (the feed's own, read from what it already fetched: nothing more is
+ * asked). Null until one is loaded. (The composer's line before the next press, when the person's key turned it down.)
+ */
+export function useNewestRun(): Generation | null {
+  const qc = useQueryClient();
+  const subscribe = useCallback((go: () => void) => qc.getQueryCache().subscribe(go), [qc]);
+  const read = useCallback((): Generation | null => {
+    let newest: Generation | null = null;
+    for (const [, data] of qc.getQueriesData<Generation[]>({ queryKey: ["generations"] })) {
+      if (!Array.isArray(data)) continue;
+      for (const g of data) if (g && typeof g.createdAt === "number" && (!newest || g.createdAt > newest.createdAt)) newest = g;
+    }
+    return newest;
+  }, [qc]);
+  return useSyncExternalStore(subscribe, read, () => null);
+}
+
 /** A new id for one press of Run: every send of that press carries it, so the studio makes its run once. */
 export function newPressId(): string {
   const c = globalThis.crypto;
@@ -1623,21 +1641,34 @@ export function refusalCard(kind: RefusalCard["kind"], at: { pathname: string; s
  * card. Never on the sign-in page (refusalCard). Installed once. A refused upload's card says so ("add your own
  * files"), not "run this".
  */
-/** Send a run again on this studio's GPUs (the toast a run that named no place gets when its own GPU didn't answer). */
-async function runOnPool(sent: string): Promise<void> {
+/**
+ * Send a studio's run again at a place named for it: this studio's GPUs (the toast a run that named no place gets when
+ * its own GPU didn't answer), or the account's own GPU (the billing card's "Run on your GPU"). True when it started.
+ */
+async function runAt(sent: string, place: "pool" | "own"): Promise<boolean> {
   let body: Record<string, unknown>;
   try {
     body = JSON.parse(sent) as Record<string, unknown>;
   } catch {
-    return;
+    return false;
   }
   try {
-    const res = await window.fetch("/api/generations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, place: "pool" }) });
-    if (res.ok) window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
-    else await json(res).catch((e: unknown) => void (refusalShown(e) || toast.error((e as Error).message)));
+    const res = await window.fetch("/api/generations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, place }) });
+    if (res.ok) {
+      window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
+      return true;
+    }
+    await json(res).catch((e: unknown) => void (refusalShown(e) || toast.error((e as Error).message)));
   } catch {
     toast.error("That didn't start. Try again.");
   }
+  return false;
+}
+
+/** A refused run sent again at a place named for it (a studio's run names it in its body, a tool's in a header). */
+function againAt(input: RequestInfo | URL, init: RequestInit | undefined, place: "pool" | "own"): () => Promise<boolean> {
+  const sent = init?.body;
+  return requestPath(input) === "/api/generations" && typeof sent === "string" ? () => runAt(sent, place) : () => sendRunAgain(input, init, { [RUN_PLACE_HEADER]: place });
 }
 
 /**
@@ -1718,7 +1749,9 @@ export function watchGuestRefusals(): void {
           const q = b.quote;
           const again =
             billing === "price-changed" && method === "POST" && q && resendable(input, init) ? () => sendRunAgain(input, init, { [RUN_SHOWN_HEADER]: shownHeader(q) }) : undefined;
-          window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing, ...(again && { runAgain: again }) } }));
+          // Hosted runs: the same run on the account's own GPU, for the card's "Run on your GPU".
+          const own = method === "POST" && resendable(input, init) ? againAt(input, init, "own") : undefined;
+          window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing, ...(again && { runAgain: again }), ...(own && { runOwn: own }) } }));
         })
         .catch(() => {});
     }
@@ -1726,9 +1759,9 @@ export function watchGuestRefusals(): void {
     // by itself.
     if (res.status === 409 && res.headers.get(PLACE_ASK_HEADER) === "1" && method === "POST" && resendable(input, init)) {
       markRefusalShown(res);
-      const sent = init?.body;
       // The studios' runs carry the place in their body; a tool's run in a header (every tool reads it).
-      const again = requestPath(input) === "/api/generations" && typeof sent === "string" ? () => void runOnPool(sent) : () => void sendRunAgain(input, init, { [RUN_PLACE_HEADER]: "pool" });
+      const onPool = againAt(input, init, "pool");
+      const again = () => void onPool();
       res
         .clone()
         .json()

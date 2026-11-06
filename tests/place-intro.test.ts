@@ -17,7 +17,7 @@ const { PlaceIntro } = await import("@/components/studio/place-intro");
 
 const gpu = { connected: true };
 const none = { connected: false };
-const base = { kind: "account" as const, hosted: true, ranOwn: true, placeName: "Studio North GPUs" };
+const base = { kind: "account" as const, hosted: true, ranOwn: true, placeName: "Studio North GPUs", cardText: "Try free" };
 
 describe("who gets the note", () => {
   it("an account with its GPU that ran there first, and no pick yet", () => {
@@ -44,6 +44,14 @@ describe("who gets the note", () => {
   });
   it("the default name reads inside the sentence", () => {
     expect(placeIntro({ ...base, placeName: undefined, gpu }, "Run")?.lead).toBe("Runs now go to our GPUs, free.");
+  });
+  it("says free only while runs there cost the account nothing (the policy's card words)", () => {
+    const paid = { ...base, cardText: undefined };
+    expect(placeIntro({ ...paid, gpu }, "Generate")).toMatchObject({ lead: "Runs now go to Studio North GPUs.", rest: "Your GPU is one tap away: the price, next to Generate." });
+    expect(placeIntro({ ...paid, gpu: none, keys: ["fal"] }, "Run")?.lead).toBe("Open models now run on Studio North GPUs.");
+  });
+  it("a tool page's note points at its place chip, as it reads", () => {
+    expect(placeIntro({ ...base, gpu }, "Run", "Studio North GPUs")?.rest).toBe("Your GPU is one tap away: tap Studio North GPUs to pick it.");
   });
 });
 
