@@ -17,6 +17,7 @@ import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { RunTroubleActions } from "@/components/gpu/run-trouble-actions";
 import { DRAG_TYPE } from "./folders";
 import { ReviewBadge } from "./review";
+import { autoLine } from "@/lib/auto-image";
 import type { Layout } from "./view-options";
 
 /** Stable callbacks from the Library (refs inside), so cards re-render only when their own data changes. */
@@ -297,7 +298,8 @@ export const AssetCard = memo(function AssetCard({
             {/* "Rendering", as the Status filter calls it: "In progress" is a review status. */}
             {!stack && g.status !== "succeeded" && ` · ${listStatus(g)}`}
           </p>
-          {/* What changed while it ran ("Made with Qwen-Image 2.1 · Ideogram 4 declined this one"). */}
+          {/* What made a run of Auto ("Auto · made with Ideogram 4"), and what changed while it ran ("Made with Qwen-Image 2.1 · Ideogram 4 declined this one"). */}
+          {!stack && autoLine(g) && <p className="truncate text-[12px] text-muted-foreground">{autoLine(g)}</p>}
           {!stack && g.request.notice && <p className="truncate text-[12px] text-muted-foreground">{g.request.notice}</p>}
           {/* An account's own GPU or key: the way out, in the row (its thumbnail is too small for it). */}
           {!stack && !trashed && (g.status === "failed" ? g.trouble : g.status === "queued" ? g.waiting : undefined) && (

@@ -1,4 +1,5 @@
 import { getModel } from "@/lib/catalog";
+import { AUTO_IMAGE } from "@/lib/auto-image";
 import { SIGNATURE_MODELS } from "@/lib/catalog/palettes";
 import { FACE_MOSAIC_MODELS } from "@/lib/catalog/open-tools";
 import { UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
@@ -20,10 +21,9 @@ export const IMAGE_STUDIO: StudioConfig = {
   slots: [],
   // Up to 10 references where the model takes them (FLUX 3 Klein); each model's own limit caps it (composer refMax).
   multiRef: { label: "Add ref", max: 10 },
-  defaultModels: { cloud: "nano-banana-pro", open: "oss-ideogram-4" },
-  // Ideogram 4 runs on a caption the install's local model writes: an account, a guest or an install with none opens on
-  // Qwen-Image 2.1, the next pick (plain words give Ideogram's grey safety card on about half the pictures of people).
-  uncaptioned: { open: "oss-qwen-image-21" },
+  // Auto picks the open model for each run (src/lib/auto-image.ts): Ideogram 4 for most, Krea 2 Realism for prompts its
+  // safety filter often declines, Qwen-Image 2.1 for edits. The default for everyone: the owner, an account and a guest.
+  defaultModels: { cloud: "nano-banana-pro", open: AUTO_IMAGE },
   // A model's own settings (MOSS-Image's Quality, Ideogram's speed) sit under "Options".
   controlsTitle: "Options",
   // Layout mode: boxes on the picture, one row each, read in place by MOSS-Image, FLUX.3, FLUX 3 Klein and Ideogram 4.5.

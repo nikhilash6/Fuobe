@@ -27,8 +27,8 @@ const openIds = MODELS.filter((m) => m.engine === "open").map((m) => m.id);
 const before = (a: string, b: string) => expect(openIds.indexOf(a), `${a} before ${b}`).toBeLessThan(openIds.indexOf(b));
 
 describe("studio defaults on your GPU", () => {
-  it("Image opens on Ideogram 4, Edit and Inpaint on Qwen-Image 2.1", () => {
-    expect(IMAGE_STUDIO.defaultModels.open).toBe("oss-ideogram-4");
+  it("Image opens on Auto (Ideogram 4 for most), Edit and Inpaint on Qwen-Image 2.1", () => {
+    expect(IMAGE_STUDIO.defaultModels.open).toBe("oss-auto-image");
     expect(EDIT_STUDIO.defaultModels.open).toBe("oss-qwen-image-21");
     expect(INPAINT_STUDIO.defaultModels.open).toBe("oss-qwen-image-21");
     expect(getModel("oss-qwen-image-21")!.routes.map((r) => r.op)).toEqual(expect.arrayContaining(["edit", "inpaint", "outpaint"]));
@@ -42,8 +42,8 @@ describe("studio defaults on your GPU", () => {
 describe('"Best for this studio" on your GPU', () => {
   // FLUX 3 Image Klein (nm10-flux3-klein) sits beside Ideogram 4 and Qwen-Image 2.1, as its brief asks; MOSS-Image moves to
   // More models.
-  it("Image: Ideogram 4, then Qwen-Image 2.1, FLUX 3 Klein and Krea 2 Realism (MOSS-Image, then FIBO 2 Dev, are next)", () => {
-    expect(best(IMAGE_STUDIO, "open")).toEqual(["oss-ideogram-4", "oss-qwen-image-21", "oss-flux3-klein", "oss-krea2-realism"]);
+  it("Image: Auto, then Ideogram 4, Qwen-Image 2.1 and FLUX 3 Klein (Krea 2 Realism, MOSS-Image, then FIBO 2 Dev, are next)", () => {
+    expect(best(IMAGE_STUDIO, "open")).toEqual(["oss-auto-image", "oss-ideogram-4", "oss-qwen-image-21", "oss-flux3-klein"]);
     const t2i = MODELS.filter((m) => m.engine === "open" && m.badges?.includes("top") && m.routes.some((r) => r.op === "t2i")).map((m) => m.id);
     expect(t2i.indexOf("oss-fibo2-dev")).toBe(5);
   });
@@ -263,7 +263,7 @@ describe("what the composer offers for Qwen-Image 2.1's and FIBO 2's edits", () 
   });
 });
 
-describe("Ideogram 4 as the Image studio's default", () => {
+describe("Auto as the Image studio's default", () => {
   const owner = (helper: string, local: unknown) => ({ llm: { helper, local } });
 
   it("is the default only where the server writes its caption with a local model", () => {
@@ -276,14 +276,11 @@ describe("Ideogram 4 as the Image studio's default", () => {
     expect(writesCaptions({ viewer: { kind: "guest", gpu: { connected: false } } })).toBe(false);
   });
 
-  it("gives way to Qwen-Image 2.1 without a caption writer; nothing changes while the status loads or in the cloud", () => {
+  it("is the default for everyone: the owner, an account and a guest, with or without a caption writer", () => {
     const d = IMAGE_STUDIO.defaultModels;
-    expect(viewerDefaults(d, IMAGE_STUDIO.uncaptioned, false)).toEqual({ cloud: "nano-banana-pro", open: "oss-qwen-image-21" });
-    expect(viewerDefaults(d, IMAGE_STUDIO.uncaptioned, true)).toBe(d);
-    expect(viewerDefaults(d, IMAGE_STUDIO.uncaptioned, undefined)).toBe(d);
+    expect(IMAGE_STUDIO.uncaptioned).toBeUndefined();
+    for (const writes of [false, true, undefined]) expect(viewerDefaults(d, IMAGE_STUDIO.uncaptioned, writes)).toBe(d);
     expect(viewerDefaults(EDIT_STUDIO.defaultModels, EDIT_STUDIO.uncaptioned, false)).toBe(EDIT_STUDIO.defaultModels);
-    const studio = { ...IMAGE_STUDIO, defaultModels: viewerDefaults(d, IMAGE_STUDIO.uncaptioned, false) };
-    expect(best(studio, "open")).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-flux3-klein", "oss-krea2-realism"]);
   });
 });
 

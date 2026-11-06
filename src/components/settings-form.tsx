@@ -30,6 +30,7 @@ import { ConnectorSettings } from "@/components/assist/connectors-settings";
 import { NotificationSettings } from "@/components/notification-settings";
 import { SecuritySettings } from "@/components/security-settings";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
+import { AutoPatternsSetting } from "@/components/auto-patterns-setting";
 
 function Section({
   id,
@@ -761,6 +762,15 @@ export function SettingsForm({ prices }: { prices?: string }) {
             onCheckedChange={(on) => set("demoMode")(on ? "on" : "off")}
           />
         </label>
+      </Section>
+
+      <Section
+        id="auto-image"
+        title="Auto image model"
+        description="Auto is the Image studio's first pick on the open engine: Ideogram 4 for most pictures and for lettering, Qwen-Image 2.1 for edits, and Krea 2 Realism for the prompts below, which Ideogram 4's safety filter often declines. When Ideogram 4 declines a run anyway, Krea 2 Realism, FIBO 2 Dev, then MOSS-Image make it."
+        inactive={mode === "cloud" ? "Not used in Paid APIs only mode" : undefined}
+      >
+        <AutoPatternsSetting setting={get("autoImagePatterns")} saving={save.isPending} onSave={set("autoImagePatterns")} />
       </Section>
 
       <Section

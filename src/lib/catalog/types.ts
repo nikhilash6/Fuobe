@@ -1309,6 +1309,11 @@ export interface GenerationRequest {
   /** Server-set: what changed while the job ran (an optional input left out), said on the result and carried down the chain. */
   notice?: string;
   /**
+   * Server-set on a run of Auto (src/lib/auto-image.ts): the model it picked, and why. A run planned again (a resend, a
+   * run that waited to enter the line) is planned on the same model.
+   */
+  auto?: AutoPick;
+  /**
    * A step only worth making for the steps after it (a per-frame render's frame edits and clips): while it still
    * waits for its inputs (nothing spent yet), the runner cancels it once every step that would use it has failed
    * or been canceled, so one failed frame doesn't leave the other lanes running up the bill.
@@ -1585,6 +1590,18 @@ export interface Generation {
    * how far its colours spread; `grey`: the share of neutral mid-grey pixels), so a false catch can be told from the card.
    */
   declinedCards?: DeclinedCard[];
+}
+
+/**
+ * Why Auto picked its model: a picture to work from ("edit"), lettering ("text"), a prompt the owner's patterns match
+ * ("trigger"), anything else ("plain"), or Ideogram 4 declined the run and this model made it in its place ("declined").
+ */
+export type AutoWhy = "edit" | "text" | "trigger" | "plain" | "declined";
+
+/** The model Auto picked for a run (GenerationRequest.auto). */
+export interface AutoPick {
+  model: string;
+  why: AutoWhy;
 }
 
 /** A picture Ideogram 4 returned that was taken for its "blocked" card (Generation.declinedCards). */

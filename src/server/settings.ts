@@ -1,6 +1,7 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { PLACE_NAME_MAX } from "@/lib/place-name";
+import { autoPatternsProblems, DEFAULT_AUTO_PATTERNS } from "@/lib/auto-image";
 import { db } from "./db";
 
 /**
@@ -135,6 +136,11 @@ export const SETTINGS = {
   llmKey: { key: "llm.key", env: "FUOBE_LLM_API_KEY", secret: true },
   /** Tokens of context the local model gets (Ollama's num_ctx; LM Studio loads models with it). 0 = the server's own setting. */
   llmContext: { key: "llm.context", env: "FUOBE_LLM_CONTEXT", default: "16384" },
+  /**
+   * Settings → Auto image model: prompts Ideogram 4's safety filter often declines, one pattern per line, which Auto sends
+   * to Krea 2 Realism straight away (src/lib/auto-image.ts). Empty: the built-in list.
+   */
+  autoImagePatterns: { key: "auto.imagePatterns", default: DEFAULT_AUTO_PATTERNS.join("\n") },
   /** "1" once the first-run guide was put away, or /api/status first saw something the engine mode generates with connected: Home stops offering it. */
   onboarded: { key: "onboarding.done", default: "0", options: ["0", "1"] },
 } satisfies Record<string, SettingDef>;
@@ -230,6 +236,11 @@ export function validateSetting(name: SettingName, value: string, from: "api" | 
   // A name visitors read in sentences: one line of at most PLACE_NAME_MAX characters.
   if (name === "hostedPlaceName" && value !== "" && (Array.from(value.trim()).length > PLACE_NAME_MAX || /[\u0000-\u001f\u007f-\u009f]/.test(value))) {
     throw new Error(`hostedPlaceName must be one line of at most ${PLACE_NAME_MAX} characters`);
+  }
+  // Auto's patterns: each line one that can be read and doesn't match every prompt (src/lib/auto-image.ts).
+  if (name === "autoImagePatterns" && value !== "") {
+    const problems = autoPatternsProblems(value);
+    if (problems.length) throw new Error(`Auto's patterns: ${problems.join("; ")}`);
   }
   if (name === "smartPlan" && value !== "" && value !== "auto" && !/^[a-z0-9-]{2,32}\|[\w.:/@+-]{1,200}$/.test(value)) {
     throw new Error("smartPlan must be auto, or a provider and model as provider|model");

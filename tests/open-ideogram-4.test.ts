@@ -310,7 +310,8 @@ describe("Ideogram 4 on the open engine", () => {
     expect(m.tagline).toMatch(/24 GB GPU/);
     // First among the open-source text-to-image models, after the Originals (the owner's order: Ideogram 4, Qwen-Image 2.1,
     // Krea 2, MOSS, FIBO 2).
-    expect(MODELS.find((x) => x.id.startsWith("oss-") && x.routes.some((r) => r.op === "t2i"))?.id).toBe("oss-ideogram-4");
+    // (Auto, which picks a model for each run, comes before it: src/lib/auto-image.ts.)
+    expect(MODELS.find((x) => x.id.startsWith("oss-") && x.id !== "oss-auto-image" && x.routes.some((r) => r.op === "t2i"))?.id).toBe("oss-ideogram-4");
     const [preset] = m.options.controls!;
     expect(preset).toMatchObject({ param: "preset", values: ["Quality", "Default", "Turbo"], default: graph()["98:156"].inputs.choice });
     expect(Object.keys(entry()!.bindings)).toContain(preset.param);

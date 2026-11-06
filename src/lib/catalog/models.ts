@@ -8,6 +8,7 @@ import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
 import { QMA_AZIMUTHS, QMA_AZIMUTH_LABELS, QMA_DISTANCES, QMA_DISTANCE_LABELS, QMA_DISTANCE_ZOOM, QMA_ELEVATIONS, QMA_ELEVATION_DEGREES, QMA_ELEVATION_LABELS, QMA_MODEL, QMA_PARAMS } from "@/lib/qma";
 import { H3_DECODER, H3_FAST_DECODE_OFFERED, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
 import { loraEntry, loraRef } from "./loras";
+import { AUTO_IMAGE, AUTO_NAME } from "@/lib/auto-image";
 import { ANGLES_LORA, ANY_ANGLE_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { ANY_ANGLE } from "./any-angle";
 import { RECOLOR_TAP_FIRST } from "./recolor";
@@ -129,6 +130,20 @@ const open: ModelDef[] = [
   // ---------------- The owner's newest image models, first picks on your GPU (2026-10-31): text to image in his order
   // (Ideogram 4, Qwen-Image 2.1, Krea 2, MOSS-Image, FIBO 2), then the edit models (Qwen-Image 2.1, FIBO 2, Krea 2).
   // A studio's "Best" list is its default, then the `top` models in this order (bestForStudio in src/lib/composer.ts).
+  // Auto: the Image studio's default on the open engine. Not a model of its own: the server plans each run on the model it
+  // picks (src/lib/auto-image.ts), and the run names that model. Its routes are its picks' own (Ideogram 4 for words,
+  // Qwen-Image 2.1 for edits), so the picker, the price and the GPU pre-flight read them; it never runs as itself.
+  o({
+    id: AUTO_IMAGE,
+    name: AUTO_NAME,
+    vendor: "Fuobe",
+    family: "auto",
+    kind: "image",
+    tagline: "Picks the model for you: Ideogram 4 for most pictures and lettering, Krea 2 Realism where Ideogram 4 often declines, Qwen-Image 2.1 for edits",
+    routes: [comfy("t2i", "ideogram4-t2i", "Auto picks the model before the run"), { ...comfy("edit", "qwen-image-21-edit", "Auto: Qwen-Image 2.1, up to 4 references"), unsized: true }],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 4, seed: true },
+    defaults: { aspectRatio: "1:1", resolution: "1.5K" },
+  }),
   // Ideogram 4: the prompt is a JSON caption the server writes from the words (promptFormat; src/lib/ideogram-caption.ts).
   o({
     id: "oss-ideogram-4",
