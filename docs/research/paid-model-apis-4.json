@@ -21130,7 +21130,7 @@
     "texture_prompt": {
      "type": "string",
      "required": false,
-     "maxLength": 600,
+     "maxLength": 800,
      "nullable": true,
      "desc": "Text prompt to guide the texturing process. Requires should_texture to be true."
     },

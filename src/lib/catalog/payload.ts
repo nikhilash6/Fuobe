@@ -188,6 +188,16 @@ function setPath(out: Record<string, unknown>, key: string, value: unknown) {
   o[parts[parts.length - 1]] = value;
 }
 
+/**
+ * The length a route makes for `seconds` (DurationField.accepts): the length itself when the route takes it, else the longest
+ * it takes below it, else its shortest. Any length when the route lists none.
+ */
+export function fitLength(accepts: readonly number[] | undefined, seconds: number): number {
+  if (!accepts?.length || accepts.some((a) => Math.abs(a - seconds) < 1e-6)) return seconds;
+  const below = accepts.filter((a) => a < seconds);
+  return below.length ? Math.max(...below) : Math.min(...accepts);
+}
+
 /** A number of seconds in the API's encoding (seconds or ms, number or "5s"). */
 function timeValue(d: DurationField, seconds: number): number | string {
   // Milliseconds are whole (Mureka's extend_at).
@@ -389,7 +399,9 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
 
   if (map.aspectRatio && input.aspectRatio) putEnum(out, map.aspectRatio, input.aspectRatio, "ratio");
   if (map.resolution && input.resolution) putEnum(out, map.resolution, input.resolution, "tier");
-  if (map.duration && input.duration !== undefined) out[map.duration.key] = timeValue(map.duration, input.duration);
+  // A length this route doesn't take is sent as the closest it does (the plan has fitted the run's own already; a second
+  // provider's route may list fewer).
+  if (map.duration && input.duration !== undefined) out[map.duration.key] = timeValue(map.duration, fitLength(map.duration.accepts, input.duration));
   if (map.numOutputs && input.numOutputs !== undefined) out[map.numOutputs] = input.numOutputs;
   if (map.seed && input.seed !== undefined && input.seed >= 0) {
     const r = map.seedRange;
@@ -587,9 +599,13 @@ export function guessKind(url: string, contentType?: string, hint?: string): Med
  */
 const LIFECYCLE_KEYS = new Set(["status_url", "cancel_url", "response_url", "logs_url", "webhook_url", "request_id"]);
 // A still the API makes beside a video (fal's Vidu Q4 cover_image) is no result of its own, and neither is the prompt it echoes
-// (fal's Wan 2.2 returns `prompt` next to the video): words that happen to be a media link are never taken for a file.
+// (fal's Wan 2.2 returns `prompt` next to the video): words that happen to be a media link are never taken for a file. fal's
+// ffmpeg compose answers every video with a thumbnail (thumbnail_url, required): a still of it, never a result. Debug files are
+// never results either: SAM 3.1 video's boundingbox_frames_zip ("per-frame bounding box overlays"), LightX relight's viz_video
+// ("visualization/debug video") and the pre-processing passes.
 const PROMPT_ECHOES = ["prompt", "negative_prompt", "actual_prompt", "revised_prompt", "expanded_prompt"];
-const SKIP_KEYS = new Set(["seed", "timings", "has_nsfw_concepts", "logs", "cover_image", ...PROMPT_ECHOES, ...LIFECYCLE_KEYS]);
+const DEBUG_FILES = ["thumbnail_url", "boundingbox_frames_zip", "viz_video", "preprocessing_video", "preprocessing_mask_video"];
+const SKIP_KEYS = new Set(["seed", "timings", "has_nsfw_concepts", "logs", "cover_image", ...PROMPT_ECHOES, ...DEBUG_FILES, ...LIFECYCLE_KEYS]);
 
 /**
  * Extract media URLs from an arbitrary provider response. Handles the common shapes:
@@ -1093,6 +1109,9 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
   }
   if (!out.length && (op === undefined || OPERATION_OUTPUT[op] === "text") && textOf(response)?.trim()) out = transcriptOutputs(response);
   const r = body(response);
+  // LightX relight also returns the clip it was given (input_video, "normalized/processed input video"): Fuobe's own input.
+  const given = op === "relight-video" && isObj(r) ? fileOf(r.input_video)?.url : undefined;
+  if (given && out.some((o) => o.url !== given)) out = out.filter((o) => o.url !== given);
   if (isObj(r)) {
     // fal's safety checker (Z-Image, FLUX and others: has_nsfw_concepts, one flag per picture in images[]) sends a flagged
     // picture back black: it is no result. When every picture was flagged, noOutputsError says so.

@@ -686,9 +686,10 @@ describe("the hosted API's other limits, in Fuobe's words before the call", () =
         undefined,
       ),
     ).toMatch(/fps/);
-    // Other models aren't held to Kling's limits.
+    // Other models aren't held to Kling 4.0's limits: O3's edit takes its own 23–60 fps (fal's x-fal on video_url).
     const o3 = getModel("kling-o3-4k-edit") ?? { id: "x", name: "X" };
-    expect(clipFpsProblem(o3, 120)).toBeNull();
+    expect(clipFpsProblem(o3, 23)).toBeNull();
+    expect(clipFpsProblem(o3, 120)).toMatch(/23–60 fps/);
   });
 
   it("a clip element is 3–8 s", () => {

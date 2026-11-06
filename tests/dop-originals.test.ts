@@ -312,7 +312,7 @@ describe("review fixes", () => {
     expect(estimateCost(m, p.params, 1, "i2v")).toBeCloseTo(0.54);
     const { url, body } = await submit(m, m.routes[0], { ...p.params, prompt: p.prompt, images: ["https://fal.media/a.png"] });
     expect(url).toContain("lightricks/ltx-2.5/image-to-video/fast");
-    expect(body).toMatchObject({ camera_motion: "focus_shift", generate_audio: false, aspect_ratio: "auto", resolution: "720p", duration: "6" });
+    expect(body).toMatchObject({ camera_motion: "focus_shift", generate_audio: false, aspect_ratio: "auto", resolution: "720p", duration: 6 });
   });
 
   it("keeps a move's partner model in the cloud when Fuobe DoP has nothing of its own there yet", () => {

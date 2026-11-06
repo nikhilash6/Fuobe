@@ -3,6 +3,7 @@ import { keyFormatValues } from "@/lib/av/keying";
 import { factorTier, factorTierProblem } from "@/lib/av/upscale";
 import type {
   Engine,
+  EnumField,
   GenerationRequest,
   GenParams,
   LoraRef,
@@ -20,7 +21,7 @@ import { requestTiming } from "@/lib/inbetween";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { qmaRunPrompt } from "@/lib/qma";
-import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
+import { askedSize, clipWords, fitLength, fitValue, numFramesValue, sizeValue } from "./payload";
 import { oneEachCall } from "./route-takes";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
@@ -101,6 +102,87 @@ export function routesFor(model: ModelDef, op: Operation, params?: GenParams): M
     const v = params.extra?.[r.when.param];
     return v === undefined || v === null ? routes.find((x) => x.when?.param === r.when!.param) === r : String(v) === r.when.value;
   });
+}
+
+/** Operations whose result keeps the shape of what goes in: the start frame (and end frame), or the clip extended. */
+const FOLLOWS_INPUT = new Set<Operation>(["i2v", "flf2v", "extend"]);
+
+/** Where an operation's own limits apply, said after the model's name in a note or a refusal. */
+const OP_PLACE: Partial<Record<Operation, string>> = {
+  i2v: " from a start frame",
+  flf2v: " from start and end frames",
+  ref2v: " from references",
+  extend: " when it extends a clip",
+  finalize: " when it finishes a draft",
+};
+
+/** "5, 10 or 15s"; "2–10s" for a run of whole seconds. */
+function lengthsWords(lengths: readonly number[]): string {
+  const xs = [...new Set(lengths)].sort((a, b) => a - b);
+  if (xs.length > 2 && xs.every((x, i) => i === 0 || x - xs[i - 1] === 1)) return `${xs[0]}–${xs[xs.length - 1]}s`;
+  return `${xs.length > 1 ? `${xs.slice(0, -1).join(", ")} or ${xs[xs.length - 1]}` : xs[0]}s`;
+}
+
+/**
+ * The lengths (seconds) an operation's hosted routes take (DurationField.accepts, from their schemas), or undefined when no route
+ * lists them: the ones every listing route takes, else the first route's (where a run goes first).
+ */
+export function routeLengths(model: Pick<ModelDef, "routes">, op: Operation, params?: GenParams): number[] | undefined {
+  const lists = routesFor(model as ModelDef, op, params).flatMap((r) => (r.map?.duration?.accepts?.length ? [r.map.duration.accepts] : []));
+  if (!lists.length) return undefined;
+  const common = lists.reduce((a, b) => a.filter((x) => b.includes(x)));
+  return common.length ? common : lists[0];
+}
+
+/** A route that takes the API's value for "the input's shape": "auto", or the name its EnumField.values gives it ("adaptive"). */
+function takesAuto(field: string | EnumField): boolean {
+  return typeof field !== "string" && !!field.accepts?.some((a) => a.toLowerCase() === "auto");
+}
+
+/**
+ * A hosted run fitted to what its operation's routes take (their field maps, so on the server, whose catalog has them):
+ * - A start frame, start and end frames or an extended clip keep their own shape: a run that picks no shape (none, or the
+ *   model's default, which every studio fills in although a start frame shows no picker) is sent "auto" when a route takes
+ *   it and the others list their ratios (they leave "auto" out, so their API's default applies).
+ * - A length a route doesn't take (Veo 3.1 extend makes 7 s; Wan 2.7 reference to video 2-10 s) becomes the closest it does,
+ *   the longest below it where there is one.
+ * - A size no route makes (H3 Max's 2K is extend's alone; Veo 3.1 extend makes 720p) becomes the one they make.
+ * The run's notes say what changed, and the price follows it.
+ */
+function fitToRoutes(model: ModelDef, op: Operation, req: GenerationRequest, params: GenParams, notes: string[]): GenParams {
+  if (model.engine === "open") return params;
+  const routes = routesFor(model, op, params).filter((r) => r.map);
+  if (!routes.length) return params;
+  let out = params;
+  const place = OP_PLACE[op] ?? "";
+  const fallback = model.defaults?.aspectRatio;
+  const asked = req.params?.aspectRatio;
+  if (FOLLOWS_INPUT.has(op) && fallback !== "auto" && (out.aspectRatio === undefined || out.aspectRatio === fallback) && (asked === undefined || asked === fallback)) {
+    const shaped = routes.filter((r) => r.map!.aspectRatio);
+    // A route that lists its ratios without "auto" leaves it out (its API's default); one with no list would send it as it is.
+    const listed = (f: string | EnumField) => typeof f !== "string" && !!f.accepts?.length;
+    if (shaped.some((r) => takesAuto(r.map!.aspectRatio!)) && shaped.every((r) => listed(r.map!.aspectRatio!))) out = { ...out, aspectRatio: "auto" };
+  }
+  const lengths = routeLengths(model, op, out);
+  if (lengths && out.duration !== undefined && !out.shots?.length) {
+    const made = fitLength(lengths, out.duration);
+    if (made !== out.duration) {
+      notes.push(`${model.name} makes ${lengthsWords(lengths)} clips${place}: this one is ${made}s`);
+      out = { ...out, duration: made };
+    }
+  }
+  const res = out.resolution;
+  const sized = routes.filter((r) => r.map!.resolution);
+  const lists = sized.map((r) => r.map!.resolution!).map((f) => (typeof f === "string" ? undefined : f.accepts));
+  if (res && sized.length && lists.every((l) => !!l?.length)) {
+    const fits = lists.map((l) => fitValue(l!, res, "tier"));
+    const made = fits[0];
+    if (made !== undefined && fits.every((f) => f === made) && made.toLowerCase() !== res.toLowerCase()) {
+      notes.push(`${model.name} makes ${made}${place}, not ${res}`);
+      out = { ...out, resolution: made };
+    }
+  }
+  return out;
 }
 
 /** Fewer characters than this of the overall prompt in front of a capped shot prompt say too little: it is left out. */
@@ -483,7 +565,7 @@ export function planGeneration(
     const shotMaps = model.routes.flatMap((r) => (r.map?.multiShot ? [r.map.multiShot] : []));
     const whole = shotMaps.some((m) => m.integer);
     if (whole) shots = wholeShots(shots);
-    const total = shots.reduce((n, s) => n + s.duration, 0);
+    let total = shots.reduce((n, s) => n + s.duration, 0);
     const max = Math.max(...(model.options.durations ?? [total]));
     const min = Math.min(...(model.options.durations ?? [total]));
     // Joined films (open models) render each shot as its own clip: only each shot has to fit.
@@ -491,6 +573,19 @@ export function planGeneration(
     if (concat && shots.some((s) => s.duration > max)) throw new Error(`${model.name} makes clips up to ${max}s per shot`);
     if (!concat && total > max) throw new Error(`The shots add up to ${total}s — ${model.name} makes up to ${max}s`);
     if (whole && total < min) throw new Error(`The shots add up to ${total}s — ${model.name} makes ${min}s or more`);
+    // Shots that add up to a length the operation's routes don't take (Wan 2.6: 5, 10 or 15 s; Seedance 2.x: 4 s or more; Kling
+    // 3.0: 3 s or more): the last shot runs longer, to the next length they take. Past the longest they take, the run is refused.
+    const shotOp = op ?? inferOperation(model, req);
+    const lengths = concat || model.engine === "open" ? undefined : routeLengths(model, shotOp, params);
+    if (lengths && !lengths.some((l) => Math.abs(l - total) < 1e-6)) {
+      const up = lengths.filter((l) => l > total);
+      if (!up.length) throw new Error(`The shots add up to ${total}s — ${model.name} makes up to ${Math.max(...lengths)}s${OP_PLACE[shotOp] ?? ""}`);
+      const next = Math.min(...up);
+      const longer = next - total;
+      shots = shots.map((s, i, all) => (i === all.length - 1 ? { ...s, duration: s.duration + longer } : s));
+      notes.push(`The last shot runs ${longer}s longer: ${model.name} makes ${lengthsWords(lengths)} clips${OP_PLACE[shotOp] ?? ""}`);
+      total = next;
+    }
     // Per-shot prompts carry the overall description (and @element legend) with them. Where a shot's prompt has a
     // length cap (Kling 4.0: 512 characters), the shot's own words come first: the overall part is cut to the room left,
     // and left out when hardly any is left.
@@ -570,6 +665,10 @@ export function planGeneration(
       // Lyrics read after the description (Lyria 3.5) share its limit with it.
       const problem = spec.inPrompt && spec.max ? promptLyricsProblem(prompt, words, spec.max, model.name) : lyricsProblem(words, spec.max, model.name);
       if (problem) throw new Error(problem);
+      // With lyrics the description is a style the API holds to a shorter limit (Mureka: 1,024 characters).
+      if (spec.promptMax && !isInstrumental(words) && prompt.length > spec.promptMax) {
+        throw new Error(`With lyrics, ${model.name} takes a style of up to ${spec.promptMax.toLocaleString("en-US")} characters, and this one has ${prompt.length.toLocaleString("en-US")}: shorten it`);
+      }
       // A model that sings words only (Mureka's songs): an instrumental is its maker's instrumental model.
       const own = spec.instrumentalModel && op === "music" && isInstrumental(words) ? getModel(spec.instrumentalModel) : undefined;
       if (own) throw new Error(`${model.name} sings the lyrics you write: for an instrumental, pick ${own.name}`);
@@ -592,6 +691,7 @@ export function planGeneration(
   }
   if (op === "song-remix" && !prompt) throw new Error("Describe the remix: its genre, mood and instruments");
   if (op === "music" && req.inputs?.audio && !model.options.cover) throw new Error(`${model.name} makes a new song: remove the song you added, or pick YuE2 to cover it`);
+  params = fitToRoutes(model, op, req, params, notes);
   const hosted = hostedInputProblem(model, op, prompt, params, req);
   if (hosted) throw new Error(hosted);
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
@@ -1031,11 +1131,21 @@ function extraImages(model: ModelDef, op: Operation, req: Pick<GenerationRequest
  */
 export function hostedInputProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, prompt: string, params: GenParams, req: Pick<GenerationRequest, "inputs">): string | null {
   const max = Math.min(...model.routes.filter((r) => r.op === op && r.map?.promptMax).map((r) => r.map!.promptMax!));
-  if (Number.isFinite(max) && prompt.length > max) {
+  // Shots sent one by one (Kling's multi_prompt) leave the whole prompt out: each shot's words are cut to their own limit.
+  const shotByShot = !!params.shots?.length && model.routes.some((r) => r.op === op && r.map?.multiShot);
+  if (Number.isFinite(max) && prompt.length > max && !shotByShot) {
     return `${model.name} takes up to ${max.toLocaleString("en-US")} characters of prompt, and this one has ${prompt.length.toLocaleString("en-US")}: shorten it`;
   }
   const refs = referenceProblem(model, op, req);
   if (refs) return refs;
+  // Sound clips a route sends as they are (Seed Audio's audio_urls, at most 3), and a model that takes a picture or sound
+  // clips but not both.
+  const sounds = req.inputs?.audios?.length ?? 0;
+  const mostSounds = model.options.maxAudios;
+  if (!REFERENCE_OPS.has(op) && op !== "audio-join" && mostSounds !== undefined && sounds > mostSounds && model.routes.some((r) => r.op === op && r.map?.audios)) {
+    return `${model.name} takes up to ${plural(mostSounds, ["sound clip", "sound clips"])}, and this run has ${sounds}: remove ${sounds - mostSounds}`;
+  }
+  if (model.options.pictureOrSounds && sounds && req.inputs?.images?.length) return `${model.name} takes a picture or sound clips, not both: remove one`;
   if (op === "insert-moment") {
     // fal's insert-video takes a new moment of 5-13 s (duration: minimum 5, maximum 13); the composer offers only those, an API
     // call or Assist may ask for any length.
@@ -1059,7 +1169,9 @@ const plural = (n: number, [one, many]: readonly [string, string]) => `${n} ${n 
  * Endpoints whose reference sound clips work only beside a reference picture or clip in the same run (Replicate's H3 Lite and
  * HighSpeed READMEs: "Reference audio needs to be combined with a reference image or video").
  */
-const REFERENCE_AUDIO_NEEDS_VISUAL = new Set(["replicate:minimax/h3-lite", "replicate:minimax/h3-highspeed"]);
+const REFERENCE_AUDIO_NEEDS_VISUAL = new Set(["replicate:minimax/h3-lite", "replicate:minimax/h3-highspeed",
+  // fal's Seedance 2.0 (and Fast) reference to video, audio_urls: "At least one reference image or video is required".
+  "fal:bytedance/seedance-2.0/reference-to-video", "fal:bytedance/seedance-2.0/fast/reference-to-video"]);
 
 /**
  * Reference lists past what the endpoint's lists take (their schema's maxItems, or the count its description gives: H3 Max insert
@@ -1071,7 +1183,8 @@ const REFERENCE_AUDIO_NEEDS_VISUAL = new Set(["replicate:minimax/h3-lite", "repl
 function referenceProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
   if (!REFERENCE_OPS.has(op)) return null;
   const routes = model.routes.filter((r) => r.op === op);
-  if (!routes.length || routes.some((r) => !r.map || r.map.elements || r.map.image)) return null;
+  // A route that also sends the first picture as a start frame (H3 Max: image_url) still sends the whole list as references.
+  if (!routes.length || routes.some((r) => !r.map || r.map.elements || (r.map.image && !r.map.images))) return null;
   const sends = (k: "images" | "videos" | "audios") => routes.every((r) => !!r.map![k]);
   const i = req.inputs ?? {};
   const counts = { images: sends("images") ? (i.images?.length ?? 0) : 0, videos: sends("videos") ? (i.videos?.length ?? 0) : 0, audios: sends("audios") ? (i.audios?.length ?? 0) : 0 };

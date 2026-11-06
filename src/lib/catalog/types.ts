@@ -358,6 +358,11 @@ export interface DurationField {
   suffix?: string;
   /** e.g. 1000 when the API wants milliseconds. */
   multiplier?: number;
+  /**
+   * Every length (seconds) this route takes, when its schema lists them (Wan 2.7 reference to video: 2-10 s; Wan 2.6: 5, 10 or
+   * 15 s; Veo 3.1 extend: 7 s only). The plan fits the run's length to them (fitRouteLength) and the payload sends the closest.
+   */
+  accepts?: number[];
 }
 
 export interface EnumField {
@@ -747,8 +752,11 @@ export interface ModelOptions {
    * go after the prompt (Lyria 3.5) rather than in a field of their own. Section tags ([Verse], [Chorus]) on lines of their own.
    * `instrumentalModel`: the model sings words only, and its maker's instrumental model is this one (Mureka 9.5 → Mureka 9.5
    * Instrumental): the editor offers no Instrumental, and lyrics that are only [Instrumental] are refused with its name.
+   * `promptMax`: with lyrics the prompt is a style of at most this many characters (Mureka: 1,024; 2,000 without lyrics).
    */
-  lyrics?: { max?: number; inPrompt?: true; required?: true; instrumentalModel?: string };
+  lyrics?: { max?: number; inPrompt?: true; required?: true; instrumentalModel?: string; promptMax?: number };
+  /** Takes a picture or sound clips as references, never both in one run (Seed Audio 1.0: image_url "Cannot be combined with audio references"). */
+  pictureOrSounds?: true;
   /** Takes a song to cover (inputs.audio: YuE2 sings its melody with the new style and lyrics). */
   cover?: true;
   /** Draft mode (cheap preview, then a full render of the take you like). */

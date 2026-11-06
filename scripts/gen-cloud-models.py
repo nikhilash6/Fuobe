@@ -11,6 +11,7 @@ correct FieldMaps, so no field name is typed by hand.
 Run:  python3 scripts/gen-cloud-models.py
 """
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -74,10 +75,22 @@ IMAGE_SIZE_MAP = {
     "5:4": "landscape_4_3", "4:5": "portrait_4_3",
 }
 RATIO = re.compile(r"^\d+(\.\d+)?:\d+(\.\d+)?$")
+PIXELS = re.compile(r"^\d+x\d+$")
+
+
+def ratio_of(r):
+    w, h = (float(x) for x in r.split(":"))
+    return w / h
 # Models whose @mentioned Elements go as the API's own elements (FieldMap.elements, ModelOptions.elements).
 ELEMENT_MODELS = {"kling-4"}
 # Duration picks for APIs that take any whole number of seconds in a range.
 NICE_DURATIONS = [3, 4, 5, 6, 8, 10, 12, 15, 20, 30]
+# A start frame, start and end frames, or an extended clip: the result keeps the shape of what goes in when the API is sent its value
+# for that ("auto"; "adaptive" on Wan 3.0 and H3 Max reference to video; Replicate's "match_input_image").
+FOLLOWS_INPUT_OPS = ("i2v", "flf2v", "extend")
+FOLLOW_VALUES = ("auto", "adaptive", "match_input_image")
+# A prompt limit stated in words only ("Max 1500 characters", "up to 10,000 characters").
+STATED_PROMPT_MAX = re.compile(r"\b(?:max(?:imum)?|up to)\s*(?:of\s*)?(\d[\d,]*)\s*char", re.I)
 
 # ---------------------------------------------------------------------------
 # Curated catalog. routes: list of (op, endpoint) or (op, endpoint, provider).
@@ -119,8 +132,8 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
     tier_size: the endpoint whose price names resolution tiers ("$0.009 at 1K … $0.036 at 4K": fal's FLUX 3 Klein): the size goes
     as one {width, height} object, the aspect ratio's shape on the tier's square (FieldMap.size.bases), on a 16 px grid within
     the limits the field's description states ("256 to 4096 pixels"); the tiers become the resolutions.
-    prompt_max: the prompt field's maxLength goes to FieldMap.promptMax, so a longer prompt is refused before a paid call (Vidu Q4's
-    5,000 characters, Meshy retexture's 600).
+    prompt_max: kept for the entries that set it; every route now gets FieldMap.promptMax from its prompt field's maxLength (or the
+    limit its description states), so a longer prompt is refused before a paid call (Vidu Q4's 5,000 characters, Meshy retexture's 600).
     A route's options dict may also set max_images (FieldMap.maxImages), note, loraEndpoint (the same model with LoRAs:
     FieldMap.loras comes from its research record) and pin (a Replicate model run by version: the research's version)."""
     M.append(dict(id=id, name=name, vendor=vendor, family=family, kind=kind, tagline=tagline, routes=routes,
@@ -136,7 +149,10 @@ model("nano-banana-pro", "Nano Banana Pro", "Google", "gemini-image", "image",
       "Gemini 3 Pro Image — best text rendering, reasoning and multi-reference edits up to 4K",
       [("t2i", "fal-ai/nano-banana-pro"), ("edit", "fal-ai/nano-banana-pro/edit"),
        ("t2i", "google/nano-banana-pro", "replicate"), ("edit", "google/nano-banana-pro", "replicate")],
-      badges=["top", "4k"], pricing=("image", 0.15, "4K is 2x"), defaults={"aspectRatio": "1:1", "resolution": "1K"})
+      badges=["top", "4k"], pricing=("image", 0.15, "4K is 2x"), defaults={"aspectRatio": "1:1", "resolution": "1K"},
+      # Replicate's aspect_ratio has match_input_image (its default), not "auto": each route lists what it takes
+      # (fit_values), so "auto" is left out there and the API follows the input image.
+      fit_values=True)
 model("nano-banana-2", "Nano Banana 2", "Google", "gemini-image", "image",
       "Newest Gemini image model — sharper detail, 0.5K–4K, up to 14 references",
       [("t2i", "fal-ai/nano-banana-2"), ("edit", "fal-ai/nano-banana-2/edit")],
@@ -150,7 +166,9 @@ model("nano-banana", "Nano Banana", "Google", "gemini-image", "image",
       "Gemini 2.5 Flash Image — fast, consistent edits",
       [("t2i", "fal-ai/nano-banana"), ("edit", "fal-ai/nano-banana/edit"),
        ("t2i", "google/nano-banana", "replicate"), ("edit", "google/nano-banana", "replicate")],
-      badges=["fast"], pricing=("image", 0.039), defaults={"aspectRatio": "1:1"})
+      badges=["fast"], pricing=("image", 0.039), defaults={"aspectRatio": "1:1"},
+      # As Nano Banana Pro: "auto" is left out on Replicate, whose default (match_input_image) follows the input image.
+      fit_values=True)
 model("seedream-5-pro", "Seedream 5.0 Pro", "ByteDance", "seedream", "image",
       "ByteDance's flagship — photoreal 4K with multi-image editing",
       [("t2i", "bytedance/seedream/v5/pro/text-to-image"), ("edit", "bytedance/seedream/v5/pro/edit")],
@@ -186,7 +204,8 @@ model("gpt-image-1-5", "GPT Image 1.5", "OpenAI", "gpt-image", "image",
 model("flux-3", "FLUX.3", "Black Forest Labs", "flux", "image",
       "BFL's newest image model with unified generation and editing",
       [("t2i", "blackforestlabs/flux-3/text-to-image"), ("edit", "blackforestlabs/flux-3/edit-image")],
-      badges=["new"], defaults={"aspectRatio": "1:1"}, options={"layout": "flux3"})
+      # Each route lists the tiers it takes (fit_values): a tier fal dropped (512sq) is left out, so the API's 1k applies.
+      badges=["new"], defaults={"aspectRatio": "1:1"}, options={"layout": "flux3"}, fit_values=True)
 model("flux-2-pro", "FLUX.2 [pro]", "Black Forest Labs", "flux", "image",
       "Production-grade photorealism with multi-reference editing",
       [("t2i", "fal-ai/flux-2-pro"), ("edit", "fal-ai/flux-2-pro/edit")],
@@ -197,7 +216,8 @@ model("flux-kontext-max", "FLUX.1 Kontext [max]", "Black Forest Labs", "flux", "
       pricing=("image", 0.08), defaults={"aspectRatio": "1:1"})
 model("ideogram-4-5", "Ideogram 4.5", "Ideogram", "ideogram", "image",
       "Best-in-class typography, posters and graphic design",
-      [("t2i", "ideogram/v4.5"), ("edit", "ideogram/v4.5/edit")], defaults={"aspectRatio": "1:1"}, options={"layout": "ideogram"})
+      # very_low is the edit's alone: text to image makes it as low.
+      [("t2i", "ideogram/v4.5", "fal", {"values": {"resolution": {"very_low": "low"}}}), ("edit", "ideogram/v4.5/edit")], defaults={"aspectRatio": "1:1"}, options={"layout": "ideogram"})
 model("flux-fill-pro", "FLUX.1 Fill [pro]", "Black Forest Labs", "flux", "image", "Precise inpainting and object replacement with a mask",
       [("inpaint", "fal-ai/flux-pro/v1/fill")], pricing=("megapixel", 0.05), hidden=False)
 model("z-image-inpaint", "Z-Image Turbo Inpaint (hosted)", "Alibaba Tongyi", "z-image", "image", "Fast masked inpainting, great value",
@@ -207,7 +227,9 @@ model("recraft-4-1", "Recraft V4.1", "Recraft", "recraft", "image",
       [("t2i", "fal-ai/recraft/v4.1/text-to-image")], defaults={"aspectRatio": "1:1"})
 model("qwen-image-3", "Qwen Image 3", "Alibaba Qwen", "qwen-image", "image",
       "Hosted Qwen with superb bilingual text rendering",
-      [("t2i", "alibaba/qwen-image-3/text-to-image"), ("edit", "alibaba/qwen-image-3/edit")], defaults={"aspectRatio": "1:1"})
+      # Its edit takes "1-3 images" (the field's description; no maxItems).
+      [("t2i", "alibaba/qwen-image-3/text-to-image"), ("edit", "alibaba/qwen-image-3/edit", "fal", {"max_images": 3})], defaults={"aspectRatio": "1:1"},
+      options={"maxImages": 3})
 # MOSS-Image (research #7 §4.7): OpenMOSS's Apache-2.0 model hosted on fal, $0.05 per megapixel; a run with LoRAs goes to
 # its /lora twin (up to 3, unpublished price). The size goes as image_size {width, height} on fal's 16-pixel grid within
 # 512-2048, so a layout is compiled for the picture fal makes; prompt expansion is off for a layout. PNG, so the words stay sharp.
@@ -249,7 +271,9 @@ model("flux-3-klein-base", "FLUX 3 Klein Base", "Black Forest Labs", "flux", "im
       licence=KLEIN_LICENCE)
 model("wan-2-7-image", "Wan 2.7 Image", "Alibaba Wan", "wan", "image",
       "Wan's image model — cinematic stills that animate well",
-      [("t2i", "fal-ai/wan/v2.7/pro/text-to-image"), ("edit", "fal-ai/wan/v2.7/pro/edit")], defaults={"aspectRatio": "16:9"})
+      # Its edit takes "1-4 images".
+      [("t2i", "fal-ai/wan/v2.7/pro/text-to-image"), ("edit", "fal-ai/wan/v2.7/pro/edit", "fal", {"max_images": 4})], defaults={"aspectRatio": "16:9"},
+      options={"maxImages": 4})
 model("z-image-turbo-cloud", "Z-Image Turbo (hosted)", "Alibaba Tongyi", "z-image", "image",
       "Sub-second photoreal images",
       [("t2i", "fal-ai/z-image/turbo", "fal", {"loraEndpoint": "fal-ai/z-image/turbo/lora"}),
@@ -277,8 +301,9 @@ model("qwen-image-edit-2509-cloud", "Qwen-Image-Edit 2509 (hosted)", "Alibaba Qw
 model("flux-2-klein-4b-cloud", "FLUX.2 [klein] 4B (hosted)", "Black Forest Labs", "flux", "image",
       "The open FLUX.2: quick drafts and edits",
       [("t2i", "fal-ai/flux-2/klein/4b", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/lora"}),
-       ("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora"})],
-      badges=["fast"], defaults={"aspectRatio": "1:1"})
+       # Its edit takes "a maximum of 4 images".
+       ("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora", "max_images": 4})],
+      badges=["fast"], defaults={"aspectRatio": "1:1"}, options={"maxImages": 4})
 model("wan-2-2-a14b-image-cloud", "Wan 2.2 A14B Image (hosted)", "Alibaba Wan", "wan", "image",
       "Open-weights Wan 2.2 stills that take Wan LoRAs",
       [("t2i", "fal-ai/wan/v2.2-a14b/text-to-image/lora", "fal")], defaults={"aspectRatio": "16:9"})
@@ -300,7 +325,7 @@ model("flux-2-klein-9b-lora-cloud", "FLUX.2 [klein] 9B with LoRAs (hosted)", "Bl
       [("t2i", "fal-ai/flux-2/klein/9b/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
 model("krea-2-turbo-lora-cloud", "Krea 2 Turbo with LoRAs (hosted)", "Krea", "krea", "image",
       "Krea 2's aesthetic with your trained characters and styles",
-      [("t2i", "fal-ai/krea-2/turbo/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
+      [("t2i", "fal-ai/krea-2/turbo/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"}, prompt_max=5000)
 # ----- Originals (O2): Fuobe Soul's cloud halves on hosted open weights (docs/research/fuobe-originals-recipes-5.md §4).
 # models.ts joins each to its ComfyUI routes as one model that runs on both engines (ModelDef.engines). Sizes are
 # Soul's table per tier (soul.settings.comfyui.sizes); steps, prompt expansion and format follow the recipe (§4.3).
@@ -347,8 +372,8 @@ model("fuobe-marketing-image", "Fuobe Marketing Image", "Fuobe Original", "fuobe
 # so it goes to the /lora endpoint: $0.01 per MP in and out, each photo resized to about 1 MP.
 model("fuobe-tryon", "Fuobe Try-On", "Fuobe Original", "fuobe-tryon", "image",
       "Dresses the person in image 1 in the garment in image 2 (a bottom in image 3): FLUX.2 [klein] 4B with a try-on LoRA",
-      [("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora"})],
-      original=True, pricing=("image", 0.03, "about 3 MP at $0.01: the photos in (each about 1 MP) and the picture out"))
+      [("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora", "max_images": 4})],
+      original=True, options={"maxImages": 4}, pricing=("image", 0.03, "about 3 MP at $0.01: the photos in (each about 1 MP) and the picture out"))
 model("imagen-4", "Imagen 4", "Google", "imagen", "image", "Google's photoreal text-to-image",
       [("t2i", "google/imagen-4", "replicate")], defaults={"aspectRatio": "1:1"})
 
@@ -400,7 +425,8 @@ model("instant-character", "Instant Character", "Tencent Hunyuan", "instant-char
       [("edit", "fal-ai/instant-character")], defaults={"aspectRatio": "1:1"}, sliders=[("scale", "Character strength")])
 model("qwen-multiple-angles", "Qwen Multiple Angles", "Alibaba Qwen", "qwen-image", "image",
       "See the same shot from another angle: rotate, tilt and zoom the camera",
-      [("edit", "fal-ai/qwen-image-edit-2511-multiple-angles")], badges=["new"],
+      # It turns the camera around one picture ("The URL of the image to adjust camera angle for").
+      [("edit", "fal-ai/qwen-image-edit-2511-multiple-angles", "fal", {"max_images": 1})], badges=["new"], options={"maxImages": 1},
       sliders=[("horizontal_angle", "Rotate (°)"), ("vertical_angle", "Tilt (°)"), ("zoom", "Zoom")])
 model("fashn-tryon", "FASHN Try-On 1.6", "FASHN", "fashn", "image",
       "Put a garment on a person: model photo first, then the garment",
@@ -429,10 +455,13 @@ model("bria-extract-object", "Bria Extract Object", "Bria", "bria", "image",
 # ----- Video
 model("seedance-2-5", "Seedance 2.5", "ByteDance", "seedance", "video",
       "ByteDance's cinema model — multi-shot with native audio, up to 30s",
-      [("t2v", "bytedance/seedance-2.5/text-to-video"), ("i2v", "bytedance/seedance-2.5/image-to-video", "fal", "+flf2v"),
+      [("t2v", "bytedance/seedance-2.5/text-to-video"),
+       # Image to video takes aspect_ratio "auto" only (the start frame's shape): never sent, so the API's "auto" applies.
+       ("i2v", "bytedance/seedance-2.5/image-to-video", "fal", {"drop": ["aspectRatio"], "flf2v": True}),
        ("ref2v", "bytedance/seedance-2.5/reference-to-video"),
        ("extend", "bytedance/seedance-2.5/reference-to-video", "fal", {"fixed": {"task": "extension"}, "videoArray": True}),
-       ("finalize", "bytedance/seedance-2.5/draft/complete")],
+       # A draft is completed at 1080p only ("Completed drafts only support 1080p output").
+       ("finalize", "bytedance/seedance-2.5/draft/complete", "fal", {"tiers": ["1080p"]})],
       # fal bills tokens: height × width × (seconds of input video + seconds out) × 24 / 1024, at $0.0214 per 1K tokens
       # (480p, 720p) or $0.0234 (1080p), times 0.6 when reference clips go in (fal's text, image and reference to video
       # pages, re-read 2026-11-06). Their per-second figures ($0.2205, $0.4730, $1.164) run about 2% above the formula;
@@ -457,12 +486,13 @@ model("seedance-2-5", "Seedance 2.5", "ByteDance", "seedance", "video",
 _K4_EDIT = "kling/v4/video-to-video/edit"
 model("kling-4", "Kling 4.0", "Kuaishou", "kling", "video",
       "Kuaishou's newest flagship — 3–30 s takes, multi-shot, @Elements and video edits up to 1080p",
-      [("t2v", "kling/v4/text-to-video"), ("i2v", "kling/v4/image-to-video", "fal", "+flf2v"),
+      [("t2v", "kling/v4/text-to-video"), ("i2v", "kling/v4/image-to-video", "fal", {"flf2v": True, "route_max_images": 1}),
        ("ref2v", "kling/v4/reference-to-video", "fal", {"drop": ["image"]}),
        ("v2v", _K4_EDIT, "fal", {"drop": ["duration"]}),
        ("video-swap", _K4_EDIT, "fal", {"drop": ["duration"]}), ("video-insert", _K4_EDIT, "fal", {"drop": ["duration"]}),
        ("t2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["image", "endImage", "images", "video"]}),
-       ("i2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["images", "video", "aspectRatio"], "flf2v": True})],
+       # Its start/end-frame routes (fal's and Replicate's) read one start frame: more stills are refused, never dropped.
+       ("i2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["images", "video", "aspectRatio"], "flf2v": True, "route_max_images": 1})],
       # Only reference-to-video takes "auto": each route lists the shapes it takes (fit_values), so a text or Replicate
       # run leaves "auto" out (the API's own 16:9) rather than sending a value it refuses.
       badges=["top", "30s", "new"], ranged_durations=True, fit_values=True,
@@ -473,16 +503,19 @@ model("seedance-2-0", "Seedance 2.0", "ByteDance", "seedance", "video",
       "Smooth multi-shot motion with audio",
       [("t2v", "bytedance/seedance-2.0/text-to-video"), ("i2v", "bytedance/seedance-2.0/image-to-video", "fal", "+flf2v"),
        ("ref2v", "bytedance/seedance-2.0/reference-to-video")],
-      badges=["audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"multiShot": {"mode": "prompt", "maxShots": 6}})
+      badges=["audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"multiShot": {"mode": "prompt", "maxShots": 6}, "maxReferences": 12})
 model("seedance-2-0-fast", "Seedance 2.0 Fast", "ByteDance", "seedance", "video",
       "Seedance 2 at draft speed",
       [("t2v", "bytedance/seedance-2.0/fast/text-to-video"), ("i2v", "bytedance/seedance-2.0/fast/image-to-video", "fal", "+flf2v"),
        ("ref2v", "bytedance/seedance-2.0/fast/reference-to-video")],
-      badges=["fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"})
+      badges=["fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
+      # "Total files across all modalities must not exceed 12" (image_urls, reference-to-video).
+      options={"maxReferences": 12})
 model("seedance-1-pro", "Seedance 1.0 Pro", "ByteDance", "seedance", "video",
       "Stable, physics-aware motion with start & end frames",
       [("t2v", "fal-ai/bytedance/seedance/v1/pro/text-to-video"), ("i2v", "fal-ai/bytedance/seedance/v1/pro/image-to-video", "fal", "+flf2v")],
-      pricing=("second", 0.124, "1080p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
+      # Only image to video takes "auto": each route lists the shapes it takes (fit_values).
+      pricing=("second", 0.124, "1080p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"}, fit_values=True)
 model("kling-3", "Kling 3.0", "Kuaishou", "kling", "video",
       "Kling's flagship — multi-shot, native audio, up to 15s",
       [("t2v", "fal-ai/kling-video/v3/pro/text-to-video"), ("i2v", "fal-ai/kling-video/v3/pro/image-to-video", "fal", "+flf2v")],
@@ -497,7 +530,8 @@ model("kling-3-4k", "Kling 3.0 4K", "Kuaishou", "kling", "video", "Native 4K Kli
 model("kling-o3", "Kling O3 Omni", "Kuaishou", "kling", "video",
       "One model for text, image, reference and video edits",
       [("t2v", "fal-ai/kling-video/o3/pro/text-to-video"), ("i2v", "fal-ai/kling-video/o3/pro/image-to-video", "fal", "+flf2v"),
-       ("ref2v", "fal-ai/kling-video/o3/pro/reference-to-video"), ("v2v", "fal-ai/kling-video/o3/pro/video-to-video/edit"),
+       # Its start_image_url is "the first frame of the video": references stay references (as Kling 4.0's).
+       ("ref2v", "fal-ai/kling-video/o3/pro/reference-to-video", "fal", {"drop": ["image"]}), ("v2v", "fal-ai/kling-video/o3/pro/video-to-video/edit"),
        # The parity studio's Remove Object page runs exactly this edit with a removal prompt (research part 4 §3); swaps and
        # inserts name @Image1 in the prompt. Same endpoint, so the studios can list Kling O3 under those tools.
        ("remove-object", "fal-ai/kling-video/o3/pro/video-to-video/edit"), ("video-swap", "fal-ai/kling-video/o3/pro/video-to-video/edit"),
@@ -519,21 +553,29 @@ model("kling-2-6-pro", "Kling 2.6 Pro", "Kuaishou", "kling", "video",
 model("kling-2-5-turbo", "Kling 2.5 Turbo Pro", "Kuaishou", "kling", "video",
       "Fast, physics-aware motion and the best camera control",
       [("t2v", "fal-ai/kling-video/v2.5-turbo/pro/text-to-video"), ("i2v", "fal-ai/kling-video/v2.5-turbo/pro/image-to-video", "fal", "+flf2v"),
-       ("t2v", "kwaivgi/kling-v2.5-turbo-pro", "replicate"), ("i2v", "kwaivgi/kling-v2.5-turbo-pro", "replicate")],
+       # Replicate's image is deprecated ("Deprecated: Use start_image instead."): the start frame goes in start_image.
+       ("t2v", "kwaivgi/kling-v2.5-turbo-pro", "replicate", {"keys": {"image": "start_image"}}),
+       ("i2v", "kwaivgi/kling-v2.5-turbo-pro", "replicate", {"keys": {"image": "start_image"}})],
       badges=["fast"], pricing=("second", 0.07), defaults={"aspectRatio": "16:9", "duration": 5})
 model("veo-3-1", "Veo 3.1", "Google", "veo", "video",
       "State-of-the-art realism with synchronized sound and dialogue",
       [("t2v", "fal-ai/veo3.1"), ("i2v", "fal-ai/veo3.1/image-to-video"), ("flf2v", "fal-ai/veo3.1/first-last-frame-to-video"),
-       ("ref2v", "fal-ai/veo3.1/reference-to-video"), ("t2v", "google/veo-3.1", "replicate"), ("i2v", "google/veo-3.1", "replicate"),
-       ("extend", "fal-ai/veo3.1/extend-video", "fal", {"note": "fal retires Veo 3.1 extend on 2026-11-17"})],
-      badges=["top", "audio", "hd"], pricing=("second", 0.4, "audio-off-half"), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "1080p"})
+       ("ref2v", "fal-ai/veo3.1/reference-to-video", "fal", {"lengths": [8]}), 
+       # Replicate's reference_images make a run reference-to-video ("only work with 16:9 aspect ratio and 8-second duration",
+       # "Last frame is ignored"): its text and image routes leave them out, so a start frame is a start frame.
+       ("t2v", "google/veo-3.1", "replicate", {"drop": ["images"]}), ("i2v", "google/veo-3.1", "replicate", {"drop": ["images"]}),
+       ("extend", "fal-ai/veo3.1/extend-video", "fal", {"note": "fal retires Veo 3.1 extend on 2026-11-17", "lengths": [7], "tiers": ["720p"]})],
+      # Only the start-frame and extend routes take "auto", and reference to video makes 8 s, extend 7 s at 720p (one-value fields
+      # the research kept as free strings): each route lists what it takes (fit_values, lengths, tiers).
+      badges=["top", "audio", "hd"], pricing=("second", 0.4, "audio-off-half"), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "1080p"},
+      fit_values=True)
 model("veo-3-1-fast", "Veo 3.1 Fast", "Google", "veo", "video", "Veo quality at a fraction of the cost",
       [("t2v", "fal-ai/veo3.1/fast"), ("i2v", "fal-ai/veo3.1/fast/image-to-video"), ("flf2v", "fal-ai/veo3.1/fast/first-last-frame-to-video"),
-       ("extend", "fal-ai/veo3.1/fast/extend-video", "fal", {"note": "fal retires Veo 3.1 extend on 2026-11-17"})],
-      badges=["fast", "audio"], pricing=("second", 0.15), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "1080p"})
+       ("extend", "fal-ai/veo3.1/fast/extend-video", "fal", {"note": "fal retires Veo 3.1 extend on 2026-11-17", "lengths": [7], "tiers": ["720p"]})],
+      badges=["fast", "audio"], pricing=("second", 0.15), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "1080p"}, fit_values=True)
 model("veo-3-1-lite", "Veo 3.1 Lite", "Google", "veo", "video", "Veo for drafts and volume",
       [("t2v", "fal-ai/veo3.1/lite"), ("i2v", "fal-ai/veo3.1/lite/image-to-video")],
-      badges=["fast", "audio"], pricing=("second", 0.05), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "720p"})
+      badges=["fast", "audio"], pricing=("second", 0.05), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "720p"}, fit_values=True)
 model("gemini-omni-flash", "Gemini Omni Flash 1.1", "Google", "gemini-omni", "video",
       "Google's any-to-video model with reference and edit modes",
       [("t2v", "google/gemini-omni-flash/v1.1/text-to-video"), ("i2v", "google/gemini-omni-flash/v1.1/image-to-video"),
@@ -551,9 +593,10 @@ model("wan-2-7", "Wan 2.7", "Alibaba Wan", "wan", "video", "Hosted Wan with refe
       [("t2v", "fal-ai/wan/v2.7/text-to-video"), ("i2v", "fal-ai/wan/v2.7/image-to-video", "fal", "+flf2v"),
        # Its video edit's duration defaults to 0 = the input's length: never sent, so a restyle stays as long as its
        # clip (the model's 5 s default would cut it short and drift off the original sound).
-       ("ref2v", "fal-ai/wan/v2.7/reference-to-video"), ("v2v", "fal-ai/wan/v2.7/edit-video", "fal", {"drop": ["duration"]}),
+       ("ref2v", "fal-ai/wan/v2.7/reference-to-video"), ("v2v", "fal-ai/wan/v2.7/edit-video", "fal", {"drop": ["duration"], "route_max_images": 1, "keys": {"image": "reference_image_url"}}),
        # Replicate's Wan 2.7 video edit keeps the source's length and framing: its own ratio/duration enums would widen the fal routes'.
-       ("v2v", "wan-video/wan-2.7-videoedit", "replicate", {"drop": ["aspectRatio", "duration"]})],
+       # It takes one reference_image and a seed (0-2147483647).
+       ("v2v", "wan-video/wan-2.7-videoedit", "replicate", {"keys": {"seed": "seed"}, "drop": ["aspectRatio", "duration"], "route_max_images": 1})],
       badges=["audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
 model("wan-2-6", "Wan 2.6", "Alibaba Wan", "wan", "video", "Multi-shot Wan with audio",
       [("t2v", "wan/v2.6/text-to-video"), ("i2v", "wan/v2.6/image-to-video"), ("ref2v", "wan/v2.6/reference-to-video")],
@@ -567,11 +610,15 @@ model("wan-2-5", "Wan 2.5", "Alibaba Wan", "wan", "video", "Audio-driven video u
 model("minimax-h3", "MiniMax H3", "MiniMax", "hailuo", "video", "Video with its own synchronized sound, 5–15 s, from words, a start frame, start and end frames, or references",
       [("t2v", "minimax/h3/text-to-video"), ("i2v", "minimax/h3/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3/reference-to-video")],
       badges=["top", "audio", "new"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      # "Reference images, videos, and audio clips must add up to at most 12 files" (reference-to-video).
+      options={"maxReferences": 12},
       pricing=("second", 0.06, "768P; 480P $0.05, 2K $0.13, 4K $0.16", {"byResolution": {"480P": 0.05, "768P": 0.06, "2K": 0.13, "4K": 0.16}}))
 model("minimax-h3-max", "MiniMax H3 Max", "MiniMax", "hailuo", "video", "Top-tier MiniMax with extend",
       [("t2v", "minimax/h3-max/text-to-video"), ("i2v", "minimax/h3-max/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3-max/reference-to-video"),
        ("extend", "minimax/h3-max/extend-video")],
-      badges=["pro"], defaults={"aspectRatio": "16:9"},
+      # 2K and "auto" are extend's alone: each route lists what it takes (fit_values), so a 2K text, picture or reference run
+      # is made (and priced) at 1080P, and "auto" is left out where the route has no such value.
+      badges=["pro"], defaults={"aspectRatio": "16:9"}, fit_values=True, options={"maxReferences": 12},
       # Build plan N7-6 (Turnaround video): fal bills every H3 Max route per second by resolution (the records' price
       # text); the flat rate read from the image-to-video record was its 480P launch price. Reference-to-video has no
       # launch price, so the list rates are used for all of them (image and text to video cost less until 2026-10-31).
@@ -829,7 +876,7 @@ model("fuobe-genjutsu-restyle", "Fuobe Genjutsu · Restyle", "Fuobe Original", "
 model("fuobe-character-swap", "Fuobe Character swap", "Fuobe Original", "fuobe-character-swap", "video",
       "The person in your clip becomes your character, same performance, scene and sound: MiniMax H3 with Akatz Labs' swap LoRA",
       [("video-swap", "minimax/h3/reference-to-video/lora", "fal", {"videoArray": True, "fixed": {"prompt_expansion_mode": "disabled", "aspect_ratio": "adaptive"}})],
-      original=True, fit_values=True, badges=["audio"],
+      original=True, fit_values=True, badges=["audio"], prompt_max=50000,
       # 2K / 4K: the same route asked for a size it offers (the result's "Re-render at 2K", n7-3); Genjutsu's Quality stays 480p / 768p.
       pricing=("second", 0.075, "768p; 480p $0.0625/s; whole seconds, 5–15 per call; a re-render at 2K $0.1625/s, 4K $0.20/s", {"byResolution": {"768p": 0.075, "480p": 0.0625, "2K": 0.1625, "4K": 0.2}}),
       options={"resolutions": ["480p", "768p"]}, defaults={"resolution": "768p"})
@@ -921,7 +968,8 @@ model("sam-3-1-face-mask", "SAM 3.1 face mask", "Meta", "sam", "image",
       fixed={"apply_mask": False, "return_multiple_masks": True, "max_masks": 16, "output_format": "png"}, api_defaults={"prompt": "face"})
 model("ltx-2-5", "LTX 2.5 Pro", "Lightricks", "ltx", "video", "Fast 4K-capable video with audio",
       [("t2v", "lightricks/ltx-2.5/text-to-video/pro"), ("i2v", "lightricks/ltx-2.5/image-to-video/pro")],
-      badges=["audio"], defaults={"aspectRatio": "16:9"})
+      # Only image to video takes "auto": each route lists the shapes it takes (fit_values).
+      badges=["audio"], defaults={"aspectRatio": "16:9"}, fit_values=True)
 # Fuobe DoP's Focus Change in the cloud (O4, research §7.3): LTX-2.5's own focus_shift move (camera_motion) on the fast
 # endpoint, open weights hosted with no LoRAs. 720p, the start frame's shape, silent like every DoP clip. A helper
 # the preset runs on, not a picker model.
@@ -946,7 +994,9 @@ model("vidu-q4", "Vidu Q4", "Shengshu", "vidu", "video", "Vidu's newest: a start
                {"byResolution": {"540p": 0.0315, "720p": 0.0665, "1080p": 0.084, "2K": 0.133, "4K": 0.273}}))
 model("luma-ray-3-2", "Luma Ray 3.2", "Luma", "luma", "video", "HDR, physically convincing motion",
       [("t2v", "luma/agent/ray/v3.2/text-to-video"), ("i2v", "luma/agent/ray/v3.2/image-to-video"), ("v2v", "luma/agent/ray/v3.2/video-to-video"),
-       ("reframe", "luma/agent/ray/v3.2/reframe")],
+       # Reframe's prompt is required (1-6000 characters) while Fuobe's reframe runs without words: an empty one sends these.
+       ("reframe", "luma/agent/ray/v3.2/reframe", "fal", {"defaults": {"prompt": "Extend the scene into the new frame with matching light and detail"},
+                                                         "omitEmptyPrompt": True})],
       defaults={"aspectRatio": "16:9"})
 model("ltx-reframe", "LTX Reframe", "Lightricks", "ltx", "video", "Change a clip's aspect ratio — fast, no prompt needed",
       [("reframe", "fal-ai/ltx-2.3/reframe")], defaults={"aspectRatio": "9:16"})
@@ -1049,7 +1099,8 @@ model("bytedance-video-upscale", "ByteDance Upscale", "ByteDance", "bytedance-up
 model("flux-video-upscale", "FLUX.3 Upscale", "Black Forest Labs", "flux", "video", "Preserve the original or creatively enhance detail (MP4, up to 20 s)",
       [("upscale-video", "blackforestlabs/flux-video-upscale")], badges=["new"],
       pricing=("second", 0.15, "2K, precise; 1080p $0.084/s, 4K $0.33/s; Creative about 1.4x", {"byResolution": {"1080p": 0.084, "1440p": 0.15, "4K": 0.33}, "factors": [{"param": "creativity", "values": {"1": 1.4}}]}),
-      defaults={"resolution": "1440p"}, upscale_tiers=["1080p", "1440p", "4K"], options={"promptOptional": True},
+      # "The video must be at most 20 seconds and 50 MB."
+      defaults={"resolution": "1440p"}, upscale_tiers=["1080p", "1440p", "4K"], options={"promptOptional": True, "maxSourceSeconds": 20},
       api_defaults={"creativity": 0}, controls=[("creativity", "Creativity", {0: "Precise", 1: "Creative"})])
 # SeedVR2: target_resolution only applies in "target" mode (the API's default mode is a 2x factor).
 model("seedvr-video", "SeedVR2 Video Upscale", "ByteDance Seed", "seedvr", "video", "Restore and upscale video",
@@ -1058,26 +1109,26 @@ model("seedvr-video", "SeedVR2 Video Upscale", "ByteDance Seed", "seedvr", "vide
 model("birefnet-cloud", "BiRefNet background removal", "ZhengPeng7", "birefnet", "image", "Clean cut-outs with hair detail",
       [("bg-remove", "fal-ai/birefnet/v2")], pricing=("image", 0.0), fixed={"operating_resolution": "2048x2048", "output_format": "png"})
 model("elevenlabs-tts", "ElevenLabs v3", "ElevenLabs", "elevenlabs", "audio", "Most expressive speech — audio tags like [whispers] and [laughs]",
-      [("tts", "fal-ai/elevenlabs/tts/eleven-v3")], badges=["top"], pricing=("request", 0.1, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"})
+      [("tts", "fal-ai/elevenlabs/tts/eleven-v3")], badges=["top"], pricing=("request", 0.1, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"}, prompt_max=True)
 model("elevenlabs-v4", "ElevenLabs v4", "ElevenLabs", "elevenlabs", "audio", "Newest ElevenLabs voice model — natural, stable long-form",
-      [("tts", "elevenlabs/tts/eleven-v4")], badges=["new"], pricing=("request", 0.08, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"})
+      [("tts", "elevenlabs/tts/eleven-v4")], badges=["new"], pricing=("request", 0.08, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"}, prompt_max=True)
 model("elevenlabs-v4-turbo", "ElevenLabs v4 Turbo", "ElevenLabs", "elevenlabs", "audio", "Low-latency v4 at half the price",
-      [("tts", "elevenlabs/tts/eleven-v4-turbo")], badges=["fast"], pricing=("request", 0.04, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"})
+      [("tts", "elevenlabs/tts/eleven-v4-turbo")], badges=["fast"], pricing=("request", 0.04, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"}, prompt_max=True)
 model("elevenlabs-multilingual-v2", "ElevenLabs Multilingual v2", "ElevenLabs", "elevenlabs", "audio", "29 languages with speed and style control",
       [("tts", "fal-ai/elevenlabs/tts/multilingual-v2")], pricing=("request", 0.1, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"})
 model("elevenlabs-dialogue", "ElevenLabs Dialogue", "ElevenLabs", "elevenlabs", "audio", "Several speakers, one natural conversation",
       [("dialogue", "fal-ai/elevenlabs/text-to-dialogue/eleven-v3")], badges=["new"], pricing=("request", 0.1, "per 1k chars"), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"})
 model("chatterbox-cloud", "Chatterbox (hosted)", "Resemble AI", "chatterbox", "audio", "Clone any voice from a 10-second sample",
-      [("tts", "fal-ai/chatterbox/text-to-speech")], pricing=("request", 0.025, "per 1k chars"))
+      [("tts", "fal-ai/chatterbox/text-to-speech")], pricing=("request", 0.025, "per 1k chars"), prompt_max=5000)
 model("index-tts-2-cloud", "IndexTTS-2 (hosted)", "Bilibili", "index-tts", "audio", "Zero-shot cloning with emotion control",
       [("tts", "fal-ai/index-tts-2/text-to-speech")], pricing=("second", 0.002))
 # The parity studio's Audio model selector also lists Inworld and MiniMax Speech (research part 3 / part 2).
 model("inworld-tts", "Inworld TTS 1.5 Max", "Inworld", "inworld", "audio", "Natural narration, great value — 113 voices in 15 languages",
-      [("tts", "fal-ai/inworld-tts")], badges=["fast"], pricing=("request", 0.01, "per 1k chars"), defaults={"voice": "Craig (en)"})
+      [("tts", "fal-ai/inworld-tts")], badges=["fast"], pricing=("request", 0.01, "per 1k chars"), defaults={"voice": "Craig (en)"}, prompt_max=True)
 model("minimax-speech-2-8", "MiniMax Speech 2.8 HD", "MiniMax", "minimax-speech", "audio", "Expressive multilingual speech with emotion control",
       [("tts", "fal-ai/minimax/speech-2.8-hd", "fal", {"fixed": {"output_format": "url"}})], pricing=("request", 0.1, "per 1k chars"),
       defaults={"voice": "Wise_Woman"}, sliders=[("voice_setting.speed", "Speed")],
-      controls=[("voice_setting.emotion", "Emotion"), ("language_boost", "Language")])
+      controls=[("voice_setting.emotion", "Emotion"), ("language_boost", "Language")], prompt_max=True)
 model("elevenlabs-voice-changer", "ElevenLabs Voice Changer", "ElevenLabs", "elevenlabs", "audio", "Re-voice a recording with any premade voice",
       [("voice-change", "fal-ai/elevenlabs/voice-changer")], pricing=("minute", 0.3), defaults={"voice": "JBFqnCBsd6RMkjVDRZzb"})
 model("chatterbox-vc-cloud", "Chatterbox Voice Conversion (hosted)", "Resemble AI", "chatterbox", "audio", "Turn a recording into any voice from a sample",
@@ -1091,7 +1142,7 @@ model("elevenlabs-dubbing", "ElevenLabs Dubbing", "ElevenLabs", "elevenlabs", "v
 # Sound effects and music (research part 3): Mirelo and Sonilo are the jobs the parity studio's Audio runs.
 model("mirelo-sfx-2", "Mirelo SFX 2.0", "Mirelo", "mirelo", "audio", "Layered, cinematic sound effects for a clip or a prompt, up to 10 minutes",
       [("sfx", "mirelo-ai/sfx2.0/text-to-audio")], badges=["top", "new"], defaults={"duration": 5}, options={"durations": [2, 5, 10, 30, 60]},
-      pricing=("second", 0.01, "intro price until 2026-12-13, then $0.015"))
+      pricing=("second", 0.01, "intro price until 2026-12-13, then $0.015"), prompt_max=True)
 # Sonilo answers in AAC unless asked: MP3 plays and downloads everywhere.
 model("sonilo-sfx", "Sonilo SFX 1.1", "Sonilo", "sonilo", "audio", "Fast sound effects up to 3 minutes",
       [("sfx", "sonilo/v1.1/text-to-sound-effects")], badges=["fast"], defaults={"duration": 5}, options={"durations": [2, 5, 8, 15, 30]},
@@ -1101,16 +1152,16 @@ model("stable-audio-3-sfx", "Stable Audio 3 SFX", "Stability AI", "stable-audio"
 model("cassette-sfx", "CassetteAI Sound Effects", "CassetteAI", "cassette", "audio", "One-cent sound effects up to 30 s",
       [("sfx", "cassetteai/sound-effects-generator")], badges=["fast"], defaults={"duration": 5}, options={"durations": [2, 5, 10, 30]})
 model("seed-audio", "Seed Audio 1.0", "ByteDance", "seed-audio", "audio", "Speech, ambience, music and Foley from one prompt",
-      [("sfx", "bytedance/seed-audio-1.0"), ("tts", "bytedance/seed-audio-1.0")], badges=["new"])
+      [("sfx", "bytedance/seed-audio-1.0"), ("tts", "bytedance/seed-audio-1.0")], badges=["new"], options={"pictureOrSounds": True}, prompt_max=True)
 model("sonilo-music", "Sonilo Music 1.1", "Sonilo", "sonilo", "audio", "Full music tracks up to 10 minutes",
       [("music", "sonilo/v1.1/text-to-music")], badges=["top", "new"], defaults={"duration": 30}, options={"durations": [15, 30, 60, 120, 240]})
 model("lyria-3", "Lyria 3", "Google", "lyria", "audio", "Google DeepMind's music model, from a prompt or an image",
-      [("music", "fal-ai/lyria3"), ("music", "google/lyria-3", "replicate")])
+      [("music", "fal-ai/lyria3", "fal", {"max_images": 1}), ("music", "google/lyria-3", "replicate")], prompt_max=True)
 model("lyria-3-pro", "Lyria 3 Pro", "Google", "lyria", "audio", "Longer, richer Lyria 3 tracks",
-      [("music", "fal-ai/lyria3/pro"), ("music", "google/lyria-3-pro", "replicate")], badges=["pro"])
+      [("music", "fal-ai/lyria3/pro", "fal", {"max_images": 1}), ("music", "google/lyria-3-pro", "replicate")], badges=["pro"], prompt_max=True)
 # A prompt alone has no lyrics to sing: lyrics_optimizer writes them from the prompt.
 model("minimax-music-2-5", "MiniMax Music 2.5", "MiniMax", "minimax-music", "audio", "Songs with vocals, lyrics written from your prompt",
-      [("music", "fal-ai/minimax-music/v2.5")], fixed={"lyrics_optimizer": True})
+      [("music", "fal-ai/minimax-music/v2.5")], fixed={"lyrics_optimizer": True}, prompt_max=True)
 model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-audio", "audio", "Quick loops and beds up to 2 minutes",
       [("music", "fal-ai/stable-audio-3/small/music/text-to-audio")], badges=["fast"], defaults={"duration": 30}, options={"durations": [10, 30, 60, 120]})
 # Full songs (new-models-10 endpointRecords): lyrics go in params.extra.lyrics with Fuobe's section tags
@@ -1138,8 +1189,8 @@ model("mureka-8", "Mureka 8", "Mureka", "mureka", "audio", "Mureka's earlier ver
       pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)", {"withLyrics": 0.045}),
       options={"controls": [{"param": "model", "label": "Version", "values": ["mureka-8", "mureka-o2", "mureka-7.6"], "default": "mureka-8",
                              "labels": {"mureka-8": "Mureka 8", "mureka-o2": "Mureka O2", "mureka-7.6": "Mureka 7.6"}}],
-               "lyrics": {"instrumentalModel": "mureka-9-instrumental"}},
-      api_defaults={"model": "mureka-8"})
+               "lyrics": {"instrumentalModel": "mureka-9-instrumental", "promptMax": 1024}},
+      api_defaults={"model": "mureka-8"}, prompt_max=True)
 # MiniMax Music 3 is the open model the open engine runs too (oss-minimax-music-3): the same weights, hosted. Its lyrics are
 # required: a run with none asks for an instrumental.
 model("minimax-music-3", "MiniMax Music 3 · both engines", "MiniMax", "minimax-music", "audio", "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
@@ -1165,9 +1216,11 @@ model("mureka-stems", "Mureka Stems", "Mureka", "mureka", "audio", "A song split
 # "Negative prompting is not supported by Lyria 3.5" (its schema): no negative prompt.
 model("lyria-3-5", "Lyria 3.5", "Google", "lyria", "audio", "Google DeepMind's newest music model: full songs from words or a picture",
       [("music", "google/lyria-3.5", "fal", {"drop": ["negativePrompt"]})], badges=["new"])
+# Replicate's Stable Audio 2.5 takes a seed (its research keyFields leave it out) and whole seconds from 1 to 190.
+SA25_REPLICATE = {"keys": {"seed": "seed"}, "ranges": {"duration": {"min": 1, "max": 190, "integer": True}}}
 model("stable-audio-2-5", "Stable Audio 2.5", "Stability AI", "stable-audio", "audio", "Sound design and music beds up to 3 minutes",
       [("sfx", "fal-ai/stable-audio-25/text-to-audio"), ("music", "fal-ai/stable-audio-25/text-to-audio"),
-       ("sfx", "stability-ai/stable-audio-2.5", "replicate"), ("music", "stability-ai/stable-audio-2.5", "replicate")],
+       ("sfx", "stability-ai/stable-audio-2.5", "replicate", SA25_REPLICATE), ("music", "stability-ai/stable-audio-2.5", "replicate", SA25_REPLICATE)],
       defaults={"duration": 30}, options={"durations": [10, 30, 60, 120, 190]})
 model("elevenlabs-sfx", "ElevenLabs Sound Effects", "ElevenLabs", "elevenlabs", "audio", "Describe a sound, get a sound",
       [("sfx", "fal-ai/elevenlabs/sound-effects/v2")], pricing=("second", 0.002), defaults={"duration": 5}, options={"durations": [2, 5, 10, 22]})
@@ -1212,7 +1265,7 @@ model("seedream-5-flash-layers", "Seedream 5.0 Flash Layers", "ByteDance", "seed
       pricing=("request", 0.135, "$0.027 per layer, ≈5 layers"))
 model("qwen-image-layered-cloud", "Qwen-Image Layered (hosted)", "Alibaba Qwen", "qwen-image", "image",
       "Open-weights layer split: 1–10 full-canvas RGBA layers",
-      [("layers", "fal-ai/qwen-image-layered"), ("layers", "qwen/qwen-image-layered", "replicate")])
+      [("layers", "fal-ai/qwen-image-layered"), ("layers", "qwen/qwen-image-layered", "replicate", {"keys": {"seed": "seed"}})])
 model("ideogram-3-text-layers", "Ideogram 3.0 Text Layers", "Ideogram", "ideogram", "image",
       "Lift the text off a poster: a clean background plus editable text blocks",
       [("text-layers", "fal-ai/ideogram/v3/layerize-text")], badges=["new"])
@@ -1243,8 +1296,9 @@ model("auto-subtitle", "Auto Subtitle", "fal", "captions", "video", "TikTok-styl
 model("veed-subtitles", "VEED Subtitles", "VEED", "veed", "video", "30 designed caption styles, with optional translation",
       [("captions", "veed/subtitles")], fixed={"preset": "simple"}, controls=[("preset", "Style")],
       pricing=("minute", 0.1, "basic styles; dynamic styles (glass, whisper, glide, fusion, terminal, handwritten, backdrop) and >1080p 2x; translation +$0.20/min"))
+# Replicate's Scribe v2 labels speakers only when asked (diarize is false by default there, true on fal).
 model("scribe-v2", "ElevenLabs Scribe v2", "ElevenLabs", "elevenlabs", "text", "Word-timed transcripts with speakers and sound events",
-      [("transcribe", "fal-ai/elevenlabs/speech-to-text/scribe-v2"), ("transcribe", "elevenlabs/scribe-v2", "replicate")], badges=["top"],
+      [("transcribe", "fal-ai/elevenlabs/speech-to-text/scribe-v2"), ("transcribe", "elevenlabs/scribe-v2", "replicate", {"fixed": {"diarize": True}})], badges=["top"],
       pricing=("minute", 0.008, "+30% with key terms"))
 # Wizper's language defaults to English; null makes it detect the language (unless one is picked).
 model("wizper", "Wizper (Whisper v3)", "fal", "whisper", "text", "Fast Whisper large-v3 transcripts in segments, any language",
@@ -1289,7 +1343,7 @@ model("tripo-h3-1", "Tripo H3.1", "Tripo", "tripo", "model3d", "Clean topology a
       controls=[("texture_quality", "Texture"), ("geometry_quality", "Geometry")])
 model("meshy-7-1", "Meshy 7.1", "Meshy", "meshy", "model3d", "Textured models with optional auto-rigging; describe the texture in the prompt",
       [("image-to-3d", "meshy/v7.1/image-to-3d")], pricing=("request", 1.2, "textured; untextured $0.80, rigging +$0.20"),
-      controls=[("model_type", "Mesh"), ("topology", "Topology")])
+      controls=[("model_type", "Mesh"), ("topology", "Topology")], prompt_max=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1376,7 +1430,7 @@ model("wan-motion", "Wan Motion (hosted)", "Alibaba Wan", "wan", "video",
       pricing=("second", 0.06, "720p; billed as frames ÷ 24 (a 30 fps clip costs 1.25× its length); +$0.08 with identity enhancement"))
 model("h3-max-recast", "MiniMax H3 Max Recast", "MiniMax", "hailuo", "video",
       "MiniMax's own person swap: 1–4 people from photos, across shots, sound kept",
-      [("video-swap", "minimax/h3-max/recast")], fit_values=True, badges=["new", "audio"], controls=[("enhance_realism", "Enhance realism")],
+      [("video-swap", "minimax/h3-max/recast")], fit_values=True, badges=["new", "audio"], prompt_max=2000, controls=[("enhance_realism", "Enhance realism")],
       pricing=("second", 0.3, "768p; 1080p $0.45/s; references free; 5–30 s, no shot over 15 s", {"byResolution": {"768p": 0.3, "1080p": 0.45}}),
       defaults={"resolution": "768p"})
 
@@ -1445,10 +1499,10 @@ model("sam-3d-objects", "SAM 3D Objects", "Meta", "sam", "model3d", "The objects
       fixed={"export_textured_glb": True}, options={"requires": {"prompt": True, "msg": "Name the objects to rebuild, e.g. “chair, lamp”"}})
 model("tripo-h3-1-text", "Tripo H3.1 Text to 3D", "Tripo", "tripo", "model3d", "A textured 3D model from a description",
       [("text-to-3d", "tripo3d/h3.1/text-to-3d")], pricing=("request", 0.2, "standard textures; untextured $0.10, HD $0.30"),
-      controls=[("texture_quality", "Texture"), ("geometry_quality", "Geometry")])
+      controls=[("texture_quality", "Texture"), ("geometry_quality", "Geometry")], prompt_max=True)
 model("meshy-7-1-multi", "Meshy 7.1 Multi-view", "Meshy", "meshy", "model3d", "One object from up to 4 photos of different sides",
       [("image-to-3d", "meshy/v7.1/multi-image-to-3d")], pricing=("request", 1.2, "textured; untextured $0.80, rigging +$0.20"),
-      controls=[("topology", "Topology")], options={"minImages": 2})
+      controls=[("topology", "Topology")], options={"minImages": 2}, prompt_max=True)
 model("meshy-rigging", "Meshy Rigging", "Meshy", "meshy", "model3d", "Rig a humanoid GLB with a skeleton, walk and run cycles, or an animation preset",
       [("rig-3d", "fal-ai/meshy/rigging")], badges=["new"], pricing=("request", 0.2, "+$0.12 with an animation preset", {"animationUsd": 0.12}))
 # Retexture a 3D model: Meshy 7 or 6 paints new textures on a GLB from words or a style picture (the
@@ -1544,7 +1598,8 @@ model("grok-imagine-video-1-5-lite", "Grok Imagine Video 1.5 Lite", "xAI", "grok
       badges=["new", "fast"], defaults={"aspectRatio": "16:9", "duration": 6, "resolution": "720p"}, ranged_durations=True,
       pricing=("second", 0.03, "720p; 480p $0.02, 1080p $0.14; +$0.01 per input image", {"byResolution": {"480p": 0.02, "720p": 0.03, "1080p": 0.14}}))
 model("pixverse-v6-max", "PixVerse V6 Max", "PixVerse", "pixverse", "video", "PixVerse's top model — up to 15 s 1080p with sound and dialogue",
-      [("t2v", "pixverse/pixverse-v6-max", "replicate"), ("i2v", "pixverse/pixverse-v6-max", "replicate")],
+      # "up to 5000 characters for text-to-video, 2048 for image-to-video" (the prompt field's description, no maxLength).
+      [("t2v", "pixverse/pixverse-v6-max", "replicate", {"prompt_max": 5000}), ("i2v", "pixverse/pixverse-v6-max", "replicate", {"prompt_max": 2048})],
       badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
       # Sound is on by default in Fuobe (off at the API), so the estimate uses the with-sound rates.
       pricing=("second", 0.15, "720p with sound; without $0.11; 1080p $0.28 / $0.22",
@@ -1574,11 +1629,14 @@ model("minimax-h3-max-reframe", "MiniMax H3 Max Reframe", "MiniMax", "hailuo", "
 model("p-video-2-pro-avatar", "P-Video 2 Pro Avatar", "Pruna AI", "p-video", "video",
       "A portrait and a voice track → a talking video up to 3 minutes",
       [("avatar", "prunaai/p-video-2-pro-avatar", "replicate", {"drop": ["voice", "script", "language"]})], badges=["new"],
-      defaults={"resolution": "768p"}, pricing=("second", 0.04, "768p; 480p $0.02", {"byResolution": {"480p": 0.02, "768p": 0.04}}))
+      defaults={"resolution": "768p"}, pricing=("second", 0.04, "768p; 480p $0.02", {"byResolution": {"480p": 0.02, "768p": 0.04}}),
+      # An empty prompt is left out, so the API's own default ("The person is talking.") applies.
+      options={"promptOptional": True})
 
 # ----- New image models
 model("krea-3", "Krea 3", "Krea", "krea", "image", "Krea's new image model — generate or edit with up to 8 references",
-      [("t2i", "krea/v3/text-to-image"), ("edit", "krea/v3/edit"), ("t2i", "krea/krea-3", "replicate"), ("edit", "krea/krea-3", "replicate")],
+      [("t2i", "krea/v3/text-to-image"), ("edit", "krea/v3/edit", "fal", {"max_images": 8}),
+       ("t2i", "krea/krea-3", "replicate", {"max_images": 8}), ("edit", "krea/krea-3", "replicate", {"max_images": 8})],
       badges=["new"], defaults={"aspectRatio": "1:1"}, pricing=("megapixel", 0.025, "output + each reference; Replicate $0.03–0.08 per image"),
       # Both APIs take up to 8 images.
       options={"maxImages": 8})
@@ -1605,7 +1663,7 @@ model("bria-expand", "Bria Expand", "Bria", "bria", "image", "Extend a picture t
 
 # ----- New speech models
 model("heygen-voice-turbo", "HeyGen Voice Turbo", "HeyGen", "heygen", "audio", "24 voices or an instant clone of yours, in 39 languages, for almost nothing",
-      [("tts", "heygen/heygen-voice/turbo")], badges=["new", "fast"], pricing=("request", 0.004, "per 1k chars"))
+      [("tts", "heygen/heygen-voice/turbo")], badges=["new", "fast"], pricing=("request", 0.004, "per 1k chars"), prompt_max=True)
 # Qwen3-TTS 1.7B on fal (research new-models-10.json endpointRecords, read 2026-11-02): a voice made from
 # words, nine premade voices, and a clone in two steps (clone-voice turns the sample into an embedding file, text-to-speech
 # speaks with it; a saved voice keeps the file: src/server/voices.ts). The same model runs on your GPU (oss-qwen3-tts).
@@ -1818,8 +1876,9 @@ def lora_field(provider, ep):
 
 
 def mask_format(ep):
-    """Ideogram paints black = change; OpenAI's GPT Image uses transparent = change; others white."""
-    return "black" if "ideogram" in ep else "alpha" if ("gpt-image" in ep or ep.startswith("openai/")) else None
+    """Ideogram paints black = change; fal's GPT Image 1.5 passes OpenAI's transparent = change; others white (fal's GPT Image 2
+    and 2.5 wrappers: "White marks regions to edit and black marks regions to keep")."""
+    return "black" if "ideogram" in ep else "alpha" if ep.startswith("fal-ai/gpt-image") else None
 
 
 def enum_of(inputs, key):
@@ -1937,7 +1996,8 @@ def part4_slots(op, kf, inputs, m, opts, fmap):
 
 def part4_ranges(op, inputs, fmap):
     """The API's limits on the numbers Fuobe fills for the round-4 tools (FieldMap.ranges): rounded and kept inside them."""
-    fields = [fmap.get(k) for k in ("targetFps", "slowdown", "frameInterval", "crossfade")]
+    # The layer count too (Replicate's Qwen-Image Layered takes 2 to 8 layers).
+    fields = [fmap.get(k) for k in ("targetFps", "slowdown", "frameInterval", "crossfade", "numLayers")]
     fields += [(fmap.get(k) or {}).get(f) for k, f in (("scale", "key"), ("position", "x"), ("position", "y"), ("zoom", "x"), ("zoom", "y"), ("animation", "key"))]
     if op in ROUND4_OPS:
         fields += [fmap.get("fps"), (fmap.get("duration") or {}).get("key")]
@@ -2047,8 +2107,10 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # A model that runs without words leaves an empty prompt out where the API's prompt is optional
     # (Bria Expand: "Omit it and the model is asked only to extend the image").
     pkey = fmap.get("prompt", "prompt" if "prompt" in kf else None)
-    if pkey and (m["options"].get("promptOptional") or (op in ("video-swap", "video-insert") and opts.get("promptOptional"))) \
-            and not (inputs.get(pkey.split(".")[0]) or {}).get("required"):
+    # A layer split's words are optional too: none leaves the API's own caption (Replicate's Qwen-Image Layered: "auto").
+    # A route that fills a required prompt itself (FieldMap.defaults: Luma Ray 3.2's reframe) leaves an empty one out too.
+    if pkey and (ropts.get("omitEmptyPrompt") or (m["options"].get("promptOptional") or op == "layers" or (op in ("video-swap", "video-insert") and opts.get("promptOptional")))
+                 and not (inputs.get(pkey.split(".")[0]) or {}).get("required")):
         fmap["omitEmptyPrompt"] = True
     # Zero-shot TTS takes its reference voice in the "audio" field; voice conversion names it separately.
     if op == "tts" and "audio" in kf:
@@ -2306,6 +2368,13 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         opts["negativePrompt"] = True
     if "seed" in fmap:
         opts["seed"] = True
+        # An API whose seed has limits (Wan 3.0: 0 to 2147483647) gets Fuobe's seeds folded into them (FieldMap.seedRange), so a
+        # typed seed or a batch's seed + index is never refused.
+        sspec = inputs.get(fmap["seed"]) or {}
+        lo, hi = num(sspec.get("minimum")), num(sspec.get("maximum"))
+        # (A limit past 2^53 is no limit for Fuobe's seeds: Mirelo's 64-bit seeds.)
+        if lo is not None and hi is not None and max(lo, 0) < hi < 2 ** 53:
+            fmap["seedRange"] = [int(max(lo, 0)), int(hi)]
     if "endImage" in fmap:
         opts["endFrame"] = True
     if "generateAudio" in fmap:
@@ -2318,7 +2387,16 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         if not enum and spec.get("type") == "union":
             # "enum or free string" unions (FLUX Ultra's aspect_ratio): offer the enum.
             enum = [v for var in spec.get("variants") or [] for v in (var.get("values") or [])]
-        if key == "image_size" or any("landscape" in str(v) or "square" in str(v) for v in enum):
+        pixels = [v for v in enum if PIXELS.match(str(v))]
+        if pixels and all(PIXELS.match(str(v)) or v == "auto" for v in enum):
+            # An API that takes a few sizes in pixels ("1024x1024", "1536x1024", "1024x1536": GPT Image 1.5), not fal's preset
+            # names: each shape goes as the size closest to it, and "auto" (the input's shape, on edit) where the API has it.
+            shape = lambda v: (lambda w, h: w / h)(*map(int, str(v).split("x")))
+            sizes = {r: min(pixels, key=lambda v: abs(math.log(shape(v) / ratio_of(r)))) for r in IMG_AR}
+            auto = "auto" in enum
+            fmap["aspectRatio"] = {"key": key, "values": {**sizes, **({"auto": "auto"} if auto else {})}, "accepts": IMG_AR + (["auto"] if auto else [])}
+            opts["aspectRatios"] = union(opts.get("aspectRatios", []), IMG_AR + (["auto"] if auto else []))
+        elif key == "image_size" or any("landscape" in str(v) or "square" in str(v) for v in enum):
             # A model that asks for "auto" (Fuobe DoP · LTX: the start frame's shape) keeps it when the API takes it;
             # otherwise the default fallback below would make every clip square (1:1, the first size listed).
             auto = "auto" in enum and m["defaults"].get("aspectRatio") == "auto"
@@ -2329,10 +2407,14 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         else:
             fmap["aspectRatio"] = key
             ratios = [v for v in enum if RATIO.match(str(v)) or v == "auto"]
+            follow = next((v for v in FOLLOW_VALUES if v in enum), None)
             if not ratios and spec.get("type") == "string":
                 ratios = ["16:9", "9:16", "1:1"] if m["kind"] == "video" else IMG_AR
-            elif m.get("fit_values") and ratios:
-                fmap["aspectRatio"] = {"key": key, "accepts": ratios}
+            elif ratios and (m.get("fit_values") or op in FOLLOWS_INPUT_OPS):
+                # A start frame or an extended clip keeps its shape on the API's own value for it (planGeneration sends it when
+                # the run picks no shape): "auto" stands for "adaptive" or "match_input_image" on a route that names it so.
+                alias = follow if op in FOLLOWS_INPUT_OPS and follow and follow != "auto" else None
+                fmap["aspectRatio"] = {"key": key, **({"values": {"auto": alias}} if alias else {}), "accepts": ratios + (["auto"] if alias else [])}
             opts["aspectRatios"] = union(opts.get("aspectRatios", []), ratios)
     # Resolution
     if "resolution" in kf:
@@ -2344,7 +2426,16 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             fmap["resolution"] = {"key": key, "values": {str(v): v for v in enum}}
         elif enum and m.get("fit_values"):
             fmap["resolution"] = {"key": key, "accepts": [str(v) for v in enum]}
+        # A route that makes fewer sizes than its schema's type says (Veo 3.1 extend: 720p only; Seedance 2.5's draft completion:
+        # 1080p only): the route option tiers lists them, and the plan prices and sends the closest.
+        if ropts.get("tiers"):
+            fmap["resolution"] = {"key": key, "accepts": list(ropts["tiers"])}
         opts["resolutions"] = union(opts.get("resolutions", []), [str(v) for v in enum])
+    # Values a route sends in place of the model's own (Ideogram 4.5's text to image: very_low, the edit's alone, as low).
+    for fld, vals in (ropts.get("values") or {}).items():
+        if fld in fmap:
+            f = fmap[fld] if isinstance(fmap[fld], dict) else {"key": fmap[fld]}
+            fmap[fld] = {**f, "values": {**(f.get("values") or {}), **vals}}
     # Duration
     if "duration" in kf:
         key = kf["duration"]
@@ -2355,8 +2446,12 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             suffix = "s" if sample and all(s.endswith("s") for s in sample) else None
             vals = [num(s[:-1] if suffix else s) for s in sample]
             vals = [v for v in vals if v is not None]
-            dtype = "number" if spec.get("valueType") in ("integer", "number") else "string"
-            fmap["duration"] = {"key": key, "type": dtype, **({"suffix": suffix} if suffix else {})}
+            # A list of numbers beside "auto" ([6, 8, 10, "auto"]: LTX 2.5, FLUX.3 Video) takes numbers, never "6".
+            numbers = spec.get("valueType") == "mixed" and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in enum if v != "auto")
+            dtype = "number" if spec.get("valueType") in ("integer", "number") or numbers else "string"
+            # Every length this route takes (DurationField.accepts): the plan fits a length the model offers that this route
+            # doesn't take (Wan 2.7 reference to video: 2-10 s) and a multi-shot total (Wan 2.6: 5, 10 or 15 s) to it.
+            fmap["duration"] = {"key": key, "type": dtype, **({"suffix": suffix} if suffix else {}), **({"accepts": list(vals)} if vals else {})}
             if len(vals) > 6:
                 pick = [v for v in vals if v in (3, 4, 5, 6, 8, 10, 12, 15, 20, 30)] or vals[:6]
                 # Keep the longest option: multi-shot budgets and the duration picker both need the real maximum.
@@ -2376,6 +2471,10 @@ def build_route(op, ep, provider, m, opts, ropts=None):
                 opts["durations"] = union(opts.get("durations", []), picks)
         if key.endswith("_ms"):
             fmap["duration"]["multiplier"] = 1000
+        # A route that makes one length only (Veo 3.1 reference to video: 8 s; extend: 7 s), a one-value field the research kept
+        # as a free string: the route option lengths lists them.
+        if ropts.get("lengths"):
+            fmap["duration"]["accepts"] = list(ropts["lengths"])
     # Song lyrics (params.extra.lyrics): the API's lyrics field and the most characters it takes, or after the
     # prompt for an API that reads them there (Lyria 3.5); the composer's lyrics editor follows ModelOptions.lyrics.
     if op in ("music", "song-extend", "song-remix") and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
@@ -2454,10 +2553,20 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             fmap.setdefault("defaults", {})[k] = spec["default"]
         else:
             warn(f"{m['id']}: {ep} requires {k}, which no field of this route fills")
-    if m.get("prompt_max"):
-        pspec = inputs.get((fmap.get("prompt") or "prompt").split(".")[0]) if fmap.get("prompt") is not False else None
-        if pspec and num(pspec.get("maxLength")):
-            fmap["promptMax"] = int(num(pspec["maxLength"]))
+    # The prompt's limit (its schema's maxLength, or the limit its description states: Wan 2.6's "Max 1500 characters") goes to
+    # FieldMap.promptMax on every route, so a longer prompt is refused in Fuobe's words before a paid call.
+    pspec = inputs.get((fmap.get("prompt") or "prompt").split(".")[0]) if fmap.get("prompt") is not False else None
+    if pspec:
+        stated = STATED_PROMPT_MAX.search(pspec.get("desc") or "")
+        most = num(pspec.get("maxLength")) or (num(stated[1].replace(",", "")) if stated else None)
+        if most:
+            fmap["promptMax"] = int(most)
+        # A limit given by number in the model's entry (Chatterbox's text: "maximum 5000 characters").
+        elif m.get("prompt_max") not in (None, True, False):
+            fmap["promptMax"] = int(m["prompt_max"])
+    # A route's own limit, stated per use in words (PixVerse V6 Max: 5,000 characters, 2,048 with an image).
+    if ropts.get("prompt_max"):
+        fmap["promptMax"] = ropts["prompt_max"]
     if "numOutputs" in fmap:
         mx = num((inputs.get(fmap["numOutputs"]) or {}).get("maximum")) or 4
         opts["maxOutputs"] = max(opts.get("maxOutputs", 1), min(4, mx))
@@ -2469,15 +2578,24 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             fmap["maxImages"] = ropts["max_images"]
     elif "image" in fmap:
         opts["maxImages"] = max(opts.get("maxImages", 0), 2 if "image2" in fmap else 1)
+        # A one-picture route of a model whose other route takes more (Lyria 3: one image_url on fal, four on Replicate).
+        if ropts.get("max_images"):
+            fmap["maxImages"] = ropts["max_images"]
     # Inpaint routes say what the mask's paint means (edit routes get theirs when the inpaint route is derived).
     if op == "inpaint" and "mask" in fmap and mask_format(ep):
         fmap["maskFormat"] = mask_format(ep)
     # Fields a past request may carry that this endpoint has no use for (Mureka 9.5's old Version).
     if ropts.get("ignore"):
         fmap["ignore"] = list(ropts["ignore"])
+    # A route's own limits on a number Fuobe fills (Replicate's Stable Audio 2.5: whole seconds, 1 to 190).
+    if ropts.get("ranges"):
+        fmap["ranges"] = {**(fmap.get("ranges") or {}), **ropts["ranges"]}
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
+    # The most stills this route reads (ModelRoute.maxImages): set on every route of an op, the plan refuses more.
+    if ropts.get("route_max_images"):
+        route["maxImages"] = ropts["route_max_images"]
     # A route that runs for one value of a setting (Kandinsky 6.0's Pro or Lite): the setting is Fuobe's, never sent.
     if ropts.get("when"):
         route["when"] = ropts["when"]

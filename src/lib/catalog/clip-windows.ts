@@ -21,18 +21,87 @@ const SOURCE_SECONDS: Record<string, { min?: number; max?: number }> = {
   "minimax-h3-max-insert": { min: 2.625 },
   // fal's H3 Max Turbo extend: "Must be 1.625 s to 60 s long".
   "minimax-h3-max-turbo-extend": { min: 1.625, max: 60 },
+  // fal's OpenAPI video_url limits (read 2026-11-06). Kling O3 Omni edit: "3-15s duration"; Kling O1 edit: "Min duration:
+  // 3.0s, Max duration: 10.05s"; H3 Max 3D: "up to 15 seconds"; FLUX.3 edit: "under 15 seconds"; H3 Max Recast: "5 to 30
+  // seconds"; Grok Imagine edit: "truncated to 8 seconds" (it would bill and return 8 s of a longer clip); Luma Ray 3.2
+  // reframe: "must be 10 seconds or less"; LTX Reframe: "Max duration 60 seconds"; Bria's erasers: "less than 5s".
+  "kling-o3": { min: 3, max: 15 },
+  "kling-o1": { min: 3, max: 10 },
+  "minimax-h3-max-3d": { max: 15 },
+  "flux-3-video": { max: 14.9 },
+  "h3-max-recast": { min: 5, max: 30 },
+  "grok-imagine-video-edit": { max: 8 },
+  "luma-ray-3-2": { max: 10 },
+  "ltx-reframe": { max: 60 },
+  "bria-video-erase": { max: 4.9 },
+  "bria-video-erase-points": { max: 4.9 },
+  "bria-video-erase-mask": { max: 4.9 },
+  // fal's H3 Max extend (its only clip route): "Must be 1.625 s to 60 s long, up to 50 MB".
+  "minimax-h3-max": { min: 1.625, max: 60 },
+  // fal's Kling 3.0 motion control: 3 to 30.05 s.
+  "kling-motion-control": { min: 3, max: 30 },
+  // HeyGen's video translation: "Maximum length is 8 minutes".
+  "heygen-translate": { max: 480 },
+  "heygen-translate-fast": { max: 480 },
 };
 
-/** How long a voice a talking-avatar model takes (fal's H3 Max lip sync: "at least 5 seconds long. Supports up to 15 minutes"). */
-const VOICE_SECONDS: Record<string, { min: number; max: number }> = { "minimax-h3-max-lipsync": { min: 5, max: 900 } };
+/**
+ * How long a voice a talking-avatar model takes (fal's H3 Max lip sync: "at least 5 seconds long. Supports up to 15 minutes";
+ * OmniHuman 2: "Duration between 4 and 300 seconds"; OmniHuman 1.5: "under 30s long for 1080p generation and under 60s long
+ * for 720p generation", 1080p when no resolution is sent).
+ */
+const VOICE_SECONDS: Record<string, { min: number; max: number; byResolution?: Record<string, number> }> = {
+  "minimax-h3-max-lipsync": { min: 5, max: 900 },
+  "omnihuman-2": { min: 4, max: 300 },
+  omnihuman: { min: 0, max: 30, byResolution: { "720p": 60, "1080p": 30 } },
+  // Replicate's P-Video 2 Pro Avatar: "Speech audio, up to 3 minutes".
+  "p-video-2-pro-avatar": { min: 0, max: 180 },
+};
 
-/** Why a voice `seconds` long is outside what the model takes, in Generate's words, or null. */
-export function voiceWindowProblem(model: { id: string; name: string }, seconds: number): string | null {
+const span = (n: number) => (n >= 120 ? `${n / 60} minutes` : `${n} s`);
+
+/**
+ * Why a voice `seconds` long is outside what the model takes (at `resolution`, when its limit depends on it: pass the API's
+ * default, "1080p" for OmniHuman 1.5, when the run sends none), or null.
+ */
+export function voiceWindowProblem(model: { id: string; name: string }, seconds: number, resolution?: string): string | null {
   const w = VOICE_SECONDS[model.id];
   if (!w || !(seconds > 0)) return null;
+  // A caller that doesn't know the run's size (the composer) gets the longest any size takes; the hand-over passes the size sent.
+  const max = resolution ? w.byResolution?.[resolution] || w.max : Math.max(w.max, ...Object.values(w.byResolution ?? {}));
   // fal: "at least 5 seconds long". No slack below: a header runs past the cut, never short of it, so 4.95-4.99 s is short.
   if (seconds < w.min) return `${model.name} needs at least ${w.min} s of audio, and this is ${Math.floor(seconds * 100) / 100} s: use a longer recording`;
-  if (seconds > w.max + 0.05) return `${model.name} takes up to ${w.max / 60} minutes of audio, and this is ${minutes(seconds)}: trim it first`;
+  if (seconds > max + 0.05) {
+    const lower = w.byResolution && Object.entries(w.byResolution).find(([, m]) => m > max && seconds <= m + 0.05)?.[0];
+    return `${model.name} takes up to ${span(max)} of audio${resolution && w.byResolution ? ` at ${resolution}` : ""}, and this is ${seconds >= 120 ? minutes(seconds) : secs(seconds)}: ${lower ? `pick ${lower}, or trim it` : "trim it first"}`;
+  }
+  return null;
+}
+
+/**
+ * The files an endpoint documents it takes (fal's OpenAPI, read 2026-11-06): containers and the most bytes. Fuobe takes
+ * MP4, MOV, WebM, MKV and AVI clips (95 MB for an account, 200 MB for the owner) and MP3, WAV, OGG, FLAC, M4A and WebM sound.
+ */
+const MP4_MOV = ["video/mp4", "video/quicktime"];
+const MB = 1024 * 1024;
+const CLIP_FILE: Record<string, { video?: { types: string[]; bytes: number; words: string }; audio?: { types: string[]; bytes: number; words: string } }> = {
+  "kling-o3": { video: { types: MP4_MOV, bytes: 200 * MB, words: "an MP4 or MOV clip up to 200 MB" } },
+  "kling-o3-4k-edit": { video: { types: MP4_MOV, bytes: 200 * MB, words: "an MP4 or MOV clip up to 200 MB" } },
+  "kling-o1": { video: { types: MP4_MOV, bytes: 200 * MB, words: "an MP4 or MOV clip up to 200 MB" } },
+  // Replicate's Runway Aleph 2: "less than 16MB" (its Files API takes up to 100 MB, so the upload alone would pass).
+  "runway-aleph-2": { video: { types: [...MP4_MOV, "video/webm"], bytes: 16 * MB - 1, words: "a clip under 16 MB" } },
+  "wan-2-7": { video: { types: MP4_MOV, bytes: 100 * MB, words: "an MP4 or MOV clip up to 100 MB" } },
+  "happy-horse-video-edit": { video: { types: MP4_MOV, bytes: 100 * MB, words: "an MP4 or MOV clip up to 100 MB" } },
+  "flux-3-video": { video: { types: ["video/mp4"], bytes: 50 * MB - 1, words: "an MP4 clip under 50 MB" } },
+  "flux-video-upscale": { video: { types: ["video/mp4"], bytes: 50 * MB, words: "an MP4 clip up to 50 MB" } },
+  "omnihuman-2": { audio: { types: ["audio/mpeg", "audio/wav", "audio/x-wav"], bytes: 15 * MB, words: "an MP3 or WAV voice up to 15 MB" } },
+};
+
+/** Why a clip or voice file (its stored type and size) is one the endpoint documents it refuses, in Generate's words, or null. */
+export function clipFileProblem(model: { id: string; name: string }, _op: string, kind: "video" | "audio", contentType: string, bytes: number): string | null {
+  const rule = CLIP_FILE[model.id]?.[kind];
+  if (!rule) return null;
+  if (!rule.types.includes(contentType) || bytes > rule.bytes) return `${model.name} takes ${rule.words}: save it as one first`;
   return null;
 }
 
@@ -108,6 +177,10 @@ export function sourceSeconds(modelId: string): { min?: number; max?: number } {
  */
 const SOURCE_FRAME: Record<string, { min: number; max: number; ratio: [number, number]; fps: [number, number] }> = {
   "kling-4": { min: 700, max: 4553, ratio: [0.4, 2.5], fps: [23.9, 60.05] },
+  // fal's Kling O3 edit (pro and 4K): 720-3840 px a side, 23-60 fps; O1 edit: 720-2160 px, 24-60 fps (x-fal on video_url).
+  "kling-o3": { min: 720, max: 3840, ratio: [0, 99], fps: [23, 60.05] },
+  "kling-o3-4k-edit": { min: 720, max: 3840, ratio: [0, 99], fps: [23, 60.05] },
+  "kling-o1": { min: 720, max: 2160, ratio: [0, 99], fps: [24, 60.05] },
 };
 
 /**

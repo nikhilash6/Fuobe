@@ -12,7 +12,8 @@ describe("applySketch", () => {
     const m = getModel("gpt-image-2-5")!;
     const route = m.routes.find((r) => r.op === "inpaint")!;
     expect(route.map?.mask).toBe("mask_url");
-    expect(route.map?.maskFormat).toBe("alpha");
+    // fal's GPT Image 2.5 wrapper reads white = change, black = keep ("White marks regions to edit"): no conversion.
+    expect(route.map?.maskFormat).toBeUndefined();
     const { request } = applySketch({ ...base, modelId: m.id }, m);
     expect(request.op).toBe("inpaint");
     expect(request.inputs).toEqual({ images: ["/img.png"], mask: "/mask.png" });

@@ -25681,12 +25681,12 @@
      "required": false,
      "values": [
       "standard",
-      "lowpoly",
-      "smart-topology"
+      "smart-topology",
+      "smart-topology-t2"
      ],
      "valueType": "string",
      "default": "standard",
-     "desc": "Type of 3D mesh generation. 'standard' produces a regular high-detail mesh; 'lowpoly' produces a low-poly mesh optimized for cleaner polygons; 'smart-topology' uses Meshy-T2 for clean, natively separated parts. When set to 'lowpoly', the remesh controls (topology, target_polycount, should_remesh) are ignored by Meshy."
+     "desc": "Type of 3D mesh generation. 'standard' produces a regular high-detail mesh; 'smart-topology' (Smart Topology T2.5) and 'smart-topology-t2' (Smart Topology T2) produce clean, triangle-only meshes with natively separated parts — T2.5 has sharper detail, T2 is faster. (fal OpenAPI re-read 2026-11-06: 'lowpoly' is no longer a value.)"
     },
     "topology": {
      "type": "enum",
@@ -25758,7 +25758,7 @@
     "texture_prompt": {
      "type": "string",
      "required": false,
-     "maxLength": 600,
+     "maxLength": 800,
      "desc": "Text prompt to guide the texturing process",
      "nullable": true
     },

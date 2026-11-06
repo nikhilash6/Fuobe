@@ -14280,9 +14280,9 @@
      "type": "enum",
      "required": false,
      "values": [
-      "512sq",
       "768sq",
       "1k",
+      "1.5k",
       "2k",
       "4k"
      ],

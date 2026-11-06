@@ -588,7 +588,10 @@ export function falTrainingInput(t: TrainingTarget, zipUrl: string, caption: str
   if (!tr) throw new Error(`${t.id} has no hosted trainer`);
   const f = tr.fields;
   const body: Record<string, unknown> = { [tr.dataField]: zipUrl };
-  if (f.steps) body.steps = clampField(f.steps, t.steps);
+  // The step count goes in the trainer's own field: "steps" on the image trainers, "number_of_steps" on the Wan 2.2,
+  // Wan 2.1 and LTX-2.3 video trainers (their schemas, read 2026-11-06), as the training kit sends it.
+  const stepsKey = f.steps ? "steps" : f.number_of_steps ? "number_of_steps" : undefined;
+  if (stepsKey) body[stepsKey] = clampField(f[stepsKey], t.steps);
   if (f.default_caption) body.default_caption = caption;
   if (trigger && f.trigger_phrase) body.trigger_phrase = trigger;
   else if (trigger && f.trigger_word) body.trigger_word = trigger;

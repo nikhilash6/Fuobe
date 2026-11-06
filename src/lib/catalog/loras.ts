@@ -277,8 +277,10 @@ export function loraFields(field: LoraField, loras: LoraRef[] | undefined): Reco
         [field.key]: kept.map((l) => ({
           path: cloudPath(l),
           scale: clampScale(l.strength, range),
-          // Wan 2.2's experts (high noise, low noise); a LoRA with no target goes on both.
-          ...(field.transformer && { transformer: expertOf(l) }),
+          // Wan 2.2's experts (high noise, low noise); a LoRA with no target goes on both. An API whose default is
+          // "both" has one transformer (fal's LTX-2.3 quality: "LTX-2.3 has a single transformer, so 'both' is the
+          // right choice", schema read 2026-11-06), so there a Wan LoRA's expert would load it nowhere: "both" always.
+          ...(field.transformer && { transformer: field.transformer === "both" ? "both" : expertOf(l) }),
           ...(field.weightName && l.weightName && { weight_name: l.weightName }),
         })),
       };

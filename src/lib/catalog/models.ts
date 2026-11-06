@@ -2824,7 +2824,7 @@ const cloudTools: ModelDef[] = [
     engine: "cloud",
     kind: "text",
     tagline: "Word timings for a known script and its recording",
-    routes: [{ op: "transcribe", provider: "fal", endpoint: "fal-ai/elevenlabs/forced-alignment", map: { prompt: "text", audio: "audio_url" } }],
+    routes: [{ op: "transcribe", provider: "fal", endpoint: "fal-ai/elevenlabs/forced-alignment", map: { prompt: "text", audio: "audio_url", promptMax: 675000 } }],
     options: {},
     pricing: { unit: "request", usd: 0.22, note: "$0.22 per started hour of audio" },
     hidden: true,
