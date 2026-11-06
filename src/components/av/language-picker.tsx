@@ -9,7 +9,36 @@ import { DUB_LANGUAGES, type DubLanguage } from "@/lib/av/languages";
 import { cn } from "@/lib/utils";
 
 /** The spoken language: detected, or one of the list. */
-export function SourceLanguageSelect({ value, onChange, id, languages = DUB_LANGUAGES }: { value: string; onChange: (v: string) => void; id?: string; languages?: DubLanguage[] }) {
+export function SourceLanguageSelect({
+  value,
+  onChange,
+  id,
+  languages = DUB_LANGUAGES,
+  unavailable,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  id?: string;
+  languages?: DubLanguage[];
+  /** Why the model doesn't take a spoken language (HeyGen detects it itself): the menu rests on Detect and says why. */
+  unavailable?: string;
+}) {
+  if (unavailable)
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <Select value="auto" disabled>
+          <SelectTrigger id={id} className="h-9 w-full cursor-not-allowed rounded-full sm:w-52" aria-label="Spoken language" aria-describedby={id ? `${id}-why` : undefined}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Detect automatically</SelectItem>
+          </SelectContent>
+        </Select>
+        <p id={id ? `${id}-why` : undefined} className="text-[12px] leading-snug text-muted-foreground">
+          {unavailable}
+        </p>
+      </div>
+    );
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger id={id} className="h-9 w-full rounded-full sm:w-52" aria-label="Spoken language">

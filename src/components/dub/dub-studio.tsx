@@ -293,7 +293,13 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
               <Label htmlFor="dub-source" className="text-[13px] sm:w-32">
                 Spoken language
               </Label>
-              <SourceLanguageSelect id="dub-source" value={source} onChange={setSource} />
+              {/* HeyGen's one-shot dub is sent no spoken language: it hears it itself (dub.ts oneShotRequests). */}
+              <SourceLanguageSelect
+                id="dub-source"
+                value={source}
+                onChange={setSource}
+                unavailable={oneShot && model !== "elevenlabs-dubbing" ? `${ONE_SHOT[model].name} detects the spoken language itself. To set it, pick ElevenLabs or “Review the script first”` : undefined}
+              />
             </div>
             <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
               <span className="pt-1.5 text-[13px] font-medium sm:w-32">Translate into</span>

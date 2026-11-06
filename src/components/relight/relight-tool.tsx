@@ -780,6 +780,8 @@ export function RelightTool({ app }: { app?: { name: string; description: string
                 <Switch id={glowId} checked={glow} onCheckedChange={setGlowAsked} />
                 <label htmlFor={glowId} className="text-[13px]">
                   Glow
+                  {/* A marker for where each light sits: the saved picture never has it (renderFull). */}
+                  <span className="block text-[12px] text-muted-foreground">On screen only: shows where each light sits</span>
                 </label>
               </div>
               {owner && (

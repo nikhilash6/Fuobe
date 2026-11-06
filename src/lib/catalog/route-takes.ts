@@ -39,10 +39,30 @@ export function routeTakes(route: ModelRoute, modelId: string): RouteTakes | und
   return route.map ? takesFromMap(route, modelId) : route.takes;
 }
 
-/** Whether every route of the operation makes one result a call (no count field): several results are several jobs. */
+/**
+ * Whether every route of the operation makes one result a call (no count field): several results are several jobs. A model
+ * with one route that takes a count (Nano Banana Pro on fal) keeps its native batch; its other route's single result is the
+ * server's to split (routeDrops names it).
+ */
 export function oneEachCall(model: Pick<ModelDef, "id" | "routes">, op: Operation): boolean {
   const routes = model.routes.filter((r) => r.op === op);
   return routes.length > 0 && routes.every((r) => routeTakes(r, model.id)?.outputs === false);
+}
+
+/**
+ * The settings a run asks for that the route it goes to has no field for (Nano Banana Pro on Replicate takes no seed; Qwen
+ * Image Edit on Replicate no negative prompt), in words for the run's note: the composer offers them because another route
+ * of the model reads them.
+ */
+export function routeDrops(route: ModelRoute, modelId: string, req: { negativePrompt?: string; params?: { seed?: number; generateAudio?: boolean; numOutputs?: number } }): string[] {
+  const t = routeTakes(route, modelId);
+  if (!t) return [];
+  return [
+    t.outputs === false && (req.params?.numOutputs ?? 1) > 1 && "a number of results",
+    t.seed === false && req.params?.seed !== undefined && "a seed",
+    t.negativePrompt === false && !!req.negativePrompt?.trim() && "a negative prompt",
+    t.audio === false && req.params?.generateAudio === false && "the sound switch",
+  ].filter((x): x is string => !!x);
 }
 
 /** What an operation's routes take together (a run goes to one of them): a value any of them takes counts. */

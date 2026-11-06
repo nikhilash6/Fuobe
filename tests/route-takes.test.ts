@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getModel, getPreset } from "@/lib/catalog";
+import { getModel, getPreset, MODELS } from "@/lib/catalog";
 import { planGeneration } from "@/lib/catalog/plan";
-import { oneEachCall, opTakes, settingUnavailable, takesFromMap } from "@/lib/catalog/route-takes";
+import { oneEachCall, opTakes, routeDrops, settingUnavailable, takesFromMap } from "@/lib/catalog/route-takes";
 import type { ModelDef } from "@/lib/catalog/types";
 import { settingsShape } from "@/lib/composer";
 import { slimModel } from "@/lib/studio-catalog";
@@ -75,10 +75,21 @@ describe("several results from a route with no count field", () => {
     expect(plan.perJobOutputs).toBe(1);
   });
 
-  it("keeps one call for a route that takes a count", () => {
-    const nb = model("nano-banana-pro");
-    expect(oneEachCall(nb, "t2i")).toBe(false);
-    const plan = planGeneration({ feature: "image", modelId: nb.id, prompt: "a red chair in a white room", params: { numOutputs: 3 } }, getModel, getPreset);
+  it("keeps one call where every route takes a count", () => {
+    const m = MODELS.find((x) => x.engine === "cloud" && (x.options.maxOutputs ?? 1) > 1 && x.routes.some((r) => r.op === "t2i") && x.routes.filter((r) => r.op === "t2i").every((r) => r.map?.numOutputs));
+    if (!m) throw new Error("no such model");
+    expect(oneEachCall(m, "t2i")).toBe(false);
+    const plan = planGeneration({ feature: "image", modelId: m.id, prompt: "a red chair in a white room", params: { numOutputs: 2 } }, getModel, getPreset);
     expect(plan.jobs).toBe(1);
+  });
+
+  it("names the settings the route a run goes to has no field for", () => {
+    const nb = model("nano-banana-pro");
+    const rep = nb.routes.find((r) => r.provider === "replicate" && r.op === "t2i")!;
+    const fal = nb.routes.find((r) => r.provider === "fal" && r.op === "t2i")!;
+    expect(routeDrops(rep, nb.id, { params: { seed: 7 } })).toEqual(["a seed"]);
+    expect(routeDrops(fal, nb.id, { params: { seed: 7 } })).toEqual([]);
+    expect(routeDrops(rep, nb.id, { params: {} })).toEqual([]);
+    expect(routeDrops(rep, nb.id, { params: { numOutputs: 3 } })).toEqual(["a number of results"]);
   });
 });

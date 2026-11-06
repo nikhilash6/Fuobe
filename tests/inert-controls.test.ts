@@ -97,3 +97,28 @@ describe("studio pickers say what the picked model can't do", () => {
     expect(src("src/components/mixed-media/mixed-studio.tsx")).toContain("const gpuCap = !cloud && r !== \"1K\";");
   });
 });
+
+describe("Dub, Relight and Swap Studio", () => {
+  it("Dub: HeyGen's one shot says it detects the spoken language, ElevenLabs keeps the menu", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { SourceLanguageSelect } = await import("@/components/av/language-picker");
+    const html = renderToStaticMarkup(createElement(SourceLanguageSelect, { id: "s", value: "es", onChange: () => {}, unavailable: "HeyGen Translate detects the spoken language itself" }));
+    expect(html).toContain("detects the spoken language itself");
+    expect(html).toContain("disabled");
+    const dub = src("src/components/dub/dub-studio.tsx");
+    expect(dub).toContain('unavailable={oneShot && model !== "elevenlabs-dubbing"');
+    // The reason holds: only ElevenLabs' one shot is sent the spoken language.
+    expect(src("src/lib/av/dub.ts")).toContain('...(o.model === "elevenlabs-dubbing" && source && { sourceLanguage: source })');
+  });
+
+  it("Relight: Glow says it is on screen only, as the saved picture has none", () => {
+    expect(src("src/components/relight/relight-tool.tsx")).toContain("On screen only: shows where each light sits");
+    expect(src("src/components/relight/relight-tool.tsx")).toContain("glow: false,");
+  });
+
+  it("Swap Studio: the anchor model shown is the one sent, after an engine switch or a model switched off", () => {
+    const s = src("src/components/swap-studio/stage-anchors.tsx");
+    expect(s).toContain("const modelId = models.find((m) => m.id === asked && m.offered)?.id ?? models.find((m) => m.offered)?.id");
+  });
+});

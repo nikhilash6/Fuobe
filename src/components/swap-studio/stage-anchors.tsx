@@ -25,7 +25,10 @@ export function AnchorMaker({ id, project, clip, shotId, segment, estimate }: Pi
   const importer = useSwapEdit(id);
   const engine = project.engine;
   const models = estimate?.anchors ?? ANCHOR_MODELS[engine].map((m) => ({ ...m, costUsd: null, offered: true }));
-  const [modelId, setModelId] = useState<string>(models.find((m) => m.offered)?.id ?? ANCHOR_MODELS[engine][0].id);
+  const [asked, setModelId] = useState<string | undefined>();
+  // The pick is read against the current list each time: another engine's model, or one switched off since, falls back to
+  // the first that is on, which is what the Select shows, the request sends and the toast names.
+  const modelId = models.find((m) => m.id === asked && m.offered)?.id ?? models.find((m) => m.offered)?.id ?? ANCHOR_MODELS[engine][0].id;
   const [importing, setImporting] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const picked = models.find((m) => m.id === modelId);
