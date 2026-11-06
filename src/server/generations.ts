@@ -8,6 +8,7 @@ import { getModel, getPreset } from "@/lib/catalog";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
 import { NO_SUBJECT_MESSAGE, withFrontView } from "./any-angle";
 import { applyMentions } from "@/lib/catalog/elements";
+import { madeOfRun } from "@/lib/catalog/fitted";
 import { migrateRequest, replacedBy } from "@/lib/catalog/replaced";
 import { directorFieldWords } from "@/lib/catalog/cinema";
 import { withSignatureWords } from "@/lib/catalog/palettes";
@@ -211,7 +212,10 @@ export function toGeneration(r: Row): Generation {
   // ready", with no progress yet.
   const ready = pool && r.status === "running" && !checking && gettingReady(r.id);
   const model = getModel(r.model_id);
-  const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
+  // What it is made at where that differs from what it asked (a 2K run on a model that makes up to 1080P), worked out from
+  // its model, mode and request, so older runs carry it too (src/lib/catalog/fitted.ts).
+  const made = madeOfRun(model, { op: r.op, provider: r.provider, request });
+  const ar = (made ? made.aspectRatio : request.params?.aspectRatio) ?? model?.defaults?.aspectRatio;
   // Rows read without the library join (the runner's own SELECTs) look the trash and folder up.
   const lib =
     r.deleted_at !== undefined && r.folder_id !== undefined
@@ -258,6 +262,7 @@ export function toGeneration(r: Row): Generation {
     folderId: lib.folder_id ?? null,
     pinnedAt: r.pinned_at ?? null,
     review: isReviewStatus(r.review) ? r.review : null,
+    ...(made && { made }),
     ...(r.status === "failed" && r.fix_json && !pool && { fix: parseFix(r.fix_json) }),
     ...(r.status === "failed" && r.fix_json && !pool && parseTrouble(r.fix_json)),
     // Waiting for its own GPU or key to come back: why, the buttons that help, and until when (never the owner's note).
