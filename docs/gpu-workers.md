@@ -334,8 +334,10 @@ local ComfyUI work counts as another program.
   or in the last 15 seconds. The worker then starts at once.
 
 When no studio job has come for a minute, the worker frees its own ComfyUI's memory (`/free`) and writes
-`siteWaiting: 0`, so your local work can go on. If no "yielded" comes within 3 minutes, the worker says so in its log
-and in its beat (`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line. While it waits,
+`siteWaiting: 0`, so your local work can go on. A fresh "yielding" (written in the last 15 seconds) counts as an
+answer: the helper is making room while local work finishes its job, however long that job takes. If 3 minutes go by
+with no "yielded" and no fresh "yielding", the worker says so in its log and in its beat
+(`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line. While it waits,
 Settings → Workers shows "Waiting for local ComfyUI work to make room", with the helper's estimate of the start when
 there is one, never "Ready".
 
@@ -716,8 +718,15 @@ The worker keeps its jobs going by itself:
 - **One retry policy for the studio.** A studio that restarts, a proxy that answers 502, 503 or 52x, a network that
   drops, or a busy studio that says when to come back is waited out. The pause grows from 1 second to at most 30
   seconds. The worker waits up to 2 minutes for a call, and up to an hour for a part of a result. It sends a call
-  again only when that is safe. A proxy's page in place of the studio's answer (a 403 that is not JSON) never stops
-  the worker.
+  again only when that is safe: a read, a part of a result, or a claim (a job that the studio gave out on a claim
+  whose answer was lost comes back on the next claim). A proxy's page in place of the studio's answer (a 403 that is
+  not JSON) never stops the worker.
+- **Its log shows trouble that lasts.** A call that gets through on its second try (a second without the studio while
+  it deploys, one dropped connection) writes nothing in the log. One missed beat writes nothing either, because the
+  next beat comes a few seconds later. Two missed beats in a row write "Can't reach the studio" with the network's
+  reason (for example `fetch failed (ECONNRESET)`), and the next beat that gets through writes "The studio answers
+  again". A claim that the studio never answered had no job, so the log says that the worker can't ask for a job,
+  not that a job stopped.
 - **A job that stalls goes back to the line.** If a job makes no progress for its stall limit, or runs past the run
   limit that the claim gives, the worker takes its prompt off its ComfyUI and gives the job back. The job keeps its
   place in the line. If its ComfyUI does not let go of the prompt within 15 seconds, the worker stops ComfyUI and

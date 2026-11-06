@@ -10,7 +10,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { helperCommand, StayAwake } from "../bin/lib/worker/awake.mjs";
 import { encodeArgs, FIT, INPUT_FORMATS, MEDIA_LIMITS, mediaKind, outputCap, reencode } from "../bin/lib/worker/media.mjs";
-import { RETRY, retrying } from "../bin/lib/worker/retry.mjs";
+import { failure, Reach, RETRY, retrying } from "../bin/lib/worker/retry.mjs";
 import { ffmpegOf } from "../bin/lib/worker/config.mjs";
 import { takeLock, workerLives, WorkerRunning } from "../bin/lib/worker/lock.mjs";
 import { privateHost, siteProblem, withoutOldPort } from "../bin/lib/worker/run.mjs";
@@ -107,6 +107,55 @@ describe("one retry policy for calls to the studio", () => {
     const spent = answers([json({ error: "That file was sent enough times." }, 429), text("data")]);
     expect((await retrying(spent.fetchFn, clock())("https://studio.test/api/gpu/computer/tasks/x/inputs/0")).status).toBe(429);
     expect(spent.calls).toHaveLength(1);
+  });
+
+  it("sends a claim again after a dropped connection: a job given out on a lost answer comes back on the next claim", async () => {
+    const c = clock();
+    const a = answers([netError("ECONNRESET"), json({ task: { id: "t1" } })]);
+    const res = await retrying(a.fetchFn, c)("https://studio.test/api/gpu/computer/claim", { method: "POST", body: "{}" });
+    expect(res.status).toBe(200);
+    expect(a.calls).toEqual(["POST https://studio.test/api/gpu/computer/claim", "POST https://studio.test/api/gpu/computer/claim"]);
+    // A beat is still never sent twice.
+    const beat = answers([netError("ECONNRESET"), json({})]);
+    await expect(retrying(beat.fetchFn, clock())("https://studio.test/api/gpu/computer/beat", { method: "POST" })).rejects.toThrow(/fetch failed/);
+    expect(beat.calls).toHaveLength(1);
+  });
+
+  it("logs only trouble that lasts past one more try, with the network's reason", async () => {
+    const quiet: string[] = [];
+    const once = answers([page(503), json({ ok: true })]);
+    expect((await retrying(once.fetchFn, { ...clock(), log: (l: string) => void quiet.push(l) })("https://studio.test/api/gpu/computer/claim", { method: "POST" })).status).toBe(200);
+    expect(quiet).toEqual([]);
+    const said: string[] = [];
+    const longer = answers([netError("ECONNRESET"), netError("ECONNRESET"), json({ ok: true })]);
+    expect((await retrying(longer.fetchFn, { ...clock(), log: (l: string) => void said.push(l) })("https://studio.test/api/gpu/computer/claim", { method: "POST" })).status).toBe(200);
+    expect(said).toEqual(["The studio didn't answer (fetch failed (ECONNRESET)): trying again."]);
+    const busy: string[] = [];
+    await retrying(answers([page(503), page(502), json({})]).fetchFn, { ...clock(), log: (l: string) => void busy.push(l) })("https://studio.test/api/gpu/computer/claim", { method: "POST" });
+    expect(busy).toEqual(["The studio didn't answer (HTTP 502): trying again."]);
+  });
+
+  it("says why a call failed: the network's code, or its cause's words", () => {
+    expect(failure(Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_SOCKET", message: "other side closed" } }))).toBe("fetch failed (UND_ERR_SOCKET)");
+    expect(failure(Object.assign(new TypeError("fetch failed"), { cause: new Error("getaddrinfo failed") }))).toBe("fetch failed (getaddrinfo failed)");
+    expect(failure(new Error("The server took too long to answer. Please try again."))).toBe("The server took too long to answer. Please try again.");
+    expect(failure(Object.assign(new Error("connect ECONNREFUSED 1.2.3.4:443"), { code: "ECONNREFUSED" }))).toBe("connect ECONNREFUSED 1.2.3.4:443");
+  });
+
+  it("one missed beat says nothing; two in a row say the studio can't be reached, and the next beat that gets through says it answers again", () => {
+    const said: string[] = [];
+    const reach = new Reach((l: string) => void said.push(l));
+    const dropped = Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+    reach.miss(dropped);
+    reach.back();
+    expect(said).toEqual([]);
+    reach.miss(dropped);
+    reach.miss(dropped);
+    reach.miss(dropped);
+    expect(said).toEqual(["Can't reach the studio: fetch failed (ECONNRESET)"]);
+    reach.back();
+    reach.back();
+    expect(said).toEqual(["Can't reach the studio: fetch failed (ECONNRESET)", "The studio answers again."]);
   });
 
   it("stops waiting once the worker is stopping", async () => {

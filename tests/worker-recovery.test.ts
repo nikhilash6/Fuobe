@@ -544,6 +544,54 @@ http.createServer((q, s) => { s.writeHead(200, { "content-type": "application/js
     expect(p.logs.some((l) => /comfy-crashes/.test(l))).toBe(true);
   });
 
+  it("dropped connections (a deploy, a proxy): no job is said to stop, a lone missed beat says nothing, and the job runs", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const dropped = () => Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+    const api = apiAs(routes, null);
+    let lost: string | null = null;
+    let beats = 0;
+    s.intercept = async (q, init) => {
+      // The studio gives out the job on its first claim, and the answer is lost on the way; its second beat doesn't
+      // get through either.
+      if (q === "/api/gpu/computer/claim" && !lost) {
+        const res = await api(q, init);
+        if (res.status !== 200) return res;
+        lost = ((await res.json()) as { task: { id: string } }).task.id;
+        throw dropped();
+      }
+      if (q === "/api/gpu/computer/beat" && ++beats === 2) throw dropped();
+      return undefined;
+    };
+    const { id } = addTask();
+    start(w, s, p);
+    const t = await ended(id);
+    expect(lost).toBe(id);
+    expect(t.state).toBe("done");
+    expect(fs.readFileSync(tasks.outputFile(id, 0)).equals(FAKE_PNG)).toBe(true);
+    // The claim sent again got the same job, and it ran once.
+    expect(prompts(p)).toBe(1);
+    await until(() => beats >= 3, 60_000);
+    expect(p.logs.filter((l) => /job stopped|Can't reach the studio|can't ask the studio|trying again/.test(l))).toEqual([]);
+  });
+
+  it("a studio it can't reach for longer: said once with the network's reason, and once when it answers again", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    let down = true;
+    s.intercept = (q) => {
+      if (down && q === "/api/gpu/computer/beat") throw Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } });
+      return undefined;
+    };
+    start(w, s, p);
+    await until(() => p.logs.some((l) => /Can't reach the studio/.test(l)), 60_000);
+    down = false;
+    await until(() => p.logs.some((l) => /The studio answers again/.test(l)), 60_000);
+    expect(p.logs.filter((l) => /Can't reach the studio|answers again/.test(l))).toEqual(["Can't reach the studio: fetch failed (UND_ERR_SOCKET)", "The studio answers again."]);
+  });
+
   it("stops when the studio no longer knows its token, and says so", async () => {
     const w = addWorker();
     const s = studio();

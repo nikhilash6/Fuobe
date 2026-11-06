@@ -35,7 +35,7 @@ import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media
 import { canCleanPictures, cleanPicture, isPicture } from "./picture.mjs";
 import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
-import { retrying } from "./retry.mjs";
+import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
 import { CodeWatch } from "./update.mjs";
@@ -709,7 +709,8 @@ async function work(saved, deps, owner) {
       .then((had) => {
         cpuMissedAt = had ? -Infinity : now();
       })
-      .catch((e) => log(`A CPU slot job stopped: ${e.message}`))
+      // A claim the studio never answered (the retry policy gave up on it) had no job: none stopped.
+      .catch((e) => log(cpuComfy.task ? `A CPU slot job stopped: ${failure(e)}` : `Its CPU slot can't ask the studio for a job: ${failure(e)}`))
       .finally(() => {
         busyCpu = false;
         cpuComfy.task = null;
@@ -747,7 +748,7 @@ async function work(saved, deps, owner) {
       .then((had) => {
         if (!o?.onlyHeld) gpuMissedAt = had ? -Infinity : now();
       })
-      .catch((e) => log(`A job stopped: ${e.message}`))
+      .catch((e) => log(comfy.task ? `A job stopped: ${failure(e)}` : `It can't ask the studio for a job: ${failure(e)}`))
       .finally(() => {
         busyJob = false;
         jobUsesGpu = false;
@@ -782,6 +783,8 @@ async function work(saved, deps, owner) {
   }
 
   let beatAt = 0;
+  // A lone missed beat says nothing; two in a row say the studio can't be reached (retry.mjs).
+  const reach = new Reach(log);
   let lastState = "";
   try {
     while (!deps.signal?.aborted) {
@@ -866,6 +869,7 @@ async function work(saved, deps, owner) {
         beaten = true;
         try {
           const a = await runner.beat();
+          reach.back();
           if (runner.view.stopped) {
             log(runner.view.stopped === "signed-out" ? "The studio doesn't know this worker's token. Run fuobe worker setup again." : "The studio stopped this worker.");
             break;
@@ -878,7 +882,7 @@ async function work(saved, deps, owner) {
             }
           }
         } catch (e) {
-          log(`Can't reach the studio: ${e.message}`);
+          reach.miss(e);
         }
       }
       // Its model folders, again every 10 minutes (in the background: beats go on while it hashes a new file).
@@ -904,7 +908,7 @@ async function work(saved, deps, owner) {
           serverInterrupt: false,
         });
         if (turn.waitForYield && !was.waitForYield) log("Local ComfyUI work holds the GPU: asking it to make room for the studio's jobs.");
-        if (turn.late && !was.late) log("Local ComfyUI work hasn't made room after 3 minutes: still waiting, with the jobs kept in line.");
+        if (turn.late && !was.late) log("Local ComfyUI work hasn't answered for 3 minutes: still waiting, with the jobs kept in line.");
         if (was.waitForYield && !turn.waitForYield && turn.siteWaiting > 0) log("Local ComfyUI work made room: starting.");
         if (turn.ended === "idle") {
           log("No studio job for a minute: its ComfyUI lets go of its memory for local work.");
