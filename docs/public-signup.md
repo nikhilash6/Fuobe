@@ -198,6 +198,15 @@ so it shows as **Same request again**; a change of model shows as the same words
 collapsed section shows what was sent to the GPU or provider. Links show by their kind only, and keys, tokens,
 cookies and passwords are left out.
 
+It also shows how long the run waited and ran: a timeline from the press to the end, with each worker that took
+its job, gave it back or finished it (and its GPU), and the GPU time the worker measured. On this site's GPUs each
+job shows its worker, GPU, lane, tries and times. It shows how the run was made: the model Auto picked and why, a run
+Ideogram 4 declined (the asked model, the model that made it, and the picture it returned), the notices said on the
+result, and each setting the model makes differently, asked and made side by side (the account's own pages show
+the made value only). It shows where the run was made (the studio or tool, and whether a tool made it for one of the
+account's projects), the job's id at its GPU or provider, its cost and whether it was charged, and each result's
+check before it shows.
+
 The API, for the owner only (guests get 401, accounts 403): `GET /api/admin/accounts` (each account
 with `runs`, `runsDay`, `runsWeek`, `running`, `failedWeek`, `lastRunAt`, `bytes` and `capBytes`,
 and `totals`; `?format=csv` for the file), `PATCH /api/admin/accounts/<id>` with

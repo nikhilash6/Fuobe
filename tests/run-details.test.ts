@@ -168,10 +168,111 @@ describe("Run details: the owner's view of one account's run", () => {
   });
 
   it("says whether the model is the studio's default", async () => {
+    // The Image studio opens on Auto on the open engine: a model named by hand is a change.
     const d = (await (await get(run(A))).json()) as RunDetails;
-    // The Image studio opens on Qwen-Image 2.1 on the open engine where the server writes no caption.
-    expect(d.model).toMatchObject({ id: "oss-qwen-image-21", state: "default" });
+    expect(d.model).toMatchObject({ id: "oss-qwen-image-21", state: "changed", default: "oss-auto-image" });
+    expect(d.model.ranOn).toBeUndefined();
     expect(d.studio?.title).toBe("Image");
+  });
+
+  it("names Auto's pick and why, and the model that made it", async () => {
+    const id = run(A, { status: "succeeded", request: { modelId: "oss-krea2-realism" } });
+    db()
+      .prepare("UPDATE generations SET request_json = json_set(request_json, '$.modelId', 'oss-auto-image', '$.auto', json(?)) WHERE id = ?")
+      .run(JSON.stringify({ model: "oss-krea2-realism", why: "trigger" }), id);
+    const d = (await (await get(id)).json()) as RunDetails;
+    expect(d.model).toMatchObject({ id: "oss-auto-image", name: "Auto", state: "default", ranOn: { id: "oss-krea2-realism" } });
+    expect(d.madeBy.auto).toMatchObject({ model: "oss-krea2-realism", why: "trigger" });
+    expect(d.madeBy.auto?.words).toContain("Auto image model");
+  });
+
+  it("shows what Ideogram 4 declined and the model that made it in its place", async () => {
+    const card = { url: "/api/files/held/card.png", spread: 3, grey: 0.97 };
+    const id = run(A, {
+      status: "succeeded",
+      request: { notice: "Made with Qwen-Image 2.1 · Ideogram 4 declined this one" },
+      meta: { jobIndex: 0, declined: { stage: "fallback", cards: [card], was: { model_id: "oss-ideogram-4", request_json: "{}" } } },
+    });
+    const d = (await (await get(id)).json()) as RunDetails;
+    expect(d.run.declinedCards).toEqual([card]);
+    expect(d.madeBy.declined).toMatchObject({ stage: "fallback", askedModel: "oss-ideogram-4" });
+    expect(d.madeBy.notices).toEqual(["Made with Qwen-Image 2.1 · Ideogram 4 declined this one"]);
+    expect(d.model).toMatchObject({ id: "oss-ideogram-4", ranOn: { id: "oss-qwen-image-21" } });
+  });
+
+  it("gives the timeline, its jobs and workers, and what it cost, without its hold or lease", async () => {
+    const t0 = Date.now() - 120_000;
+    const id = run(A, { status: "succeeded", at: t0, externalId: "task-1", request: { feature: "canvas" } });
+    db()
+      .prepare(
+        "UPDATE generations SET completed_at = ?, cost_usd = 0.04, request_json = json_set(request_json, '$.place', 'pool', '$.class', 'paid', '$.hold', 'hold-secret-77', '$.charged', json('true'), '$.charge', '7 units') WHERE id = ?",
+      )
+      .run(t0 + 90_000, id);
+    db().prepare("INSERT INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, ?)").run(id, t0 + 1_000, t0 + 30_000);
+    db()
+      .prepare(
+        `INSERT INTO relay_tasks (id, principal, generation_id, state, prompt_id, lease_hash, lane, class, requeues, est_ms, created_at, updated_at, claimed_at, sent_at, started_at, finished_at)
+         VALUES ('task-1', 'pool:pool', ?, 'done', 'p-1', 'lease-secret-99', 'image', 'paid', 1, 50000, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, t0 + 1_000, t0 + 90_000, t0 + 20_000, t0 + 25_000, t0 + 30_000, t0 + 88_000);
+    const log = db().prepare(
+      "INSERT INTO worker_jobs (at, event, worker_id, worker_name, task_id, generation_id, principal, lane, exec_ms, device) VALUES (?, ?, ?, ?, 'task-1', ?, 'pool:pool', 'image', ?, ?)",
+    );
+    log.run(t0 + 5_000, "claimed", "w1", "box-a", id, null, null);
+    log.run(t0 + 10_000, "requeued", "w1", "box-a", id, null, null);
+    log.run(t0 + 20_000, "claimed", "w2", "box-b", id, null, null);
+    log.run(t0 + 88_000, "finished", "w2", "box-b", id, 55_000, "NVIDIA GeForce RTX 5090");
+    db()
+      .prepare("INSERT INTO billing_outbox (key, kind, hold_id, payload_json, tries, next_at, created_at, done_at) VALUES (?, 'settle', 'hold-secret-77', '{}', 1, 0, 0, 1)")
+      .run(id);
+    const text = await (await get(id)).text();
+    for (const secret of ["hold-secret-77", "lease-secret-99"]) expect(text, secret).not.toContain(secret);
+    const d = JSON.parse(text) as RunDetails;
+    expect(d.timing).toMatchObject({ pressedAt: t0, sentAt: t0 + 1_000, startedAt: t0 + 30_000, endedAt: t0 + 90_000, waitedMs: 30_000, ranMs: 60_000, gpuMs: 55_000, totalMs: 90_000 });
+    expect(d.jobs).toEqual([
+      expect.objectContaining({ state: "done", slot: "gpu", lane: "image", lineClass: "paid", worker: "box-b", device: "NVIDIA GeForce RTX 5090", requeues: 1, estMs: 50_000, execMs: 55_000 }),
+    ]);
+    expect(d.workerLog.map((e) => [e.event, e.worker])).toEqual([
+      ["claimed", "box-a"],
+      ["requeued", "box-a"],
+      ["claimed", "box-b"],
+      ["finished", "box-b"],
+    ]);
+    expect(d.money).toMatchObject({ costUsd: 0.04, lineClass: "paid", charge: "7 units", setAside: true, notCharged: false, report: { kind: "settle", state: "sent", tries: 1 } });
+    expect(d.surface).toMatchObject({ label: "Canvas", standalone: false });
+    expect(d.providerId).toBe("task-1");
+    expect(d.progress).toBeNull();
+  });
+
+  it("shows a value the model makes differently beside what was asked", async () => {
+    const id = run(A, { status: "succeeded", request: { feature: "video", modelId: "minimax-h3-max-turbo", op: "t2v", params: { resolution: "2K" } } });
+    db().prepare("UPDATE generations SET provider = 'fal', engine = 'cloud', kind = 'video' WHERE id = ?").run(id);
+    const d = (await (await get(id)).json()) as RunDetails;
+    expect(d.madeBy.changes).toEqual([expect.objectContaining({ setting: "resolution", asked: "2K", made: "1080p" })]);
+    expect(d.settings.find((r) => r.key === "params.resolution")?.made).toMatchObject({ value: "1080p", asked: "2K" });
+  });
+
+  it("tells a run made on its own in a studio from one a tool made", async () => {
+    const id = run(A, { request: { feature: "cinema-scene" } });
+    expect(((await (await get(id)).json()) as RunDetails).surface).toMatchObject({ label: "Cinema Studio", standalone: false });
+    const own = run(A);
+    db().prepare("UPDATE generations SET request_json = json_set(request_json, '$.standalone', json('true')) WHERE id = ?").run(own);
+    expect(((await (await get(own)).json()) as RunDetails).surface).toMatchObject({ label: "Image", standalone: true });
+  });
+});
+
+describe("withMade: what a setting is made at, beside what was asked", () => {
+  it("adds the made value to its row, and a row for a setting the request left out", async () => {
+    const { withMade } = await import("@/server/run-details");
+    const rows = withMade(
+      [{ key: "params.resolution", label: "Resolution", value: "2K", hasDefault: true, default: "1080P", state: "changed", sent: true }],
+      [
+        { setting: "resolution", label: "Quality", asked: "2K", made: "1080p", reason: "the most this model makes", note: "" },
+        { setting: "duration", label: "Duration", asked: "Its own", made: "6", reason: "its only length", note: "" },
+      ],
+    );
+    expect(rows[0].made).toEqual({ value: "1080p", asked: "2K", reason: "the most this model makes" });
+    expect(rows[1]).toMatchObject({ key: "params.duration", sent: false, made: { value: "6" } });
   });
 });
 

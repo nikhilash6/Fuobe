@@ -33,6 +33,8 @@ export interface SettingRow {
   state: SettingState;
   /** The request carried it (false: left out, so its default applied). */
   sent: boolean;
+  /** The model makes it differently: what it is made at, what was asked (in words), and why. */
+  made?: { value: string; asked: string; reason: string };
 }
 
 /** What a run's defaults come from: its model, its preset (or app) and the preset's route on that model. */
