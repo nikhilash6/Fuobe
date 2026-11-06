@@ -478,7 +478,7 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {header}
           <StudioGpuPill />
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} hint />
         </div>
         <PhoneNavButton />
       </header>

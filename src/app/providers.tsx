@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { GuestPrompt } from "@/components/guest-prompt";
 import { DeleteForGoodHost } from "@/components/studio/delete-for-good";
 import { AddKeyPrompt } from "@/components/keys/your-keys";
+import { CloudPanel } from "@/components/keys/cloud-panel";
 import { toast } from "sonner";
 import { AUTH_CHANNEL, takeNotice, type ViewerInfo } from "@/lib/api";
 
@@ -60,6 +61,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <GuestPrompt />
           <DeleteForGoodHost />
           <AddKeyPrompt />
+          <CloudPanel />
           <BillingCard />
           <GuidedFixHost />
           <ComputerRunnerHost />

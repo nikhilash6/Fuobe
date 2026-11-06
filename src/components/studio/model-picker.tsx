@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { ownSetupLabel } from "@/lib/own-setup";
 import { answerPickModel } from "@/lib/pick-model";
 import { addKeyLabel, billedTo, CLOUD_KEY, CLOUD_PROVIDERS, needsKey, type CloudProvider } from "@/lib/your-keys";
+import { CLOUD_SECTION_LABEL, cloudModelAsk, openCloudPanel, visitorEngine } from "@/lib/engine-ux";
 import { EngineSwitch } from "./engine-switch";
 import { ResponsivePanel } from "./responsive-panel";
 import { RECENT_MODELS, STARRED_MODELS, useStoredList } from "./stored-list";
@@ -295,18 +296,20 @@ export function ModelPicker(props: PickerProps) {
       <PickerList
         {...props}
         onPicked={() => setOpen(false)}
-        onNeedsKey={(m, p) => {
+        onNeedsKey={(m, p, served) => {
           waiting.current = m.id;
           setOpen(false);
-          openAddKey(p, m.id);
+          // While open models run free here, the Cloud panel first: what Cloud is, then the key it needs.
+          if (cloudModelAsk(status) === "panel") openCloudPanel({ modelId: m.id, modelName: m.name, served });
+          else openAddKey(p, m.id);
         }}
       />
     </ResponsivePanel>
   );
 }
 
-/** The searchable list (mounted by the popover / sheet only while it shows). */
-function PickerList({
+/** The searchable list (mounted by the popover / sheet only while it shows; exported for tests). */
+export function PickerList({
   models,
   value,
   onChange,
@@ -321,7 +324,7 @@ function PickerList({
   ownSetup,
   onPicked,
   onNeedsKey,
-}: PickerProps & { onPicked: () => void; onNeedsKey?: (m: ModelDef, p: CloudProvider) => void }) {
+}: PickerProps & { onPicked: () => void; onNeedsKey?: (m: ModelDef, p: CloudProvider, served: CloudProvider[]) => void }) {
   const [q, setQ] = useState("");
   const status = useStatus().data;
   const badges = useGpuBadges().data;
@@ -360,7 +363,9 @@ function PickerList({
     () => (keyless && !engines.includes("cloud") ? (groupModels({ models, engine: "cloud", engines: ["cloud"], query: q, recent: [], starred: [], best: [] }).groups[0]?.models ?? []) : []),
     [keyless, q, engines, models],
   );
-  const listed = paid.length ? [...groups, { id: "paid" as const, label: "Paid models · with your own key", models: paid }] : groups;
+  // While open models run free here, the section says which side it is: Cloud, on the visitor's own key.
+  const hostedVisitor = !!visitorEngine(status);
+  const listed = paid.length ? [...groups, { id: "paid" as const, label: hostedVisitor ? CLOUD_SECTION_LABEL : "Paid models · with your own key", models: paid }] : groups;
   // The key a paid row needs: an account's (needsKey), or for a guest the providers that serve it.
   const rowNeeds = (m: ModelDef): CloudProvider[] | null => {
     if (!guest) return needsKey(m, status);
@@ -369,12 +374,13 @@ function PickerList({
     return served.length ? served : null;
   };
   const pick = (m: ModelDef) => {
-    if (guest && rowNeeds(m)) {
+    // A guest while open models run free here reads the Cloud panel first (its buttons ask to sign up).
+    if (guest && rowNeeds(m) && !(hostedVisitor && onNeedsKey)) {
       onPicked();
       return askToSignUp("run");
     }
-    const needs = needsKey(m, status);
-    if (needs && onNeedsKey) return onNeedsKey(m, needs[0]);
+    const needs = guest ? rowNeeds(m) : needsKey(m, status);
+    if (needs && onNeedsKey) return onNeedsKey(m, needs[0], needs);
     onChange(m);
     onPicked();
   };

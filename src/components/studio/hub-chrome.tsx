@@ -197,7 +197,7 @@ export const HUB_SKELETON_AFTER_MS = 60;
 function HubEngine({ kind, mode }: { kind: HubKind; mode: string | undefined }) {
   const [engine, setEngine] = useEngine();
   const selfHostedOnly = !!HUB_MODES[kind].find((m) => m.id === mode)?.selfHostedOnly;
-  return <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly={selfHostedOnly} />;
+  return <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly={selfHostedOnly} hint />;
 }
 
 /**
