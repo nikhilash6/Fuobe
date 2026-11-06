@@ -18,6 +18,7 @@
  *   back, and the output arrives once.
  * - A model folder that isn't there yet (a drive still locked after a restart): the worker waits for it, says so, and
  *   sends no list of files meanwhile; once the folder is there, the waiting job is taken within one look.
+ * - New worker code installed mid-job: it takes no new job, finishes the one it has, and ends to start again on it.
  */
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -27,6 +28,8 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runWorker } from "../bin/lib/worker/run.mjs";
 import { Hold } from "../bin/lib/worker/hold.mjs";
+import { STAMP_FILE } from "../bin/lib/worker/stamp.mjs";
+import { CodeWatch, UPDATE_READY_FILE } from "../bin/lib/worker/update.mjs";
 import { inputRules, readCatalog } from "../scripts/lib/worker-catalog.mjs";
 import { FAKE_PNG } from "./helpers/fake-local-comfy";
 import { apiAs, loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
@@ -169,7 +172,7 @@ function start(
   w: W,
   s: Studio,
   p: Pc,
-  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; env?: Record<string, string | undefined> } = {},
+  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; env?: Record<string, string | undefined>; codeWatch?: unknown } = {},
 ) {
   const ctrl = new AbortController();
   const cfg = {
@@ -211,6 +214,7 @@ function start(
     ...(o.rescanMs && { rescanMs: o.rescanMs }),
     ...(o.modelsCheckMs && { modelsCheckMs: o.modelsCheckMs }),
     ...(o.env && { env: o.env }),
+    ...(o.codeWatch ? { codeWatch: o.codeWatch } : {}),
   });
   const r = { ctrl, done };
   running.push(r);
@@ -553,6 +557,55 @@ http.createServer((q, s) => { s.writeHead(200, { "content-type": "application/js
   it("refuses a studio address that isn't https (this PC itself aside)", async () => {
     const p = pc();
     await expect(runWorker({ site: "http://studio.example", token: "t", workDir: p.workDir, comfyDir: p.comfyDir }, { home: p.home })).rejects.toThrow(/https/);
+  });
+});
+
+describe("new worker code", () => {
+  /** A watch on a checkout of its own (its parts taken as whole) and the PC's home folder, looked at every turn. */
+  function watch(p: Pc) {
+    const root = tempDir("fuobe-worker-update-root-");
+    fs.mkdirSync(path.join(root, ".git"), { recursive: true });
+    fs.writeFileSync(path.join(root, ".git/HEAD"), `${"a".repeat(40)}
+`);
+    const dist = tempDir("fuobe-worker-update-dist-");
+    fs.writeFileSync(path.join(dist, STAMP_FILE), JSON.stringify({ stamp: "s1" }));
+    return new CodeWatch({ root, dist, home: p.home, everyMs: 0, problem: () => null });
+  }
+  const installed = (p: Pc) => fs.writeFileSync(path.join(p.home, UPDATE_READY_FILE), JSON.stringify({ commit: "b".repeat(40) }));
+  const LINE = "New worker code is installed: restarting after this job.";
+
+  it("installed mid-job: no new job, the job in hand finishes, then the worker ends to start again", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const { id } = addTask();
+    const r = start(w, s, p, { steps: 20, stepMs: 150, codeWatch: watch(p) });
+    await until(async () => {
+      const c = comfyOf(p);
+      return c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 2;
+    });
+    const next = addTask();
+    installed(p);
+    expect(await r.done).toBe("update");
+    // Never mid-job: the job ran to the end, once, and the next one stays in line for another start.
+    expect(state(id).state).toBe("done");
+    expect(prompts(p)).toBe(1);
+    expect(state(next.id).state).toBe("waiting");
+    expect(p.logs.filter((l) => l === LINE)).toHaveLength(1);
+    expect(p.logs.indexOf(LINE)).toBeLessThan(p.logs.indexOf(`Job ${id} done.`));
+    expect(JSON.parse(fs.readFileSync(path.join(p.home, "status.json"), "utf8")).state).toBe("Finishing its job, then restarting on new code");
+  });
+
+  it("installed while it waits for work: it ends at once, with its ComfyUI stopped", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const r = start(w, s, p, { codeWatch: watch(p) });
+    const comfy = await until(() => p.logs.includes("Ready") && comfyOf(p));
+    installed(p);
+    expect(await r.done).toBe("update");
+    expect(p.logs).toContain(LINE);
+    expect(() => process.kill(comfy.pid, 0)).toThrow();
   });
 });
 

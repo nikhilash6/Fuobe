@@ -163,11 +163,21 @@ offer the worker as a download. Use a git checkout at a signed release tag:
 it. Get the maintainer's public key from a source that you trust, and import it before step 3. Until the repository
 has a release tag, check out a commit instead, and verify it with `git verify-commit <commit>` in step 3.
 
-To update, stop the worker, do steps 2 to 6 with the new tag, and start the worker again. If the worker was set up by
+To update, do steps 2 to 6 with the new tag. A running worker then restarts on the new code by itself (see "New code
+while the worker runs"). You can also stop the worker first and start it again after step 6. If the worker was set up by
 an older version, run `fuobe worker setup` again after the update. That clears the fixed port that older setups saved
 (8190), so its ComfyUI takes a free port at each start, and it asks for ffmpeg (without ffmpeg the worker takes no
 clips or sound). Until then, the worker treats a saved 8190 as no fixed port, and says when no ffmpeg is set. Do not
 install the worker from a zip file, from a copy that someone sends you, or from a branch.
+
+**New code while the worker runs.** At its start, the worker notes three things: the commit of its checkout, the build
+stamp of its parts (`dist/build-stamp.json`), and the file `update-ready.json` in its home folder. It looks at them
+again every 15 seconds. When one of them changes and the parts match the checkout, the worker takes no new job. It
+finishes the job that it has, writes "New worker code is installed: restarting after this job." in its log, and ends
+with exit code 75. Kept results that are not sent yet stay for its next start. Whatever starts the worker can start it
+again at once on exit code 75. An update that is only half done (a new checkout whose build has not run yet) does not
+end the worker: it works on until the parts match, and checks the stamp once a minute meanwhile. A program that
+installs updates writes `update-ready.json` last, after it has checked the new build.
 
 ### The worker's own ComfyUI
 
@@ -731,7 +741,8 @@ The worker keeps its jobs going by itself:
   worker checks its folders every minute. Once they are all there, it reads them again, sends the new list, and takes
   jobs again. A job already running goes on.
 - **When the studio stops the worker.** If the studio no longer knows the worker's token, `fuobe worker run` ends with
-  exit code 3; any other stop that you did not ask for ends with exit code 1. The sign-in task that
+  exit code 3; after new code is installed, it ends with exit code 75 (see "Install and update"); any other stop that
+  you did not ask for ends with exit code 1. The sign-in task that
   `fuobe worker install` adds then starts the worker again after a minute. Ctrl+C ends with 0. On Ctrl+C, and on a
   stop from the system (SIGTERM), the worker stops its ComfyUI and empties its folders before it ends. Kept results
   stay for its next start.
@@ -876,7 +887,7 @@ routes.
   `tests/pool-line-order.test.ts`, `tests/pool-limits.test.ts`,
   `tests/worker-input-rules.test.ts`, `tests/worker-environment.test.ts`, `tests/worker-guard.test.ts`,
   `tests/worker-runner.test.ts`, `tests/worker-recovery.test.ts`, `tests/worker-parts.test.ts`,
-  `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`, `tests/cpu-slot.test.ts`,
+  `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`, `tests/worker-update.test.ts`, `tests/cpu-slot.test.ts`,
   `tests/worker-cpu-slot.test.ts`, `tests/fuobe-connect-nodes.test.ts`). The CPU slot tests run a CPU task while a GPU job runs, refuse a GLB that names
   an outside file on the worker, bring a turntable back with its GLB, check that an account's picture reaches its
   ComfyUI with no EXIF, and drop a preview over 64 KB. The turn tests use a fake port table, fake GPU

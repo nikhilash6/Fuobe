@@ -38,6 +38,7 @@ import { withPlainResults } from "./results.mjs";
 import { retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
+import { CodeWatch } from "./update.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "../../..");
@@ -179,7 +180,8 @@ export function siteOf(answer) {
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
  * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
  * options), readCounters, readListeners, gpuEveryMs, readGpuGen, idleClaimMs (IDLE_CLAIM_MS), canCleanPictures, and for
- * job tickets: composer (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes }.
+ * job tickets: composer (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes, and codeWatch (update.mjs's
+ * CodeWatch: new code on disk ends it with "update" once its jobs are done) }.
  */
 export async function runWorker(saved, deps) {
   // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
@@ -282,6 +284,9 @@ async function work(saved, deps, owner) {
   // How long the PC slept since the studio last answered a beat (ms), and how much of it the beat in flight carries.
   let slept = 0;
   let sleptSent = 0;
+  // New code on disk (update.mjs): it takes no new job, finishes the one it has, and ends to start again on the new code.
+  const codeWatch = deps.codeWatch ?? new CodeWatch({ root: ROOT, dist: path.join(here, "dist"), home: deps.home });
+  let updating = false;
   // Its ComfyUI's start, while it goes on (beats go on meanwhile), and the signal that ends a start when the worker stops.
   let starting = null;
   const stopStarts = new AbortController();
@@ -693,9 +698,11 @@ async function work(saved, deps, owner) {
       });
   };
 
-  const mayWork = () => !pause.paused && answer?.worker && !answer.worker.paused && answer.worker.insideHours && !answer.worker.drain;
+  const mayWork = () => !updating && !pause.paused && answer?.worker && !answer.worker.paused && answer.worker.insideHours && !answer.worker.drain;
   const state = () =>
-    pause.why === "models-not-ready"
+    updating
+      ? "Finishing its job, then restarting on new code"
+      : pause.why === "models-not-ready"
       ? "Waiting for its model folders"
       : pause.paused
         ? `Paused here (${pause.why})`
@@ -761,6 +768,12 @@ async function work(saved, deps, owner) {
   try {
     while (!deps.signal?.aborted) {
       const t = now();
+      // New code installed: once no job is in hand (the GPU's and the CPU slot's), it ends, and starts again on it.
+      if (!updating && codeWatch.check(t)) {
+        updating = true;
+        log("New worker code is installed: restarting after this job.");
+      }
+      if (updating && !busyJob && !busyCpu) break;
       // Its own switch, and --for running out.
       let control = readControl(deps.home);
       if (control.paused && control.until && t >= control.until) {
@@ -949,7 +962,8 @@ async function work(saved, deps, owner) {
         for (const id of hold.expire(t, HOLD_MAX_AGE_MS)) log(`Deleted the kept results of job ${id}: the studio didn't take them for a day.`);
       }
       // Kept results go up first, and even while it may not work (or waits for its turn): they need no GPU and no ComfyUI.
-      if (!busyJob && answer && heldFirst) take({ onlyHeld: true });
+      // Not while it ends for new code: they stay for its next start.
+      if (!busyJob && answer && heldFirst && !updating) take({ onlyHeld: true });
       // Awake while it holds a job, has results to send, or waits for work.
       awake.set(!!answer?.worker && (busyJob || busyCpu || hold.ids().length > 0 || !!mayWork()));
       // A taken port is tried again (a bind test, never a connection) once a minute.
@@ -993,5 +1007,5 @@ async function work(saved, deps, owner) {
       emptyCpuCache();
     }
   }
-  return deps.signal?.aborted ? "aborted" : (runner.view.stopped ?? "disconnected");
+  return deps.signal?.aborted ? "aborted" : (runner.view.stopped ?? (updating ? "update" : "disconnected"));
 }

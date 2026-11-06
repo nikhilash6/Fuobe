@@ -74,7 +74,9 @@ export async function worker(args, io) {
       } finally {
         off?.();
       }
-      // Stopped by hand: done. Stopped by the studio: not 0, so the sign-in task starts it again a minute later.
+      // Stopped by hand: done. Stopped by the studio: not 0, so the sign-in task starts it again a minute later. Ended for
+      // new code on disk (update.mjs): UPDATE_EXIT, so whatever started it may start it again at once.
+      if (why === "update") return (await import("./update.mjs")).UPDATE_EXIT;
       return why === "aborted" ? 0 : why === "signed-out" ? 3 : 1;
     }
     case "pause": {
