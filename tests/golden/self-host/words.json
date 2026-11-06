@@ -676,6 +676,7 @@
     "uploadStalled": "The upload stopped arriving. Check your connection, then try again.",
     "diskLow": "Uploads are paused for a moment. Please try again shortly.",
     "activeRuns": "You have 4 runs going. Start the next one when one finishes.",
+    "waitingRuns": "You have 4 runs waiting for your GPU. Cancel one, or run one with your key, to start another.",
     "runRate": "That's a lot of runs this hour. Try again later.",
     "finishRate": "That's a lot of finished pictures this hour. Try again later.",
     "finishBusy": "Your last pictures are still being saved. Try again in a moment.",

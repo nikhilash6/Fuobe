@@ -909,10 +909,9 @@ With it on:
     7 h" before Run, "In line · starts in about 7 h" on the tile; at the renewal the runs enter at their press-time
     places, in press order;
   - the billing service doesn't answer within 5 s of the press (or the moderation service doesn't, at a studio's
-    press), or a run was cut off between its row and its GPU task (a deploy, a crash): its tile shows its place as if
-    in line, it reserves (and is checked) under its press's own request id once the service answers, and enters at its
-    press-time place. While the service says runs
-    here are paused, the line before Run shows its words, and a press waits ("In line · starts when a GPU is free");
+    press): its tile shows its place as if in line, it reserves (and is checked) under its press's own request id once
+    the service answers, and enters at its press-time place. While the service says runs here are paused, the line
+    before Run shows its words, and a press waits ("In line · starts when a GPU is free");
   - an hourly limit or free generations that renew (credits on): it starts at that time, at the back of the line.
 
   Holds are kept in SQLite (`pool_holds`) with a lease per run, so they survive a deploy, a restart and two app

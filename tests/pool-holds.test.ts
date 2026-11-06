@@ -9,8 +9,9 @@ import { tempDir } from "./helpers/temp-dir";
  * press makes one run, always. A press past the account's runs at once is taken and enters at the back when one of them
  * ends (so ten fast presses never pass another account); the day's GPU time used up keeps runs back until it renews,
  * then they enter in press order; a press while the billing service doesn't answer is taken and reserves once it is
- * back, at its press-time place; a run cut off between its row and its GPU task waits again instead of failing; only a
- * press past the cap on runs waiting is refused. Leases keep two app processes from releasing one run twice.
+ * back, at its press-time place; a run cut off between its row and its GPU task is sent again in its place (and ends
+ * instead when a task was made for it); only a press past the cap on runs waiting is refused. Leases keep two app
+ * processes from releasing one run twice.
  */
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -549,7 +550,7 @@ describe("a deploy or crash between a run's row and its GPU task (C5, A18)", () 
     expect(t!.rank_at).toBeLessThanOrEqual(at);
   });
 
-  it("a GPU task made for the row whose id never reached it stops, so the row runs once", async () => {
+  it("a GPU task made for the row whose id never reached it is never sent twice: the row ends, and that task stops", async () => {
     const a = account();
     const made = await press(a.cookie);
     const first = await until(() => taskOf(idOf(made)));
@@ -570,10 +571,12 @@ describe("a deploy or crash between a run's row and its GPU task (C5, A18)", () 
       d.prepare("UPDATE orphan_task SET id = ?, generation_id = ?, state = 'waiting', created_at = ?, rank_at = ?").run(orphan, id, at, at);
       d.exec("INSERT INTO relay_tasks SELECT * FROM orphan_task; DROP TABLE orphan_task");
     })();
-    const fresh = () => d.prepare("SELECT id FROM relay_tasks WHERE generation_id = ? AND id != ? AND state != 'canceled'").get(id, orphan) as { id: string } | undefined;
-    expect(await until(fresh), "a new GPU task for the row").toBeTruthy();
+    // (A worker may have taken that task already: the row is never sent again, as for any run on the workers.)
+    const status = () => (d.prepare("SELECT status FROM generations WHERE id = ?").get(id) as { status: string }).status;
+    expect(await until(() => status() === "failed"), "the row ends").toBe(true);
     expect((d.prepare("SELECT state FROM relay_tasks WHERE id = ?").get(orphan) as { state: string }).state).toBe("canceled");
-    expect(getGeneration(id)!.status).not.toBe("failed");
+    const fresh = d.prepare("SELECT id FROM relay_tasks WHERE generation_id = ? AND id != ?").get(id, orphan) as { id: string } | undefined;
+    expect(fresh, "no second GPU task for the row").toBeUndefined();
   });
 });
 

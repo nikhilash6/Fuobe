@@ -3624,7 +3624,8 @@ export function sendHeld(id: string, job: number, rankAt?: number): boolean {
     return false;
   }
   submitting().add(id);
-  void submit(id, p.route, p.providerId, p.plan, p.req, job, undefined, rankAt);
+  // (Its place: its press, or now, at the back; never the time its row was made, which pool.ts runPlaceOf gives a run.)
+  void submit(id, p.route, p.providerId, p.plan, p.req, job, undefined, rankAt ?? Date.now());
   return true;
 }
 

@@ -97,14 +97,16 @@ describe("the check before Run while hosted runs are on", () => {
   });
   it("a key's offer says its price, and with no price known it isn't made", () => {
     const priced = gpuBeforeRun({ ...base, viewer: account(offline, ["fal"]), site: place, keyPrice: "≈ $0.20" })!;
-    expect(priced.actions.at(-1)).toEqual(withKeyAction("fal", "minimax-h3", "i2v", "≈ $0.20"));
-    expect(priced.actions.at(-1)?.label).toBe("Run with your fal.ai key · ≈ $0.20");
+    // Run on <the place> first, then the first fix, then the key's run.
+    expect(priced.actions.map((a) => a.kind)).toEqual(["run-on-site", "start-gpu", "run-with-key", "check-gpu", "gpu-settings"]);
+    expect(priced.actions[2]).toEqual(withKeyAction("fal", "minimax-h3", "i2v", "≈ $0.20"));
+    expect(priced.actions[2].label).toBe("Run with your fal.ai key · ≈ $0.20");
     expect(gpuBeforeRun({ ...base, viewer: account(offline, ["fal"]), site: place })!.actions.map((a) => a.kind)).not.toContain("run-with-key");
   });
   it("hosted runs off: the same buttons as before (no place, the key's offer without a price)", () => {
     const off = gpuBeforeRun({ viewer: account(offline, ["fal"]), model: h3, engine: "open", preset: fpv, has, getModel, keyPrice: "≈ $0.20" })!;
-    expect(off.actions.map((a) => a.kind)).toEqual(["start-gpu", "check-gpu", "gpu-settings", "run-with-key"]);
-    expect(off.actions.at(-1)?.label).toBe("Run with your fal.ai key");
+    expect(off.actions.map((a) => a.kind)).toEqual(["start-gpu", "run-with-key", "check-gpu", "gpu-settings"]);
+    expect(off.actions[1].label).toBe("Run with your fal.ai key");
   });
   it("Run on <the place> shows only where the page can send the run there", () => {
     const actions = [{ kind: "run-on-site" as const, label: "Run on Studio North GPUs" }, ...stopped.actions];
@@ -169,6 +171,22 @@ describe("the buttons", () => {
     expect(html).toContain("Start your pod");
     expect(html).toContain("Run with your fal.ai key");
     expect(html).toContain(end.words.replaceAll("'", "&#x27;"));
+  });
+
+  it("a failed tile offers no Retry where only a fix on the GPU helps (a known ComfyUI problem, a missing model file)", () => {
+    const tile = (cause: string, actions: { kind: string; label: string; target?: string }[]) =>
+      render(
+        createElement(FailedTile, {
+          g: { id: `g-${cause}`, status: "failed", error: "It stopped.", trouble: { cause, actions }, outputs: [], createdAt: Date.now(), request: { feature: "image", modelId: "oss-qwen-image" }, modelId: "oss-qwen-image", op: "t2i" } as never,
+          ratio: 16 / 9,
+          onRetry: () => {},
+        }),
+      );
+    const known = tile("gpu-comfy-known", [{ kind: "update-comfy", label: "How to update ComfyUI", target: "https://docs.comfy.org/installation/update_comfyui" }]);
+    expect(known).toContain("How to update ComfyUI");
+    expect(known).not.toContain("Retry");
+    expect(tile("gpu-model-file", [{ kind: "check-gpu", label: "Check my GPU" }])).not.toContain("Retry");
+    expect(tile("gpu-job-error", [{ kind: "check-gpu", label: "Check my GPU" }])).toContain("Retry");
   });
 
   it("a model file its GPU can't read: the tile and the Library card name it, with Get the file (a new tab) and Check my GPU", () => {

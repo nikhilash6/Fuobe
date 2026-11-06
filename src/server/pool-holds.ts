@@ -11,8 +11,8 @@ import { endLease, leaseToken, MINE_NOW, takeLease } from "./run-leases";
  * Why a run waits (`reason`):
  * - `mine`: the account already has its runs at once in line (the policy's `activeRuns`); it enters when one of them ends.
  * - `today`: the day's GPU time is used up (the billing service's `startAt`); it enters at the renewal.
- * - `service`: the billing or moderation service didn't answer at the press (or said runs are paused), or the run was
- *   cut off between its rows and its GPU task (a deploy, a crash); it reserves (and is checked) once the service answers.
+ * - `service`: the billing or moderation service didn't answer at the press (or said runs are paused); it reserves (and
+ *   is checked) once the service answers.
  * - `hour`: an hourly limit; it enters at `start_at`.
  * - `list`: the waiting list (only when the service has one switched on).
  * - `credits`: no free generations left until they renew at `start_at` (credits on).

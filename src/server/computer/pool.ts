@@ -1106,6 +1106,7 @@ const SAME_PRESS = "(CASE WHEN @hold IS NOT NULL THEN json_extract(g.request_jso
  *   its job was made (a restart or a deploy: generations.ts sendAgainOnWorkers).
  * - `started`: a worker took one of those jobs. The run's wait limit no longer applies then (it applies only before the
  *   run's first start).
+ * - `placed`: one of those jobs exists (else `rankAt` is the time the run was made).
  * - `later`: the row is a later step of its run (it waits for a step the same press made). It has no wait limit: its run
  *   was taken in line already, so it waits at the run's place for as long as it takes.
  *
@@ -1113,7 +1114,7 @@ const SAME_PRESS = "(CASE WHEN @hold IS NOT NULL THEN json_extract(g.request_jso
  * the run started. Only steps the same press made count (the same billing hold; with none, the same batch): a result
  * kept from an earlier run that a step uses gives it neither that run's place nor its start. Null: no such row.
  */
-export function runPlaceOf(generationId: string): { class: "paid" | "free"; rankAt: number | null; started: boolean; later: boolean } | null {
+export function runPlaceOf(generationId: string): { class: "paid" | "free"; rankAt: number | null; placed: boolean; started: boolean; later: boolean } | null {
   const d = db();
   const g = d
     .prepare(
@@ -1150,6 +1151,7 @@ export function runPlaceOf(generationId: string): { class: "paid" | "free"; rank
   return {
     class: g.cls === "paid" ? "paid" : "free",
     rankAt: jobs[0]?.rank_at ?? g.created_at - boost,
+    placed: jobs.length > 0,
     started: jobs.some((t) => t.claimed_at !== null),
     later,
   };

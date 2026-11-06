@@ -174,13 +174,14 @@ describe("the engine switch a studio starts on", () => {
     const rescue = down.actions.find((a) => a.kind === "run-with-key")!;
     expect(rescue).toEqual(withKeyAction("fal", "minimax-h3", "i2v"));
     const request = { feature: "video", modelId: h3.id, engine: "open" as const, prompt: "a fast pass over the cliffs", params: { extra: { graph: 1 } } };
-    expect(onCloudKey(request as never, rescue)).toEqual({ feature: "video", modelId: "minimax-h3", engine: "cloud", op: "i2v", prompt: "a fast pass over the cliffs", params: {} });
+    expect(onCloudKey(request as never, rescue)).toEqual({ feature: "video", modelId: "minimax-h3", engine: "cloud", op: "i2v", prompt: "a fast pass over the cliffs", params: {}, prefer: "fal" });
     // Nothing was written: the next run starts on the switch as it was.
     expect(storage.map.size).toBe(0);
     expect(api.readEngine(ana)).toBe("open");
-    // The composer: while hosted, the press sends this run on the key; the switch moves to Cloud only with hosted runs off.
+    // The composer: while hosted, the press sends this run on the key through Run (at the price it showed); with hosted
+    // runs off it runs once on the key too (runOnceWithKey), and the switch stays where it was.
     const composer = readFileSync("src/components/studio/composer.tsx", "utf8");
-    expect(composer).toMatch(/const onRunWithKey = viewerInfo\?\.hosted\s+\? \(a: TroubleAction\) => submitRef\.current\(undefined, a\)\s+: \(\) => \{\s+setEngine\("cloud"\);\s+setCloudRun\(true\);/);
+    expect(composer).toMatch(/const onRunWithKey = viewerInfo\?\.hosted \? \(a: TroubleAction\) => submitRef\.current\(undefined, a\) : runOnceWithKey;/);
     expect(composer).toMatch(/const onKey = withKey \? onCloudKey\(withVoiceFirst, withKey\) : withVoiceFirst;/);
     expect(composer).toMatch(/onClick=\{\(\) => \(viewerInfo\?\.hosted \? engineForNextPage\("cloud"\) : setEngine\("cloud"\)\)\}/);
   });

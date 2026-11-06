@@ -724,3 +724,25 @@ describe("round-3 workflow bindings", () => {
     await expect(prepare("captions-burnin", { prompt: "no timings here" })).rejects.toThrow(/No timed captions/);
   });
 });
+
+describe("a model file an account's GPU lacks, as its run says it", () => {
+  it("names the file's title, size and folder, with Fix it and Check again", async () => {
+    const { onOwnGpu, promptRefusal } = await import("@/server/providers/comfyui");
+    const body = {
+      error: { type: "prompt_outputs_failed_validation", message: "Prompt outputs failed validation" },
+      node_errors: {
+        "12": {
+          class_type: "LoraLoaderModelOnly",
+          errors: [{ type: "value_not_in_list", message: "Value not in list: lora_name: 'minimax_h3_flf2v_lora_v1.safetensors' not in []", extra_info: { received_value: "minimax_h3_flf2v_lora_v1.safetensors" } }],
+        },
+      },
+    };
+    const r = onOwnGpu({ url: "https://pod.example.com" }, () => promptRefusal(body, 400, getWorkflow("minimax-h3-orbit").manifest, []));
+    expect(r.fix?.code).toBe("comfy_missing_model");
+    expect(r.message).toContain("Orbit LoRA");
+    expect(r.message).toContain("minimax_h3_flf2v_lora_v1.safetensors");
+    expect(r.message).toContain("155 MB");
+    expect(r.message).toContain("ComfyUI/models/loras");
+    expect(r.message).toMatch(/Press Fix it to get it, then Check again\.$/);
+  });
+});
