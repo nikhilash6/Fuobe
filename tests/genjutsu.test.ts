@@ -544,7 +544,7 @@ describe("Genjutsu: setup codes", () => {
     expect(decodeSetup(encodeSetup({ mode: "character", character: { dialogue: "secret words", who: "largest" } as never }))?.character).toEqual({ who: "largest" });
   });
 
-  it("keeps looks, maps old models to the Originals and drops what isn't valid (Higgsfield's looks too)", () => {
+  it("keeps looks, maps old models to the Originals and drops what isn't valid (the retired provider's looks too)", () => {
     expect(decodeSetup(encodeSetup({ mode: "restyle", look: { kind: "custom", images: [ref, "https://evil.example/x.png"], words: "neon" } }))).toEqual({ mode: "restyle", look: { kind: "custom", images: [ref], words: "neon" } });
     expect(decodeSetup(encodeSetup({ mode: "restyle", look: { kind: "soul", id: "v1-general" } }))?.look).toEqual({ kind: "soul", id: "v1-general" });
     expect(decodeSetup(encodeSetup({ mode: "restyle", look: { kind: "preset", id: "nope" } }))?.look).toBeUndefined();

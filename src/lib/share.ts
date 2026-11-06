@@ -21,7 +21,7 @@ export const KIND_LABELS: Record<ShareKind, string> = {
   publish: "Published page",
 };
 
-/** The Publish wizard's Assets step (Higgsfield's Feature / Series / Carousel). */
+/** The Publish wizard's Assets step (the parity studio's Feature / Series / Carousel). */
 export const PUBLISH_LAYOUTS: { id: Exclude<ShareLayout, "grid">; label: string; hint: string; cover: string }[] = [
   { id: "feature", label: "Feature", hint: "The first piece large on top, the rest under it.", cover: "Its piece goes large on top" },
   { id: "series", label: "Series", hint: "Numbered episodes, one after another, in your order.", cover: "It sits beside the title, above the episodes" },

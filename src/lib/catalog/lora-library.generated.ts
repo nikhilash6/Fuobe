@@ -25,8 +25,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2025-12-14",
-    "notes": "Portrait-beauty LoRA: card says it removes Z-Image's skin grain, tames HDR and widens face variety. 680 MB. No strength on the card; 0.5-0.7 is a starting point (unverified)."
+    "released": "2025-12-14"
   },
   {
     "key": "lenovo",
@@ -47,8 +46,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2025-11-30",
-    "notes": "No trigger. Strength 0.6-1.0 per round-1 research (comfyui-oss.md); not on the card."
+    "released": "2025-11-30"
   },
   {
     "key": "grainscape",
@@ -69,8 +67,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2025-12-02",
-    "notes": "No trigger; strength not on the card (0.4-0.6 suggested, unverified)."
+    "released": "2025-12-02"
   },
   {
     "key": "realism",
@@ -114,8 +111,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2026-06-27",
-    "notes": "Card: strength 0.60-0.70; optional tags 'high ISO noise, direct on-camera flash', 'visible pores, visible vellus hair', 'wide-angle lens, barrel distortion'."
+    "released": "2026-06-27"
   },
   {
     "key": "amateur",
@@ -159,8 +155,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2025-11-29",
-    "notes": "Trained on 100+ classic Technicolor film stills (card)."
+    "released": "2025-11-29"
   },
   {
     "key": "reversal",
@@ -182,8 +177,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2025-12-12",
-    "notes": "Card: strength 0.5, sampler euler / sgm_uniform."
+    "released": "2025-12-12"
   },
   {
     "key": "sunbleach",
@@ -205,8 +199,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "MIT"
     },
-    "released": "2025-12-03",
-    "notes": "Card tail: 'flash pop, warm peach skin, cyan grass, sunbleach style, red halation, light vignette'. Use the step-2500 file the card recommends."
+    "released": "2025-12-03"
   },
   {
     "key": "reededglass",
@@ -229,7 +222,6 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "none declared"
     },
     "released": "2025-12-02",
-    "notes": "The repo has no licence field (the same author's other LoRA is MIT). Treat as not cleared until the author adds one. Card recommends the step-750 file.",
     "spare": true
   },
   {
@@ -498,8 +490,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "BigScience OpenRAIL-M"
     },
-    "released": "2026-03-25",
-    "notes": "OpenRAIL-M allows commercial use with use-based restrictions (no illegal or harmful uses)."
+    "released": "2026-03-25"
   },
   {
     "key": "darkroomnoir",
@@ -521,8 +512,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2026-08-08",
-    "notes": "Card: strength 0.8 (0.6 subtle to 1.0), 8 steps, cfg 1, res_multistep/simple; 'Free for any use, including commercial'."
+    "released": "2026-08-08"
   },
   {
     "key": "airbrush80s",
@@ -566,8 +556,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-23",
       "name": "Apache-2.0"
     },
-    "released": "2025-12-02",
-    "notes": "Trigger taken from the civitai page of the same LoRA (civitai 2187645); the HF card lists none."
+    "released": "2025-12-02"
   },
   {
     "key": "grunge",
@@ -661,8 +650,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
         "Sell"
       ]
     },
-    "released": "2025-12-07",
-    "notes": "HF repo is the author's mirror of civitai 1592586 and has no licence field; the civitai page grants all uses."
+    "released": "2025-12-07"
   },
   {
     "key": "scifi80s",
@@ -690,8 +678,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
         "Sell"
       ]
     },
-    "released": "2026-01-01",
-    "notes": "HF mirror by the author; civitai 1802714 grants all uses."
+    "released": "2026-01-01"
   },
   {
     "key": "pencil",
@@ -742,8 +729,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
         "SellMerge"
       ]
     },
-    "released": "2026-10-22",
-    "notes": "The card's trigger is a long weighted tag list; the first four tags are kept here."
+    "released": "2026-10-22"
   },
   {
     "key": "doubleexp67",
@@ -1074,8 +1060,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
         "SellMerge"
       ]
     },
-    "released": "2026-03-19",
-    "notes": "Trained on angel/demon twin pairs; use at 0.4-0.5 for wings only."
+    "released": "2026-03-19"
   },
   {
     "key": "symbolic",
@@ -1340,7 +1325,6 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-14",
-    "notes": "649 MB",
     "spare": true
   },
   {
@@ -1371,8 +1355,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
         "SellMerge"
       ]
     },
-    "released": "2025-12-03",
-    "notes": "85 mm f/1.4 portrait-lens look"
+    "released": "2025-12-03"
   },
   {
     "key": "helios",
@@ -1403,7 +1386,6 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-05",
-    "notes": "swirly-bokeh vintage Soviet lens",
     "spare": true
   },
   {
@@ -3122,8 +3104,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0"
     },
     "released": "2026-07-15",
-    "hostedEndpoint": "fal-ai/flux-2/klein/4b/edit/lora",
-    "notes": "Rank-32 edit LoRA trained by xocialize with ai-toolkit on FLUX.2-klein-base-4B (Apache-2.0); card licence apache-2.0, so fal may host it (build plan O10's check). Three ordered inputs: person, top (or a dress / whole outfit), bottom; trigger TRYON. Trained on clothing-agnostic people: the open graph greys the old outfit out first (ClothesSegment), the hosted route sends the photo as it is (quality unmeasured until the eval harness runs the fashion suite)."
+    "hostedEndpoint": "fal-ai/flux-2/klein/4b/edit/lora"
   },
   {
     "key": "next-scene-qwen-edit-2509",
@@ -3146,8 +3127,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "MIT"
     },
     "released": "2025-10-21",
-    "hostedEndpoint": "fal-ai/qwen-image-edit-plus-lora",
-    "notes": "The v2 next-scene LoRA the GPU's storyboard-qwen-edit-2509-next-scene graph loads (at 0.75), so a cloud board's next frames run the same recipe on fal's hosted Qwen-Image-Edit 2509 (loras: [{path, scale}], up to 3; $0.035 per megapixel). Card licence MIT, base Qwen/Qwen-Image-Edit-2509 (Apache-2.0); a prompt starting \"Next Scene:\" continues the previous panel (image 1) with a new shot. Pinned 2026-10-29 from the Hugging Face API (repo head, the file's LFS SHA256 and size)."
+    "hostedEndpoint": "fal-ai/qwen-image-edit-plus-lora"
   },
   {
     "key": "qwen-edit-2509-multiple-angles",
@@ -3169,8 +3149,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0"
     },
     "released": "2025-10-31",
-    "hostedEndpoint": "fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles",
-    "notes": "The camera-move LoRA behind Higgsfield Angles (higgsfield-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
+    "hostedEndpoint": "fal-ai/qwen-image-edit-2509-lora-gallery/multiple-angles"
   },
   {
     "key": "qwen-image-21-any-angle",
@@ -3191,8 +3170,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-02",
       "name": "Apache-2.0"
     },
-    "released": "2026-09-28",
-    "notes": "Any Angle's repaint: a rough render of a 3D view of the photo (image 2) becomes a finished photo at that camera, with the face, outfit, light and room of the original (image 1). Rank 24, bf16, ComfyUI keys (core LoraLoaderModelOnly, no conversion). Its own prompt, at strength 1: \"Change the camera angle from <image2> to <image1>.\" The any-angle-shot graph loads it itself; as a recipe LoRA it is downloaded and hash-checked before a run. Not hosted with Qwen-Image 2.1 anywhere Fuobe calls, so Any Angle runs on a GPU only."
+    "released": "2026-09-28"
   },
   {
     "key": "fusionix-i2v-14b",
@@ -3214,8 +3192,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-29",
       "name": "Apache-2.0 (the repository's card); FusioniX merges other LoRAs (CausVid, AccVideo, MoviiGen, MPS reward…) whose own licences were not checked"
     },
-    "released": "2025-06-10",
-    "notes": "The LoRA Higgsfield's 'Infinite Talk' engine loads ('fusex', scale 1, rank 32; higgsfield-originals-5.md §3.13) and InfiniteTalk's README recommends. Fuobe Speak loads it on InfiniteTalk (kijai's WanVideoWrapper) on the GPU in place of the lightx2v distill LoRA. fal's InfiniteTalk takes no LoRA, so the cloud half runs without it. Check on the first live run: the licences of the LoRAs merged into it."
+    "released": "2025-06-10"
   },
   {
     "key": "ltx-2-5-22b-ic-lora-restore-1-0",
@@ -3237,8 +3214,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "LTX-2.x Community License (free under US$10M annual revenue)"
     },
     "released": "2026-09-27",
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/reference-video-to-video/lora",
-    "notes": "Rank-128 IC-LoRA (step 4000) trained on LTX-2.3 22B dev, tested unchanged on the LTX-2.5 distilled transformer (every number on its card). The archive clip, lanczos-resized to the working canvas (1440 wide for 4:3, 1920x1088 for 16:9, multiples of 32), is the frame-aligned reference at downscale factor 1; tiled latent fusion with 960x544 tiles at 50% overlap at every size; strength 1.0 is a switch (0.7 stays monochrome, 1.4 over-tints); 8 distilled steps (sigmas 1.0 … 0.0, euler), guidance 1.0; 8n+1 frames a pass (49 or 97), longer clips in 97-frame windows that start from the previous window's last 17 restored frames (LTXVAddGuide at frame 0); an optional reference image (native crops on a grey canvas) at frame_idx -1. Read 2026-10-30 from the model card (revision pinned) and the Hugging Face API (size and LFS SHA256). Gated on Hugging Face (\"Agree and Access\" on the model page, which also consents to Lightricks' offers): the file downloads only with the token of an account that accepted, so Fuobe asks for an HF token (Settings → LoRAs) and uses it only for gated downloads; a cloud run gets Fuobe's mirror of the file on fal storage, never the token."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/reference-video-to-video/lora"
   },
   {
     "key": "ltx-2-5-22b-ic-lora-refine-details-1-0",
@@ -3259,8 +3235,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-10-30",
       "name": "LTX-2.x Community License (free under US$10M annual revenue)"
     },
-    "released": "2026-09-27",
-    "notes": "The Restore card's stage 2: the restored clip lanczos x2 (2880x2176 from 1440x1088) through the same tiled-fusion workflow with this LoRA at 1.0, tile 1024x576; restore first, refine second (refining first sharpens the damage and desaturates the colour). Trained on LTX-2.5; no host serves LTX-2.5 with LoRAs, so it runs on your GPU only. Gated on Hugging Face (\"Agree and Access\" on the model page, which also consents to Lightricks' offers): the file downloads only with the token of an account that accepted, so Fuobe asks for an HF token (Settings → LoRAs) and uses it only for gated downloads; a cloud run gets Fuobe's mirror of the file on fal storage, never the token."
+    "released": "2026-09-27"
   },
   {
     "key": "qwen21-dmd2-2step",
@@ -3281,8 +3256,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-01",
       "name": "Qwen Research License (a derivative of Qwen-Image 2.1: card and NOTICE)"
     },
-    "released": "2026-10-30",
-    "notes": "2 steps at CFG 1 on fixed sigmas [1.0, 0.5] with no shift; rank 32, attention only. v1.5 (2026-10-30) improves prompt adherence and edit fidelity over v1 (the file Live edit loads), same settings. Pinned 2026-11-01 from the Hugging Face API (revision, LFS SHA256 and size)."
+    "released": "2026-10-30"
   },
   {
     "key": "qwen21-lightning-4step",
@@ -3303,8 +3277,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-01",
       "name": "Not stated in the repository (no LICENSE file, no licence tag; comfyui-wiki says Apache-2.0); it runs on Qwen-Image 2.1 (Qwen Research License)"
     },
-    "released": "2026-10-13",
-    "notes": "DMD distillation by LightX2V for text to image and multi-reference edits: 4 steps at CFG 1 on [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9), which the graph's ManualSigmas holds shifted for the canvas. The repository has no licence of its own (checked 2026-11-01): recorded as not stated, non-commercial through its base."
+    "released": "2026-10-13"
   },
   {
     "key": "qwen21-pq-image-6step-upsampled",
@@ -3325,8 +3298,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-01",
       "name": "Qwen Research License (a derivative of Qwen-Image 2.1: LICENSE and NOTICE)"
     },
-    "released": "2026-10-27",
-    "notes": "Pruna's ComfyUI export of the v0.2 6-steps-upsampled adapter: the prompt upsampler distilled into the LoRA, so short prompts come out detailed with no separate upsampling call. Strength 1, euler, CFG 1, ManualSigmas 1.0, 0.961054, 0.918949, 0.769302, 0.545554, 0.222292, 0 (v0.2's own; not v0.1's). Trained at 1K; at most 3 references for edits."
+    "released": "2026-10-27"
   },
   {
     "key": "qwen21-next-scene",
@@ -3348,8 +3320,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-01",
       "name": "Apache-2.0 as a tag on its card only, without a LICENSE file in the repository; an adapter of Qwen-Image 2.1 (Qwen Research License), so non-commercial through its base"
     },
-    "released": "2026-10-07",
-    "notes": "The card's licence tag is apache-2.0 (no LICENSE file); the base, Qwen-Image 2.1, is Qwen Research (non-commercial). The step-2500 checkpoint in diffusers / ComfyUI key layout, at 0.7 with a 0.5 px blur on each chained panel (the card's clean-chain recipe). Trained at 512 px on Sintel and Tears of Steel frame pairs. Qwen-Image 2.1 isn't hosted on fal or Replicate, so the cloud keeps the 2509 next-scene LoRA."
+    "released": "2026-10-07"
   },
   {
     "key": "qwen21-qma-angles",
@@ -3371,8 +3342,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-02",
       "name": "Apache-2.0 as the licence on its card (no LICENSE file in the repository); an adapter of Qwen-Image 2.1 (Qwen Research License), so non-commercial through its base"
     },
-    "released": "2026-10-13",
-    "notes": "Rank-64 edit LoRA trained with AI-Toolkit for 3,000 steps at 512 and 1024 px on photo and Blender pairs covering all 96 views. Prompt: \"<qma> {azimuth} {elevation} {distance}\", 8 azimuths (front view, front-right quarter view, right side view, back-right quarter view, back view, back-left quarter view, left side view, front-left quarter view) relative to the ORIGINAL CAMERA (\"right side view\" = the camera swings 90 degrees to its own right), 4 elevations (low-angle, eye-level, elevated, high-angle shot), 3 distances (close-up, medium shot, wide shot); more edit words may follow. Card settings: strength 1.0, 30 steps, CFG 3, euler / simple, about 1 MP (768 px for previews). Quarter views, elevated shots and distance changes are the most reliable; big orbits on wide landscapes can stop short of 90 degrees. fal hosts Qwen-Image 2.1 (fal-ai/qwen-image-2.1, fal-ai/qwen-image-2.1/edit, read 2026-11-02) without a LoRA input, and Replicate has no Qwen-Image 2.1, so QMA runs on your GPU only."
+    "released": "2026-10-13"
   },
   {
     "key": "anisora-3-2-i2v-high",
@@ -3395,8 +3365,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0 (bilibili's Index-AniSora weights: GitHub bilibili/Index-anisora LICENSE and the HF card IndexTeam/Index-anisora, V3.2 released 2025-09-23); Kijai's rank-64 extraction repository states no licence of its own"
     },
     "released": "2025-09-27",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)",
-    "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)"
   },
   {
     "key": "wan22-i2v-lightx2v-4step-low",
@@ -3418,12 +3387,11 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "snapshotDate": "2026-11-02",
       "name": "Apache-2.0 (the Comfy-Org repack's card; LightX2V's Wan2.2-Lightning is Apache-2.0)"
     },
-    "released": "2025-08-07",
-    "notes": "The repository now answers as Comfy-Org/Wan-2.2 (Hugging Face redirects the old name). The open graph loads it on the low-noise expert so the in-betweens take 4 steps; in the cloud fal's own acceleration takes its place (fal's endpoint runs its own step count), so it is never sent there."
+    "released": "2025-08-07"
   }
 ];
 
-/** Motion and effect presets (Higgsfield's generic names) → their LoRA keys in LORA_LIBRARY, with the research's status. */
+/** Motion and effect presets (the parity studio's generic names) → their LoRA keys in LORA_LIBRARY, with the research's status. */
 export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
   {
     "kind": "motion",
@@ -3437,8 +3405,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "High/low pair. Older than mid-2026 but not yet in the map."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3467,8 +3434,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "High-noise file only; a MiniMax H3 version followed on 2026-09-20."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3495,8 +3461,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "No trigger listed; describe a head-mounted camera."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3539,8 +3504,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Remade POV-Driving (Wan 2.1 T2V) from round 1 is the Apache alternative."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3584,8 +3548,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Reuse the orbit pair at 0.6-0.8 and write 'slow' into the prompt."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3598,8 +3561,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Open: reuse Remade crane_up / crane_down (already mapped for Crane Up/Down). Cloud: LTX-2.3's built-in camera_lora."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3613,8 +3575,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Open: Wan 2.2 Fun Camera 'Pan Left/Right' (a translation). Cloud: LTX-2.3 camera_lora (or the Lightricks LTX-2 Dolly Left/Right LoRAs on an LTX-2 host)."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3625,8 +3586,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Open: Fun Camera 'Zoom Out'."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3642,8 +3602,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Add to FUN_CAMERA_POSE in src/lib/catalog/index.ts: Zoom→Zoom In, Pan→Pan Right, Pedestal Down→Pan Down, Classic Static→Static, Roll Transition→ClockWise (CW), Aerial Pullback→Zoom Out. Added 2026-10-26 (o/dop): camera_lora per preset: Zoom dolly_in, Classic Static static, Aerial Pullback dolly_out, Pedestal Down jib_down (a straight vertical move); Pan and Roll Transition have no LTX camera LoRA and stay prompt-only in the cloud. Roll Transition is a start + end frame preset, which the Fun Camera graph can't take, so it stays a Wan start/end-frame clip on the open engine."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3655,8 +3614,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Added 2026-10-26 (o/dop): already on Wan 2.2 Fun Camera on the open engine (Zoom Out, Static); LTX-2.3's built-in camera_lora (dolly_out, static) in the cloud, as for the moves above."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3669,8 +3627,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Wan options (DroneShot, FPV Drone Dive) do not allow selling outputs or third-party hosting."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3683,8 +3640,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "LTX-2 19B LoRA host needed (fal's LoRA endpoints are LTX-2.3; an LTX-2 19B LoRA may not load there, unverified)",
-    "notes": "Wan 'Earth Zoom Out' (civitai 1871537) forbids selling outputs."
+    "hostedEndpoint": "LTX-2 19B LoRA host needed (fal's LoRA endpoints are LTX-2.3; an LTX-2 19B LoRA may not load there, unverified)"
   },
   {
     "kind": "motion",
@@ -3695,8 +3651,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "lightricks/ltx-2.5/image-to-video/fast",
-    "notes": "Open on GPU: prompt-only on Wan; RackFocus (civitai 1783051) forbids selling outputs."
+    "hostedEndpoint": "lightricks/ltx-2.5/image-to-video/fast"
   },
   {
     "kind": "motion",
@@ -3709,8 +3664,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": false,
     "newSinceMid2026": true,
-    "hostedEndpoint": "no hosted LTX-2.5 LoRA endpoint on fal (lightricks/ltx-2.5 takes no loras)",
-    "notes": "Gated repo: accept the licence on HF and pass a token. Card not readable without login, so usage settings are unverified."
+    "hostedEndpoint": "no hosted LTX-2.5 LoRA endpoint on fal (lightricks/ltx-2.5 takes no loras)"
   },
   {
     "kind": "motion",
@@ -3723,8 +3677,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Same file is re-uploaded as wolf1280/LTX-2.3-Transition-LORA (2026-08-31). Best with a start and an end frame."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3736,8 +3689,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
       "btsmovieset-ltx25-v1"
     ],
     "bothEnginesToday": false,
-    "newSinceMid2026": true,
-    "notes": "Licence conflict between the HF and civitai pages: do not ship until the author clarifies. Status corrected 2026-10-24 (o/lora-plumbing): add-lora → licence-hold, so no default uses this non-commercial LoRA; BTS stays prompt-only until the licence is clear."
+    "newSinceMid2026": true
   },
   {
     "kind": "motion",
@@ -3750,8 +3702,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Wan 'eyes in' (civitai 1877142) forbids selling outputs; Remade Eye-Close-Up is a Wan 2.1 T2V LoRA. Train a Wan 2.2 I2V LoRA on 20-40 own push-in clips (fal-ai/wan-22-trainer/i2v-a14b)."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "motion",
@@ -3765,8 +3716,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "train-own",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "The Wan 2.2 Time-lapse LoRA (civitai 1877924) forbids selling outputs. Train from own time-lapse footage."
+    "newSinceMid2026": false
   },
   {
     "kind": "motion",
@@ -3779,8 +3729,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
       "civitai-2490837-wiggle-redmond"
     ],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Usable on the user's own GPU (outputs may be sold), not on fal or Replicate."
+    "newSinceMid2026": false
   },
   {
     "kind": "motion",
@@ -3790,8 +3739,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Remade Tiny-Planet-Fisheye is Wan 2.1 T2V only; on Originals, make the still with the Fish Eye Redmond image LoRA and animate it."
+    "newSinceMid2026": false
   },
   {
     "kind": "motion",
@@ -3803,8 +3751,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "DroneShot and Set Reveal forbid selling outputs; keep prompt-only or train own drone clips."
+    "newSinceMid2026": false
   },
   {
     "kind": "motion",
@@ -3825,8 +3772,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "No good cleared LoRA. Through Object In/Out works better as start + end frame (FLF2V) with an end frame Fuobe generates."
+    "newSinceMid2026": false
   },
   {
     "kind": "motion",
@@ -3849,8 +3795,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-14b/animate/move or fal-ai/scail-2 (mode=animation)",
-    "notes": "Better than LoRAs: drive Wan Animate 2 / SCAIL-2 with a short CC0 or own-shot reference clip per preset (a 'motion library')."
+    "hostedEndpoint": "fal-ai/wan/v2.2-14b/animate/move or fal-ai/scail-2 (mode=animation)"
   },
   {
     "kind": "effect",
@@ -3893,8 +3838,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Closest match; describe the powder or plasma colour."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -3907,8 +3851,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Low-noise file only."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -3967,8 +3910,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "XPLDV card: strength 0.5 (0.7 with first + last frame), distilled LTX-2.5."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -3982,8 +3924,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Closest match (coins burst upward)."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -4035,8 +3976,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora",
-    "notes": "Run as start + end frame on LTX-2.3; the preset's words describe the in-between."
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -4059,8 +3999,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "alias",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Alias to the existing 'muscle' key (Remade Muscle)."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4070,8 +4009,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "alias",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Alias to the existing 'disintegration' key."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4085,8 +4023,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Native Wan 2.2 pair; would replace the Wan 2.1 'electrify' LoRA now mapped."
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -4103,8 +4040,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
       "fire-12-epochs"
     ],
     "bothEnginesToday": true,
-    "newSinceMid2026": false,
-    "notes": "Only a Wan 2.1 T2V LoRA exists; on I2V quality is unproven. AInVFX fluid (LTX-2.5 IC-LoRA, 2026-09-11) makes fire from painted blobs: a tool, not a one-click preset."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4118,8 +4054,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "local-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Wan LoRAs exist (Superstar Moment 1888178, Titanscape 1941755, Cinematic Flare 1902817) but forbid selling outputs; keep prompt-only for Originals."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4138,8 +4073,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/qwen-image-edit-plus-lora (relight the start frame) then fal-ai/wan/v2.2-a14b/image-to-video/lora",
-    "notes": "Relight the still first, then animate. The LTX IC-LoRA relights an existing clip."
+    "hostedEndpoint": "fal-ai/qwen-image-edit-plus-lora (relight the start frame) then fal-ai/wan/v2.2-a14b/image-to-video/lora"
   },
   {
     "kind": "effect",
@@ -4164,8 +4098,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "none (grade in the browser or oss-palette-video on ComfyUI)",
-    "notes": "A grade, not a generation: animate with no LoRA, then apply a grade.ts preset or the palette-match video workflow."
+    "hostedEndpoint": "none (grade in the browser or oss-palette-video on ComfyUI)"
   },
   {
     "kind": "effect",
@@ -4207,8 +4140,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "per-frame fal-ai/z-image/turbo/controlnet/lora, or fal-ai/wan-22-vace-fun-a14b/depth with a restyled first frame",
-    "notes": "These are Mixed Media looks: run the Mixed Media studio's per-frame Z-Image route with a look LoRA (e.g. Sketch→pencil, Noir→darkroomnoir, Vintage→vhs, Paper/Origami→paperdiorama, Overexposed→sunbleach, Comic→prompt)."
+    "hostedEndpoint": "per-frame fal-ai/z-image/turbo/controlnet/lora, or fal-ai/wan-22-vace-fun-a14b/depth with a restyled first frame"
   },
   {
     "kind": "effect",
@@ -4271,8 +4203,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "No cleared Wan 2.2 / LTX LoRA found on 2026-10-23. Round-1 Wan 2.1 T2V options: Remade Tsunami (Flood), Tornado (Sand Storm), Tiny-Planet-Fisheye (Tiny Planet). Pixelated Face / Censorship are better as SAM 3.1 mask + mosaic in post."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4306,8 +4237,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Viral templates; Higgsfield's versions are prompt templates on frontier models. Keep prompt-only; train only the ones that get used."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4334,8 +4264,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "UGC moves; handheld ones can take the new 'Shaky, handheld camera' LoRA. Static Posing could use the LTX-2.5 Cinemagraph LoRA (gated, 2026-09-10) once checked."
+    "newSinceMid2026": false
   },
   {
     "kind": "effect",
@@ -4369,8 +4298,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "status": "prompt-only",
     "loras": [],
     "bothEnginesToday": false,
-    "newSinceMid2026": false,
-    "notes": "Blockbuster templates. Stop World / Frozen in Motion can reuse the bullet-time / matrix-shot LoRAs already mapped; World Morphing can use the LTX-2.3 Transition LoRA."
+    "newSinceMid2026": false
   }
 ];
 

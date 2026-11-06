@@ -87,7 +87,7 @@ describe("ComfyUI-Idol: pinned, recorded and expected by the build", () => {
   });
 
   it("the manifest entry names the pack, keeps idol-1's files and adds the crop and pruning bindings", () => {
-    expect(entry).toMatchObject({ capability: "splat", vramGb: 8, limits: { maxGaussians: 1048576 }, validated: false });
+    expect(entry).toMatchObject({ capability: "splat", vramGb: 8, limits: { maxGaussians: 1048576 }, validated: true });
     expect(entry.customNodes).toEqual([{ name: "ComfyUI-Idol", repo: REPO }]);
     expect(entry.models).toEqual(core.models);
     expect(entry.defaults).toMatchObject({ splatFormat: "spz", cutout: true, cropMode: "synthetic", minOpacity: 0.05, maxScale: 0, steps: 50, cfg: 4, numGaussians: 262144 });
@@ -311,7 +311,7 @@ describe("the outputs and the card", () => {
     },
   });
 
-  it("the clean splat says how many Gaussians were kept; the still is the poster; the count isn't a file", () => {
+  it("the clean splat says how many Gaussians were kept; the card's still is the orbit's first frame; the count isn't a file", () => {
     const outs = collectOutputs(history("131072"), getWorkflow("image-to-splat-idol-clean").manifest);
     expect(outs.map((o) => [o.kind, o.meta])).toEqual([
       ["model3d", { role: "splat", format: "spz", pruned: true, kept: 131072 }],
@@ -320,7 +320,10 @@ describe("the outputs and the card", () => {
     ]);
     const view = m3d.model3dView({ outputs: outs as never, request: { op: "splat", inputs: { images: ["/api/files/p.png"] } } as never });
     expect(view.clean).toEqual({ cleaned: true, text: "Cleaned: 131,072 Gaussians kept" });
-    expect(view.poster).toBe(outs[2].url);
+    // The input-view still (role preview) can collapse for a product seen side on: the card shows the orbit instead, and
+    // the next steps take the photo (tests/idol-clean-poster.test.ts).
+    expect(view.stillClip).toBe(outs[1].url);
+    expect(view.poster).toBe("/api/files/p.png");
     expect(view.splat?.format).toBe("spz");
     // No count (an older pack, or an answer that isn't a number): pruned, with nothing to say about it.
     const noCount = collectOutputs(history("n/a"), getWorkflow("image-to-splat-idol-clean").manifest);

@@ -150,7 +150,7 @@ const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
   ["PATCH DELETE", /^\/api\/folders\/[^/]+$/],
   ["PATCH DELETE", /^\/api\/generations\/[^/]+$/],
   // (POST /api/generations/bulk goes to the route, which takes an account's likes, pins and reviews of its own runs only.)
-  ["POST", /^\/api\/generations\/[^/]+\/(cancel|finish)$/],
+  ["POST", /^\/api\/generations\/[^/]+\/(cancel|finish|smaller)$/],
   ["DELETE", /^\/api\/generations\/trash$/],
   ["DELETE", /^\/api\/assets\/[^/]+$/],
   ["POST", /^\/api\/shares$/],
@@ -181,8 +181,8 @@ const GENERATION = /^\/api\/generations\/(?!(?:facets|trash|stream|zip|bulk|loca
 
 /** The generation an account's request is about (its own runs: the proxy checks it made it), or undefined. */
 export function accountGeneration(method: string, pathname: string): string | undefined {
-  // Cancel, and Fuobe Soul's finished picture for its own result.
-  const step = /^\/api\/generations\/([^/]+)\/(cancel|finish)$/.exec(pathname);
+  // Cancel, Fuobe Soul's finished picture for its own result, and a smaller copy of its failed run's file.
+  const step = /^\/api\/generations\/([^/]+)\/(cancel|finish|smaller)$/.exec(pathname);
   if (method === "POST" && step) return step[1];
   // A run's live preview picture while it works.
   const preview = /^\/api\/generations\/([^/]+)\/preview$/.exec(pathname);
@@ -194,7 +194,8 @@ export function accountGeneration(method: string, pathname: string): string | un
 
 /**
  * A read of an account's own things, which the route (or the proxy, by accountGeneration) scopes to it:
- * the list of its runs, a stored file (the proxy checks whose it is), its GPU, its keys (never a key: their last 4).
+ * the list of its runs, a stored file (the proxy checks whose it is), its GPU, its keys (never a key: their last 4),
+ * and what its own keys tell about its provider accounts (/api/key-info: the balance, never a key).
  */
 export function accountOwnRead(pathname: string): boolean {
   if (ACCOUNT_LISTS.has(pathname)) return true;
@@ -203,6 +204,7 @@ export function accountOwnRead(pathname: string): boolean {
     pathname === "/api/account/gpu" ||
     pathname === "/api/account/keys" ||
     pathname === "/api/account/run-on" ||
+    pathname === "/api/key-info" ||
     ACCOUNT_CANVASES.test(pathname) ||
     GPU_READS.has(pathname) ||
     COMPUTER_READ.test(pathname) ||

@@ -116,19 +116,14 @@ describe("round-4 ComfyUI workflows", () => {
       // they run on a GPU (tests/qwen21-fast.test.ts).
       "qwen-image-21-t2i-small",
       "qwen-image-21-edit-small",
-      "krea2-inpaint",
       "krea2-outpaint",
       "video-restore-ltx25-tiled",
       // Hi3D refine (hi3d-refine): Comfyui-Hi3d-T8 needs an Ampere-or-newer NVIDIA GPU, so it isn't on the validation server.
       "mesh-refine-hi3d",
       "video-character-swap-h3-relay",
-      "video-character-swap-h3-segment",
-      "video-mask-h3-relay",
       // Idol 3D's clean splats and four views: ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
-      "image-to-splat-idol-clean",
       "image-to-views-idol",
       "video-regenerate-h3",
-      "video-h3-t2v-2k",
       "video-regenerate-h3-latent",
       // NVIDIA RTX Video: the pack needs an NVIDIA RTX card, so it isn't on the CPU validation server (tests/rtx-video.test.ts checks its inputs).
       "upscale-video-rtx",

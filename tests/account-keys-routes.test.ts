@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./helpers/fake-cloud";
 import { tempDir } from "./helpers/temp-dir";
@@ -117,15 +117,22 @@ describe("adding a key", () => {
   });
 
   it("says when the provider can't be reached or answers oddly", async () => {
+    // The check's own waits before it asks again, made short.
+    const { KEY_CHECK } = await import("@/server/your-keys");
+    KEY_CHECK.waitsMs = [10, 10];
+    onTestFinished(() => {
+      KEY_CHECK.waitsMs = [1_000, 3_000];
+    });
     const odd = await put("fal", { key: "outage-key-id-1111:outage-secret-1111" });
     // 503, not 502: a proxy in front (Cloudflare) swaps an origin's 502 for its own page, and the words are lost.
     expect(odd.status).toBe(503);
-    expect((await odd.json()).error).toBe("fal.ai answered 503, so the key couldn't be checked. Try again in a moment.");
+    // Plain words, the status in details (the check asked twice more by itself first).
+    expect(await odd.json()).toEqual({ error: "fal.ai is busy right now, so we couldn't check your key. Try again in a minute.", details: "fal.ai answered 503" });
     globalThis.__fuobeTestFalUrl = "http://127.0.0.1:9";
     try {
       const down = await put("fal", { key: GOOD_FAL });
       expect(down.status).toBe(503);
-      expect((await down.json()).error).toBe("Couldn't reach fal.ai to check the key, so it wasn't saved. Try again in a moment.");
+      expect((await down.json()).error).toBe("We couldn't reach fal.ai to check your key. Try again in a minute.");
     } finally {
       globalThis.__fuobeTestFalUrl = fal.url;
     }

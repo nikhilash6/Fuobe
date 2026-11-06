@@ -34,6 +34,8 @@ export interface KeyInfo {
   readable: boolean;
   /** When the provider refused it in a run. */
   rejectedAt?: number;
+  /** When a run (or the check) found its provider account's balance empty: "Add credit" until it takes a run again. */
+  balanceEmptyAt?: number;
 }
 
 /** GET /api/account/keys. */

@@ -1,5 +1,5 @@
 /**
- * The AI Influencer builder (Higgsfield's game-style character builder, docs/research/higgsfield-delta-4.md
+ * The AI Influencer builder (the parity studio's game-style character builder, docs/research/parity-delta-4.md
  * §4.5): which options each tier shows, the pick rules and the two conflict messages, Shuffle with the
  * researched weights, and the prompt compiler (every option → a short English phrase, the tier → a
  * style clause) plus the plan per engine. Pure: shared by the page and the server.
@@ -33,7 +33,7 @@ export const HUMAN_TIERS: { id: HumanTier; label: string; hint: string }[] = [
   { id: "total", label: "Extreme", hint: "Extreme caricature" },
 ];
 
-/** Higgsfield's limits: "You can add up to three clothing references"; Direction up to 4,000 characters. */
+/** The researched limits: "You can add up to three clothing references"; Direction up to 4,000 characters. */
 export const MAX_CLOTHING = 3;
 export const MAX_DIRECTION = 4000;
 
@@ -86,7 +86,7 @@ const BIG_BUILDS = ["body_heavy", "body_muscular", "body_ultra"];
 const LEG_PROPORTIONS = ["pr_shortlegs", "pr_longlimbs"];
 const has = (picks: Record<string, string[]>, category: string, ids: string[]) => (picks[category] ?? []).some((x) => ids.includes(x));
 
-/** The conflict in a set of picks, in Higgsfield's words (null when they go together). */
+/** The conflict in a set of picks, in the parity research's words (null when they go together). */
 export function conflictIn(tier: InfluencerTier, picks: Record<string, string[]>): string | null {
   if (has(picks, "body_type", ["body_heavy"]) && has(picks, "height", TALL)) return CONFLICT_MESSAGES.heavyTall;
   // "in this mode": Bold, Extreme and the creature types; Average allows it.
@@ -116,13 +116,13 @@ export function conflictFor(state: InfluencerState, category: string, id: string
 
 export interface PickResult {
   state: InfluencerState;
-  /** The pick was refused: Higgsfield's conflict message. */
+  /** The pick was refused: the parity studio's conflict message. */
   conflict?: string;
   /** Said when an older pick made room ("Up to 2 — Long limbs was replaced"). */
   note?: string;
 }
 
-/** Pick or unpick an option, following Higgsfield's rules. */
+/** Pick or unpick an option, following the researched rules. */
 export function togglePick(state: InfluencerState, category: string, id: string): PickResult {
   const c = CATEGORY.get(category);
   const option = c?.options.find((o) => o.id === id);
@@ -263,7 +263,7 @@ export interface ShuffleOptions {
 const one = (id: string | undefined): string[] => (id ? [id] : []);
 
 /**
- * Higgsfield's Shuffle: keeps locked picks (and, with a photo, what the photo decides); gender is male 67%,
+ * The parity studio's Shuffle: keeps locked picks (and, with a photo, what the photo decides); gender is male 67%,
  * female 33%; style Suits 40%, Retro 20%, else any other; hairstyle Bob 20% where Bob shows; build is never
  * Curvy, never Ultra Muscular in Average, never Heavy with Tall heights or a Tiny waist, never Centaur with
  * an Egg body or Ultra Muscular with a Long neck (nor any pick that would conflict). Those pairs hold whichever
@@ -842,7 +842,7 @@ export interface InfluencerPlan {
 
 export const FEATURE = "influencer";
 
-/** Why a run can't start yet (null when it can): Higgsfield's words where it has them. */
+/** Why a run can't start yet (null when it can): the parity research's words where it has them. */
 export function influencerBlocker(run: Pick<InfluencerRun, "state" | "direction" | "start" | "photo" | "clothing">): string | null {
   const conflict = conflictIn(run.state.tier, run.state.picks);
   if (conflict) return conflict;

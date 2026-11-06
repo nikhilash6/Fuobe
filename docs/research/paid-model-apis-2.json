@@ -7344,7 +7344,7 @@
    },
    "price": "Billing is calculated per second of generated video, which matches the source video length. Video costs $0.05 per second at 480p, $0.08 per second at 768p, $0.16 per second at 1080p, and $0.32 per second at 2K. A 5-second video at 768p costs $0.40.",
    "replicateEquivalent": null,
-   "notes": "reference_image_url = a SPHERE RENDER of the target lighting (Fuobe can render a lit sphere client-side from Higgsfield-style light presets). Source <=15s, resampled to 24fps.",
+   "notes": "reference_image_url = a SPHERE RENDER of the target lighting (Fuobe can render a lit sphere client-side from parity-studio-style light presets). Source <=15s, resampled to 24fps.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/minimax/h3-max/relight/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/relight"
@@ -14903,9 +14903,7 @@
      "required": false,
      "nullable": true,
      "desc": "The ID of the custom style reference (optional)",
-     "examples": [
-      null
-     ]
+     "examples": []
     },
     "negative_prompt": {
      "type": "string",
@@ -15869,7 +15867,7 @@
    },
    "price": "Your request will cost $0.02 per image for 480p or $0.03 per image for 720p.",
    "replicateEquivalent": null,
-   "notes": "Closest to Higgsfield 'Draw to Edit': user sketches on the image; optional mask_url (BLACK = sketched region).",
+   "notes": "Closest to the parity studio 'Draw to Edit': user sketches on the image; optional mask_url (BLACK = sketched region).",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/fal-ai/chrono-edit-lora-gallery/paintbrush/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/chrono-edit-lora-gallery/paintbrush"

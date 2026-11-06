@@ -46,7 +46,7 @@ export function DrawnTile({ hue, tone, k = 0, className, children }: { hue: numb
 }
 
 /**
- * A drawn pack cover (Fuobe ships no copies of Higgsfield's sample photos): a 2×2 contact sheet in the
+ * A drawn pack cover (Fuobe ships no copies of the parity studio's sample photos): a 2×2 contact sheet in the
  * pack's own hue and treatment (flash, film, gels…), its name and photo count. A built-in pack with a
  * real cover (templateCover) shows its frames in the cells instead, and user packs their reference photos.
  */

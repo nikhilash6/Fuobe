@@ -2,6 +2,7 @@
 
 import { BotMessageSquare, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { aiSetupHref } from "@/lib/ai-setup/ways";
 import { signInHref } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
  */
 
 /** Where the setup opens as a page of its own (a reload or a closed dialog never loses it). */
-export const AI_SETUP_HREF = "/connect?setup=ai";
+export const AI_SETUP_HREF = aiSetupHref();
 
 const ROW = "flex w-full items-center gap-3 rounded-2xl border bg-background p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 

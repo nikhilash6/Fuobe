@@ -2,6 +2,7 @@ import "server-only";
 import { CLOUD_PROVIDERS, type CloudProvider, type KeyInfo } from "@/lib/your-keys";
 import { accountKeyRecord, setAccountKey } from "./auth";
 import { accountKeyContext, open, seal } from "./secret-box";
+import { balanceEmptyAt, clearBalanceEmpty, markBalanceEmpty } from "./key-notes";
 import { savedSetting } from "./settings";
 
 /**
@@ -21,7 +22,8 @@ export function accountKey(id: string, p: CloudProvider): string | null {
 export function accountKeyInfo(id: string): Record<CloudProvider, KeyInfo | null> {
   const info = (p: CloudProvider): KeyInfo | null => {
     const r = accountKeyRecord(id, p);
-    return r ? { last4: r.last4, addedAt: r.addedAt, readable: accountKey(id, p) !== null, ...(r.rejectedAt && { rejectedAt: r.rejectedAt }) } : null;
+    const empty = r ? balanceEmptyAt(id, p, r.addedAt) : undefined;
+    return r ? { last4: r.last4, addedAt: r.addedAt, readable: accountKey(id, p) !== null, ...(r.rejectedAt && { rejectedAt: r.rejectedAt }), ...(empty && { balanceEmptyAt: empty }) } : null;
   };
   return { fal: info("fal"), replicate: info("replicate") };
 }
@@ -36,11 +38,13 @@ export function cleanKey(raw: unknown): string | null {
 export function saveAccountKey(id: string, p: CloudProvider, key: string): KeyInfo {
   const stored = { sealed: seal(key, accountKeyContext(id, p)), last4: key.slice(-4), addedAt: Date.now() };
   setAccountKey(id, p, stored);
+  clearBalanceEmpty(id, p);
   return { last4: stored.last4, addedAt: stored.addedAt, readable: true };
 }
 
 export function removeAccountKey(id: string, p: CloudProvider): void {
   setAccountKey(id, p, null);
+  clearBalanceEmpty(id, p);
 }
 
 /** The provider refused the key in a run: Settings says so. Only when `used` is still the saved key (not one replaced since). */
@@ -50,11 +54,40 @@ export function markKeyRejected(id: string, p: CloudProvider, used: string): voi
   setAccountKey(id, p, { ...record, rejectedAt: Date.now() });
 }
 
+/**
+ * The provider said the key works but its account has no balance left (a run, or the free check): Settings says "Add
+ * credit", and the key isn't offered for "Run with your … key" until it takes a run again. Only when `used` is still the
+ * saved key.
+ */
+export function markKeyBalanceEmpty(id: string, p: CloudProvider, used: string): void {
+  const record = accountKeyRecord(id, p);
+  if (!record || accountKey(id, p) !== used) return;
+  markBalanceEmpty(id, p, record.addedAt);
+}
+
+/** The provider took a run on the key, or its check passed: a refusal or an empty balance noted before is over. */
+export function markKeyGood(id: string, p: CloudProvider): void {
+  const record = accountKeyRecord(id, p);
+  if (!record) return;
+  if (record.rejectedAt) setAccountKey(id, p, { sealed: record.sealed, last4: record.last4, addedAt: record.addedAt });
+  if (balanceEmptyAt(id, p, record.addedAt)) clearBalanceEmpty(id, p);
+}
+
 /** The studio lets accounts run paid models on their own keys: it isn't open-source only (Settings → Engine mode). */
 export const paidAllowed = () => savedSetting("engineMode") !== "open";
 
 /** The providers the account has a key for that this server can open. */
 export const accountProviders = (id: string): CloudProvider[] => CLOUD_PROVIDERS.filter((p) => accountKey(id, p) !== null);
+
+/**
+ * The providers whose key "Run with your … key" may offer: one this server can open that the provider didn't refuse and
+ * whose balance isn't known to be empty (pressing it would only fail again).
+ */
+export const usableProviders = (id: string): CloudProvider[] =>
+  CLOUD_PROVIDERS.filter((p) => {
+    const r = accountKeyRecord(id, p);
+    return !!r && !r.rejectedAt && !balanceEmptyAt(id, p, r.addedAt) && accountKey(id, p) !== null;
+  });
 
 /**
  * The engine mode an account's work runs with: "both" (open models on its own GPU, paid ones on its own keys) while it

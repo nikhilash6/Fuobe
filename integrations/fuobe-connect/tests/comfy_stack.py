@@ -35,9 +35,9 @@ def _from_comfyui(folder: str) -> dict:
     missing = WANTED - {n.name for n in picked}
     if missing:
         raise RuntimeError(f"ComfyUI's server.py has no {', '.join(sorted(missing))}")
-    exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/server.py", "exec"), ns)
+    exec(compile(ast.Module(body=picked, type_ignores=[]), "comfyui/server.py", "exec"), ns)  # noqa: S102
     with open(os.path.join(folder, "middleware", "cache_middleware.py"), encoding="utf-8") as f:
-        exec(compile(f.read(), "comfyui/middleware/cache_middleware.py", "exec"), ns)
+        exec(compile(f.read(), "comfyui/middleware/cache_middleware.py", "exec"), ns)  # noqa: S102
     ns["source"] = f"ComfyUI at {folder}"
     return ns
 

@@ -36,10 +36,11 @@ const hostOf = (site: string) => new URL(site).host;
 export function prefillText(i: HandoffInput): string {
   const code = showCode(i.code);
   const steps = `Steps: ${i.site}/api/setup/guide/${i.way}/${i.os}`;
+  const where = i.phone ? " I am on my phone now, so every command runs on the computer." : ` I use ${BROWSER_LABEL[i.browser]}.`;
   const first =
     i.way === "address"
-      ? `Please help me give the ComfyUI ${onMyComputer(i.os)} a web address for Fuobe (${hostOf(i.site)}), so Fuobe can run on my own GPU.${i.phone ? " I am on my phone now, so every command runs on the computer." : ` I use ${BROWSER_LABEL[i.browser]}.`}`
-      : `Please help me connect ComfyUI ${onMyComputer(i.os)} to Fuobe (${hostOf(i.site)}), so Fuobe can run on my own GPU. I use ${BROWSER_LABEL[i.browser]}.`;
+      ? `Please help me give the ComfyUI ${onMyComputer(i.os)} a web address for Fuobe (${hostOf(i.site)}), so Fuobe can run on my own GPU.${where}`
+      : `Please help me connect ComfyUI ${onMyComputer(i.os)} to Fuobe (${hostOf(i.site)})${i.way === "connect" ? " with Fuobe Connect" : ""}, so Fuobe can run on my own GPU.${where}`;
   const core = [first, steps, `My setup code: ${code}`, `Fuobe's status for it: ${i.site}/api/setup/${code}`, "Read the steps first. Then guide me one step at a time. Show me each command and wait for my OK before it runs."];
   // Kept while the message stays short (a long studio address leaves less room).
   const extra = ["If you can't open links, tell me and I will paste the steps.", ...(i.way === "address" ? ["The web address cloudflared makes works like a key: help me put it into Fuobe, not into this chat."] : [])];

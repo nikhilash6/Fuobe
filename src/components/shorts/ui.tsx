@@ -3,10 +3,12 @@
 import { Check, CircleAlert, Film, Library, Loader2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
 import { LibraryGrid } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useAskBeforeUpload } from "@/lib/api";
 import { toolPoolPrice } from "@/lib/run-place";
+import type { Unavailable } from "@/lib/unavailable";
 import { cn } from "@/lib/utils";
 import type { SourceClip } from "./use-source-clip";
 
@@ -22,37 +24,50 @@ export function Segmented<T extends string | number>({
 }: {
   label: string;
   value: T;
-  options: { value: T; label: string; hint?: string; disabled?: boolean; title?: string }[];
+  /**
+   * `unavailable`: a choice the current model or mode can't do. It stays in view, muted; pressing it picks nothing and
+   * says why, with the way to get it (src/components/ui/unavailable.tsx). A plain `disabled` reads the same way, with
+   * its `title` as the reason.
+   */
+  options: { value: T; label: string; hint?: string; disabled?: boolean; title?: string; unavailable?: Unavailable | false | null }[];
   onChange: (v: T) => void;
   className?: string;
   /** The id of text that says more (why some options are turned off). */
   describedBy?: string;
 }) {
-  // The Tab stop is the checked option, or the first one that can be picked when it's turned off
-  // (a disabled button can't take focus, and the whole group would be skipped).
-  const stop = options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value;
+  const note = useUnavailableNote(options);
+  // An unavailable choice is never drawn as the picked one. The Tab stop is the checked option, else the first one
+  // that can be picked (so the group always takes focus).
+  const checked = (o: (typeof options)[number]) => o.value === value && !note.isUnavailable(o);
+  const stop = options.find(checked)?.value ?? options.find((o) => !note.isUnavailable(o))?.value ?? options[0]?.value;
   return (
-    <div role="radiogroup" aria-label={label} aria-describedby={describedBy} onKeyDown={radioKeys} className={cn("flex w-full rounded-full bg-muted p-0.5", className)}>
-      {options.map((o) => (
-        <button
-          key={String(o.value)}
-          type="button"
-          role="radio"
-          aria-checked={value === o.value}
-          tabIndex={radioTab(stop === o.value)}
-          disabled={o.disabled}
-          title={o.title}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted-foreground",
-            value === o.value && "bg-background text-foreground shadow-soft",
-          )}
-        >
-          {o.label}
-          {o.hint && <span className="hidden text-[11px] font-normal text-muted-foreground sm:inline">{o.hint}</span>}
-        </button>
-      ))}
-    </div>
+    <>
+      <div role="radiogroup" aria-label={label} aria-describedby={describedBy} onKeyDown={radioKeys} className={cn("flex w-full rounded-full bg-muted p-0.5", className)}>
+        {options.map((o) => {
+          const off = note.isUnavailable(o);
+          return (
+            <button
+              key={String(o.value)}
+              type="button"
+              role="radio"
+              aria-checked={checked(o)}
+              tabIndex={radioTab(stop === o.value)}
+              {...note.optionProps(o)}
+              onClick={() => note.press(o, onChange)}
+              className={cn(
+                "flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                off ? UNAVAILABLE_OPTION : "hover:text-foreground",
+                checked(o) && "bg-background text-foreground shadow-soft",
+              )}
+            >
+              {o.label}
+              {o.hint && <span className="hidden text-[11px] font-normal text-muted-foreground sm:inline">{o.hint}</span>}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} />
+    </>
   );
 }
 

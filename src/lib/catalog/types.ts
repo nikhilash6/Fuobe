@@ -329,7 +329,7 @@ export type VideoFormat = "h264" | "h265_10bit" | "prores_422_hq" | "prores_4444
  */
 export type MatteOutput = "cutout" | "matte" | "foreground";
 
-/** Depth map colour maps, in Higgsfield's order (grayscale first: every depth model draws it). */
+/** Depth map colour maps, in the parity research's order (grayscale first: every depth model draws it). */
 export const COLORMAPS = ["grayscale", "turbo", "inferno", "magma", "viridis"] as const;
 
 /** A point on a picture in its own pixels (the first frame of a video). Negative points mark what to keep. */
@@ -1202,6 +1202,11 @@ export interface GenerationRequest {
   boostMs?: number;
   /** Server-only: a run on this install's GPUs made of light work only (joins, trims), free and never counted. */
   light?: boolean;
+  /**
+   * Server-only too: an account's run made on its own in a studio, not by a tool for one of its projects (a Cinema take,
+   * a storyboard). Only such a run can move to the account's key while it waits (Run with your key).
+   */
+  standalone?: boolean;
   feature: string;
   presetId?: string;
   modelId: string;
@@ -1234,7 +1239,7 @@ export interface GenerationRequest {
   presetOptions?: Record<string, string>;
   /** Motions/effects: how strongly the preset applies (0–1, default 1). */
   presetStrength?: number;
-  /** Higgsfield's Mix: a second motion or effect on top of the first, with its own strength. */
+  /** The parity studio's Mix: a second motion or effect on top of the first, with its own strength. */
   mix?: { presetId: string; strength: number };
   /** LoRAs added by @element mentions (trained identities, server-side), or a recipe's LoRAs sent by the evaluation harness. */
   loras?: LoraRef[];
@@ -1245,6 +1250,11 @@ export interface GenerationRequest {
    * Unset: the install's engine mode, else the first one connected (your GPU before the cloud).
    */
   engine?: Engine;
+  /**
+   * An account's cloud run on this provider's key when the model is on several ("Run with your Replicate key"): its
+   * routes there go first. Without a key for it the run asks for one.
+   */
+  prefer?: "fal" | "replicate";
   /** Chained jobs: where the previous job's image goes among `inputs.images` (one dependency). */
   chainFrom?: "first" | "last";
   /** Chained jobs with several dependencies: where each one's first output goes, in dependsOn order. */
@@ -1483,6 +1493,11 @@ export interface Generation {
    * help (Start your pod, Check my GPU, Replace key…; src/lib/diagnose.ts). The plain sentence is `error`.
    */
   trouble?: RunTrouble;
+  /**
+   * An account's run waiting for its own GPU or key to come back (it goes on by itself): why, the buttons that help
+   * (Start your pod, Run with your key…), and when it stops waiting.
+   */
+  waiting?: RunTrouble & { until?: number };
   /** Failed or stopped before its paid provider took the job (no external id): the card says "Not billed", not its price. */
   notBilled?: true;
   /** Ran on this install's GPUs (hosted runs), not the account's own. */

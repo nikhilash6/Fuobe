@@ -4,7 +4,7 @@ Generate src/lib/catalog/oss-loras.generated.ts: the preset → LoRA map v2 of F
 effects, build plan O4), from two research files:
 
 - docs/research/comfyui-oss.json "loras" (round 1): Wan 2.1 / 2.2 I2V LoRAs matched to presets by their
-  higgsfieldEquivalent column and their own short name ("Remade-AI Squish" → "squish"). Keyed by the bare
+  parityEquivalent column and their own short name ("Remade-AI Squish" → "squish"). Keyed by the bare
   slug, as before.
 - docs/research/fuobe-originals-recipes-5.json "motionsEffects" (§7.2–7.4): the rows whose status makes a LoRA
   a default (add-lora, replace, relight-route, weak-candidate, and local-only, which runs on the user's GPU
@@ -22,6 +22,9 @@ LoRA goes into the map with its licence as recorded. A round-1 LoRA whose licenc
 licence (e.g. "unspecified (check card)") is kept with commercial: false and its licence named; a map v2 row that
 makes a non-commercial LoRA a default, sends a hostedOk: false LoRA to the cloud, or is on licence hold is listed
 as a note, never a failure.
+
+The rows' free-text `notes` stay in the research file: the generated map is bundled into the site's browser code,
+and no page shows them.
 
 Run:  python3 scripts/gen-oss-loras.py
 """
@@ -63,7 +66,7 @@ for l in ROUND1_LORAS:
         continue
     licence = (l.get("license") or "").strip()
     commercial = licence in COMMERCIAL
-    eq = l.get("higgsfieldEquivalent") or ""
+    eq = l.get("parityEquivalent") or ""
     names = [re.sub(r"\(.*?\)", "", n).strip() for n in re.split(r"/|,", eq)]
     names = [n for n in names if n and n != "-"]
     # Also index by the LoRA's own short name ("Remade-AI Squish" → "squish").
@@ -162,8 +165,6 @@ for m in RECIPES["motionsEffects"]:
                     mine = [dict(l) for l in round1[src]]
         if mine:
             v2[pid] = mine
-        if m.get("notes"):
-            recipe["notes"] = m["notes"]
         recipes[pid] = recipe
 
 overlap = sorted(k for k in v2 if k in round1)
@@ -197,7 +198,6 @@ ts = (
     "  cameraMotion?: string;\n"
     "  /** The round-1 key whose LoRAs it reuses. */\n"
     "  aliasOf?: string;\n"
-    "  notes?: string;\n"
     "}\n\n"
     "/** Preset id (\"motion-overhead\") for the map v2, else the bare slug of a round-1 match (\"crash-zoom-in\"). */\n"
     f"export const OSS_LORAS: Record<string, OssLora[]> = {json.dumps(out, indent=2, ensure_ascii=False)};\n\n"

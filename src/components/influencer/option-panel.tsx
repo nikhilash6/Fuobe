@@ -77,7 +77,7 @@ export const CATEGORY_ICON: Record<string, LucideIcon> = {
   accessory: Glasses,
 };
 
-/** A stable hue per option id, for its tile (Fuobe draws its own tiles; nothing comes from Higgsfield's CDN). */
+/** A stable hue per option id, for its tile (Fuobe draws its own tiles; nothing comes from the parity studio's CDN). */
 function hue(id: string): number {
   let h = 0;
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;

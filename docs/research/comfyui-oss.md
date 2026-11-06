@@ -1,4 +1,4 @@
-# Fuobe research: open-weight + ComfyUI equivalents of Higgsfield AI capabilities
+# Fuobe research: open-weight + ComfyUI equivalents of the parity studio capabilities
 
 _As of 2026-10-16. Companion machine-readable file: `comfyui-oss.json` (same data: options, model files with URLs/sizes/folders, settings, LoRA catalog, ComfyUI API reference)._
 
@@ -8,7 +8,7 @@ _As of 2026-10-16. Companion machine-readable file: `comfyui-oss.json` (same dat
 
 * **2026 landscape changes vs. 2025:** ComfyUI core now natively runs almost everything Fuobe needs: Wan 2.2 (all variants incl. Animate, S2V, Fun Camera/Control/VACE), **Wan Animate 2** and **SCAIL-2** (motion transfer / character replacement), **InfiniteTalk** and HuMo (lipsync), **LTX-2.3/2.5** (open 22B audio+video, multishot, 4K), **MiniMax H3** (33B audio+video, restrictive license), HunyuanVideo 1.5, **Z-Image**, **Qwen-Image-2512 / Edit-2511 / Qwen Image 2.1**, **FLUX.2 / FLUX.2 klein / FLUX 3 Image Klein (released 2026-10-15)**, **Krea 2**, HiDream-O1, **BiRefNet** background removal, **SAM 3.1**, **SeedVR2** upscaling, **RIFE/FILM** interpolation, ACE-Step 1.5/XL, MiniMax Music 3, YuE2, Stable Audio 3 and an LLM `TextGenerate` node (Qwen3.5 / Qwen3-VL / Gemma 4) for prompt enhancement.
 * **Still custom-node territory:** TTS (Chatterbox, Qwen3-TTS, IndexTTS-2, VibeVoice, Kokoro), video-to-audio foley (MMAudio, HunyuanVideo-Foley), LatentSync re-dubbing, ReActor face swap, Uni3C/ReCamMaster/Phantom/MultiTalk/FantasyTalking (kijai WanVideoWrapper), LTX IC-LoRA dub/outpaint workflows (ComfyUI-LTXVideo), Wan 2.2 Animate preprocessing, Ollama, FlashVSR, GIMM-VFI.
-* **Not available as open weights:** Wan 2.5/2.6/2.7/3.0, Kling, Veo, Seedance, Nano Banana, Higgsfield's own DoP/Soul models (Higgsfield ships "Genjutsu Motion Transfer" only as a paid ComfyUI partner node).
+* **Not available as open weights:** Wan 2.5/2.6/2.7/3.0, Kling, Veo, Seedance, Nano Banana, the parity studio's own DoP/Soul models (the parity studio ships "Genjutsu Motion Transfer" only as a paid ComfyUI partner node).
 * **Licensing is the main product constraint.** Commercially clean core stack: Z-Image (Apache), Qwen-Image-2512 / Edit-2509/2511 (Apache), FLUX.2 klein 4B (Apache), Wan 2.1/2.2/Animate 2 (Apache), SCAIL-2 (MIT), HiDream-O1 (MIT), BiRefNet (MIT), SeedVR2 (Apache), ACE-Step 1.5 (Apache), MiniMax Music 3 (Apache), Chatterbox (MIT), Qwen3-TTS (Apache). Revenue-gated: FLUX 3 Klein (< US$5M), LTX-2.x (< US$10M), Krea 2 (community tiers), Stable Audio 3 (< US$1M). Non-commercial: Qwen Image 2.1, FLUX.1/2 [dev] + Kontext + Krea-dev + klein 9B, YuE2, MMAudio, F5-TTS, SUPIR, 4x-UltraSharp, InsightFace swappers. Territory-restricted: MiniMax H3 (excludes US/EU/UK/KR), Tencent Hunyuan (excludes EU/UK/KR).
 * **Hardware baseline:** a 24 GB GPU (RTX 4090/3090) runs every rank-1 option with fp8/int8 weights and ComfyUI offloading (LTX-2.5 only with heavy offload); 32 GB (RTX 5090) is comfortable for LTX-2.5 and FLUX.2 dev; MiniMax H3 wants 32-48 GB. 12-16 GB cards can serve Z-Image-Turbo, FLUX.2 klein 4B, Wan 2.2 5B, SeedVR2 3B, BiRefNet and audio.
 
@@ -40,43 +40,43 @@ _As of 2026-10-16. Companion machine-readable file: `comfyui-oss.json` (same dat
 | `music` | ACE-Step 1.5 XL Turbo (core) | audio_ace_step1_5_xl_turbo / audio_ace_step1_5_xl_sft / audio_ace_step1_5_xl_base / audio_ace_step_1_5_checkpoint (AIO) | core | Apache-2.0 | <4 GB (DiT only) to ~16-20 GB (XL + 4B planner) |
 | `prompt-enhance` | Core TextGenerate node + Qwen3.5 4B/9B or Qwen3-VL 8B (image-aware) / Gemma 4 | llm_qwen3_5_text_gen / llm_qwen3vl_text_gen / llm_gemma4_text_gen | core | Apache-2.0 | ~5-20 GB (unloaded before diffusion) |
 
-### Higgsfield feature -> Fuobe capability map
+### The parity studio's feature -> Fuobe capability map
 
-| Higgsfield feature (approx.) | Fuobe capability ids |
+| The parity studio's feature (approx.) | Fuobe capability ids |
 |---|---|
-| Higgsfield Soul / Soul 2 text-to-image, "Popcorn" storyboards | `t2i` |
-| Higgsfield Edit / Nano Banana / Seedream edit, Product placement, Draw-to-edit, Sketch-to-real | `edit` |
-| Higgsfield Inpaint, Expand/Outpaint, Remove object | `inpaint` |
-| Higgsfield background remover, product cut-outs | `bg-remove` |
-| Higgsfield Relight / lighting presets | `relight` |
-| Higgsfield "Angles" / multi-shot from one photo | `angles` |
-| Higgsfield Face Swap, Character Swap, Recast | `face-swap` |
-| Higgsfield Soul ID (train a recurring character from ~20 photos) | `character-lora` |
-| Higgsfield Create Video (Kling 3, Veo 3.1, Seedance 2.x, Wan 2.6/3.0 backends) | `t2v` |
-| Higgsfield DoP / Image-to-Video | `i2v` |
-| Higgsfield Start/End frame, transitions | `flf2v` |
-| Higgsfield "Ingredients"/references, Soul ID in video, product-to-video | `ref2v` |
-| Higgsfield DoP camera motions (113 entries in the companion higgsfield-inventory.json): Crash Zoom In/Out, Dolly In/Out/Left/Right, Dolly Zoom In/Out, Super Dolly In/Out, 360 Orbit, Arc Left/Right, Crane Up/Down/Over The Head, Jib up/down, Bullet Time, FPV Drone, Whip Pan, Snorricam, Handheld, Lazy Susan, 3D Rotation, Earth Zoom Out, Eyes In, Fisheye, Car Chasing, Action Run, Hyperlapse/Timelapse, Dutch Angle, Robo Arm ... | `camera-motion` |
-| Higgsfield DoP VFX presets (274 entries in the companion inventory): Disintegration, Melting, Levitation, Set on Fire, Thunder God, Explosion / Head Explosion / Building Explosion, Turning Metal, Freezing, Balloon, Morphskin, Cyborg, Fire Breathe, Garden Bloom, transitions, outfit switch, emotions ... | `vfx` |
-| Higgsfield Lipsync Studio, Talking Avatar, UGC Factory/Builder, Speak | `lipsync` |
-| Higgsfield voice / UGC voiceover (backed by ElevenLabs-style TTS) | `tts` |
-| Higgsfield Motion Control / Recast / Character Swap / "Genjutsu" (now a ComfyUI partner node) | `motion-transfer` |
-| Higgsfield Upscale (image) | `upscale-image` |
-| Higgsfield Upscale (video), 4K export | `upscale-video` |
-| Higgsfield smooth motion / frame rate boost | `interpolate` |
-| Higgsfield audio/sound for videos | `v2a` |
-| Higgsfield music for videos | `music` |
-| Higgsfield "Enhance prompt" toggle | `prompt-enhance` |
+| Soul / Soul 2 text-to-image, "Popcorn" storyboards | `t2i` |
+| Edit / Nano Banana / Seedream edit, Product placement, Draw-to-edit, Sketch-to-real | `edit` |
+| Inpaint, Expand/Outpaint, Remove object | `inpaint` |
+| The parity studio's background remover, product cut-outs | `bg-remove` |
+| Relight / lighting presets | `relight` |
+| The parity studio "Angles" / multi-shot from one photo | `angles` |
+| Face Swap, Character Swap, Recast | `face-swap` |
+| Soul ID (train a recurring character from ~20 photos) | `character-lora` |
+| Create Video (Kling 3, Veo 3.1, Seedance 2.x, Wan 2.6/3.0 backends) | `t2v` |
+| DoP / Image-to-Video | `i2v` |
+| Start/End frame, transitions | `flf2v` |
+| The parity studio "Ingredients"/references, Soul ID in video, product-to-video | `ref2v` |
+| DoP camera motions (113 entries in the companion parity-inventory.json): Crash Zoom In/Out, Dolly In/Out/Left/Right, Dolly Zoom In/Out, Super Dolly In/Out, 360 Orbit, Arc Left/Right, Crane Up/Down/Over The Head, Jib up/down, Bullet Time, FPV Drone, Whip Pan, Snorricam, Handheld, Lazy Susan, 3D Rotation, Earth Zoom Out, Eyes In, Fisheye, Car Chasing, Action Run, Hyperlapse/Timelapse, Dutch Angle, Robo Arm ... | `camera-motion` |
+| DoP VFX presets (274 entries in the companion inventory): Disintegration, Melting, Levitation, Set on Fire, Thunder God, Explosion / Head Explosion / Building Explosion, Turning Metal, Freezing, Balloon, Morphskin, Cyborg, Fire Breathe, Garden Bloom, transitions, outfit switch, emotions ... | `vfx` |
+| Lipsync Studio, Talking Avatar, UGC Factory/Builder, Speak | `lipsync` |
+| The parity studio's voice / UGC voiceover (backed by ElevenLabs-style TTS) | `tts` |
+| Motion Control / Recast / Character Swap / "Genjutsu" (now a ComfyUI partner node) | `motion-transfer` |
+| Upscale (image) | `upscale-image` |
+| Upscale (video), 4K export | `upscale-video` |
+| The parity studio smooth motion / frame rate boost | `interpolate` |
+| The parity studio's audio/sound for videos | `v2a` |
+| The parity studio's music for videos | `music` |
+| The parity studio "Enhance prompt" toggle | `prompt-enhance` |
 
-Higgsfield preset names used below are approximations of its public vocabulary (Dolly In, Crane Up/Down, Tracking, Whip Pan, Snorricam, Bullet Time, Boom, FPV, Dolly Zoom, crash zoom, etc.); its catalogue changes often and is not published in full.
+The parity studio's preset names used below are approximations of its public vocabulary (Dolly In, Crane Up/Down, Tracking, Whip Pan, Snorricam, Bullet Time, Boom, FPV, Dolly Zoom, crash zoom, etc.); its catalogue changes often and is not published in full.
 
 ## 2. Capabilities
 
 Ranking = recommended default for Fuobe, weighing output quality, license (commercial use), native ComfyUI support and VRAM. Where the quality leader is ranked lower for licensing reasons the capability summary says so. Settings come from the official template JSON unless marked otherwise; `turbo`/`withoutLora` keys give the alternate recipe.
 
-### `t2i` - Text-to-image (Higgsfield "Soul" photoreal look + fast/turbo)
+### `t2i` - Text-to-image (the parity studio "Soul" photoreal look + fast/turbo)
 
-*Higgsfield equivalent:* Higgsfield Soul / Soul 2 text-to-image, "Popcorn" storyboards
+*The parity studio's equivalent:* Soul / Soul 2 text-to-image, "Popcorn" storyboards
 
 Soul is a fashion/UGC-photoreal aesthetic model. In 2026 the open-weight frontier for that look is Z-Image-Turbo (Apache-2.0, 6B, 8 steps) with "UltraReal"-style LoRAs, the brand-new FLUX 3 Image Klein (released 2026-10-15, FLUX Kommunity license), Krea 2 Turbo (aesthetics-first, 8 steps) and Qwen-Image-2512 (Apache-2.0, best prompt adherence/text among commercially clean models). Qwen Image 2.1 (2026-09-20) is the strongest all-rounder (native 2K, RGBA, up to 10 references) but is research/non-commercial only. Everything below runs on ComfyUI core nodes; most new templates are subgraphs.
 
@@ -246,7 +246,7 @@ Soul is a fashion/UGC-photoreal aesthetic model. In 2026 the open-weight frontie
 
 ### `edit` - Image edit / multi-reference edit (Nano Banana / Seedream-edit equivalent), product packshot, sketch-to-real
 
-*Higgsfield equivalent:* Higgsfield Edit / Nano Banana / Seedream edit, Product placement, Draw-to-edit, Sketch-to-real
+*The parity studio's equivalent:* Edit / Nano Banana / Seedream edit, Product placement, Draw-to-edit, Sketch-to-real
 
 Instruction editing is solved natively in ComfyUI. Qwen-Image-Edit-2511 (Apache-2.0) is the commercially clean default with the biggest LoRA ecosystem (angles, relight, face swap, inflate...). FLUX 3 Image Klein (new) and Qwen Image 2.1 (non-commercial, 10 references) are the quality leaders. Product packshots and sketch-to-photo are Qwen-Edit LoRA presets.
 
@@ -267,7 +267,7 @@ Instruction editing is solved natively in ComfyUI. Qwen-Image-Edit-2511 (Apache-
 
 - License: Apache-2.0 (commercial OK)
 - Settings: steps=40; cfg=3; sampler=euler; scheduler=simple; shift=3.1; shiftNode=ModelSamplingAuraFlow; resolution=~1 MP (FluxKontextImageScale / ImageScaleToTotalPixels); turbo=4 steps, cfg 1 with Lightning LoRA; references=up to 3 images (TextEncodeQwenImageEditPlus image1..image3)
-- Notes: Multi-person consistency, material replacement, text editing, built-in popular LoRA abilities. Uses CFGNorm + TextEncodeQwenImageEditPlus nodes. Most Higgsfield "app" presets map to 2509/2511 LoRAs (see angles/relight/face-swap/vfx).
+- Notes: Multi-person consistency, material replacement, text editing, built-in popular LoRA abilities. Uses CFGNorm + TextEncodeQwenImageEditPlus nodes. Most the parity studio "app" presets map to 2509/2511 LoRAs (see angles/relight/face-swap/vfx).
 - Model files:
 
   | File | Folder | Size (GB) | Notes |
@@ -389,7 +389,7 @@ Instruction editing is solved natively in ComfyUI. Qwen-Image-Edit-2511 (Apache-
 
 - License: Apache-2.0 (commercial OK)
 - Settings: steps=8; cfg=1; sampler=euler; scheduler=simple; shift=3; resolution=~1 MP
-- Notes: Alternatives: ControlNet-guided regeneration (Z-Image-Turbo Fun Union ControlNet, Qwen-Image InstantX/DiffSynth union, Qwen Image 2.1 Fun ControlNet union model patch). Higgsfield "Draw-to-Video" = this step + I2V (or Wan-Move/ATI trajectory drawing).
+- Notes: Alternatives: ControlNet-guided regeneration (Z-Image-Turbo Fun Union ControlNet, Qwen-Image InstantX/DiffSynth union, Qwen Image 2.1 Fun ControlNet union model patch). The parity studio "Draw-to-Video" = this step + I2V (or Wan-Move/ATI trajectory drawing).
 - Model files:
 
   | File | Folder | Size (GB) | Notes |
@@ -402,7 +402,7 @@ Instruction editing is solved natively in ComfyUI. Qwen-Image-Edit-2511 (Apache-
 
 ### `inpaint` - Inpaint / outpaint / object removal (image and video)
 
-*Higgsfield equivalent:* Higgsfield Inpaint, Expand/Outpaint, Remove object
+*The parity studio's equivalent:* Inpaint, Expand/Outpaint, Remove object
 
 Mask-based inpainting is native (InpaintModelConditioning / ControlNet inpaint / SetLatentNoiseMask). Instruction editors (Qwen-Edit) handle mask-free removal. Video inpainting is native via VOID, Wan VACE and LTX-2.3 IC-LoRAs.
 
@@ -506,7 +506,7 @@ Mask-based inpainting is native (InpaintModelConditioning / ControlNet inpaint /
 
 ### `bg-remove` - Background removal / matting
 
-*Higgsfield equivalent:* Higgsfield background remover, product cut-outs
+*The parity studio's equivalent:* the parity studio's background remover, product cut-outs
 
 BiRefNet is now a CORE ComfyUI node (LoadBackgroundRemovalModel + RemoveBackground, models/background_removal). SAM 3.1 is native for video segmentation.
 
@@ -562,7 +562,7 @@ BiRefNet is now a CORE ComfyUI node (LoadBackgroundRemovalModel + RemoveBackgrou
 
 ### `relight` - Relight
 
-*Higgsfield equivalent:* Higgsfield Relight / lighting presets
+*The parity studio's equivalent:* Relight / lighting presets
 
 Qwen-Image-Edit LoRAs give the most robust relighting in 2026 and have official templates; IC-Light (SD1.5) remains as a lightweight custom-node option.
 
@@ -629,7 +629,7 @@ Qwen-Image-Edit LoRAs give the most robust relighting in 2026 and have official 
 
 ### `angles` - Multiple camera angles from one image
 
-*Higgsfield equivalent:* Higgsfield "Angles" / multi-shot from one photo
+*The parity studio's equivalent:* the parity studio "Angles" / multi-shot from one photo
 
 Qwen-Image-Edit-2511 + fal Multiple-Angles LoRA (96 camera poses) with a 3D camera picker node is the 2026 reference workflow (official app template).
 
@@ -671,7 +671,7 @@ Qwen-Image-Edit-2511 + fal Multiple-Angles LoRA (96 camera poses) with a 3D came
 
 ### `face-swap` - Face / head / character swap
 
-*Higgsfield equivalent:* Higgsfield Face Swap, Character Swap, Recast
+*The parity studio's equivalent:* Face Swap, Character Swap, Recast
 
 Diffusion-based head swap LoRAs (BFS for Qwen-Edit 2511 / Qwen 2.1 / Klein / Krea 2 / LTX / H3) now beat inswapper-style swaps on realism; ReActor stays the fast frame-by-frame option. Full-body/video character swap is covered under motion-transfer (Wan Animate 2, SCAIL-2).
 
@@ -740,7 +740,7 @@ Diffusion-based head swap LoRAs (BFS for Qwen-Edit 2511 / Qwen 2.1 / Klein / Kre
 
 ### `character-lora` - Character consistency / "Soul ID" (trained LoRA + zero-shot identity)
 
-*Higgsfield equivalent:* Higgsfield Soul ID (train a recurring character from ~20 photos)
+*The parity studio's equivalent:* Soul ID (train a recurring character from ~20 photos)
 
 Soul ID = a per-user identity LoRA. Train with ostris/ai-toolkit (UI + YAML; supports Z-Image, FLUX 3 Klein base, Krea 2, Qwen-Image/2512/2.1, Qwen-Edit, Wan 2.1/2.2, LTX-2.x, MiniMax H3) or kohya musubi-tuner, then load with LoraLoaderModelOnly. For zero-shot consistency use multi-reference editors and reference-to-video models.
 
@@ -799,7 +799,7 @@ Soul ID = a per-user identity LoRA. Train with ostris/ai-toolkit (UI + YAML; sup
 
 ### `t2v` - Text-to-video (Kling / Veo / Seedance-like)
 
-*Higgsfield equivalent:* Higgsfield Create Video (Kling 3, Veo 3.1, Seedance 2.x, Wan 2.6/3.0 backends)
+*The parity studio's equivalent:* Create Video (Kling 3, Veo 3.1, Seedance 2.x, Wan 2.6/3.0 backends)
 
 Wan 3.0 and Wan 2.5-2.7 are API-only; the last open Wan flagship is still Wan 2.2 (Apache-2.0). 2026 adds open joint audio+video models: LTX-2.3/2.5 (22B, synchronized audio, native multishot, up to 4K/50 fps) and MiniMax H3 (33B, stereo audio, 768p, ~15 s; restrictive territory license). All of these are native in ComfyUI core.
 
@@ -905,9 +905,9 @@ Wan 3.0 and Wan 2.5-2.7 are API-only; the last open Wan flagship is still Wan 2.
 
 ### `i2v` - Image-to-video
 
-*Higgsfield equivalent:* Higgsfield DoP / Image-to-Video
+*The parity studio's equivalent:* DoP / Image-to-Video
 
-Same model families as T2V; I2V is the most-used Higgsfield path (Soul image -> animate).
+Same model families as T2V; I2V is the most-used the parity studio's path (Soul image -> animate).
 
 | # | Option | Official template | Nodes | License | VRAM |
 |---|---|---|---|---|---|
@@ -1010,7 +1010,7 @@ Same model families as T2V; I2V is the most-used Higgsfield path (Soul image -> 
 
 ### `flf2v` - Start + end frame (first-last-frame) video
 
-*Higgsfield equivalent:* Higgsfield Start/End frame, transitions
+*The parity studio's equivalent:* Start/End frame, transitions
 
 Native in Wan 2.2 (WanFirstLastFrameToVideo), LTX-2.3/2.5 and MiniMax H3.
 
@@ -1096,7 +1096,7 @@ Native in Wan 2.2 (WanFirstLastFrameToVideo), LTX-2.3/2.5 and MiniMax H3.
 
 ### `ref2v` - Reference-to-video (subject/character/product references)
 
-*Higgsfield equivalent:* Higgsfield "Ingredients"/references, Soul ID in video, product-to-video
+*The parity studio's equivalent:* the parity studio "Ingredients"/references, Soul ID in video, product-to-video
 
 Quality leader is MiniMax H3 R2V (9 images, 3 videos, 3 audio refs) but its license excludes US/EU/UK/KR, so the Fuobe default is Wan 2.1 VACE 14B (Apache, native); LTX-2.3 IC-LoRA/ID-LoRA (revenue-gated) and Phantom (wrapper) are alternatives. For still images, do multi-reference composition with Qwen-Image-Edit-2511 / FLUX 3 Klein first and then I2V.
 
@@ -1174,9 +1174,9 @@ Quality leader is MiniMax H3 R2V (9 images, 3 videos, 3 audio refs) but its lice
   |---|---|---|---|
   | [Phantom-Wan-14B_fp8_e4m3fn.safetensors](https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Phantom-Wan-14B_fp8_e4m3fn.safetensors) | `diffusion_models` | 15.0 |  |
 
-### `camera-motion` - Camera motions (Higgsfield DoP presets)
+### `camera-motion` - Camera motions (DoP presets)
 
-*Higgsfield equivalent:* Higgsfield DoP camera motions (113 entries in the companion higgsfield-inventory.json): Crash Zoom In/Out, Dolly In/Out/Left/Right, Dolly Zoom In/Out, Super Dolly In/Out, 360 Orbit, Arc Left/Right, Crane Up/Down/Over The Head, Jib up/down, Bullet Time, FPV Drone, Whip Pan, Snorricam, Handheld, Lazy Susan, 3D Rotation, Earth Zoom Out, Eyes In, Fisheye, Car Chasing, Action Run, Hyperlapse/Timelapse, Dutch Angle, Robo Arm ...
+*The parity studio's equivalent:* DoP camera motions (113 entries in the companion parity-inventory.json): Crash Zoom In/Out, Dolly In/Out/Left/Right, Dolly Zoom In/Out, Super Dolly In/Out, 360 Orbit, Arc Left/Right, Crane Up/Down/Over The Head, Jib up/down, Bullet Time, FPV Drone, Whip Pan, Snorricam, Handheld, Lazy Susan, 3D Rotation, Earth Zoom Out, Eyes In, Fisheye, Car Chasing, Action Run, Hyperlapse/Timelapse, Dutch Angle, Robo Arm ...
 
 Three complementary mechanisms: (1) explicit camera-path conditioning (Wan 2.2 Fun Camera native presets, Uni3C, ReCamMaster, LTX IC-LoRA Cameraman copying a reference clip), (2) motion LoRAs per preset (Remade-AI Wan 2.1 I2V set, ostris orbit, Lightricks LTX-2 dolly/jib, MiniMax H3 orbit/FPV/handheld), and (3) prompt-only camera language for Wan 2.2/LTX-2.5/H3. Fuobe should expose a preset table where each preset maps to {model, LoRA file, trigger phrase, strength, prompt template}; see the LoRA catalog.
 
@@ -1265,7 +1265,7 @@ Three complementary mechanisms: (1) explicit camera-path conditioning (Wan 2.2 F
 
 - License: n/a
 - Settings: promptHints=Wan 2.2 responds to cinematography terms: "camera slowly dollies in", "orbiting shot around the subject", "crane shot rising", "handheld tracking shot", "whip pan to the right", "FPV drone shot diving", "low-angle", "rack focus". H3: describe camera per timed [Shot n].
-- Notes: Zero-cost presets: keep a prompt-template table per Higgsfield preset; fall back to LoRAs where prompts fail (orbit 360, bullet time, crash zoom).
+- Notes: Zero-cost presets: keep a prompt-template table per the parity studio's preset; fall back to LoRAs where prompts fail (orbit 360, bullet time, crash zoom).
 
 **7. MiniMax H3 camera LoRAs + embeddings (360 orbit, FPV head-bob, handheld, bullet_time, spiral_ascent)**
 
@@ -1282,9 +1282,9 @@ Three complementary mechanisms: (1) explicit camera-path conditioning (Wan 2.2 F
 
 ### `vfx` - VFX / effect presets (explode, melt, inflate, squish, cakeify, levitate, disintegrate ...)
 
-*Higgsfield equivalent:* Higgsfield DoP VFX presets (274 entries in the companion inventory): Disintegration, Melting, Levitation, Set on Fire, Thunder God, Explosion / Head Explosion / Building Explosion, Turning Metal, Freezing, Balloon, Morphskin, Cyborg, Fire Breathe, Garden Bloom, transitions, outfit switch, emotions ...
+*The parity studio's equivalent:* DoP VFX presets (274 entries in the companion inventory): Disintegration, Melting, Levitation, Set on Fire, Thunder God, Explosion / Head Explosion / Building Explosion, Turning Metal, Freezing, Balloon, Morphskin, Cyborg, Fire Breathe, Garden Bloom, transitions, outfit switch, emotions ...
 
-Higgsfield effects are essentially per-effect motion LoRAs on an I2V model. The open catalogue: Remade-AI Wan 2.1 I2V LoRAs (squish, cakeify, inflate, deflate, crush, explode, electrify, super-saiyan, hulk, robot reveal ...), LTX-2 effect LoRAs (squish template, inflate, cakeify), Wan 2.2 disintegration/skin-morph LoRAs, Qwen-Edit INFL8/ACTION image LoRAs (first frame) + I2V, and MiniMax H3 style embeddings.
+The parity studio's effects are essentially per-effect motion LoRAs on an I2V model. The open catalogue: Remade-AI Wan 2.1 I2V LoRAs (squish, cakeify, inflate, deflate, crush, explode, electrify, super-saiyan, hulk, robot reveal ...), LTX-2 effect LoRAs (squish template, inflate, cakeify), Wan 2.2 disintegration/skin-morph LoRAs, Qwen-Edit INFL8/ACTION image LoRAs (first frame) + I2V, and MiniMax H3 style embeddings.
 
 | # | Option | Official template | Nodes | License | VRAM |
 |---|---|---|---|---|---|
@@ -1375,7 +1375,7 @@ Higgsfield effects are essentially per-effect motion LoRAs on an I2V model. The 
 
 ### `lipsync` - Lipsync / talking avatar / UGC
 
-*Higgsfield equivalent:* Higgsfield Lipsync Studio, Talking Avatar, UGC Factory/Builder, Speak
+*The parity studio's equivalent:* Lipsync Studio, Talking Avatar, UGC Factory/Builder, Speak
 
 Native options now cover the whole space: InfiniteTalk (WanInfiniteTalkToVideo, unlimited length, multi-speaker), Wan 2.2 S2V, HuMo, LTX-2.3 image+audio-to-video and ID-LoRA, LTX-2.3 DubIt IC-LoRA for re-dubbing existing video, and MiniMax H3 which generates speech + lips jointly. LatentSync 1.6 remains the best mouth-only re-sync for real footage.
 
@@ -1453,7 +1453,7 @@ Native options now cover the whole space: InfiniteTalk (WanInfiniteTalkToVideo, 
 
 - License: LTX-2.x Community License (free incl. commercial below US$10M annual revenue; paid Commercial Use Agreement above)
 - Settings: steps=8 + 3; cfg=1; sampler=euler; scheduler=ManualSigmas (same schedule as LTX-2.5); resolution=768x512 -> x2; frames=97; fps=24
-- Notes: Gated; use the dub-it workflow from ComfyUI-LTXVideo. Closest OSS equivalent to Higgsfield "lipsync existing video".
+- Notes: Gated; use the dub-it workflow from ComfyUI-LTXVideo. Closest OSS equivalent to the parity studio "lipsync existing video".
 - Custom nodes: https://github.com/Lightricks/ComfyUI-LTXVideo
 - Model files:
 
@@ -1490,7 +1490,7 @@ Native options now cover the whole space: InfiniteTalk (WanInfiniteTalkToVideo, 
 
 ### `tts` - Text-to-speech / voice cloning (for lipsync & UGC)
 
-*Higgsfield equivalent:* Higgsfield voice / UGC voiceover (backed by ElevenLabs-style TTS)
+*The parity studio's equivalent:* the parity studio's voice / UGC voiceover (backed by ElevenLabs-style TTS)
 
 ComfyUI core has no TTS node in 2026 (official TTS templates are API partner nodes, except the Chatter Box templates which use the filliptm custom pack). Best OSS stack: Chatterbox / Chatterbox Multilingual (MIT, official community templates), Qwen3-TTS (Apache, Jan 2026, clone + voice design), IndexTTS-2 (emotion + duration control), VibeVoice (long multi-speaker), Kokoro (tiny, fast, preset voices). Output AUDIO feeds InfiniteTalk / S2V / LTX IA2V directly.
 
@@ -1576,9 +1576,9 @@ ComfyUI core has no TTS node in 2026 (official TTS templates are API partner nod
 
 ### `motion-transfer` - Motion transfer / character swap in video
 
-*Higgsfield equivalent:* Higgsfield Motion Control / Recast / Character Swap / "Genjutsu" (now a ComfyUI partner node)
+*The parity studio's equivalent:* Motion Control / Recast / Character Swap / "Genjutsu" (now a ComfyUI partner node)
 
-Wan Animate 2 (2026-08-07, Apache) removes pose extraction and loops natively over long driving videos; SCAIL-2 (MIT) does replacement or animation with SAM3 tracking - both core-native. Wan 2.2 Animate (2025) needs preprocessing custom nodes. Higgsfield itself ships "Genjutsu Motion Transfer" as a paid ComfyUI partner node (not OSS).
+Wan Animate 2 (2026-08-07, Apache) removes pose extraction and loops natively over long driving videos; SCAIL-2 (MIT) does replacement or animation with SAM3 tracking - both core-native. Wan 2.2 Animate (2025) needs preprocessing custom nodes. The parity studio itself ships "Genjutsu Motion Transfer" as a paid ComfyUI partner node (not OSS).
 
 | # | Option | Official template | Nodes | License | VRAM |
 |---|---|---|---|---|---|
@@ -1680,7 +1680,7 @@ Wan Animate 2 (2026-08-07, Apache) removes pose extraction and loops natively ov
 
 ### `upscale-image` - Image upscale / restoration
 
-*Higgsfield equivalent:* Higgsfield Upscale (image)
+*The parity studio's equivalent:* Upscale (image)
 
 SeedVR2 is now CORE in ComfyUI (SeedVR2Preprocess/Conditioning/PostProcessing nodes, one-step). GAN upscalers via core UpscaleModelLoader + ImageUpscaleWithModel. SUPIR also has a core template.
 
@@ -1719,7 +1719,7 @@ SeedVR2 is now CORE in ComfyUI (SeedVR2Preprocess/Conditioning/PostProcessing no
 
 - License: Apache-2.0
 - Settings: steps=8; cfg=1; sampler=res_multistep; scheduler=simple; shift=3; resolution=2K+ (tiles 1024); denoise=0.2-0.4
-- Notes: Adds skin/texture detail (Higgsfield "enhance"). USDU custom node tiles any model.
+- Notes: Adds skin/texture detail (the parity studio "enhance"). USDU custom node tiles any model.
 - Custom nodes: https://github.com/ssitu/ComfyUI_UltimateSDUpscale
 - Model files:
 
@@ -1743,7 +1743,7 @@ SeedVR2 is now CORE in ComfyUI (SeedVR2Preprocess/Conditioning/PostProcessing no
 
 ### `upscale-video` - Video upscale / restoration
 
-*Higgsfield equivalent:* Higgsfield Upscale (video), 4K export
+*The parity studio's equivalent:* Upscale (video), 4K export
 
 SeedVR2 3B/7B (native, temporal chunking) is the quality leader; FlashVSR is the fast 4x option; model-native latent upscalers (LTX x2, HunyuanVideo 1.5 SR) are cheapest when generating.
 
@@ -1819,7 +1819,7 @@ SeedVR2 3B/7B (native, temporal chunking) is the quality leader; FlashVSR is the
 
 ### `interpolate` - Frame interpolation (16 fps -> 32/48/60 fps)
 
-*Higgsfield equivalent:* Higgsfield smooth motion / frame rate boost
+*The parity studio's equivalent:* the parity studio smooth motion / frame rate boost
 
 ComfyUI core now ships FrameInterpolationModelLoader + FrameInterpolate with RIFE 4.25/4.26 and FILM weights (models/frame_interpolation).
 
@@ -1857,7 +1857,7 @@ ComfyUI core now ships FrameInterpolationModelLoader + FrameInterpolate with RIF
 
 ### `v2a` - Video-to-audio / foley / sound effects
 
-*Higgsfield equivalent:* Higgsfield audio/sound for videos
+*The parity studio's equivalent:* the parity studio's audio/sound for videos
 
 No core foley node; MMAudio and HunyuanVideo-Foley via custom nodes (both non-permissive weights). Joint audio-video models (LTX-2.x, MiniMax H3) avoid a separate foley pass. Stable Audio 3.0 (core templates) covers text-to-SFX.
 
@@ -1918,7 +1918,7 @@ No core foley node; MMAudio and HunyuanVideo-Foley via custom nodes (both non-pe
 
 ### `music` - Music generation
 
-*Higgsfield equivalent:* Higgsfield music for videos
+*The parity studio's equivalent:* the parity studio's music for videos
 
 ACE-Step 1.5 / 1.5 XL (Apache, core nodes) is the default; MiniMax Music 3 (Apache, core) for long songs with vocals; YuE2 (CC-BY-NC) for lyrics-to-song and covers.
 
@@ -1981,7 +1981,7 @@ ACE-Step 1.5 / 1.5 XL (Apache, core nodes) is the default; MiniMax Music 3 (Apac
 
 ### `prompt-enhance` - Prompt enhancement ("Enhance prompt") and captioning with local LLMs
 
-*Higgsfield equivalent:* Higgsfield "Enhance prompt" toggle
+*The parity studio's equivalent:* the parity studio "Enhance prompt" toggle
 
 ComfyUI core has a TextGenerate node that runs LLM/VLMs stored in models/text_encoders (Qwen3, Qwen3.5, Qwen3-VL, Gemma 4). Several 2026 models ship their own trained enhancers (FLUX 3 Klein PUP, Qwen Image 2.1 PE, LTX-2.5 prompt_enhance, Krea 2, ERNIE-Image). Alternatively Fuobe can call Ollama/llama.cpp outside ComfyUI and inject the text.
 
@@ -2024,14 +2024,14 @@ ComfyUI core has a TextGenerate node that runs LLM/VLMs stored in models/text_en
 - Notes: Keeps the LLM out of ComfyUI VRAM scheduling; easiest to swap models.
 - Custom nodes: https://github.com/stavsap/comfyui-ollama, https://github.com/1038lab/ComfyUI-QwenVL, https://github.com/if-ai/ComfyUI-IF_LLM
 
-## 3. Higgsfield preset coverage (camera motions and VFX)
+## 3. The parity studio's preset coverage (camera motions and VFX)
 
-Preset names below are Higgsfield names from the companion inventory (`higgsfield-inventory.json`). "Best open implementation" lists what Fuobe can run today; "weak" = only prompt-level control, no dedicated open LoRA/model found.
+Preset names below are the parity studio names from the companion inventory (`parity-inventory.json`). "Best open implementation" lists what Fuobe can run today; "weak" = only prompt-level control, no dedicated open LoRA/model found.
 
-| Higgsfield camera preset | Best open implementation (ComfyUI) | Strength |
+| The parity studio's camera preset | Best open implementation (ComfyUI) | Strength |
 |---|---|---|
 | Crash Zoom In / Crash Zoom Out | Remade-AI Crash-zoom-in / Crash-zoom-out LoRA on Wan 2.1 I2V 480p ("cr34sh crash zoom in effect") | good |
-| Dolly In / Dolly Out / Dolly Left / Dolly Right (also dolly_in ... in Higgsfield's LTX presets) | Lightricks LTX-2 Camera-Control Dolly LoRAs (exact match); Wan 2.2 prompt "camera dollies in"; lovis93 Push-in (Wan 2.1 720p) | good |
+| Dolly In / Dolly Out / Dolly Left / Dolly Right (also dolly_in ... in the parity studio's LTX presets) | Lightricks LTX-2 Camera-Control Dolly LoRAs (exact match); Wan 2.2 prompt "camera dollies in"; lovis93 Push-in (Wan 2.1 720p) | good |
 | Jib up / Jib down / Crane Up / Crane Down / Crane Over The Head | LTX-2 Jib-Up/Down LoRAs; Remade Crane_up / Crane-down / Crane_over_the_head (Wan 2.1 I2V) | good |
 | Static | LTX-2 Static LoRA; Wan 2.2 Fun Camera "Static" | good |
 | Pan Left / Pan Right / Pedestal Down / Zoom In / Zoom Out / Roll Transition | Wan 2.2 Fun Camera presets (Pan Left/Right/Up/Down = translations, Zoom In/Out = dolly, ACW/CW = roll) - deterministic; true tilts/pans (rotation) via prompt | good |
@@ -2049,7 +2049,7 @@ Preset names below are Higgsfield names from the companion inventory (`higgsfiel
 | Whip Pan / Dutch Angle / Focus Change / Low Shutter / Wiggle / YoYo Zoom / Hyperlapse / Timelapse | prompt-only on Wan 2.2 / LTX-2.5 / H3 (no dedicated open LoRA found) | weak |
 | Kiss / Face Punch / Boxing / sport presets (Skate, Ski, Moonwalk ...) | Remade kissing / Boxing (T2V); H3 kiss_camera embedding; others prompt-only or train a LoRA | weak-medium |
 
-| Higgsfield VFX preset | Best open implementation (ComfyUI) | Strength |
+| The parity studio's VFX preset | Best open implementation (ComfyUI) | Strength |
 |---|---|---|
 | Disintegration | artificialguybr Disintegration LoRA (Wan 2.2 I2V high+low, CC0) | good |
 | Set on Fire / Flame On / Fire Breathe | Remade Fire (T2V); MiniMax H3 fire_breath embedding; prompt | medium |
@@ -2065,7 +2065,7 @@ Preset names below are Higgsfield names from the companion inventory (`higgsfiel
 | Garden Bloom / Nature Bloom | MiniMax H3 blooming_flowers embedding; prompt | medium |
 | Flood / Sand Storm / Tornado | Remade Tsunami / Tornado (T2V LoRAs) | medium |
 | Transitions (Seamless, Melt, Smoke, Flame ...) | LTX-2.3 transition LoRA ("zhuanchang"); Wan 2.2 FLF2V between two stills | medium |
-| Squish / Cakeify (Pika-style) | Remade Squish / Cakeify; LTX-2 squish template (video_ltx2_i2v_lora) | good (no Higgsfield preset) |
+| Squish / Cakeify (Pika-style) | Remade Squish / Cakeify; LTX-2 squish template (video_ltx2_i2v_lora) | good (no parity-studio preset) |
 | Color grades / film looks (Bleach Bypass, Teal Orange Epic, Noir, Vintage ...) | prompt + post-grade (LUT) in Fuobe; Remade Film-Noir / Vintage-VHS; Krea 2 style LoRAs for stills | medium |
 
 ## 4. LoRA / embedding catalogue (camera, VFX, style, speed)
@@ -2074,7 +2074,7 @@ Preset names below are Higgsfield names from the companion inventory (`higgsfiel
 
 #### camera
 
-| Name | Base model | Trigger | Higgsfield-style preset | License | File |
+| Name | Base model | Trigger | parity-studio-style preset | License | File |
 |---|---|---|---|---|---|
 | Remade-AI Rotate | wan2.1-i2v-14b-480p | r0t4tion 360 degrees rotation | 3D Rotation / Lazy Susan | Apache-2.0 | [rotate_20_epochs.safetensors](https://huggingface.co/Remade-AI/Rotate/resolve/main/rotate_20_epochs.safetensors) |
 | Remade-AI Ultra-Wide | wan2.1-t2v-14b | u1tr4_w1d3, ultra wide angle shot | - (lens look) | Apache-2.0 | [ultra_wide_5_epochs.safetensors](https://huggingface.co/Remade-AI/Ultra-Wide/resolve/main/ultra_wide_5_epochs.safetensors) |
@@ -2119,7 +2119,7 @@ Preset names below are Higgsfield names from the companion inventory (`higgsfiel
 
 #### vfx
 
-| Name | Base model | Trigger | Higgsfield-style preset | License | File |
+| Name | Base model | Trigger | parity-studio-style preset | License | File |
 |---|---|---|---|---|---|
 | Remade-AI Squish | wan2.1-i2v-14b-480p | sq41sh squish effect | - (no direct preset) | Apache-2.0 | [squish_18.safetensors](https://huggingface.co/Remade-AI/Squish/resolve/main/squish_18.safetensors) |
 | Remade-AI Cakeify | wan2.1-i2v-14b-480p | c4k3 cakeify it | - (no direct preset) | Apache-2.0 | [cakeify_16_epochs.safetensors](https://huggingface.co/Remade-AI/Cakeify/resolve/main/cakeify_16_epochs.safetensors) |
@@ -2181,7 +2181,7 @@ Preset names below are Higgsfield names from the companion inventory (`higgsfiel
 
 #### style
 
-| Name | Base model | Trigger | Higgsfield-style preset | License | File |
+| Name | Base model | Trigger | parity-studio-style preset | License | File |
 |---|---|---|---|---|---|
 | Remade-AI Vintage-VHS | wan2.1-t2v-14b | vh5_c4m3r4 old VHS style | Vintage | Apache-2.0 | [vhs_20_epochs.safetensors](https://huggingface.co/Remade-AI/Vintage-VHS/resolve/main/vhs_20_epochs.safetensors) |
 | Remade-AI Zoom-Call | wan2.1-t2v-14b | [z00m_ca11] | - | Apache-2.0 | [zoom_call_10_epochs.safetensors](https://huggingface.co/Remade-AI/Zoom-Call/resolve/main/zoom_call_10_epochs.safetensors) |
@@ -2233,7 +2233,7 @@ Preset names below are Higgsfield names from the companion inventory (`higgsfiel
 
 #### speed
 
-| Name | Base model | Trigger | Higgsfield-style preset | License | File |
+| Name | Base model | Trigger | parity-studio-style preset | License | File |
 |---|---|---|---|---|---|
 | Wan2.2 I2V Lightx2v 4-step v1 (high noise) | wan2.2-i2v-a14b | none (cfg 1, 4 steps) | Fast mode | Apache-2.0 | [wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors) |
 | Wan2.2 I2V Lightx2v 4-step v1 (low noise) | wan2.2-i2v-a14b | none | Fast mode | Apache-2.0 | [wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors) |
@@ -2373,7 +2373,7 @@ comfy --json run --workflow wf_api.json --wait | comfy download   # submit + fet
 
 ## 7. Sources
 
-- [Companion Higgsfield inventory (camera motion / effect names)](higgsfield-inventory.json)
+- [Companion the parity studio's inventory (camera motion / effect names)](parity-inventory.json)
 - [Comfy-Org/workflow_templates (templates/index.json and template JSONs)](https://github.com/Comfy-Org/workflow_templates/tree/main/templates)
 - [ComfyUI source (server.py, execution.py, comfy_api/latest/_ui.py, comfy_extras/nodes_video.py, comfy_execution/progress.py, protocol.py)](https://github.com/Comfy-Org/ComfyUI)
 - [docs.comfy.org index (llms.txt)](https://docs.comfy.org/llms.txt)
@@ -2415,7 +2415,7 @@ comfy --json run --workflow wf_api.json --wait | comfy download   # submit + fet
 - [LTX-2.x license](https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x)
 - [MiniMax H3 overview / native / prompt guide](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)
 - [MiniMax H3 license](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE)
-- [Higgsfield Genjutsu partner node](https://docs.comfy.org/tutorials/partner-nodes/higgsfield/genjutsu-motion-transfer)
+- [Genjutsu partner node](https://docs.comfy.org/tutorials/partner-nodes/{studio}/genjutsu-motion-transfer)
 - [SeedVR2 native](https://docs.comfy.org/tutorials/utility/seedvr2)
 - [Image / video upscale](https://docs.comfy.org/tutorials/utility/image-upscale)
 - [Frame interpolation](https://docs.comfy.org/tutorials/utility/frame-interpolation)
@@ -2442,8 +2442,8 @@ comfy --json run --workflow wf_api.json --wait | comfy download   # submit + fet
 - [MiniMax H3 open weights coverage (secondary)](https://comfyui-wiki.com/en/news/2026-08-03-minimax-h3-open-weights-comfyui)
 - [Krea 2 open weights coverage (secondary)](https://dev.to/damogallagher/krea-releases-krea-2-as-open-weights-for-image-generation-13pe)
 - [Qwen-Image-2.1 coverage (secondary)](https://aiweekly.co/alerts/alibaba-ships-qwen-image-21-7b-dit-with-native-2048x2048-and-rgba-drops-apache)
-- [Higgsfield camera presets (secondary)](https://bibigpt.co/en/features/higgsfield-ai-video-generator-explained)
-- [Higgsfield features overview (secondary)](https://geo.higgsfield.ai/higgsfield-ai-features-full-guide-2026)
+- [the parity studio's camera presets (secondary)](https://bibigpt.co/en/features/{studio}-ai-video-generator-explained)
+- [the parity studio's features overview (secondary)]({studio-service}/{studio}-ai-features-full-guide-2026)
 - [ComfyUI-LatentSyncWrapper](https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper)
 - [kijai ComfyUI-MMAudio](https://github.com/kijai/ComfyUI-MMAudio)
 - [Chatterbox ComfyUI nodes](https://github.com/filliptm/ComfyUI_Fill-ChatterBox)

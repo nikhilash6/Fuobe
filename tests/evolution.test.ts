@@ -64,7 +64,7 @@ describe("Fuobe Evolution: intensities", () => {
 describe("Fuobe Evolution: the model on both engines", () => {
   const m = getModel(EVOLUTION.model)!;
 
-  it("is an Original: the GPU graph and the same Wan 2.2 Fun VACE hosted on fal, no Higgsfield, no LTX-2.3", () => {
+  it("is an Original: the GPU graph and the same Wan 2.2 Fun VACE hosted on fal, no retired provider, no LTX-2.3", () => {
     expect(m).toBeTruthy();
     expect(m.engines).toEqual(["open", "cloud"]);
     expect(m.routes.map((r) => `${r.provider}:${r.endpoint}`)).toEqual(["comfyui:video-evolution-wan22-fun-vace", "fal:fal-ai/wan-22-vace-fun-a14b/depth"]);

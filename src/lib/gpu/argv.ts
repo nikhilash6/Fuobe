@@ -34,5 +34,7 @@ export function parseArgv(argv: unknown): ComfyFlags {
     managerLegacyUi: has("--enable-manager-legacy-ui"),
     lowvram: has("--lowvram") || has("--novram"),
     cpuOnly: has("--cpu"),
+    // ComfyUI's dynamic VRAM (comfy-aimdo) is off with any of these (comfy/cli_args.py enables_dynamic_vram).
+    dynamicVramOff: ["--disable-dynamic-vram", "--highvram", "--gpu-only", "--novram", "--cpu"].some(has),
   };
 }

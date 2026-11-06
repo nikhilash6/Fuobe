@@ -50,7 +50,7 @@ export interface FramesAnimation {
 const pct = (t: number, duration: number) => `${duration > 0 ? (t / duration) * 100 : 0}%`;
 
 /**
- * Frames mode's strip (Kling 4.0's Frames, Higgsfield G02): up to 10 frame tiles in order, each with
+ * Frames mode's strip (Kling 4.0's Frames, parity gap G02): up to 10 frame tiles in order, each with
  * its time, a ruler to drag them along (snapped to 0.1 s; the first is the start frame and stays at 0),
  * and the clip's length. Positions are fractions of the clip, so a longer clip stretches them.
  */

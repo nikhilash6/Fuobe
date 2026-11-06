@@ -218,7 +218,7 @@ describe("one mode per chain at launch (S9)", () => {
       db()
         .prepare(
           `INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, depends_on, created_at, updated_at)
-           VALUES (?, 'storyboard-film', 'kling-3', 'cloud', 'higgsfield', 'i2v', 'video', 'queued', '{"feature":"storyboard-film","modelId":"kling-3"}', '[]', 'frame-x', ?, ?)`,
+           VALUES (?, 'storyboard-film', 'kling-3', 'cloud', 'old-provider', 'i2v', 'video', 'queued', '{"feature":"storyboard-film","modelId":"kling-3"}', '[]', 'frame-x', ?, ?)`,
         )
         .run(id, Date.now(), Date.now());
     }

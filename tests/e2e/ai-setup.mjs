@@ -4,14 +4,18 @@
 // the requirement index names (18192). The browser's requests to 127.0.0.1:8188 go to the stand-in the step needs;
 // every other loopback port is refused, and sockets to them never leave the browser. A real ComfyUI on 8188 is never
 // touched. The person's AI is played by plain fetches with no cookie, as an AI's web tool reads the status.
+// E2E_FAKE_BASE moves the stand-ins (base, base + 2, base + 4) when something else uses those ports.
 //
 //   pnpm build && node tests/e2e/ai-setup.mjs
 //
-// Checks: a guest gets "Set it up with my AI" through sign-up; the panel opens with a code; the hand-offs wait for the
-// browser's question; each stand-in ticks the checklist on and the public status follows (text and JSON, no cookie);
-// the guard step waits for the guard; it connects by itself and makes the first picture; the prefill links and the agent
-// command carry the code and nothing else; End this code ends it; Safari gets the web address; a phone gets Send to my
-// computer.
+// Checks: a guest at "Set it up with my AI" gets Log in first, then Sign up, both back to the same link; the panel opens with a code, and nothing moves when the
+// code arrives; the hand-offs wait for the browser's question; each stand-in ticks the checklist on and the public
+// status follows (text and JSON, no cookie); the guard step waits for the guard; it connects by itself and makes the
+// first picture; the prefill links and the agent command carry the code and nothing else; End this code ends it; a
+// ComfyUI that stops answering is waited for, with the time so far; Safari gets the web address; a phone gets one Send
+// to my computer, which sends the way the phone is on, and its setup ends on the computer at the box for the address,
+// under the same code, after Log in through the form; a guest's Sign up from that link comes back on its way; a web
+// address's ComfyUI on the processor is said as such.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -20,10 +24,12 @@ import { launch, root } from "./_browser.mjs";
 import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.E2E_APP_PORT ?? 3651);
-const CLOSED = 18190;
-const OPEN = 18188;
-const GUARDED = 18192;
+const FAKE_BASE = Number(process.env.E2E_FAKE_BASE ?? 18188);
+const OPEN = FAKE_BASE;
+const CLOSED = FAKE_BASE + 2;
+const GUARDED = FAKE_BASE + 4;
 const DEAD_PORT = 3659;
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
 const SITE = `http://127.0.0.1:${APP_PORT}`;
 const shots = process.env.E2E_SHOTS ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-ai-setup-shots-"));
 fs.mkdirSync(shots, { recursive: true });
@@ -120,15 +126,59 @@ async function signUp(page) {
         })),
       email,
     );
-    if (r.status === 201 || r.status === 200) return;
+    if (r.status === 201 || r.status === 200) return email;
     if (r.status !== 429) throw new Error(`sign-up answered ${r.status}`);
     await sleep(r.wait * 1000 + 200);
   }
   throw new Error("sign-up kept answering 429");
 }
 
+/** The setup code the panel shows, once it shows one. */
+const codeOf = (page) =>
+  until(async () => {
+    const t = (await page.locator("span[aria-label^='Setup code']").textContent())?.trim();
+    return t && /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(t) ? t : null;
+  }, 15_000);
+
+/**
+ * A guest's card at /connect?setup=ai: its links in order, as [name, href], once it shows (null if it never does). The
+ * card says, in one line, to log in with the account the setup started with.
+ */
+const guestLinks = (page) =>
+  until(async () => {
+    const card = page.getByText("Started on your phone? Log in with the same account, and the setup goes on here.").locator("..");
+    if (!(await card.isVisible())) return null;
+    return card.getByRole("link").evaluateAll((as) => as.map((a) => [a.textContent.trim(), a.getAttribute("href")]));
+  }, 30_000);
+
+/** navigator.share as a phone has it, kept on the page (window.__shared), never a share sheet. */
+const withShare = (ctx) =>
+  ctx.addInitScript(() => {
+    window.__shared = [];
+    Navigator.prototype.share = async function (d) {
+      window.__shared.push(d);
+    };
+  });
+
+/** The phone's one button that sends the setup to the computer: how many there are, and the link it sends. */
+async function sendToComputer(page) {
+  const buttons = page.getByRole("button", { name: /my computer/ });
+  const count = await buttons.count();
+  const before = await page.evaluate(() => window.__shared.length);
+  await page.getByRole("button", { name: "Send to my computer", exact: true }).click();
+  const shared = await until(() => page.evaluate((n) => window.__shared[n]?.url, before), 5000);
+  return { count, url: shared };
+}
+
+/** On a phone: the way picked by hand (Change, then the way's pill). */
+async function pickWayOn(page, name) {
+  await page.getByRole("button", { name: "Change", exact: true }).click();
+  await page.getByRole("tab", { name, exact: true }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+}
+
 /** What the person's AI reads: the status, with no cookie. */
-const status = (code, json = false) => fetch(`${SITE}/api/setup/${code}${json ? "?format=json" : ""}`).then(async (r) => ({ status: r.status, body: json ? await r.json() : await r.text() }));
+const status =(code, json = false) => fetch(`${SITE}/api/setup/${code}${json ? "?format=json" : ""}`).then(async (r) => ({ status: r.status, body: json ? await r.json() : await r.text() }));
 
 let browser;
 try {
@@ -147,23 +197,36 @@ try {
     const page = await ctx.newPage();
     if (process.env.E2E_CONSOLE) page.on("console", (m) => console.log(`[page] ${m.type()} ${m.text()}`));
 
-    // A guest: the button signs up first.
+    // A guest at Set it up with my AI: Log in first (the account it started with), then Sign up, both back to this link.
     await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
-    const guestButton = page.getByRole("link", { name: "Set it up with my AI" });
-    check(`${tag}: a guest gets Set it up with my AI, through sign-up`, !!(await until(() => guestButton.isVisible(), 30_000)) && /\/login\?signup=1&next=%2Fconnect%3Fsetup%3Dai/.test((await guestButton.getAttribute("href")) ?? ""));
+    const links = await guestLinks(page);
+    check(
+      `${tag}: a guest gets Log in first, then Sign up free, both back to Set it up with my AI`,
+      JSON.stringify(links) === JSON.stringify([["Log in", "/login?next=%2Fconnect%3Fsetup%3Dai"], ["Sign up free", "/login?signup=1&next=%2Fconnect%3Fsetup%3Dai"]]),
+      JSON.stringify(links),
+    );
     await page.screenshot({ path: path.join(shots, `${tag}-0-guest.png`) });
 
-    // An account: the panel, with a code.
+    // An account: the panel, with a code. The code is held back a moment here: the page keeps its place for it.
     await signUp(page);
-    await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
+    let held = 0;
+    await ctx.route(`${SITE}/api/setup/session`, async (route) => {
+      if (route.request().method() === "POST" && held++ === 0) await sleep(2500);
+      return route.continue();
+    });
+    await page.goto(`${SITE}/connect?setup=ai&way=direct`, { waitUntil: "load" });
     const heading = page.getByRole("heading", { name: "Set it up with your AI" });
     check(`${tag}: the panel opens`, !!(await until(() => heading.isVisible(), 30_000)));
-    const codeEl = page.locator("span[aria-label^='Setup code']");
-    const code = await until(async () => {
-      const t = (await codeEl.textContent())?.trim();
-      return t && /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(t) ? t : null;
-    }, 15_000);
+    // Where the checklist sits under the panel's heading (the page around the panel may settle meanwhile).
+    const below = async () => {
+      const [h, l] = await Promise.all([heading.boundingBox(), page.getByRole("list", { name: "Setup steps" }).boundingBox()]);
+      return h && l ? l.y - h.y : null;
+    };
+    const beforeCode = (await until(() => page.locator("[data-code-line=waiting]").isVisible(), 5000)) ? await below() : null;
+    const code = await codeOf(page);
     check(`${tag}: …with a setup code`, !!code, code ?? "");
+    const afterCode = await below();
+    check(`${tag}: nothing moves when the code arrives`, beforeCode !== null && afterCode !== null && Math.abs(beforeCode - afterCode) < 1, `${beforeCode} -> ${afterCode}`);
     const chatNow = page.getByRole("link", { name: /Open in ChatGPT/ });
     check(`${tag}: the hand-offs are ready before Fuobe looks (no browser question first)`, !!(await until(() => chatNow.isVisible(), 10_000)));
     const checklistTop = await page.getByRole("list", { name: "Setup steps" }).boundingBox();
@@ -231,7 +294,7 @@ try {
     check(`${tag}: the status never holds the account's email or the GPU's name`, !JSON.stringify(st?.body ?? {}).includes("example.com") && !JSON.stringify(st?.body ?? {}).includes("5090"));
 
     // End this code: the AI's reads stop.
-    await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
+    await page.goto(`${SITE}/connect?setup=ai&way=direct`, { waitUntil: "load" });
     await heading.waitFor({ timeout: 30_000 });
     await sleep(1500);
     const lookAgain = page.getByRole("button", { name: "Let Fuobe look" });
@@ -258,7 +321,7 @@ try {
     const page = await ctx.newPage();
     await page.goto(`${SITE}/connect`, { waitUntil: "load" });
     await signUp(page);
-    await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
+    await page.goto(`${SITE}/connect?setup=ai&way=direct`, { waitUntil: "load" });
     await page.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
     const codeEl = page.locator("span[aria-label^='Setup code']");
     const code = await until(async () => {
@@ -275,6 +338,18 @@ try {
       return s.body.next?.id === "restarting" ? s : null;
     }, 30_000);
     check("restart on 8288: the status says it is restarting, not to install it", !!quiet, quiet ? "" : JSON.stringify((await status(code, true)).body.next));
+    check("restart on 8288: …that a portable ComfyUI can take up to 5 minutes", !!quiet && quiet.body.next.say.includes("up to 5 minutes"), quiet?.body.next.say);
+    check("restart on 8288: the panel waits with the time so far", !!(await until(() => page.getByText(/ComfyUI stopped answering on port 8288\. Waiting for it to start again… \(\d+ s\)/).isVisible(), 15_000)));
+    await page.screenshot({ path: path.join(shots, "restart-8288-waiting.png"), fullPage: true });
+    // After a minute: still waiting (not "start ComfyUI"), and why it can take this long.
+    check("restart on 8288: after a minute, still waiting, with why", !!(await until(() => page.getByText("A portable or Easy-Install ComfyUI can take up to 5 minutes.", { exact: false }).isVisible(), 80_000)));
+    const later = await until(async () => {
+      const s = await status(code, true);
+      return s.body.next?.id === "restarting" && s.body.next.say.includes("1 min ago") ? s : null;
+    }, 30_000);
+    check("restart on 8288: …and the status counts the minutes", !!later, JSON.stringify((await status(code, true)).body.next?.say));
+    check("restart on 8288: …and the step says so", await page.getByRole("list", { name: "Setup steps" }).getByText("Starting again: 1 min so far").isVisible());
+    await page.screenshot({ path: path.join(shots, "restart-8288-minute.png"), fullPage: true });
     ctx.map = { 8288: OPEN };
     check("restart on 8288: found again by itself with Fuobe's setting", !!(await until(() => steps.getByText("127.0.0.1:3651 only").isVisible(), 40_000)));
     await page.screenshot({ path: path.join(shots, "restart-8288.png"), fullPage: true });
@@ -291,6 +366,11 @@ try {
     await page.goto(`${SITE}/connect`, { waitUntil: "load" });
     await signUp(page);
     await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
+    await page.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
+    check("Safari: Fuobe Connect first, for a Mac", !!(await until(() => page.getByText("For ComfyUI on your macOS computer, with Fuobe Connect.").isVisible(), 10_000)));
+    check("Safari: …paired with the code ComfyUI shows", await page.getByText("The code ComfyUI shows").isVisible());
+    await page.screenshot({ path: path.join(shots, "safari-connect-1440.png"), fullPage: true });
+    await page.goto(`${SITE}/connect?setup=ai&way=address`, { waitUntil: "load" });
     await page.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
     check("Safari: the web address way, for a Mac", await page.getByText("For ComfyUI on your macOS computer, through a web address.").isVisible());
     check("Safari: the address form is in the checklist", await page.getByLabel("Your ComfyUI's web address").isVisible());
@@ -309,19 +389,145 @@ try {
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
       colorScheme: "dark",
     }, { safari: true });
+    await withShare(ctx);
     const page = await ctx.newPage();
     await page.goto(`${SITE}/connect`, { waitUntil: "load" });
     await signUp(page);
     await page.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
     await page.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
     check("phone: Send to my computer comes first", await page.getByRole("button", { name: /Send to my computer|Copy link for my computer/ }).isVisible());
+    check("phone: …and says to log in there with this account", await page.getByText("It opens this setup on your computer. Log in there with this account.").isVisible());
     check("phone: the AI apps wait for the computer to be picked", await page.getByText("Pick the computer that runs ComfyUI first.").isVisible());
     await page.getByRole("tab", { name: "Windows" }).click();
     const href = await until(() => page.getByRole("link", { name: /Open in ChatGPT/ }).getAttribute("href"), 10_000);
     check("phone: the message says every command runs on the computer", !!href && decodeURIComponent(href).includes("I am on my phone now"));
+    // One button sends the setup to the computer, on the way the phone is on.
+    let sent = await sendToComputer(page);
+    check("phone, Fuobe Connect: one button sends the setup to the computer, on Fuobe Connect", sent.count === 1 && sent.url === `${SITE}/connect?setup=ai&way=connect`, JSON.stringify(sent));
+    await pickWayOn(page, "A web address");
+    await page.getByLabel("Your ComfyUI's web address").waitFor({ timeout: 10_000 });
+    sent = await sendToComputer(page);
+    check("phone, web address: still one button, and it sends the box for the address", sent.count === 1 && sent.url === `${SITE}/connect?setup=ai&way=address`, JSON.stringify(sent));
     const wide = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     check("phone: no sideways scroll", !wide);
     await page.screenshot({ path: path.join(shots, "phone-390-dark.png"), fullPage: true });
+    await ctx.close();
+  }
+
+  // From a phone to the computer: the address lands on the computer's clipboard, so the setup ends on the computer, at
+  // the page the status names, signed in to the same account: the box for the address, in focus, under the same code.
+  {
+    const phoneCtx = await context(browser, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: IPHONE }, { safari: true });
+    await withShare(phoneCtx);
+    const phone = await phoneCtx.newPage();
+    await phone.goto(`${SITE}/connect`, { waitUntil: "load" });
+    const email = await signUp(phone);
+    await phone.goto(`${SITE}/connect?setup=ai`, { waitUntil: "load" });
+    await phone.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
+    await phone.getByRole("tab", { name: "Windows" }).click();
+    await pickWayOn(phone, "A web address");
+    const code = await codeOf(phone);
+    check("phone to computer: the phone has a code", !!code, code ?? "");
+    check(
+      "phone to computer: the phone says where the address goes, and names its one Send button",
+      await phone.getByText(/On that computer, open .*\/connect\?setup=ai&way=address and log in with this account, or press Send to my computer at the top\./).isVisible(),
+    );
+    const sent = await sendToComputer(phone);
+    check("phone to computer: Send to my computer sends the box for the address", sent.count === 1 && sent.url === `${SITE}/connect?setup=ai&way=address`, JSON.stringify(sent));
+    await phone.screenshot({ path: path.join(shots, "phone-to-computer-1-phone.png"), fullPage: true });
+    let st = await until(async () => {
+      const s = await status(code, true);
+      return s.body.next?.id === "start-tunnel" ? s : null;
+    }, 15_000);
+    const how = st?.body.next.how.join(" ") ?? "";
+    check("phone to computer: the status sends the person to that page on the computer, same account", how.includes(`${SITE}/connect?setup=ai&way=address`) && how.includes("same account as on the phone"), st?.body.next.say);
+
+    const pcCtx = await context(browser, { viewport: { width: 1440, height: 900 } });
+    const pc = await pcCtx.newPage();
+    await pc.goto(sent.url ?? `${SITE}/connect?setup=ai&way=address`, { waitUntil: "load" });
+    const pcLinks = await guestLinks(pc);
+    check(
+      "phone to computer: signed out, Log in comes first, for the phone's account, then Sign up free, both back to the same page",
+      JSON.stringify(pcLinks) === JSON.stringify([["Log in", "/login?next=%2Fconnect%3Fsetup%3Dai%26way%3Daddress"], ["Sign up free", "/login?signup=1&next=%2Fconnect%3Fsetup%3Dai%26way%3Daddress"]]),
+      JSON.stringify(pcLinks),
+    );
+    await pc.screenshot({ path: path.join(shots, "phone-to-computer-2-guest-1440.png") });
+    // Log in through the form: back at the same page.
+    await pc.getByText("Started on your phone? Log in with the same account, and the setup goes on here.").locator("..").getByRole("link", { name: "Log in", exact: true }).click();
+    await pc.getByPlaceholder("Email").fill(email);
+    await pc.getByPlaceholder("Password", { exact: true }).fill("long enough password");
+    await pc.locator('form button[type="submit"]').click();
+    check("phone to computer: Log in comes back to the same page", !!(await until(() => pc.url() === `${SITE}/connect?setup=ai&way=address`, 30_000)), pc.url());
+    await pc.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
+    const box = pc.getByLabel("Your ComfyUI's web address");
+    check("phone to computer: the computer shows the box for the address", !!(await until(() => box.isVisible(), 15_000)));
+    check("phone to computer: …in focus, so a paste goes there", !!(await until(() => box.evaluate((el) => el === document.activeElement), 5000)));
+    check("phone to computer: …on the first screen", !!(await box.boundingBox().then((b) => b && b.y >= 0 && b.y + b.height <= 900)));
+    const pcCode = await codeOf(pc);
+    check("phone to computer: …under the same setup code", pcCode === code, `${pcCode} / ${code}`);
+    st = await until(async () => {
+      const s = await status(code, true);
+      return s.body.fuobe_open && s.body.way === "address" && s.body.computer === "windows" ? s : null;
+    }, 15_000);
+    check("phone to computer: the AI sees the computer's tab, on the web address", !!st && st.body.next.id === "start-tunnel" && st.body.next.say.includes("paste the address into Your ComfyUI's web address in Fuobe"), st?.body.next.say);
+    await pc.screenshot({ path: path.join(shots, "phone-to-computer-3-computer-1440.png") });
+    check("phone to computer: the phone hands over", !!(await until(() => phone.getByText("This setup is open in another tab or on another device.").isVisible(), 40_000)));
+    await phone.screenshot({ path: path.join(shots, "phone-to-computer-4-phone-after.png"), fullPage: true });
+    // Two tabs on one code: neither ends the other's wait, so nothing is refused and the waits stay few.
+    const waits = { n: 0 };
+    for (const c of [phoneCtx, pcCtx]) c.on("request", (r) => /\/wait\?tab=/.test(r.url()) && waits.n++);
+    await sleep(10_000);
+    check("phone to computer: two tabs wait calmly", waits.n <= 4, `${waits.n} waits in 10 s`);
+    check("phone to computer: no setup request of either tab failed", phoneCtx.failed.length + pcCtx.failed.length === 0, [...phoneCtx.failed, ...pcCtx.failed].slice(0, 5).join(", "));
+    await phoneCtx.close();
+    await pcCtx.close();
+  }
+
+  // A guest who signs up from a phone's link: the new account comes back to Set it up with my AI, on the link's way.
+  {
+    const ctx = await context(browser, { viewport: { width: 390, height: 844 }, colorScheme: "dark" });
+    const page = await ctx.newPage();
+    await page.goto(`${SITE}/connect?setup=ai&way=address`, { waitUntil: "load" });
+    await guestLinks(page);
+    await page.screenshot({ path: path.join(shots, "guest-from-phone-link-390-dark.png"), fullPage: true });
+    check("guest from a phone's link, 390: no sideways scroll", !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
+    await page.getByRole("link", { name: "Sign up free", exact: true }).last().click();
+    await page.getByPlaceholder("Email").fill(`e2e-ai-setup-form-${Date.now()}@example.com`);
+    await page.getByPlaceholder("Password (at least 8 characters)").fill("long enough password");
+    await page.locator('form button[type="submit"]').click();
+    const back = await until(() => {
+      const u = new URL(page.url());
+      return u.pathname === "/connect" && u.searchParams.get("setup") === "ai" && u.searchParams.get("way") === "address";
+    }, 30_000);
+    check("guest from a phone's link: Sign up comes back to Set it up with my AI, on the web address", !!back, page.url());
+    check("guest from a phone's link: …at the box for the address", !!(await until(() => page.getByLabel("Your ComfyUI's web address").isVisible(), 30_000)));
+    await ctx.close();
+  }
+
+  // A web address whose ComfyUI runs on the processor: said as such, never as a GPU that is too small. (The server
+  // never tests an address on this computer, so the account's saved address and its check are played here.)
+  {
+    const ctx = await context(browser, { viewport: { width: 1440, height: 1000 }, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15" }, { safari: true });
+    const page = await ctx.newPage();
+    await page.goto(`${SITE}/connect`, { waitUntil: "load" });
+    await signUp(page);
+    await ctx.route(`${SITE}/api/account/gpu`, (route) => (route.request().method() === "GET" ? route.fulfill({ json: { gpu: { mode: "link", url: "https://cpu-only-example.trycloudflare.com" } } }) : route.continue()));
+    await ctx.route(`${SITE}/api/status`, async (route) => {
+      const r = await route.fetch();
+      const j = await r.json();
+      j.viewer = { ...j.viewer, gpu: { connected: true, mode: "link", online: true, device: "cpu", host: "tunnel" } };
+      return route.fulfill({ response: r, json: j });
+    });
+    await ctx.route(/\/api\/gpu\/badges/, (route) =>
+      route.fulfill({ json: { connected: true, checkedAt: Date.now(), models: { "oss-z-image-turbo#t2i": ["g", 0, 0, 0], "oss-krea2-turbo#t2i": ["g", 0, 0, 0], "oss-sdxl#t2i": ["g", 0, 0, 0], "oss-flux1-schnell#t2i": ["g", 0, 0, 0] }, presets: {} } }),
+    );
+    await page.goto(`${SITE}/connect?setup=ai&way=address`, { waitUntil: "load" });
+    await page.getByRole("heading", { name: "Set it up with your AI" }).waitFor({ timeout: 30_000 });
+    const steps = page.getByRole("list", { name: "Setup steps" });
+    check("processor, web address: the model step says it runs on the processor", !!(await until(() => steps.getByText("ComfyUI runs on the processor").isVisible(), 20_000)));
+    check("processor, web address: …and what that means", await page.getByText("on the processor one picture would take many minutes", { exact: false }).isVisible());
+    check("processor, web address: never a GPU that is too small", !(await page.getByText("too little memory", { exact: false }).isVisible()) && !(await steps.getByText("No small picture model fits this GPU").isVisible()));
+    await page.screenshot({ path: path.join(shots, "address-cpu-1440.png"), fullPage: true });
     await ctx.close();
   }
 } catch (e) {

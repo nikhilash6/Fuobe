@@ -1,12 +1,12 @@
 /**
- * Higgsfield's rebranded open tools and Speak, rebuilt as Fuobe Originals (build plan O11; research
+ * The parity studio's rebranded open tools and Speak, rebuilt as Fuobe Originals (build plan O11; research
  * docs/research/fuobe-originals-recipes-5.json studios[angles], studios[speak], presets[PixeletedFace].post). Pure:
  * the recipes' constants and the words, steps and LoRAs they need, used by the catalog, the planner and the server.
  *
  * - Fuobe Angles: Qwen-Image-Edit 2509 with dx8152's Multiple-angles LoRA. fal's hosted route takes the camera as
  *   fields (rotate, vertical angle, move forward, wide-angle) and writes the LoRA's words itself; on the GPU Fuobe
  *   writes them ({@link anglesWords}), the instructions the LoRA was trained on, in Chinese with English.
- * - Fuobe Speak: InfiniteTalk with Higgsfield's Infinite Talk settings on the GPU (the FusioniX LoRA, 15 motion
+ * - Fuobe Speak: InfiniteTalk with the parity studio's Infinite Talk settings on the GPU (the FusioniX LoRA, 15 motion
  *   frames, 25 steps, shift 10, text and audio guidance 5, colour correction), fal's InfiniteTalk in the cloud.
  *   Fuobe Speak · Motion is Wan 2.2 S2V on both engines (a Speak v1-like route: the body and the scene move).
  * - The face mosaic (Fuobe Soul's PixeletedFace look): SAM 3.1 finds the faces, a mosaic covers them. On the GPU one
@@ -42,7 +42,7 @@ export const ANGLES_2511_LORA: LoraRef = {
   strength: 1,
 };
 
-/** FusioniX for Wan 2.1 I2V 14B, the LoRA Higgsfield's Infinite Talk loads at 1 (adapterLoras). */
+/** FusioniX for Wan 2.1 I2V 14B, the LoRA the parity studio's Infinite Talk loads at 1 (adapterLoras). */
 const SPEAK_ENTRY = loraEntry("fusionix-i2v-14b");
 export const SPEAK_LORA: LoraRef | undefined = SPEAK_ENTRY && loraRef(SPEAK_ENTRY);
 

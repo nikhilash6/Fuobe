@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { PLACEHOLDER_SETTING, placeholdersOn } from "@/lib/demo-mode";
 import { AccountsChip } from "@/components/accounts-admin";
 import { ConnectField, useSettings, type PublicSetting } from "@/components/connect-field";
+import { KeyAccountDetails } from "@/components/keys/key-account-details";
+import { hashId, keepInView } from "@/components/use-hash-anchor";
 import { GetStarted } from "@/components/get-started";
 import { AboutLinks } from "@/components/owner-settings";
 import { LlmProviderSettings } from "@/components/llm-provider-settings";
@@ -518,11 +520,11 @@ export function SettingsForm({ prices }: { prices?: string }) {
   const get = (n: string) => settings.data?.find((s) => s.name === n);
   const set = (n: string) => (v: string) => save.mutate({ [n]: v });
   // Deep links (/settings#comfyui) arrive while the form is still a skeleton, so the browser finds
-  // no anchor: scroll to it once the sections exist.
+  // no anchor: scroll to it once the sections exist, and keep it there while the page above it settles.
   const loaded = !settings.isLoading;
   useEffect(() => {
-    if (!loaded || !window.location.hash) return;
-    document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView({ block: "start" });
+    const el = loaded ? document.getElementById(hashId(window.location.hash)) : null;
+    return el ? keepInView(el) : undefined;
   }, [loaded]);
 
   if (settings.isLoading)
@@ -585,7 +587,9 @@ export function SettingsForm({ prices }: { prices?: string }) {
               Get a key <ExternalLink className="size-3" />
             </a>
           }
-        />
+        >
+          {get("falKey")?.isSet && <KeyAccountDetails provider="fal" scope="owner" className="mt-2" />}
+        </ConnectField>
         <ConnectField
           id="replicate"
           name="replicateToken"
@@ -598,7 +602,9 @@ export function SettingsForm({ prices }: { prices?: string }) {
               Get a token <ExternalLink className="size-3" />
             </a>
           }
-        />
+        >
+          {get("replicateToken")?.isSet && <KeyAccountDetails provider="replicate" scope="owner" className="mt-2" />}
+        </ConnectField>
         <ChoiceField
           id="setting-cloud-provider"
           label="Preferred provider"

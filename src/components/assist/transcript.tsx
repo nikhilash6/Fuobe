@@ -8,6 +8,7 @@ import { PlaceholderChip } from "@/components/demo-mode";
 import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/studio/feed";
 import { useCreateGeneration } from "@/lib/api";
 import { memoryCardLine, planRunnable, type AssistItem, type AssistThread, type SkillSummary } from "@/lib/assist";
+import { showableOutputs } from "@/lib/av/idol-camera-still";
 import type { Generation } from "@/lib/catalog/types";
 import { isPlaceholder, PLACEHOLDER_CHIP } from "@/lib/demo-mode";
 import { formatCost } from "@/lib/format";
@@ -147,7 +148,9 @@ export function GenerationCards({ ids, all, storyboard, onOpen }: { ids: string[
   const tiles = gens.flatMap((g) => {
     const ratio = tileRatio(g);
     if (g.status === "succeeded") {
-      return g.outputs.map((o, i) => {
+      // Every output but a clean Idol splat's camera still; a 3D model's tile plays its orbit (MediaThumb reads it from g).
+      return showableOutputs(g).map((i) => {
+        const o = g.outputs[i];
         const n = stills > 1 && g.kind === "image" && o.kind === "image" ? ++take : 0;
         return (
           <div key={`${g.id}-${i}`} className="relative">
@@ -158,7 +161,7 @@ export function GenerationCards({ ids, all, storyboard, onOpen }: { ids: string[
               aria-label={`Open ${n ? `take ${n}: ` : ""}${g.request.prompt?.slice(0, 60) || "result"}`}
             >
               {/* A text card says "Placeholder" in its own header row: on a narrow tile a corner badge would cover its label. */}
-              <MediaThumb output={o} className="transition duration-300 group-hover:scale-[1.02]" tag={isPlaceholder(g) && o.kind === "text" ? PLACEHOLDER_CHIP : undefined} />
+              <MediaThumb output={o} g={g} className="transition duration-300 group-hover:scale-[1.02]" tag={isPlaceholder(g) && o.kind === "text" ? PLACEHOLDER_CHIP : undefined} />
               {n > 0 && (
                 <span aria-hidden className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-background/85 text-[12px] font-medium tabular-nums shadow-soft">
                   {n}

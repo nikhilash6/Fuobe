@@ -2,6 +2,9 @@ import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/ca
 import type { OwnSetup } from "@/lib/own-setup";
 import { PATH_FRAMES, keyAt } from "@/lib/camera-path";
 import { exactOrbitKeys, type ExactOrbit } from "@/lib/exact-orbit";
+import { idolCameraStills, isIdolClean } from "./idol-camera-still";
+
+export { idolCameraStills, isIdolCameraStill, isIdolClean, showableOutputs } from "./idol-camera-still";
 
 /**
  * Image to 3D / Product spin: the modes (from an image, from several images, from text, pick an object, a splat),
@@ -197,6 +200,12 @@ export function idolKept(text: string | undefined): number | undefined {
   return t && Number.isInteger(n) && n >= 0 ? n : undefined;
 }
 
+/**
+ * A clip's first frame, for a <video> that stands in for a still: the media fragment makes browsers that wait for a
+ * play (iOS Safari) show the frame too. A link that already has a fragment is left as it is.
+ */
+export const firstFrameSrc = (url: string) => (url.includes("#") ? url : `${url}#t=0.001`);
+
 /** The result card's line about a splat file: how many Gaussians the clean graph kept, or that it wasn't cleaned. */
 export function idolCleanLine(meta: Record<string, unknown> | undefined): { cleaned: boolean; text: string } | undefined {
   if (typeof meta?.kept === "number") return { cleaned: true, text: `Cleaned: ${meta.kept.toLocaleString("en-US")} Gaussians kept` };
@@ -357,7 +366,16 @@ export interface Model3dView {
   rendering?: { queued: boolean; progress: number };
   /** The material class the server's finish read from the textures (matte, metal, mixed, unknown). */
   material?: string;
+  /**
+   * The still, as a picture: the card's poster, the next steps' picture. An Idol 3D clean splat with no still of its
+   * orbit has the photo here (and `stillClip` for the card when it has an orbit), never the graph's camera still.
+   */
   poster?: string;
+  /**
+   * The clip whose first frame is the card's still (an Idol 3D clean splat's orbit, when no still of it was made): the
+   * graph's own still is rendered from the camera Idol predicts, which can miss a product seen side on.
+   */
+  stillClip?: string;
   /** The product photo it was made from. */
   photo?: string;
   /** Other files the provider returned (OBJ, FBX, USDZ, the splat, the walk and run clips…), by name. */
@@ -411,16 +429,30 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const format = splatFormatOf(mesh);
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
   const clean = splat ? idolCleanLine(meta) : undefined;
+  const turntable = str(meta.turntable) ?? str(meta.video) ?? video?.url;
+  const photo = g.request.inputs?.images?.[0];
+  const images = g.outputs.filter((o) => o.kind === "image");
+  // Idol 3D's clean graph: its own still (role "preview") is rendered from the camera Idol predicts, which can collapse
+  // for a product seen side on (a heel in profile comes out as a few squares on black; idol-camera-still.ts). Its card
+  // shows the orbit instead: a still made of it (by the server, the graph, or on the clip), else the clip's first frame,
+  // with the photo as the picture the next steps take. Without an orbit, the photo is the still.
+  const idolClean = !!splat && isIdolClean(meta);
+  const cameraStills = idolClean ? idolCameraStills(g) : new Set<string>();
+  const fromOrbit = idolClean && !!turntable;
+  const orbit = fromOrbit ? g.outputs.find((o) => o.kind === "video" && o.url === turntable) : undefined;
+  const still = (v: unknown) => (str(v) && !cameraStills.has(v as string) ? (v as string) : undefined);
+  const orbitStill = idolClean ? (still(meta.poster) ?? still(images.find((o) => o.meta?.role === "poster")?.url) ?? still(orbit?.meta?.poster) ?? still(orbit?.meta?.thumbnail)) : undefined;
   return {
     glb: splat ? fromSplat?.url : mesh?.url,
     web: mesh && !splat ? viewerGlb(mesh) : fromSplat?.url,
     splat,
     ...(clean && { clean }),
-    turntable: str(meta.turntable) ?? str(meta.video) ?? video?.url,
+    turntable,
     rendering: pending ? { queued: finish.turntable === "queued", progress: typeof finish.turntableProgress === "number" ? finish.turntableProgress : 0 } : undefined,
     material: str(finish.material),
-    poster: str(meta.preview) ?? str(meta.poster) ?? g.outputs.find((o) => o.kind === "image")?.url,
-    photo: g.request.inputs?.images?.[0],
+    poster: idolClean ? (orbitStill ?? photo) : (str(meta.preview) ?? str(meta.poster) ?? images[0]?.url),
+    ...(fromOrbit && !orbitStill && { stillClip: turntable }),
+    photo,
     formats,
     rigged: meta.rigged === true || undefined,
     animated: meta.animated === true || undefined,

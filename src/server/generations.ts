@@ -74,28 +74,36 @@ import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
-import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, ownLink, probeComfy, relayFile, troubleError, type OwnGpu } from "./providers/comfyui";
+import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, onPoolWorkers, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, ownLink, probeComfy, relayFile, troubleError, type OwnGpu } from "./providers/comfyui";
 import { accountById, accountGpu, gpuLink, type AccountGpu } from "./auth";
-import { accountEngineMode, accountKey, accountProviders, paidAllowed } from "./account-keys";
-import { addKeyMessage, CLOUD_PROVIDERS, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
+import { accountEngineMode, accountKey, markKeyGood, paidAllowed, usableProviders } from "./account-keys";
+import { addKeyMessage, CLOUD_KEY, CLOUD_PROVIDERS, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
 import { cachedGpuState, GpuError, noteGpuState, testGpu } from "./account-gpu";
 import { presetRoutes } from "@/lib/catalog/preset-recipe-routes";
 import {
   backoffMs,
+  cleanDetails,
   diagnoseGpu,
   diagnoseGpuJob,
   diagnoseKey,
+  diagnoseKeyJob,
+  gpuHostOf,
+  HEAL_CAP_MS,
   resultExpired,
   retryPlan,
   troubleOf,
   waitingWords,
   withKeyAction,
+  withOfferAfterFirst,
   type Diagnosis,
   type GpuFailure,
   type KeyStage,
   type RunTrouble,
   type TroubleAction,
+  type TroubleCause,
 } from "@/lib/diagnose";
+import { draining } from "./shutdown";
+import { keptText, networkCode, recordOwnRun, type HostKind } from "./run-events";
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { MODEL3D_SETUP, ownSetupLabel } from "@/lib/own-setup";
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
@@ -127,14 +135,14 @@ import { engineMode, getSetting, withCandidates, withoutCandidates } from "./set
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp, type RunStamp } from "./run-stamp";
-import { anyHeld, dropGone, dropHold, HELD, holdRun, NOT_HELD } from "./pool-holds";
-import { ACTIVE_STATES, FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
+import { anyHeld, dropGone, dropHold, HELD, NOT_HELD } from "./pool-holds";
+import { FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { heldLine, placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { catalogVersion } from "./computer/catalog-version";
 import { gettingReady, poolLane, queueOfGeneration, type LinePlace } from "./computer/pool";
 import { noteCatalogProcess, processStart } from "./computer/ticket-refresh";
-import { endTask, runPreviewAt } from "./computer/tasks";
+import { hasJobFor, runPreviewAt, stopJobsOf } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope, outsideDemo } from "./demo-scope";
@@ -246,8 +254,11 @@ export function toGeneration(r: Row): Generation {
     review: isReviewStatus(r.review) ? r.review : null,
     ...(r.status === "failed" && r.fix_json && !pool && { fix: parseFix(r.fix_json) }),
     ...(r.status === "failed" && r.fix_json && !pool && parseTrouble(r.fix_json)),
-    // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
-    ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
+    // Waiting for its own GPU or key to come back: why, the buttons that help, and until when (never the owner's note).
+    ...(r.status === "queued" && !r.external_id && r.external_meta_json && !pool && waitingOf(r)),
+    // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed. Not
+    // said of a run whose send was under way when it stopped: the provider may have the job.
+    ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && !maybeSent(r) && { notBilled: true as const }),
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
     ...(stored.place === "pool" && { place: "pool" as const }),
     ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
@@ -382,6 +393,191 @@ function parseTrouble(json: string): { trouble: RunTrouble } | Record<string, ne
     return {};
   }
 }
+
+/**
+ * A waiting run's diagnosis (external_meta_json `heal`), as the Generation field. A run Run with your key can't move on
+ * its own (keyMoveBlock: a step of a longer run, or a tool's run for one of the account's projects) never offers it,
+ * also when its wait was kept before.
+ */
+function waitingOf(r: Pick<Row, "id" | "depends_on" | "batch_id" | "request_json" | "external_meta_json">): { waiting: RunTrouble & { until?: number } } | Record<string, never> {
+  const h = readMeta(r.external_meta_json).heal;
+  if (!h?.trouble || typeof h.trouble.cause !== "string" || !Array.isArray(h.trouble.actions)) return {};
+  const t = h.trouble.actions.some((a) => a.kind === "run-with-key") && keyMoveBlock(r) ? withoutKeyOffer(h.trouble) : h.trouble;
+  return { waiting: { ...t, ...(h.deadline && { until: h.deadline }) } };
+}
+
+/** A run whose job was being sent when it stopped (a server cut off in the middle of the send): its provider may have it. */
+const maybeSent = (r: Pick<Row, "error" | "external_meta_json">): boolean => r.error === CUT_OFF_SENDING || typeof readMeta(r.external_meta_json).heal?.sending === "number";
+
+/**
+ * A run that is one step of a longer one: it waits for an earlier step, or a later step (queued or running) waits for it.
+ * Run with your key can't move such a step alone (the route answers 409 CHAINED_RUN, and its tile doesn't offer it).
+ */
+function inChain(r: string | Pick<Row, "id" | "depends_on">): boolean {
+  const id = typeof r === "string" ? r : r.id;
+  const dependsOn = typeof r === "string" ? (db().prepare("SELECT depends_on FROM generations WHERE id = ?").pluck().get(id) as string | null | undefined) : r.depends_on;
+  if (dependsOn) return true;
+  return !!db().prepare(`SELECT 1 FROM generations WHERE status IN ('queued', 'running') AND ${DEPENDENTS_OF} LIMIT 1`).get({ id, quoted: JSON.stringify(id) });
+}
+
+/** Why Run with your key can't take a waiting run's place on its own: a step of a longer run, or a run of a project. */
+export type KeyMoveBlock = "chained" | "project";
+
+/**
+ * Whether Run with your key can take this waiting run's place on its own (null), and why not. One check for its tile,
+ * its next try's words and the route (POST /api/generations with `replaces`), so a button that shows can always act.
+ *
+ * - "chained": a step of a longer run (it waits for an earlier step, or a later step waits for it), or a job of a batch
+ *   whose other waiting job a later step waits for (the press moves the whole batch). Moved alone, the rest of the run
+ *   would go without it.
+ * - "project": a run a tool made for one of the account's projects (a Cinema take, a storyboard, a short), even a take of
+ *   one step. The project keeps the run it made: a run made in its place would be outside it, and the take would show
+ *   Canceled. Only a run made on its own in a studio (stamped `standalone`, run-stamp.ts) moves.
+ */
+export function keyMoveBlock(r: string | Pick<Row, "id" | "depends_on" | "batch_id" | "request_json">): KeyMoveBlock | null {
+  const row =
+    typeof r === "string" ? (db().prepare("SELECT id, depends_on, batch_id, request_json FROM generations WHERE id = ?").get(r) as Pick<Row, "id" | "depends_on" | "batch_id" | "request_json"> | undefined) : r;
+  if (!row) return null;
+  if (inChain(row)) return "chained";
+  if (row.batch_id) {
+    // The batch's other jobs the press would stop with it (the same request, not handed over yet).
+    const jobs = db()
+      .prepare("SELECT id FROM generations WHERE batch_id = ? AND request_json = ? AND depends_on IS NULL AND status = 'queued' AND external_id IS NULL AND id != ?")
+      .pluck()
+      .all(row.batch_id, row.request_json, row.id) as string[];
+    if (jobs.some((j) => inChain(j))) return "chained";
+  }
+  let standalone = false;
+  try {
+    standalone = (JSON.parse(row.request_json) as GenerationRequest).standalone === true;
+  } catch {}
+  return standalone ? null : "project";
+}
+
+/** What a step of a longer run that can't move to a key alone says (POST /api/generations with `replaces` on it). */
+export const CHAINED_RUN = "This step is part of a longer run, so it can't move to your key on its own. It goes on by itself, or cancel it and run the tool again with your key.";
+
+/** What a run of one of the account's projects says the same way (a Cinema take, a storyboard, a short). */
+export const PROJECT_RUN = "This run is part of one of your projects, so it can't move to your key on its own. It goes on by itself, or cancel it and run it again in its project with your key.";
+
+/** A trouble's buttons without Run with your key (a run that can't move to a key on its own). */
+const withoutKeyOffer = <T extends { actions: TroubleAction[] }>(t: T): T => ({ ...t, actions: t.actions.filter((a) => a.kind !== "run-with-key") });
+
+/**
+ * What a run keeps in external_meta_json before its provider has it (external_id NULL): while it waits for its own GPU
+ * or key, how the wait goes (`heal`), so another app process (a restart, a deploy) goes on with it instead of failing it.
+ * Which process is handing it over or waiting on it is its turn (submit_turns). Once handed over the column holds the
+ * provider's meta.
+ */
+interface PendingMeta {
+  heal?: HealState;
+  /** Sent again after its GPU lost it (once). */
+  resent?: boolean;
+  /** Which of its batch's jobs it is (its seed is the batch's + this). */
+  jobIndex?: number;
+  /**
+   * A step of an account's longer run on its first try (nothing waited, so no `heal`): when its job began to be sent.
+   * Cleared when the try fails and the step waits; gone once it is handed over (markSending).
+   */
+  sending?: number;
+  /**
+   * With `sending`: that send's job is a task of this database (a step of a run on this install's workers), so whether
+   * the send made it is known (hasJobFor). Without it the job went to a ComfyUI or a provider that may have it.
+   */
+  sendingTask?: boolean;
+  /** Who holds the run as the release before this one marked it (OLD_LEASE), and until when. */
+  lease?: { by?: unknown; until?: unknown };
+}
+
+/** A run's wait for its own GPU or key, kept with it (survives a restart). */
+interface HealState {
+  since: number;
+  /** When it stops waiting (per cause, never past HEAL_CAP_MS from `since`). */
+  deadline: number;
+  /** When each cause was first seen: a change of cause (off, then starting up) gets that cause's whole budget. */
+  firstSeen: Partial<Record<TroubleCause, number>>;
+  tries: number;
+  /** When it tries again. */
+  next: number;
+  index: number;
+  rechecked?: boolean;
+  /** The words of the last try (the run fails in them when the wait is over), and what helps meanwhile. */
+  words?: string;
+  trouble?: RunTrouble;
+  /**
+   * When a try began sending the job itself (markSending): an instance that takes the wait over later (this one cut off
+   * in the middle of that send) doesn't send it again. Cleared when the try fails and the run waits again (markWaiting).
+   */
+  sending?: number;
+}
+
+const readMeta = (json: string | null | undefined): PendingMeta & Record<string, unknown> => {
+  if (!json) return {};
+  try {
+    const m = JSON.parse(json) as unknown;
+    return m && typeof m === "object" && !Array.isArray(m) ? (m as PendingMeta & Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Who hands a run over: the app process that holds its turn (submit_turns, takeSubmitTurn), from the moment it begins to
+ * send the run until it is handed over or stops, the wait for an account's own GPU or key included. Every app process
+ * says every few seconds that it still runs (keepBeating), so a turn whose process stopped (a restart, a deploy's old
+ * instance) is free once that process has gone quiet, and one it gave back (it exits, or it stops waiting on a run while
+ * it drains) is free at once. One mechanism for every run: the owner's, an account's on its own GPU or key, and one on
+ * this install's GPUs.
+ */
+
+/**
+ * The release before this one marked the runs an instance held with a lease in external_meta_json (`lease`: {by, until},
+ * renewed every 15 s, good for 60 s), not with a turn. For the first deploy of this release its old instance still runs
+ * next to the new one for a moment, on the same database, so both marks count: a live lease whose holder isn't an app
+ * process of this release (none in app_processes) holds a run as a turn of another process does, and while this process
+ * holds a run's turn, the run carries a lease of this process too (takeSubmitTurn, renewed by the beat, gone with the
+ * turn), which the release before reads as held. Neither then sends, fails or takes over a run the other holds.
+ */
+export const OLD_LEASE = { ms: 60_000, renewMs: 15_000 };
+
+/** A lease field of a row's external_meta_json, in SQL (NULL when the column isn't JSON). */
+const leaseField = (table: string, field: "by" | "until") =>
+  `(CASE WHEN json_valid(${table}.external_meta_json) THEN json_extract(${table}.external_meta_json, '$.lease.${field}') END)`;
+
+/**
+ * SQL: a live lease of the release before (OLD_LEASE) holds the run in `table` (1, else 0: never NULL); this process's
+ * own lease never does. Named parameters: @__now and @__me.
+ */
+const OLD_LEASE_HELD = (table: string) =>
+  `(COALESCE(${leaseField(table, "until")} > @__now, 0) AND ${leaseField(table, "by")} IS NOT @__me
+    AND NOT EXISTS (SELECT 1 FROM app_processes lp WHERE lp.token = ${leaseField(table, "by")}))`;
+
+/** A live lease of the release before (OLD_LEASE) holds this run: an instance of that release is sending it or waiting on it. */
+function oldLeaseHolds(json: string | null | undefined, now = Date.now()): boolean {
+  const lease = readMeta(json).lease;
+  if (!lease || typeof lease !== "object" || typeof lease.until !== "number" || lease.until <= now) return false;
+  if (lease.by === runnerToken()) return false;
+  return !(typeof lease.by === "string" && db().prepare("SELECT 1 FROM app_processes WHERE token = ?").get(lease.by));
+}
+
+/** This process's lease on a run whose turn it holds (OLD_LEASE), as SQL sets it (@lease: leaseOf). */
+const LEASE_SET = `json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.lease', json(@lease))`;
+const leaseOf = (now: number) => JSON.stringify({ by: runnerToken(), until: now + OLD_LEASE.ms });
+
+/**
+ * Another app process took this run's turn (this one went quiet meanwhile), or an instance of the release before holds it
+ * (OLD_LEASE): it is that process's to send now.
+ */
+function turnTaken(id: string): boolean {
+  const r = db().prepare("SELECT s.held_by, g.external_meta_json FROM generations g LEFT JOIN submit_turns s ON s.id = g.id WHERE g.id = ?").get(id) as
+    | { held_by: string | null; external_meta_json: string | null }
+    | undefined;
+  if (!r) return false;
+  return (r.held_by !== null && r.held_by !== runnerToken()) || oldLeaseHolds(r.external_meta_json);
+}
+
+/** A row still waiting for its hand-over (queued or running, no job yet): only then is it changed. */
+const PENDING = "status IN ('queued', 'running') AND external_id IS NULL";
 
 function update(id: string, fields: Partial<Row>): void {
   const keys = Object.keys(fields);
@@ -737,10 +933,16 @@ export function deleteGeneration(id: string): void {
  * `loras` and `seconds` (the clip length asked for) prefer a route that carries every LoRA and makes that
  * length (Replicate's Wan 2.2 fast renders only 81–121 frames, fal's 17–161).
  */
-export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef[] = [], seconds?: number, forceDemo = false): { route: ModelRoute; demo: boolean } {
+export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef[] = [], seconds?: number, forceDemo = false, prefer?: CloudProvider): { route: ModelRoute; demo: boolean } {
   // Honour the preferred cloud aggregator (Settings → API configuration) when a model is on several.
   const preferred = getSetting("cloudProvider");
-  const routes = preferred === "auto" ? candidates : [...candidates].sort((a, b) => Number(b.provider === preferred) - Number(a.provider === preferred));
+  let routes = preferred === "auto" ? candidates : [...candidates].sort((a, b) => Number(b.provider === preferred) - Number(a.provider === preferred));
+  // An account's "Run with your Replicate key": that provider's routes first, on its own key (none: it asks for one).
+  const account = tenantAccount();
+  if (prefer && account && routes.some((r) => r.provider === prefer)) {
+    if (accountKey(account, prefer) === null) throw new AccountRunError(paidAllowed() ? { error: addKeyMessage(prefer), code: "add-key", provider: prefer } : { error: OPEN_ONLY_RUN, code: "open-only" });
+    routes = [...routes].sort((a, b) => Number(b.provider === prefer) - Number(a.provider === prefer));
+  }
   const demo = getSetting("demoMode");
   // A request marked demo (a skill recipe's free dry run) runs on the demo provider whatever Settings says, as does
   // anything a studio starts inside runAsDemo (a skill's dry run of a studio step, src/server/demo-scope.ts).
@@ -971,7 +1173,8 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
+  const prefer = tenantAccount() && isCloudProvider(worded.prefer) ? worded.prefer : undefined;
+  const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo, prefer);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
   if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {
@@ -1622,11 +1825,13 @@ function chainMode(p: { demo: boolean; plan: { model: { name: string } }; route:
 const DEP_IDS = "json_each(CASE WHEN substr(g.depends_on, 1, 1) = '[' AND json_valid(g.depends_on) THEN g.depends_on ELSE json_array(g.depends_on) END) d";
 
 /**
- * SQL: another app process that still runs is handing the run in `table` to its provider right now (takeSubmitTurn).
- * Named parameters: @me (this process's name) and @quiet (since when a process that still runs has said so).
+ * SQL: an app process that still runs holds the turn to hand the run in `table` to its provider (takeSubmitTurn: it is
+ * sending it, or waiting on its own GPU or key for it); `others`: a process other than this one. An instance of the
+ * release before that holds it with a live lease (OLD_LEASE) holds it too. Named parameters: @__me (this process's
+ * name), @__quiet (since when a process that still runs has said so) and @__now.
  */
-const SENT_ELSEWHERE = (table: string) =>
-  `EXISTS (SELECT 1 FROM submit_turns s JOIN app_processes p ON p.token = s.held_by WHERE s.id = ${table}.id AND s.held_by != @me AND p.seen_at >= @quiet)`;
+const TURN_HELD = (table: string, others: boolean) =>
+  `(EXISTS (SELECT 1 FROM submit_turns s JOIN app_processes p ON p.token = s.held_by WHERE s.id = ${table}.id${others ? " AND s.held_by != @__me" : ""} AND p.seen_at >= @__quiet) OR ${OLD_LEASE_HELD(table)})`;
 
 /**
  * Waiting steps that can move: none of their dependencies is still queued or running (so they launch), or one
@@ -1642,11 +1847,13 @@ const READY_DEPENDENTS = `SELECT g.* FROM generations g
       NOT EXISTS (SELECT 1 FROM ${DEP_IDS} JOIN generations dep ON dep.id = d.value WHERE dep.status IN ('queued', 'running'))
       OR EXISTS (SELECT 1 FROM ${DEP_IDS} LEFT JOIN generations dep ON dep.id = d.value WHERE dep.id IS NULL OR dep.status IN ('failed', 'canceled'))
     )
-    AND NOT ${SENT_ELSEWHERE("g")} AND ${NOT_HELD("g")}
+    AND NOT ${TURN_HELD("g", true)} AND ${NOT_HELD("g")}
   ORDER BY g.created_at ASC LIMIT @limit`;
 
 /** The error a waiting step gets when an input failed (framesProgress tells these from a step's own failure). */
 export const waitedOnFailure = (frame?: boolean) => `${frame ? "The previous frame" : "An earlier step"} didn't finish`;
+/** Both of waitedOnFailure's sentences: a step that stopped only because an earlier one did. */
+const WAITED_ON_FAILURE = new Set([waitedOnFailure(false), waitedOnFailure(true)]);
 /** What a step dropped by dropUnused says (canceled, not by anyone: the steps it was for failed). */
 export const DROPPED_UNUSED = "Stopped before it ran: the steps it was for failed";
 
@@ -1710,9 +1917,12 @@ export const COMFY_WAIT = { ms: 60_000 };
 
 /** Launch dependent jobs whose inputs finished; fail the ones whose inputs failed. Never waits for an upload. */
 async function advanceDependents(): Promise<void> {
+  // A server that is stopping launches no step (the app process that goes on does), and leaves the steps it looked at.
+  if (draining()) return;
+  const now = Date.now();
   const rows = db()
     .prepare(READY_DEPENDENTS)
-    .all({ limit: 50 + submitting().size + parked().size, me: runnerToken(), quiet: Date.now() - QUIET_MS }) as Row[];
+    .all({ limit: 50 + submitting().size + parked().size, __me: runnerToken(), __quiet: now - QUIET_MS, __now: now }) as Row[];
   // A forced look at ComfyUI, at most one a sweep, for the steps that found it not answering.
   let lookedAgain: Promise<boolean> | undefined;
   for (const r of rows) {
@@ -1723,19 +1933,26 @@ async function advanceDependents(): Promise<void> {
     const allIds = depIds(r.depends_on);
     const allSlots = slotsFor(stored, allIds.length);
     const allDeps = allIds.map(
-      (id) => db().prepare("SELECT status, provider, outputs_json, request_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "provider" | "outputs_json" | "request_json"> | undefined,
+      (id) =>
+        db().prepare("SELECT status, provider, outputs_json, request_json, error FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "provider" | "outputs_json" | "request_json" | "error"> | undefined,
     );
     const earlier = stored.frame ? "The previous frame" : "An earlier step";
-    const fail = (error: string) => {
+    const fail = (error: string, cause = "earlier-step", logged = true) => {
       update(r.id, { status: "failed", error, message: null, completed_at: Date.now() });
+      // An account's own step: the owner's log line and note, as for any of its runs.
+      if (logged) ownFailed(r.id, ownAccountOf(stored), factsOf(r, { stage: "chain" }), cause);
       // Steps waiting only to feed this one (the other lanes of a per-frame render) are dropped before they are paid for.
       dropUnused(allIds);
     };
     const broken = (d: (typeof allDeps)[number]) => !d || d.status === "failed" || d.status === "canceled";
     // An optional input whose step failed is left out (Genjutsu's anchor frame): the step runs without it.
     const skipped = allSlots.flatMap((s, i) => (s.optional && broken(allDeps[i]) ? [i] : []));
-    if (allDeps.some((d, i) => broken(d) && !skipped.includes(i))) {
-      fail(waitedOnFailure(!!stored.frame));
+    const failedDeps = allDeps.filter((d, i) => broken(d) && !skipped.includes(i));
+    if (failedDeps.length) {
+      // The owner's line goes with the first step after the failure: a step whose earlier steps all stopped only because
+      // theirs did (a frame-by-frame chain broken at frame 3) writes none of its own.
+      const knockOn = failedDeps.every((d) => d?.status === "failed" && WAITED_ON_FAILURE.has(d.error ?? ""));
+      fail(waitedOnFailure(!!stored.frame), "earlier-step", !knockOn);
       continue;
     }
     const keep = (_: unknown, i: number) => !skipped.includes(i);
@@ -1753,8 +1970,26 @@ async function advanceDependents(): Promise<void> {
       continue;
     }
     // Every app process looks at the same waiting steps (a deploy runs two for a moment): only the one that takes the
-    // step's turn sends it, so it is sent once.
+    // step's turn sends it, so it is sent once. A server that began to stop meanwhile leaves it to the one that goes on.
+    if (draining()) return;
     if (!takeSubmitTurn(r.id, { waiting: true })) continue;
+    // A step that waited for its own GPU or key, taken over after a restart or a deploy (its wait is kept with it, as a
+    // run's is: takeOver). One cut off in the middle of its send, on a later try or its first (markSending), may have
+    // reached its GPU or provider: never sent twice. A step of a run on this install's workers whose send was to make a
+    // task here (`sendingTask`) is known: with no task made, nothing was sent and the step is sent now (in its run's
+    // place); with one made, it stops with the step instead of running for nothing. One sent to this install's own
+    // ComfyUI (no task: its job may be there) stops as an account's own does.
+    const pending = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null);
+    const heal = pending.heal;
+    if ((heal && typeof heal.sending === "number") || typeof pending.sending === "number") {
+      if (stored.place === "pool" && pending.sendingTask === true && !hasJobFor(r.id)) notSending(r.id);
+      else {
+        fail(CUT_OFF_SENDING, "interrupted-sending");
+        if (stored.place === "pool") stopJobsOf(r.id);
+        handOverEnds(r.id);
+        continue;
+      }
+    }
     submitting().add(r.id);
     let handedOff = false;
     // An account's step reads its inputs, and is planned, as its run was: as that account, on its own ComfyUI and its own
@@ -1826,6 +2061,16 @@ async function advanceDependents(): Promise<void> {
       const mode = chainMode(prepared, deps as Pick<Row, "provider">[], original);
       if (mode.error) throw new Error(mode.error);
       const p = mode.forceDemo ? { ...prepared, demo: true, providerId: "mock" as const, cost: 0 } : prepared;
+      // A step that waited, planned for another provider now (its GPU disconnected or moved, its keys changed): its wait
+      // was for the one it was made for, and nobody asked for the other, so it stops as a waiting run taken over does.
+      const own = ownAccountOf(stored);
+      if (heal && own && p.providerId !== r.provider) {
+        stopReplanned(r.id, r.provider, own, p, "chain");
+        dropUnused(allIds);
+        continue;
+      }
+      // Its wait goes on with what is left of it (its tries and its time), where it still goes; its tile keeps its words.
+      const resume = heal && !mode.forceDemo && p.providerId === r.provider ? heal : undefined;
       update(r.id, {
         ...(moved.note && { model_id: p.plan.model.id, engine: p.plan.model.engine }),
         provider: p.providerId,
@@ -1834,13 +2079,13 @@ async function advanceDependents(): Promise<void> {
         prompt: p.plan.prompt,
         cost_usd: p.cost,
         request_json: JSON.stringify(original),
-        message: mode.forceDemo ? "Demo — an earlier step ran as a demo" : p.demo ? "Demo mode — no provider connected" : "Submitting",
+        ...(!resume && { message: mode.forceDemo ? "Demo — an earlier step ran as a demo" : p.demo ? "Demo mode — no provider connected" : "Submitting" }),
       });
       // In the background: an upload must not hold up the runner's other polls.
       handedOff = true;
-      void submit(r.id, p.route, p.providerId, p.plan, p.req, 0);
+      void submit(r.id, p.route, p.providerId, p.plan, p.req, 0, resume);
     } catch (e) {
-      fail((e as Error).message);
+      fail((e as Error).message, e instanceof AccountRunError ? e.refusal.code : "chain");
     } finally {
       if (!handedOff) handOverEnds(r.id);
     }
@@ -2073,13 +2318,13 @@ const poolOf = (r: Pick<Row, "request_json">): boolean => {
   }
 };
 
-function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number, rankAt?: number): Promise<void> {
+function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number, resume?: HealState, rankAt?: number): Promise<void> {
   if (!req.account) return submitNow(id, route, providerId, plan, req, index);
   // On this install's GPUs (hosted runs): as the account, on this install's ComfyUI server only.
   if (req.place === "pool") {
     // (A run is checked against the same table before it is made: hosted-run.ts stepsProblem.)
     if (!poolRunsProvider(providerId)) {
-      update(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
+      updateLive(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
       handOverEnds(id);
       return Promise.resolve();
     }
@@ -2089,16 +2334,33 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   }
   const own = accountRun(req.account, providerId, "submit");
   if ("error" in own) {
-    update(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+    if (updateLive(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null })) {
+      ownFailed(id, req.account, { provider: providerId, model: plan.model.id, op: plan.op, stage: "submit" }, own.code);
+    }
     // A chained step advanceDependents marked as being handed over isn't any more.
     handOverEnds(id);
     return Promise.resolve();
   }
-  return own.run(() => submitNow(id, route, providerId, plan, req, index));
+  return own.run(() => submitNow(id, route, providerId, plan, req, index, resume));
 }
 
 /** A song's cloud tools (Mureka): the song's length and format are read before it's sent. */
 const SONG_TOOL_OPS = new Set<Operation>(["song-extend", "song-remix", "song-stems"]);
+
+/** What an earlier try of a hand-over already sent (an input's name or link at the provider, a voice it cloned): reused. */
+type HandOverCache = Map<string, string>;
+
+/** What a run's log line and its owner's note say of it (src/server/run-events.ts). */
+interface RunFacts {
+  provider: string;
+  model: string;
+  op?: string;
+  stage?: string;
+  attempt?: number;
+  waitedMs?: number;
+}
+
+const factsOf = (r: Pick<Row, "provider" | "model_id" | "op">, more: Omit<RunFacts, "provider" | "model" | "op"> = {}): RunFacts => ({ provider: r.provider, model: r.model_id, op: r.op, ...more });
 
 async function submitNow(
   id: string,
@@ -2107,8 +2369,10 @@ async function submitNow(
   plan: ReturnType<typeof planGeneration>,
   req: GenerationRequest,
   index: number,
+  resume?: HealState,
 ): Promise<void> {
-  // Another app process that still runs is handing this run over right now: it is left to that process.
+  // Another app process that still runs is handing this run over, or waiting on it, right now (a deploy's overlap): it is
+  // left to that process. So is a run that was cancelled, failed or handed over meanwhile.
   if (!takeSubmitTurn(id)) {
     submitting().delete(id);
     return;
@@ -2120,116 +2384,317 @@ async function submitNow(
     if (extra !== plan.params.extra) plan = { ...plan, params: { ...plan.params, extra } };
   }
   // An account's run on its own GPU or key (not on this install's GPUs): a passing problem (a GPU that is off or starting
-  // up, a busy or down provider) is waited out within a budget, the tile saying what it waits for; anything else fails
-  // in plain words, with what helps (src/lib/diagnose.ts). The owner's runs and runs on this install's GPUs fail at once,
-  // in their own words, as before.
+  // up, a busy or down provider) is waited out within a budget, the tile saying what it waits for and what helps; the
+  // wait is kept with the run, so a restart or a deploy goes on with it. Anything else fails in plain words, with what
+  // helps (src/lib/diagnose.ts). The owner's runs and runs on this install's GPUs fail at once, in their own words.
   const account = req.account && req.place !== "pool" ? req.account : undefined;
-  const link = account && providerId === "comfyui" ? gpuLink(accountGpu(account)) : null;
+  // The GPU this run was planned for (its scope read it when it began).
+  const gpu = account && providerId === "comfyui" ? accountGpu(account) : null;
+  const link = gpuLink(gpu);
+  const pod = !!link && gpuHostOf(link.url).kind === "runpod";
   const started = Date.now();
-  let tries = 0;
-  let rechecked = false;
+  const heal: HealState = resume ? { ...resume, firstSeen: { ...resume.firstSeen } } : { since: started, deadline: started, firstSeen: {}, tries: 0, next: 0, index };
+  const facts = (more: Omit<RunFacts, "provider" | "model" | "op"> = {}): RunFacts => ({ provider: providerId, model: plan.model.id, op: plan.op, stage: "submit", ...more });
+  const sent: HandOverCache = new Map();
   try {
+    // Taken over (a restart, another instance): what is left of its wait first, then a look at its GPU.
+    if (resume && resume.next > Date.now() && !(await pause(id, resume.next - Date.now()))) return;
+    let lookFirst = !!resume && !!link;
+    // The first try reads the GPU's last status check (never asked again here): one that is off waits at once,
+    // instead of sending files to an address that answers nothing.
+    const known = link && !resume ? cachedGpuState(account!, link.url) : undefined;
     for (;;) {
+      // A try again (its wait kept with the run) while this server stops: nothing more is sent from here, and the run
+      // is left as it is, for the next instance to go on with.
+      if ((heal.tries > 0 || resume) && draining()) return;
       let error: unknown;
-      // The first try reads the GPU's last status check (never asked again here): one that is off waits at once,
-      // instead of sending files to an address that answers nothing.
-      const known = link && tries === 0 ? cachedGpuState(account!, link.url) : undefined;
-      if (known && !known.online && known.trouble?.retryable) error = troubleError(known.trouble);
-      else {
+      if (heal.tries === 0 && !resume && known && !known.online && known.trouble?.retryable) error = troubleError(known.trouble);
+      else if (link && (heal.tries > 0 || lookFirst)) {
+        lookFirst = false;
+        // Tried again: first a look at the GPU (its /system_stats, no files, outside the send line). Files go once it answers.
+        const look = await probeGpu(account!, link);
+        if (look !== "online") error = look;
+      }
+      if (!error) {
         try {
-          await handOver(id, route, providerId, plan, req, index);
+          await handOver(id, route, providerId, plan, req, index, sent);
           if (link && statusOf(id) !== "failed") noteHandedOver(account!, link.url);
+          if (account && heal.tries > 0) recordOwnRun({ run: id, account, ...facts({ attempt: heal.tries, waitedMs: Date.now() - heal.since }), hostKind: hostKindOf(gpu), outcome: "healed" });
           return;
         } catch (e) {
+          // Another instance holds the run now, or this server is stopping: left as it is, for the instance that goes on.
+          if (e instanceof LetGo) return;
           error = e;
+          // A voice the provider cloned for this run (a billed step) is kept for the next try.
+          const voice = (e as { voiceEmbedding?: unknown } | null)?.voiceEmbedding;
+          if (typeof voice === "string") sent.set("voiceEmbedding", voice);
         }
       }
+      // Cancelled, failed or taken by another instance, deleted, or handed over meanwhile: nothing more to do here.
       const status = statusOf(id);
-      // A cancel during the hand-over stays a cancel.
-      if (!status || status === "canceled") return;
+      if (status !== "queued" && status !== "running") return;
       let trouble = account ? accountTrouble(error, account, providerId, "submit", req) : undefined;
-      const heal = trouble?.retryable ? retryPlan(trouble.cause) : null;
-      if (heal && trouble) {
-        tries++;
-        const wait = backoffMs(tries, heal, trouble.retryAfterMs) * SELF_HEAL.scale;
-        if (Date.now() - started + wait <= heal.budgetMs * SELF_HEAL.scale) {
+      const budget = trouble?.retryable ? retryPlan(trouble.cause) : null;
+      if (budget && trouble) {
+        heal.tries++;
+        const now = Date.now();
+        // Each cause has its own budget from when it was first seen (a GPU that was off and is starting up now gets the
+        // whole of starting up's), never past the cap from the first try.
+        const first = (heal.firstSeen[trouble.cause] ??= now);
+        heal.deadline = Math.min(heal.since + HEAL_CAP_MS * SELF_HEAL.scale, Math.max(heal.deadline, first + budget.budgetMs * SELF_HEAL.scale));
+        const wait = backoffMs(heal.tries, budget, trouble.retryAfterMs) * SELF_HEAL.scale;
+        if (now + wait <= heal.deadline) {
           if (link) noteGpuState(account!, link.url, false, { trouble: asStatus(error, trouble, link) });
-          update(id, { status: "queued", message: waitingWords(trouble, isCloudProvider(providerId) ? providerId : undefined) });
+          // Kept with the run (another instance goes on with it after a restart or a deploy), the tile saying what it
+          // waits for and showing what helps. A step of a longer run, or a run of one of the account's projects, doesn't
+          // offer Run with your key: moved alone, it would leave its run or its project (keyMoveBlock).
+          const shown = trouble.actions.some((a) => a.kind === "run-with-key") && keyMoveBlock(id) ? withoutKeyOffer(trouble) : trouble;
+          if (!markWaiting(id, heal, shown, now + wait, waitingWords(shown, isCloudProvider(providerId) ? providerId : undefined, pod))) return;
+          if (heal.tries === 1 || heal.firstSeen[trouble.cause] === now) ownEvent(id, account!, error, trouble, facts({ attempt: heal.tries, waitedMs: now - heal.since }), "waiting");
           if (!(await pause(id, wait))) return;
-          // The account moved its GPU meanwhile (another address, or this computer): this run was planned for the old one.
-          if (link && gpuLink(accountGpu(account!))?.url !== link.url) {
-            failRun(id, error, diagnoseGpuJob({ kind: "moved" }, { kind: "link", url: link.url }), req.account);
-            return;
+          // The account changed its GPU meanwhile (a new address or password, this computer, or none): this run goes there.
+          if (providerId === "comfyui" && account && gpuChanged(account, gpu)) {
+            if (!accountGpu(account)) {
+              failRun(id, error, diagnoseGpuJob({ kind: "disconnected" }, { kind: "link", url: link?.url ?? "" }), account, facts({ attempt: heal.tries }));
+              return;
+            }
+            const p = replan(id, account);
+            if (!p || p.providerId !== providerId) {
+              failRun(id, error, diagnoseGpuJob({ kind: "moved" }, { kind: "link", url: link?.url ?? "" }), account, facts({ attempt: heal.tries }));
+              return;
+            }
+            if (!updateLive(id, { message: "Your GPU has a new address, so this run goes there" }, " AND external_id IS NULL")) return;
+            return await submit(id, p.route, p.providerId, p.plan, p.req, index, { ...heal, tries: 0, rechecked: false, next: 0 });
           }
           continue;
         }
         // Out of time: a GPU that seemed off is asked once more before the run fails (it may be back by now).
-        if (link && !rechecked) {
-          rechecked = true;
+        if (link && !heal.rechecked) {
+          heal.rechecked = true;
           const again = await recheckGpu(account!, link);
           if (again === "online") continue;
           trouble = { ...again, actions: withKeyOffer(again.actions, account!, req) };
         }
       }
-      failRun(id, error, trouble, req.account);
+      // The provider turned the job down as it was sent (a refused key, an empty balance, a model gone): it never had it,
+      // so its card says Not billed again, as on a first try (not after a voice the provider cloned for it: that was billed).
+      if (refusedAtSend(error) && !sent.has("voiceEmbedding")) notSending(id);
+      failRun(id, error, trouble, req.account, account ? facts({ attempt: heal.tries, waitedMs: Date.now() - heal.since }) : undefined, !!account);
       return;
     }
   } finally {
+    // Its turn goes, whatever happened: sent, failed, cancelled, or left waiting while this server stops (the next
+    // process takes the wait over at once, instead of after this one has gone quiet).
     handOverEnds(id);
   }
+}
+
+/** handOver stopped before the send: another app process took the run, or this server is stopping while the run waited. */
+class LetGo extends Error {}
+
+/**
+ * Just before a run's job is sent. A run that waited (its `heal` kept with it) is marked as being sent: a process that
+ * takes the wait over later (this one cut off in the middle of the send, by a restart or a deploy) then doesn't send it
+ * a second time. So is a step of an account's longer run on its first try (`step`: on its own GPU or key, or on this
+ * install's GPUs): the process that launches it after this one was cut off never sends it again (advanceDependents).
+ * `task`: the job this send makes is a task of this database (a run on this install's workers), noted with the mark.
+ *
+ * The look at the turn and the mark are one step (an immediate transaction): a process that stalled past its turn (20 s
+ * with no beat) and another took it meanwhile never marks or sends the run, and one that takes the turn after the mark
+ * sees it (takeOver, advanceDependents). Throws LetGo when this process doesn't hold the run's turn (another took it, or
+ * an instance of the release before holds it: OLD_LEASE), when this server is stopping and the run waited (the next
+ * process goes on with its wait, and sends it), and for a step's first try while this server is stopping (the next
+ * process launches it, instead of finding it cut off in the middle of its send; the owner's steps too).
+ */
+function markSending(id: string, step: boolean, task = false): void {
+  const d = db();
+  const out = d
+    .transaction((): "gone" | "taken" | "stopping" | "marked" => {
+      const r = d
+        .prepare(`SELECT g.external_meta_json, g.depends_on, s.held_by FROM generations g LEFT JOIN submit_turns s ON s.id = g.id WHERE g.id = ? AND g.status IN ('queued', 'running') AND g.external_id IS NULL`)
+        .get(id) as (Pick<Row, "external_meta_json" | "depends_on"> & { held_by: string | null }) | undefined;
+      if (!r) return "gone";
+      if (r.held_by !== runnerToken() || oldLeaseHolds(r.external_meta_json)) return "taken";
+      const now = Date.now();
+      if (!readMeta(r.external_meta_json).heal) {
+        // A first try (nothing waited): a run's send cut off here fails at the next process's look (sweepInterrupted).
+        if (!r.depends_on) return "marked";
+        if (draining()) return "stopping";
+        if (!step) return "marked";
+        d.prepare(
+          `UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending', @now${task ? ", '$.sendingTask', json('true')" : ""})
+           WHERE id = @id AND ${PENDING}`,
+        ).run({ id, now });
+        return "marked";
+      }
+      if (draining()) return "stopping";
+      d.prepare(`UPDATE generations SET external_meta_json = json_set(external_meta_json, '$.heal.sending', @now) WHERE id = @id AND ${PENDING} AND json_type(external_meta_json, '$.heal') = 'object'`).run({ id, now });
+      return "marked";
+    })
+    .immediate();
+  if (out === "gone") throw new Error("Stopped");
+  if (out === "taken") throw new LetGo("Taken by another app process");
+  if (out === "stopping") throw new LetGo("Stopping");
+}
+
+/** A send its provider answered with a refusal (a 4xx): the job was never taken. */
+function refusedAtSend(e: unknown): boolean {
+  const status = (e as { status?: unknown } | null)?.status;
+  return typeof status === "number" && status >= 400 && status < 500;
+}
+
+/** A send that is over without a job: the run's mark of being sent goes (it was never handed over). */
+function notSending(id: string): void {
+  db()
+    .prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.heal.sending', '$.sending', '$.sendingTask') WHERE id = ? AND ${PENDING} AND json_valid(external_meta_json)`)
+    .run(id);
 }
 
 /** Self-healing's clock: tests make it faster (0.001: a 30-minute wait takes 1.8 s). */
 export const SELF_HEAL = { scale: 1 };
 
-/** Wait `ms`, looking every second whether the run was cancelled (false: it was, or it was deleted). */
+/** An account's job waiting in its own GPU's (or provider's) queue: how long without moving. Tests make it shorter. */
+export const OWN_QUEUE = { scale: 1 };
+/** The longest an account's job waits in its own GPU's (or provider's) queue, however it moves. */
+const OWN_QUEUE_CAP_MS = 2 * 60 * 60_000;
+
+/**
+ * The words a waiting run's tile shows, its wait kept with it (external_meta_json `heal`). False: it isn't waiting any more,
+ * or this process no longer holds its turn (it stalled, and another took the wait over: that one's wait, and its mark of
+ * a send, stay as they are).
+ */
+function markWaiting(id: string, heal: HealState, trouble: Diagnosis, next: number, message: string): boolean {
+  heal.next = next;
+  heal.words = trouble.words;
+  heal.trouble = troubleOf(trouble);
+  // The try that was sending failed: the next one may send.
+  delete heal.sending;
+  return (
+    db()
+      .prepare(
+        `UPDATE generations SET status = 'queued', message = @message, updated_at = @now,
+           external_meta_json = json_set(json_remove(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.sending', '$.sendingTask'), '$.heal', json(@heal))
+         WHERE id = @id AND ${PENDING} AND EXISTS (SELECT 1 FROM submit_turns s WHERE s.id = @id AND s.held_by = @me)`,
+      )
+      .run({ id, message, now: Date.now(), heal: JSON.stringify(heal), me: runnerToken() }).changes > 0
+  );
+}
+
+/**
+ * Wait `ms`, looking every second whether the run still waits here. False: it was cancelled, failed, deleted or handed
+ * over meanwhile, another app process took its turn, or this server is stopping (the next one goes on with it).
+ */
 async function pause(id: string, ms: number): Promise<boolean> {
   const end = Date.now() + ms;
   for (;;) {
+    if (draining()) return false;
     const left = end - Date.now();
     if (left <= 0) return true;
     await new Promise((r) => setTimeout(r, Math.min(1000, left)));
-    const s = statusOf(id);
-    if (!s || s === "canceled") return false;
+    const r = db().prepare("SELECT status, external_id FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id"> | undefined;
+    if (!r || (r.status !== "queued" && r.status !== "running") || r.external_id || turnTaken(id)) return false;
   }
 }
 
-/** A failed run in its words: an account's plain sentence (the owner's own detail as before), with what helps and "Fix it". */
-function failRun(id: string, e: unknown, trouble: Diagnosis | undefined, account: string | undefined): void {
-  const fix = (e as { fix?: GenerationFix }).fix;
+/**
+ * A failed run in its words: an account's plain sentence (the owner's own detail as before), with what helps and "Fix it".
+ * Only while the run is still going: a Cancel (or another instance's failure) written meanwhile stays. `facts`: an
+ * account's own run, logged and noted for the owner (run-events.ts).
+ */
+function failRun(id: string, e: unknown, trouble: Diagnosis | undefined, account: string | undefined, facts?: RunFacts, own = !!facts): boolean {
+  const fix = (e as { fix?: GenerationFix } | null)?.fix;
   const kept = keptFix(fix, trouble);
   // What the GPU was missing (a model, a node class) is kept, so the tile offers "Fix it", and its GPU check counts as stale.
-  // (Only while the run still goes: one another app process saved meanwhile stays saved.)
-  updateLive(id, { status: "failed", error: trouble?.words ?? (e as Error).message, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+  // (Only while the run still goes: a Cancel, or a result another app process saved meanwhile, stays.)
+  const done = updateLive(id, { status: "failed", error: trouble?.words ?? String((e as Error | null)?.message ?? e), completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+  if (!done) return false;
   if (fix) markStale(account ? `acct:${account}` : "install");
+  if (own && account && facts) ownEvent(id, account, e, trouble, facts, "failed");
+  return true;
+}
+
+/** An account's own run (its GPU or key), never one on this install's GPUs: its account, else undefined. */
+const ownAccountOf = (req: Pick<GenerationRequest, "account" | "place"> | null | undefined): string | undefined => (req?.account && req.place !== "pool" ? req.account : undefined);
+
+/** ownAccountOf for a stored request (unreadable: none). */
+const ownAccountIn = (requestJson: string): string | undefined => {
+  try {
+    return ownAccountOf(JSON.parse(requestJson) as GenerationRequest);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * An account's own run that failed in this server's own words (cut off by a restart, refused as its account runs now, an
+ * earlier step that didn't finish): the owner's log line and note, as failRun writes them for a GPU's or key's failure.
+ * `cause` says which. Nothing for the owner's runs or runs on this install's GPUs (`account` undefined).
+ */
+function ownFailed(id: string, account: string | undefined, f: RunFacts, cause: string): void {
+  if (!account) return;
+  try {
+    const hostKind = f.provider === "comfyui" ? hostKindOf(accountGpu(account)) : undefined;
+    recordOwnRun({ run: id, account, ...f, hostKind, cause, outcome: "failed" });
+  } catch {
+    // A log line never stops a run.
+  }
 }
 
 /** generations.fix_json: what the GPU was missing (GenerationFix) and, for an account, what its GPU or key ran into. */
 const keptFix = (fix: GenerationFix | undefined, trouble: Diagnosis | undefined): string | undefined =>
   fix || trouble ? JSON.stringify({ ...(fix ?? {}), ...(trouble && { trouble: troubleOf(trouble) }) }) : undefined;
 
-/** A network failure (no answer at all) as its words, or undefined for any other error. */
-function networkReason(e: unknown): string | undefined {
-  const err = e as { message?: unknown; cause?: { code?: unknown } } | null;
-  const code = typeof err?.cause?.code === "string" ? err.cause.code : undefined;
-  const msg = String(err?.message ?? "");
-  if (!code && !/fetch failed|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|UND_ERR/i.test(msg)) return undefined;
-  return [msg, code && !msg.includes(code) ? code : undefined].filter(Boolean).join(" ");
+/** Where an account's GPU is, as the log says it: a RunPod pod, a tunnel, a web address, or the person's own computer. */
+function hostKindOf(gpu: AccountGpu | null | undefined): HostKind | undefined {
+  if (!gpu) return undefined;
+  if (gpu.mode === "computer") return "computer";
+  return gpuHostOf(gpu.url).kind;
 }
 
-/** Another key of the account that runs the same model (Replicate for fal.ai, or the other way round). */
+/**
+ * An account's run on its own GPU or key that waits, healed or failed: one log line, and (failed) the note the owner
+ * reads. Its stage and code from what came back, the provider's own words without the GPU's address, a token or a key.
+ */
+function ownEvent(id: string, account: string, e: unknown, trouble: Diagnosis | undefined, f: RunFacts, outcome: "failed" | "waiting"): void {
+  try {
+    const failure = (e as { failure?: GpuFailure } | null)?.failure;
+    const status = failure?.status ?? (e as { status?: unknown } | null)?.status;
+    const net = failure?.error ?? networkReason(e);
+    const code = typeof status === "number" && status > 0 ? String(status) : net ? networkCode(net) : undefined;
+    const own = f.provider === "comfyui" ? ownGpu() : undefined;
+    const link = own && own.kind !== "computer" ? own : undefined;
+    const hostKind: HostKind | undefined = f.provider !== "comfyui" ? undefined : own?.kind === "computer" ? "computer" : link?.url ? gpuHostOf(link.url).kind : undefined;
+    const said = keptText(failure?.body || failure?.error || failure?.location || ((e as { said?: unknown } | null)?.said as string | undefined) || (e as Error | null)?.message, { url: link?.url, secret: link?.token });
+    recordOwnRun({ run: id, account, ...f, stage: failure?.stage ?? f.stage, code, hostKind, cause: trouble?.cause, outcome }, said);
+  } catch {
+    // A log line never stops a run.
+  }
+}
+
+/** A network failure (no answer at all) as its words, or undefined for any other error. */
+function networkReason(e: unknown): string | undefined {
+  const err = e as { message?: unknown; name?: unknown; cause?: { code?: unknown } } | null;
+  const code = typeof err?.cause?.code === "string" ? err.cause.code : undefined;
+  const msg = String(err?.message ?? "");
+  const aborted = err?.name === "TimeoutError" || err?.name === "AbortError";
+  if (!code && !aborted && !/fetch failed|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|UND_ERR|aborted due to timeout|operation was aborted/i.test(msg)) return undefined;
+  return [msg || String(err?.name ?? ""), code && !msg.includes(code) ? code : undefined].filter(Boolean).join(" ");
+}
+
+/** Another key of the account that runs the same model (Replicate for fal.ai, or the other way round), and would take it now. */
 function otherKeyFor(account: string, p: CloudProvider, modelId: string | undefined): CloudProvider | undefined {
   const m = modelId ? getModel(modelId) : undefined;
-  return m ? accountProviders(account).find((k) => k !== p && m.routes.some((r) => r.provider === k)) : undefined;
+  return m ? usableProviders(account).find((k) => k !== p && m.routes.some((r) => r.provider === k)) : undefined;
 }
 
 /**
  * The cloud version of a run on the account's GPU that one of its keys runs: a preset's first cloud route, or the same
- * Fuobe Original on the cloud engine. Null without a key that serves it, or when the studio is open-source only.
+ * Fuobe Original on the cloud engine. Null without a key that would take it (one the provider refused, or whose balance
+ * ran out, isn't offered), or when the studio is open-source only.
  */
 export function cloudTwin(req: Pick<GenerationRequest, "presetId" | "modelId">, account: string): { modelId: string; provider: CloudProvider; op?: string } | null {
   if (!paidAllowed()) return null;
-  const keys = accountProviders(account);
+  const keys = usableProviders(account);
   if (!keys.length) return null;
   const has = (id: string) => !!getModel(id);
   const preset = req.presetId ? getPreset(req.presetId) : undefined;
@@ -2248,16 +2713,17 @@ export function cloudTwin(req: Pick<GenerationRequest, "presetId" | "modelId">, 
 }
 
 /**
- * A GPU trouble's buttons, with "Run with your … key" when one of the account's keys runs this tool's cloud version.
- * While hosted runs are on, only with its price (a key is never billed by a press that showed none).
+ * A GPU trouble's buttons, with "Run with your … key" when one of the account's keys runs this tool's cloud version: right
+ * after the first (the one that fixes the GPU), so a tile that shows only a few keeps it. While hosted runs are on, only
+ * with its price (a key is never billed by a press that showed none).
  */
 function withKeyOffer(actions: TroubleAction[], account: string, req: Pick<GenerationRequest, "presetId" | "modelId" | "params" | "op">): TroubleAction[] {
   if (actions.some((a) => a.kind === "run-with-key")) return actions;
   const twin = cloudTwin(req, account);
   if (!twin) return actions;
-  if (!hostedRunsOn()) return [...actions, withKeyAction(twin.provider, twin.modelId, twin.op)];
+  if (!hostedRunsOn()) return withOfferAfterFirst(actions, withKeyAction(twin.provider, twin.modelId, twin.op));
   const price = keyRunPrice(twin, req);
-  return price ? [...actions, withKeyAction(twin.provider, twin.modelId, twin.op, price)] : actions;
+  return price ? withOfferAfterFirst(actions, withKeyAction(twin.provider, twin.modelId, twin.op, price)) : actions;
 }
 
 /** A run's price on its cloud version (one run, at the request's settings), as a key offer says it ("≈ $0.04"), or null. */
@@ -2292,7 +2758,10 @@ function accountTrouble(e: unknown, account: string, providerId: string, stage: 
   const said = (e as { said?: unknown } | null)?.said;
   if (typeof status === "number" && status > 0) return diagnoseKey({ stage, status, text: typeof said === "string" ? said : message }, ctx);
   const net = networkReason(e);
-  return net ? diagnoseKey({ stage, error: net }, ctx) : undefined;
+  if (net) return diagnoseKey({ stage, error: net }, ctx);
+  // A step at the provider that failed in words of its own (a voice it couldn't clone): plain words already, its own in details.
+  if (typeof said === "string" && said) return { cause: "provider-failed", words: message, details: cleanDetails(said, 200) || undefined, actions: [{ kind: "retry", label: "Retry" }], retryable: false };
+  return undefined;
 }
 
 /** A short, stable name for the address a run was sent to (kept with the run, never the address itself). */
@@ -2304,26 +2773,70 @@ function noteHandedOver(account: string, url: string): void {
   if (known && !known.online) noteGpuState(account, url, true);
 }
 
+declare global {
+  /** A look at an account's GPU on its way (one per account and address: runs that wait share it). */
+  var __fuobeGpuLooks: Map<string, Promise<"online" | (Error & { trouble: Diagnosis })>> | undefined;
+}
+
+/**
+ * A look at the account's GPU before a waiting run tries again: its /system_stats only (no files, outside the send line),
+ * shared by the account's runs that wait. "online", or the run's error, in a run's words (what came back kept for the
+ * details). The status strip learns the answer too.
+ */
+function probeGpu(account: string, link: { url: string; token?: string }): Promise<"online" | (Error & { trouble: Diagnosis })> {
+  const probes = (globalThis.__fuobeGpuLooks ??= new Map());
+  const key = `${account} ${link.url}`;
+  const going = probes.get(key);
+  if (going) return going;
+  const place = { kind: "link" as const, url: link.url, hasToken: !!link.token };
+  const p = testGpu(link, { timeoutMs: 8000, stage: "status" })
+    .then(
+      ({ url: _moved, ...info }) => {
+        void _moved;
+        noteGpuState(account, link.url, true, { info });
+        return "online" as const;
+      },
+      (e: unknown) => {
+        const f: GpuFailure = (e instanceof GpuError && e.failure) || { stage: "status", error: (e as Error).message };
+        // The status strip keeps the check's words; the run says the same in a run's words.
+        noteGpuState(account, link.url, false, { trouble: e instanceof GpuError && !e.failure ? e.trouble : diagnoseGpu(f, place) });
+        return troubleError(e instanceof GpuError && !e.failure ? e.trouble : diagnoseGpu({ ...f, stage: "poll" }, place), f.status, f);
+      },
+    )
+    .finally(() => probes.delete(key));
+  probes.set(key, p);
+  return p;
+}
+
 /** The account's GPU asked once more, before a run that couldn't reach it fails: "online", or why not (the run's words). */
 async function recheckGpu(account: string, link: { url: string; token?: string }): Promise<"online" | Diagnosis> {
-  const place = { kind: "link" as const, url: link.url, hasToken: !!link.token };
-  try {
-    const { url: _moved, ...info } = await testGpu(link, { timeoutMs: 8000, stage: "status" });
-    void _moved;
-    noteGpuState(account, link.url, true, { info });
-    return "online";
-  } catch (e) {
-    // The status strip keeps the check's words; the run says the same in a run's words.
-    const f: GpuFailure = (e instanceof GpuError && e.failure) || { stage: "status", error: (e as Error).message };
-    noteGpuState(account, link.url, false, { trouble: e instanceof GpuError && !e.failure ? e.trouble : diagnoseGpu(f, place) });
-    return e instanceof GpuError && !e.failure ? e.trouble : diagnoseGpu({ ...f, stage: "poll" }, place);
-  }
+  const r = await probeGpu(account, link);
+  return r === "online" ? "online" : r.trouble;
 }
 
 /** A run's GPU trouble as the status strip says it (in a check's words) when what came back is known; else as it is. */
 function asStatus(error: unknown, trouble: Diagnosis, link: { url: string; token?: string }): Diagnosis {
   const f = (error as { failure?: GpuFailure } | null)?.failure;
   return f ? diagnoseGpu({ ...f, stage: "status" }, { kind: "link", url: link.url, hasToken: !!link.token }) : trouble;
+}
+
+/** The account's GPU isn't the one a run was planned for any more: another address or password, this computer, or none. */
+function gpuChanged(account: string, was: AccountGpu | null): boolean {
+  const now = accountGpu(account);
+  if (!now || !was) return now !== was;
+  if (now.mode === "computer" || was.mode === "computer") return now.mode !== was.mode;
+  return now.url !== was.url || (now.token ?? "") !== (was.token ?? "");
+}
+
+/** A run planned again, as its account runs now (its GPU, its keys): when the GPU changed, or another instance takes it. */
+function replan(id: string, account: string): ReturnType<typeof prepare> | null {
+  const r = db().prepare("SELECT request_json FROM generations WHERE id = ?").get(id) as Pick<Row, "request_json"> | undefined;
+  if (!r) return null;
+  try {
+    return asAccount(account, () => prepare(JSON.parse(r.request_json) as GenerationRequest));
+  } catch {
+    return null;
+  }
 }
 
 declare global {
@@ -2340,35 +2853,53 @@ const resentRuns = () => (globalThis.__fuobeResent ??= new Set());
 /** What a poll can't wait out: a key refused, credit gone, no access; a GPU that wants a password or a sign-in. */
 const FINAL_AT_POLL: ReadonlySet<string> = new Set(["key-rejected", "key-balance", "key-permission", "gpu-password", "gpu-password-wrong", "gpu-sign-in", "address-local"]);
 
-/** How long an account's run's polls may keep failing before it stops: its own GPU, or its key's provider. */
-const POLL_HEAL_MS = { comfyui: 15 * 60_000, cloud: 10 * 60_000 };
+/** How long an account's run's polls on its own GPU may keep failing before it stops (its key's provider: the run's own clock). */
+const POLL_HEAL_MS = { comfyui: 15 * 60_000 };
+/** The growing wait between an account's polls that keep failing. */
+const POLL_BACKOFF = { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 };
 /** Polls that fail in a row before the tile says it is waiting. */
 const POLL_MISSES_SAID = 3;
+/** How long a made result's copy is tried again (a GPU or provider that dropped the connection for a while). */
+const SAVE_HEAL_MS = 15 * 60_000;
+
+/** Which of its batch's jobs a run is (its seed is the batch's + this): kept at hand-over, else read from its batch. */
+function jobIndexOf(r: Pick<Row, "batch_id" | "created_at">, meta: PendingMeta): number {
+  if (typeof meta.jobIndex === "number" && meta.jobIndex >= 0) return meta.jobIndex;
+  if (!r.batch_id) return 0;
+  // createGenerations stamps a batch's jobs created_at = now + i.
+  const first = db().prepare("SELECT MIN(created_at) FROM generations WHERE batch_id = ?").pluck().get(r.batch_id) as number | null;
+  const i = first === null ? 0 : r.created_at - first;
+  return i >= 0 && i < 64 ? i : 0;
+}
 
 /**
- * A run its GPU lost (ComfyUI restarted): sent again once, planned as it was (inputs uploaded again). False when it
- * can't be (sent again before, or its plan doesn't go to the same place any more).
+ * A run its GPU lost (ComfyUI restarted): sent again once, planned as it was (inputs uploaded again), as the same job of
+ * its batch (its own seed). False when it can't be (sent again before, or its plan doesn't go to the same place any more).
  */
 function resend(r: Row, account: string, words: string): boolean {
-  if (resentRuns().has(r.id)) return false;
+  const was = readMeta(r.external_meta_json);
+  if (resentRuns().has(r.id) || was.resent) return false;
   try {
     const stored = JSON.parse(r.request_json) as GenerationRequest;
     const p = asAccount(account, () => prepare(stored));
     if (p.providerId !== r.provider) return false;
+    const index = jobIndexOf(r, was);
     resentRuns().add(r.id);
     if (resentRuns().size > 5000) resentRuns().delete(resentRuns().values().next().value!);
-    // (Only while the run still goes: one another app process saved or ended meanwhile is left as it is.)
-    // (It takes its turn to be sent in the same step: a chain's step waiting to be sent again is never sent by another
-    // app process too.)
+    // (Only while the run still goes and is still the job that was lost: one another app process saved, ended or sent
+    // again meanwhile is left as it is.) It takes its turn to be sent in the same step: a run waiting to be sent again is
+    // never sent by another app process too.
     const again = db().transaction((): boolean => {
-      if (!updateLive(r.id, { external_id: null, external_meta_json: null, status: "queued", progress: null, message: words })) return false;
+      const meta = JSON.stringify({ resent: true, jobIndex: index });
+      if (!updateLive(r.id, { external_id: null, external_meta_json: meta, status: "queued", progress: null, message: words }, " AND external_id = @__ext", { __ext: r.external_id })) return false;
       db().prepare("DELETE FROM generation_runs WHERE id = ?").run(r.id);
       noteSubmitTurn(r.id);
       return true;
     })();
+    // (Saved, ended or sent again by another app process meanwhile: nothing more to do here, and nothing to fail.)
     if (!again) return true;
     submitting().add(r.id);
-    void submit(r.id, p.route, p.providerId, p.plan, p.req, 0);
+    void submit(r.id, p.route, p.providerId, p.plan, p.req, index);
     return true;
   } catch {
     return false;
@@ -2377,8 +2908,9 @@ function resend(r: Row, account: string, words: string): boolean {
 
 /**
  * An account's poll that failed: a key that won't work (refused, no credit, no access) fails the run at once; a passing
- * problem (its GPU off, its provider busy) is asked again with a growing wait, the tile saying so, until the budget is
- * spent: then its GPU is asked once more, and the run fails in plain words. True when the poll was handled here.
+ * problem (its GPU off, its provider busy) is asked again with a growing wait, the tile saying so. A run on its own GPU
+ * stops when that has lasted its budget (its GPU asked once more first); one on its key is never cut short here (the
+ * job is accepted, and paid): the run's own clock in pollOne ends it. True when the poll was handled here.
  */
 async function healPoll(r: Row, ctx: PollContext, account: string, pollError: unknown): Promise<boolean> {
   const stored = JSON.parse(r.request_json) as GenerationRequest;
@@ -2388,30 +2920,33 @@ async function healPoll(r: Row, ctx: PollContext, account: string, pollError: un
       .cancel?.(ctx)
       .catch(() => {});
   if (d && !d.retryable && FINAL_AT_POLL.has(d.cause)) {
-    await cancel();
     pollHeals().delete(r.id);
-    failRun(r.id, pollError, d, account);
+    if (failRun(r.id, pollError, d, account, factsOf(r, { stage: "poll" }))) await cancel();
     return true;
   }
   if (!d) return false;
   const now = Date.now();
   const h = pollHeals().get(r.id) ?? { first: now, n: 0, next: 0 };
   h.n++;
-  h.next = now + backoffMs(h.n, { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 }, d.retryAfterMs) * SELF_HEAL.scale;
+  // What the other side asked for (Retry-After) is kept to, up to twice the longest wait: a run's own clocks (its GPU's
+  // budget below, a run's time in pollOne) are read at each poll, so a day-long Retry-After can't hold the run.
+  const ask = Math.min(backoffMs(h.n, POLL_BACKOFF, d.retryAfterMs), POLL_BACKOFF.maxMs * 2) * SELF_HEAL.scale;
+  // A run on its own GPU asks once more when its budget ends, whatever the wait said.
+  const budgetLeft = r.provider === "comfyui" ? Math.max(0, h.first + POLL_HEAL_MS.comfyui * SELF_HEAL.scale - now) : Infinity;
+  h.next = now + Math.min(ask, budgetLeft);
   pollHeals().set(r.id, h);
-  const budget = (r.provider === "comfyui" ? POLL_HEAL_MS.comfyui : POLL_HEAL_MS.cloud) * SELF_HEAL.scale;
-  if (now - h.first >= budget) {
-    const link = r.provider === "comfyui" ? gpuLink(accountGpu(account)) : null;
+  if (h.n === 1) ownEvent(r.id, account, pollError, d, factsOf(r, { stage: "poll", attempt: 1 }), "waiting");
+  if (r.provider === "comfyui" && now - h.first >= POLL_HEAL_MS.comfyui * SELF_HEAL.scale) {
+    const link = gpuLink(accountGpu(account));
     // Its GPU asked once more: back, it is polled again at once (and collected, or found lost and sent again).
     if (link && (await recheckGpu(account, link)) === "online") {
       pollHeals().delete(r.id);
       return true;
     }
-    await cancel();
     pollHeals().delete(r.id);
     const minutes = Math.max(1, Math.round((now - h.first) / 60_000));
     const end = link ? diagnoseGpuJob({ kind: "gone", minutes }, { kind: "link", url: link.url }) : d;
-    failRun(r.id, pollError, { ...end, actions: link ? withKeyOffer(end.actions, account, stored) : end.actions }, account);
+    if (failRun(r.id, pollError, { ...end, actions: link ? withKeyOffer(end.actions, account, stored) : end.actions }, account, factsOf(r, { stage: "poll", attempt: h.n, waitedMs: now - h.first }))) await cancel();
     return true;
   }
   if (h.n >= POLL_MISSES_SAID) {
@@ -2421,17 +2956,27 @@ async function healPoll(r: Row, ctx: PollContext, account: string, pollError: un
   return true;
 }
 
-/** Copy one result of an account's run, trying again a few times when the copy breaks off (a passing network problem). */
-async function persistWithRetry(o: RichOutput, id: string): Promise<OutputFile> {
+/**
+ * A copy of a made result that broke off for a passing reason: the connection refused, reset or idle, or a 5xx, 429 or
+ * 408 answer. Never the whole copy's time limit, nor a file over its size: trying again can't change those.
+ */
+function passingSave(e: unknown): boolean {
+  if (e instanceof AccountFilesFull) return false;
+  const msg = (e as Error | null)?.message ?? "";
+  if (msg === ACCOUNT_MESSAGES.diskLow || /^The answer was over/.test(msg) || /took over \d+ s to answer/.test(msg)) return false;
+  if (/^download (5\d\d|429|408)$/.test(msg)) return true;
+  if (e instanceof RemoteFetchError) return /stopped answering|Timed out reaching|Couldn't reach/.test(msg);
+  return !!networkReason(e);
+}
+
+/** Copy one result of an account's run, trying again once at once when the copy breaks off for a passing reason. */
+async function persistWithRetry(o: RichOutput, id: string, linked: Record<string, unknown> | undefined): Promise<OutputFile> {
   for (let n = 1; ; n++) {
     try {
-      return await persistOutput(o, id);
+      return await persistOutput(o, id, { linked });
     } catch (e) {
-      const msg = (e as Error).message ?? "";
-      const passing =
-        !(e instanceof AccountFilesFull) && !/^The answer was over/.test(msg) && msg !== ACCOUNT_MESSAGES.diskLow && (/^download (5\d\d|429|408)$/.test(msg) || e instanceof RemoteFetchError || !!networkReason(e));
-      if (!passing || n >= 3) throw e;
-      await new Promise((r) => setTimeout(r, [2_000, 5_000][n - 1] * SELF_HEAL.scale));
+      if (!passingSave(e) || n >= 2) throw e;
+      await new Promise((r) => setTimeout(r, 2_000 * SELF_HEAL.scale));
     }
   }
 }
@@ -2452,9 +2997,14 @@ function saveTrouble(e: unknown, provider: string): Diagnosis | undefined {
  * Hand a run over to its provider once: its files, then the job. Throws what went wrong (submitNow decides whether to wait
  * and try again, or to fail the run).
  */
-async function handOver(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number): Promise<void> {
+async function handOver(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number, sent?: HandOverCache): Promise<void> {
   /** Why the run failed, once it has: its files still waiting to be sent are not sent. */
   let failed: { error: unknown } | undefined;
+  /** Still this run's to hand over: queued or running, no job yet (a cancel, a failure or another instance stops it). */
+  const going = () => {
+    const s = statusOf(id);
+    return s === "queued" || s === "running";
+  };
   try {
     // An account's run on its own ComfyUI and keys only (asAccount): outside it, nothing is sent.
     const adapter = adapterFor(providerId, req.account);
@@ -2469,7 +3019,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
       if (!req.account) return fn();
       return accountSend(req.account, async () => {
         if (failed) throw failed.error;
-        if (statusOf(id) === "canceled") throw new Error("Stopped");
+        if (!going()) throw new Error("Stopped");
         try {
           return await fn();
         } catch (e) {
@@ -2478,21 +3028,34 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
         }
       });
     };
+    // An input an earlier try of this hand-over already sent is used as it was sent (its name or link at the provider):
+    // a run that waits and tries again never sends a file twice.
+    const upload = async (key: string, data: Buffer, contentType: string, name: string) => {
+      const was = sent?.get(key);
+      if (was) return was;
+      const at = await adapter.prepareFile(data, contentType, name, route);
+      sent?.set(key, at);
+      return at;
+    };
     const prep = async (ref?: string) => {
       if (!ref) return undefined;
+      const was = sent?.get(`file:${ref}`);
+      if (was) return was;
       return gate(async () => {
         const f = await readRef(ref);
-        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+        return upload(`file:${ref}`, f.data, f.contentType, f.name);
       });
     };
     // An end-frame step crops the start frame before the edit (the recipe's crop of the subject).
     const cropWindow = isCropWindow(plan.params.extra?.crop) ? plan.params.extra.crop : undefined;
     const prepCropped = async (ref?: string) => {
       if (!ref || !cropWindow) return prep(ref);
+      const was = sent?.get(`crop:${ref}`);
+      if (was) return was;
       return gate(async () => {
         const f = await readRef(ref);
         const data = cropPicture(f.data, cropWindow);
-        return adapter.prepareFile(data, "image/png", f.name.replace(/\.[^.]+$/, ".png"), route);
+        return upload(`crop:${ref}`, data, "image/png", f.name.replace(/\.[^.]+$/, ".png"));
       });
     };
     // The input clip's header (size, frame rate, length): upscalers that take a factor and frame-count routes read it.
@@ -2507,7 +3070,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
           ...(facts.fps ? { sourceFps: facts.fps } : {}),
           ...(facts.duration ? { sourceDuration: facts.duration } : {}),
         };
-        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+        return upload(`file:${ref}`, f.data, f.contentType, f.name);
       });
     };
     // A talking avatar is as long as its voice (fal's InfiniteTalk and Wan 2.2 S2V take a frame count): the voice's header.
@@ -2517,7 +3080,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
         const f = await readRef(ref);
         const facts = mediaFacts(f.data);
         if (facts.duration && !source.sourceDuration) source = { ...source, sourceDuration: facts.duration };
-        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+        return upload(`file:${ref}`, f.data, f.contentType, f.name);
       });
     };
     // A song tool's song (Mureka): its length read as a voice's is, and one Mureka refuses (Stems: MP3 or M4A, 10 MB; Remix:
@@ -2530,7 +3093,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
         if (facts.duration && !source.sourceDuration) source = { ...source, sourceDuration: facts.duration };
         const problem = providerId === "mock" ? null : songToolProblem(plan.op, { format: songFormat(f.contentType, f.name), bytes: f.data.length, seconds: facts.duration });
         if (problem) throw new Error(problem);
-        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+        return upload(`file:${ref}`, f.data, f.contentType, f.name);
       });
     };
     // Reference clips and clip elements a model bills with the output (Kling 4.0, Pricing.clipInput): their headers' lengths.
@@ -2543,16 +3106,18 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
         const f = await readRef(ref);
         const facts = mediaFacts(f.data);
         if (facts.duration) clipLengths[i] = facts.duration;
-        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+        return upload(`file:${ref}`, f.data, f.contentType, f.name);
       });
     };
     const prepMask = async (ref?: string) => {
       if (!ref) return undefined;
+      const was = sent?.get(`mask:${ref}`);
+      if (was) return was;
       return gate(async () => {
         const f = await readRef(ref);
         const fmt = route.map?.maskFormat;
         const data = fmt && fmt !== "white" && f.contentType === "image/png" ? convertMask(f.data, fmt) : f.data;
-        return adapter.prepareFile(data, f.contentType, f.name, route);
+        return upload(`mask:${ref}`, data, f.contentType, f.name);
       });
     };
     let prompt = plan.prompt;
@@ -2739,30 +3304,52 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
       // gated Restore or Detail Refine IC-LoRA) gets them downloaded too.
       await ensureLorasOnComfy([...(input.loras ?? []), ...graphLoras(route.endpoint, input.extra)], await comfyLoraFiles(route), (message) => update(id, { message }));
     }
+    // A voice an earlier try had the provider clone (a billed step) is used again, not cloned twice.
+    const cloned = sent?.get("voiceEmbedding");
+    if (cloned && route.map?.cloneFirst && !input.voiceEmbedding) input.voiceEmbedding = cloned;
+    // Nothing is sent once the run stopped being this one's to send (cancelled, failed, or taken by another instance).
+    if (!going()) throw new Error("Stopped");
+    // (Every account's step on its first try: on its own GPU or key, and on this install's GPUs. On the workers its job is
+    // a task of this database, made by this send: the mark says so.)
+    markSending(id, !!req.account, providerId === "comfyui" && onPoolWorkers());
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });
     // A saved voice the cloud just cloned keeps the embedding (the owner's runs only), so its next line skips the clone.
     if (typeof res.meta?.voiceEmbedding === "string" && !req.account) void keepVoiceEmbedding(req.inputs?.voiceAudio, res.meta.voiceEmbedding).catch(() => {});
     const now = Date.now();
-    const status = statusOf(id);
-    if (!status || status === "canceled") {
-      // Canceled (or deleted) while it was being handed over: stop the provider's job too.
-      await adapter.cancel?.({ externalId: res.externalId, meta: res.meta ?? {}, route, model: plan.model, createdAt: now }).catch(() => {});
-      if (status) update(id, { external_id: res.externalId, external_meta_json: JSON.stringify(res.meta ?? {}), message: null });
-      return;
-    }
     // An account's link: which address the job went to (its name, never the address), so a run whose account moved to
     // another address meanwhile says so instead of asking the new one about it.
     const sentTo = req.account && req.place !== "pool" && providerId === "comfyui" ? ownLink()?.url : undefined;
-    db().transaction(() => {
-      update(id, {
-        external_id: res.externalId,
-        external_meta_json: JSON.stringify({ ...(res.meta ?? {}), ...(sentTo && { sentTo: addressKey(sentTo) }) }),
-        provider_input_json: res.payload ? JSON.stringify(res.payload).slice(0, 200_000) : null,
-        // A run sent again after its GPU lost it says so until its GPU reports on it.
-        message: resentRuns().has(id) ? RESENT_WORDS : "Queued",
-      });
-      recordSubmission(id, now);
+    const before = readMeta((db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").get(id) as Pick<Row, "external_meta_json"> | undefined)?.external_meta_json);
+    // Only onto a run still waiting for its job (never one cancelled, failed or handed over by another instance meanwhile).
+    const handed = db().transaction(() => {
+      const changed = db()
+        .prepare(
+          `UPDATE generations SET external_id = @external_id, external_meta_json = @meta, provider_input_json = @payload, message = @message, updated_at = @now
+           WHERE id = @id AND ${PENDING}`,
+        )
+        .run({
+          id,
+          now,
+          external_id: res.externalId,
+          meta: JSON.stringify({ ...(res.meta ?? {}), ...(sentTo && { sentTo: addressKey(sentTo) }), jobIndex: index, ...(before.resent && { resent: true }) }),
+          payload: res.payload ? JSON.stringify(res.payload).slice(0, 200_000) : null,
+          // A run sent again after its GPU lost it says so until its GPU reports on it.
+          message: before.resent || resentRuns().has(id) ? RESENT_WORDS : "Queued",
+        }).changes;
+      if (changed) recordSubmission(id, now);
+      return changed > 0;
     })();
+    if (!handed) {
+      // Cancelled, failed or deleted while it was being handed over (or another instance sent it): its job stops too.
+      await adapter.cancel?.({ externalId: res.externalId, meta: res.meta ?? {}, route, model: plan.model, createdAt: now }).catch(() => {});
+      // A cancelled row keeps the job's id (as before), so what was stopped can be found.
+      db()
+        .prepare("UPDATE generations SET external_id = ?, external_meta_json = ?, message = NULL, updated_at = ? WHERE id = ? AND status = 'canceled' AND external_id IS NULL")
+        .run(res.externalId, JSON.stringify(res.meta ?? {}), now, id);
+      return;
+    }
+    // The provider took a run on the account's key: a refusal or an empty balance noted before is over.
+    if (req.account && req.place !== "pool" && isCloudProvider(providerId)) markKeyGood(req.account, providerId);
   } catch (e) {
     failed ??= { error: e };
     throw e;
@@ -2784,8 +3371,11 @@ const TIMEOUT_MS = 45 * 60 * 1000;
 const WORLDCAST_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 /** …and how long it may wait in the provider's queue first (a busy local GPU works through jobs one by one). */
 const QUEUE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
-/** A row this old with no external id, that no submit in this process is working on, was cut off by a restart. */
-const STALE_SUBMIT_MS = 2 * 60 * 1000;
+/**
+ * A row this old with no external id whose turn no app process that still runs holds (takeSubmitTurn) was cut off by a
+ * restart: a wait goes on, a hand-over fails. Tests make it shorter.
+ */
+export const STALE_SUBMIT = { ms: 2 * 60 * 1000 };
 
 interface RunnerState {
   timer: NodeJS.Timeout;
@@ -2852,25 +3442,148 @@ function startRunner(): void {
 }
 
 /**
- * Jobs that never got an external id (the server died mid-submit) can't be recovered. Runs every tick. One another app
- * process that still runs is sending (a deploy's overlap: an account's files waiting their turn to go) is left to it, and
- * so is a run made to wait to enter the line (pool-holds.ts). With hosted runs on, a run on this install's GPUs that was
- * cut off between its row and its GPU task (a deploy, a crash) isn't failed: it waits to enter the line again at its
- * press-time place, and the release loop makes its GPU task (pool-release.ts). Every other row fails as before.
+ * Runs with no job yet that no app process that still runs is handing over (takeSubmitTurn: its process stopped, by a
+ * restart, or a deploy's old instance gone). One waiting for its own GPU or key goes on here, with what is left of its
+ * wait (one process takes it); so does one on this install's workers whose job was never made (sendAgainOnWorkers). One
+ * cut off in the middle of its hand-over can't be recovered, and fails. A run a process that still runs is sending or
+ * waiting on (this one, or another in a deploy's overlap) is left to it, and so is a run made to wait to enter the line
+ * (pool-holds.ts). Runs at start and every tick; not while this
+ * server stops (the app process that goes on looks).
  */
 function sweepInterrupted(): void {
+  if (draining()) return;
   const now = Date.now();
   const rows = db()
     .prepare(
-      `SELECT g.id, g.batch_id, g.created_at, g.request_json FROM generations g WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before
-         AND NOT ${SENT_ELSEWHERE("g")} AND ${NOT_HELD("g")}`,
+      `SELECT g.id, g.provider, g.model_id, g.op, g.request_json, g.external_meta_json, g.batch_id, g.created_at FROM generations g
+         WHERE g.status IN ('queued','running') AND g.external_id IS NULL AND g.depends_on IS NULL AND g.created_at < @before AND NOT ${TURN_HELD("g", false)}
+         AND ${NOT_HELD("g")}`,
     )
-    .all({ before: now - STALE_SUBMIT_MS, me: runnerToken(), quiet: now - QUIET_MS }) as Pick<Row, "id" | "batch_id" | "created_at" | "request_json">[];
+    .all({ before: now - STALE_SUBMIT.ms, __me: runnerToken(), __quiet: now - QUIET_MS, __now: now }) as Pick<
+    Row,
+    "id" | "provider" | "model_id" | "op" | "request_json" | "external_meta_json" | "batch_id" | "created_at"
+  >[];
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
-    if (hostedRunsOn() && holdCutOff(r)) continue;
-    update(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null });
+    let meta = readMeta(r.external_meta_json);
+    if (meta.heal) {
+      if (takeOver(r, meta.heal)) continue;
+      // (As it is now: the process it was taken from may have marked it as being sent since this look.)
+      meta = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null);
+    } else if (sendAgainOnWorkers(r)) continue;
+    // A run that waited and was cut off in the middle of its send may have reached its GPU or provider: never sent twice.
+    const cutOff = !!meta.heal && typeof meta.heal.sending === "number";
+    const words = cutOff ? CUT_OFF_SENDING : "This run stopped before it started. Press Retry.";
+    // (Not one a process that still runs took meanwhile.)
+    if (updateLive(r.id, { status: "failed", error: words, completed_at: Date.now(), message: null }, ` AND external_id IS NULL AND NOT ${TURN_HELD("generations", false)}`)) {
+      ownFailed(r.id, ownAccountIn(r.request_json), factsOf(r, { stage: "submit" }), cutOff ? "interrupted-sending" : "interrupted");
+      // On this install's GPUs, a job the cut-off send made stops with it (it would run for nothing).
+      if (poolOf(r)) stopJobsOf(r.id);
+    }
+  }
+}
+
+/** A waiting run whose app process was cut off while it sent the job (its GPU or provider may have it): not sent again. */
+const CUT_OFF_SENDING = "This run was interrupted while it was being sent. Press Retry.";
+
+/**
+ * A run on this install's workers whose hand-over was cut off before its job was made (a restart or a deploy while its
+ * inputs were being made ready): its job would be a task of this database, and there is none, so nothing reached a
+ * worker. It is taken by this process (one process takes it) and sent now as it was decided (its stamp: its place in
+ * line, its class, its hold), as the same job of its batch, instead of failing. Its job waits from the time the run was
+ * made (pool.ts runPlaceOf), so it keeps its place. False: not one of those, and it fails as before (one on the install's
+ * own ComfyUI may be in that ComfyUI's queue already; one whose job was made may run, and stops with it).
+ */
+function sendAgainOnWorkers(r: Pick<Row, "id" | "provider" | "request_json" | "external_meta_json" | "batch_id" | "created_at">): boolean {
+  if (r.provider !== "comfyui" || !poolOnWorkers() || hasJobFor(r.id)) return false;
+  let stored: GenerationRequest;
+  try {
+    stored = JSON.parse(r.request_json) as GenerationRequest;
+  } catch {
+    return false;
+  }
+  const account = stored.account;
+  if (!account || stored.place !== "pool") return false;
+  // Another app process took it first.
+  if (!takeSubmitTurn(r.id)) return true;
+  try {
+    // Looked at again under the turn: a job the process that held it made meanwhile (it stalled rather than stopped).
+    if (hasJobFor(r.id)) throw new LetGo("Its job was made");
+    const p = runOnPool(account, () => withRunStamp(stampOf(stored), () => prepare(stored)));
+    if (p.providerId !== r.provider) throw new LetGo("Planned elsewhere now");
+    submitting().add(r.id);
+    void submit(r.id, p.route, p.providerId, p.plan, p.req, jobIndexOf(r, readMeta(r.external_meta_json)));
+    return true;
+  } catch {
+    // It fails as before (the sweep's look, once this process has given its turn back).
+    handOverEnds(r.id);
+    return false;
+  }
+}
+
+/**
+ * A waiting run whose turn no app process that still runs holds: taken by this one, planned again as its account runs now
+ * (its GPU, its keys), and its wait goes on where it was (its budget and its tries kept). False: it isn't one this can
+ * take (one cut off in the middle of its send among them: it fails, rather than being sent twice).
+ */
+function takeOver(r: Pick<Row, "id" | "provider" | "model_id" | "op" | "request_json">, h: HealState): boolean {
+  if (typeof h.sending === "number") return false;
+  let stored: GenerationRequest;
+  try {
+    stored = JSON.parse(r.request_json) as GenerationRequest;
+  } catch {
+    return false;
+  }
+  const account = stored.account;
+  if (!account || stored.place === "pool") return false;
+  // Another app process took it first.
+  if (!takeSubmitTurn(r.id)) return true;
+  // Read again under the turn: the process that held it may have marked it as being sent after the sweep's look, before
+  // it went quiet (markSending marks only under its turn). Then it may have reached its GPU or provider: never sent twice.
+  const now = readMeta(db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(r.id) as string | null).heal;
+  if (!now || typeof now.sending === "number") {
+    handOverEnds(r.id);
+    return false;
+  }
+  h = now;
+  let p: ReturnType<typeof prepare>;
+  try {
+    p = asAccount(account, () => prepare(stored));
+  } catch (e) {
+    // It can't run as the account runs now (its key removed, its model switched off): said in its own words.
+    const refusal = e instanceof AccountRunError ? e.refusal.error : (e as Error).message;
+    if (updateLive(r.id, { status: "failed", error: refusal, completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
+      ownFailed(r.id, account, factsOf(r, { stage: "submit" }), e instanceof AccountRunError ? e.refusal.code : "refused");
+    }
+    handOverEnds(r.id);
+    return true;
+  }
+  // Planned for another provider now (its GPU disconnected, another key): its polls would ask the provider it was made
+  // for, so it stops, as a run whose GPU changed while it waited does.
+  if (p.providerId !== r.provider) {
+    stopReplanned(r.id, r.provider, account, p, "submit");
+    handOverEnds(r.id);
+    return true;
+  }
+  submitting().add(r.id);
+  void submit(r.id, p.route, p.providerId, p.plan, p.req, typeof h.index === "number" ? h.index : 0, h);
+  return true;
+}
+
+/**
+ * A run that waited for its own GPU or key, planned again after a restart or a deploy (takeOver, or advanceDependents for
+ * a step of a longer run), that would now go to another provider than the one it waited for: it stops in plain words and
+ * is never sent there, since nobody pressed Run there. `was`: the provider it was made for.
+ */
+function stopReplanned(id: string, was: string, account: string, p: { plan: { model: { id: string }; op: string } }, stage: "submit" | "chain"): void {
+  const facts: RunFacts = { provider: was, model: p.plan.model.id, op: p.plan.op, stage };
+  if (was === "comfyui") {
+    const gpu = accountGpu(account);
+    const end = diagnoseGpuJob({ kind: gpu ? "moved" : "disconnected" }, { kind: "link", url: gpuLink(gpu)?.url ?? "" });
+    failRun(id, new Error("moved"), end, account, facts);
+  } else if (updateLive(id, { status: "failed", error: "This run stopped because your keys changed while it waited. Press Retry.", completed_at: Date.now(), message: null }, " AND external_id IS NULL")) {
+    ownFailed(id, account, facts, "keys-changed");
   }
 }
 
@@ -2885,32 +3598,6 @@ function endHeldRuns(): void {
     .all() as { id: string }[];
   for (const r of rows) updateLive(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null });
   dropGone();
-}
-
-/**
- * A run on this install's GPUs cut off between its row and its GPU task: it waits to enter the line again, at its
- * press-time place (its row's time), as the job it was in its run (its seed's offset). Its rows counted against the
- * account's limits already, so it enters as soon as it can. False for any other row.
- */
-function holdCutOff(r: Pick<Row, "id" | "batch_id" | "created_at" | "request_json">): boolean {
-  let stored: GenerationRequest;
-  try {
-    stored = JSON.parse(r.request_json) as GenerationRequest;
-  } catch {
-    return false;
-  }
-  if (stored.place !== "pool" || !stored.account) return false;
-  // Its job in its run: the rows of its batch made before it (each job's row is made a moment after the one before).
-  const job = r.batch_id
-    ? (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE batch_id = ? AND depends_on IS NULL AND created_at < ?").get(r.batch_id, r.created_at) as { n: number }).n
-    : 0;
-  // A GPU task made for it whose id never reached the row (cut off in between) stops: the row gets a new one.
-  const orphans = db()
-    .prepare(`SELECT id FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state IN (${ACTIVE_STATES.map(() => "?").join(",")})`)
-    .all(r.id, ...ACTIVE_STATES) as { id: string }[];
-  for (const t of orphans) endTask(t.id, "canceled");
-  holdRun({ accountId: stored.account, rows: [{ id: r.id, job }], ...(r.batch_id && { runId: `batch:${r.batch_id}` }), reason: "service", rankRule: "press", pressedAt: r.created_at, reserved: true, counted: true });
-  return true;
 }
 
 /**
@@ -2937,7 +3624,7 @@ export function sendHeld(id: string, job: number, rankAt?: number): boolean {
     return false;
   }
   submitting().add(id);
-  void submit(id, p.route, p.providerId, p.plan, p.req, job, rankAt);
+  void submit(id, p.route, p.providerId, p.plan, p.req, job, undefined, rankAt);
   return true;
 }
 
@@ -2977,7 +3664,10 @@ async function pollGuarded(r: Row): Promise<void> {
     const onPool = account ? poolOf(r) : false;
     const own = account && !onPool ? accountRun(account, r.provider, "poll") : undefined;
     if (onPool) await runOnPool(account!, () => pollOne(r));
-    else if (own && "error" in own) update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+    else if (own && "error" in own) {
+      update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+      ownFailed(r.id, account!, factsOf(r, { stage: "poll" }), own.code);
+    }
     else if (own) await own.run(() => pollOne(r));
     else await pollOne(r);
   } catch (e) {
@@ -3134,12 +3824,15 @@ async function pollOne(r: Row): Promise<void> {
     const now = gpuLink(accountGpu(own));
     if (now && addressKey(now.url) !== ctx.meta.sentTo) {
       pollHeals().delete(r.id);
-      return failRun(r.id, new Error("moved"), diagnoseGpuJob({ kind: "moved" }, { kind: "link", url: now.url }), own);
+      failRun(r.id, new Error("moved"), diagnoseGpuJob({ kind: "moved" }, { kind: "link", url: now.url }), own, factsOf(r, { stage: "poll" }));
+      return;
     }
   }
-  // A poll that failed a moment ago waits its turn (a growing wait), instead of asking every 1.5 s.
+  // A poll that failed a moment ago waits its turn (a growing wait), instead of asking every 1.5 s; so does a made result
+  // whose copy broke off (it is copied again at the next poll).
   const healing = own ? pollHeals().get(r.id) : undefined;
   if (healing && Date.now() < healing.next) return;
+  if (own && typeof ctx.meta.saveNext === "number" && Date.now() < ctx.meta.saveNext) return;
   try {
     res = await adapterFor(r.provider, account).poll(ctx);
   } catch (e) {
@@ -3147,7 +3840,14 @@ async function pollOne(r: Row): Promise<void> {
   }
   if (own && pollError && (await healPoll(r, ctx, own, pollError))) {
     if (statusOf(r.id) !== "queued" && statusOf(r.id) !== "running") return;
-  } else if (own && !pollError) pollHeals().delete(r.id);
+  } else if (own && !pollError) {
+    const was = pollHeals().get(r.id);
+    pollHeals().delete(r.id);
+    if (was) recordOwnRun({ run: r.id, account: own, ...factsOf(r, { stage: "poll", attempt: was.n, waitedMs: Date.now() - was.first }), outcome: "healed" });
+    // Its GPU answered: the status strip and the next run take it as online (one slow status check doesn't say otherwise).
+    const link = r.provider === "comfyui" ? ownLink() : null;
+    if (link) noteHandedOver(own, link.url);
+  }
   // An account's job waits at most 30 minutes in its own ComfyUI's queue (or its provider's).
   const stored = JSON.parse(r.request_json) as GenerationRequest;
   const onPool = !!account && stored.place === "pool";
@@ -3171,18 +3871,43 @@ async function pollOne(r: Row): Promise<void> {
     }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;
+    // An account's own GPU (or its provider) whose queue keeps moving: the job waits on. Only a queue that hasn't moved
+    // for the limit, or one waited in for 2 hours, ends it.
+    const ownQueue = !!own && !onPool;
+    let movedAt = typeof ctx.meta.queueMovedAt === "number" ? ctx.meta.queueMovedAt : run.submitted_at;
+    const pos = res?.state === "queued" && typeof res.position === "number" ? res.position : undefined;
+    // The job its GPU runs now (another one): a new one there is a queue that moves too.
+    const busyWith = res?.state === "queued" && typeof res.busyWith === "string" ? res.busyWith : undefined;
+    const wasBusyWith = typeof ctx.meta.busyWith === "string" ? ctx.meta.busyWith : undefined;
+    const nearer = pos !== undefined && (typeof ctx.meta.queuePos !== "number" || pos < ctx.meta.queuePos);
+    if (ownQueue && pos !== undefined && (nearer || busyWith !== wasBusyWith)) {
+      // Its place first seen is where it starts; a place nearer the front, or another job running ahead of it, is a
+      // queue that moves.
+      if (typeof ctx.meta.queuePos === "number" && (nearer || (busyWith !== undefined && wasBusyWith !== undefined))) movedAt = now;
+      const place = nearer ? pos : ctx.meta.queuePos;
+      db()
+        .prepare(
+          "UPDATE generations SET external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.queuePos', @place, '$.queueMovedAt', @movedAt, '$.busyWith', @busyWith) WHERE id = @id AND external_id IS NOT NULL",
+        )
+        .run({ id: r.id, place, movedAt, busyWith: busyWith ?? null });
+    }
+    // While a job runs ahead of it, that one job may take its own time (45 minutes) before the queue counts as stuck.
+    const stillMs = ownQueue && busyWith ? Math.max(queueMs, TIMEOUT_MS) : queueMs;
+    const queueOver = ownQueue
+      ? now - Math.max(run.submitted_at, movedAt) > stillMs * OWN_QUEUE.scale || now - run.submitted_at > OWN_QUEUE_CAP_MS * OWN_QUEUE.scale
+      : now - run.submitted_at > queueMs;
     const deadline = ownClocks && (res?.state === "queued" || res?.state === "running") ? res.deadline : undefined;
     // (Worked out only for a started job: a queued one never reads it.)
     const limitMs = ownClocks ? (deadline?.ms ?? 0) : run.started_at ? runningLimitMs(r, ctx.meta, account, onPool) : 0;
-    const overdue = ownClocks ? !!deadline && now > deadline.at : run.started_at ? now - run.started_at > limitMs : !startsNow && now - run.submitted_at > queueMs;
+    const overdue = ownClocks ? !!deadline && now > deadline.at : run.started_at ? now - run.started_at > limitMs : !startsNow && queueOver;
     if (overdue) {
       // Stop the provider's job too, so it doesn't keep rendering (or billing) for nothing.
-      await adapterFor(r.provider, account)
-        .cancel?.(ctx)
-        .catch(() => {});
-      updateLive(r.id, {
-        status: "failed",
-        error: run.started_at || deadline
+      const cancel = () =>
+        adapterFor(r.provider, account)
+          .cancel?.(ctx)
+          .catch(() => {});
+      const words =
+        run.started_at || deadline
           ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
@@ -3190,10 +3915,26 @@ async function pollOne(r: Row): Promise<void> {
               ? POOL_WAITED
               : account
                 ? `This waited over ${queueMs / 60_000} minutes to start. Press Retry.`
-              : "This took too long to start. Press Retry.",
-        completed_at: now,
-        message: null,
-      });
+                : "This took too long to start. Press Retry.";
+      if (ownQueue) {
+        // An account's own GPU or key: why, in plain words, with what helps.
+        const waited = Math.max(1, Math.round((now - run.submitted_at) / 60_000));
+        const ran = Math.round(limitMs / 60_000);
+        const link = r.provider === "comfyui" ? ownLink() : null;
+        const ctxKey = isCloudProvider(r.provider) ? { provider: r.provider, other: otherKeyFor(own!, r.provider, r.model_id) } : null;
+        const d: Diagnosis | undefined =
+          res?.state === "queued" && res.timeoutError
+            ? { cause: "gpu-offline", words: res.timeoutError, actions: [{ kind: "retry", label: "Retry" }, ...(/paired/i.test(res.timeoutError) ? [{ kind: "pair" as const, label: "Pair with a code", target: "/connect" }] : [])], retryable: false }
+            : ctxKey
+              ? diagnoseKeyJob(run.started_at ? { kind: "too-long", minutes: ran } : { kind: "busy", minutes: waited }, ctxKey)
+              : r.provider === "comfyui"
+                ? diagnoseGpuJob(run.started_at ? { kind: "too-long", minutes: ran } : { kind: "busy", minutes: waited }, link ?? { kind: "computer" })
+                : undefined;
+        if (failRun(r.id, new Error(words), d, own, factsOf(r, { stage: "poll", waitedMs: now - run.submitted_at }))) await cancel();
+        return;
+      }
+      await cancel();
+      updateLive(r.id, { status: "failed", error: words, completed_at: now, message: null });
       return;
     }
     if (!res) {
@@ -3220,8 +3961,12 @@ async function pollOne(r: Row): Promise<void> {
           )
         : undefined);
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
-    const kept = keptFix(res.fix, own ? trouble : undefined);
-    updateLive(r.id, { status: "failed", error: (own && trouble?.words) || res.error, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+    if (own) {
+      failRun(r.id, Object.assign(new Error(res.error), { said: res.error, ...(res.fix && { fix: res.fix }) }), trouble, own, factsOf(r, { stage: "poll" }));
+      return;
+    }
+    const kept = keptFix(res.fix, undefined);
+    updateLive(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
     // (A run on this install's GPUs says nothing about the account's own GPU.)
     if (res.fix && !onPool) markStale(account ? `acct:${account}` : "install");
     return;
@@ -3272,8 +4017,10 @@ async function pollOne(r: Row): Promise<void> {
   } else {
     for (const o of keepMatte(res.outputs as RichOutput[], matte)) {
       try {
-        // An account's own GPU or key: a copy that breaks off is tried again a few times (the result is made, and paid).
-        outputs.push(await (own ? persistWithRetry(o, r.id) : persistOutput(o, r.id)));
+        // An account's own GPU or key: a copy that breaks off is tried again (the result is made, and paid). The files a
+        // result links to are kept once, before (never fetched again with each try of the main file).
+        const linked = own ? await persistArtifacts(o.meta, r.id, o.url) : undefined;
+        outputs.push(await (own ? persistWithRetry(o, r.id, linked) : persistOutput(o, r.id)));
         // Still saving: the turn is still this process's.
         claimFinish(r.id);
       } catch (e) {
@@ -3284,11 +4031,34 @@ async function pollOne(r: Row): Promise<void> {
             const left = rest.url ? scratchOutputFile(rest.url) : null;
             if (left) fs.rmSync(left, { force: true });
           }
+          // Its own GPU or key, a copy that broke off for a passing reason (the GPU or the provider dropped it for a
+          // while): copied again at a later poll, with a growing wait, for some minutes. The tile says so.
+          if (own && passingSave(e)) {
+            const at = Date.now();
+            const since = typeof ctx.meta.saveSince === "number" ? ctx.meta.saveSince : at;
+            const tries = (typeof ctx.meta.saveTries === "number" ? ctx.meta.saveTries : 0) + 1;
+            if (at - since < SAVE_HEAL_MS * SELF_HEAL.scale) {
+              const next = at + backoffMs(tries, { budgetMs: 0, firstMs: 5_000, maxMs: 60_000 }) * SELF_HEAL.scale;
+              const words = r.provider === "comfyui" ? "Your result is made. Copying it from your GPU" : `Your result is made. Copying it from ${isCloudProvider(r.provider) ? CLOUD_KEY[r.provider].label : "the provider"}`;
+              db()
+                .prepare(
+                  `UPDATE generations SET message = @words, updated_at = @at,
+                     external_meta_json = json_set(CASE WHEN json_valid(external_meta_json) THEN external_meta_json ELSE '{}' END, '$.saveSince', @since, '$.saveTries', @tries, '$.saveNext', @next)
+                   WHERE id = @id AND status = 'running'`,
+                )
+                .run({ id: r.id, words, at, since, tries, next });
+              if (tries === 1) ownEvent(r.id, own, e, saveTrouble(e, r.provider), factsOf(r, { stage: "result", attempt: 1 }), "waiting");
+              return;
+            }
+          }
           // Its own GPU or key: why, and what helps (a file over the cap, an expired link, a GPU that went away).
           const trouble = own && !(e instanceof AccountFilesFull) ? saveTrouble(e, r.provider) : undefined;
           const why = e instanceof AccountFilesFull ? e.message : (trouble?.words ?? "We couldn't save this result. Press Retry.");
-          const kept = keptFix(undefined, trouble);
-          updateLive(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+          if (own) failRun(r.id, Object.assign(new Error(why), { said: (e as Error).message }), trouble, own, factsOf(r, { stage: "result" }));
+          else {
+            const kept = keptFix(undefined, trouble);
+            updateLive(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+          }
           return;
         }
         outputs.push({ url: o.url, kind: o.kind ?? r.kind, ...inlineText(o.text, o.meta), ...(o.draftId ? { draftId: o.draftId } : {}) });
@@ -3363,20 +4133,22 @@ async function pollOne(r: Row): Promise<void> {
 /**
  * Change a run the runner looked at, only while it still goes (queued or running, and not held for its output check) and
  * no other app process that still runs holds its turn to save its results. A look that took a while (a slow poll, a
- * deploy's overlap) never takes a run another process saved, failed or canceled meanwhile back to an earlier state, and
- * never fails a run another process is saving. Returns whether the change was made.
+ * deploy's overlap, a wait for an account's own GPU) never takes a run another process saved, failed or canceled (or a
+ * person canceled) meanwhile back to an earlier state, and never fails a run another process is saving. `extra`: more of
+ * the WHERE clause (it may read @__me, @__quiet and @__now, and its own `params`). Returns whether the change was made.
  */
-export function updateLive(id: string, fields: Partial<Row>, now = Date.now()): boolean {
+export function updateLive(id: string, fields: Partial<Row>, extra = "", params: Record<string, unknown> = {}): boolean {
   const keys = Object.keys(fields);
   if (!keys.length) return false;
+  const now = Date.now();
   return (
     db()
       .prepare(
         `UPDATE generations SET ${keys.map((k) => `${k} = @${k}`).join(", ")}, updated_at = @__now WHERE id = @__id AND status IN ('queued', 'running') AND stage IS NULL
            AND NOT EXISTS (SELECT 1 FROM generation_runs t WHERE t.id = @__id AND t.finish_by IS NOT NULL AND t.finish_by != @__me AND t.finish_until >= @__now
-             AND NOT ${HOLDER_QUIET})`,
+             AND NOT ${HOLDER_QUIET})${extra}`,
       )
-      .run({ ...fields, __now: now, __id: id, __me: runnerToken(), __quiet: now - QUIET_MS }).changes > 0
+      .run({ ...params, ...fields, __now: now, __id: id, __me: runnerToken(), __quiet: now - QUIET_MS }).changes > 0
   );
 }
 
@@ -3410,6 +4182,23 @@ function beat(now = Date.now()): void {
     .prepare("INSERT INTO app_processes (token, started_at, seen_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET seen_at = excluded.seen_at")
     .run(runnerToken(), now, now);
   noteCatalogProcess(catalogVersion(), processStart(), now);
+  renewLeases(now);
+}
+
+/**
+ * The leases of the runs whose turn this process holds (OLD_LEASE), renewed once less than OLD_LEASE.ms - renewMs is left
+ * (each renewal is a change of the run that its live updates send). Never over a live lease of the release before.
+ */
+function renewLeases(now: number): void {
+  const by = leaseField("generations", "by");
+  const until = leaseField("generations", "until");
+  db()
+    .prepare(
+      `UPDATE generations SET external_meta_json = ${LEASE_SET}
+       WHERE id IN (SELECT id FROM submit_turns WHERE held_by = @me) AND ${PENDING}
+         AND (${until} IS NULL OR ${until} <= @now OR ${by} = @me) AND (${by} IS NOT @me OR ${until} IS NULL OR ${until} < @fresh)`,
+    )
+    .run({ me: runnerToken(), now, fresh: now + OLD_LEASE.ms - OLD_LEASE.renewMs, lease: leaseOf(now) });
 }
 
 /**
@@ -3429,6 +4218,16 @@ function keepBeating(): void {
   } catch (e) {
     console.warn(`[generations] app process: ${(e as Error).message}`);
   }
+  // Started inside a caller's transaction (the runner, first started by a run being made): that first word goes if the
+  // transaction is rolled back, so it is said again as soon as the transaction is over, not 5 s later.
+  if (db().inTransaction)
+    setImmediate(() => {
+      try {
+        beat();
+      } catch {
+        // The next beat says it.
+      }
+    });
   const timer = setInterval(() => {
     try {
       beat();
@@ -3448,6 +4247,8 @@ function giveTurnsBack(): void {
     const me = runnerToken();
     d.transaction(() => {
       d.prepare("UPDATE generation_runs SET finish_by = NULL, finish_until = NULL WHERE finish_by = ? AND finish_until >= ?").run(me, Date.now());
+      // (Its leases first, while its turns still name the runs: OLD_LEASE.)
+      d.prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.lease') WHERE id IN (SELECT id FROM submit_turns WHERE held_by = @me) AND ${leaseField("generations", "by")} = @me`).run({ me });
       d.prepare("DELETE FROM submit_turns WHERE held_by = ?").run(me);
       d.prepare("DELETE FROM app_processes WHERE token = ?").run(me);
     })();
@@ -3485,30 +4286,34 @@ export function claimFinish(id: string, now = Date.now()): boolean {
 }
 
 /**
- * Take this app process's turn to hand a run to its provider: only when no other app process that still runs holds it
- * (one quiet for 20 s, or gone, holds nothing any more). `waiting`: only while the run still waits to be sent (queued,
- * with no job at its provider yet), as a chain's next step is, which every app process looks at (advanceDependents).
- * Two processes on one database (a deploy's overlap) never both send a run, and neither fails one the other is still
- * sending (sweepInterrupted). handOverEnds gives the turn back.
+ * Take this app process's turn to hand a run to its provider: only while the run still waits for its hand-over (queued
+ * or running, with no job at its provider yet), and only when no other app process that still runs holds the turn (one
+ * quiet for 20 s, or gone, holds nothing any more). The turn is held from the first look until the run is handed over or
+ * stops, its wait for an account's own GPU or key included (submitNow). `waiting`: only while the run is queued, as a
+ * chain's next step is, which every app process looks at (advanceDependents). Two processes on one database (a deploy's
+ * overlap) never both send a run, neither fails one the other is still sending or waiting on (sweepInterrupted), and a
+ * wait whose process stopped is taken over by one of them only (takeOver). handOverEnds gives the turn back.
  */
 function takeSubmitTurn(id: string, o: { waiting?: boolean } = {}, now = Date.now()): boolean {
   keepBeating();
   const d = db();
   return d
     .transaction((): boolean => {
-      if (o.waiting) {
-        const g = d.prepare("SELECT status, external_id FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id"> | undefined;
-        if (!g || g.status !== "queued" || g.external_id) return false;
-      }
-      return (
+      const g = d.prepare("SELECT status, external_id, external_meta_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "external_id" | "external_meta_json"> | undefined;
+      if (!g || g.external_id || (g.status !== "queued" && (o.waiting || g.status !== "running"))) return false;
+      // An instance of the release before holds it (its lease: OLD_LEASE).
+      if (oldLeaseHolds(g.external_meta_json, now)) return false;
+      const took =
         d
           .prepare(
             `INSERT INTO submit_turns (id, held_by, held_at) VALUES (@id, @me, @now)
              ON CONFLICT(id) DO UPDATE SET held_by = excluded.held_by, held_at = excluded.held_at
              WHERE submit_turns.held_by = @me OR NOT EXISTS (SELECT 1 FROM app_processes p WHERE p.token = submit_turns.held_by AND p.seen_at >= @quiet)`,
           )
-          .run({ id, me: runnerToken(), now, quiet: now - QUIET_MS }).changes > 0
-      );
+          .run({ id, me: runnerToken(), now, quiet: now - QUIET_MS }).changes > 0;
+      // The lease the release before reads as held, while this process holds the turn (renewed by the beat).
+      if (took) d.prepare(`UPDATE generations SET external_meta_json = ${LEASE_SET} WHERE id = @id AND ${PENDING}`).run({ id, lease: leaseOf(now) });
+      return took;
     })
     .immediate();
 }
@@ -3525,7 +4330,13 @@ function noteSubmitTurn(id: string): void {
 function handOverEnds(id: string): void {
   submitting().delete(id);
   try {
-    db().prepare("DELETE FROM submit_turns WHERE id = ? AND held_by = ?").run(id, runnerToken());
+    const d = db();
+    const me = runnerToken();
+    d.transaction(() => {
+      d.prepare("DELETE FROM submit_turns WHERE id = ? AND held_by = ?").run(id, me);
+      // Its lease goes with the turn (OLD_LEASE): an instance of the release before may take a run left waiting at once.
+      d.prepare(`UPDATE generations SET external_meta_json = json_remove(external_meta_json, '$.lease') WHERE id = ? AND ${leaseField("generations", "by")} = ?`).run(id, me);
+    })();
   } catch {
     // A closed database: the turn is free once this process has been quiet for 20 s.
   }
@@ -3820,8 +4631,9 @@ async function persistRelayOutput(o: RichOutput, generationId: string, account: 
   };
 }
 
-async function persistOutput(o: RichOutput, generationId: string): Promise<OutputFile> {
-  const linked = await persistArtifacts(o.meta, generationId, o.url);
+/** Save one result. `pre`: the files it links to, kept already (persistArtifacts runs once for a copy tried again). */
+async function persistOutput(o: RichOutput, generationId: string, pre?: { linked: Record<string, unknown> | undefined }): Promise<OutputFile> {
+  const linked = pre ? pre.linked : await persistArtifacts(o.meta, generationId, o.url);
   const account = tenantAccount();
   if (o.url?.startsWith("relay:") || o.url?.startsWith("scratch:")) return persistRelayOutput(o, generationId, account, linked);
   if (account && o.url && /^https?:\/\//.test(o.url)) return persistAccountOutput(o, generationId, account, linked);
@@ -3910,6 +4722,20 @@ export async function cancelGeneration(id: string): Promise<void> {
 function markCanceled(id: string): boolean {
   const now = Date.now();
   return db().prepare("UPDATE generations SET status = 'canceled', completed_at = ?, message = NULL, updated_at = ? WHERE id = ? AND status IN ('queued', 'running')").run(now, now, id).changes > 0;
+}
+
+/**
+ * Stop the runs a new one takes the place of (Run with your key on a waiting run), in the same step that makes the new
+ * run (POST /api/generations, inside admitRun's transaction): each one not handed over yet is canceled at once, so a press
+ * on another of its batch's tiles, in this app process or another, finds nothing left to take. Its wait sees it at its
+ * next look and gives its turn back; a send under way stops its job as it lands (handOver). A failed one stays as it is.
+ */
+export function stopReplaced(ids: readonly string[]): void {
+  const pending = db().prepare("SELECT depends_on FROM generations WHERE id = ? AND status = 'queued' AND external_id IS NULL");
+  for (const id of ids) {
+    const r = pending.get(id) as Pick<Row, "depends_on"> | undefined;
+    if (r && markCanceled(id)) dropUnused(depIds(r.depends_on));
+  }
 }
 
 // ---------------------------------------------------------------------------

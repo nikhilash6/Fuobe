@@ -29,7 +29,7 @@ const publishable = (g: Generation) => g.status === "succeeded" && g.outputs.len
 const firstShown = (g: Generation) => shownOutputs(g)[0] ?? 0;
 
 /**
- * Publish a selection as a portfolio page (Higgsfield's Publish wizard, made a share link):
+ * Publish a selection as a portfolio page (the parity studio's Publish wizard, made a share link):
  * Details (title, description, tags) → Assets (Feature, Series or Carousel, in your order) →
  * Cover → Access (with prompts or prompts hidden, and when the link stops working).
  */

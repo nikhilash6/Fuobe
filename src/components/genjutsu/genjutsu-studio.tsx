@@ -53,6 +53,7 @@ import {
   MODE_TARGETS,
   modeHint,
   OPEN_TARGET_PROBLEM,
+  resolutionChoices,
   resolutionWords,
   SCENE_ACTIONS,
   SOURCE_LABELS,
@@ -298,6 +299,36 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   const seedNumber = seedOf(seed);
   // Modes with no seed field of their own show one once a seed is set (an example's or a pasted setup's).
   const seedShown = !isCharacter && !fresh && seed.trim() !== "" && seedFor === mode;
+  /** A model picked in the list (or by a note's Switch): the rest of the setup stays where it still applies. */
+  const pickMaker = (id: string) => {
+    setPicked((p) => ({ ...p, [choiceKey]: id }));
+    // Another model than Scene edit: back to swapping (Remove it and New background are Scene edit's).
+    if (mode === "swap" && !options.find((m) => m.id === id)?.actions) setAction("change");
+    // Motion transfer's MiniMax H3 takes up to 15 s: a longer selection is cut back to its first 15 s.
+    const most = mode === "motion" ? options.find((m) => m.id === id)?.part?.max : undefined;
+    if (most && range && range.endTime - range.startTime > most + 0.05) setRange({ ...range, endTime: Math.round((range.startTime + most) * 100) / 100 });
+  };
+  // Resolutions the picked model can't render stay in view, muted; pressing one says what renders it, with Switch.
+  const resChoices = maker ? resolutionChoices(maker, options, tier, isOn) : [];
+  const resolutionOptions = GENJUTSU.qualities.map((q) => {
+    const c = resChoices.find((r) => r.quality === q);
+    const route = c?.route;
+    return {
+      value: q,
+      label: q,
+      unavailable: c && !c.ok && {
+        why: c.why ?? "",
+        fix: route && {
+          label: "Switch",
+          run: () => {
+            if (route.pick) pickMaker(route.pick);
+            if (route.tier) setTier(route.tier);
+            setQuality(route.quality);
+          },
+        },
+      },
+    };
+  });
   // Character swap's H3 makers take H3's two qualities; the other makers (Recast, P-Video…) Genjutsu's own.
   // A size this engine can't make worth it (your GPU's 4K) is asked as 2K, as the picker shows it.
   const askedQuality = isCharacter && maker?.h3 ? (qualityOff(engine, charQuality) ? "2K" : charQuality) : quality;
@@ -1193,14 +1224,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                   <MakerList
                     options={options}
                     value={maker.pair && maker.tier === "high" ? maker.pair : maker.id}
-                    onChange={(id) => {
-                      setPicked((p) => ({ ...p, [choiceKey]: id }));
-                      // Another model than Scene edit: back to swapping (Remove it and New background are Scene edit's).
-                      if (mode === "swap" && !options.find((m) => m.id === id)?.actions) setAction("change");
-                      // Motion transfer's MiniMax H3 takes up to 15 s: a longer selection is cut back to its first 15 s.
-                      const most = mode === "motion" ? options.find((m) => m.id === id)?.part?.max : undefined;
-                      if (most && range && range.endTime - range.startTime > most + 0.05) setRange({ ...range, endTime: Math.round((range.startTime + most) * 100) / 100 });
-                    }}
+                    onChange={pickMaker}
                     mark={(m) => (m.features && !m.features.some((f) => !!live?.[f]) ? mark(m.features[0]) : undefined)}
                   />
                 </Field>
@@ -1232,7 +1256,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                     label="Resolution"
                     value={(maker && GENJUTSU.qualities.find((q) => q === qualityFor(maker, quality))) || quality}
                     onChange={setQuality}
-                    options={GENJUTSU.qualities.map((q) => ({ value: q, label: q }))}
+                    options={resolutionOptions}
                   />
                 </Field>
               )}

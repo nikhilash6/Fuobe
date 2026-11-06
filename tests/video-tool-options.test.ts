@@ -6,7 +6,7 @@ import type { GenerationRequest, ModelDef } from "@/lib/catalog/types";
 import { settingsShape, settingsSummary, videoToolNote } from "@/lib/composer";
 import { VIDEO_DEPTH_STUDIO, VIDEO_MATTE_STUDIO } from "@/lib/studios";
 
-// Video tools → Remove background and Depth map, with Higgsfield's options (docs/research/higgsfield-delta-4.md §4.3):
+// Video tools → Remove background and Depth map, with the parity studio's options (docs/research/parity-delta-4.md §4.3):
 // what to keep (SAM), Cutout video or Alpha mask, the colour map and side by side, per model and engine.
 
 const model = (id: string) => getModel(id)!;
@@ -84,7 +84,7 @@ describe("Remove background: what to keep, cut-out or alpha mask", () => {
 });
 
 describe("Depth map: colour map and side by side", () => {
-  it("the cloud draws Higgsfield's five maps and goes side by side; the open engine gray or inferno", () => {
+  it("the cloud draws the parity studio's five maps and goes side by side; the open engine gray or inferno", () => {
     expect(model("depth-anything-video-cloud").options).toMatchObject({ colormaps: ["grayscale", "turbo", "inferno", "magma", "viridis"], sideBySide: true });
     expect(buildPayload(map("depth-anything-video-cloud"), { ...clip, colormap: "turbo", sideBySide: true })).toMatchObject({
       video_url: clip.video,

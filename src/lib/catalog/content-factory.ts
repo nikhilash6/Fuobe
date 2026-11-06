@@ -27,7 +27,7 @@ import type { Engine } from "./types";
  * Content Factory: a faceless short-video series in the style of a reference clip, made here (each episode is a
  * Faceless episode in a Content Factory channel, src/server/content-factory.ts) or handed to Claude over MCP.
  *
- * Research: docs/research/higgsfield-delta-4.md §4.6 ("Generate in Claude" / "Generate here"; a reference upload,
+ * Research: docs/research/parity-delta-4.md §4.6 ("Generate in Claude" / "Generate here"; a reference upload,
  * a TikTok or Instagram link, or a preset; "Make a video about…"; 30 s – 5 min; episodes; four animation styles;
  * the four Faceless genres) and docs/research/comfyui-oss-4.md §i (reference-brief-gemma4: Gemma 4 E4B reads the
  * frames at 1 fps and the sound and writes a JSON style brief). The cloud reads the same brief from extracted
@@ -43,7 +43,7 @@ import type { Engine } from "./types";
 // ---------------------------------------------------------------------------
 // The composer's choices
 
-/** Higgsfield's four animation styles, as two render modes (a video model, or Ken Burns moves over stills) with their own pacing and camera. */
+/** The parity studio's four animation styles, as two render modes (a video model, or Ken Burns moves over stills) with their own pacing and camera. */
 export type AnimationStyleId = "fully-animated" | "seamless" | "scene-by-scene" | "frame-by-frame";
 
 export interface AnimationStyle {
@@ -1073,7 +1073,7 @@ export function claudeMessage(o: {
     .filter((l): l is string => l !== null)
     .filter((l, i, all) => l !== "" || (all[i - 1] !== "" && i > 0));
   let out = lines.join("\n");
-  // Within Higgsfield's 64 KB cap (a very long prompt is cut, never the instructions).
+  // Within the parity studio's 64 KB cap (a very long prompt is cut, never the instructions).
   while (new TextEncoder().encode(out).length > MAX_CLAUDE_MESSAGE) out = out.replace(/Make a video about: ([\s\S]*?)\n/, (_m, p: string) => `Make a video about: ${p.slice(0, Math.floor(p.length * 0.8))}…\n`);
   return out;
 }

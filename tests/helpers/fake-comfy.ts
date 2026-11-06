@@ -9,6 +9,8 @@ import zlib from "node:zlib";
 
 export interface FakeScenario {
   version?: string;
+  /** system_stats' python_version, build part included ("3.12.9 (main, Feb 12 2025) [Clang 19.1.6 ]"). */
+  python?: string;
   os?: string;
   embeddedPython?: boolean;
   deployEnv?: string;
@@ -148,7 +150,7 @@ export async function startFakeComfy(scenario: FakeScenario, port = 0): Promise<
               ram_total: (s.ramGb ?? 32) * GB,
               ram_free: (s.ramGb ?? 32) * GB * 0.5,
               comfyui_version: s.version ?? "0.41.2",
-              python_version: "3.12.9 (main)",
+              python_version: s.python ?? "3.12.9 (main)",
               pytorch_version: "2.9.0+cu128",
               embedded_python: !!s.embeddedPython,
               deploy_environment: s.deployEnv ?? "local-git",

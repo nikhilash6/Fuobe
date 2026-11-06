@@ -41,11 +41,16 @@ import { discardBody, fetchPublic, peekText, RemoteFetchError } from "../remote-
 import { zipToFile } from "../zip";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskFloorBytes, diskFreeBytes, diskHasRoom, filesFullMessage } from "../account-files";
 import { accountSend } from "../account-send";
+import { redactKey } from "../provider-keys";
 import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
 import { isOutOfMemory } from "@/lib/gpu/fix-codes";
-import { diagnoseGpu, diagnoseGpuJob, diagnoseRefusal, type Diagnosis, type GpuFailure, type GpuStage } from "@/lib/diagnose";
+import { diagnoseGpu, diagnoseGpuJob, diagnoseRefusal, isLoaderNode, loaderFiles, MODEL_FILE, modelFileProblem, type Diagnosis, type GpuFailure, type GpuJobTrouble, type GpuPlace, type GpuStage } from "@/lib/diagnose";
+import { hfPage } from "@/lib/gpu/plan";
+import { fileTitle } from "@/lib/gpu/readiness";
+import { formatBytes } from "@/lib/gpu/requirements";
+import type { FileKey } from "@/lib/gpu/types";
 import {
   makingWords,
   META_BATCH_HISTORY,
@@ -367,15 +372,21 @@ export const OWN_FRAME_MAX_BYTES = 100 * 2 ** 20;
 
 /**
  * What an account's ComfyUI may answer, by path: a file (/view) up to 1 GB in 15 minutes; an upload's answer 1 MB, in
- * 5 minutes (the time covers sending the file); the node list (/object_info) 64 MB in 2 minutes; anything else 8 MB in
- * 60 seconds. A slow or endless answer can't hold the server.
+ * the time sending its file takes at a slow 128 KB/s plus a minute (5 to 30 minutes: the time covers sending the file);
+ * the node list (/object_info) 64 MB in 2 minutes; anything else 8 MB in 60 seconds. A slow or endless answer can't
+ * hold the server.
  */
-export function ownGpuLimits(p: string): { maxBytes: number; deadlineMs: number } {
+export function ownGpuLimits(p: string, bytes = 0): { maxBytes: number; deadlineMs: number } {
   const at = p.split("?")[0];
   if (at.startsWith("/view")) return OWN_OUTPUT_LIMITS;
-  if (at.startsWith("/upload/")) return { maxBytes: 2 ** 20, deadlineMs: 5 * 60_000 };
+  if (at.startsWith("/upload/")) return { maxBytes: 2 ** 20, deadlineMs: uploadDeadlineMs(bytes) };
   if (at.startsWith("/object_info")) return { maxBytes: 64 * 2 ** 20, deadlineMs: 2 * 60_000 };
   return { maxBytes: 8 * 2 ** 20, deadlineMs: 60_000 };
+}
+
+/** How long sending a file of `bytes` to an account's ComfyUI may take: 128 KB/s plus a minute, between 5 and 30 minutes. */
+export function uploadDeadlineMs(bytes: number): number {
+  return Math.min(30 * 60_000, Math.max(5 * 60_000, Math.ceil((Math.max(0, bytes) / (128 * 1024)) * 1000) + 60_000));
 }
 
 /** A job id as ComfyUI gives it (a UUID): anything else from an account's ComfyUI is refused, never put in a path. */
@@ -430,8 +441,19 @@ export function troubleError(d: Diagnosis, status?: number, failure?: GpuFailure
   return Object.assign(new ProviderError(d.words, status), { trouble: d, ...(failure && { failure }) });
 }
 
-/** What came back from an account's link, read for the person (diagnose.ts), as the run's error. */
-const gpuTrouble = (f: GpuFailure, place: Parameters<typeof diagnoseGpu>[1]) => troubleError(diagnoseGpu(f, place), f.status, f);
+/** What came back from an account's link, read for the person (diagnose.ts), as the run's error. Its token never in it. */
+const gpuTrouble = (f: GpuFailure, place: Parameters<typeof diagnoseGpu>[1]) => {
+  const own = ownGpu();
+  const token = own && own.kind !== "computer" ? own.token : undefined;
+  const clean = token ? withoutToken(f, token) : f;
+  return troubleError(diagnoseGpu(clean, place), clean.status, clean);
+};
+
+/** What came back, with a token it echoed taken out (a page that repeats the request's headers). */
+export function withoutToken(f: GpuFailure, token: string): GpuFailure {
+  const out = (t: string | undefined) => (t === undefined ? t : redactKey(t, token));
+  return { ...f, body: out(f.body), error: out(f.error), location: out(f.location) };
+}
 
 /** An answer from an account's link that isn't what was asked: read for the person (its body's first KB, for details). */
 async function linkAnswer(res: Response, f: Omit<GpuFailure, "status" | "body" | "contentType" | "location" | "retryAfterS">, link: NonNullable<ReturnType<typeof ownLink>>): Promise<ProviderError> {
@@ -460,7 +482,8 @@ async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker
     // A visitor without a GPU of its own (a price check): nothing to reach, and never the install's.
     if (!base) throw new ProviderError(CONNECT_GPU_MESSAGE);
     try {
-      return await fetchPublic(`${base}${p}`, { ...init, headers: { "ngrok-skip-browser-warning": "1", ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, ...ownGpuLimits(p) });
+      // A connection that doesn't open in 15 s is a GPU that doesn't answer (the idle time, 2 minutes, is for a slow one).
+      return await fetchPublic(`${base}${p}`, { ...init, headers: { "ngrok-skip-browser-warning": "1", ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, connectTimeoutMs: 15_000, ...ownGpuLimits(p, o.bytes) });
     } catch (e) {
       // The account's words (a stopped pod, a GPU that doesn't answer…); the reason itself goes in the details line.
       throw gpuTrouble({ stage: stageOf(p), error: (e as Error).message, bytes: o.bytes }, ownLink() ?? { kind: "link", url: base });
@@ -602,6 +625,18 @@ function forget(promptId: string) {
   globalThis.__fuobeComfyWs?.progress.delete(promptId);
   globalThis.__fuobeComfyWsIsolated?.progress.delete(promptId);
   globalThis.__fuobeComfyMisses?.delete(promptId);
+}
+
+/**
+ * A job's place in ComfyUI's queue (`/queue` queue_pending): how many jobs go before it (0: next), or -1 when it isn't
+ * there. The list is ComfyUI's heap, not in order: the jobs before it are the ones with a lower number.
+ */
+export function queuePlace(pending: unknown[][], promptId: string): number {
+  const mine = pending.find((q) => q[1] === promptId);
+  if (!mine) return -1;
+  const n = mine[0];
+  if (typeof n !== "number") return pending.indexOf(mine);
+  return pending.filter((q) => typeof q[0] === "number" && q[0] < n).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -1269,9 +1304,11 @@ export function promptRefusal(
 ): { message?: string; fix?: ReturnType<typeof fixFromPromptError>; details?: string; plain?: true } {
   // The index names the pack a missing class comes from, so the message names that pack, not every pack the workflow uses.
   let packOf: (cls: string) => string | undefined = () => undefined;
+  let idx: ReturnType<typeof loadIndex> | undefined;
   try {
-    const idx = loadIndex();
-    packOf = (cls) => Object.entries(idx.packs).find(([, p]) => p.classes.includes(cls))?.[0];
+    const index = loadIndex();
+    idx = index;
+    packOf = (cls) => Object.entries(index.packs).find(([, p]) => p.classes.includes(cls))?.[0];
   } catch {}
   const fix = fixFromPromptError(body, manifest.id, manifest.models, packOf);
   const missingClass = fix?.code === "comfy_missing_node" ? fix.items[0] : undefined;
@@ -1309,7 +1346,12 @@ export function promptRefusal(
       const words =
         fix.code === "comfy_missing_node"
           ? `Your ComfyUI needs one add-on for this: ${name}. Press Fix it to add it.`
-          : `Your ComfyUI needs one more file for this: ${name}. Press Fix it to see how to add it.`;
+          : (() => {
+              // The file as the index knows it: its title, size and folder.
+              const f = first?.folder && first.file ? idx?.files[`${first.folder}/${first.file}` as FileKey] : undefined;
+              const what = f ? `the ${fileTitle(f.folder, f.file)} (${f.file}, ${formatBytes(f.sizeBytes)})` : name;
+              return `Your GPU needs ${what} in ComfyUI/models/${f?.folder ?? first?.folder ?? ""}. Press Fix it to get it, then Check again.`;
+            })();
       return { message: words, fix, plain: true, ...(detail && detail !== words && { details: detail.replace(/\s*\(see scripts\/comfy\/README\.md\)/, "") }) };
     }
   }
@@ -1333,7 +1375,77 @@ function explainExecutionError(err: { exception_message?: string; node_type?: st
   return `${err.node_type}: ${msg}`;
 }
 
-const executionError = (entry: HistoryEntry) => entry.status?.messages?.find(([t]) => t === "execution_error")?.[1] as { exception_message?: string; node_type?: string } | undefined;
+type ExecutionError = { exception_message?: string; node_type?: string; node_id?: string; current_inputs?: unknown };
+const executionError = (entry: HistoryEntry) => entry.status?.messages?.find(([t]) => t === "execution_error")?.[1] as ExecutionError | undefined;
+
+/**
+ * Where a model file downloads from, for an account whose GPU has it damaged or lacks it: the requirement index's
+ * (pinned to its revision), the workflow's own list, or a LoRA's page. A gated file: its Hugging Face page (its licence
+ * first). Only an https link.
+ */
+export function modelFileUrl(file: string, manifest?: Pick<ManifestWorkflow, "models">): string | undefined {
+  const name = (file.split(/[\\/]/).pop() ?? file).toLowerCase();
+  const https = (u: string | undefined) => (u && /^https:\/\/[^\s"'<>]+$/i.test(u) ? u : undefined);
+  let indexed: { url: string; pinnedUrl?: string; gated?: boolean } | undefined;
+  try {
+    indexed = Object.values(loadIndex().files).find((f) => f.file.toLowerCase() === name);
+  } catch {}
+  if (indexed) return https(indexed.gated ? hfPage(indexed.url) : indexed.pinnedUrl || indexed.url);
+  const listed = manifest?.models.find((m) => (m.file.split(/[\\/]/).pop() ?? m.file).toLowerCase() === name);
+  if (listed?.url) return https(listed.gated ? hfPage(listed.url) : needsToken(listed.url) ? undefined : listed.url);
+  return https(loraByFile(file.split(/[\\/]/).pop() ?? file)?.page);
+}
+
+/**
+ * A job's error as diagnose.ts reads it. A loader that can't read its model file, or doesn't have it: the file it was
+ * loading (from the graph that was sent, by the error's node id) and where it downloads from.
+ */
+function jobErrorOf(err: ExecutionError | undefined, graph: unknown, manifest: ManifestWorkflow | undefined): Extract<GpuJobTrouble, { kind: "error" }> {
+  const base = { kind: "error" as const, nodeType: err?.node_type, message: err?.exception_message };
+  if (!err || !modelFileProblem(err.node_type, err.exception_message)) return base;
+  const files = loaderFiles(err, graph);
+  const fileUrl = files.length === 1 ? modelFileUrl(files[0], manifest) : undefined;
+  return { ...base, files, ...(fileUrl && { fileUrl }) };
+}
+
+/**
+ * A job that failed on an account's own GPU at a web address, said plainly with what helps: stopped there, out of memory,
+ * a model file its loader can't read or doesn't have (named, with where to get it again), or an add-on's exception.
+ * ComfyUI's own words go in the details line.
+ */
+function ownJobFailed(entry: HistoryEntry, manifest: ManifestWorkflow | undefined, link: GpuPlace): { state: "failed"; error: string; trouble: Diagnosis } {
+  const err = executionError(entry);
+  const said = explainExecutionError(err, manifest);
+  const interrupted = !err && entry.status?.messages?.some(([type]) => type === "execution_interrupted");
+  const d: Diagnosis = interrupted
+    ? diagnoseGpuJob({ kind: "interrupted" }, link)
+    : err && !modelFileProblem(err.node_type, err.exception_message) && said !== `${err.node_type}: ${(err.exception_message ?? "").trim()}`
+      ? { cause: "gpu-job-error", words: said, actions: [{ kind: "retry", label: "Retry" }], retryable: false }
+      : diagnoseGpuJob(jobErrorOf(err, entry.prompt?.[2], manifest), link);
+  return { state: "failed", error: d.words, trouble: d };
+}
+
+/**
+ * A /prompt refusal on an account's own GPU for a model file a loader doesn't list, one no "Fix it" knows (a file outside
+ * the workflow's list): the file named, with where to get it.
+ */
+function unlistedModelFile(body: PromptRefusalBody, manifest: ManifestWorkflow, place: GpuPlace): Diagnosis | null {
+  const errs = body.node_errors && typeof body.node_errors === "object" ? Object.values(body.node_errors as Record<string, unknown>) : [];
+  for (const raw of errs.slice(0, 64)) {
+    const ne = raw as { class_type?: unknown; errors?: unknown } | null;
+    const cls = typeof ne?.class_type === "string" ? ne.class_type : undefined;
+    if (!isLoaderNode(cls) || !Array.isArray(ne?.errors)) continue;
+    for (const e of ne.errors.slice(0, 16) as { message?: unknown; details?: unknown; extra_info?: { received_value?: unknown } }[]) {
+      const file = e?.extra_info?.received_value;
+      if (typeof file !== "string" || !MODEL_FILE.test(file.trim()) || !/not in list/i.test(`${e.message ?? ""} ${e.details ?? ""}`)) continue;
+      const details = String(e.details ?? "").slice(0, 600);
+      const message = `${String(e.message ?? "Value not in list")}: ${details.includes(file.trim()) ? details : file.trim()}`;
+      const fileUrl = modelFileUrl(file.trim(), manifest);
+      return diagnoseGpuJob({ kind: "error", nodeType: cls, message, files: [file.trim()], ...(fileUrl && { fileUrl }) }, place);
+    }
+  }
+  return null;
+}
 
 const promptHasPrefix = (prompt: unknown, prefix: string) =>
   !!prompt && typeof prompt === "object" && Object.values(prompt as ComfyWorkflow).some((n) => n?.inputs?.filename_prefix === prefix);
@@ -1366,7 +1478,7 @@ export function metaBatchResults<E extends { prompt?: unknown[] }>(passes: E[], 
  * VHS meta-batching re-queues the prompt (new prompt ids) until every frame is done; only the last pass
  * saves the video. Follow the passes by their shared filename prefix.
  */
-async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | undefined, worker: ComfyWorker): Promise<ComfyOutput[] | "running" | { error: string } | null> {
+async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | undefined, worker: ComfyWorker): Promise<ComfyOutput[] | "running" | { error: string; failed: HistoryEntry } | null> {
   const queue = await comfyJson<{ queue_running?: unknown[][]; queue_pending?: unknown[][] }>("/queue", worker);
   if ([...(queue.queue_running ?? []), ...(queue.queue_pending ?? [])].some((q) => promptHasPrefix(q[2], prefix))) return "running";
   const read = async (n: number) => Object.values(await comfyJson<Record<string, HistoryEntry>>(`/history?max_items=${n}`, worker)).filter((e) => promptHasPrefix(e.prompt?.[2], prefix));
@@ -1376,7 +1488,7 @@ async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | unde
   if (passes.some((e) => collect(e).some(isFrame))) passes = await read(META_BATCH_HISTORY);
   // A pass that failed (out of memory, a node exception) ends the job: say why instead of "no output".
   const failed = passes.find((e) => e.status?.status_str === "error");
-  if (failed) return { error: explainExecutionError(executionError(failed), manifest) };
+  if (failed) return { error: explainExecutionError(executionError(failed), manifest), failed };
   const files = metaBatchResults(passes, collect);
   return files.length ? files : null;
 }
@@ -1578,7 +1690,12 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
   const failed = list.find((e) => e?.status?.status_str === "error");
   if (failed) {
     const interrupted = failed.status?.messages?.some(([type]) => type === "execution_interrupted");
-    return { error: interrupted ? RELAY_WORDS.stopped : explainExecutionError(executionError(failed), manifest) };
+    if (interrupted) return { error: RELAY_WORDS.stopped };
+    // An account's own computer or paired ComfyUI (never the workers): a model file its loader can't read, or doesn't
+    // have, is kept as what it is, and said plainly with where to get it when the run is read (relayFailure).
+    const err = executionError(failed);
+    if (tenantAccount() && !t.pools && err && modelFileProblem(err.node_type, err.exception_message)) return { error: modelFileTaskError(jobErrorOf(err, failed.prompt?.[2], manifest)) };
+    return { error: explainExecutionError(err, manifest) };
   }
   const collect = (e: HistoryEntry) => collectOutputs(e, manifest, `relay:${t.id}`);
   let outputs: ComfyOutput[] = passes ? metaBatchResults(list, collect) : list[0] ? collect(list[0]) : [];
@@ -1626,17 +1743,46 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
   return { wanted, outputs, budget: Number.isFinite(budget) ? budget : Number.MAX_SAFE_INTEGER };
 }
 
-/** A task's error as the run's words (and what was missing, for "Fix it"). */
-function relayFailure(t: TaskRow, manifest: ManifestWorkflow | undefined): { error: string; fix?: GenerationFix } {
+/** An account's ComfyUI that refused a job without saying why: plain words (the owner's keep the status). */
+const REFUSED_PLAIN = "Your ComfyUI couldn't start this run. Update your add-ons, then press Retry.";
+
+/** A relay task's error for a model file an account's loader can't read or doesn't have: what diagnose.ts reads, as JSON. */
+const MODEL_FILE_TASK = "model-file:";
+
+function modelFileTaskError(e: Extract<GpuJobTrouble, { kind: "error" }>): string {
+  return MODEL_FILE_TASK + JSON.stringify({ node: e.nodeType?.slice(0, 128), said: e.message?.slice(0, 1024), files: e.files, url: e.fileUrl });
+}
+
+/** That error, as the run's plain words with what helps (on the account's own computer or paired ComfyUI). */
+function modelFileTaskFailure(e: string): { error: string; trouble: Diagnosis } | null {
+  if (!e.startsWith(MODEL_FILE_TASK)) return null;
+  let j: { node?: unknown; said?: unknown; files?: unknown; url?: unknown } = {};
+  try {
+    j = (JSON.parse(e.slice(MODEL_FILE_TASK.length)) ?? {}) as typeof j;
+  } catch {}
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const files = Array.isArray(j.files) ? j.files.filter((f): f is string => typeof f === "string") : [];
+  const fileUrl = str(j.url);
+  const d = diagnoseGpuJob({ kind: "error", nodeType: str(j.node), message: str(j.said), files, ...(fileUrl && { fileUrl }) }, { kind: "computer" });
+  return { error: d.words, trouble: d };
+}
+
+/** A task's error as the run's words (and what was missing, for "Fix it"; for a model file, what helps). */
+export function relayFailure(t: TaskRow, manifest: ManifestWorkflow | undefined): { error: string; fix?: GenerationFix; trouble?: Diagnosis } {
   const refusal = refusalOf(t);
   if (refusal && manifest) {
     const r = promptRefusal((refusal.body ?? {}) as PromptRefusalBody, refusal.status, manifest, extraOf(t).loras ?? []);
-    return { error: r.message ?? `Your ComfyUI refused the job (HTTP ${refusal.status})`, ...(r.fix && { fix: r.fix }) };
+    // An account's own computer or paired ComfyUI: a model file outside the workflow's list ("Fix it" doesn't know it), named.
+    const file = tenantAccount() && !t.pools && !r.fix && !r.plain ? unlistedModelFile((refusal.body ?? {}) as PromptRefusalBody, manifest, { kind: "computer" }) : null;
+    if (file) return { error: file.words, trouble: file };
+    return { error: r.message ?? (tenantAccount() ? REFUSED_PLAIN : `Your ComfyUI refused the job (HTTP ${refusal.status})`), ...(r.fix && { fix: r.fix }) };
   }
-  if (refusal) return { error: `Your ComfyUI refused the job (HTTP ${refusal.status})` };
+  if (refusal) return { error: tenantAccount() ? REFUSED_PLAIN : `Your ComfyUI refused the job (HTTP ${refusal.status})` };
   const e = t.error ?? "";
   const tab = /^tab:([a-z-]+)(?::(\d+))?$/.exec(e);
-  if (tab) return { error: tabFailureWords(tab[1] as TabFailure, tab[2] ? Number(tab[2]) : undefined) };
+  if (tab) return { error: tabFailureWords(tab[1] as TabFailure, tab[2] ? Number(tab[2]) : undefined, !!tenantAccount()) };
+  const file = modelFileTaskFailure(e);
+  if (file) return file;
   const words: Record<string, string> = { lost: RELAY_WORDS.lost, silent: RELAY_WORDS.computerSilent, down: RELAY_WORDS.comfyDownTooLong, tooBig: RELAY_WORDS.tooBig };
   if (e === "full") {
     const account = tenantAccount();
@@ -1873,7 +2019,7 @@ export const comfyProvider: ProviderAdapter = {
         if (!refusal.message) throw gpuTrouble({ stage: "prompt", status: res.status, body: answer.slice(0, 4096), contentType: res.headers.get("content-type") ?? undefined }, link);
         const d: Diagnosis = refusal.plain
           ? { cause: "gpu-refused", words: refusal.message, ...(refusal.details && { details: refusal.details }), actions: [{ kind: "retry", label: "Retry" }], retryable: false }
-          : diagnoseRefusal(refusal.message);
+          : ((!refusal.fix && unlistedModelFile(body, manifest, link)) || diagnoseRefusal(refusal.message));
         throw Object.assign(troubleError(d, res.status), refusal.fix ? { fix: refusal.fix } : {});
       }
       throw Object.assign(new ProviderError(refusal.message ?? `ComfyUI /prompt failed (${res.status})`, res.status), refusal.fix ? { fix: refusal.fix } : {});
@@ -1905,19 +2051,10 @@ export const comfyProvider: ProviderAdapter = {
       if (manifest && CONTEXT_LOOP_IDS.has(manifest.id) && typeof meta.generationId === "string") void deleteRunFolder(runName(meta.generationId), worker);
       if (entry.status?.status_str === "error") {
         forget(externalId);
+        // An account's link: stopped there, out of memory, a model file it can't read, or an add-on's exception, said
+        // plainly (its words go in details).
         const link = ownLink();
-        if (link) {
-          // An account's link: stopped there, out of memory, or an add-on's exception, said plainly (its words go in details).
-          const err = executionError(entry);
-          const said = explainExecutionError(err, manifest);
-          const interrupted = !err && entry.status?.messages?.some(([type]) => type === "execution_interrupted");
-          const d = interrupted
-            ? diagnoseGpuJob({ kind: "interrupted" }, link)
-            : err && said !== `${err.node_type}: ${(err.exception_message ?? "").trim()}`
-              ? { cause: "gpu-job-error" as const, words: said, actions: [{ kind: "retry" as const, label: "Retry" }], retryable: false }
-              : diagnoseGpuJob({ kind: "error", nodeType: err?.node_type, message: err?.exception_message }, link);
-          return { state: "failed" as const, error: d.words, trouble: d };
-        }
+        if (link) return ownJobFailed(entry, manifest, link);
         return { state: "failed" as const, error: explainExecutionError(executionError(entry), manifest) };
       }
       let outputs = collectOutputs(entry, manifest, baseUrl(worker), authHeaders(worker));
@@ -1927,7 +2064,8 @@ export const comfyProvider: ProviderAdapter = {
         if (next === "running") return { state: "running" as const, message: "Rendering the next batch of frames" };
         if (next && "error" in next) {
           forget(externalId);
-          return { state: "failed" as const, error: next.error };
+          const link = ownLink();
+          return link ? ownJobFailed(next.failed, manifest, link) : { state: "failed" as const, error: next.error };
         }
         outputs = next ?? [];
       }
@@ -1953,7 +2091,7 @@ export const comfyProvider: ProviderAdapter = {
     const p = progress.get(externalId);
     const queue = await comfyJson<{ queue_running?: unknown[][]; queue_pending?: unknown[][] }>("/queue", worker);
     const running = queue.queue_running?.some((q) => q[1] === externalId);
-    const pendingIdx = queue.queue_pending?.findIndex((q) => q[1] === externalId) ?? -1;
+    const pendingIdx = queuePlace(queue.queue_pending ?? [], externalId);
     if (!running && pendingIdx < 0 && !entry) {
       // It may have finished between the two requests (ComfyUI moves it from the queue to the history at once).
       const again = (await comfyJson<Record<string, HistoryEntry>>(`/history/${encodeURIComponent(externalId)}`, worker))[externalId];
@@ -1972,7 +2110,11 @@ export const comfyProvider: ProviderAdapter = {
       return { state: "failed", error: "ComfyUI restarted and lost this run. Press Retry." };
     }
     globalThis.__fuobeComfyMisses?.delete(externalId);
-    if (pendingIdx >= 0) return { state: "queued", message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
+    if (pendingIdx >= 0) {
+      // The job the GPU runs now (another one), by its name there: a new one is a queue that moves.
+      const busy = queue.queue_running?.[0]?.[1];
+      return { state: "queued", position: pendingIdx, ...(typeof busy === "string" && { busyWith: busy.slice(0, 64) }), message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
+    }
     const total = Number(meta.nodeCount ?? 0);
     const stepFrac = p && p.max ? p.value / p.max : 0;
     const progressValue = total ? Math.min(0.99, ((p?.nodesDone ?? 0) - 1 + stepFrac) / total) : stepFrac || undefined;

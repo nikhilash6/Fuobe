@@ -293,6 +293,12 @@
     "error": null,
     "at": "2026-11-02T01:03:11.136Z"
   },
+  "image-to-splat-idol-clean": {
+    "sha256": "8d472befae7b602f6d6f0dee0c88152076de912a623eeacd227a83e73394658a",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T17:14:05.042Z"
+  },
   "image-to-splat-triposplat": {
     "sha256": "cb65f4660b4d5fef3c0544146ed51b7d3acf059f3190a102dccf8166908f5413",
     "validated": true,
@@ -388,6 +394,12 @@
     "validated": true,
     "error": null,
     "at": "2026-11-04T19:55:00.097Z"
+  },
+  "krea2-inpaint": {
+    "sha256": "855f6fbb9f4fc02c861cd4385b0140546a941c3765623bf3b398ab20f802338b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T17:14:05.040Z"
   },
   "krea2-realism-t2i": {
     "sha256": "93b01aeb5d584a78d26271c8a42ad9e7c82c3d38e26f02437dfe2c03d90afded",
@@ -1105,9 +1117,9 @@
   },
   "video-character-swap-h3-segment": {
     "sha256": "876118b7908f3f831f4232a4cdad10235d15b736af835c84b60234a384226f4e",
-    "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'H3RelayAppendWindow' not found. The custom node may not be installed. (Node ID '#append')",
-    "at": "2026-10-27T11:01:36.134Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T17:14:05.044Z"
   },
   "video-composite-mask": {
     "sha256": "c86a6a0dcd25f45e566cbaff79574bc03d5aaf7cdbd3d976d72bc850a3c85de5",
@@ -1273,9 +1285,9 @@
   },
   "video-h3-t2v-2k": {
     "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
-    "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'Save the 768p latent (Finish in 2K decodes from it)' not found. The custom node may not be installed. (Node ID '#20')",
-    "at": "2026-11-02T15:34:50.056Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T17:14:05.046Z"
   },
   "video-inpaint-wan-vace": {
     "sha256": "71aaa43c8ac4bb0a764a9a835d96d1c47b33244f741611c7036ebea8ffcef3a7",
@@ -1303,9 +1315,9 @@
   },
   "video-mask-h3-relay": {
     "sha256": "d5a3fc7046010b54ea070f45acc325602ed5ab5dbe403040e4d6591949084c84",
-    "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'H3RelayPrepareSource' not found. The custom node may not be installed. (Node ID '#prepare')",
-    "at": "2026-10-27T11:01:36.148Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-05T17:14:05.043Z"
   },
   "video-matte-vrmbg3": {
     "sha256": "bc8e7b99a0f2e29af5355f6fc2823966f18a0012acf2dac1f6c65fdf90b6591a",

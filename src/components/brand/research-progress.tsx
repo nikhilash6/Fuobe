@@ -22,7 +22,7 @@ export function ResearchLabel({ progress }: { progress: BrandKit["progress"] }) 
   return <>{researchLabel(progress, now).label}</>;
 }
 
-/** "Usually takes about a minute": Higgsfield's rotating research labels, a progress bar and Cancel. */
+/** "Usually takes about a minute": the parity studio's rotating research labels, a progress bar and Cancel. */
 export function ResearchProgress({ brand, onCancel, canceling }: { brand: BrandKit; onCancel?: () => void; canceling?: boolean }) {
   const now = useNow(700);
   const { label } = researchLabel(brand.progress, now);

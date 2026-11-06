@@ -6,13 +6,13 @@
  * origin looking down -Z, +Y is up. On the open engine that is MoGe 2's mesh (metres); on the cloud it is a
  * point cloud built here from the photo and a depth map (research: paid-model-apis-4.md §8, comfyui-oss-4.md §i).
  *
- * The camera follows Higgsfield's viewer (higgsfield-delta-4.md §4.4): W A S D Q E to fly, Shift faster, a lens
+ * The camera follows the parity studio's viewer (parity-delta-4.md §4.4): W A S D Q E to fly, Shift faster, a lens
  * in mm on a full-frame body, an aperture that sets the depth of field, and a frame in the project's ratio.
  */
 
 export type Vec3 = [number, number, number];
 
-/** Lens range in mm (Higgsfield's 3D Angles: 24–300; 18 for a wider establishing view). */
+/** Lens range in mm (the parity studio's 3D Angles: 24–300; 18 for a wider establishing view). */
 export const LENS = { min: 18, max: 300, default: 24 } as const;
 /** Quick picks on the lens slider. */
 export const LENS_STOPS = [18, 24, 35, 50, 85, 135, 200, 300];
@@ -614,7 +614,7 @@ export function cameraWords(lensMm: number, fNumber: number): string {
 export const formatStop = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 /**
- * The recomposition instruction. Research (higgsfield-delta-4.md §4.4): "Re-render this view photorealistically,
+ * The recomposition instruction. Research (parity-delta-4.md §4.4): "Re-render this view photorealistically,
  * keep composition and camera exactly, fix holes and stretched textures." Image 1 is the capture, image 2 the photo.
  */
 export function recomposePrompt(lensMm: number, fNumber: number, note?: string): string {

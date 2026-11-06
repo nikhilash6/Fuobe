@@ -37,7 +37,6 @@ export interface LoraEntry extends LoraRef {
   hostedEndpoint?: string;
   /** No default preset uses it. */
   spare?: boolean;
-  notes?: string;
 }
 
 /**
@@ -73,7 +72,6 @@ export interface MotionEffectLoras {
   hostedEndpoint?: string;
   bothEnginesToday: boolean;
   newSinceMid2026: boolean;
-  notes?: string;
 }
 
 const BY_KEY = new Map(LORA_LIBRARY.map((e) => [e.key, e]));

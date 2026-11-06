@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { isCloudProvider, NOT_ACCOUNT_KEYS, type CloudProvider } from "@/lib/your-keys";
-import { accountKeyInfo, cleanKey, removeAccountKey, saveAccountKey } from "@/server/account-keys";
+import { accountKey, accountKeyInfo, cleanKey, markKeyBalanceEmpty, markKeyGood, markKeyRejected, removeAccountKey, saveAccountKey } from "@/server/account-keys";
 import { accountKeyRecord, LoginGuard, requestAccount } from "@/server/auth";
 import { poolReady } from "@/server/hosted";
 import { hit, unhit } from "@/server/rate";
 import { clearRunOnFor } from "@/server/run-on";
 import { SecretBoxError } from "@/server/secret-box";
-import { checkKey, runsGoingMessage, runsOnKey, stopRunsOnKey } from "@/server/your-keys";
+import { checkKey, recheckKey, runsGoingMessage, runsOnKey, stopRunsOnKey } from "@/server/your-keys";
 
 /**
  * Settings → Your keys: add, replace or remove the account's own fal.ai key or Replicate token. PUT checks the key with
@@ -46,7 +46,7 @@ function countCheck(id: string, headers: Headers): { ok: true } | { ok: false; r
   return { ok: true };
 }
 
-const Body = z.object({ key: z.string().max(400), stopRuns: z.boolean().optional() });
+const Body = z.union([z.object({ recheck: z.literal(true) }).strict(), z.object({ key: z.string().max(400), stopRuns: z.boolean().optional() })]);
 
 /** The account asking and the provider named, or the answer for anyone else. */
 async function who(request: Request, ctx: RouteContext<"/api/account/keys/[provider]">): Promise<{ refused: Response } | { id: string; provider: CloudProvider }> {
@@ -62,12 +62,26 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/account/keys
   if ("refused" in w) return w.refused;
   const { id, provider } = w;
   const parsed = Body.safeParse(await request.json().catch(() => null));
-  const key = parsed.success ? cleanKey(parsed.data.key) : null;
-  if (!parsed.success || !key) return answer(400, { error: "Paste the whole key, without spaces." });
+  // "Check again": the saved key, asked of its provider again (a refusal or an empty balance noted before may be over).
+  if (parsed.success && "recheck" in parsed.data) {
+    const saved = accountKey(id, provider);
+    if (!saved) return answer(404, { error: "Add your key first." });
+    const counted = countCheck(id, request.headers);
+    if (!counted.ok) return answer(429, { error: "Too many checks. Wait a minute." }, { "Retry-After": String(counted.retryAfterS) });
+    const again = await recheckKey(provider, saved);
+    if (again.ok) {
+      markKeyGood(id, provider);
+      if (again.balance) markKeyBalanceEmpty(id, provider, saved);
+    } else if (again.rejected) markKeyRejected(id, provider, saved);
+    const info = accountKeyInfo(id)[provider];
+    return again.ok ? answer(200, { provider, ...info }) : answer(again.status, { error: again.error, ...(again.details && { details: again.details }), ...(info && { info }) });
+  }
+  const key = parsed.success && "key" in parsed.data ? cleanKey(parsed.data.key) : null;
+  if (!parsed.success || !("key" in parsed.data) || !key) return answer(400, { error: "Paste the whole key, without spaces." });
   const counted = countCheck(id, request.headers);
   if (!counted.ok) return answer(429, { error: "Too many checks. Wait a minute." }, { "Retry-After": String(counted.retryAfterS) });
   const check = await checkKey(provider, key);
-  if (!check.ok) return answer(check.status, { error: check.error });
+  if (!check.ok) return answer(check.status, { error: check.error, ...(check.details && { details: check.details }) });
   const said = { detail: check.detail, ...(check.note && { note: check.note }) };
   if (new URL(request.url).searchParams.get("test") === "1") return answer(200, { provider, ok: true, ...said });
   // Replacing a key runs are going on: they stop first, with the key they were sent with.
@@ -76,7 +90,9 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/account/keys
   if (going.length) await stopRunsOnKey(id, provider);
   try {
     const info = saveAccountKey(id, provider, key);
-    return answer(200, { provider, ...info, ...said });
+    // A key that works on an account with nothing on it yet: Settings says Add credit until a run is taken.
+    if (check.balance) markKeyBalanceEmpty(id, provider, key);
+    return answer(200, { provider, ...(accountKeyInfo(id)[provider] ?? info), ...said });
   } catch (e) {
     if (e instanceof SecretBoxError) return answer(503, { error: e.message });
     throw e;

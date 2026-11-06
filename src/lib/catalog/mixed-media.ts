@@ -1,6 +1,6 @@
 /**
- * Mixed Media (Higgsfield's /mixed-media): turn a 1–10 s clip into mixed-media art (sketch, comic,
- * paper, neon…) with per-preset settings. Higgsfield samples frames at 4–24 fps and stylises each
+ * Mixed Media (the parity studio's /mixed-media): turn a 1–10 s clip into mixed-media art (sketch, comic,
+ * paper, neon…) with per-preset settings. The parity studio samples frames at 4–24 fps and stylises each
  * one, priced per output frame. Fuobe Mixed Media (build plan O9) does the same on both engines:
  * every frame drawn again in the look by Z-Image Turbo under the frame's own outlines (its Fun
  * ControlNet), with the look's LoRA and one fixed seed — one per-frame job on your GPU, or on fal
@@ -12,7 +12,7 @@
  * frame when the model takes one (LTX 2.3 reference restyle).
  *
  * Pure module, shared by the page, src/server/mixed-media.ts and the tests.
- * Research: docs/research/higgsfield-studios.md §3, docs/research/fuobe-originals-recipes-5.md §8 mixed-media.
+ * Research: docs/research/parity-studios.md §3, docs/research/fuobe-originals-recipes-5.md §8 mixed-media.
  */
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
 import { templateCover, templatePreview } from "../template-covers";
@@ -29,7 +29,7 @@ export const MIXED = {
   defaultFps: 8,
   manualFps: { min: 4, max: 24 },
   resolutions: ["1K", "2K", "4K"] as const,
-  /** Higgsfield: 2 credits per output frame (×2 at 4K). */
+  /** The parity studio: 2 credits per output frame (×2 at 4K). */
   accept: "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm",
 } as const;
 
@@ -61,7 +61,7 @@ export const MIXED_TOOLS = {
 } as const;
 
 /**
- * How a render restyles: frame by frame like Higgsfield (the default, both engines), Smooth (the Original's first frame,
+ * How a render restyles: frame by frame like the parity studio (the default, both engines), Smooth (the Original's first frame,
  * then Wan 2.2 Fun VACE by depth: no flicker), or Fast (cloud: one partner video-to-video pass).
  */
 export type MixedMode = "frames" | "smooth" | "fast";
@@ -90,7 +90,7 @@ export const FRAME_LIMITS = { perExtract: 500, perClip: 200, lane: 12, maxInterv
 export const FRAME_SEED = 424242;
 
 // ---------------------------------------------------------------------------
-// Settings (Higgsfield's per-preset param_configs: colour pickers, dropdowns with a custom option, text)
+// Settings (the parity studio's per-preset param_configs: colour pickers, dropdowns with a custom option, text)
 
 export type MixedSetting =
   | { key: string; label: string; type: "color"; default: string }
@@ -500,7 +500,7 @@ export function parseHex(raw: string): string | null {
 // ---------------------------------------------------------------------------
 // Frames, frame rates and cost
 
-/** Output frames for a selection: floor(seconds × fps), as Higgsfield counts and charges them. */
+/** Output frames for a selection: floor(seconds × fps), as the parity studio counts and charges them. */
 export function mixedFrames(seconds: number, fps: number): number {
   return Math.max(0, Math.floor(seconds * fps + 1e-6));
 }
@@ -549,7 +549,7 @@ export function nearestResolution(choices: string[] | undefined, want: MixedReso
  * Cloud per-frame sampling: the extractor takes every `interval`-th frame of the clip, so the frame rate
  * is the clip's own divided by a whole number — the one closest to the rate asked for (fewer frames on a
  * tie), never below 4 FPS. 8 FPS from a 30 FPS clip is every 4th frame, 7.5 FPS; 24 from 25 is every
- * frame. `frames` counts as Higgsfield does, floor(seconds × fps).
+ * frame. `frames` counts as the parity studio does, floor(seconds × fps).
  */
 export function frameSampling(seconds: number, fps: number, sourceFps: number): { interval: number; fps: number; frames: number } {
   let interval = 1;
@@ -773,7 +773,7 @@ export function planMixed(input: MixedPlanInput): { steps: PlanStep[]; final: st
 }
 
 /**
- * Cloud, frame by frame (Higgsfield's Mixed Media): cut the selection → take every Nth frame (500 a call;
+ * Cloud, frame by frame (the parity studio's Mixed Media): cut the selection → take every Nth frame (500 a call;
  * a longer run is cut into windows) → redraw each frame with the frame editor, a fixed seed and the frame
  * styled before it as a second picture (lanes of FRAME_LIMITS.lane; a lane starts from the approved preview,
  * else the first styled frame) → the styled frames back into clips of up to 200 at the sampled frame rate

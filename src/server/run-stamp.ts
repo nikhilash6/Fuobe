@@ -16,6 +16,8 @@ import type { GenerationRequest } from "@/lib/catalog/types";
  * - `class` and `boostMs`: its class in the line ("paid" before "free") and its head start inside that class.
  * - `light`: a run on this install's GPUs made of light work only (joins, trims): free, and never counted against the
  *   policy's limits on runs there (pool-limits.ts).
+ * - `standalone`: an account's run made on its own in a studio (POST /api/generations, Image to 3D's route), not by a
+ *   tool for one of its projects: Run with your key may take its place while it waits (generations.ts keyMoveBlock).
  */
 export interface RunStamp {
   place?: "pool";
@@ -39,6 +41,8 @@ export interface RunStamp {
    * at (its press, pool-holds.ts), when its first job is sent. Absent: the time it is sent.
    */
   rankAt?: number;
+  /** Made on its own in a studio, not by a tool for one of the account's projects. */
+  standalone?: boolean;
 }
 
 declare global {
@@ -54,7 +58,7 @@ export const withRunStamp = <T,>(stamp: RunStamp, fn: () => T): T => store().run
 export const runStamp = (): RunStamp | undefined => store().getStore();
 
 /** The server-only fields of a request. */
-export const STAMP_FIELDS = ["place", "hold", "charge", "charged", "checkOutputs", "waitMs", "class", "boostMs", "light"] as const;
+export const STAMP_FIELDS = ["place", "hold", "charge", "charged", "checkOutputs", "waitMs", "class", "boostMs", "light", "standalone"] as const;
 
 /** A request with the current stamp's fields, and none of a stored request's own. */
 export function stamped(req: GenerationRequest): GenerationRequest {
@@ -73,6 +77,7 @@ export function stamped(req: GenerationRequest): GenerationRequest {
     ...(s.class === "paid" && { class: "paid" as const }),
     ...(s.boostMs && s.boostMs > 0 && { boostMs: s.boostMs }),
     ...(s.light && { light: true }),
+    ...(s.standalone && { standalone: true }),
   };
 }
 
@@ -91,6 +96,7 @@ export function stampOf(req: Pick<GenerationRequest, (typeof STAMP_FIELDS)[numbe
     ...(req.class === "paid" && { class: "paid" as const }),
     ...(req.boostMs && req.boostMs > 0 && { boostMs: req.boostMs }),
     ...(req.light && { light: true }),
+    ...(req.standalone && { standalone: true }),
   };
 }
 

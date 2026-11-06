@@ -8,13 +8,13 @@
  * - A LoRA belongs to a family (its base), not to one model, and works on both engines where the family has models:
  *   a LoRA trained on fal is downloaded into ComfyUI for open runs, one trained on the user's GPU is copied to the
  *   cloud provider for cloud runs (src/server/loras.ts). Another family means training again on the same photos
- *   ("Upgrade character"), as Higgsfield retrains a Soul ID per model family.
+ *   ("Upgrade character"), as the parity studio retrains a Soul ID per model family.
  * - The hosted trainers' fields, prices, response fields and licences are generated from the research
  *   (trainers.generated.ts by scripts/gen-trainers.py). Licences are information, never a gate (the owner's decision
  *   of 2026-10-27): every target says the licence of the weights it trains on and whether they allow selling
  *   outputs, and the admin turns models on or off in Settings.
- * - Photo rules and the consent line follow Higgsfield's character flow (docs/research/higgsfield-originals-5.md
- *   §3.4, higgsfield-delta-4.md G18): 20+ photos recommended, 80 at most, one person, a full-body shot, consent
+ * - Photo rules and the consent line follow the researched character flow (docs/research/parity-originals-5.md
+ *   §3.4, parity-delta-4.md G18): 20+ photos recommended, 80 at most, one person, a full-body shot, consent
  *   before a person's photos are trained.
  */
 import type { ElementKind, ElementLora } from "./elements";
@@ -196,12 +196,12 @@ export function familyLead(f: TrainingFamily, engine?: Engine): string {
   return (engine && lead[engine]) || lead.cloud || lead.open || "";
 }
 
-/** Higgsfield's character flow, as limits (research §3.4): 20+ photos recommended, 80 at most on the web. */
+/** The researched character flow, as limits (research §3.4): 20+ photos recommended, 80 at most on the web. */
 export const SOUL_ID_PHOTOS = { min: 5, recommended: 20, max: 80, minSide: 512 } as const;
 
 /**
- * The photo rules and the consent line (Higgsfield's character-creation copy, docs/research/higgsfield-image-studios.md
- * §2 and higgsfield-delta-4.md G18), shared by every place that makes or trains a character.
+ * The photo rules and the consent line (the researched character-creation copy, docs/research/parity-image-studios.md
+ * §2 and parity-delta-4.md G18), shared by every place that makes or trains a character.
  */
 export const SOUL_ID_COPY = {
   moreTitle: "More Photos, Better Results",
@@ -524,7 +524,7 @@ export function usableOn(l: Pick<ElementLora, "file" | "url" | "own" | "referenc
   return engine === "open" ? !!l.file : !!l.url || (!!l.own && !!l.file);
 }
 
-/** An older Soul ID (Higgsfield's, from before O3): it can't be exported, so the element is retrained on its photos. */
+/** An older Soul ID (the retired provider's, from before O3): it can't be exported, so the element is retrained on its photos. */
 export const isLegacySoulId = (l: Pick<ElementLora, "referenceId">): boolean => !!l.referenceId;
 
 /**

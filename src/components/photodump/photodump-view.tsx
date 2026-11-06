@@ -21,6 +21,7 @@ import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 import { toastError } from "@/lib/refusals";
 import { useAskFirst } from "./ask-first";
+import { CLEAR_OF_BAR, PICKED_GO, PICKER_BAR, showPicked } from "./clear-of-bar";
 import { PackCover } from "./covers";
 import { useOwnsElements, usePhotoCharacters, useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
 import { DownloadAll, ResultsGrid, runState } from "./results";
@@ -283,16 +284,21 @@ export function PhotodumpView() {
             {shown.map((p) => {
               const sel = p.id === packId;
               return (
-                <div key={p.id} className="group/pack relative min-w-0">
+                <div key={p.id} data-picker-card className={cn("group/pack relative min-w-0", CLEAR_OF_BAR)}>
                   <button
                     type="button"
                     aria-pressed={sel}
-                    onClick={() => setPackId(p.id)}
+                    onClick={(e) => (setPackId(p.id), showPicked(e.currentTarget))}
                     onDoubleClick={() => (setPackId(p.id), go(1))}
-                    className={cn("block w-full overflow-hidden rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring", sel && "ring-3 ring-primary")}
+                    className={cn("block w-full overflow-hidden rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring", CLEAR_OF_BAR, sel && "ring-3 ring-primary")}
                   >
                     <PackCover id={p.id} name={p.name} count={p.count} refs={p.refs} hue={p.hue} tone={p.tone} className="aspect-[3/4]" />
                   </button>
+                  {sel && (
+                    <Button className={PICKED_GO} onClick={() => go(1)}>
+                      Use this pack <ArrowRight />
+                    </Button>
+                  )}
                   <p className="mt-1.5 line-clamp-2 px-0.5 text-[12px] text-muted-foreground">
                     {p.custom ? "Your pack · " : ""}{p.description}
                   </p>
@@ -311,8 +317,8 @@ export function PhotodumpView() {
             })}
           </div>
           {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? "No packs of your own yet — create one from your reference photos." : `No packs match “${q}”`}</p>}
-          <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
-            <p className="min-w-0 truncate text-[13px]">{pack ? <><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
+          <div className={PICKER_BAR}>
+            <p className="min-w-0 truncate text-[13px]">{pack ?<><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
             <Button disabled={!pack} onClick={() => go(1)}>
               Use this pack <ArrowRight />
             </Button>

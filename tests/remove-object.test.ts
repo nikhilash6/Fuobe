@@ -111,7 +111,7 @@ describe("Remove object: erasers", () => {
 describe("Remove object: words", () => {
   it("cuts the object out of an instruction for SAM 3.1, Bria and VOID", () => {
     expect(targetPhrase(REMOVE_EXAMPLES[0].prompt)).toBe("the coffee cup");
-    // Higgsfield's pogo example names four things to remove; the instruction after the dash isn't one.
+    // The parity studio's pogo example names four things to remove; the instruction after the dash isn't one.
     expect(targetPhrase(REMOVE_EXAMPLES[1].prompt)).toBe("the pogo stick the guy is bouncing on, the black handle grips in his hands, the platform under his feet, its shadow on the ground");
     expect(targetPhrase("the people walking in the background")).toBe("the people walking in the background");
     expect(targetPhrase("Erase the logo from the video.")).toBe("the logo");
@@ -142,7 +142,7 @@ describe("Remove object: words", () => {
     expect(removalTitle({ mode: "type", prompt: "the logo and the watermark" })).toBe("Remove · the logo, the watermark");
   });
 
-  it("writes Kling's edit prompt the way Higgsfield does", () => {
+  it("writes Kling's edit prompt the way the parity studio does", () => {
     expect(klingPrompt("the coffee cup")).toBe("Remove the coffee cup from @Video1, keep everything else the same.");
     expect(klingPrompt(REMOVE_EXAMPLES[0].prompt)).toBe(`In @Video1: ${REMOVE_EXAMPLES[0].prompt}`);
     expect(klingPrompt("Remove the dog")).toBe("In @Video1: Remove the dog, keep everything else the same.");

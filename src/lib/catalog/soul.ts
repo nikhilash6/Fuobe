@@ -14,7 +14,7 @@
  * - Preset strength 0–1 multiplies the look's LoRA scales; character strength 0–1 maps to a character
  *   LoRA scale of 0.6–1.0.
  * - A look made for another base (Graffiti: Qwen-Image 2512) keeps its words, not its LoRAs.
- * - Higgsfield's style ids are read only to find the look an old request or moodboard pick meant
+ * - Legacy style ids are read only to find the look an old request or moodboard pick meant
  *   (`legacyStyleId`); they are never sent anywhere.
  */
 import { loraEntry, loraRef } from "./loras";
@@ -57,8 +57,7 @@ export interface SoulLook {
   post?: SoulPost;
   /** A Fuobe-trained LoRA should replace the public one or the words (research §6). */
   train?: true;
-  note?: string;
-  /** Higgsfield's style id: only to read old saved settings, never sent. */
+  /** Legacy style id: only to read old saved settings, never sent. */
   legacyStyleId: string;
 }
 
@@ -91,7 +90,7 @@ const norm = (s: string) =>
     .replace(/^-|-$/g, "");
 
 /**
- * A look by its Fuobe id ("v1-general"), its old Higgsfield style id (saved settings from before), or its
+ * A look by its Fuobe id ("v1-general"), its legacy style id (saved settings from before), or its
  * name ("Indie sleaze"; Soul v1 first when both families have one, as the evaluation harness reads names).
  */
 export function soulLook(key: string | undefined | null): SoulLook | undefined {

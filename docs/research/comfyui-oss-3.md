@@ -1,6 +1,6 @@
 # Fuobe research #3: open-weight ComfyUI routes for the round-3 features
 
-_As of 2026-10-17. Machine-readable companion: [`comfyui-oss-3.json`](comfyui-oss-3.json). It holds the full API-format graphs, bindings, live `/object_info` node specs, model URLs and sizes, and the validation results. This file builds on [`comfyui-oss.md`](comfyui-oss.md) (capability rankings), [`comfyui-oss-2.md`](comfyui-oss-2.md) (round 2) and [`comfyui-workflow-library.md`](comfyui-workflow-library.md) (the 73-workflow library). The Higgsfield behaviour each route copies is in [`higgsfield-studios.md`](higgsfield-studios.md) and [`higgsfield-image-studios.md`](higgsfield-image-studios.md)._
+_As of 2026-10-17. Machine-readable companion: [`comfyui-oss-3.json`](comfyui-oss-3.json). It holds the full API-format graphs, bindings, live `/object_info` node specs, model URLs and sizes, and the validation results. This file builds on [`comfyui-oss.md`](comfyui-oss.md) (capability rankings), [`comfyui-oss-2.md`](comfyui-oss-2.md) (round 2) and [`comfyui-workflow-library.md`](comfyui-workflow-library.md) (the 73-workflow library). The parity studio's behaviour each route copies is in [`parity-studios.md`](parity-studios.md) and [`parity-image-studios.md`](parity-image-studios.md)._
 
 ## How this was produced and what "verified" means
 
@@ -137,7 +137,7 @@ UNETLoader(qwen_image_layered_fp8mixed) → ModelSamplingAuraFlow(1) → KSample
   * `qwen_image_layered_vae.safetensors`: 0.25 GB
   * `qwen_2.5_vl_7b_fp8_scaled.safetensors`: 9.38 GB, already in the library
   * Hardware: 24 GB VRAM class.
-* **Matching Higgsfield's zip export** ("cropped/positioned layers"): the app computes each layer's bounding box from its alpha, crops it, and writes `{name, x, y, w, h, z}` into the zip manifest.
+* **Matching the parity studio's zip export** ("cropped/positioned layers"): the app computes each layer's bounding box from its alpha, crops it, and writes `{name, x, y, w, h, z}` into the zip manifest.
   * "Separate layer" means running the graph again on one layer.
   * Layer names don't come from the model. Caption each layer with Qwen3-VL or Claude to get Seedream-style named layers.
 * **Prompt-guided variant (validated): Qwen-Image-Layered-Control** (DiffSynth-Studio, Apache, template `image_qwen_image_layered_control`).
@@ -154,7 +154,7 @@ UNETLoader(qwen_image_layered_fp8mixed) → ModelSamplingAuraFlow(1) → KSample
 
 ## 2. Moodboards: "make an image in the style of these 4–20 images" (`style-reference`)
 
-Higgsfield moodboards take 5–80 images and are built asynchronously ("Building your moodboard…"); in other words, they are **trained**. The 1:1 open route is therefore two-tier.
+The parity studio's moodboards take 5–80 images and are built asynchronously ("Building your moodboard…"); in other words, they are **trained**. The 1:1 open route is therefore two-tier.
 
 **Instant preview (recommended graph): Qwen-Image-Edit-2511 + Lightning, generating from board collages** (`style-ref-qwen-edit-2511`, Apache, no new base weights).
 
@@ -248,7 +248,7 @@ Fun VACE high/low fp8 + T2V lightx2v 4-step (shift 5, split 2/2, cfg 1) → Trim
 
 ### 4c. Mixed Media (`video-stylize-frames`)
 
-Higgsfield prices Mixed Media per output frame (4/8/10/12/24 fps, 1–10 s), which means per-frame stylisation. The open route is `mixed-media-zimage-frames`:
+The parity studio prices Mixed Media per output frame (4/8/10/12/24 fps, 1–10 s), which means per-frame stylisation. The open route is `mixed-media-zimage-frames`:
 
 ```
 VHS_BatchManager(framesPerBatch 8) → VHS_LoadVideo(force_rate = fps, frame_load_cap, meta_batch) → ImageScale(W×H)
@@ -390,7 +390,7 @@ _(inferred)_ That the LoRA, trained on the base checkpoint, works on the 4-step 
 
 ## 9. Cinema Studio grid (`image-grid`) and Soul Cast (`character-sheet`)
 
-* **`grid-zimage-contact-sheet`** makes one Z-Image Turbo generation of an N×N contact sheet, which matches Higgsfield's "same context, same cost".
+* **`grid-zimage-contact-sheet`** makes one Z-Image Turbo generation of an N×N contact sheet, which matches the parity studio's "same context, same cost".
   * Default: 2048×1152, `gridPrompt` + `prompt`.
   * KJNodes `ImageGridtoBatch(columns, rows)` cuts the sheet into tiles. Both the sheet and the tiles are saved.
   * `gridPrompt` per type:

@@ -1,4 +1,4 @@
-// Fuobe Cinema browser check (build plan O6): the Cinema workspace runs on the Originals, with no Higgsfield anywhere.
+// Fuobe Cinema browser check (build plan O6): the Cinema workspace runs on the Originals, with no retired provider anywhere.
 // At 1440 and 390 px, light and dark: the model menu lists Fuobe Cinema first with an "Original" badge and what runs on
 // each engine; a camera move says how the Original drives it (LTX-2.3's camera LoRA in the cloud); the price shows
 // before running ("Free" on the open engine); a take is made in demo mode; Soul Cast and Soul Location name Fuobe Soul
@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { mentionsRetiredName } from "../helpers/retired-name.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
@@ -69,9 +70,10 @@ async function session(width, height, scheme) {
   const shot = async (name) => shots && (await page.screenshot({ path: path.join(shots, `${name}-${width}-${scheme}.png`) }));
   const sideways = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   const project = await call("/api/cinema/projects", "POST", { name: `Original check ${tag}` });
-  // The project page sends no Higgsfield flag.
+  // The project page sends only the context it has (no retired provider's flag).
   const view = await call(`/api/cinema/projects/${project.id}`);
-  check(`${tag}: the project's context has no Higgsfield flag`, view.context && !("higgsfield" in view.context), JSON.stringify(view.context));
+  const contextKeys = Object.keys(view.context ?? {});
+  check(`${tag}: the project's context holds only its own keys`, contextKeys.length > 0 && contextKeys.every((k) => ["cloudAllowed", "civitai", "worldReady", "worldcast"].includes(k)) && !contextKeys.some((k) => mentionsRetiredName(k)), JSON.stringify(view.context));
 
   // Start on the cloud engine (the switch remembers it per browser).
   await page.goto(`${app}/cinema/${project.id}`, { waitUntil: "load", timeout: 120_000 });
@@ -100,7 +102,7 @@ async function session(width, height, scheme) {
   check(`${tag}: the menu lists Fuobe Cinema first, as an Original`, /^Fuobe Cinema\s*Original/.test(items[0] ?? ""), JSON.stringify(items[0]));
   check(`${tag}: it says LTX-2.3 runs in the cloud`, /LTX-2\.3 on fal/.test(items[0] ?? ""));
   check(`${tag}: partner models stay pickable`, ["Seedance 2.5", "Kling 3.0", "Veo 3.1"].every((n) => items.some((t) => t.startsWith(n))), items.map((t) => t.split("\n")[0]).join(", "));
-  check(`${tag}: nothing in the menu mentions Higgsfield`, !/Higgsfield/i.test(items.join(" ")));
+  check(`${tag}: nothing in the menu names the parity studio`, !mentionsRetiredName(items.join(" ")));
   await shot("model-menu");
   await page.keyboard.press("Escape");
   await menu.waitFor({ state: "hidden" });

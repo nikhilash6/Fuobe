@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadFile, useAskBeforeUpload, useEngine, useHydrated, useIsOwner, useModelAccess } from "@/lib/api";
 import { offered } from "@/lib/model-access";
-import { FINAL_3D, RETEXTURE_MODELS, animateSpinHref, animationName, finalBuildHref, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
+import { FINAL_3D, RETEXTURE_MODELS, animateSpinHref, animationName, finalBuildHref, firstFrameSrc, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
 import { anyAngleHref } from "@/lib/catalog/any-angle";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
@@ -137,8 +137,9 @@ export function ModelCard({
   useEffect(() => () => void (recordedUrl && URL.revokeObjectURL(recordedUrl)), [recordedUrl]);
   // The turntable the server rendered (open models), TripoSplat's orbit or the demo's, or the one recorded here.
   const clip = view.turntable ?? recordedUrl;
-  // What the card shows while the viewer is closed: the poster, else the photo it was made from.
-  const still = view.poster ?? view.photo;
+  // What the card shows while the viewer is closed: the poster, else the photo it was made from. An Idol 3D clean splat
+  // shows its orbit's first frame instead (view.stillClip), so the turntable shows its own.
+  const still = view.stillClip ? undefined : (view.poster ?? view.photo);
   // From words on the open engine: the Z-Image still the model was built from (a helper step the page hides).
   const drawn = stillOf(g);
   const name = (g.modelName ?? "model").replace(/[^\w .-]+/g, "");
@@ -288,9 +289,11 @@ export function ModelCard({
     switchTo("3d");
   };
   const placeholder = view.splat ? (
-    view.poster ? (
+    view.stillClip ? (
+      <ClipStill src={view.stillClip} label={`The ${label} splat, from its orbit`} />
+    ) : view.poster ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={view.poster} alt="The subject the splat was made from, cut out" loading="lazy" decoding="async" className="size-full object-contain p-4" />
+      <img src={view.poster} alt={view.poster === view.photo ? "The photo the splat was made from" : "The subject the splat was made from, cut out"} loading="lazy" decoding="async" className="size-full object-contain p-4" />
     ) : (
       <div className="grid size-full place-items-center p-6 text-center text-[13px] text-muted-foreground">
         <div>
@@ -547,9 +550,15 @@ export function ModelCard({
   );
 }
 
+/** A clip's first frame as the card's still: it never plays, and loads only what that frame needs. */
+function ClipStill({ src, label }: { src: string; label: string }) {
+  return <video src={firstFrameSrc(src)} muted playsInline preload="metadata" aria-label={label} className="size-full bg-media object-contain" />;
+}
+
 /**
  * A card's turntable loop: it loads and plays only while the card is on screen, not at all when the user
- * prefers reduced motion (the poster shows instead), and has a pause / play button (WCAG 2.2.2).
+ * prefers reduced motion (the poster shows instead, or the clip's first frame without one), and has a pause / play
+ * button (WCAG 2.2.2).
  */
 function TurntableLoop({ src, poster, label }: { src: string; poster?: string; label: string }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -574,7 +583,17 @@ function TurntableLoop({ src, poster, label }: { src: string; poster?: string; l
   }, [playing]);
   return (
     <>
-      <video ref={ref} src={src} poster={poster} loop muted playsInline preload="none" aria-label={label} className="size-full bg-media object-contain" />
+      <video
+        ref={ref}
+        src={poster ? src : firstFrameSrc(src)}
+        poster={poster}
+        loop
+        muted
+        playsInline
+        preload={poster ? "none" : "metadata"}
+        aria-label={label}
+        className="size-full bg-media object-contain"
+      />
       <button
         type="button"
         onClick={() => setChoice(wanted ? "pause" : "play")}

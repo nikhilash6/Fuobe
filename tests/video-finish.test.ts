@@ -220,7 +220,7 @@ describe("cloud payloads", () => {
     expect(buildPayload(map, { video: "v", format: "exr", sourceDuration: 5 }).num_frames).toBe(120);
   });
 
-  it("Topaz Video: a tier becomes upscale_factor from the clip's size; frame rate within 16–60; Higgsfield's presets", () => {
+  it("Topaz Video: a tier becomes upscale_factor from the clip's size; frame rate within 16–60; the parity studio's presets", () => {
     const map = route("topaz-video", "upscale-video").map!;
     const hd: GenInput = { video: "v", sourceSize: { width: 1280, height: 720 } };
     expect(buildPayload(map, { ...hd, resolution: "4K", targetFps: 60, extra: { model: "Artemis High Quality", noise: 0.4 } })).toEqual({

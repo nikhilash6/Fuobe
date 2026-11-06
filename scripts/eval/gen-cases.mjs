@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes the generated suites from the research, so the case files can't drift from it:
-//   cases/soul.json  one case per Soul look (139, ids from docs/research/higgsfield-image-studios.json)
+//   cases/soul.json  one case per Soul look (139, ids from docs/research/parity-image-studios.json)
 //   cases/soul-cinema.json  Soul Cinema's one look (research soul.soulCinema) on cinematic scenes
 //   cases/soul-hex.json  Soul HEX: Fuobe's own palettes in the prompt, and the open engine's palette lock
 //   cases/dop.json   one case per DoP motion / effect that the research gives a LoRA, a camera pose or a camera LoRA
@@ -8,7 +8,7 @@
 //   cases/dop-mixed-media.json  DoP's Mixed Media effects in the cloud, blind: Fuobe DoP against Kling 2.5 Turbo
 //   cases/separation.json  soundtrack separation (DBS D4): DBS-TIGER vs DBS-BSRNN, mono vs each channel, DBS vs MelBand for the dub, Demucs
 //   cases/case.schema.json  the suite format as JSON Schema (for editors)
-// The prompts are Fuobe's own (never Higgsfield's). Run: node scripts/eval/gen-cases.mjs [--check]
+// The prompts are Fuobe's own (never copied from the parity studio). Run: node scripts/eval/gen-cases.mjs [--check]
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -52,7 +52,7 @@ function soulSuite() {
     $schema: "./case.schema.json",
     suite: "soul",
     title: "Fuobe Soul · the 139 looks",
-    description: `${HEADER} Each look on three subjects with pinned seeds: the research recipe (look template, triggers, LoRAs at their listed strengths) against the same words without LoRAs, half-strength LoRAs, the bare prompt, and the shipped Original (fuobe-soul; Soul HD for a lettering look). The Original's grade and overlay are applied in the browser after generation, so its scores are of the raw picture. Style references (your own or licensed images, never Higgsfield previews) go in local/references/soul/<look>/.`,
+    description: `${HEADER} Each look on three subjects with pinned seeds: the research recipe (look template, triggers, LoRAs at their listed strengths) against the same words without LoRAs, half-strength LoRAs, the bare prompt, and the shipped Original (fuobe-soul; Soul HD for a lettering look). The Original's grade and overlay are applied in the browser after generation, so its scores are of the raw picture. Style references (your own or licensed images, never copied previews) go in local/references/soul/<look>/.`,
     original: ["fuobe-soul", "fuobe-soul-hd"],
     kind: "image",
     recipe: "soul-look",
@@ -168,7 +168,7 @@ function soulCinemaSuite() {
   };
 }
 
-/** Fuobe's own palettes for Soul HEX (never Higgsfield's), five colours each, dark to light. */
+/** Fuobe's own palettes for Soul HEX (never copied from the parity studio), five colours each, dark to light. */
 const HEX_PALETTES = [
   { id: "teal-dusk", name: "Teal dusk", colors: ["#0B1D2A", "#1F4E5F", "#2A9D8F", "#E9C46A", "#F4A261"] },
   { id: "candy-pop", name: "Candy pop", colors: ["#118AB2", "#06D6A0", "#FF5DA2", "#FFD166", "#FDF6EC"] },

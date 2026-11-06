@@ -3,6 +3,7 @@
 import { ConnectChoice } from "@/components/gpu/connect-choice";
 import { PairedComfyUIs } from "@/components/gpu/fuobe-connect";
 import { WhereRunsGo } from "@/components/gpu/where-runs-go";
+import { useHashAnchor } from "@/components/use-hash-anchor";
 import { useHydrated, useStatus, useViewer } from "@/lib/api";
 
 /**
@@ -14,7 +15,10 @@ export function AccountGpuSection() {
   const account = useViewer().data?.account;
   // Hosted runs: runs already work without a GPU of one's own, so connecting one is optional.
   const hosted = !!useStatus().data?.viewer?.hosted;
-  if (!hydrated || !account) return null;
+  const shown = hydrated && !!account;
+  // A link to /settings#your-gpu arrives before this section exists: it is scrolled to once it does.
+  useHashAnchor("your-gpu", shown);
+  if (!shown) return null;
   return (
     <section id="your-gpu" aria-labelledby="your-gpu-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
       <div className="min-w-0">

@@ -21,7 +21,7 @@ import { lookCard, lookSet, SOUL_LOOK_CARDS } from "@/lib/catalog/soul-cards";
 
 const ROOT = path.resolve(__dirname, "..");
 const research = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/research/fuobe-originals-recipes-5.json"), "utf8"));
-const looks = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/research/higgsfield-image-studios.json"), "utf8"));
+const looks = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/research/parity-image-studios.json"), "utf8"));
 /** The evaluation harness's slug (scripts/eval/lib/recipes.mjs): the Original's look ids must match it. */
 const slug = (s: string) =>
   s
@@ -43,6 +43,16 @@ describe("Soul looks (soul-originals.generated.ts)", () => {
     }
   });
 
+  it("leaves the research's notes in the research: the looks are bundled into the site's browser code", () => {
+    // The research does have notes on its looks, so this checks something.
+    expect(research.presets.some((p: { notes?: string }) => p.notes)).toBe(true);
+    for (const l of SOUL_ORIGINALS) {
+      expect(Object.keys(l), l.id).not.toContain("note");
+      expect(Object.keys(l), l.id).not.toContain("notes");
+    }
+    expect(fs.readFileSync(path.join(ROOT, "src/lib/catalog/soul-originals.generated.ts"), "utf8")).not.toMatch(/"notes?":/);
+  });
+
   it("gives every look at most 3 LoRAs, each in the library with its licence recorded (information, not a rule)", () => {
     for (const l of SOUL_ORIGINALS) {
       expect(l.loras.length, l.id).toBeLessThanOrEqual(3);
@@ -57,7 +67,7 @@ describe("Soul looks (soul-originals.generated.ts)", () => {
     expect(SOUL_ORIGINALS.filter((l) => l.loras.length).length).toBe(136);
   });
 
-  it("keeps the research's words, triggers, grades and overlays (and no Higgsfield description)", () => {
+  it("keeps the research's words, triggers, grades and overlays (and no description copied from the parity research)", () => {
     for (const p of research.presets) {
       const l = soulLook(p.id)!;
       expect(l, p.name).toBeDefined();
@@ -77,7 +87,7 @@ describe("Soul looks (soul-originals.generated.ts)", () => {
     expect(soulLook("v1-digitalcam")?.look).not.toMatch(/date stamp/);
   });
 
-  it("finds a look by Fuobe id, old Higgsfield style id or name", () => {
+  it("finds a look by Fuobe id, legacy style id or name", () => {
     expect(soulLook("v1-general")?.name).toBe("General");
     expect(soulLook("464ea177-8d40-4940-8d9d-b438bab269c7")?.id).toBe("v1-general");
     expect(soulLook("General")?.id).toBe("v1-general");
@@ -87,7 +97,7 @@ describe("Soul looks (soul-originals.generated.ts)", () => {
     expect(categories[0]).toBe("New");
     expect(lookCard("v1-y2k")!.civitai).toBe(true);
     expect(lookCard("v1-general")!.civitai).toBe(false);
-    // The browser's cards: the old Higgsfield id still finds its look; the words are Fuobe's.
+    // The browser's cards: the legacy style id still finds its look; the words are Fuobe's.
     expect(lookCard("464ea177-8d40-4940-8d9d-b438bab269c7")?.id).toBe("v1-general");
     expect(lookCard("v1-general")?.description).toBe(soulLook("v1-general")!.look);
     expect(lookCard("v1-graffiti")?.hd).toBe(true);

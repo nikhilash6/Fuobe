@@ -1,6 +1,6 @@
 {
  "asOf": "2026-10-17",
- "method": "fal: per-endpoint OpenAPI (https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>) parsed programmatically (refs resolved, anyOf-null -> nullable, nested object/array item schemas kept as itemSchema/fields; output schemas kept as outputFields); price = '## Pricing' of https://fal.ai/models/<id>/llms.txt, or the 'Billing' block embedded in https://fal.ai/models/<id> when llms.txt is missing (unlisted apps); status from https://api.fal.ai/v1/models (full catalog, 1,516 active on 2026-10-17) and ?endpoint_id= lookups for unlisted/deprecated ids; candidates found by searching the whole catalog plus 110 guessed ids probed by OpenAPI ('null' body = no such endpoint). Replicate: dereferenced_openapi_schema, billingConfig and latest version id embedded in https://replicate.com/<owner>/<name>; candidates from https://replicate.com/api/search. Higgsfield: docs.higgsfield.ai/llms-full.txt + docs/openapi.json + dash.higgsfield.ai/api/v2/pricing/models (no new endpoints vs higgsfield-api.json) and 30 guessed per-model llms.txt ids. Skipped every endpoint already in paid-model-apis.json / -2.json unless a field was missing (re-verified with new keyFields: fal-ai/ideogram/v3, fal-ai/ideogram/v3/remix, fal-ai/recraft/v3|v4|v4.1|v4.1/pro text-to-image, fal-ai/ffmpeg-api/extract-frame|merge-videos|merge-audio-video). No paid inference calls were made.",
+ "method": "fal: per-endpoint OpenAPI (https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>) parsed programmatically (refs resolved, anyOf-null -> nullable, nested object/array item schemas kept as itemSchema/fields; output schemas kept as outputFields); price = '## Pricing' of https://fal.ai/models/<id>/llms.txt, or the 'Billing' block embedded in https://fal.ai/models/<id> when llms.txt is missing (unlisted apps); status from https://api.fal.ai/v1/models (full catalog, 1,516 active on 2026-10-17) and ?endpoint_id= lookups for unlisted/deprecated ids; candidates found by searching the whole catalog plus 110 guessed ids probed by OpenAPI ('null' body = no such endpoint). Replicate: dereferenced_openapi_schema, billingConfig and latest version id embedded in https://replicate.com/<owner>/<name>; candidates from https://replicate.com/api/search. The parity studio: {studio-docs}/llms-full.txt + docs/openapi.json + {studio-dashboard}/api/v2/pricing/models (no new endpoints vs parity-api.json) and 30 guessed per-model llms.txt ids. Skipped every endpoint already in paid-model-apis.json / -2.json unless a field was missing (re-verified with new keyFields: fal-ai/ideogram/v3, fal-ai/ideogram/v3/remix, fal-ai/recraft/v3|v4|v4.1|v4.1/pro text-to-image, fal-ai/ffmpeg-api/extract-frame|merge-videos|merge-audio-video). No paid inference calls were made.",
  "conventions": {
   "operation": "layer-decompose | text-layerize | t2i-transparent | segment | bg-remove | text-edit | text-remove | ocr | vectorize | t2svg | style-create | t2i-style | style-ref | style-transfer | color-grade | i2i | t2i | restyle | ref2v | character-swap | t2v-style | v2v | effect | utility | captions | transcribe | align | sfx | v2a | music | v2m | stem-split | audio-clean | lipsync | product-shot | bg-replace | product-annotate | product-holding | packshot | ad-static | image-to-3d | try-on | angles | storyboard | edit | character | explainer | tts | avatar | music-video",
   "inputs": "Same per-field shape as paid-model-apis.json / -2.json ({type, required, default, values, valueType, minimum, maximum, minLength, maxLength, minItems, maxItems, nullable, desc, examples}); arrays of objects carry itemSchema/itemRequired, objects carry fields/fieldRequired; unions carry variants.",
@@ -74,7 +74,7 @@
     "fal-ai/ideogram/v3 (image_urls style refs)",
     "fal-ai/flux-pro/v1.1-ultra/redux (one image prompt)",
     "fal-ai/nano-banana-pro/edit / bytedance/seedream/v5/pro/edit / fal-ai/flux-2-pro/edit with the board as references (part 1)",
-    "higgsfield:higgsfield-ai/soul/v2/standard style_id (Higgsfield's curated moodboards only)",
+    "{studio}:{studio}/soul/v2/standard style_id (the parity studio's curated moodboards only)",
     "LoRA training on the board (part 2 trainers)"
    ],
    "fields": "create-style: image_urls (1-10) [+image_weights], base_style any|vector_illustration, match precise|flexible -> style_id; then style_id (or image_urls inline) + prompt + colors on recraft/v4/style/*"
@@ -86,8 +86,8 @@
     "fal-ai/ideogram/v3 color_palette.members",
     "recraft/v4.1/flash/text-to-image ($0.007 preview)",
     "recraft/v4/style/text-to-image (style + palette)",
-    "higgsfield:recraft/v4.1/text-to-image colors[{rgb:[r,g,b]}]",
-    "higgsfield:higgsfield/cinema-studio/4.0 color_palette (slug of the 50 Higgsfield palettes)",
+    "{studio}:recraft/v4.1/text-to-image colors[{rgb:[r,g,b]}]",
+    "{studio}:{studio}/cinema-studio/4.0 color_palette (slug of the parity studio's 50 palettes)",
     "other models: hex list in the prompt + palette transfer (open graph)"
    ],
    "fields": "Recraft: colors [{r,g,b}] + background_color {r,g,b}; Ideogram 3: color_palette {members:[{rgb:{r,g,b}, color_weight 0.05-1}]} or {name: EMBER|FRESH|JUNGLE|MAGIC|MELON|MOSAIC|PASTEL|ULTRAMARINE}"
@@ -105,7 +105,7 @@
   },
   {
    "feature": "Photodump Studio",
-   "default": "higgsfield:higgsfield-ai/soul/v2/standard (custom_reference_id = Soul ID)",
+   "default": "{studio}:{studio}/soul/v2/standard (custom_reference_id = Soul ID)",
    "alt": [
     "fal-ai/nano-banana-pro/edit (selfie + pack photo per output)",
     "bytedance/seedream/v5/pro/edit",
@@ -140,9 +140,9 @@
   },
   {
    "feature": "Cinema Studio: Soul Cast (AI actors)",
-   "default": "higgsfield:higgsfield-ai/soul/v2/standard (cast prompt compiled from the 17 fields)",
+   "default": "{studio}:{studio}/soul/v2/standard (cast prompt compiled from the 17 fields)",
    "alt": [
-    "higgsfield:higgsfield/ai-influencer (character sheet)",
+    "{studio}:{studio}/ai-influencer (character sheet)",
     "fal-ai/instant-character (keep a cast member consistent from one photo)",
     "fal-ai/nano-banana-pro"
    ],
@@ -154,7 +154,7 @@
    "alt": [
     "fal-ai/qwen-image-edit-2511-multiple-angles ('another view')",
     "fal-ai/image-editing/scene-composition (place the cast in the set)",
-    "higgsfield:higgsfield-ai/soul/cinema"
+    "{studio}:{studio}/soul/cinema"
    ],
    "fields": "prompt <=2,500 chars; another view = horizontal_angle/vertical_angle/zoom on the set image"
   },
@@ -169,7 +169,7 @@
   },
   {
    "feature": "Shorts Studio (restyle your footage: <=2 min in, <=10 s segments out)",
-   "default": "google/gemini-omni-flash/v1.1/edit (part 1; the model Higgsfield's Shorts Studio runs on)",
+   "default": "google/gemini-omni-flash/v1.1/edit (part 1; the model the parity studio's Shorts Studio runs on)",
    "alt": [
     "alibaba/happy-horse/video-edit (3-60 s sources, no split needed)",
     "decart/lucy-edit/pro",
@@ -180,7 +180,7 @@
     "replicate:wan-video/wan-2.7-videoedit",
     "xai/grok-imagine-video/edit-video (<=8 s)",
     "fal-ai/bernini-r/reference-edit-video",
-    "higgsfield:higgsfield/genjutsu/restyle/v1.0 (Higgsfield's own preset restyle)"
+    "{studio}:{studio}/genjutsu/restyle/v1.0 (the parity studio's own preset restyle)"
    ],
    "fields": "pipeline: fal-ai/ffmpeg-api/metadata (validate 4-120 s, <=200 MB) -> fal-ai/workflow-utilities/trim-video (start_time,end_time per <=10 s segment) -> edit model (video_url, prompt = preset text, style reference images) -> fal-ai/workflow-utilities/scale-video (9:16 or 16:9) -> fal-ai/ffmpeg-api/merge-videos ('stitch') -> fal-ai/workflow-utilities/auto-subtitle (type presets)"
   },
@@ -291,7 +291,7 @@
   },
   {
    "feature": "Ads Studio (URL -> brand kit -> batch static ads)",
-   "default": "higgsfield:higgsfield/ads-studio/v1.0",
+   "default": "{studio}:{studio}/ads-studio/v1.0",
    "alt": [
     "fal-ai/nano-banana-pro/edit or openai/gpt-image-2.5/sunburst/edit with product + logo refs and the brand palette in the prompt (part 1)",
     "fal-ai/ideogram/v3 (color_palette + exact headline text)",
@@ -303,7 +303,7 @@
   },
   {
    "feature": "Ad Multiplier (reference ad -> new product/cast/location/hook)",
-   "default": "higgsfield:bytedance/seedance-2.5/video-edit (the model Higgsfield's Ad Multiplier runs on)",
+   "default": "{studio}:bytedance/seedance-2.5/video-edit (the model the parity studio's Ad Multiplier runs on)",
    "alt": [
     "fal-ai/kling-video/o3/pro/video-to-video/edit (part 1)",
     "google/gemini-omni-flash/v1.1/edit (part 1)",
@@ -314,7 +314,7 @@
     "replicate:kwaivgi/kling-v3-omni-video (video_reference_type base|feature)",
     "bytedance/seedance-2.5/reference-to-video (part 2, video_urls + image_urls)"
    ],
-   "fields": "Higgsfield: video_url (4-30 s) + image_urls (<=20 @-mentions) + prompt (or hook/CTA text) + resolution 480p|720p|1080p; Kling: video_url (3-15 s) + prompt (@Video1, @Image1..) + image_urls/elements + keep_audio; recast: video_url + reference_image_urls (1-4 people)"
+   "fields": "The parity studio: video_url (4-30 s) + image_urls (<=20 @-mentions) + prompt (or hook/CTA text) + resolution 480p|720p|1080p; Kling: video_url (3-15 s) + prompt (@Video1, @Image1..) + image_urls/elements + keep_audio; recast: video_url + reference_image_urls (1-4 people)"
   },
   {
    "feature": "Marketing Studio / product photography",
@@ -327,13 +327,13 @@
     "replicate:bria/product-packshot",
     "replicate:bria/product-shadow",
     "fal-ai/bria/background/replace",
-    "higgsfield:marketing-studio/image (templates; part HF)"
+    "{studio}:marketing-studio/image (templates; part HF)"
    ],
    "fields": "image_url + scene_description | ref_image_url, placement_type, shot_size, num_results"
   },
   {
    "feature": "Click to Ad (product URL -> video ad)",
-   "default": "higgsfield:marketing-studio/image + Fuobe chain: fal-ai/bria/product-shot -> kling/seedance i2v (part 1) -> fal-ai/workflow-utilities/auto-subtitle -> sonilo/v1.1/text-to-music -> fal-ai/ffmpeg-api/compose",
+   "default": "{studio}:marketing-studio/image + Fuobe chain: fal-ai/bria/product-shot -> kling/seedance i2v (part 1) -> fal-ai/workflow-utilities/auto-subtitle -> sonilo/v1.1/text-to-music -> fal-ai/ffmpeg-api/compose",
    "alt": [
     "argil/avatars/text-to-video (UGC presenter)",
     "fal-ai/heygen/v3/video-agent (one-shot ad from prompt + product files)",
@@ -357,7 +357,7 @@
   },
   {
    "feature": "Faceless Studio / Explainer (script -> scenes -> narrated video)",
-   "default": "Fuobe chain: LLM script -> google/gemini-omni-flash/image-to-video per 10 s block (part 1; what Higgsfield's Faceless/Explainer skills use) -> fal-ai/elevenlabs/tts/eleven-v3 (part 1) or fal-ai/inworld-tts -> fal-ai/elevenlabs/forced-alignment -> fal-ai/ffmpeg-api/compose (+ sonilo/v1.1/text-to-music bed) -> fal-ai/workflow-utilities/auto-subtitle",
+   "default": "Fuobe chain: LLM script -> google/gemini-omni-flash/image-to-video per 10 s block (part 1; what the parity studio's Faceless/Explainer skills use) -> fal-ai/elevenlabs/tts/eleven-v3 (part 1) or fal-ai/inworld-tts -> fal-ai/elevenlabs/forced-alignment -> fal-ai/ffmpeg-api/compose (+ sonilo/v1.1/text-to-music bed) -> fal-ai/workflow-utilities/auto-subtitle",
    "alt": [
     "fal-ai/heygen/v3/video-agent (one call)",
     "fal-ai/sensenova-u1-infographic (diagram scenes)",
@@ -378,15 +378,15 @@
   }
  ],
  "gaps": [
-  "Higgsfield's public API (docs.higgsfield.ai llms-full.txt, OpenAPI and the pricing API with the same 31 model families as 2026-10-16) has no endpoint for Cinema Studio image/grid, Soul Cast, Soul Location, Layers, Shorts Studio, Mixed Media, Photodump, Fashion Factory, Moodboard training, Soul HEX or Click to Ad. 30 guessed ids probed at dash.higgsfield.ai/models/<id>/llms.txt (e.g. higgsfield/cinema-studio/image, higgsfield/soul-cast, higgsfield/soul-location, higgsfield/layers, higgsfield/shorts-studio/v1.0, higgsfield-ai/soul/hex, higgsfield/click-to-ad): all 404. Only Soul 2.0 style_id (curated moodboards), Cinema Studio 4.0 color_palette/light and Recraft 4.1 colors exist.",
+  "The parity studio's public API ({studio-docs} llms-full.txt, OpenAPI and the pricing API with the same 31 model families as 2026-10-16) has no endpoint for Cinema Studio image/grid, Soul Cast, Soul Location, Layers, Shorts Studio, Mixed Media, Photodump, Fashion Factory, Moodboard training, Soul HEX or Click to Ad. 30 guessed ids probed at {studio-dashboard}/models/<id>/llms.txt (e.g. {studio}/cinema-studio/image, {studio}/soul-cast, {studio}/soul-location, {studio}/layers, {studio}/shorts-studio/v1.0, {studio}/soul/hex, {studio}/click-to-ad): all 404. Only Soul 2.0 style_id (curated moodboards), Cinema Studio 4.0 color_palette/light and Recraft 4.1 colors exist.",
   "No split / subtitle-burn ffmpeg endpoint on fal (fal-ai/ffmpeg-api/{trim,trim-video,split,split-video,add-subtitles,burn-subtitles,subtitles,speed,concat,crop,resize,extract-audio}: 404). Split = repeated fal-ai/workflow-utilities/trim-video; SRT burn-in only via veed/subtitles (srt_file_url / srt_content).",
   "No PixVerse restyle/modify endpoint on fal (fal-ai/pixverse/{restyle,v5/restyle,v5.5/restyle,v6/restyle,v6/modify}: 404); PixVerse effects are image-to-video only.",
-  "Runway Aleph is Replicate-only (runwayml/gen4-aleph in part 1, runwayml/aleph-2 here); fal-ai/runway/aleph etc. 404. Seedance 2.5 video-edit exists only on Higgsfield (bytedance/seedance-2.5/video-edit on fal: 404).",
+  "Runway Aleph is Replicate-only (runwayml/gen4-aleph in part 1, runwayml/aleph-2 here); fal-ai/runway/aleph etc. 404. Seedance 2.5 video-edit exists only on the parity studio (bytedance/seedance-2.5/video-edit on fal: 404).",
   "Decart: only queue endpoints decart/lucy-restyle (part 2) and decart/lucy-edit/{pro (unlisted), fast, dev (deprecated)}; decart/lucy-2-5/realtime and decart/lucy2-vton/realtime are realtime (WebSocket) apps that do not fit Fuobe's queue flow; no Decart 'Mirage' endpoint (mirage-api/* on fal are unrelated avatar models).",
-  "Palette inputs exist only on Recraft (fal colors/background_color, Higgsfield colors{rgb}) and Ideogram 3 (color_palette). Replicate's Recraft V4.1 and Ideogram 4 have no palette or style-reference fields; Ideogram 4/4.5 on fal have none either. There is no cloud palette-transfer endpoint (apply palette to an existing image/video); use the browser grade or the open palette-transfer graphs.",
-  "Personal moodboard training like Higgsfield's: no public endpoint; Recraft V4 create-style (1-10 images) is the closest hosted equivalent; for 20-80 images train a style LoRA (part 2 trainers).",
+  "Palette inputs exist only on Recraft (fal colors/background_color, the parity studio's colors{rgb}) and Ideogram 3 (color_palette). Replicate's Recraft V4.1 and Ideogram 4 have no palette or style-reference fields; Ideogram 4/4.5 on fal have none either. There is no cloud palette-transfer endpoint (apply palette to an existing image/video); use the browser grade or the open palette-transfer graphs.",
+  "Personal moodboard training like the parity studio's: no public endpoint; Recraft V4 create-style (1-10 images) is the closest hosted equivalent; for 20-80 images train a style LoRA (part 2 trainers).",
   "bria/ad-delayer publishes no output schema (free-form object); capture the JSON from the first live run before building the Ads Layers import.",
-  "No templated static-ad endpoint on fal or Replicate; Higgsfield Ads Studio is the only one. Build templates with bria/embed-product (boxes) + Ideogram/Recraft text + palette.",
+  "No templated static-ad endpoint on fal or Replicate; Ads Studio is the only one. Build templates with bria/embed-product (boxes) + Ideogram/Recraft text + palette.",
   "fal-ai/controlfoley is listed in the fal catalog but its OpenAPI 404s (not recorded).",
   "No newer Kling lipsync on fal (fal-ai/kling-video/{lipsync/v2, v2.6/lipsync, v3/lipsync, o3/lipsync}: 404); no HeyGen v3 translate (fal-ai/heygen/v3/translate*: 404). Dubbing endpoints from part 2 (fal-ai/elevenlabs/dubbing, fal-ai/heygen/v2/translate/*, replicate elevenlabs/dubbing, heygen/video-translate) were re-checked as present in the catalog.",
   "Kling Kolors try-on is deprecated in fal's catalog (still served); IDM-VTON (fal unlisted, Replicate cuuupid/idm-vton) has non-commercial weights.",
@@ -622,7 +622,7 @@
    },
    "replicateEquivalent": "bytedance/seedream-5-pro (layer_decomposition:true)",
    "license": "commercial",
-   "notes": "The same model Higgsfield Layers runs on (Seedream 5.0 layer decomposition). Returns layers[] = base image (z_index 0) + up to 16 transparent PNG layers ordered by z_index, each with bounding_box {absolute:[l,t,r,b] px, normalized:[l,t,r,b] 0-1000}, name and description (omitted for the base); images[] repeats the same files flat. prompt is optional (empty = auto-separate major elements); <bbox>l t r b</bbox> tags (normalized) target a region; 'Return name and description in english.' is the documented example. image_size auto|auto_1K|auto_1.5K|auto_2K. Input 512x512..6000x6000 total px, aspect 1/16..16, <=30 MB. Billed per generated layer.",
+   "notes": "The same model Layers runs on (Seedream 5.0 layer decomposition). Returns layers[] = base image (z_index 0) + up to 16 transparent PNG layers ordered by z_index, each with bounding_box {absolute:[l,t,r,b] px, normalized:[l,t,r,b] 0-1000}, name and description (omitted for the base); images[] repeats the same files flat. prompt is optional (empty = auto-separate major elements); <bbox>l t r b</bbox> tags (normalized) target a region; 'Return name and description in english.' is the documented example. image_size auto|auto_1K|auto_1.5K|auto_2K. Input 512x512..6000x6000 total px, aspect 1/16..16, <=30 MB. Billed per generated layer.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/bytedance/seedream/v5/pro/layerize/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=bytedance/seedream/v5/pro/layerize",
@@ -3325,7 +3325,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Moodboard -> reusable style_id from 1-10 reference images (optional per-image weights). base_style any|vector_illustration, match precise|flexible. Use the returned style_id with recraft/v4/style/* (and Higgsfield-like 'Moodboards' that are reused). Fuobe: store style_id on the style element; boards with >10 images send the 10 most representative (or let the user weight them).",
+   "notes": "Moodboard -> reusable style_id from 1-10 reference images (optional per-image weights). base_style any|vector_illustration, match precise|flexible. Use the returned style_id with recraft/v4/style/* (and parity-studio-like 'Moodboards' that are reused). Fuobe: store style_id on the style element; boards with >10 images send the 10 most representative (or let the user weight them).",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/recraft/v4/create-style/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=recraft/v4/create-style",
@@ -16086,9 +16086,7 @@
      "valueType": "string",
      "default": "en",
      "desc": "Language of the audio file.\n        If translate is selected as the task, the audio will be translated to\n        English, regardless of the language selected. If `None` is passed,\n        the language will be automatically detected. This will also increase\n        the inference time.",
-     "examples": [
-      null
-     ],
+     "examples": [],
      "nullable": true
     },
     "chunk_level": {
@@ -16462,9 +16460,7 @@
      "required": false,
      "minimum": 1,
      "desc": "Number of speakers in the audio file. Defaults to null.\n            If not provided, the number of speakers will be automatically\n            detected.",
-     "examples": [
-      null
-     ],
+     "examples": [],
      "nullable": true
     }
    },
@@ -17228,7 +17224,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Higgsfield's 'mirelo_text_to_audio' job. duration 0.1-600 s, 1-4 samples per call (audio[] array). Billed per output second per sample: $0.010/s promo until 2026-12-13, $0.015/s from 2026-12-14.",
+   "notes": "The parity studio's 'mirelo_text_to_audio' job. duration 0.1-600 s, 1-4 samples per call (audio[] array). Billed per output second per sample: $0.010/s promo until 2026-12-13, $0.015/s from 2026-12-14.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/mirelo-ai/sfx2.0/text-to-audio/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mirelo-ai/sfx2.0/text-to-audio",
@@ -19125,7 +19121,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Higgsfield's 'seed_audio' job: one prompt-driven audio model for speech, SFX and music beds; up to 3 reference clips (@Audio1..) or one reference image; preset voice or cloned voice id. $0.1875 per output minute.",
+   "notes": "The parity studio's 'seed_audio' job: one prompt-driven audio model for speech, SFX and music beds; up to 3 reference clips (@Audio1..) or one reference image; preset voice or cloned voice id. $0.1875 per output minute.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/bytedance/seed-audio-1.0/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=bytedance/seed-audio-1.0",
@@ -19356,7 +19352,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Higgsfield's 'sonilo_music' job. 1-600 s, 1-3 samples; $0.0025 per second per sample.",
+   "notes": "The parity studio's 'sonilo_music' job. 1-600 s, 1-3 samples; $0.0025 per second per sample.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/sonilo/v1.1/text-to-music/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=sonilo/v1.1/text-to-music",
@@ -31031,7 +31027,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "One prompt -> finished presenter/explainer video (script, avatar, voice, B-roll, captions chosen by the agent; up to 20 asset files). The closest single-call match to Higgsfield Faceless/Explainer; Fuobe's own pipeline (script -> scenes -> TTS -> clips -> compose) stays the default for style control. $0.034 per output second.",
+   "notes": "One prompt -> finished presenter/explainer video (script, avatar, voice, B-roll, captions chosen by the agent; up to 20 asset files). The closest single-call match to Faceless/Explainer; Fuobe's own pipeline (script -> scenes -> TTS -> clips -> compose) stays the default for style control. $0.034 per output second.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/fal-ai/heygen/v3/video-agent/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/heygen/v3/video-agent",
@@ -31247,7 +31243,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Higgsfield's 'inworld_text_to_speech' job. <=2000 chars per call (split long narration), preset voices '<Name> (<lang>)'. $0.01 per 1000 characters: cheapest narration.",
+   "notes": "The parity studio's 'inworld_text_to_speech' job. <=2000 chars per call (split long narration), preset voices '<Name> (<lang>)'. $0.01 per 1000 characters: cheapest narration.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/fal-ai/inworld-tts/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/inworld-tts",
@@ -31757,7 +31753,7 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Song (10 s - 6 min) -> beat-cut music video in a style (Cinematic, Lo-fi, Claymation, ... or Custom with style_image_url), optional character image and lip_sync_switch. Higgsfield 'beat_fit'-like. $0.06/s 720p, $0.09/s 1080p.",
+   "notes": "Song (10 s - 6 min) -> beat-cut music video in a style (Cinematic, Lo-fi, Claymation, ... or Custom with style_image_url), optional character image and lip_sync_switch. The parity studio 'beat_fit'-like. $0.06/s 720p, $0.09/s 1080p.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/pixverse/music-video/vibemv/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=pixverse/music-video/vibemv",
@@ -32065,7 +32061,7 @@
    "falEquivalent": null,
    "official": true,
    "version": "e166a17b5b7fd58ec0a7c6a9b8073aa070cfc41d2976419ade10363aacab6ba5",
-   "notes": "Official. No colors/background_color on Replicate (palette only via fal/Higgsfield Recraft). $0.04.",
+   "notes": "Official. No colors/background_color on Replicate (palette only via fal/{studio} Recraft). $0.04.",
    "verified": true,
    "sourceUrl": "https://replicate.com/recraft-ai/recraft-v4.1-svg",
    "schemaUrl": "https://replicate.com/recraft-ai/recraft-v4.1-svg (embedded dereferenced_openapi_schema)",

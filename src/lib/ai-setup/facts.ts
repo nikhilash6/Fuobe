@@ -27,6 +27,11 @@ export interface TabFacts {
   /** What the tab's look found: ComfyUI it can read, one it can't read yet, another app, nothing, or ComfyUI restarting. */
   comfy?: "none" | "unreadable" | "found" | "other" | "waiting";
   port?: number;
+  /**
+   * Whole minutes since ComfyUI stopped answering on this computer: while it is starting again ("waiting"), and from
+   * RESTART_WAIT_MIN on, when it didn't come back ("none").
+   */
+  quietMin?: number;
   install?: InstallKind;
   /** ComfyUI's cross-site setting: this site exactly, every site, or another site. */
   cors?: "exact" | "any" | "other";
@@ -68,6 +73,7 @@ export const TabFactsSchema = z.strictObject({
   browserName: z.enum(BROWSER_NAMES as [BrowserName, ...BrowserName[]]).optional(),
   comfy: z.enum(["none", "unreadable", "found", "other", "waiting"]).optional(),
   port: z.number().int().min(1).max(65535).optional(),
+  quietMin: z.number().int().min(0).max(60).optional(),
   install: z.enum(INSTALLS).optional(),
   cors: z.enum(["exact", "any", "other"]).optional(),
   listen: z.boolean().optional(),
@@ -94,6 +100,8 @@ export interface ServerFacts {
   gpu: "none" | "link" | "computer";
   /** Answering: a link's last check (null: not checked in the last 30 s), or the computer's tab beating with ComfyUI. */
   online: boolean | null;
+  /** A ComfyUI paired with Fuobe Connect was heard from in the last minute. */
+  paired?: boolean;
 }
 
 /** One setup as the steps and the next step read it. */
@@ -146,6 +154,12 @@ export function listensWide(argv: readonly string[] | undefined): boolean {
   if (!value || value.startsWith("--")) return true;
   return value.split(",").some((a) => !["127.0.0.1", "localhost", "::1"].includes(a.trim()));
 }
+
+/**
+ * A ComfyUI's device, as its /system_stats names it (devices[0].name), is the computer's processor: ComfyUI calls it
+ * "cpu" (a graphics card is "cuda:0 NVIDIA ...", Apple's GPU "mps").
+ */
+export const onCpuDevice = (device: string | undefined): boolean => /^cpu\b/i.test(device?.trim() ?? "");
 
 /** ComfyUI was started with --cpu: it never uses the graphics card, whatever the computer has. */
 export const startedOnCpu = (argv: readonly string[] | undefined): boolean => !!argv?.includes("--cpu");

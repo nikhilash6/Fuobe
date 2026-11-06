@@ -177,7 +177,8 @@ describe("an account's runs reach the provider with its own key only", () => {
     db().prepare("UPDATE generation_runs SET submitted_at = ? WHERE id = ?").run(Date.now() - 31 * 60_000, g.id);
     const done = await settle(g.id);
     expect(done.status).toBe("failed");
-    expect(done.error).toBe("This waited over 30 minutes to start. Press Retry.");
+    // Its place in fal.ai's queue never moved: the provider was busy, in plain words.
+    expect(done.error).toBe("fal.ai was busy for 31 minutes, so this run stopped. Press Retry in a few minutes.");
     const cancel = fal.log.find((r) => r.path.endsWith("/cancel"));
     expect(cancel?.authorization).toBe("Key acct-fal-A");
     expect(keysSeen(fal.log)).toEqual(["Key acct-fal-A"]);

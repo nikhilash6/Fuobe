@@ -2,7 +2,7 @@
   "$schema": "./case.schema.json",
   "suite": "angles",
   "title": "Fuobe Angles · the same shot from another camera",
-  "description": "A photo you supply (local/angles/subject.png: a person or a product in a scene) seen from another camera. Measures identity against the photo, CLIP and aesthetic. Fuobe Angles (O11) is Higgsfield Angles' recipe: Qwen-Image-Edit 2509 with dx8152's Multiple-angles LoRA (on your GPU with Qwen-Image-Lightning, the camera written as the LoRA's own words; in the cloud fal's 2509 multiple-angles route at LoRA strength 1.25, 6 steps). The Angles app stays on today's 2511 recipe (Qwen-Image-Edit 2511 + fal's Multiple-Angles LoRA on your GPU, fal's Qwen Multiple Angles in the cloud) until this suite promotes Fuobe Angles; the today variants run it on the same photo and camera. The prompts are Fuobe's own.",
+  "description": "A photo you supply (local/angles/subject.png: a person or a product in a scene) seen from another camera. Measures identity against the photo, CLIP and aesthetic. Fuobe Angles (O11) is the Angles recipe from the parity research: Qwen-Image-Edit 2509 with dx8152's Multiple-angles LoRA (on your GPU with Qwen-Image-Lightning, the camera written as the LoRA's own words; in the cloud fal's 2509 multiple-angles route at LoRA strength 1.25, 6 steps). The Angles app stays on today's 2511 recipe (Qwen-Image-Edit 2511 + fal's Multiple-Angles LoRA on your GPU, fal's Qwen Multiple Angles in the cloud) until this suite promotes Fuobe Angles; the today variants run it on the same photo and camera. The prompts are Fuobe's own.",
   "original": "fuobe-angles",
   "kind": "image",
   "targets": {

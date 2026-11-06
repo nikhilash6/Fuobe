@@ -2,7 +2,7 @@
   "$schema": "./case.schema.json",
   "suite": "cinema",
   "title": "Fuobe Cinema · Director, camera moves and shot lists",
-  "description": "Fuobe Cinema (O6), Cinema Studio 4.0's Original: on the GPU Wan 2.2 14B Lightning, in the cloud LTX-2.3 22B on fal with prompt expansion off. Director cases carry the prompt Cinema compiles from the Director's Panel; camera-move cases also carry the move as LTX-2.3's camera_lora (cloud only); shot lists render each shot as its own clip with the same seed, so continuity across shots can be compared. Variants: the Original as it ships, the camera move in words only (camera_lora none), fal's prompt expansion on, Wan 2.2 A14B hosted instead of LTX-2.3, and Seedance 2.5 as the partner reference. Nothing here comes from Higgsfield: the scenes are Fuobe's own.",
+  "description": "Fuobe Cinema (O6), Cinema Studio 4.0's Original: on the GPU Wan 2.2 14B Lightning, in the cloud LTX-2.3 22B on fal with prompt expansion off. Director cases carry the prompt Cinema compiles from the Director's Panel; camera-move cases also carry the move as LTX-2.3's camera_lora (cloud only); shot lists render each shot as its own clip with the same seed, so continuity across shots can be compared. Variants: the Original as it ships, the camera move in words only (camera_lora none), fal's prompt expansion on, Wan 2.2 A14B hosted instead of LTX-2.3, and Seedance 2.5 as the partner reference. Nothing here comes from the parity studio: the scenes are Fuobe's own.",
   "original": "fuobe-cinema",
   "kind": "video",
   "targets": {

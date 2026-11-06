@@ -1,6 +1,6 @@
 # Paid / closed generative-model APIs for Fuobe
 
-As of **2026-10-16**. This report covers the third-party models that Higgsfield offers, as they can be called through **fal.ai** (primary), **Replicate** (secondary) and vendor-native APIs where neither aggregator has them.
+As of **2026-10-16**. This report covers the third-party models that parity-studio offers, as they can be called through **fal.ai** (primary), **Replicate** (secondary) and vendor-native APIs where neither aggregator has them.
 
 The machine-readable companion is [`paid-model-apis.json`](./paid-model-apis.json). It holds 517 endpoint records: 398 fal, 106 Replicate and 13 vendor. Each record has the full input schema (exact field names, types, enums, defaults, ranges), the output path, a `keyFields` map from Fuobe's canonical slots to that endpoint's field names, the price text, the status, and the Replicate equivalent.
 
@@ -10,7 +10,7 @@ The machine-readable companion is [`paid-model-apis.json`](./paid-model-apis.jso
 - **fal prices** come from the `## Pricing` section of `https://fal.ai/models/<id>/llms.txt`.
 - **fal status** comes from fal's public catalog, `https://api.fal.ai/v1/models`, which returned 1,516 active endpoints on 2026-10-16. Deprecation dates come from the endpoint warning banners on fal.ai model pages.
 - **Replicate schemas and prices** come from the OpenAPI schema and `billingConfig` embedded in each `https://replicate.com/<owner>/<name>` page.
-- **Higgsfield, Hedra and Runway** schemas come from their official docs. **Reve** and **Higgsfield DoP** could not be verified, so they are `verified:false`.
+- **The parity studio, Hedra and Runway** schemas come from their official docs. **Reve** and **DoP** could not be verified, so they are `verified:false`.
 - In the JSON, `verified:true` means the schema was read from an official page or schema file today. `verified:false` covers 18 records: models that were removed or retired, and vendor APIs whose docs could not be fetched.
 
 ---
@@ -34,13 +34,13 @@ The machine-readable companion is [`paid-model-apis.json`](./paid-model-apis.jso
 | **Luma** | Ray 2 and Ray 2 Flash on fal are being **deprecated on 2026-10-25** ("Migrate to Ray v3.2"). The successor is `luma/agent/ray/v3.2/*`. No "Ray 3" endpoint exists on fal; on Replicate the slug is `luma/ray-3.2`. |
 | **Runway** | Not on fal. On Replicate: `runwayml/gen-4.5`, `gen4-turbo`, `gen4-aleph`, `gen4-image`. Native API: `api.dev.runwayml.com`, where the current editing model is `aleph2`. |
 | **Hedra Character-3** | Not on fal or Replicate. Native `api.hedra.com/v3` only. |
-| **Higgsfield SOUL** | Only available through Higgsfield's own API: `api.higgsfield.ai/higgsfield-ai/soul/{standard,v2/standard,cinema}`. **DoP is not in Higgsfield's API catalog** (84 entries checked). |
+| **SOUL** | Only available through the parity studio's own API: `{studio-api}/{studio}/soul/{standard,v2/standard,cinema}`. **DoP is not in the parity studio's API catalog** (84 entries checked). |
 | **Lipsync / avatars** | New: `fal-ai/sync-lipsync/v3` (+ `/image-to-video`), `bytedance/omnihuman/v2`, `veed/lipsync/v2`, `fal-ai/heygen/v3/lipsync/*`, `minimax/h3-max/lip-sync/image-to-video`. |
 | **Topaz** | Moved to the `topaz/upscale/{image,video}/{precision,creative,generative}` endpoints. The older `fal-ai/topaz/upscale/*` is unlisted but still has a schema. |
 
 ---
 
-## 2. Quick reference: the most-used Higgsfield models on fal
+## 2. Quick reference: the most-used the parity studio's models on fal
 
 Required fields are marked `*`. Duration and other enum values are shown with their exact JSON types: `"5"` is a string, `5` is a number.
 
@@ -218,20 +218,20 @@ Source: <https://api.replicate.com/openapi.json> and the Replicate docs topics *
   - Sora used `seconds`.
   - `openai/gpt-image-1` and `-mini` require `openai_api_key` (bring your own key).
 
-### 4.3 Higgsfield API (only route to SOUL)
+### 4.3 The parity studio's API (only route to SOUL)
 
-Source: <https://docs.higgsfield.ai/docs/llms.txt>.
+Source: <{studio-docs}/docs/llms.txt>.
 
-- **Auth header:** `Authorization: Key {api_key_id}:{api_key_secret}`, with keys from console.higgsfield.ai. Add an optional `Idempotency-Key` header.
-- **Submit:** `POST https://api.higgsfield.ai/{model_id}` with the raw input JSON. The response is `{"status":"queued","request_id","status_url","cancel_url"}`.
-- **Status:** `GET https://api.higgsfield.ai/requests/{id}/status`.
+- **Auth header:** `Authorization: Key {api_key_id}:{api_key_secret}`, with keys from {studio-console}. Add an optional `Idempotency-Key` header.
+- **Submit:** `POST {studio-api}/{model_id}` with the raw input JSON. The response is `{"status":"queued","request_id","status_url","cancel_url"}`.
+- **Status:** `GET {studio-api}/requests/{id}/status`.
   - `status` is `queued | in_progress | completed | failed | nsfw | canceled`.
   - Outputs appear as `images[].url`, `video.url`, `audio.url` or `audios[]`.
   - Poll every 2 s, backing off to 10 s, with jitter.
-- **Cancel:** `POST https://api.higgsfield.ai/requests/{id}/cancel`. This only works while the request is queued.
+- **Cancel:** `POST {studio-api}/requests/{id}/cancel`. This only works while the request is queued.
 - **Upload:**
-  1. `POST https://api.higgsfield.ai/files/generate-upload-url {"content_type":"image/jpeg"}`. The response is `{public_url, upload_url, upload_headers}`.
-  2. `PUT` the bytes to `upload_url` with every header in `upload_headers`. Do not send Higgsfield credentials to that URL.
+  1. `POST {studio-api}/files/generate-upload-url {"content_type":"image/jpeg"}`. The response is `{public_url, upload_url, upload_headers}`.
+  2. `PUT` the bytes to `upload_url` with every header in `upload_headers`. Do not send the parity studio's credentials to that URL.
   3. Use `public_url` as the input.
   - Supported types: jpeg, png, webp, gif, wav and mp4.
   - Outputs are kept for at least 7 days.
@@ -923,7 +923,7 @@ Every table below was generated from the JSON.
 
 All of these are **official models**: call them with `POST /v1/models/{owner}/{name}/predictions`. The full input schemas (enums, defaults, ranges) are in the JSON under `provider:"replicate"`. Each fal record's `replicateEquivalent` field points to the matching row here.
 
-These were not found on Replicate (404 on 2026-10-16): `reve/*`, `hedra/character-3`, `higgsfield/*`, `kwaivgi/kling-v3`, `luma/ray-3`, `ideogram-ai/ideogram-v4`, `sync/lipsync-3`, `vidu/*`, and the `wan-3.0` slugs.
+These were not found on Replicate (404 on 2026-10-16): `reve/*`, `hedra/character-3`, `{studio}/*`, `kwaivgi/kling-v3`, `luma/ray-3`, `ideogram-ai/ideogram-v4`, `sync/lipsync-3`, `vidu/*`, and the `wan-3.0` slugs.
 
 | Replicate model | ops | media fields | output | price (replicate page) | note |
 |---|---|---|---|---|---|
@@ -1038,18 +1038,18 @@ These were not found on Replicate (404 on 2026-10-16): `reve/*`, `hedra/characte
 
 ## 7. Vendor-native endpoints (for models fal and Replicate lack)
 
-### Higgsfield SOUL (verified on docs.higgsfield.ai)
+### SOUL (verified on {studio-docs})
 
 | Endpoint | Inputs (exact names) | Output |
 |---|---|---|
-| `POST https://api.higgsfield.ai/higgsfield-ai/soul/standard` | `prompt`*; `aspect_ratio` "9:16","16:9","4:3","3:4","1:1","2:3","3:2" (def "4:3"); `resolution` "720p","1080p" (def "720p"); `enhance_prompt` bool (def false); `style_id` uuid (def `464ea177-8d40-4940-8d9d-b438bab269c7`); `style_strength` 0–1 (def 1.0); `seed` int 1–1000000 or null; `custom_reference_id` uuid (Soul ID character) or null; `custom_reference_strength` 0–1 (def 1.0); `image_reference_url` uri or null; `batch_size` 1 or 4 (def 1) | `images[].url` |
-| `POST https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard` | Same fields except no `image_reference_url`; `aspect_ratio` def "1:1"; `style_id` def `3db34ab5-3439-4317-9e03-08dc30852e69` | `images[].url` |
-| `POST https://api.higgsfield.ai/higgsfield-ai/soul/cinema` | `prompt`*, `aspect_ratio` (def "1:1"), `resolution` 720p/1080p, `enhance_prompt`, `custom_reference_id`, `custom_reference_strength`, `seed`, `batch_size` 1/4 | `images[].url` |
-| `POST https://api.higgsfield.ai/higgsfield/cinema-studio/4.0` | `prompt`*, `duration` 4–30 (def 5), `resolution` "480p","720p", `aspect_ratio` 16:9/4:3/1:1/3:4/9:16/21:9, `image_urls[]`, `video_urls[]`, `audio_urls[]`, `generate_audio` (def true), plus look controls: `era`, `genre`, `light`, `pacing`, `camera_lens`, `camera_model`, `camera_aperture`, `camera_movement` (33 moves), `color_palette` (50 named) | `video.url` |
+| `POST {studio-api}/{studio}/soul/standard` | `prompt`*; `aspect_ratio` "9:16","16:9","4:3","3:4","1:1","2:3","3:2" (def "4:3"); `resolution` "720p","1080p" (def "720p"); `enhance_prompt` bool (def false); `style_id` uuid (def `464ea177-8d40-4940-8d9d-b438bab269c7`); `style_strength` 0–1 (def 1.0); `seed` int 1–1000000 or null; `custom_reference_id` uuid (Soul ID character) or null; `custom_reference_strength` 0–1 (def 1.0); `image_reference_url` uri or null; `batch_size` 1 or 4 (def 1) | `images[].url` |
+| `POST {studio-api}/{studio}/soul/v2/standard` | Same fields except no `image_reference_url`; `aspect_ratio` def "1:1"; `style_id` def `3db34ab5-3439-4317-9e03-08dc30852e69` | `images[].url` |
+| `POST {studio-api}/{studio}/soul/cinema` | `prompt`*, `aspect_ratio` (def "1:1"), `resolution` 720p/1080p, `enhance_prompt`, `custom_reference_id`, `custom_reference_strength`, `seed`, `batch_size` 1/4 | `images[].url` |
+| `POST {studio-api}/{studio}/cinema-studio/4.0` | `prompt`*, `duration` 4–30 (def 5), `resolution` "480p","720p", `aspect_ratio` 16:9/4:3/1:1/3:4/9:16/21:9, `image_urls[]`, `video_urls[]`, `audio_urls[]`, `generate_audio` (def true), plus look controls: `era`, `genre`, `light`, `pacing`, `camera_lens`, `camera_model`, `camera_aperture`, `camera_movement` (33 moves), `color_palette` (50 named) | `video.url` |
 
-- Higgsfield's supplementary `/docs/openapi.json` still shows an older SOUL shape (`num_images`, `resolution` "2K"/"4K"). Higgsfield's docs say the model page is authoritative, so the shape above is the one to use.
-- **Higgsfield DoP** has no first-party API: it is absent from the 84-entry catalog. A third-party copy exists on WaveSpeed (`/api/v3/higgsfield/dop/image-to-video`) but is not verified.
-- Higgsfield's API also re-sells third-party models: Seedance 2/2.5, Kling 2.5/2.6/3/O3/Omni, Wan 2.6/2.7/3/3-Prime, MiniMax H3, Hailuo 2.3, LTX-2.5, PixVerse V6, Grok, Recraft 4.1, Qwen Image 3, Ideogram 4 and Z-Image Turbo. It is useful as a parity reference but not needed by Fuobe.
+- The parity studio's supplementary `/docs/openapi.json` still shows an older SOUL shape (`num_images`, `resolution` "2K"/"4K"). The parity studio's docs say the model page is authoritative, so the shape above is the one to use.
+- **DoP** has no first-party API: it is absent from the 84-entry catalog. A third-party copy exists on WaveSpeed (`/api/v3/{studio}/dop/image-to-video`) but is not verified.
+- The parity studio's API also re-sells third-party models: Seedance 2/2.5, Kling 2.5/2.6/3/O3/Omni, Wan 2.6/2.7/3/3-Prime, MiniMax H3, Hailuo 2.3, LTX-2.5, PixVerse V6, Grok, Recraft 4.1, Qwen Image 3, Ideogram 4 and Z-Image Turbo. It is useful as a parity reference but not needed by Fuobe.
 
 ### Hedra Character-3 (verified on hedra.com docs)
 
@@ -1094,7 +1094,7 @@ These were not found on Replicate (404 on 2026-10-16): `reve/*`, `hedra/characte
 
 1. **Drive requests from the JSON, not hand-written code.** For each (model, operation), read the endpoint, map Fuobe's canonical slots through `keyFields`, and cast values using the enum `valueType` (string vs number).
 2. **Treat fal as primary, with Replicate fallbacks.** Use Replicate for: Veo 3.1 after 2026-11-17 (`google/veo-3.1*`), Imagen 4, Runway (Gen-4.5, Aleph, Gen-4 Image), and as a second source for Kling, Seedance, Hailuo, Wan, Nano Banana and Seedream.
-3. **Higgsfield-only features:** SOUL, Soul ID and Cinema Studio need a Higgsfield API key (`api.higgsfield.ai`). If Fuobe wants Soul-like output without Higgsfield, the closest open alternatives are FLUX.2 or Seedream 5 with LoRA or reference images. That is out of scope here.
+3. **parity-studio-only features:** SOUL, Soul ID and Cinema Studio need a parity-studio API key (`{studio-api}`). If Fuobe wants Soul-like output without the parity studio, the closest open alternatives are FLUX.2 or Seedream 5 with LoRA or reference images. That is out of scope here.
 4. **Set sane defaults to avoid surprise costs:** `generate_audio:false` on Veo and Kling 2.6/3 unless the user asks for audio (it doubles the price), `resolution` 720p, and `num_images` 1.
 5. **Files:** upload user files to the fal CDN once with the two-step `initiate` + `PUT`, then reuse the URL. Avoid data URIs above a few KB on fal and above 256 KB on Replicate. Replicate outputs vanish after 1 hour, so mirror them to Fuobe storage.
 6. **Polling:** poll the `status_url` that fal returns, which is under the app root. Back off 1–2 s for images and 3–5 s for video. Prefer webhooks in production.
@@ -1122,24 +1122,24 @@ Replicate:
 - Docs: <https://replicate.com/docs/topics/predictions/create-a-prediction>, <https://replicate.com/docs/topics/predictions/input-files>, <https://replicate.com/docs/topics/predictions/lifecycle>
 - Model pages `https://replicate.com/<owner>/<name>` (embedded schema and billing), for example <https://replicate.com/google/nano-banana-pro> and <https://replicate.com/google/veo-3.1>
 
-Higgsfield:
+The parity studio:
 
-- <https://docs.higgsfield.ai/docs/llms.txt>
-- <https://docs.higgsfield.ai/docs/models/soul-standard/generate.md>
-- <https://docs.higgsfield.ai/docs/models/soul-2/generate.md>
-- <https://docs.higgsfield.ai/docs/models/soul-cinema/generate.md>
-- <https://docs.higgsfield.ai/docs/models/cinema-studio-4/generate.md>
-- <https://docs.higgsfield.ai/docs/concepts/requests.md>
-- <https://docs.higgsfield.ai/docs/concepts/file-uploads.md>
-- <https://docs.higgsfield.ai/docs/concepts/polling.md>
-- <https://docs.higgsfield.ai/docs/openapi.json>
+- <{studio-docs}/docs/llms.txt>
+- <{studio-docs}/docs/models/soul-standard/generate.md>
+- <{studio-docs}/docs/models/soul-2/generate.md>
+- <{studio-docs}/docs/models/soul-cinema/generate.md>
+- <{studio-docs}/docs/models/cinema-studio-4/generate.md>
+- <{studio-docs}/docs/concepts/requests.md>
+- <{studio-docs}/docs/concepts/file-uploads.md>
+- <{studio-docs}/docs/concepts/polling.md>
+- <{studio-docs}/docs/openapi.json>
 
 Other vendors:
 
 - Hedra: <https://www.hedra.com/docs/api-reference/v3/run-a-model/run-hedra-character-3-hedra-character-3.md>
 - Runway: <https://docs.dev.runwayml.com/llms-full.txt>
 - Reve (secondary): <https://docs.pixeltable.com/sdk/latest/reve.md>, <https://runtimewire.com/article/reve-details-image-api-for-create-edit-and-remix-after-2-0-launch>
-- Higgsfield DoP on WaveSpeed (secondary, unverified): <https://wavespeed.ai/models/higgsfield/dop/image-to-video>
+- DoP on WaveSpeed (secondary, unverified): <https://wavespeed.ai/models/{studio}/dop/image-to-video>
 
 Sora 2 retirement (secondary):
 

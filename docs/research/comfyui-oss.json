@@ -1,6 +1,6 @@
 {
   "asOf": "2026-10-16",
-  "scope": "Open-weight models + ComfyUI workflows reproducing Higgsfield AI capabilities for Fuobe. Model URLs/sizes resolved from the Hugging Face API; templates from Comfy-Org/workflow_templates (templates/index.json) on 2026-10-16.",
+  "scope": "Open-weight models + ComfyUI workflows reproducing the parity studio capabilities for Fuobe. Model URLs/sizes resolved from the Hugging Face API; templates from Comfy-Org/workflow_templates (templates/index.json) on 2026-10-16.",
   "conventions": {
     "folder": "path under ComfyUI/models/ (\"custom (...)\" = node-managed folder, auto-download)",
     "sizeGb": "decimal GB from the HF API (null = not resolvable)",
@@ -11,8 +11,8 @@
   "capabilities": [
     {
       "id": "t2i",
-      "title": "Text-to-image (Higgsfield \"Soul\" photoreal look + fast/turbo)",
-      "higgsfield": "Higgsfield Soul / Soul 2 text-to-image, \"Popcorn\" storyboards",
+      "title": "Text-to-image (the parity studio \"Soul\" photoreal look + fast/turbo)",
+      "parity": "Soul / Soul 2 text-to-image, \"Popcorn\" storyboards",
       "summary": "Soul is a fashion/UGC-photoreal aesthetic model. In 2026 the open-weight frontier for that look is Z-Image-Turbo (Apache-2.0, 6B, 8 steps) with \"UltraReal\"-style LoRAs, the brand-new FLUX 3 Image Klein (released 2026-10-15, FLUX Kommunity license), Krea 2 Turbo (aesthetics-first, 8 steps) and Qwen-Image-2512 (Apache-2.0, best prompt adherence/text among commercially clean models). Qwen Image 2.1 (2026-09-20) is the strongest all-rounder (native 2K, RGBA, up to 10 references) but is research/non-commercial only. Everything below runs on ComfyUI core nodes; most new templates are subgraphs.",
       "options": [
         {
@@ -571,7 +571,7 @@
     {
       "id": "edit",
       "title": "Image edit / multi-reference edit (Nano Banana / Seedream-edit equivalent), product packshot, sketch-to-real",
-      "higgsfield": "Higgsfield Edit / Nano Banana / Seedream edit, Product placement, Draw-to-edit, Sketch-to-real",
+      "parity": "Edit / Nano Banana / Seedream edit, Product placement, Draw-to-edit, Sketch-to-real",
       "summary": "Instruction editing is solved natively in ComfyUI. Qwen-Image-Edit-2511 (Apache-2.0) is the commercially clean default with the biggest LoRA ecosystem (angles, relight, face swap, inflate...). FLUX 3 Image Klein (new) and Qwen Image 2.1 (non-commercial, 10 references) are the quality leaders. Product packshots and sketch-to-photo are Qwen-Edit LoRA presets.",
       "options": [
         {
@@ -622,7 +622,7 @@
           },
           "vramGb": "~24 GB with offload (fp8mixed DiT 20.5 GB + TE 9.4 GB); 16 GB possible with int8/GGUF + offload",
           "license": "Apache-2.0 (commercial OK)",
-          "notes": "Multi-person consistency, material replacement, text editing, built-in popular LoRA abilities. Uses CFGNorm + TextEncodeQwenImageEditPlus nodes. Most Higgsfield \"app\" presets map to 2509/2511 LoRAs (see angles/relight/face-swap/vfx).",
+          "notes": "Multi-person consistency, material replacement, text editing, built-in popular LoRA abilities. Uses CFGNorm + TextEncodeQwenImageEditPlus nodes. Most the parity studio \"app\" presets map to 2509/2511 LoRAs (see angles/relight/face-swap/vfx).",
           "docs": "https://docs.comfy.org/tutorials/image/qwen/qwen-image-edit-2511",
           "relatedTemplates": [
             "image_qwen_image_edit_2511_int8"
@@ -1064,7 +1064,7 @@
           },
           "vramGb": "~24 GB",
           "license": "Apache-2.0 (commercial OK)",
-          "notes": "Alternatives: ControlNet-guided regeneration (Z-Image-Turbo Fun Union ControlNet, Qwen-Image InstantX/DiffSynth union, Qwen Image 2.1 Fun ControlNet union model patch). Higgsfield \"Draw-to-Video\" = this step + I2V (or Wan-Move/ATI trajectory drawing).",
+          "notes": "Alternatives: ControlNet-guided regeneration (Z-Image-Turbo Fun Union ControlNet, Qwen-Image InstantX/DiffSynth union, Qwen Image 2.1 Fun ControlNet union model patch). The parity studio \"Draw-to-Video\" = this step + I2V (or Wan-Move/ATI trajectory drawing).",
           "relatedTemplates": [
             "templates_rob_image_to_real.app"
           ],
@@ -1075,7 +1075,7 @@
     {
       "id": "inpaint",
       "title": "Inpaint / outpaint / object removal (image and video)",
-      "higgsfield": "Higgsfield Inpaint, Expand/Outpaint, Remove object",
+      "parity": "Inpaint, Expand/Outpaint, Remove object",
       "summary": "Mask-based inpainting is native (InpaintModelConditioning / ControlNet inpaint / SetLatentNoiseMask). Instruction editors (Qwen-Edit) handle mask-free removal. Video inpainting is native via VOID, Wan VACE and LTX-2.3 IC-LoRAs.",
       "options": [
         {
@@ -1414,7 +1414,7 @@
     {
       "id": "bg-remove",
       "title": "Background removal / matting",
-      "higgsfield": "Higgsfield background remover, product cut-outs",
+      "parity": "The parity studio's background remover, product cut-outs",
       "summary": "BiRefNet is now a CORE ComfyUI node (LoadBackgroundRemovalModel + RemoveBackground, models/background_removal). SAM 3.1 is native for video segmentation.",
       "options": [
         {
@@ -1558,7 +1558,7 @@
     {
       "id": "relight",
       "title": "Relight",
-      "higgsfield": "Higgsfield Relight / lighting presets",
+      "parity": "Relight / lighting presets",
       "summary": "Qwen-Image-Edit LoRAs give the most robust relighting in 2026 and have official templates; IC-Light (SD1.5) remains as a lightweight custom-node option.",
       "options": [
         {
@@ -1747,7 +1747,7 @@
     {
       "id": "angles",
       "title": "Multiple camera angles from one image",
-      "higgsfield": "Higgsfield \"Angles\" / multi-shot from one photo",
+      "parity": "The parity studio \"Angles\" / multi-shot from one photo",
       "summary": "Qwen-Image-Edit-2511 + fal Multiple-Angles LoRA (96 camera poses) with a 3D camera picker node is the 2026 reference workflow (official app template).",
       "options": [
         {
@@ -1869,7 +1869,7 @@
     {
       "id": "face-swap",
       "title": "Face / head / character swap",
-      "higgsfield": "Higgsfield Face Swap, Character Swap, Recast",
+      "parity": "Face Swap, Character Swap, Recast",
       "summary": "Diffusion-based head swap LoRAs (BFS for Qwen-Edit 2511 / Qwen 2.1 / Klein / Krea 2 / LTX / H3) now beat inswapper-style swaps on realism; ReActor stays the fast frame-by-frame option. Full-body/video character swap is covered under motion-transfer (Wan Animate 2, SCAIL-2).",
       "options": [
         {
@@ -2064,7 +2064,7 @@
     {
       "id": "character-lora",
       "title": "Character consistency / \"Soul ID\" (trained LoRA + zero-shot identity)",
-      "higgsfield": "Higgsfield Soul ID (train a recurring character from ~20 photos)",
+      "parity": "Soul ID (train a recurring character from ~20 photos)",
       "summary": "Soul ID = a per-user identity LoRA. Train with ostris/ai-toolkit (UI + YAML; supports Z-Image, FLUX 3 Klein base, Krea 2, Qwen-Image/2512/2.1, Qwen-Edit, Wan 2.1/2.2, LTX-2.x, MiniMax H3) or kohya musubi-tuner, then load with LoraLoaderModelOnly. For zero-shot consistency use multi-reference editors and reference-to-video models.",
       "options": [
         {
@@ -2217,7 +2217,7 @@
     {
       "id": "t2v",
       "title": "Text-to-video (Kling / Veo / Seedance-like)",
-      "higgsfield": "Higgsfield Create Video (Kling 3, Veo 3.1, Seedance 2.x, Wan 2.6/3.0 backends)",
+      "parity": "Create Video (Kling 3, Veo 3.1, Seedance 2.x, Wan 2.6/3.0 backends)",
       "summary": "Wan 3.0 and Wan 2.5-2.7 are API-only; the last open Wan flagship is still Wan 2.2 (Apache-2.0). 2026 adds open joint audio+video models: LTX-2.3/2.5 (22B, synchronized audio, native multishot, up to 4K/50 fps) and MiniMax H3 (33B, stereo audio, 768p, ~15 s; restrictive territory license). All of these are native in ComfyUI core.",
       "options": [
         {
@@ -2589,8 +2589,8 @@
     {
       "id": "i2v",
       "title": "Image-to-video",
-      "higgsfield": "Higgsfield DoP / Image-to-Video",
-      "summary": "Same model families as T2V; I2V is the most-used Higgsfield path (Soul image -> animate).",
+      "parity": "DoP / Image-to-Video",
+      "summary": "Same model families as T2V; I2V is the most-used the parity studio's path (Soul image -> animate).",
       "options": [
         {
           "name": "Wan 2.2 14B I2V + Lightx2v 4-step",
@@ -2969,7 +2969,7 @@
     {
       "id": "flf2v",
       "title": "Start + end frame (first-last-frame) video",
-      "higgsfield": "Higgsfield Start/End frame, transitions",
+      "parity": "Start/End frame, transitions",
       "summary": "Native in Wan 2.2 (WanFirstLastFrameToVideo), LTX-2.3/2.5 and MiniMax H3.",
       "options": [
         {
@@ -3261,7 +3261,7 @@
     {
       "id": "ref2v",
       "title": "Reference-to-video (subject/character/product references)",
-      "higgsfield": "Higgsfield \"Ingredients\"/references, Soul ID in video, product-to-video",
+      "parity": "The parity studio \"Ingredients\"/references, Soul ID in video, product-to-video",
       "summary": "Quality leader is MiniMax H3 R2V (9 images, 3 videos, 3 audio refs) but its license excludes US/EU/UK/KR, so the Fuobe default is Wan 2.1 VACE 14B (Apache, native); LTX-2.3 IC-LoRA/ID-LoRA (revenue-gated) and Phantom (wrapper) are alternatives. For still images, do multi-reference composition with Qwen-Image-Edit-2511 / FLUX 3 Klein first and then I2V.",
       "options": [
         {
@@ -3506,8 +3506,8 @@
     },
     {
       "id": "camera-motion",
-      "title": "Camera motions (Higgsfield DoP presets)",
-      "higgsfield": "Higgsfield DoP camera motions (113 entries in the companion higgsfield-inventory.json): Crash Zoom In/Out, Dolly In/Out/Left/Right, Dolly Zoom In/Out, Super Dolly In/Out, 360 Orbit, Arc Left/Right, Crane Up/Down/Over The Head, Jib up/down, Bullet Time, FPV Drone, Whip Pan, Snorricam, Handheld, Lazy Susan, 3D Rotation, Earth Zoom Out, Eyes In, Fisheye, Car Chasing, Action Run, Hyperlapse/Timelapse, Dutch Angle, Robo Arm ...",
+      "title": "Camera motions (DoP presets)",
+      "parity": "DoP camera motions (113 entries in the companion parity-inventory.json): Crash Zoom In/Out, Dolly In/Out/Left/Right, Dolly Zoom In/Out, Super Dolly In/Out, 360 Orbit, Arc Left/Right, Crane Up/Down/Over The Head, Jib up/down, Bullet Time, FPV Drone, Whip Pan, Snorricam, Handheld, Lazy Susan, 3D Rotation, Earth Zoom Out, Eyes In, Fisheye, Car Chasing, Action Run, Hyperlapse/Timelapse, Dutch Angle, Robo Arm ...",
       "summary": "Three complementary mechanisms: (1) explicit camera-path conditioning (Wan 2.2 Fun Camera native presets, Uni3C, ReCamMaster, LTX IC-LoRA Cameraman copying a reference clip), (2) motion LoRAs per preset (Remade-AI Wan 2.1 I2V set, ostris orbit, Lightricks LTX-2 dolly/jib, MiniMax H3 orbit/FPV/handheld), and (3) prompt-only camera language for Wan 2.2/LTX-2.5/H3. Fuobe should expose a preset table where each preset maps to {model, LoRA file, trigger phrase, strength, prompt template}; see the LoRA catalog.",
       "options": [
         {
@@ -3786,7 +3786,7 @@
           },
           "vramGb": "n/a",
           "license": "n/a",
-          "notes": "Zero-cost presets: keep a prompt-template table per Higgsfield preset; fall back to LoRAs where prompts fail (orbit 360, bullet time, crash zoom).",
+          "notes": "Zero-cost presets: keep a prompt-template table per the parity studio's preset; fall back to LoRAs where prompts fail (orbit 360, bullet time, crash zoom).",
           "relatedTemplates": []
         },
         {
@@ -3840,8 +3840,8 @@
     {
       "id": "vfx",
       "title": "VFX / effect presets (explode, melt, inflate, squish, cakeify, levitate, disintegrate ...)",
-      "higgsfield": "Higgsfield DoP VFX presets (274 entries in the companion inventory): Disintegration, Melting, Levitation, Set on Fire, Thunder God, Explosion / Head Explosion / Building Explosion, Turning Metal, Freezing, Balloon, Morphskin, Cyborg, Fire Breathe, Garden Bloom, transitions, outfit switch, emotions ...",
-      "summary": "Higgsfield effects are essentially per-effect motion LoRAs on an I2V model. The open catalogue: Remade-AI Wan 2.1 I2V LoRAs (squish, cakeify, inflate, deflate, crush, explode, electrify, super-saiyan, hulk, robot reveal ...), LTX-2 effect LoRAs (squish template, inflate, cakeify), Wan 2.2 disintegration/skin-morph LoRAs, Qwen-Edit INFL8/ACTION image LoRAs (first frame) + I2V, and MiniMax H3 style embeddings.",
+      "parity": "DoP VFX presets (274 entries in the companion inventory): Disintegration, Melting, Levitation, Set on Fire, Thunder God, Explosion / Head Explosion / Building Explosion, Turning Metal, Freezing, Balloon, Morphskin, Cyborg, Fire Breathe, Garden Bloom, transitions, outfit switch, emotions ...",
+      "summary": "The parity studio's effects are essentially per-effect motion LoRAs on an I2V model. The open catalogue: Remade-AI Wan 2.1 I2V LoRAs (squish, cakeify, inflate, deflate, crush, explode, electrify, super-saiyan, hulk, robot reveal ...), LTX-2 effect LoRAs (squish template, inflate, cakeify), Wan 2.2 disintegration/skin-morph LoRAs, Qwen-Edit INFL8/ACTION image LoRAs (first frame) + I2V, and MiniMax H3 style embeddings.",
       "options": [
         {
           "name": "Wan 2.1 I2V 14B 480p + Remade-AI effect LoRAs (+ Lightx2v)",
@@ -4129,7 +4129,7 @@
     {
       "id": "lipsync",
       "title": "Lipsync / talking avatar / UGC",
-      "higgsfield": "Higgsfield Lipsync Studio, Talking Avatar, UGC Factory/Builder, Speak",
+      "parity": "Lipsync Studio, Talking Avatar, UGC Factory/Builder, Speak",
       "summary": "Native options now cover the whole space: InfiniteTalk (WanInfiniteTalkToVideo, unlimited length, multi-speaker), Wan 2.2 S2V, HuMo, LTX-2.3 image+audio-to-video and ID-LoRA, LTX-2.3 DubIt IC-LoRA for re-dubbing existing video, and MiniMax H3 which generates speech + lips jointly. LatentSync 1.6 remains the best mouth-only re-sync for real footage.",
       "options": [
         {
@@ -4393,7 +4393,7 @@
           },
           "vramGb": "~32 GB",
           "license": "LTX-2.x Community License (free incl. commercial below US$10M annual revenue; paid Commercial Use Agreement above)",
-          "notes": "Gated; use the dub-it workflow from ComfyUI-LTXVideo. Closest OSS equivalent to Higgsfield \"lipsync existing video\".",
+          "notes": "Gated; use the dub-it workflow from ComfyUI-LTXVideo. Closest OSS equivalent to the parity studio \"lipsync existing video\".",
           "relatedTemplates": []
         },
         {
@@ -4489,7 +4489,7 @@
     {
       "id": "tts",
       "title": "Text-to-speech / voice cloning (for lipsync & UGC)",
-      "higgsfield": "Higgsfield voice / UGC voiceover (backed by ElevenLabs-style TTS)",
+      "parity": "The parity studio's voice / UGC voiceover (backed by ElevenLabs-style TTS)",
       "summary": "ComfyUI core has no TTS node in 2026 (official TTS templates are API partner nodes, except the Chatter Box templates which use the filliptm custom pack). Best OSS stack: Chatterbox / Chatterbox Multilingual (MIT, official community templates), Qwen3-TTS (Apache, Jan 2026, clone + voice design), IndexTTS-2 (emotion + duration control), VibeVoice (long multi-speaker), Kokoro (tiny, fast, preset voices). Output AUDIO feeds InfiniteTalk / S2V / LTX IA2V directly.",
       "options": [
         {
@@ -4714,8 +4714,8 @@
     {
       "id": "motion-transfer",
       "title": "Motion transfer / character swap in video",
-      "higgsfield": "Higgsfield Motion Control / Recast / Character Swap / \"Genjutsu\" (now a ComfyUI partner node)",
-      "summary": "Wan Animate 2 (2026-08-07, Apache) removes pose extraction and loops natively over long driving videos; SCAIL-2 (MIT) does replacement or animation with SAM3 tracking - both core-native. Wan 2.2 Animate (2025) needs preprocessing custom nodes. Higgsfield itself ships \"Genjutsu Motion Transfer\" as a paid ComfyUI partner node (not OSS).",
+      "parity": "Motion Control / Recast / Character Swap / \"Genjutsu\" (now a ComfyUI partner node)",
+      "summary": "Wan Animate 2 (2026-08-07, Apache) removes pose extraction and loops natively over long driving videos; SCAIL-2 (MIT) does replacement or animation with SAM3 tracking - both core-native. Wan 2.2 Animate (2025) needs preprocessing custom nodes. The parity studio itself ships \"Genjutsu Motion Transfer\" as a paid ComfyUI partner node (not OSS).",
       "options": [
         {
           "name": "Wan Animate 2 (14B) - native, no pose extraction",
@@ -5056,7 +5056,7 @@
     {
       "id": "upscale-image",
       "title": "Image upscale / restoration",
-      "higgsfield": "Higgsfield Upscale (image)",
+      "parity": "Upscale (image)",
       "summary": "SeedVR2 is now CORE in ComfyUI (SeedVR2Preprocess/Conditioning/PostProcessing nodes, one-step). GAN upscalers via core UpscaleModelLoader + ImageUpscaleWithModel. SUPIR also has a core template.",
       "options": [
         {
@@ -5173,7 +5173,7 @@
           },
           "vramGb": "~16 GB",
           "license": "Apache-2.0",
-          "notes": "Adds skin/texture detail (Higgsfield \"enhance\"). USDU custom node tiles any model.",
+          "notes": "Adds skin/texture detail (the parity studio \"enhance\"). USDU custom node tiles any model.",
           "relatedTemplates": []
         },
         {
@@ -5223,7 +5223,7 @@
     {
       "id": "upscale-video",
       "title": "Video upscale / restoration",
-      "higgsfield": "Higgsfield Upscale (video), 4K export",
+      "parity": "Upscale (video), 4K export",
       "summary": "SeedVR2 3B/7B (native, temporal chunking) is the quality leader; FlashVSR is the fast 4x option; model-native latent upscalers (LTX x2, HunyuanVideo 1.5 SR) are cheapest when generating.",
       "options": [
         {
@@ -5416,7 +5416,7 @@
     {
       "id": "interpolate",
       "title": "Frame interpolation (16 fps -> 32/48/60 fps)",
-      "higgsfield": "Higgsfield smooth motion / frame rate boost",
+      "parity": "The parity studio smooth motion / frame rate boost",
       "summary": "ComfyUI core now ships FrameInterpolationModelLoader + FrameInterpolate with RIFE 4.25/4.26 and FILM weights (models/frame_interpolation).",
       "options": [
         {
@@ -5512,7 +5512,7 @@
     {
       "id": "v2a",
       "title": "Video-to-audio / foley / sound effects",
-      "higgsfield": "Higgsfield audio/sound for videos",
+      "parity": "The parity studio's audio/sound for videos",
       "summary": "No core foley node; MMAudio and HunyuanVideo-Foley via custom nodes (both non-permissive weights). Joint audio-video models (LTX-2.x, MiniMax H3) avoid a separate foley pass. Stable Audio 3.0 (core templates) covers text-to-SFX.",
       "options": [
         {
@@ -5685,7 +5685,7 @@
     {
       "id": "music",
       "title": "Music generation",
-      "higgsfield": "Higgsfield music for videos",
+      "parity": "The parity studio's music for videos",
       "summary": "ACE-Step 1.5 / 1.5 XL (Apache, core nodes) is the default; MiniMax Music 3 (Apache, core) for long songs with vocals; YuE2 (CC-BY-NC) for lyrics-to-song and covers.",
       "options": [
         {
@@ -5861,7 +5861,7 @@
     {
       "id": "prompt-enhance",
       "title": "Prompt enhancement (\"Enhance prompt\") and captioning with local LLMs",
-      "higgsfield": "Higgsfield \"Enhance prompt\" toggle",
+      "parity": "The parity studio \"Enhance prompt\" toggle",
       "summary": "ComfyUI core has a TextGenerate node that runs LLM/VLMs stored in models/text_encoders (Qwen3, Qwen3.5, Qwen3-VL, Gemma 4). Several 2026 models ship their own trained enhancers (FLUX 3 Klein PUP, Qwen Image 2.1 PE, LTX-2.5 prompt_enhance, Krea 2, ERNIE-Image). Alternatively Fuobe can call Ollama/llama.cpp outside ComfyUI and inject the text.",
       "options": [
         {
@@ -5999,7 +5999,7 @@
       "url": "https://huggingface.co/Remade-AI/Vintage-VHS/resolve/main/vhs_20_epochs.safetensors",
       "file": "vhs_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Vintage",
+      "parityEquivalent": "Vintage",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Vintage-VHS"
     },
@@ -6011,7 +6011,7 @@
       "url": "https://huggingface.co/Remade-AI/Squish/resolve/main/squish_18.safetensors",
       "file": "squish_18.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "- (no direct preset)",
+      "parityEquivalent": "- (no direct preset)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Squish"
     },
@@ -6023,7 +6023,7 @@
       "url": "https://huggingface.co/Remade-AI/Cakeify/resolve/main/cakeify_16_epochs.safetensors",
       "file": "cakeify_16_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "- (no direct preset)",
+      "parityEquivalent": "- (no direct preset)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Cakeify"
     },
@@ -6035,7 +6035,7 @@
       "url": "https://huggingface.co/Remade-AI/Inflate/resolve/main/inflate_20_epochs.safetensors",
       "file": "inflate_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Balloon (closest)",
+      "parityEquivalent": "Balloon (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Inflate"
     },
@@ -6047,7 +6047,7 @@
       "url": "https://huggingface.co/Remade-AI/Deflate/resolve/main/deflate_20_epochs.safetensors",
       "file": "deflate_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Deflate"
     },
@@ -6059,7 +6059,7 @@
       "url": "https://huggingface.co/Remade-AI/Crush/resolve/main/crush_20_epochs.safetensors",
       "file": "crush_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Crush"
     },
@@ -6071,7 +6071,7 @@
       "url": "https://huggingface.co/Remade-AI/Rotate/resolve/main/rotate_20_epochs.safetensors",
       "file": "rotate_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "3D Rotation / Lazy Susan",
+      "parityEquivalent": "3D Rotation / Lazy Susan",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Rotate"
     },
@@ -6083,7 +6083,7 @@
       "url": "https://huggingface.co/Remade-AI/Gun-Shooting/resolve/main/gun_20_epochs.safetensors",
       "file": "gun_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Gun-Shooting"
     },
@@ -6095,7 +6095,7 @@
       "url": "https://huggingface.co/Remade-AI/Muscle/resolve/main/muscle_18_epochs.safetensors",
       "file": "muscle_18_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Muscle"
     },
@@ -6107,7 +6107,7 @@
       "url": "https://huggingface.co/Remade-AI/Bride/resolve/main/bride_50_epochs.safetensors",
       "file": "bride_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Bride"
     },
@@ -6119,7 +6119,7 @@
       "url": "https://huggingface.co/Remade-AI/Baby/resolve/main/baby_50_epochs.safetensors",
       "file": "baby_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Baby"
     },
@@ -6131,7 +6131,7 @@
       "url": "https://huggingface.co/Remade-AI/Puppy/resolve/main/puppy_50_epochs.safetensors",
       "file": "puppy_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Animalization (closest)",
+      "parityEquivalent": "Animalization (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Puppy"
     },
@@ -6143,7 +6143,7 @@
       "url": "https://huggingface.co/Remade-AI/Classy/resolve/main/classy_45_epochs.safetensors",
       "file": "classy_45_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Classy"
     },
@@ -6155,7 +6155,7 @@
       "url": "https://huggingface.co/Remade-AI/Snow-White/resolve/main/snow_white_50_epochs.safetensors",
       "file": "snow_white_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Snow-White"
     },
@@ -6167,7 +6167,7 @@
       "url": "https://huggingface.co/Remade-AI/Disney-Princess/resolve/main/disney_princess_45_epochs.safetensors",
       "file": "disney_princess_45_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Disney-Princess"
     },
@@ -6179,7 +6179,7 @@
       "url": "https://huggingface.co/Remade-AI/VIP/resolve/main/vip_50_epochs.safetensors",
       "file": "vip_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Red Carpet",
+      "parityEquivalent": "Red Carpet",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/VIP"
     },
@@ -6191,7 +6191,7 @@
       "url": "https://huggingface.co/Remade-AI/Mona-Lisa/resolve/main/mona_lisa_45_epochs.safetensors",
       "file": "mona_lisa_45_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Pearl earring / Monet Muse (closest)",
+      "parityEquivalent": "Pearl earring / Monet Muse (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Mona-Lisa"
     },
@@ -6203,7 +6203,7 @@
       "url": "https://huggingface.co/Remade-AI/Princess/resolve/main/princess_45_epochs.safetensors",
       "file": "princess_45_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Princess"
     },
@@ -6215,7 +6215,7 @@
       "url": "https://huggingface.co/Remade-AI/Jungle/resolve/main/jungle_50_epochs.safetensors",
       "file": "jungle_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Nature Bloom (closest)",
+      "parityEquivalent": "Nature Bloom (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Jungle"
     },
@@ -6227,7 +6227,7 @@
       "url": "https://huggingface.co/Remade-AI/Pirate-Captain/resolve/main/pirate_captain_50_epochs.safetensors",
       "file": "pirate_captain_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Pirate-Captain"
     },
@@ -6239,7 +6239,7 @@
       "url": "https://huggingface.co/Remade-AI/Samurai/resolve/main/samurai_50_epochs.safetensors",
       "file": "samurai_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Outfit Switch (closest)",
+      "parityEquivalent": "Outfit Switch (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Samurai"
     },
@@ -6251,7 +6251,7 @@
       "url": "https://huggingface.co/Remade-AI/Zen/resolve/main/zen_50_epochs.safetensors",
       "file": "zen_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Zen"
     },
@@ -6263,7 +6263,7 @@
       "url": "https://huggingface.co/Remade-AI/Assassin/resolve/main/assassin_45_epochs.safetensors",
       "file": "assassin_45_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Agent Reveal (closest)",
+      "parityEquivalent": "Agent Reveal (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Assassin"
     },
@@ -6275,7 +6275,7 @@
       "url": "https://huggingface.co/Remade-AI/Warrior/resolve/main/warrior_45_epochs.safetensors",
       "file": "warrior_45_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Mighty fighter (closest)",
+      "parityEquivalent": "Mighty fighter (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Warrior"
     },
@@ -6287,7 +6287,7 @@
       "url": "https://huggingface.co/Remade-AI/Painting/resolve/main/painting_50_epochs.safetensors",
       "file": "painting_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Monet Muse / Canvas (closest)",
+      "parityEquivalent": "Monet Muse / Canvas (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Painting"
     },
@@ -6299,7 +6299,7 @@
       "url": "https://huggingface.co/Remade-AI/Zoom-Call/resolve/main/zoom_call_10_epochs.safetensors",
       "file": "zoom_call_10_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Zoom-Call"
     },
@@ -6311,7 +6311,7 @@
       "url": "https://huggingface.co/Remade-AI/Fire/resolve/main/fire_12_epochs.safetensors",
       "file": "fire_12_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "Set on Fire / Flame On",
+      "parityEquivalent": "Set on Fire / Flame On",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Fire"
     },
@@ -6323,7 +6323,7 @@
       "url": "https://huggingface.co/Remade-AI/Tsunami/resolve/main/tsunami_4_epochs.safetensors",
       "file": "tsunami_4_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "Flood",
+      "parityEquivalent": "Flood",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Tsunami"
     },
@@ -6335,7 +6335,7 @@
       "url": "https://huggingface.co/Remade-AI/Doom-FPS/resolve/main/doom_8_epochs.safetensors",
       "file": "doom_8_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Doom-FPS"
     },
@@ -6347,7 +6347,7 @@
       "url": "https://huggingface.co/Remade-AI/Fus-Ro-Dah/resolve/main/fus_ro_dah_20_epochs.safetensors",
       "file": "fus_ro_dah_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Air Bending (closest)",
+      "parityEquivalent": "Air Bending (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Fus-Ro-Dah"
     },
@@ -6359,7 +6359,7 @@
       "url": "https://huggingface.co/Remade-AI/Hug-Jesus/resolve/main/hug_jesus_20_epochs.safetensors",
       "file": "hug_jesus_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Buddy (closest)",
+      "parityEquivalent": "Buddy (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Hug-Jesus"
     },
@@ -6371,7 +6371,7 @@
       "url": "https://huggingface.co/Remade-AI/Super-Saiyan/resolve/main/super_saiyan_35_epochs.safetensors",
       "file": "super_saiyan_35_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Innerlight / Saint Glow (closest)",
+      "parityEquivalent": "Innerlight / Saint Glow (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Super-Saiyan"
     },
@@ -6383,7 +6383,7 @@
       "url": "https://huggingface.co/Remade-AI/Robot-Face-Reveal/resolve/main/robot_face_reveal_35_epochs.safetensors",
       "file": "robot_face_reveal_35_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Cyborg",
+      "parityEquivalent": "Cyborg",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Robot-Face-Reveal"
     },
@@ -6395,7 +6395,7 @@
       "url": "https://huggingface.co/Remade-AI/Pixar/resolve/main/pixar_10_epochs.safetensors",
       "file": "pixar_10_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Pixar"
     },
@@ -6407,7 +6407,7 @@
       "url": "https://huggingface.co/Remade-AI/Boxing/resolve/main/boxing_10_epochs.safetensors",
       "file": "boxing_10_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Boxing (camera motion)",
+      "parityEquivalent": "Boxing (camera motion)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Boxing"
     },
@@ -6419,7 +6419,7 @@
       "url": "https://huggingface.co/Remade-AI/Ultra-Wide/resolve/main/ultra_wide_5_epochs.safetensors",
       "file": "ultra_wide_5_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "- (lens look)",
+      "parityEquivalent": "- (lens look)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Ultra-Wide"
     },
@@ -6431,7 +6431,7 @@
       "url": "https://huggingface.co/Remade-AI/Animal-Documentary/resolve/main/animal_doc_5_epochs.safetensors",
       "file": "animal_doc_5_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "Documentary Snap (closest)",
+      "parityEquivalent": "Documentary Snap (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Animal-Documentary"
     },
@@ -6443,7 +6443,7 @@
       "url": "https://huggingface.co/Remade-AI/Cats/resolve/main/cats_10_epochs.safetensors",
       "file": "cats_10_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Cats"
     },
@@ -6455,7 +6455,7 @@
       "url": "https://huggingface.co/Remade-AI/Dogs/resolve/main/dogs_5_epochs.safetensors",
       "file": "dogs_5_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Dogs"
     },
@@ -6467,7 +6467,7 @@
       "url": "https://huggingface.co/Remade-AI/POV-Driving/resolve/main/pov_driving_5_epochs.safetensors",
       "file": "pov_driving_5_epochs.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "Road Rush / POV",
+      "parityEquivalent": "Road Rush / POV",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/POV-Driving"
     },
@@ -6479,7 +6479,7 @@
       "url": "https://huggingface.co/Remade-AI/Abandoned-Places/resolve/main/abandoned_50_epochs.safetensors",
       "file": "abandoned_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Abandoned-Places"
     },
@@ -6491,7 +6491,7 @@
       "url": "https://huggingface.co/Remade-AI/Explode/resolve/main/explode_30_epochs.safetensors",
       "file": "explode_30_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Explosion / Head Explosion",
+      "parityEquivalent": "Explosion / Head Explosion",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Explode"
     },
@@ -6503,7 +6503,7 @@
       "url": "https://huggingface.co/Remade-AI/Electrify/resolve/main/electrify_50_epochs.safetensors",
       "file": "electrify_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Thunder God",
+      "parityEquivalent": "Thunder God",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Electrify"
     },
@@ -6515,7 +6515,7 @@
       "url": "https://huggingface.co/Remade-AI/Cyberpunk/resolve/main/cyberpunk_20_epochs.safetensors",
       "file": "cyberpunk_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Hyper Neon (closest)",
+      "parityEquivalent": "Hyper Neon (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Cyberpunk"
     },
@@ -6527,7 +6527,7 @@
       "url": "https://huggingface.co/Remade-AI/Fantasy-Landscapes/resolve/main/fantasy_50_epochs.safetensors",
       "file": "fantasy_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Wonderland (closest)",
+      "parityEquivalent": "Wonderland (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Fantasy-Landscapes"
     },
@@ -6539,7 +6539,7 @@
       "url": "https://huggingface.co/Remade-AI/Eye-Close-Up/resolve/main/eye_10_epochs.safetensors",
       "file": "eye_10_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Eyes In",
+      "parityEquivalent": "Eyes In",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Eye-Close-Up"
     },
@@ -6551,7 +6551,7 @@
       "url": "https://huggingface.co/Remade-AI/Tiny-Planet-Fisheye/resolve/main/fisheye_15_epochs.safetensors",
       "file": "fisheye_15_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Fisheye",
+      "parityEquivalent": "Fisheye",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Tiny-Planet-Fisheye"
     },
@@ -6563,7 +6563,7 @@
       "url": "https://huggingface.co/Remade-AI/Dolly-Effect/resolve/main/dolly_25_epochs.safetensors",
       "file": "dolly_25_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Dolly Zoom In / Dolly Zoom Out",
+      "parityEquivalent": "Dolly Zoom In / Dolly Zoom Out",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Dolly-Effect"
     },
@@ -6575,7 +6575,7 @@
       "url": "https://huggingface.co/Remade-AI/Tornado/resolve/main/tornado_10_epochs.safetensors",
       "file": "tornado_10_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Sand Storm (closest)",
+      "parityEquivalent": "Sand Storm (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Tornado"
     },
@@ -6587,7 +6587,7 @@
       "url": "https://huggingface.co/Remade-AI/Film-Noir/resolve/main/film_noir_10_epochs.safetensors",
       "file": "film_noir_10_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Noir / Classic BW",
+      "parityEquivalent": "Noir / Classic BW",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Film-Noir"
     },
@@ -6599,7 +6599,7 @@
       "url": "https://huggingface.co/Remade-AI/Lego/resolve/main/lego_35_epochs.safetensors",
       "file": "lego_35_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Lego"
     },
@@ -6611,7 +6611,7 @@
       "url": "https://huggingface.co/Remade-AI/Hulk-Transformation/resolve/main/hulk_35_epochs.safetensors",
       "file": "hulk_35_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Beast Appearance / Monstrosity",
+      "parityEquivalent": "Beast Appearance / Monstrosity",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Hulk-Transformation"
     },
@@ -6623,7 +6623,7 @@
       "url": "https://huggingface.co/Remade-AI/Selfie-With-Younger-Self/resolve/main/selfie_younger_self_15_epochs.safetensors",
       "file": "selfie_younger_self_15_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Selfception",
+      "parityEquivalent": "Selfception",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Selfie-With-Younger-Self"
     },
@@ -6635,7 +6635,7 @@
       "url": "https://huggingface.co/Remade-AI/angry-face/resolve/main/angry_face_5_epochs.safetensors",
       "file": "angry_face_5_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Angry Mode",
+      "parityEquivalent": "Angry Mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/angry-face"
     },
@@ -6647,7 +6647,7 @@
       "url": "https://huggingface.co/Remade-AI/kissing/resolve/main/kissing_30_epochs.safetensors",
       "file": "kissing_30_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Kiss",
+      "parityEquivalent": "Kiss",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/kissing"
     },
@@ -6659,7 +6659,7 @@
       "url": "https://huggingface.co/Remade-AI/crying/resolve/main/crying_20_epochs.safetensors",
       "file": "crying_20_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Crying",
+      "parityEquivalent": "Crying",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/crying"
     },
@@ -6671,7 +6671,7 @@
       "url": "https://huggingface.co/Remade-AI/Laughing/resolve/main/laughing_15_epochs.safetensors",
       "file": "laughing_15_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Happy Mode",
+      "parityEquivalent": "Happy Mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Laughing"
     },
@@ -6683,7 +6683,7 @@
       "url": "https://huggingface.co/Remade-AI/Cartoon_Jaw_Drop/resolve/main/cartoon_jaw_drop_50_epochs.safetensors",
       "file": "cartoon_jaw_drop_50_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Shocked",
+      "parityEquivalent": "Shocked",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Cartoon_Jaw_Drop"
     },
@@ -6695,7 +6695,7 @@
       "url": "https://huggingface.co/Remade-AI/Jumpscare/resolve/main/jumpscare_35_epochs.safetensors",
       "file": "jumpscare_35_epochs.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Horror Face",
+      "parityEquivalent": "Horror Face",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Jumpscare"
     },
@@ -6707,7 +6707,7 @@
       "url": "https://huggingface.co/Remade-AI/Hero-run/resolve/main/Hero_run.safetensors",
       "file": "Hero_run.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Action Run",
+      "parityEquivalent": "Action Run",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Hero-run"
     },
@@ -6719,7 +6719,7 @@
       "url": "https://huggingface.co/Remade-AI/360-Orbit/resolve/main/360_Orbit.safetensors",
       "file": "360_Orbit.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "360 Orbit",
+      "parityEquivalent": "360 Orbit",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/360-Orbit"
     },
@@ -6731,7 +6731,7 @@
       "url": "https://huggingface.co/Remade-AI/Arc_shot/resolve/main/Arc_shot.safetensors",
       "file": "Arc_shot.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Arc Left / Arc Right",
+      "parityEquivalent": "Arc Left / Arc Right",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Arc_shot"
     },
@@ -6743,7 +6743,7 @@
       "url": "https://huggingface.co/Remade-AI/Crane_up/resolve/main/crane_up.safetensors",
       "file": "crane_up.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Crane Up",
+      "parityEquivalent": "Crane Up",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Crane_up"
     },
@@ -6755,7 +6755,7 @@
       "url": "https://huggingface.co/Remade-AI/Crane_over_the_head/resolve/main/crane_overhead.safetensors",
       "file": "crane_overhead.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Crane Over The Head",
+      "parityEquivalent": "Crane Over The Head",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Crane_over_the_head"
     },
@@ -6767,7 +6767,7 @@
       "url": "https://huggingface.co/Remade-AI/Crane-down/resolve/main/crane_down.safetensors",
       "file": "crane_down.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Crane Down",
+      "parityEquivalent": "Crane Down",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Crane-down"
     },
@@ -6779,7 +6779,7 @@
       "url": "https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors",
       "file": "matrix_shot.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Bullet Time",
+      "parityEquivalent": "Bullet Time",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/matrix-shot"
     },
@@ -6791,7 +6791,7 @@
       "url": "https://huggingface.co/Remade-AI/Car-chase/resolve/main/car_chase.safetensors",
       "file": "car_chase.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Car Chasing",
+      "parityEquivalent": "Car Chasing",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Car-chase"
     },
@@ -6803,7 +6803,7 @@
       "url": "https://huggingface.co/Remade-AI/Crash-zoom-in/resolve/main/crash_zoom_in.safetensors",
       "file": "crash_zoom_in.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Crash Zoom In",
+      "parityEquivalent": "Crash Zoom In",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Crash-zoom-in"
     },
@@ -6815,7 +6815,7 @@
       "url": "https://huggingface.co/Remade-AI/Crash-zoom-out/resolve/main/crash_zoom_out.safetensors",
       "file": "crash_zoom_out.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Crash Zoom Out",
+      "parityEquivalent": "Crash Zoom Out",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Remade-AI/Crash-zoom-out"
     },
@@ -6827,7 +6827,7 @@
       "url": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors",
       "file": "wan22_14b_i2v_orbit_high_noise.safetensors",
       "sizeGb": 0.15,
-      "higgsfieldEquivalent": "360 Orbit / Arc Left / Arc Right",
+      "parityEquivalent": "360 Orbit / Arc Left / Arc Right",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora",
       "note": "load wan22_14b_i2v_orbit_low_noise.safetensors on the low-noise expert"
@@ -6840,7 +6840,7 @@
       "url": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_low_noise.safetensors",
       "file": "wan22_14b_i2v_orbit_low_noise.safetensors",
       "sizeGb": 0.15,
-      "higgsfieldEquivalent": "360 Orbit / Arc Left / Arc Right",
+      "parityEquivalent": "360 Orbit / Arc Left / Arc Right",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora"
     },
@@ -6852,7 +6852,7 @@
       "url": "https://huggingface.co/ostris/wan21_i2v_dolly_zoom_lora/resolve/main/wan_21_i2v_dolly_zoom.safetensors",
       "file": "wan_21_i2v_dolly_zoom.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Dolly Zoom In / Dolly Zoom Out",
+      "parityEquivalent": "Dolly Zoom In / Dolly Zoom Out",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/ostris/wan21_i2v_dolly_zoom_lora"
     },
@@ -6864,7 +6864,7 @@
       "url": "https://huggingface.co/lovis93/Motion-Lora-Camera-Push-In-Wan-14B-720p-I2V/resolve/main/motionpushin-v5-wan-i2v-14b-720p-400.safetensors",
       "file": "motionpushin-v5-wan-i2v-14b-720p-400.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Dolly In / Super Dolly In",
+      "parityEquivalent": "Dolly In / Super Dolly In",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lovis93/Motion-Lora-Camera-Push-In-Wan-14B-720p-I2V"
     },
@@ -6876,7 +6876,7 @@
       "url": "https://huggingface.co/joyfox/Wan2.1-BulletTime-LoRA/resolve/main/Wan21_I2V_rotation_000003750.safetensors",
       "file": "Wan21_I2V_rotation_000003750.safetensors",
       "sizeGb": 0.36,
-      "higgsfieldEquivalent": "Bullet Time",
+      "parityEquivalent": "Bullet Time",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/joyfox/Wan2.1-BulletTime-LoRA"
     },
@@ -6888,7 +6888,7 @@
       "url": "https://huggingface.co/wolfer45/bullettimehigh-wan22-i2v/resolve/main/wan2.2bullet_time_high_noise.safetensors",
       "file": "wan2.2bullet_time_high_noise.safetensors",
       "sizeGb": 0.04,
-      "higgsfieldEquivalent": "Bullet Time",
+      "parityEquivalent": "Bullet Time",
       "license": "unspecified (check card)",
       "source": "https://huggingface.co/wolfer45/bullettimehigh-wan22-i2v"
     },
@@ -6900,7 +6900,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-In/resolve/main/ltx-2-19b-lora-camera-control-dolly-in.safetensors",
       "file": "ltx-2-19b-lora-camera-control-dolly-in.safetensors",
       "sizeGb": 0.33,
-      "higgsfieldEquivalent": "Dolly In / dolly_in",
+      "parityEquivalent": "Dolly In / dolly_in",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-In"
     },
@@ -6912,7 +6912,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Out/resolve/main/ltx-2-19b-lora-camera-control-dolly-out.safetensors",
       "file": "ltx-2-19b-lora-camera-control-dolly-out.safetensors",
       "sizeGb": 0.33,
-      "higgsfieldEquivalent": "Dolly Out / dolly_out",
+      "parityEquivalent": "Dolly Out / dolly_out",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Out"
     },
@@ -6924,7 +6924,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Left/resolve/main/ltx-2-19b-lora-camera-control-dolly-left.safetensors",
       "file": "ltx-2-19b-lora-camera-control-dolly-left.safetensors",
       "sizeGb": 0.33,
-      "higgsfieldEquivalent": "Dolly Left / dolly_left",
+      "parityEquivalent": "Dolly Left / dolly_left",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Left"
     },
@@ -6936,7 +6936,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Right/resolve/main/ltx-2-19b-lora-camera-control-dolly-right.safetensors",
       "file": "ltx-2-19b-lora-camera-control-dolly-right.safetensors",
       "sizeGb": 0.33,
-      "higgsfieldEquivalent": "Dolly Right / dolly_right",
+      "parityEquivalent": "Dolly Right / dolly_right",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Right"
     },
@@ -6948,7 +6948,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Jib-Up/resolve/main/ltx-2-19b-lora-camera-control-jib-up.safetensors",
       "file": "ltx-2-19b-lora-camera-control-jib-up.safetensors",
       "sizeGb": 2.21,
-      "higgsfieldEquivalent": "Jib up / jib_up",
+      "parityEquivalent": "Jib up / jib_up",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Jib-Up"
     },
@@ -6960,7 +6960,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Jib-Down/resolve/main/ltx-2-19b-lora-camera-control-jib-down.safetensors",
       "file": "ltx-2-19b-lora-camera-control-jib-down.safetensors",
       "sizeGb": 2.21,
-      "higgsfieldEquivalent": "Jib down / jib_down",
+      "parityEquivalent": "Jib down / jib_down",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Jib-Down"
     },
@@ -6972,7 +6972,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Static/resolve/main/ltx-2-19b-lora-camera-control-static.safetensors",
       "file": "ltx-2-19b-lora-camera-control-static.safetensors",
       "sizeGb": 2.21,
-      "higgsfieldEquivalent": "Static / static",
+      "parityEquivalent": "Static / static",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Static"
     },
@@ -6984,7 +6984,7 @@
       "url": "https://huggingface.co/Cseti/LTX2.3-22B_IC-LoRA-Cameraman_v1/resolve/main/LTX2.3-22B_IC-LoRA-Cameraman_v1_10500.safetensors",
       "file": "LTX2.3-22B_IC-LoRA-Cameraman_v1_10500.safetensors",
       "sizeGb": 0.33,
-      "higgsfieldEquivalent": "any preset (camera path copied from a reference clip)",
+      "parityEquivalent": "any preset (camera path copied from a reference clip)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Cseti/LTX2.3-22B_IC-LoRA-Cameraman_v1"
     },
@@ -6996,7 +6996,7 @@
       "url": "https://huggingface.co/chsengni/ltx2.3-fpv-motion/resolve/main/ltx2.3_fpv_motion.safetensors",
       "file": "ltx2.3_fpv_motion.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "FPV Drone",
+      "parityEquivalent": "FPV Drone",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/chsengni/ltx2.3-fpv-motion"
     },
@@ -7008,7 +7008,7 @@
       "url": "https://huggingface.co/TheBurgstall/EarthZoomOut-LoRA-LTX-2-19b/resolve/main/lora_weights_step_02000.safetensors",
       "file": "lora_weights_step_02000.safetensors",
       "sizeGb": 0.86,
-      "higgsfieldEquivalent": "Earth Zoom Out",
+      "parityEquivalent": "Earth Zoom Out",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/TheBurgstall/EarthZoomOut-LoRA-LTX-2-19b"
     },
@@ -7020,7 +7020,7 @@
       "url": "https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/main/minimax_h3_flf2v_lora_v1.safetensors",
       "file": "minimax_h3_flf2v_lora_v1.safetensors",
       "sizeGb": 0.16,
-      "higgsfieldEquivalent": "360 Orbit / Bullet Time",
+      "parityEquivalent": "360 Orbit / Bullet Time",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA"
     },
@@ -7032,7 +7032,7 @@
       "url": "https://huggingface.co/MATLOWAI/MiniMax-H3-ORB360-CardSpin/resolve/main/minimax_h3_orb360_step1500.safetensors",
       "file": "minimax_h3_orb360_step1500.safetensors",
       "sizeGb": 0.6,
-      "higgsfieldEquivalent": "360 Orbit / Lazy Susan",
+      "parityEquivalent": "360 Orbit / Lazy Susan",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/MATLOWAI/MiniMax-H3-ORB360-CardSpin"
     },
@@ -7044,7 +7044,7 @@
       "url": "https://huggingface.co/Jojocodex/minimax-h3-Camera-Motion-lora/resolve/main/camera_motion_h3_lora_v1_3000_pruned.safetensors",
       "file": "camera_motion_h3_lora_v1_3000_pruned.safetensors",
       "sizeGb": 0.16,
-      "higgsfieldEquivalent": "Dolly In / Tracking (general)",
+      "parityEquivalent": "Dolly In / Tracking (general)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Jojocodex/minimax-h3-Camera-Motion-lora",
       "note": "strength 0.8-1.0"
@@ -7057,7 +7057,7 @@
       "url": "https://huggingface.co/neph1/minimax_h3_handheld_shaky_camera/resolve/main/handheld_h3_100.safetensors",
       "file": "handheld_h3_100.safetensors",
       "sizeGb": 0.08,
-      "higgsfieldEquivalent": "Handheld",
+      "parityEquivalent": "Handheld",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/neph1/minimax_h3_handheld_shaky_camera"
     },
@@ -7069,7 +7069,7 @@
       "url": "https://huggingface.co/neph1/minimax_h3_headmounted_fpv_cam/resolve/main/fpv_headbob_h3_50.safetensors",
       "file": "fpv_headbob_h3_50.safetensors",
       "sizeGb": 0.08,
-      "higgsfieldEquivalent": "POV / Snorricam (closest)",
+      "parityEquivalent": "POV / Snorricam (closest)",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/neph1/minimax_h3_headmounted_fpv_cam"
     },
@@ -7081,7 +7081,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_bullet_time.safetensors",
       "file": "minimaxh3_bullet_time.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Bullet Time",
+      "parityEquivalent": "Bullet Time",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7095,7 +7095,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_spiral_ascent.safetensors",
       "file": "minimaxh3_spiral_ascent.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Helicopter Shot / Crane Up (closest)",
+      "parityEquivalent": "Helicopter Shot / Crane Up (closest)",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7109,7 +7109,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_kiss_camera.safetensors",
       "file": "minimaxh3_kiss_camera.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Kiss",
+      "parityEquivalent": "Kiss",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7123,7 +7123,7 @@
       "url": "https://huggingface.co/artificialguybr/Disintegration-Redmond-WAN2-I2V-14B/resolve/main/%5BWan2.2%5DDisintegration_Redmond_high_noise.safetensors",
       "file": "[Wan2.2]Disintegration_Redmond_high_noise.safetensors",
       "sizeGb": 0.08,
-      "higgsfieldEquivalent": "Disintegration",
+      "parityEquivalent": "Disintegration",
       "license": "CC0-1.0",
       "source": "https://huggingface.co/artificialguybr/Disintegration-Redmond-WAN2-I2V-14B",
       "note": "pair with [Wan2.2]Disintegration_Redmond_low_noise.safetensors"
@@ -7136,7 +7136,7 @@
       "url": "https://huggingface.co/artificialguybr/SkinMorph-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2%5DSkinMorph_Redmond_high_noise.safetensors",
       "file": "[WAN2.2]SkinMorph_Redmond_high_noise.safetensors",
       "sizeGb": 0.15,
-      "higgsfieldEquivalent": "Morphskin / Skin Surge",
+      "parityEquivalent": "Morphskin / Skin Surge",
       "license": "CC0-1.0",
       "source": "https://huggingface.co/artificialguybr/SkinMorph-Redmond-WAN2-I2V-14B",
       "note": "pair with low_noise file"
@@ -7149,7 +7149,7 @@
       "url": "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/loras/ltx2-squish.safetensors",
       "file": "ltx2-squish.safetensors",
       "sizeGb": 0.43,
-      "higgsfieldEquivalent": "- (no direct preset)",
+      "parityEquivalent": "- (no direct preset)",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Comfy-Org/ltx-2"
     },
@@ -7161,7 +7161,7 @@
       "url": "https://huggingface.co/ovi054/LTX-2-19b-Squish-LoRA/resolve/main/ltx-2-19b-squish-lora.safetensors",
       "file": "ltx-2-19b-squish-lora.safetensors",
       "sizeGb": 0.43,
-      "higgsfieldEquivalent": "- (no direct preset)",
+      "parityEquivalent": "- (no direct preset)",
       "license": "other (see card)",
       "source": "https://huggingface.co/ovi054/LTX-2-19b-Squish-LoRA"
     },
@@ -7173,7 +7173,7 @@
       "url": "https://huggingface.co/kabachuha/ltx2-inflate-it/resolve/main/ltx2-inflate.safetensors",
       "file": "ltx2-inflate.safetensors",
       "sizeGb": 1.11,
-      "higgsfieldEquivalent": "Balloon (closest)",
+      "parityEquivalent": "Balloon (closest)",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/kabachuha/ltx2-inflate-it"
     },
@@ -7185,7 +7185,7 @@
       "url": "https://huggingface.co/kabachuha/ltx2-cakeify/resolve/main/ltx2-cakeify-v2.safetensors",
       "file": "ltx2-cakeify-v2.safetensors",
       "sizeGb": 0.83,
-      "higgsfieldEquivalent": "- (no direct preset)",
+      "parityEquivalent": "- (no direct preset)",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/kabachuha/ltx2-cakeify"
     },
@@ -7197,7 +7197,7 @@
       "url": "https://huggingface.co/TheBurgstall/ltx-2.3-googlyeyes-lora/resolve/main/googlyeyes-ltx-2.3-rank32-step03000.safetensors",
       "file": "googlyeyes-ltx-2.3-rank32-step03000.safetensors",
       "sizeGb": 0.33,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/TheBurgstall/ltx-2.3-googlyeyes-lora"
     },
@@ -7209,7 +7209,7 @@
       "url": "https://huggingface.co/joyfox/LTX-2.3-Transition-LORA/resolve/main/ltx2.3-transition.safetensors",
       "file": "ltx2.3-transition.safetensors",
       "sizeGb": 0.39,
-      "higgsfieldEquivalent": "Seamless Transition / Melt Transition (closest)",
+      "parityEquivalent": "Seamless Transition / Melt Transition (closest)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/joyfox/LTX-2.3-Transition-LORA",
       "note": "repo moved from valiantcat/LTX-2.3-Transition-LORA (template URL redirects)"
@@ -7222,7 +7222,7 @@
       "url": "https://huggingface.co/systms/SYSTMS-INFL8-LoRA-Qwen-Image-Edit-2511/resolve/main/SYSTMS_INFL8_LoRA_Qwen_Image_Edit_2511.safetensors",
       "file": "SYSTMS_INFL8_LoRA_Qwen_Image_Edit_2511.safetensors",
       "sizeGb": 0.3,
-      "higgsfieldEquivalent": "Balloon (closest; end frame for FLF2V)",
+      "parityEquivalent": "Balloon (closest; end frame for FLF2V)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/systms/SYSTMS-INFL8-LoRA-Qwen-Image-Edit-2511"
     },
@@ -7234,7 +7234,7 @@
       "url": "https://huggingface.co/systms/SYSTMS-ACTION-LoRA-Qwen-Image-Edit-2511/resolve/main/QWEN_EDIT_ACTION_V1.safetensors",
       "file": "QWEN_EDIT_ACTION_V1.safetensors",
       "sizeGb": 0.3,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/systms/SYSTMS-ACTION-LoRA-Qwen-Image-Edit-2511"
     },
@@ -7246,7 +7246,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_art_is_explosion.safetensors",
       "file": "minimaxh3_art_is_explosion.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Explosion (closest)",
+      "parityEquivalent": "Explosion (closest)",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7260,7 +7260,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_fire_breath.safetensors",
       "file": "minimaxh3_fire_breath.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Fire Breathe",
+      "parityEquivalent": "Fire Breathe",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7274,7 +7274,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_dark_magic.safetensors",
       "file": "minimaxh3_dark_magic.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Shadow Smoke (closest)",
+      "parityEquivalent": "Shadow Smoke (closest)",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7288,7 +7288,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_storm_magic.safetensors",
       "file": "minimaxh3_storm_magic.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Thunder God (closest)",
+      "parityEquivalent": "Thunder God (closest)",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7302,7 +7302,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_blooming_flowers.safetensors",
       "file": "minimaxh3_blooming_flowers.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "Garden Bloom / Nature Bloom",
+      "parityEquivalent": "Garden Bloom / Nature Bloom",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7316,7 +7316,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_four_seasons.safetensors",
       "file": "minimaxh3_four_seasons.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "World morphing (closest)",
+      "parityEquivalent": "World morphing (closest)",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7330,7 +7330,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/embeddings/minimaxh3_truman_show.safetensors",
       "file": "minimaxh3_truman_show.safetensors",
       "sizeGb": 0.0,
-      "higgsfieldEquivalent": "-",
+      "parityEquivalent": "-",
       "license": "MiniMax H3 Community (territory-restricted)",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3",
       "folder": "embeddings",
@@ -7344,7 +7344,7 @@
       "url": "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors",
       "file": "qwen-image-edit-2511-multiple-angles-lora.safetensors",
       "sizeGb": 0.3,
-      "higgsfieldEquivalent": "Angles",
+      "parityEquivalent": "Angles",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA"
     },
@@ -7356,7 +7356,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Edit-2509-Multiple-angles.safetensors",
       "file": "Qwen-Edit-2509-Multiple-angles.safetensors",
       "sizeGb": 0.24,
-      "higgsfieldEquivalent": "Angles",
+      "parityEquivalent": "Angles",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI"
     },
@@ -7368,7 +7368,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Relight.safetensors",
       "file": "Qwen-Image-Edit-2509-Relight.safetensors",
       "sizeGb": 0.24,
-      "higgsfieldEquivalent": "Relight",
+      "parityEquivalent": "Relight",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI"
     },
@@ -7380,7 +7380,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Light-Migration.safetensors",
       "file": "Qwen-Image-Edit-2509-Light-Migration.safetensors",
       "sizeGb": 0.24,
-      "higgsfieldEquivalent": "Relight from reference",
+      "parityEquivalent": "Relight from reference",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI"
     },
@@ -7392,7 +7392,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Fusion.safetensors",
       "file": "Qwen-Image-Edit-2509-Fusion.safetensors",
       "sizeGb": 0.24,
-      "higgsfieldEquivalent": "Product placement / composite blend",
+      "parityEquivalent": "Product placement / composite blend",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI"
     },
@@ -7404,7 +7404,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-White_to_Scene.safetensors",
       "file": "Qwen-Image-Edit-2509-White_to_Scene.safetensors",
       "sizeGb": 0.24,
-      "higgsfieldEquivalent": "Product packshot to lifestyle scene",
+      "parityEquivalent": "Product packshot to lifestyle scene",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI"
     },
@@ -7416,7 +7416,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Anything2RealAlpha.safetensors",
       "file": "Qwen-Image-Edit-2509-Anything2RealAlpha.safetensors",
       "sizeGb": 0.61,
-      "higgsfieldEquivalent": "Sketch/Drawing to real",
+      "parityEquivalent": "Sketch/Drawing to real",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI"
     },
@@ -7428,7 +7428,7 @@
       "url": "https://huggingface.co/Hyperccino/Qwen-Edit-2511-Anime-to-Photoreal-v1.1/resolve/main/qwen-image-edit-2511-anime-to-photoreal-v1.1.safetensors",
       "file": "qwen-image-edit-2511-anime-to-photoreal-v1.1.safetensors",
       "sizeGb": 0.3,
-      "higgsfieldEquivalent": "Anime to real",
+      "parityEquivalent": "Anime to real",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Hyperccino/Qwen-Edit-2511-Anime-to-Photoreal-v1.1"
     },
@@ -7440,7 +7440,7 @@
       "url": "https://huggingface.co/tlennon-ie/qwen-edit-skin/resolve/main/qwen-edit-skin.safetensors",
       "file": "qwen-edit-skin.safetensors",
       "sizeGb": 0.3,
-      "higgsfieldEquivalent": "Skin enhancer",
+      "parityEquivalent": "Skin enhancer",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/tlennon-ie/qwen-edit-skin"
     },
@@ -7452,7 +7452,7 @@
       "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors",
       "file": "bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors",
       "sizeGb": 0.31,
-      "higgsfieldEquivalent": "Face swap",
+      "parityEquivalent": "Face swap",
       "license": "MIT",
       "source": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap"
     },
@@ -7464,7 +7464,7 @@
       "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v1.1_qwen_2.1.safetensors",
       "file": "bfs_head_v1.1_qwen_2.1.safetensors",
       "sizeGb": 0.26,
-      "higgsfieldEquivalent": "Face swap",
+      "parityEquivalent": "Face swap",
       "license": "MIT (base is non-commercial)",
       "source": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap"
     },
@@ -7476,7 +7476,7 @@
       "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v1_flux-klein_4b.safetensors",
       "file": "bfs_head_v1_flux-klein_4b.safetensors",
       "sizeGb": 0.37,
-      "higgsfieldEquivalent": "Face swap",
+      "parityEquivalent": "Face swap",
       "license": "MIT",
       "source": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap"
     },
@@ -7488,7 +7488,7 @@
       "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap-Video/resolve/main/ltx-2.3/head_swap_v3_rank_64.safetensors",
       "file": "head_swap_v3_rank_64.safetensors",
       "sizeGb": 0.65,
-      "higgsfieldEquivalent": "Video face swap",
+      "parityEquivalent": "Video face swap",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap-Video"
     },
@@ -7500,7 +7500,7 @@
       "url": "https://huggingface.co/ilkerzgi/face-swap/resolve/main/FS2_V5_r64_800_pytorch_lora_weights.safetensors",
       "file": "FS2_V5_r64_800_pytorch_lora_weights.safetensors",
       "sizeGb": 0.13,
-      "higgsfieldEquivalent": "Face swap",
+      "parityEquivalent": "Face swap",
       "license": "FLUX Non-Commercial",
       "source": "https://huggingface.co/ilkerzgi/face-swap"
     },
@@ -7512,7 +7512,7 @@
       "url": "https://huggingface.co/ali-vilab/ACE_Plus/resolve/main/portrait/comfyui_portrait_lora64.safetensors",
       "file": "comfyui_portrait_lora64.safetensors",
       "sizeGb": 0.61,
-      "higgsfieldEquivalent": "Face swap / portrait consistency",
+      "parityEquivalent": "Face swap / portrait consistency",
       "license": "see repo (base non-commercial)",
       "source": "https://huggingface.co/ali-vilab/ACE_Plus"
     },
@@ -7524,7 +7524,7 @@
       "url": "https://huggingface.co/Danrisi/Lenovo_UltraReal_Z_Image/resolve/main/lenovo_z.safetensors",
       "file": "lenovo_z.safetensors",
       "sizeGb": 0.09,
-      "higgsfieldEquivalent": "Soul photoreal look",
+      "parityEquivalent": "Soul photoreal look",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Danrisi/Lenovo_UltraReal_Z_Image"
     },
@@ -7536,7 +7536,7 @@
       "url": "https://huggingface.co/Danrisi/GrainScape_UltraReal_ZImage/resolve/main/grainscape_zimage.safetensors",
       "file": "grainscape_zimage.safetensors",
       "sizeGb": 0.09,
-      "higgsfieldEquivalent": "Film grain photoreal",
+      "parityEquivalent": "Film grain photoreal",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Danrisi/GrainScape_UltraReal_ZImage"
     },
@@ -7548,7 +7548,7 @@
       "url": "https://huggingface.co/suayptalha/Z-Image-Turbo-Realism-LoRA/resolve/main/pytorch_lora_weights.safetensors",
       "file": "pytorch_lora_weights.safetensors",
       "sizeGb": 0.09,
-      "higgsfieldEquivalent": "Soul photoreal look",
+      "parityEquivalent": "Soul photoreal look",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/suayptalha/Z-Image-Turbo-Realism-LoRA"
     },
@@ -7560,7 +7560,7 @@
       "url": "https://huggingface.co/Danrisi/Qwen-image_SamsungCam_UltraReal/resolve/main/Samsung.safetensors",
       "file": "Samsung.safetensors",
       "sizeGb": 0.05,
-      "higgsfieldEquivalent": "Phone-camera UGC look",
+      "parityEquivalent": "Phone-camera UGC look",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Danrisi/Qwen-image_SamsungCam_UltraReal"
     },
@@ -7572,7 +7572,7 @@
       "url": "https://huggingface.co/flymy-ai/qwen-image-realism-lora/resolve/main/flymy_realism.safetensors",
       "file": "flymy_realism.safetensors",
       "sizeGb": 0.09,
-      "higgsfieldEquivalent": "Photoreal",
+      "parityEquivalent": "Photoreal",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/flymy-ai/qwen-image-realism-lora"
     },
@@ -7584,7 +7584,7 @@
       "url": "https://huggingface.co/RudySen/Krea2-realism-V2/resolve/main/Krea2-realism-V2.safetensors",
       "file": "Krea2-realism-V2.safetensors",
       "sizeGb": 1.56,
-      "higgsfieldEquivalent": "Soul photoreal look",
+      "parityEquivalent": "Soul photoreal look",
       "license": "MIT",
       "source": "https://huggingface.co/RudySen/Krea2-realism-V2"
     },
@@ -7596,7 +7596,7 @@
       "url": "https://huggingface.co/gokaygokay/Krea-2-Realism-LoRA/resolve/main/krea2_realism_lora.safetensors",
       "file": "krea2_realism_lora.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Photoreal",
+      "parityEquivalent": "Photoreal",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/gokaygokay/Krea-2-Realism-LoRA"
     },
@@ -7608,7 +7608,7 @@
       "url": "https://huggingface.co/Danrisi/Canon_UltraReal/resolve/main/canon_krea2.safetensors",
       "file": "canon_krea2.safetensors",
       "sizeGb": 0.11,
-      "higgsfieldEquivalent": "DSLR photoreal",
+      "parityEquivalent": "DSLR photoreal",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Danrisi/Canon_UltraReal"
     },
@@ -7620,7 +7620,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
       "file": "krea2_darkbrush.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7632,7 +7632,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_dotmatrix.safetensors",
       "file": "krea2_dotmatrix.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7644,7 +7644,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_kidsdrawing.safetensors",
       "file": "krea2_kidsdrawing.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7656,7 +7656,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_neondrip.safetensors",
       "file": "krea2_neondrip.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7668,7 +7668,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_rainywindow.safetensors",
       "file": "krea2_rainywindow.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7680,7 +7680,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_retroanime.safetensors",
       "file": "krea2_retroanime.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7692,7 +7692,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_softwatercolor.safetensors",
       "file": "krea2_softwatercolor.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7704,7 +7704,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_sunsetblur.safetensors",
       "file": "krea2_sunsetblur.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7716,7 +7716,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_vintagetarot.safetensors",
       "file": "krea2_vintagetarot.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Style preset",
+      "parityEquivalent": "Style preset",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7728,7 +7728,7 @@
       "url": "https://huggingface.co/alvdansen/illustration-1.0-qwen-image/resolve/main/illustration-1.0-qwen-image.safetensors",
       "file": "illustration-1.0-qwen-image.safetensors",
       "sizeGb": 0.77,
-      "higgsfieldEquivalent": "Illustration style",
+      "parityEquivalent": "Illustration style",
       "license": "other (see card)",
       "source": "https://huggingface.co/alvdansen/illustration-1.0-qwen-image"
     },
@@ -7740,7 +7740,7 @@
       "url": "https://huggingface.co/tarn59/pixel_art_style_lora_z_image_turbo/resolve/main/pixel_art_style_z_image_turbo.safetensors",
       "file": "pixel_art_style_z_image_turbo.safetensors",
       "sizeGb": 0.17,
-      "higgsfieldEquivalent": "Pixel art style",
+      "parityEquivalent": "Pixel art style",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/tarn59/pixel_art_style_lora_z_image_turbo"
     },
@@ -7752,7 +7752,7 @@
       "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
       "file": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
       "sizeGb": 1.23,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
     },
@@ -7764,7 +7764,7 @@
       "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
       "file": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
       "sizeGb": 1.23,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
     },
@@ -7776,7 +7776,7 @@
       "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "file": "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "sizeGb": 0.63,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras"
     },
@@ -7788,7 +7788,7 @@
       "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "file": "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "sizeGb": 0.74,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras"
     },
@@ -7800,7 +7800,7 @@
       "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
       "file": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
       "sizeGb": 1.23,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
     },
@@ -7812,7 +7812,7 @@
       "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
       "file": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
       "sizeGb": 1.23,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
     },
@@ -7824,7 +7824,7 @@
       "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_t2v_A14b_high_noise_lora_rank64_lightx2v_4step_1217.safetensors",
       "file": "wan2.2_t2v_A14b_high_noise_lora_rank64_lightx2v_4step_1217.safetensors",
       "sizeGb": 0.61,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras"
     },
@@ -7836,7 +7836,7 @@
       "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
       "file": "lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
       "sizeGb": 0.74,
-      "higgsfieldEquivalent": "Fast mode (InfiniteTalk, Animate, SCAIL, VACE)",
+      "parityEquivalent": "Fast mode (InfiniteTalk, Animate, SCAIL, VACE)",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Kijai/WanVideo_comfy"
     },
@@ -7848,7 +7848,7 @@
       "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
       "file": "lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
       "sizeGb": 0.63,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Kijai/WanVideo_comfy"
     },
@@ -7860,7 +7860,7 @@
       "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan21_CausVid_14B_T2V_lora_rank32.safetensors",
       "file": "Wan21_CausVid_14B_T2V_lora_rank32.safetensors",
       "sizeGb": 0.32,
-      "higgsfieldEquivalent": "Fast mode (VACE)",
+      "parityEquivalent": "Fast mode (VACE)",
       "license": "see repo",
       "source": "https://huggingface.co/Kijai/WanVideo_comfy"
     },
@@ -7872,7 +7872,7 @@
       "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Lightning-4steps-V1.0.safetensors",
       "file": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
       "sizeGb": 1.7,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Qwen-Image-Lightning"
     },
@@ -7884,7 +7884,7 @@
       "url": "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning/resolve/main/Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
       "file": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
       "sizeGb": 1.7,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning"
     },
@@ -7896,7 +7896,7 @@
       "url": "https://huggingface.co/Wuli-art/Qwen-Image-2512-Turbo-LoRA-2-Steps/resolve/main/Wuli-Qwen-Image-2512-Turbo-LoRA-2steps-V1.0-bf16.safetensors",
       "file": "Wuli-Qwen-Image-2512-Turbo-LoRA-2steps-V1.0-bf16.safetensors",
       "sizeGb": 2.36,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Wuli-art/Qwen-Image-2512-Turbo-LoRA-2-Steps"
     },
@@ -7908,7 +7908,7 @@
       "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
       "file": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
       "sizeGb": 0.85,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Qwen-Image-Lightning"
     },
@@ -7920,7 +7920,7 @@
       "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
       "file": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
       "sizeGb": 0.85,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning"
     },
@@ -7932,7 +7932,7 @@
       "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/loras/qwen_image_2.1_turbo_lora_avg_rank_178_bf16.safetensors",
       "file": "qwen_image_2.1_turbo_lora_avg_rank_178_bf16.safetensors",
       "sizeGb": 0.91,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Qwen Research (non-commercial)",
       "source": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1"
     },
@@ -7944,7 +7944,7 @@
       "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/loras/Flux2TurboComfyv2.safetensors",
       "file": "Flux2TurboComfyv2.safetensors",
       "sizeGb": 2.76,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "see card",
       "source": "https://huggingface.co/Comfy-Org/flux2-dev"
     },
@@ -7956,7 +7956,7 @@
       "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/loras/z_image_turbo_distill_patch_lora_bf16.safetensors",
       "file": "z_image_turbo_distill_patch_lora_bf16.safetensors",
       "sizeGb": 0.16,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0",
       "source": "https://huggingface.co/Comfy-Org/z_image_turbo"
     },
@@ -7968,7 +7968,7 @@
       "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_turbo_lora_rank_64_bf16.safetensors",
       "file": "krea2_turbo_lora_rank_64_bf16.safetensors",
       "sizeGb": 0.47,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Krea 2 Community",
       "source": "https://huggingface.co/Comfy-Org/Krea-2"
     },
@@ -7980,7 +7980,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors",
       "file": "ltx-2-19b-distilled-lora-384.safetensors",
       "sizeGb": 7.67,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Lightricks/LTX-2"
     },
@@ -7992,7 +7992,7 @@
       "url": "https://huggingface.co/Comfy-Org/ltx-2.3/resolve/main/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
       "file": "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
       "sizeGb": 2.74,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "LTX-2 Community License",
       "source": "https://huggingface.co/Comfy-Org/ltx-2.3"
     },
@@ -8004,7 +8004,7 @@
       "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "file": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "sizeGb": 8.9,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "LTX-2.x Community",
       "source": "https://huggingface.co/Lightricks/LTX-2.5",
       "gated": true
@@ -8017,7 +8017,7 @@
       "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/loras/hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors",
       "file": "hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors",
       "sizeGb": 0.34,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Tencent Hunyuan Community",
       "source": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged"
     },
@@ -8029,7 +8029,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
       "file": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
       "sizeGb": 1.96,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0 (LoRA) / H3 base restricted",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3"
     },
@@ -8041,7 +8041,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
       "file": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
       "sizeGb": 1.96,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0 (LoRA) / H3 base restricted",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3"
     },
@@ -8053,7 +8053,7 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
       "file": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
       "sizeGb": 1.96,
-      "higgsfieldEquivalent": "Fast mode",
+      "parityEquivalent": "Fast mode",
       "license": "Apache-2.0 (LoRA) / H3 base restricted",
       "source": "https://huggingface.co/Comfy-Org/MiniMax-H3"
     }
@@ -8061,174 +8061,174 @@
   "presetCoverage": {
     "camera": [
       {
-        "higgsfieldPreset": "Crash Zoom In / Crash Zoom Out",
+        "parityPreset": "Crash Zoom In / Crash Zoom Out",
         "openImplementation": "Remade-AI Crash-zoom-in / Crash-zoom-out LoRA on Wan 2.1 I2V 480p (\"cr34sh crash zoom in effect\")",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Dolly In / Dolly Out / Dolly Left / Dolly Right (also dolly_in ... in Higgsfield's LTX presets)",
+        "parityPreset": "Dolly In / Dolly Out / Dolly Left / Dolly Right (also dolly_in ... in the parity studio's LTX presets)",
         "openImplementation": "Lightricks LTX-2 Camera-Control Dolly LoRAs (exact match); Wan 2.2 prompt \"camera dollies in\"; lovis93 Push-in (Wan 2.1 720p)",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Jib up / Jib down / Crane Up / Crane Down / Crane Over The Head",
+        "parityPreset": "Jib up / Jib down / Crane Up / Crane Down / Crane Over The Head",
         "openImplementation": "LTX-2 Jib-Up/Down LoRAs; Remade Crane_up / Crane-down / Crane_over_the_head (Wan 2.1 I2V)",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Static",
+        "parityPreset": "Static",
         "openImplementation": "LTX-2 Static LoRA; Wan 2.2 Fun Camera \"Static\"",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Pan Left / Pan Right / Pedestal Down / Zoom In / Zoom Out / Roll Transition",
+        "parityPreset": "Pan Left / Pan Right / Pedestal Down / Zoom In / Zoom Out / Roll Transition",
         "openImplementation": "Wan 2.2 Fun Camera presets (Pan Left/Right/Up/Down = translations, Zoom In/Out = dolly, ACW/CW = roll) - deterministic; true tilts/pans (rotation) via prompt",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Dolly Zoom In / Dolly Zoom Out",
+        "parityPreset": "Dolly Zoom In / Dolly Zoom Out",
         "openImplementation": "ostris Wan2.1 I2V dolly zoom LoRA (\"dolly zoom\"); Remade Dolly-Effect",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "360 Orbit / Arc Left / Arc Right",
+        "parityPreset": "360 Orbit / Arc Left / Arc Right",
         "openImplementation": "ostris Wan2.2 I2V orbit LoRA (\"orbit 360\"); Remade 360-Orbit / Arc_shot; MiniMax H3 360-Orbit LoRA",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Bullet Time",
+        "parityPreset": "Bullet Time",
         "openImplementation": "Remade matrix-shot; joyfox Wan2.1 bullet time; MiniMax H3 bullet_time embedding",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "3D Rotation / Lazy Susan",
+        "parityPreset": "3D Rotation / Lazy Susan",
         "openImplementation": "Remade Rotate (\"r0t4tion 360 degrees rotation\"); MATLOWAI H3 ORB360",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Super Dolly In / Super Dolly Out / Earth Zoom Out",
+        "parityPreset": "Super Dolly In / Super Dolly Out / Earth Zoom Out",
         "openImplementation": "lovis93 Push-in; TheBurgstall EarthZoomOut (LTX-2, \"EARTHZO\")",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "FPV Drone / Road Rush / POV / Downhill POV",
+        "parityPreset": "FPV Drone / Road Rush / POV / Downhill POV",
         "openImplementation": "chsengni LTX-2.3 FPV LoRA; Remade POV-Driving (T2V); neph1 H3 FPV head-bob; prompt \"FPV drone shot\"",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Handheld / Snorricam",
+        "parityPreset": "Handheld / Snorricam",
         "openImplementation": "neph1 MiniMax H3 handheld LoRA; prompt \"handheld camera\"; Snorricam: H3 head-mounted LoRA (closest)",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Eyes In / Mouth In / Through Object In",
+        "parityPreset": "Eyes In / Mouth In / Through Object In",
         "openImplementation": "Remade Eye-Close-Up (T2V); otherwise prompt + Wan FLF2V to a macro end frame",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Fisheye",
+        "parityPreset": "Fisheye",
         "openImplementation": "Remade Tiny-Planet-Fisheye (T2V)",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Car Chasing / Car Grip / Action Run / Hero Cam",
+        "parityPreset": "Car Chasing / Car Grip / Action Run / Hero Cam",
         "openImplementation": "Remade Car-chase / Hero-run (Wan 2.1 I2V)",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Any preset copied from a reference clip (\"Robo Arm\", \"Impossible Camera\", \"One Take\" ...)",
+        "parityPreset": "Any preset copied from a reference clip (\"Robo Arm\", \"Impossible Camera\", \"One Take\" ...)",
         "openImplementation": "Cseti LTX-2.3 IC-LoRA Cameraman (reference video -> same camera path); Uni3C / ReCamMaster (WanVideoWrapper)",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Whip Pan / Dutch Angle / Focus Change / Low Shutter / Wiggle / YoYo Zoom / Hyperlapse / Timelapse",
+        "parityPreset": "Whip Pan / Dutch Angle / Focus Change / Low Shutter / Wiggle / YoYo Zoom / Hyperlapse / Timelapse",
         "openImplementation": "prompt-only on Wan 2.2 / LTX-2.5 / H3 (no dedicated open LoRA found)",
         "strength": "weak"
       },
       {
-        "higgsfieldPreset": "Kiss / Face Punch / Boxing / sport presets (Skate, Ski, Moonwalk ...)",
+        "parityPreset": "Kiss / Face Punch / Boxing / sport presets (Skate, Ski, Moonwalk ...)",
         "openImplementation": "Remade kissing / Boxing (T2V); H3 kiss_camera embedding; others prompt-only or train a LoRA",
         "strength": "weak-medium"
       }
     ],
     "vfx": [
       {
-        "higgsfieldPreset": "Disintegration",
+        "parityPreset": "Disintegration",
         "openImplementation": "artificialguybr Disintegration LoRA (Wan 2.2 I2V high+low, CC0)",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Set on Fire / Flame On / Fire Breathe",
+        "parityPreset": "Set on Fire / Flame On / Fire Breathe",
         "openImplementation": "Remade Fire (T2V); MiniMax H3 fire_breath embedding; prompt",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Thunder God",
+        "parityPreset": "Thunder God",
         "openImplementation": "Remade Electrify (\"e13c7r1c electricity effect\")",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Explosion / Head Explosion / Building Explosion / Car Explosion",
+        "parityPreset": "Explosion / Head Explosion / Building Explosion / Car Explosion",
         "openImplementation": "Remade Explode (\"3xp105ion huge explosion\"); H3 art_is_explosion",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Balloon",
+        "parityPreset": "Balloon",
         "openImplementation": "Remade Inflate; kabachuha LTX-2 inflate; SYSTMS INFL8 (Qwen-Edit end frame) + Wan FLF2V",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Melting / Turning Metal / Freezing / Diamond / Morphskin / Skin Surge",
+        "parityPreset": "Melting / Turning Metal / Freezing / Diamond / Morphskin / Skin Surge",
         "openImplementation": "Qwen-Image-Edit-2511 material change for the end frame + Wan 2.2 FLF2V; artificialguybr SkinMorph (Wan 2.2)",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Levitation / Floating fall / I Can Fly / Hero Flight",
+        "parityPreset": "Levitation / Floating fall / I Can Fly / Hero Flight",
         "openImplementation": "prompt-only (Wan 2.2 / LTX-2.5) or Qwen-Edit end frame + FLF2V; no dedicated open LoRA found",
         "strength": "weak"
       },
       {
-        "higgsfieldPreset": "Cyborg / Horror Face / Beast Appearance / Monstrosity",
+        "parityPreset": "Cyborg / Horror Face / Beast Appearance / Monstrosity",
         "openImplementation": "Remade Robot-Face-Reveal / Jumpscare / Hulk-Transformation",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Crying / Angry Mode / Happy Mode / Shocked",
+        "parityPreset": "Crying / Angry Mode / Happy Mode / Shocked",
         "openImplementation": "Remade crying / angry-face / Laughing / Cartoon_Jaw_Drop",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Kiss / Red Carpet / Selfception",
+        "parityPreset": "Kiss / Red Carpet / Selfception",
         "openImplementation": "Remade kissing / VIP / Selfie-With-Younger-Self",
         "strength": "good"
       },
       {
-        "higgsfieldPreset": "Outfit Switch / Agent Reveal / transformations",
+        "parityPreset": "Outfit Switch / Agent Reveal / transformations",
         "openImplementation": "Remade transformation LoRAs (Bride, Princess, Samurai, Pirate, Warrior, Assassin ...) or Qwen-Edit outfit change + FLF2V",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Garden Bloom / Nature Bloom",
+        "parityPreset": "Garden Bloom / Nature Bloom",
         "openImplementation": "MiniMax H3 blooming_flowers embedding; prompt",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Flood / Sand Storm / Tornado",
+        "parityPreset": "Flood / Sand Storm / Tornado",
         "openImplementation": "Remade Tsunami / Tornado (T2V LoRAs)",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Transitions (Seamless, Melt, Smoke, Flame ...)",
+        "parityPreset": "Transitions (Seamless, Melt, Smoke, Flame ...)",
         "openImplementation": "LTX-2.3 transition LoRA (\"zhuanchang\"); Wan 2.2 FLF2V between two stills",
         "strength": "medium"
       },
       {
-        "higgsfieldPreset": "Squish / Cakeify (Pika-style)",
+        "parityPreset": "Squish / Cakeify (Pika-style)",
         "openImplementation": "Remade Squish / Cakeify; LTX-2 squish template (video_ltx2_i2v_lora)",
-        "strength": "good (no Higgsfield preset)"
+        "strength": "good (no parity-studio preset)"
       },
       {
-        "higgsfieldPreset": "Color grades / film looks (Bleach Bypass, Teal Orange Epic, Noir, Vintage ...)",
+        "parityPreset": "Color grades / film looks (Bleach Bypass, Teal Orange Epic, Noir, Vintage ...)",
         "openImplementation": "prompt + post-grade (LUT) in Fuobe; Remade Film-Noir / Vintage-VHS; Krea 2 style LoRAs for stills",
         "strength": "medium"
       }

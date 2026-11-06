@@ -1,4 +1,5 @@
 import { compareVersions, formatBytes, nameKey, splitKey, vramGb } from "./requirements";
+import { knownProblemNeed, knownProblems } from "./known-problems";
 import { cardFits, GPU_NEED_TEXT, readCard, type GpuNeed } from "./rtx";
 import type { Badge, FileKey, GpuInventory, IndexFile, InventorySummary, Need, Readiness, RequirementIndex, ToolReadiness, ToolRef, VramFit } from "./types";
 
@@ -39,25 +40,39 @@ export function shortGpu(name: string | undefined): string {
 /** Extensions ComfyUI's folder listings show (supported_pt_extensions). */
 const LISTED = /\.(ckpt|pt|pt2|bin|pth|safetensors|pkl|sft)$/i;
 
-export type FileState = "present" | "partial" | "missing" | "unknown" | "unobservable";
+/**
+ * - "partial": smaller than the index's file (cut short).
+ * - "other": a file pinned to one revision whose size is larger than that revision's: another file under the same name,
+ *   which loads but doesn't do what the graph needs (an Orbit LoRA that leaves the clip frozen).
+ */
+export type FileState = "present" | "partial" | "other" | "missing" | "unknown" | "unobservable";
+
+/** A file the index pins to one revision (Hugging Face resolve/<commit>): its size is that file's, exactly. */
+const pinnedRevision = (f: Pick<IndexFile, "pinnedUrl">) => /\/resolve\/[0-9a-f]{40}\//.test(f.pinnedUrl ?? "");
+
+/** What the folder listing's size says of a file that is there. A size the listing didn't give says nothing. */
+function bySize(f: IndexFile, size: number | null | undefined): "present" | "partial" | "other" {
+  if (typeof size !== "number" || !(f.sizeBytes > 0) || size <= 0) return "present";
+  if (size < 0.99 * f.sizeBytes) return "partial";
+  return pinnedRevision(f) && size > 1.01 * f.sizeBytes ? "other" : "present";
+}
 
 /** Is this index file on that ComfyUI: by its loader's combo list first, then the folder listing. */
 export function filePresence(f: IndexFile, inv: GpuInventory): FileState {
   if (f.presence === "unobservable") return "unobservable";
   const listing = inv.models[f.listFolder ?? f.folder];
   const size = listing && !listing.folderMissing ? listing.have[f.file] : undefined;
-  const short = typeof size === "number" && f.sizeBytes > 0 && size < 0.99 * f.sizeBytes;
   if (f.presence === "loader") {
     let said: boolean | undefined;
     for (const [cls, input] of f.loaders ?? []) {
       const combo = inv.combos[`${cls}.${input}`];
       if (combo) said = said || combo.includes(f.file);
     }
-    if (said === true) return short ? "partial" : "present";
+    if (said === true) return bySize(f, size);
     if (said === false) return "missing";
   }
   // No loader read: the folder listing decides, for the files a listing can show.
-  if (size !== undefined) return short ? "partial" : "present";
+  if (size !== undefined) return bySize(f, size);
   if (!LISTED.test(f.file)) return "unknown";
   if (listing) return "missing";
   return "unknown";
@@ -81,6 +96,20 @@ const FOLDER_LABEL: Record<string, string> = {
   optical_flow: "Motion reader",
   geometry_estimation: "Depth reader",
 };
+
+/**
+ * Files whose job has a name people know: the guided fix and the readiness line say it ("Orbit LoRA") instead of the
+ * folder's role. By the file's base name.
+ */
+const FILE_TITLES: Record<string, string> = {
+  // pablodawson's MiniMax H3 360 Orbit LoRA (the orbit presets: Bullet Time, 360 Orbit, 3D Rotation, Product 360).
+  "minimax_h3_flf2v_lora_v1.safetensors": "Orbit LoRA",
+};
+
+/** A file's name for people: its known title, else its folder's role ("Decoder", "Video model"). */
+export function fileTitle(folder: string, file: string, kind?: string): string {
+  return FILE_TITLES[file] ?? fileLabel(folder, kind);
+}
 
 export function fileLabel(folder: string, kind?: string): string {
   const base = FOLDER_LABEL[folder];
@@ -154,7 +183,7 @@ function fileNeed(key: FileKey, f: IndexFile, kind: "model" | "model-replace", c
   return {
     key: `file:${key}`,
     kind,
-    label: fileLabel(f.folder, ctx.kind),
+    label: fileTitle(f.folder, f.file, ctx.kind),
     detail: `${f.file} → models/${f.folder}`,
     sizeBytes: f.sizeBytes,
     file: key,
@@ -192,6 +221,9 @@ export function workflowReadiness(id: string, inv: GpuInventory, idx: Requiremen
           },
     );
   }
+  // A known problem of this ComfyUI on this system (memfd on ComfyUI 0.43 with a standalone Linux Python): every graph
+  // that loads a model stops the same way, so its fix is a step of each, before Run (Run anyway stays).
+  if (w.files.length && !out.needs.some((n) => n.kind === "comfy-update")) for (const p of knownProblems(inv)) out.needs.push(knownProblemNeed(p));
   // Add-ons.
   const packNeeds = new Set<string>();
   for (const [name, classes] of Object.entries(w.packs)) {
@@ -220,6 +252,7 @@ export function workflowReadiness(id: string, inv: GpuInventory, idx: Requiremen
     if (s === "unobservable") out.unobservable.push(f.file);
     else if (s === "present") out.have.push(fileNeed(key, f, "model", ctx));
     else if (s === "partial") out.needs.push({ ...fileNeed(key, f, "model-replace", ctx), detail: `${f.file} in models/${f.folder} is only partly downloaded` });
+    else if (s === "other") out.needs.push({ ...fileNeed(key, f, "model-replace", ctx), detail: `${f.file} in models/${f.folder} isn't the file this needs (its size is different)` });
     else if (s === "missing") {
       out.needs.push(fileNeed(key, f, "model", ctx));
       if (f.gated) out.needs.push({ key: `licence:${key}`, kind: "hf-licence", label: "Accept the model's licence on Hugging Face", detail: f.url, file: key });

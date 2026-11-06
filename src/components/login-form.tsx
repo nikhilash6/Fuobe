@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isWay } from "@/lib/ai-setup/ways";
 import { announceAuthChange, rememberViewer, signOut, useStatus, useViewer } from "@/lib/api";
 import { safeNext } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
@@ -74,9 +75,13 @@ export function LoginForm() {
       // Settings' Your GPU (its Sign up free): the welcome page is that same choice.
       const q = new URLSearchParams({ welcome: "1" });
       if (after !== "/" && !after.startsWith("/connect") && !after.startsWith("/settings#your-gpu")) q.set("next", after);
-      // "Set it up with my AI" (a guest's sign-up from it): the welcome page opens with it.
+      // "Set it up with my AI" (a guest's sign-up from it): the welcome page opens with it, on the link's way.
       const nextUrl = new URL(after, window.location.origin);
-      if (nextUrl.pathname === "/connect" && nextUrl.searchParams.get("setup") === "ai") q.set("setup", "ai");
+      if (nextUrl.pathname === "/connect" && nextUrl.searchParams.get("setup") === "ai") {
+        q.set("setup", "ai");
+        const way = nextUrl.searchParams.get("way");
+        if (isWay(way)) q.set("way", way);
+      }
       // With hosted runs on, a GPU of its own is optional: straight back to where it was.
       const dest = mode === "signup" && !hosted ? new URL(`/connect?${q}`, window.location.origin).toString() : after;
       rememberViewer(mode === "owner" ? "owner" : "account");

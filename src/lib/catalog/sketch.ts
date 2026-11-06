@@ -3,7 +3,7 @@
  *
  * Models with a native mask input get the mask (op "inpaint"). Everything else gets the
  * painted image as an extra reference plus a prompt that says what the paint means — the
- * same trick Higgsfield's "Draw to Edit" and Nano Banana inpainting rely on.
+ * same trick the parity studio's "Draw to Edit" and Nano Banana inpainting rely on.
  */
 import type { GenerationRequest, ModelDef } from "./types";
 

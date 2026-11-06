@@ -137,7 +137,7 @@ describe("/api/influencer", () => {
     expect(run.items[0].feature).toBe("influencer");
   });
 
-  it("says what is wrong, in Higgsfield's words where it has them", async () => {
+  it("says what is wrong, in the parity research's words where it has them", async () => {
     const tooMany = await post({ engine: "cloud", state, start: "scratch", clothing: [upload(), upload(), upload(), upload()] });
     expect(tooMany.status).toBe(400);
     expect((await tooMany.json()).error).toBe("You can add up to three clothing references");

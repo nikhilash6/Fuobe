@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronRight, Circle, Cpu, Download, Layers, Loader2, Wre
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CommandTabs } from "@/components/gpu/command-block";
+import { FileStepRows } from "@/components/gpu/file-steps";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +13,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { GPU_SETUP_EVENT, takeGpuRetry, useGpuCheck, useGpuPlan, type GpuSetupDetail } from "@/hooks/use-gpu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEngine } from "@/lib/api";
+import { knownFixes } from "@/lib/gpu/known-problems";
 import { formatBytes } from "@/lib/gpu/requirements";
 import type { FixPlan, FixStep, Need, WhyCode } from "@/lib/gpu/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,9 @@ function itemLine(n: Need): string {
 }
 
 function intro(plan: FixPlan, kind?: string): string {
+  // A known problem of this ComfyUI on this system says what stops, and why, in its own words.
+  const known = plan.steps.find((s) => s.problem);
+  if (known) return known.detail;
   const downloads = plan.steps.filter((s) => DOWNLOAD_KINDS.has(s.kind));
   const packs = plan.steps.filter((s) => s.kind.startsWith("pack-"));
   if (plan.steps.some((s) => s.kind === "comfy-update")) return "Your ComfyUI is older than this tool needs. Updating it keeps your models and add-ons.";
@@ -111,20 +116,37 @@ interface Actions {
 
 function PlanState({ plan, kind, actions, checking, onCheck, checkError }: { plan: FixPlan; kind?: string; actions: Actions; checking: boolean; onCheck: () => void; checkError: string | null }) {
   const real = plan.steps.filter((s) => s.kind !== "restart" && s.kind !== "hf-licence" && s.kind !== "civitai-key");
-  const shown = real.length ? real : plan.steps;
+  // Files get rows of their own (name, size, folder, Get it); the list keeps the other steps and what is already there.
+  const files = real.filter((s) => s.download);
+  // A known problem's fixes, recommended first, each with an example.
+  const fixes = knownFixes(plan.steps.find((s) => s.problem)?.problem);
+  const shown = files.length ? real.filter((s) => !s.download) : real.length ? real : plan.steps;
   const why = WHY[plan.why] ?? WHY["manual-only"]!;
   const [lo, hi] = plan.etaMin;
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-muted-foreground">{intro(plan, kind)}</p>
-      <ul className="divide-y rounded-lg border px-3">
-        {shown.map((s) => (
-          <StepRow key={s.id} n={s} />
-        ))}
-        {plan.have.slice(0, 6).map((h) => (
-          <StepRow key={h.key} n={h} done />
-        ))}
-      </ul>
+      {fixes.length > 0 && (
+        <ol className="space-y-2 rounded-lg border px-3 py-2.5 text-[13px]">
+          {fixes.map((f, i) => (
+            <li key={f.label}>
+              <p className={cn(i === 0 && "font-medium")}>{f.label}</p>
+              {f.example && <p className="mt-0.5 font-mono text-[12px] break-all text-muted-foreground">{f.example}</p>}
+            </li>
+          ))}
+        </ol>
+      )}
+      {files.length > 0 && <FileStepRows plan={plan} />}
+      {(shown.length > 0 || plan.have.length > 0) && (
+        <ul className="divide-y rounded-lg border px-3">
+          {shown.map((s) => (
+            <StepRow key={s.id} n={s} />
+          ))}
+          {plan.have.slice(0, 6).map((h) => (
+            <StepRow key={h.key} n={h} done />
+          ))}
+        </ul>
+      )}
       {plan.downloadBytes > 0 && (
         <p className="text-[13px]">
           {formatBytes(plan.downloadBytes)} from Hugging Face · about {lo === hi ? lo : `${lo}–${hi}`} min on fast internet.{" "}

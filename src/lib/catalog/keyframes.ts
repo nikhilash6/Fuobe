@@ -1,5 +1,5 @@
 /**
- * Frames mode (Kling 4.0's "Frames", Higgsfield gap G02): up to 10 stills, each at its own time in
+ * Frames mode (Kling 4.0's "Frames", parity gap G02): up to 10 stills, each at its own time in
  * the clip, the first one the start frame. Pure logic shared by the Video studio composer, the
  * planner and the open engine's keyframe film (src/server/chains.ts createKeyframeFilm):
  *

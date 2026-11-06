@@ -96,6 +96,11 @@ declare global {
   var __fuobeSelfAddresses: { at: number; set: Set<string> } | undefined;
   /** Tests only: the port of a stand-in ComfyUI an account may use on this machine (see loopbackGpuPort). */
   var __fuobeTestGpuPort: number | undefined;
+  /**
+   * Tests only: web addresses (a RunPod pod's, a tunnel's) that reach the stand-in ComfyUI at this port on this machine,
+   * over plain http (see testGpuHost), so a test runs the real address's words without calling it.
+   */
+  var __fuobeTestGpuHosts: Record<string, number> | undefined;
 }
 
 /** An address as compared: IPv4 as it is, IPv6 as 8 hextets (no zone). */
@@ -189,8 +194,19 @@ export function loopbackGpuPort(): number | null {
   return typeof v === "number" && Number.isInteger(v) && v >= 1024 && v <= 65535 && !RESERVED_PORTS.includes(v) ? v : null;
 }
 
+/**
+ * Tests only (vitest, never a live server): the port of the stand-in that a named address (a RunPod pod's, a tunnel's)
+ * stands for, from globalThis.__fuobeTestGpuHosts; null anywhere else.
+ */
+export function testGpuHost(u: URL): number | null {
+  if (process.env.NODE_ENV === "production" || process.env.VITEST !== "true") return null;
+  const port = globalThis.__fuobeTestGpuHosts?.[u.hostname.toLowerCase()];
+  return typeof port === "number" && Number.isInteger(port) && port >= 1024 && port <= 65535 && !RESERVED_PORTS.includes(port) ? port : null;
+}
+
 /** An address that is the stand-in ComfyUI of loopbackGpuPort: http://localhost or http://127.0.0.1 at exactly that port. */
 export function isLoopbackGpu(u: URL): boolean {
+  if (testGpuHost(u) !== null) return true;
   const port = loopbackGpuPort();
   const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   return port !== null && u.protocol === "http:" && (host === "localhost" || host === "127.0.0.1") && Number(u.port) === port;
@@ -360,6 +376,8 @@ export interface PublicFetchOptions extends Pick<RemoteFetchOptions, "resolve" |
   deadlineMs?: number;
   /** The most the answer's body may hold (default 8 MiB): past it, reading the body fails. */
   maxBytes?: number;
+  /** How long the connection may take to open (none: only the idle time): past it, the address doesn't answer. */
+  connectTimeoutMs?: number;
 }
 
 export const PUBLIC_FETCH_MAX_BYTES = 8 * 2 ** 20;
@@ -402,10 +420,13 @@ export async function peekText(res: Response, maxBytes = 4096, ms = 2000): Promi
 const mbOf = (n: number) => (n >= 2 ** 30 ? `${Math.round(n / 2 ** 30)} GB` : `${Math.max(1, Math.round(n / 2 ** 20))} MB`);
 
 export async function fetchPublic(url: string, init: RequestInit = {}, o: PublicFetchOptions = {}): Promise<Response> {
-  const target = new URL(url);
+  const named = new URL(url);
+  // Tests only: a named address that stands for the stand-in ComfyUI on this machine (its own name in the messages).
+  const standIn = testGpuHost(named);
+  const target = standIn === null ? named : new URL(`http://127.0.0.1:${standIn}${named.pathname}${named.search}`);
   if (target.protocol !== "http:" && target.protocol !== "https:") throw new RemoteFetchError(`Only http(s) addresses, not ${target.protocol}`);
   // A stand-in ComfyUI on this machine (tests and `next dev` only): loopback, and nothing else, for this request.
-  const blocked = o.blocked ?? (isLoopbackGpu(target) ? (ip: string) => !LOOPBACK.has(ip) : blockedForAccounts);
+  const blocked = o.blocked ?? (standIn !== null || isLoopbackGpu(target) ? (ip: string) => !LOOPBACK.has(ip) : blockedForAccounts);
   const maxBytes = o.maxBytes ?? PUBLIC_FETCH_MAX_BYTES;
   const deadlineMs = o.deadlineMs ?? 60_000;
   const resolve = o.resolve ?? (async (host: string) => (await dns.lookup(host, { all: true, verbatim: true })).map((a) => a.address));
@@ -446,7 +467,7 @@ export async function fetchPublic(url: string, init: RequestInit = {}, o: Public
       settle(e);
     };
     // The whole exchange, not only the idle time: a ComfyUI that drips a byte at a time can't hold a request open.
-    const deadline = setTimeout(() => fail(new RemoteFetchError(`${target.host} took over ${Math.round(deadlineMs / 1000)} s to answer`)), deadlineMs);
+    const deadline = setTimeout(() => fail(new RemoteFetchError(`${named.host} took over ${Math.round(deadlineMs / 1000)} s to answer`)), deadlineMs);
     deadline.unref?.();
     const req = (target.protocol === "https:" ? https : http).request(target, { method: asked.method, headers, lookup, timeout: o.timeoutMs ?? 60_000 }, (res) => {
       const status = res.statusCode ?? 0;
@@ -483,7 +504,7 @@ export async function fetchPublic(url: string, init: RequestInit = {}, o: Public
       });
       const stream = counted;
       res.on("error", (e) => stream.destroy(e));
-      res.on("aborted", () => stream.destroy(new RemoteFetchError(`${target.host} stopped answering`)));
+      res.on("aborted", () => stream.destroy(new RemoteFetchError(`${named.host} stopped answering`)));
       // Read to its end, failed, or let go by the caller (discardBody): the connection closes at once, never held
       // open until the deadline.
       stream.on("close", () => {
@@ -493,9 +514,20 @@ export async function fetchPublic(url: string, init: RequestInit = {}, o: Public
       res.pipe(stream);
       settle(undefined, new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, { status, statusText: res.statusMessage, headers: out }));
     });
-    req.on("timeout", () => req.destroy(new RemoteFetchError(`Timed out reaching ${target.host}`)));
+    req.on("timeout", () => req.destroy(new RemoteFetchError(`Timed out reaching ${named.host}`)));
+    // A connection that doesn't open in time: the address doesn't answer (the idle time is for a slow answer).
+    if (o.connectTimeoutMs) {
+      req.on("socket", (socket) => {
+        if (!socket.connecting) return;
+        const t = setTimeout(() => req.destroy(new RemoteFetchError(`Couldn't reach ${named.host}: connect ETIMEDOUT (no answer in ${Math.round(o.connectTimeoutMs! / 1000)} s)`)), o.connectTimeoutMs);
+        t.unref?.();
+        const clear = () => clearTimeout(t);
+        socket.once("connect", clear);
+        socket.once("close", clear);
+      });
+    }
     req.on("error", (e) => {
-      const err = e instanceof RemoteFetchError ? e : new RemoteFetchError(`Couldn't reach ${target.host}: ${e.message}`);
+      const err = e instanceof RemoteFetchError ? e : new RemoteFetchError(`Couldn't reach ${named.host}: ${e.message}`);
       counted?.destroy(err);
       clearTimeout(deadline);
       settle(err);

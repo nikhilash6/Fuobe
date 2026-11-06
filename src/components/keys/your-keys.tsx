@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ExternalLink, KeyRound, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, CreditCard, ExternalLink, KeyRound, Loader2 } from "lucide-react";
+import { BILLING_URL } from "@/lib/diagnose";
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useHashAnchor } from "@/components/use-hash-anchor";
 import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { settingProblem } from "@/lib/connections";
 import { CLOUD_KEY, CLOUD_PROVIDERS, keySavedText, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
@@ -16,6 +18,7 @@ import { engineAfterKeySave } from "@/lib/engine-pref";
 import { placeOf } from "@/lib/place-name";
 import { placeRows } from "@/lib/run-place";
 import { runsGoNowText } from "@/lib/run-on";
+import { KeyAccountDetails, NoKeyYet } from "./key-account-details";
 import { cn } from "@/lib/utils";
 
 /**
@@ -61,6 +64,8 @@ function useKeysChanged() {
     void qc.invalidateQueries({ queryKey: ["account-keys"] });
     void qc.invalidateQueries({ queryKey: ["status"] });
     void qc.invalidateQueries({ queryKey: ["models"] });
+    // Connected accounts: a new key's account, or none.
+    void qc.invalidateQueries({ queryKey: ["key-info"] });
   };
 }
 
@@ -188,6 +193,26 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
   const [confirm, setConfirm] = useState<null | { going?: string }>(null);
   const [busy, setBusy] = useState(false);
   const viewer = useStatus().data?.viewer;
+  const [checking, setChecking] = useState(false);
+  const [checkNote, setCheckNote] = useState<{ words: string; details?: string } | null>(null);
+  // Check again: the saved key asked of its provider again (free, nothing runs). A refusal or an empty balance noted on a
+  // run is cleared when the provider says the key works now.
+  const checkAgain = async () => {
+    setChecking(true);
+    setCheckNote(null);
+    try {
+      const r = await fetch(`/api/account/keys/${provider}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recheck: true }) });
+      const j = (await r.json().catch(() => ({}))) as KeyInfo & { error?: string; details?: string };
+      changed();
+      if (r.ok) toast.success(j.balanceEmptyAt ? `Your ${p.label} key works, but its balance is empty. Add credit, then run.` : `Your ${p.label} key works.`);
+      else setCheckNote({ words: j.error ?? "We couldn't check your key. Try again in a minute.", ...(j.details && { details: j.details }) });
+    } catch {
+      setCheckNote({ words: "We couldn't check your key. Check this computer's internet, then try again." });
+    } finally {
+      setChecking(false);
+    }
+  };
+  const empty = !!info?.readable && !info.rejectedAt && !!info.balanceEmptyAt;
 
   const remove = async (stopRuns: boolean) => {
     setBusy(true);
@@ -215,10 +240,22 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
           <h3 className="text-[14px] font-medium">{p.label}</h3>
           <p className="text-[12px] text-muted-foreground">{p.blurb}</p>
         </div>
-        {info?.readable && !info.rejectedAt && (
+        {info?.readable && !info.rejectedAt && !empty && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
             <Check className="size-3" /> Ready
           </span>
+        )}
+        {empty && (
+          // The key works, but its provider account has no balance left: the badge is the way to add some.
+          <a
+            href={BILLING_URL[provider]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-highlight px-2 py-0.5 text-[12px] font-medium text-highlight-foreground hover:opacity-90"
+          >
+            <CreditCard className="size-3" /> Add credit
+            <ExternalLink className="size-3 opacity-60" aria-hidden />
+          </a>
         )}
       </div>
       {info && !replacing ? (
@@ -239,8 +276,20 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
           {info.readable && info.rejectedAt && (
             <p className="inline-flex items-start gap-1.5 text-[13px] text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              {p.label} stopped accepting this key on {day(info.rejectedAt)}. Replace it, or remove it.
+              {p.label} stopped accepting this key on {day(info.rejectedAt)}. Replace it, or check it again.
             </p>
+          )}
+          {empty && (
+            <p className="text-[13px] text-muted-foreground">
+              Your {p.label} balance ran out on {day(info.balanceEmptyAt!)}. Add credit on {p.label}, then press Check again.
+            </p>
+          )}
+          {info.readable && <KeyAccountDetails provider={provider} scope="account" refused={!!info.rejectedAt} emptyNoted={empty} />}
+          {checkNote && (
+            <div aria-live="polite" className="space-y-0.5">
+              <p className="text-[13px]">{checkNote.words}</p>
+              {checkNote.details && <p className="font-mono text-[10.5px] text-muted-foreground/80">{checkNote.details}</p>}
+            </div>
           )}
           {confirm ? (
             confirm.going ? (
@@ -266,6 +315,11 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
               <Button size="sm" variant="secondary" onClick={() => setReplacing(true)}>
                 {info.readable ? "Replace" : "Add again"}
               </Button>
+              {info.readable && (
+                <Button size="sm" variant="ghost" onClick={() => void checkAgain()} disabled={checking}>
+                  {checking && <Loader2 className="animate-spin" />} Check again
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setConfirm({})}>
                 Remove
               </Button>
@@ -273,7 +327,10 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
           )}
         </>
       ) : (
-        <KeyForm provider={provider} replacing={!!info} onSaved={() => setReplacing(false)} onCancel={info ? () => setReplacing(false) : undefined} />
+        <>
+          <KeyForm provider={provider} replacing={!!info} onSaved={() => setReplacing(false)} onCancel={info ? () => setReplacing(false) : undefined} />
+          {!info && <NoKeyYet provider={provider} />}
+        </>
       )}
     </div>
   );
@@ -290,7 +347,10 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
   const paidOff = viewer?.paidAllowed === false || q.data?.paidAllowed === false;
   // Hosted runs: the limits below are a key's own (runs on this studio's GPUs have theirs).
   const hosted = !!viewer?.hosted;
-  if (!hydrated || !account || paidOff) return null;
+  const shown = hydrated && !!account && !paidOff;
+  // A link to /settings#your-keys arrives before this section exists: it is scrolled to once it does.
+  useHashAnchor("your-keys", shown);
+  if (!shown) return null;
   // Hosted runs: where the account's runs go now (Settings → Your GPU changes it).
   const keys = viewer?.keys ?? [];
   const runKey = viewer?.runKey && keys.includes(viewer.runKey) ? viewer.runKey : keys.includes("fal") ? "fal" : keys[0];

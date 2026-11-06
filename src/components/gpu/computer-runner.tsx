@@ -168,6 +168,8 @@ type Note = { text: string; action?: string; go?: () => void; problem: boolean }
 /** What the note says now, or nothing: something for the person to do (only while there is work), or the GPU working. */
 function noteOf(s: ComputerState): Note | null {
   const v = s.view;
+  // This tab's sign-in ended: runs can't go on here until the person logs in again.
+  if (s.holder === "this" && v?.stopped === "signed-out") return { text: "You're signed out on this computer. Log in to keep running your runs here.", action: "Log in", go: () => window.location.assign(new URL("/login", window.location.origin).href), problem: true };
   if (s.holder !== "this" || !v || v.stopped) return null;
   const working = v.jobs.some((j) => j.phase !== "done" && j.phase !== "failed");
   const wanted = working || v.waiting > 0;

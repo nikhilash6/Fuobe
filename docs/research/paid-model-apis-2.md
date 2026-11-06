@@ -1,6 +1,6 @@
 # Paid model APIs, part 2: editing, audio, training and control endpoints
 
-As of **2026-10-16**. This extends [`paid-model-apis.md`](./paid-model-apis.md). It covers the Higgsfield features that part 1 left open: multi-shot, draft mode, extend, reframe, relight, inpaint and erase, voice tools, dubbing, LoRA (Soul ID) training, draw-to-video and storyboards.
+As of **2026-10-16**. This extends [`paid-model-apis.md`](./paid-model-apis.md). It covers the parity studio's features that part 1 left open: multi-shot, draft mode, extend, reframe, relight, inpaint and erase, voice tools, dubbing, LoRA (Soul ID) training, draw-to-video and storyboards.
 The machine-readable companion is [`paid-model-apis-2.json`](./paid-model-apis-2.json). It holds **202 endpoint records**: 184 fal and 18 Replicate. The JSON also holds the recommendations, the gaps and the ElevenLabs premade voice list.
 ## How this was verified
 
@@ -10,9 +10,9 @@ The machine-readable companion is [`paid-model-apis-2.json`](./paid-model-apis-2
 - **Replicate schemas** come from the `dereferenced_openapi_schema` and `billingConfig` embedded in each model page.
 - **ElevenLabs voices** come from `https://api.elevenlabs.io/v1/voices`, which is public and needs no key.
 - **No paid inference calls were made.** Runtime behaviour that the schemas do not state is marked *unverified*.
-## 1. Recommended default per Higgsfield feature
+## 1. Recommended default per the parity studio's feature
 
-| Higgsfield feature | Default endpoint(s) | Exact key fields | Price | Alternatives |
+| The parity studio's feature | Default endpoint(s) | Exact key fields | Price | Alternatives |
 |---|---|---|---|---|
 | **Multi-shot** | `fal-ai/kling-video/v3/pro/text-to-video` | multi_prompt:[{prompt, duration:'1'..'15'}] (1-6 shots, sum<=duration<=15s), shot_type:'customize'\|'intelligent'; prompt XOR multi_prompt | $0.112/s (audio off), $0.168/s (audio on) | fal-ai/kling-video/o3/pro/reference-to-video; wan/v2.6/text-to-video; bytedance/seedance-2.5/text-to-video (prompt-driven) |
 | **Draft mode** | `bytedance/seedance-2.5/{text,image,reference}-to-video + bytedance/seedance-2.5/draft/complete` | draft:true -> output.draft_id (7 days, same account) -> draft/complete {draft_id} -> 1080p | 480p draft ≈ $0.22/s, then 1080p completion ≈ $1.164/s | blackforestlabs/flux-3/*/draft + blackforestlabs/flux-3/draft-enhance |
@@ -115,7 +115,7 @@ The `draft_id` is valid for 7 days and only for the account that created it.
 
 ## 4. Reframe, relight, restyle and colour
 
-**Higgsfield-style relight presets.** `minimax/h3-max/relight` takes `reference_image_url`, which must be a **sphere render** that shows the target lighting. Fuobe can render a lit sphere on the client, for example with three.js, from preset lights or from up to 2 custom lights (colour, angle, brightness), then upload that image.
+**parity-studio-style relight presets.** `minimax/h3-max/relight` takes `reference_image_url`, which must be a **sphere render** that shows the target lighting. Fuobe can render a lit sphere on the client, for example with three.js, from preset lights or from up to 2 custom lights (colour, angle, brightness), then upload that image.
 
 `fal-ai/lightx/relight` is controlled by text instead. Use `relit_cond_type: "ic"` with `relight_parameters: {relight_prompt, bg_source: Left|Right|Top|Bottom}`.
 
@@ -130,7 +130,7 @@ The `draft_id` is valid for 7 days and only for the account that created it.
 | `fal-ai/wan-vace-14b/reframe` | fal / active | `prompt`, `first_frame_url`, `last_frame_url`, `video_url`*, `aspect_ratio`, `resolution`, `seed`, `negative_prompt` | Open-weights reframe; aspect_ratio only auto\|16:9\|1:1\|9:16; <=241 frames. | Your request will cost $0.08 per video second for 720p, $0.06 per video second for 580p, $0.04 per video second for … |
 | `fal-ai/wan-vace-apps/long-reframe` | fal / active | `prompt`, `video_url`*, `aspect_ratio`, `resolution`, `seed`, `negative_prompt` | Scene-split long-video reframe; paste_back. | Your request will cost $0.08 per 2 seconds of output video for 720p, $0.06 per 2 seconds of output video for 580p, abd … |
 | `fal-ai/wan-22-vace-fun-a14b/reframe` | fal / active | `prompt`, `first_frame_url`, `last_frame_url`, `video_url`*, `aspect_ratio`, `resolution`, `seed`, `negative_prompt` | Reframe via Wan 2.2 VACE Fun. | Your request will cost $0.10 per video second for 720p, $0.075 per video second for 580p, $0.05 per video second for … |
-| `minimax/h3-max/relight` | fal / active | `video_url`*, `aspect_ratio`, `resolution`, `seed`, `reference_image_url`* | reference_image_url = a SPHERE RENDER of the target lighting (Fuobe can render a lit sphere client-side from Higgsfield-style light presets). Source <=15s, resampled to 24fps. | Billing is calculated per second of generated video, which matches the source video length. Video costs $0.05 per … |
+| `minimax/h3-max/relight` | fal / active | `video_url`*, `aspect_ratio`, `resolution`, `seed`, `reference_image_url`* | reference_image_url = a SPHERE RENDER of the target lighting (Fuobe can render a lit sphere client-side from parity-studio-style light presets). Source <=15s, resampled to 24fps. | Billing is calculated per second of generated video, which matches the source video length. Video costs $0.05 per … |
 | `fal-ai/lightx/relight` | fal / active | `prompt`, `video_url`*, `seed`, `relight_parameters.relight_prompt`, `relight_parameters.bg_source`, `relit_cond_img_url` | relit_cond_type ic\|ref\|hdr\|bg. ic: relight_parameters{relight_prompt,bg_source Left\|Right\|Top\|Bottom,cfg,use_sky_mask}. ref/hdr/bg: relit_cond_img_url. ~49 frames. | Your request will cost 0.1$ per output video second. |
 | `fal-ai/lightx/recamera` | fal / active | `prompt`, `video_url`*, `seed` | Camera re-render (not lighting): camera traj\|target, trajectory{theta[],phi[],radius[]}. | Your request will cost 0.1$ per output video second. |
 | `fal-ai/id-v2v/relight` | fal / active | `prompt`*, `image_url`*, `video_url`*, `resolution`, `seed`, `keyframes` | Restyle driven by an edited FIRST FRAME (image_url) + keyframes[{frame_index,image_url}] <=5. Pair with an image relight/edit model on frame 1. | $0.2 per seconds |
@@ -215,7 +215,7 @@ For a mask-free edit model, composite the brush strokes onto the image and descr
 | `fal-ai/finegrain-eraser/mask` | fal / active | `image_url`*, `mask_url`*, `seed` | mask white=erase. | Your request will cost $0.04 with Express, $0.13 with Standard, and $0.22 with Premium. |
 | `fal-ai/ideogram/object-removal` | fal / active | `image_url`*, `mask_url`* | mask white=remove; $0.03. | Your request will cost $0.03 per generation. |
 | `fal-ai/image-editing/object-removal` | fal / active | `prompt`, `image_url`*, `aspect_ratio`, `seed` | prompt default 'background people'. | $0.04 per images |
-| `fal-ai/chrono-edit-lora-gallery/paintbrush` | fal / active | `prompt`*, `image_url`*, `mask_url`, `resolution`, `seed`, `loras` | Closest to Higgsfield 'Draw to Edit': user sketches on the image; optional mask_url (BLACK = sketched region). | Your request will cost $0.02 per image for 480p or $0.03 per image for 720p. |
+| `fal-ai/chrono-edit-lora-gallery/paintbrush` | fal / active | `prompt`*, `image_url`*, `mask_url`, `resolution`, `seed`, `loras` | Closest to the parity studio 'Draw to Edit': user sketches on the image; optional mask_url (BLACK = sketched region). | Your request will cost $0.02 per image for 480p or $0.03 per image for 720p. |
 | `black-forest-labs/flux-fill-pro` | replicate | `prompt`*, `image`*, `mask`, `seed`, `steps` | image + mask (white = fill) + outpaint preset. | $0.05 per output image |
 | `bria/eraser` | replicate | `image_url`, `mask_url` | image/mask or image_url/mask_url; mask_type. | $0.04 per output image |
 | `bria/genfill` | replicate | `prompt`*, `image`, `mask`, `seed`, `negative_prompt` | image + mask + prompt. | $0.04 per output image |
@@ -385,7 +385,7 @@ Isolation drops the music and ambience. To keep them, use `fal-ai/chatterbox/spe
 
 ## 9. Draw to video, trajectory and motion
 
-Higgsfield's *Draw to Video* lets the user draw arrows and notes on the frame and then sends that image to a normal i2v model; the inventory lists Hailuo, Seedance, Veo and 'Banana' draw variants. On fal, this means compositing the drawing on the client and calling an i2v endpoint, with an instruction to follow the annotations and then remove them.
+The parity studio's *Draw to Video* lets the user draw arrows and notes on the frame and then sends that image to a normal i2v model; the inventory lists Hailuo, Seedance, Veo and 'Banana' draw variants. On fal, this means compositing the drawing on the client and calling an i2v endpoint, with an instruction to follow the annotations and then remove them.
 
 True trajectory control exists only in `fal-ai/wan-ati` (`track`) and `fal-ai/wan-move` (`trajectories`). Both take `[[{x, y}, ...], ...]` in pixel coordinates, and both are **deprecated** in fal's catalog although their schemas are still served. `minimax/h3-max/camera-controls` controls the camera path only.
 
@@ -456,4 +456,4 @@ True trajectory control exists only in `fal-ai/wan-ati` (`track`) and `fal-ai/wa
 - fal catalog: `https://api.fal.ai/v1/models` and `?endpoint_id=`
 - Replicate model pages: `https://replicate.com/<owner>/<name>`
 - ElevenLabs premade voices: `https://api.elevenlabs.io/v1/voices`
-- Higgsfield feature definitions: [`higgsfield-inventory.md`](./higgsfield-inventory.md)
+- The parity studio's feature definitions: [`parity-inventory.md`](./parity-inventory.md)

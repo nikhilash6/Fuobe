@@ -43,7 +43,7 @@ import {
   type InfluencerTier,
 } from "@/lib/influencer";
 
-const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/higgsfield-delta-4.json"), "utf8")).aiInfluencerBuilder as {
+const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/parity-delta-4.json"), "utf8")).aiInfluencerBuilder as {
   categories: { id: string; label: string; max: number; options: { id: string; label: string; swatch?: string; slot?: string; visibleIn?: string[] }[] }[];
   creatureTypes: Record<string, string[]>;
 };
@@ -184,7 +184,7 @@ describe("pick rules", () => {
   });
 });
 
-describe("conflicts (Higgsfield's messages)", () => {
+describe("conflicts (the researched messages)", () => {
   it("Heavy build with Tall or Very tall, either way round, in every tier", () => {
     for (const tier of ALL_TIERS) {
       const heavy = pickAll(S(tier), ["body_type", "body_heavy"]);
@@ -545,7 +545,7 @@ describe("the plan per engine", () => {
     expect(seedream.steps[0].request.params).toEqual({ numOutputs: 1, aspectRatio: "16:9" });
     expect(seedream.steps[0].request.inputs?.images).toEqual(clothes);
     valid(seedream);
-    // Nothing else is asked for: not Higgsfield's AI Influencer, not a model the builder doesn't list: the default runs.
+    // Nothing else is asked for: not the retired AI Influencer model, not a model the builder doesn't list: the default runs.
     for (const modelId of ["ai-influencer", "flux-3-max"]) {
       const other = planInfluencer(run({ modelId }), ALL);
       expect(other.modelId).toBe("fuobe-soul");
@@ -586,7 +586,7 @@ describe("the plan per engine", () => {
     expect(planInfluencer(run({ engine: "open", start: "scratch", photo: face }), ALL).steps).toHaveLength(1);
   });
 
-  it("says what is missing or too much, in Higgsfield's words where it has them", () => {
+  it("says what is missing or too much, in the parity research's words where it has them", () => {
     expect(influencerBlocker(run({ direction: "x".repeat(4001) }))).toBe("Keep the direction under 4,000 characters");
     expect(influencerBlocker(run({ direction: "x".repeat(4000) }))).toBeNull();
     expect(influencerBlocker(run({ clothing: [...clothes, "/api/files/d.png"] }))).toBe("You can add up to three clothing references");

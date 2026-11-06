@@ -58,7 +58,7 @@ export function InstallConnect({ className, then }: { className?: string; then?:
         )}
       </ol>
       <p className="text-[12px] text-muted-foreground">
-        No Manager? In ComfyUI&apos;s custom_nodes folder, run <Copyable text={`git clone ${FUOBE_CONNECT.gitUrl}`} label="the git command" /> and restart ComfyUI.
+        Not in the Manager&apos;s list yet, or no Manager? In ComfyUI&apos;s custom_nodes folder, run <Copyable text={`git clone ${FUOBE_CONNECT.gitUrl}`} label="the git command" /> and restart ComfyUI.
       </p>
       {then && <p className="text-[12px] text-muted-foreground">{then}</p>}
     </div>
@@ -202,7 +202,8 @@ export function PairInstead({ className }: { className?: string }) {
     <div className={cn("space-y-2 rounded-xl border bg-background p-3", className)}>
       <p className="text-[14px] font-medium">Pair your ComfyUI with a code</p>
       <p className="text-[13px] text-muted-foreground">
-        Install {FUOBE_CONNECT.name} in ComfyUI-Manager (search <Copyable text={FUOBE_CONNECT.search} label="the search term" />), restart ComfyUI, then open
+        Install {FUOBE_CONNECT.name} in ComfyUI-Manager (search <Copyable text={FUOBE_CONNECT.search} label="the search term" />; not listed yet? in ComfyUI&apos;s custom_nodes folder, run{" "}
+        <Copyable text={`git clone ${FUOBE_CONNECT.gitUrl}`} label="the git command" />), restart ComfyUI, then open
         <span className="text-foreground"> Extensions → Connect to Fuobe</span>. Enter the code it shows here. Your runs then go to that ComfyUI, with no Fuobe tab open.
       </p>
       <PairWithCode />

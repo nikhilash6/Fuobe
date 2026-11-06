@@ -1,8 +1,8 @@
 /**
- * Fuobe Evolution (build plan O13): Higgsfield Evolution's Original. One clip and up to 40 references are taken
+ * Fuobe Evolution (build plan O13): Evolution's Original. One clip and up to 40 references are taken
  * further in a creative direction an LLM writes from the references (or you write); the change intensity sets how
  * much of the clip stays. Research: docs/research/fuobe-originals-recipes-5.md §8 evolution and its JSON twin
- * (studios[evolution].original); what Higgsfield's does: higgsfield-originals-5.md §3.20.
+ * (studios[evolution].original); what the parity studio's does: parity-originals-5.md §3.20.
  *
  * - On your GPU: per ≤81-frame segment at 16 fps, Qwen-Image 2.1 Turbo takes the segment's first frame toward the
  *   direction (the first references as images 2–4), then Wan 2.2 Fun VACE re-renders the segment from the segment
@@ -40,7 +40,7 @@ export const EVOLUTION = {
   feature: "evolution",
   /** Cuts, direction frames, segments and joins: kept apart from the finished videos. */
   stepFeature: "evolution-step",
-  /** Higgsfield's limits: one video of 4–30 s, up to 40 references, a direction of up to 10,000 characters. */
+  /** The researched limits: one video of 4–30 s, up to 40 references, a direction of up to 10,000 characters. */
   minSeconds: 4,
   maxSeconds: 30,
   maxReferences: 40,

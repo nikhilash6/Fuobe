@@ -19,7 +19,7 @@ _As of 2026-10-27. Machine-readable twin: [`openjutsu-6.json`](openjutsu-6.json)
 
 ## 2. Openjutsu's flow and limits
 
-Sources: [`README.md`](https://github.com/Comfy-Org/comfy-openjutsu/blob/70ec62df0eda7c58697ea3ac2050588513651583/README.md), `lib/swap.ts`, `lib/anchor.ts`, `lib/frame.ts`, `lib/uploads.ts`, `lib/job-error.ts`, `lib/comfy.ts`, `components/app-runner.tsx`, `app/api/*`, all at `70ec62d`. Openjutsu is Comfy's reference app for its "Open Source Higgsfield" competition (["Openjutsu — Swap a character in a video"](https://comfy.org/open-source-higgsfield/), entries due 2026-10-30) and runs at [comfy.org/hub/apps/openjutsu](https://comfy.org/hub/apps/openjutsu/). Licence MIT (Comfy Org 2026).
+Sources: [`README.md`](https://github.com/Comfy-Org/comfy-openjutsu/blob/70ec62df0eda7c58697ea3ac2050588513651583/README.md), `lib/swap.ts`, `lib/anchor.ts`, `lib/frame.ts`, `lib/uploads.ts`, `lib/job-error.ts`, `lib/comfy.ts`, `components/app-runner.tsx`, `app/api/*`, all at `70ec62d`. Openjutsu is Comfy's reference app for its "Open Source the parity studio" competition (["Openjutsu — Swap a character in a video"](https://comfy.org/open-source-{studio}/), entries due 2026-10-30) and runs at [comfy.org/hub/apps/openjutsu](https://comfy.org/hub/apps/openjutsu/). Licence MIT (Comfy Org 2026).
 
 | Step | What happens | Where |
 |---|---|---|
@@ -294,7 +294,7 @@ Existing Fuobe cloud swap routes stay as partner choices: Kling O3 edit ($0.168/
 - **Fuobe equivalents** (both prompts are MIT and may be reused with their notices):
   - **cloud:** `gpt-image-2-5-sunburst` (already in `cloud-models.generated.ts`, edit route `openai/gpt-image-2.5/sunburst/edit`, `quality` low; fal bills tokens: image $8/M input, $30/M output) — the closest to Openjutsu; **Nano Banana Pro** edit (`fal-ai/nano-banana-pro/edit`, $0.15/image) as the second choice; Comfy Router `openai/gpt-image-2.5-sunburst` when a Comfy key is set.
   - **open:** **Qwen-Image-Edit 2511** with two images (the library's `qwen-image-edit-2511-multi`, `src/lib/catalog/models.ts` L175), Apache-2.0.
-- **Genjutsu today** (`src/lib/catalog/genjutsu.ts`, `src/server/genjutsu.ts`, `/genjutsu`): four modes (Motion transfer, Object swap, Restyle, Insert), 4–30 s sources, pieces/windows joined with the clip's own sound put back (`joinWithSound`), prices from `MAKER_USD` and the catalog, setup codes. Its people-swap makers are cloud-only (Genjutsu, Kling O3 edit, P-Video Replace, hosted VACE) plus the open `oss-vace-swap` (SAM 3.1 + Wan 2.1 VACE, 81-frame windows). The H3 route is the first open maker that keeps the source audio *as conditioning* and regenerates only the masked person in long windows. Higgsfield makers (`genjutsu-*`) are being replaced in O5; nothing here depends on them.
+- **Genjutsu today** (`src/lib/catalog/genjutsu.ts`, `src/server/genjutsu.ts`, `/genjutsu`): four modes (Motion transfer, Object swap, Restyle, Insert), 4–30 s sources, pieces/windows joined with the clip's own sound put back (`joinWithSound`), prices from `MAKER_USD` and the catalog, setup codes. Its people-swap makers are cloud-only (Genjutsu, Kling O3 edit, P-Video Replace, hosted VACE) plus the open `oss-vace-swap` (SAM 3.1 + Wan 2.1 VACE, 81-frame windows). The H3 route is the first open maker that keeps the source audio *as conditioning* and regenerates only the masked person in long windows. The parity studio's makers (`genjutsu-*`) are being replaced in O5; nothing here depends on them.
 
 ## 11. Integration plan for Fuobe
 
@@ -373,7 +373,7 @@ Caveat for the fal route: its quality without a mask is unverified — the LoRA 
 
 ## Sources (read 2026-10-27)
 
-- Openjutsu: `/home/user/comfy-org/comfy-openjutsu` @ `70ec62df0eda7c58697ea3ac2050588513651583` — https://github.com/Comfy-Org/comfy-openjutsu ; https://comfy.org/hub/apps/openjutsu/ ; https://comfy.org/open-source-higgsfield/
+- Openjutsu: `/home/user/comfy-org/comfy-openjutsu` @ `70ec62df0eda7c58697ea3ac2050588513651583` — https://github.com/Comfy-Org/comfy-openjutsu ; https://comfy.org/hub/apps/openjutsu/ ; https://comfy.org/open-source-{studio}/
 - Akatz: https://github.com/akatz-labs/h3-character-swap-tool @ `0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b` and `5f83374bc4f6fbc458f369f5bbe058c4a65816dc` (README, `workflows/`, `worker_nodes/`, `templates/render.json`, `h3workbench/*.py`, `static/*.js`, `docker/resource-catalog.json`, `docker/MODEL_TERMS.md`, `runtime/relay-lock.json`, `runtime/allowed_nodes.json`)
 - H3 Relay: `vendor/h3-relay-8c313cc6bd23.tar.gz` (SHA-256 `e61e0a8a582ae4fe9c4bd9c96e406838f84a55b455ea46977bc70f99a9ba7d38`); https://github.com/akatz-ai/h3-relay @ `e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220` (README, UPSTREAMS.md, MODELS.md, `example_workflows/toolkit/*`)
 - Hugging Face API: `/api/models/{repo}/tree/{rev}` and `/api/models/{repo}` for Comfy-Org/MiniMax-H3, Comfy-Org/sam3.1, akatz-ai/MiniMax-H3-Character-Swap-LoRA, akatz-ai/MiniMax-H3-Person-Remover-LoRA, lightx2v/Minimax-h3-Turbo, MiniMaxAI/MiniMax-H3, Alissonerdx/Minimax-H3-ComfyUI; model cards, LICENSE and NOTICE files at the revisions above

@@ -81,7 +81,7 @@ import { tenantAccount } from "./tenant";
  * Fuobe Genjutsu (/genjutsu): plans, prices and starts a Motion transfer, Character swap, Object swap, Restyle or Insert
  * (src/lib/catalog/genjutsu.ts) as one pipeline of ordinary generations: feature "genjutsu" for the finished video,
  * "genjutsu-step" for the cuts, tracks, anchor frames, pieces and joins. No table of its own: the page's history is a
- * feed, and a setup travels as a code (encodeSetup), not a row. No Higgsfield model runs here.
+ * feed, and a setup travels as a code (encodeSetup), not a row. No retired provider's model runs here.
  */
 
 export { ShortsError as GenjutsuError };

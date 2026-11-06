@@ -1,6 +1,6 @@
 /**
  * Elements: reusable characters, locations, props and styles that can be dropped into
- * any prompt with `@handle` (Higgsfield's "Elements" / Soul ID). Resolution is pure so the
+ * any prompt with `@handle` (the parity studio's "Elements" / Soul ID). Resolution is pure so the
  * server (authoritative), the composer (live preview + cost) and the agent share it.
  */
 import { identityFor, type TrainingFamily } from "./training";
@@ -19,7 +19,7 @@ export const ELEMENT_KINDS: { kind: ElementKind; label: string; plural: string; 
 
 export const elementKindInfo = (k: ElementKind) => ELEMENT_KINDS.find((x) => x.kind === k) ?? ELEMENT_KINDS[0];
 
-/** Photos an element keeps: a Soul ID trains on up to 80 (Higgsfield's web limit). */
+/** Photos an element keeps: a Soul ID trains on up to 80 (the parity studio's web limit). */
 export const MAX_ELEMENT_PHOTOS = 80;
 
 /**
@@ -46,7 +46,7 @@ export interface ElementLora {
   trainedAt?: number;
   /** A demo training's stand-in (no key, no GPU): nothing was trained, so no run uses it. */
   demo?: true;
-  /** An older Soul ID (Higgsfield's, before O3): a reference id no current model takes. Retrain for Fuobe Soul. */
+  /** An older Soul ID (the retired provider's, before O3): a reference id no current model takes. Retrain for Fuobe Soul. */
   referenceId?: string;
 }
 

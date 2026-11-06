@@ -82,7 +82,16 @@ function Segmented<T extends string>({ value, options, onChange, label }: { valu
   );
 }
 
-export function ViewOptions({ prefs, onChange }: { prefs: ViewPrefs; onChange: (patch: Partial<ViewPrefs>) => void }) {
+export function ViewOptions({
+  prefs,
+  onChange,
+  noStacks,
+}: {
+  prefs: ViewPrefs;
+  onChange: (patch: Partial<ViewPrefs>) => void;
+  /** Why batches aren't stacked on this tab (Trash, Uploads): the switch says so, and is off, instead of flipping for nothing. */
+  noStacks?: string;
+}) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -129,12 +138,12 @@ export function ViewOptions({ prefs, onChange }: { prefs: ViewPrefs; onChange: (
           Split by date
           <Switch checked={prefs.splitByDate} onCheckedChange={(splitByDate) => onChange({ splitByDate })} />
         </label>
-        <label className="flex items-center justify-between gap-3 text-[13px]">
-          <span>
+        <label className={cn("flex items-center justify-between gap-3 text-[13px]", noStacks && "cursor-not-allowed")}>
+          <span className={cn(noStacks && "text-muted-foreground")}>
             Stack batches
-            <span className="block text-[12px] text-muted-foreground">Storyboards, films and takes as one card</span>
+            <span className="block text-[12px] text-muted-foreground">{noStacks ?? "Storyboards, films and takes as one card"}</span>
           </span>
-          <Switch checked={prefs.stacks} onCheckedChange={(stacks) => onChange({ stacks })} />
+          <Switch checked={!noStacks && prefs.stacks} disabled={!!noStacks} onCheckedChange={(stacks) => onChange({ stacks })} />
         </label>
       </PopoverContent>
     </Popover>

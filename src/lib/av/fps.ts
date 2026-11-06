@@ -1,13 +1,13 @@
 /**
  * FPS Boost and slow motion, as plain math shared by the composer and the ComfyUI provider.
  *
- * Higgsfield's FPS Boost reaches 24, 30, 60, 90 or 120 fps (60 by default). Topaz takes the target
+ * The parity studio's FPS Boost reaches 24, 30, 60, 90 or 120 fps (60 by default). Topaz takes the target
  * itself; the open engine interpolates by a whole multiplier m (core FrameInterpolate, 2–16) and keeps
  * every n-th frame (VHS Select Every Nth), so that source fps × m / n = target × slowdown
  * (docs/research/comfyui-oss-4.md §i: 24 → 30 is m 5, n 4; 24 → 90 is m 15, n 4).
  */
 
-/** The frame rates FPS Boost offers (Higgsfield's chips); 60 is the default. */
+/** The frame rates FPS Boost offers (the parity studio's chips); 60 is the default. */
 export const FPS_TARGETS = [24, 30, 60, 90, 120] as const;
 export const DEFAULT_FPS_TARGET = 60;
 /** Slow-motion factors offered: 1 = the clip's own speed, 2 = twice as long. Topaz takes 1–8. */

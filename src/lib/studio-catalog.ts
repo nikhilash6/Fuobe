@@ -1,6 +1,6 @@
 /**
  * The slice of the model catalog one studio needs, computed on the server and passed to the
- * studio page as a prop, so the browser never downloads the whole catalog (every cloud, Higgsfield
+ * studio page as a prop, so the browser never downloads the whole catalog (every cloud
  * and open model, 121 apps, 363 motions and effects). Only the composer's lookups are kept:
  * provider field maps stay on the server, which plans and builds the real request itself.
  */

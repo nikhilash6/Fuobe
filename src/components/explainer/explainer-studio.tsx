@@ -149,7 +149,7 @@ function LinkPopover({ engine, disabled, onAdd }: { engine: EpisodeSettings["eng
 }
 
 /**
- * Higgsfield Explainer's form: a style, what to explain, up to 3 sources, the format; plus your history.
+ * The parity studio's Explainer form: a style, what to explain, up to 3 sources, the format; plus your history.
  * starters: the ready explainers (src/lib/starters/catalog.ts), where the history is while it's empty, one row under it
  * after; fills: what each one puts in the form.
  */

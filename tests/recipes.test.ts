@@ -319,7 +319,7 @@ describe("checking a recipe", () => {
     skills.createSkill({ name: "old-soul", title: "Old soul", description: "x", body: "x" });
     const checked = { ...soul("soul-2"), verified: { cloud: { plan: "2026-10-01", dryRun: "2026-10-01", real: null, catalog: "sha256:old" } } };
     skills.setSkillFile("old-soul", "recipe.json", JSON.stringify(checked));
-    expect(recipes.recipeView("old-soul").recheck.cloud).toEqual(["Soul 2.0 (Higgsfield) was replaced by Fuobe Soul"]);
+    expect(recipes.recipeView("old-soul").recheck.cloud).toEqual(["Soul 2.0 (earlier version) was replaced by Fuobe Soul"]);
     // The re-check moves the step to what replaced it, as every run does.
     const again = await recipes.verifyRecipe("old-soul", "demo");
     expect(again.ok).toBe(true);

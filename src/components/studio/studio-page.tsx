@@ -17,6 +17,8 @@ import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, promptS
 import { presetGpuKey } from "@/lib/catalog/preset-recipe-routes";
 import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
 import { movedAppRequest } from "@/lib/catalog/plan";
+import { openModelPicker } from "@/lib/open-model-picker";
+import { PICK_PARAM, REUSE_PARAM } from "@/lib/run-trouble";
 import { migrateRequest } from "@/lib/catalog/replaced";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
 import type { StudioCatalog } from "@/lib/studio-catalog";
@@ -824,6 +826,48 @@ function LayoutHandoff() {
 }
 
 /**
+ * `?reuse=<run id>` (a run's fixes in the Library: Pick another model, or another size): that run's settings come into
+ * the composer, as its tile's Reuse brings them, and with `pick=1` the model picker opens on them. Taken out of the address
+ * once read, so a reload doesn't load it again.
+ */
+function ReuseHandoff() {
+  const sp = useSearchParams();
+  const id = sp.get(REUSE_PARAM);
+  const pick = sp.get(PICK_PARAM) === "1";
+  const { config, setDraft } = useStudioActions();
+  const catalog = useCatalog();
+  const [engine, setEngine] = useEngine();
+  const opened = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id) opened.current = null;
+    if (!id || opened.current === id || !catalog.ready) return;
+    opened.current = id;
+    void fetch(`/api/generations/${encodeURIComponent(id)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("That run isn't in your library any more.");
+        const g = (await res.json()) as Generation;
+        setDraft(draftFromGeneration(g, config, catalog.getModel, catalog.getPreset));
+        // A run on a model Fuobe retired comes back on what replaced it: said, as Reuse says it.
+        const retired = migrateRequest(g.request);
+        const moved = retired.note ?? movedAppRequest(retired.request, catalog.getModel, catalog.getPreset).note;
+        if (moved) toast(moved);
+        if (g.engine !== engine) setEngine(g.engine);
+        // Once the draft is in, the picker opens on its model.
+        if (pick) setTimeout(openModelPicker, 0);
+        else requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-composer] textarea")?.focus());
+      })
+      .catch((err: Error) => toast.error(err.message, { id: "reuse-run" }))
+      .finally(() => {
+        const u = new URL(window.location.href);
+        u.searchParams.delete(REUSE_PARAM);
+        u.searchParams.delete(PICK_PARAM);
+        window.history.replaceState(null, "", `${u.pathname}${u.search}${u.hash}`);
+      });
+  }, [id, pick, catalog, config, engine, setDraft, setEngine]);
+  return null;
+}
+
+/**
  * One draft's page: the studio and its hand-off. The start request resets with the draft (a new epoch).
  *
  * A guest's Start from Home opens "Create a free account" here instead of sending a run that can only be refused. It
@@ -856,6 +900,9 @@ function StudioSession({
       </Suspense>
       <Suspense fallback={null}>
         <LayoutHandoff />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ReuseHandoff />
       </Suspense>
     </StartRequestCtx.Provider>
   );

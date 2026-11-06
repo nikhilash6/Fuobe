@@ -2,7 +2,7 @@
   "$schema": "./case.schema.json",
   "suite": "shorts",
   "title": "Fuobe Shorts · segment restyle",
-  "description": "Fuobe Shorts (build plan O9) on your clip (local/shorts/clip.mp4). shorts/segment is one segment's Wan 2.2 Fun VACE pass from a first frame you made or own (local/shorts/frame0.png), straight through /api/generations; shorts/session is the whole studio chain through POST /api/shorts/sessions (each segment's first frame drawn in the look by Qwen-Image-Edit 2511, Fun VACE by depth, the segments stitched under the clip's sound), on the first 6 s (local/shorts/clip.mp4 must be at least that long). Flicker, style and prompt match are measured. The partner variant runs Gemini Omni Flash, Higgsfield's Shorts engine and still a choice in the studio, for comparison.",
+  "description": "Fuobe Shorts (build plan O9) on your clip (local/shorts/clip.mp4). shorts/segment is one segment's Wan 2.2 Fun VACE pass from a first frame you made or own (local/shorts/frame0.png), straight through /api/generations; shorts/session is the whole studio chain through POST /api/shorts/sessions (each segment's first frame drawn in the look by Qwen-Image-Edit 2511, Fun VACE by depth, the segments stitched under the clip's sound), on the first 6 s (local/shorts/clip.mp4 must be at least that long). Flicker, style and prompt match are measured. The partner variant runs Gemini Omni Flash, the parity studio's Shorts engine and still a choice in the studio, for comparison.",
   "original": "fuobe-shorts",
   "kind": "video",
   "targets": {
@@ -21,7 +21,7 @@
       "description": "Fuobe Shorts: the restyle as the Shorts pipeline runs it, on the engine asked for"
     },
     "partner": {
-      "description": "Gemini Omni Flash (a partner model, Higgsfield's Shorts engine) on the same clip",
+      "description": "Gemini Omni Flash (a partner model, the parity studio's Shorts engine) on the same clip",
       "engines": ["cloud"],
       "models": {"cloud": ["gemini-omni-flash"]}
     }

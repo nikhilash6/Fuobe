@@ -48,17 +48,24 @@ describe("nothing else reads the studio's fal.ai or Replicate key", () => {
   });
 
   it("names fal.ai's and Replicate's API hosts only in their adapters", () => {
-    expect(offenders(/queue\.fal\.run|rest\.fal\.ai|api\.replicate\.com/, ["server/providers/fal.ts", "server/providers/replicate.ts"])).toEqual([]);
-    expect(offenders(/`Key \$\{/, ["server/providers/fal.ts"])).toEqual([]);
+    // provider-account-info.ts: the read-only account calls behind Connected accounts (the balance, the account's
+    // name). It takes its key from cloudKey as the adapters do (the next test), inside the asker's own tenant.
+    const callers = ["server/providers/fal.ts", "server/providers/replicate.ts", "server/provider-account-info.ts"];
+    expect(offenders(/queue\.fal\.run|rest\.fal\.ai|api\.fal\.ai|api\.replicate\.com/, callers)).toEqual([]);
+    expect(offenders(/`Key \$\{/, ["server/providers/fal.ts", "server/provider-account-info.ts"])).toEqual([]);
   });
 
   it("reads keys in the adapters only through cloudKey", () => {
-    for (const f of ["server/providers/fal.ts", "server/providers/replicate.ts", "server/training.ts"]) {
+    for (const f of ["server/providers/fal.ts", "server/providers/replicate.ts", "server/training.ts", "server/provider-account-info.ts"]) {
       const text = code(sources.find((s) => s.file === f)!.text);
       expect(text, f).not.toMatch(/getSetting\(\s*["'`](falKey|replicateToken)/);
     }
     expect(code(sources.find((s) => s.file === "server/providers/fal.ts")!.text)).toMatch(/cloudKey\("fal"\)/);
     expect(code(sources.find((s) => s.file === "server/providers/replicate.ts")!.text)).toMatch(/cloudKey\("replicate"\)/);
+    // Connected accounts: the asker's key through cloudKey only, inside the account's own tenant for an account.
+    const info = code(sources.find((s) => s.file === "server/provider-account-info.ts")!.text);
+    expect(info).toMatch(/runAsTenant\(\{ kind: "account", id: who\.id \}, \(\) => cloudKey\(p\)\)/);
+    expect(info).not.toMatch(/\b(accountKey|savedSetting|getSetting)\(/);
   });
 
   it("sends a run to its provider only through adapterFor, which checks it runs as the run's own account", () => {

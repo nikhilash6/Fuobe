@@ -129,7 +129,7 @@
   /* Hover only while the mouse leads (html[data-input], nav/input-modality.ts), as in the nav: never a second fill
      beside the keyboard's ring. */
   @media (hover: hover) {
-    html:not([data-input="keyboard"]) .tab-pill:not([data-on], [data-state="active"]):hover {
+    html:not([data-input="keyboard"]) .tab-pill:not([data-on], [data-state="active"], :disabled, [aria-disabled="true"]):hover {
       background-color: var(--tab-hi);
       color: var(--foreground);
     }
@@ -139,7 +139,7 @@
       color: var(--muted-foreground);
     }
   }
-  html .tab-pill:not([data-on], [data-state="active"]):active:active {
+  html .tab-pill:not([data-on], [data-state="active"], :disabled, [aria-disabled="true"]):active:active {
     background-color: var(--tab-press);
     transition-duration: 0ms;
   }

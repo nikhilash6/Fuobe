@@ -4,6 +4,7 @@ import { ChevronDown, Cloud, Cpu, SearchX, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KEY_ADDED_EVENT, openAddKey } from "@/components/keys/your-keys";
+import { OPEN_MODEL_PICKER_EVENT } from "@/lib/open-model-picker";
 import { Badge } from "@/components/ui/badge";
 import { OwnSetupChip } from "@/components/own-setup";
 import type { OwnSetup } from "@/lib/own-setup";
@@ -193,6 +194,8 @@ export function ModelRow({
 }
 
 interface PickerProps {
+  /** Opens when a failed run's tile asks for another model (open-model-picker.ts): the studio's own composer's picker. */
+  listens?: boolean;
   models: ModelDef[];
   value: ModelDef | undefined;
   onChange: (m: ModelDef) => void;
@@ -234,6 +237,13 @@ export function phoneName(name: string): string {
 
 export function ModelPicker(props: PickerProps) {
   const [open, setOpen] = useState(false);
+  const listens = !!props.listens;
+  useEffect(() => {
+    if (!listens) return;
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_MODEL_PICKER_EVENT, show);
+    return () => window.removeEventListener(OPEN_MODEL_PICKER_EVENT, show);
+  }, [listens]);
   const { value, models, onChange, answersPick } = props;
   useEffect(() => (answersPick ? answerPickModel(() => setOpen(true)) : undefined), [answersPick]);
   const made = !!value && value.id === props.madeWith;

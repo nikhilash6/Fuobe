@@ -46,6 +46,8 @@ export const ACCOUNT_LIMITS = {
   diskFreeBytes: 20 * GB,
   /** Runs: at once (queued or running), per hour, and outputs per run. */
   activeRuns: 4,
+  /** Runs waiting for the account's own GPU to come back (they use nothing meanwhile): counted apart. A run waiting on a key counts among the runs at once. */
+  waitingRuns: 4,
   runsPerHour: 60,
   outputsPerRun: 4,
   /** What one run request may weigh (inputs are uploaded first, so a request is only words and file paths). */
@@ -83,6 +85,7 @@ export const ACCOUNT_MESSAGES = {
   uploadStalled: "The upload stopped arriving. Check your connection, then try again.",
   diskLow: "Uploads are paused for a moment. Please try again shortly.",
   activeRuns: "You have 4 runs going. Start the next one when one finishes.",
+  waitingRuns: "You have 4 runs waiting for your GPU. Cancel one, or run one with your key, to start another.",
   runRate: "That's a lot of runs this hour. Try again later.",
   finishRate: "That's a lot of finished pictures this hour. Try again later.",
   finishBusy: "Your last pictures are still being saved. Try again in a moment.",

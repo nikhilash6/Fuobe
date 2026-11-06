@@ -16,14 +16,14 @@ import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { usePhotoCharacters, useSaveCharacter } from "./hooks";
 
-/** What a character brings: a trained Soul ID (Fuobe Soul), an old Higgsfield one to retrain, or just photos. */
+/** What a character brings: a trained Soul ID (Fuobe Soul), an older one to retrain, or just photos. */
 export function identityLabel(el: StudioElement): string {
   if (el.loras.some((l) => !l.referenceId && !l.demo)) return "Soul ID";
   if (el.loras.some((l) => l.referenceId)) return "Retrain Soul ID";
   return `${el.references.length} photo${el.references.length === 1 ? "" : "s"}`;
 }
 
-/** The character-creation copy (src/lib/catalog/training.ts SOUL_ID_COPY, Higgsfield's rules): saving is the consent. */
+/** The character-creation copy (src/lib/catalog/training.ts SOUL_ID_COPY, the researched rules): saving is the consent. */
 const CREATE_COPY = {
   ...SOUL_ID_COPY,
   // The line starts with "I consent", which stays a capital I mid-sentence.

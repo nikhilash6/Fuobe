@@ -260,14 +260,11 @@ export const FREE_TEXT_INPUTS = [
  * Model files the catalog names that have no SHA-256 pin yet: the one list of them. A file of the requirement index is
  * "folder/file". A file that only a graph names is its bare name: a node fetches it on its first run, and
  * first-run-files.json doesn't pin it yet. A worker never reports such a file, so no worker runs a workflow that needs
- * one. The index files here sit in a repository that asks a signed-in account to accept its licence before their hashes
- * can be read (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN). The list may only shrink: tests/adding-a-model.test.ts fails when a file has no pin and
- * isn't here, and when a file here gets one; tests/worker-input-rules.test.ts fails when a file that a workflow for
- * workers needs has no pin and isn't here.
+ * one. The list may only shrink: tests/adding-a-model.test.ts fails when a file has no pin and isn't here, and when a
+ * file here gets one; tests/worker-input-rules.test.ts fails when a file that a workflow for workers needs has no pin and
+ * isn't here.
  */
 export const UNPINNED_FILES = [
-  "loras/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
-  "loras/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
   "rife49.pth",
   "video_depth_anything_vitl.pth",
   "video_depth_anything_vits.pth",

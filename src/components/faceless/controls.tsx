@@ -5,7 +5,9 @@ import { AlertTriangle, Info, Loader2 } from "lucide-react";
 import { useId, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
+import type { Unavailable } from "@/lib/unavailable";
 import { formatLength, PART_LABELS, type EstimateResult, type StepPart } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
@@ -19,31 +21,41 @@ export function Segmented<T extends string | number>({
   className,
 }: {
   value: T;
-  options: { value: T; label: string; hint?: string }[];
+  /** `unavailable`: a choice the current setup can't do; pressing it says why (src/components/ui/unavailable.tsx). */
+  options: { value: T; label: string; hint?: string; unavailable?: Unavailable | false | null }[];
   onChange: (v: T) => void;
   label: string;
   className?: string;
 }) {
+  const note = useUnavailableNote(options);
+  const checked = (o: (typeof options)[number]) => value === o.value && !note.isUnavailable(o);
+  const stop = options.find(checked)?.value ?? options.find((o) => !note.isUnavailable(o))?.value ?? options[0]?.value;
   return (
-    <div role="radiogroup" aria-label={label} onKeyDown={radioKeys} className={cn("inline-flex max-w-full flex-wrap gap-0.5 rounded-full bg-muted p-0.5", className)}>
-      {options.map((o) => (
-        <button
-          key={String(o.value)}
-          type="button"
-          role="radio"
-          aria-checked={value === o.value}
-          tabIndex={radioTab(value === o.value)}
-          title={o.hint}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "h-8 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            value === o.value ? "bg-background text-foreground shadow-soft" : "hover:text-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <>
+      <div role="radiogroup" aria-label={label} onKeyDown={radioKeys} className={cn("inline-flex max-w-full flex-wrap gap-0.5 rounded-full bg-muted p-0.5", className)}>
+        {options.map((o) => {
+          const off = note.isUnavailable(o);
+          return (
+            <button
+              key={String(o.value)}
+              type="button"
+              role="radio"
+              aria-checked={checked(o)}
+              tabIndex={radioTab(stop === o.value)}
+              {...note.optionProps({ ...o, title: o.hint })}
+              onClick={() => note.press(o, onChange)}
+              className={cn(
+                "h-8 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                checked(o) ? "bg-background text-foreground shadow-soft" : off ? UNAVAILABLE_OPTION : "hover:text-foreground",
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} />
+    </>
   );
 }
 

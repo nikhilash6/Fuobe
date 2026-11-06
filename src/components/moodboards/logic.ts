@@ -1,6 +1,6 @@
 /**
  * Moodboards, pure logic shared by the page, the composer chip and the server (src/server/moodboards.ts):
- * Higgsfield's limits and exact copy, the status a board shows while its cover job runs, which
+ * The researched limits and exact copy, the status a board shows while its cover job runs, which
  * images best represent a board, and the 2×2 collages open-source style models take.
  */
 import { coverTone, hueOf, spreadHue, type CoverTone } from "@/lib/catalog/packs";
@@ -89,7 +89,7 @@ export const CURATED_TABS: Record<CuratedSource, string[]> = {
 
 export const inCuratedTab = (c: Pick<CuratedMoodboard, "category" | "categories">, tab: string) => tab === "All presets" || (c.categories ?? [c.category]).includes(tab);
 
-/** A Fuobe Soul look as a curated pick, by its id (or Higgsfield's old style id: a run or a link saved before the Originals). */
+/** A Fuobe Soul look as a curated pick, by its id (or legacy style id: a run or a link saved before the Originals). */
 export function soulPick(id: string): MoodboardPick | undefined {
   const c = lookCard(id);
   return c && { id: c.id, kind: "curated", name: c.name, description: c.description, status: "complete", ...(c.family === "v1" && { source: "soul-v1" as const }) };
@@ -97,7 +97,7 @@ export function soulPick(id: string): MoodboardPick | undefined {
 
 export const MOODBOARD_LIMITS = { min: 5, max: 80, minPx: 256, nameMax: 100, refs: 10, collages: 2 } as const;
 
-/** Higgsfield's copy, word for word. */
+/** The researched copy, word for word. */
 export const COPY = {
   title: "CREATE YOUR MOODBOARD",
   subtitle: "Turn your references into a focused moodboard that defines style, tone, consistent details, and creative direction.",
@@ -129,7 +129,7 @@ export const STATUS_LABEL: Record<MoodboardStatus, string> = {
 export const COVER_PROMPT = (name: string) =>
   `A moodboard cover for “${name}”: one striking, purely visual image that sums up this style — its palette, light, texture, grain and mood.`;
 
-/** What stops a board from being saved, in Higgsfield's words, or null. */
+/** What stops a board from being saved, in the parity research's words, or null. */
 export function moodboardError(b: { name: string; images: string[] }): string | null {
   if (b.images.length < MOODBOARD_LIMITS.min) return COPY.tooFew;
   if (b.images.length > MOODBOARD_LIMITS.max) return COPY.tooMany;

@@ -221,12 +221,15 @@ its own results, once. The server never calls the person's computer. Runs wait w
   on this device, it looks only after a click, and explains that question first. A tab never
   reaches the computer's apps by itself before that.
 - **Fuobe Connect.** A page can read a ComfyUI on the computer only when ComfyUI lets that site in.
-  Fuobe Connect (`integrations/fuobe-connect`, from ComfyUI-Manager or a git clone) lets in only the
-  studios that the person trusts (`https://fuobe.com` unless they name others), and only for what a
-  run needs. Every other website still meets ComfyUI's own check. The card offers it only while
-  `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, which it is once its repository
-  is published. Then it is the one step, and the setting and the guard below are under "Advanced".
-  Until then the setting with the guard is the one step. See [gpu-workers.md](gpu-workers.md).
+  Fuobe Connect (`integrations/fuobe-connect`, published as
+  [ComfyUI-Fuobe-Connect](https://github.com/workingprototype/ComfyUI-Fuobe-Connect); a git clone,
+  ComfyUI-Manager's Install via Git URL, or the Manager's search, which installs it from the Comfy Registry)
+  lets in only the studios that the person trusts (`https://fuobe.com` unless they name others), and
+  only for what a run needs. Every other website still meets ComfyUI's own check. It is optional.
+  The card offers it while `FUOBE_CONNECT_PUBLISHED` (`src/lib/fuobe-connect.ts`) is true, as it is
+  now that its repository is published: it is the one step, and the setting and the guard below are
+  under "Advanced". With the switch off, the setting with the guard is the one step. See
+  [gpu-workers.md](gpu-workers.md).
 - **Pairing** (Safari, phones, a blocked browser, a PC with no screen), offered with Fuobe Connect:
   Fuobe Connect shows a code, and the person types it and approves it while signed in
   (`/connect?pair=1`; the page never fills in a code from its link). That ComfyUI then runs this
@@ -494,10 +497,40 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
 
 An account can let its own AI (ChatGPT, Claude, or a coding agent such as Claude Code, Codex or
 Gemini CLI) do the setup: **Set it up with my AI** on the Connect your GPU card, in Settings → Your
-GPU and at `/connect?setup=ai`. A guest signs up first and comes back there. The panel picks the
-way for the browser (this browser, or a web address on Safari, on a phone and on a page on plain
-http), gives the AI a short message with two links (the steps and the status), and ticks off each
-step as the account's open tab sees it. It ends with a first picture made on the account's GPU.
+GPU and at `/connect?setup=ai`. A guest who opens that link gets **Log in** first, for the account it
+started with (most often on a phone), then **Sign up free**. Both come back to the same link, its
+way included. The panel picks the
+way for the browser (Fuobe Connect first while it is published, then this browser, or a web address
+on Safari, on a phone and on a page on plain http), gives the AI a short message with two links (the
+steps and the status), and ticks off each step as the account's open tab sees it. It ends with a
+first picture made on the account's GPU. `/connect?setup=ai&way=address` opens the panel on the web
+address, with the box for it in focus.
+
+- **Fuobe Connect.** The steps install it from its repository: a `git clone` into `custom_nodes`,
+  or its `.zip` or `.tar.gz` download where git is missing, then a restart of ComfyUI (ComfyUI
+  Desktop, the portable build, Stability Matrix, a terminal, or a service on Linux). They say that
+  ComfyUI-Manager's search may offer no version to install, they count its install (the folder
+  `fuobe-connect`) as installed, and they make sure that ComfyUI answers `GET /fuobe/connect`. In Chrome, Edge or Firefox on that computer, the tab connects by itself once
+  Fuobe Connect answers. On a phone, in Safari, on a page on plain http or in a browser that blocks
+  the computer, the panel shows the box for the code that ComfyUI's **Connect to Fuobe** shows, and
+  the setup is done once the paired ComfyUI is heard from (in the last minute). On a self-hosted
+  studio, the steps add its address to Fuobe Connect's list.
+
+- **From a phone.** The commands run on the computer, so the tunnel's address lands on the
+  computer's clipboard. The status, the steps and the phone's panel send the person to
+  `/connect?setup=ai&way=address` on that computer, signed in to the same account: the box for the
+  address is there, under the same setup code (a different code means another account). Until
+  Fuobe has an address, the status's next step is the tunnel even while the phone's tab sleeps.
+  The phone has one **Send to my computer** button (**Copy link for my computer** where the
+  browser can't share). It sends `/connect?setup=ai` with the way the phone is on: `way=address`
+  for a web address, `way=connect` for Fuobe Connect. The computer opens on that same way.
+- **ComfyUI starting again.** When ComfyUI stops answering on this computer, the panel and the
+  status say it is starting again for up to 5 minutes (a portable or Easy-Install ComfyUI loads
+  every add-on first), with the minutes so far. After that they say it didn't come back: look at
+  its window, or start it again.
+- **On the processor.** A ComfyUI with no graphics card (its device is `cpu`) is named as such on
+  every way, the web address included, with what it means: no picture model fits, and a picture
+  would take many minutes.
 
 - **The code.** `POST /api/setup/session` (`{ way, os, phone?, fresh?, resume? }`) gives the
   account one setup code of 12 letters and digits, like `ABCD-EFGH-JKMN`. The same call again
@@ -521,15 +554,22 @@ step as the account's open tab sees it. It ends with a first picture made on the
   network), `GET /api/setup/files/fuobe_guard.py` and `GET /api/setup/files/start/<port>` (the
   Windows start file) are open to everyone. The steps tell the AI to show each command and wait for
   a yes, to use exactly `--enable-cors-header <the studio's address>`, never `--listen`, and to
-  check Fuobe's files by their SHA-256. For a web address, they run the tunnel in a window the
-  person sees, keep its log where only that user can read it, warn when ComfyUI-Manager is
+  check Fuobe's files by their SHA-256. For Fuobe Connect, they add no start setting and install only
+  Fuobe Connect, from its repository. For a web address, they run the tunnel in a window the
+  person sees, keep its log where only that user can read it (`~/.fuobe` on a Mac or Linux,
+  `~\.fuobe` in the user's own folder on Windows), warn when ComfyUI-Manager is
   installed (anyone with the address can use it), and stop the tunnel when the person is done. When
   the address asks for a password or a token, they keep it and put it in Fuobe's Access token.
 - **Limits.** 6 new codes a minute and 20 an hour per account. 30 status reads a minute per code.
-  Unknown codes: 10 per 10 minutes per visitor (behind a trusted proxy, `FUOBE_TRUST_PROXY=1`) and
-  600 per 10 minutes for everyone together. The steps and Fuobe's files: 60 a minute per visitor
+  Unknown codes: 10 per 10 minutes per visitor and 600 per 10 minutes for everyone together. The
+  visitor is the client behind a trusted proxy (`FUOBE_TRUST_PROXY=1`), else the last
+  `X-Forwarded-For` hop a proxy in front set: a made-up hop only moves its own reads to another
+  budget, the shared one still holds, and an active code never uses either. With no proxy at all,
+  only the shared budget applies. The steps and Fuobe's files: 60 a minute per visitor
   (behind a trusted proxy), and no budget shared by everyone, so no visitor can use up another
-  person's. All answer 429 with `Retry-After`.
+  person's. All answer 429 with `Retry-After`. Past the budget for unknown codes, the answer still
+  tells the AI to ask the person for the code Fuobe shows now: a code that is active works at once,
+  and the wait is only for a person with no new code.
 
 The code is `src/server/ai-setup.ts`, `src/lib/ai-setup/`, `src/components/gpu/ai-setup/` and
 `src/app/api/setup/`.
@@ -579,59 +619,170 @@ account with that provider. The studio's own keys are never used for an account'
   attached files to that provider. civitai LoRAs are left out of runs on an account's key (copying
   them would use the studio's civitai key). Image to 3D runs on its key too; Assist, text steps and the other tools stay closed.
 - An account on a studio set to **Open source only** keeps its keys, but they aren't used.
+- **Balance and account.** Each saved key's card shows what the provider tells about the account
+  behind it, and the account menu (the You sheet on a phone) has **Connected accounts**: one row per
+  key with its balance, or **Add a key** when the account has none. `GET /api/key-info`
+  (`src/server/provider-account-info.ts`) asks fal.ai's account billing call (the balance and the
+  account's name, for a key with the `billing:usage:read` permission; fal.ai's default API keys
+  get a link to the billing page instead) and Replicate's `GET /v1/account` (the account; Replicate
+  has no balance call, so its row links to its billing page). Both are reads that run nothing. The
+  route reads the key through `cloudKey` inside the account's own work, so an account only ever
+  gets its own keys' answers. The owner gets the studio's keys, and a guest gets 401 before any key
+  is read. Nothing is asked on page load: the menu asks when it opens, and Settings when the card
+  scrolls into view. An answer is kept 60 seconds (15 when the provider is busy or out of reach),
+  and **Refresh** asks again at most once every 10 seconds per key. The answer holds only the
+  balance, the account's name and the state, never a key, its last characters or the provider's
+  own words. A check here never marks a key refused or its balance empty.
 
 ## When your GPU or key has a problem
 
 An account's GPU can be off, starting up, or behind a password. Its key can be refused, or its
 provider can be busy. In each case the account sees one plain sentence that says what is wrong
-and what to do, a small details line for the curious (the address, the status and the reason), and
-buttons that help. `src/lib/diagnose.ts` reads every failure the same way, for Settings, the
-composer and a failed run. The owner's own runs, and runs on this studio's GPUs (hosted runs),
-keep their words as before.
+and what to do, a small details line for the curious, and buttons that help. The details line
+names the kind of address ("RunPod pod, port 8188", "your tunnel", "your web address"), never the
+address itself, with the status and the reason; a token or key the answer echoed is taken out.
+`src/lib/diagnose.ts` reads every failure the same way, for Settings, the composer and a run. The
+owner's own runs, and runs on this studio's GPUs (hosted runs), keep their words as before.
 
 - **Settings → Your GPU.** Test and Connect say what is wrong with the address: a RunPod pod that is
   stopped ("Your RunPod pod isn't running, or ComfyUI isn't on port 8188", with **Start your pod**,
-  a link to RunPod's pods page), a GPU starting up, no answer, a password that is missing or wrong,
-  a sign-in page in front, or another app on that address. `PUT /api/account/gpu` answers 422 with
-  `error` (the sentence) and `trouble` (`cause`, `details`, `actions`, `retryable`). An address
-  pasted without `https://` gets it added, and a `?…` or `#…` part is left out; the answer's `note`
-  says so. A GPU that is off or starting up is checked again by itself (5, 10, 20, 30 seconds, for 3
-  to 5 minutes), and **Save anyway** (`{ "anyway": true }`) keeps its address: runs wait for it. Too
-  many checks (429) count down and check again by themselves. The saved address's card says
-  **Offline** with the reason, and **Check now** (`{ "saved": true }`) asks it again.
+  a link to RunPod's pods page), a pod that is on while ComfyUI starts, a GPU starting up, no
+  answer, a password that is missing or wrong, a sign-in page in front, or another app on that
+  address. `PUT /api/account/gpu` answers 422 with `error` (the sentence) and `trouble` (`cause`,
+  `details`, `actions`, `retryable`). An address pasted without `https://` gets it added, and a
+  `?…` or `#…` part is left out; the answer's `note` says so. An `http://` address that sends to
+  the same host's `https://` is followed to the port it named. A GPU that is off or starting up is
+  checked again by itself (5, 10, 20, 30 seconds, for 3 to 5 minutes). After Test, which saves
+  nothing, the words say to press **Connect** once it answers; when the checks stop, they say so,
+  with **Check again** and **Save anyway** (`{ "anyway": true }`, which keeps the address: runs wait
+  for it). Too many checks (429) count down and check again by themselves. The saved address's card
+  says **Offline** with the reason, and **Check now** (`{ "saved": true }`) asks it again. A local
+  address (`localhost`, a home network) offers **Use this computer** where this browser can reach
+  its ComfyUI, and **Pair with a code**. Where it can't, a line says why instead ("Use this computer
+  works in Chrome, Edge or Firefox. Safari doesn't let a website reach programs on your Mac.", or on
+  a phone or tablet, or a page the browser marks as not secure).
+- **Settings → Your keys.** A key whose provider account has no balance left shows **Add credit**
+  (a link to the provider's billing page) instead of **Ready**, with the day it ran out. A saved key
+  has **Check again** (`PUT /api/account/keys/<provider>` with `{ "recheck": true }`): the provider's
+  free check, run on the saved key, which clears a refusal or an empty balance once the provider
+  takes the key. A check that finds the provider busy or out of reach (429 or 5xx) asks twice more
+  by itself, then says "fal.ai is busy right now, so we couldn't check your key. Try again in a
+  minute." with the status in `details`. A run the provider takes on the key clears both marks too.
 - **Before Run.** When the account's GPU didn't answer its last status check, the composer shows
   the reason and its buttons above Generate. It reads the status the strip already has (every 30
-  seconds), so the GPU is never asked more often. When one of the account's keys runs the tool's
-  cloud version (a preset's cloud route, or a Fuobe Original on the cloud engine), **Run with your
-  fal.ai key** switches to Cloud and runs it there, billed to that key (with hosted runs on, it runs
-  that one run there and the switch stays where it was). A run started anyway waits.
-  The account menu says why the GPU is offline: "pod stopped", "starting up", "needs a password".
+  seconds), so the GPU is never asked more often. Its words say what happens to runs ("Start your
+  pod, and your runs start as soon as it answers. A run you start now waits for it."); a problem
+  waiting can't fix (a password, another app on the address) says "Runs can't reach your GPU until
+  this is fixed." When one of the account's keys runs the tool's cloud version (a preset's cloud
+  route, or a Fuobe Original on the cloud engine), **Run with your fal.ai key** sits right after the
+  first fix. It runs this one run there, billed to that key, and leaves the engine switch where it
+  was: the next run goes to the GPU again. A key the provider refused, or whose balance ran out, is
+  not offered. A paid model on a key whose balance is empty (found on a run, or by a check of the
+  key) says so above Generate ("Your fal.ai balance is empty. Add credit there, then run."), with
+  **Add credit**. A graph that needs a second ComfyUI (ThinkSound, LatentSync 1.6) says so before Run, with
+  **Run with your key** when one runs its cloud version, and **Pick another model**. The account
+  menu says why the GPU is offline: "pod stopped", "starting up", "needs a password".
 - **A run that waits.** A run whose GPU is off, starting up or out of reach waits and tries again by
-  itself, with a growing wait (up to a minute between tries). Its tile says what it waits for
-  ("Waiting for your RunPod pod to start", "Waiting for your GPU to start up"). A GPU that is off
-  waits up to 30 minutes, one starting up 10 minutes. Before the run fails, the GPU is asked once
-  more. A run whose account saves another address while it waits stops and says so. A provider
-  that is busy (429) or down (503) at submit is tried again for 1 to 3 minutes; a 502 or 504 at
-  submit is not, because the job may have started. Waiting never retries what it can't fix: a
-  refused key, an empty balance, a missing add-on or file, or an input the model refuses. A 403
-  that isn't about the key (a model the key may not run) says to pick another model; the key
-  stays as it is.
+  itself, with a growing wait (up to a minute between tries, or what the other side asked for).
+  Before each try it asks the GPU's `/system_stats` only; its files go once the GPU answers, and a
+  file already sent is never sent twice. Its tile says what it waits for ("Your RunPod pod is off.
+  Start it, and this run goes on by itself", "Waiting for your GPU to start up"), until when it
+  waits, and the buttons that help (**Start your pod**, **Check my GPU**, **Run with your fal.ai
+  key**, which moves this run to the key: it stops waiting and the cloud run takes its place). A run
+  that made several jobs (a batch) moves as one: the press stops every job of it not handed over yet
+  and the cloud run makes their outputs, never the whole batch again; while it is on its way the
+  batch's other tiles don't offer the button, and a later press on one of them answers 409 "This run
+  has already started or stopped, so nothing new was run." (`replaces` beside the request names the
+  run). A step of a longer run (a relight and then its clip, a film's shot, a Mixed Media step), or a
+  job of a batch whose other waiting job a later step waits for, doesn't offer it: moved alone, the
+  step would stop and the rest of the run would go without it. Its wait goes on, and `replaces` on it
+  answers 409 "This step is part of a longer run, so it can't move to your key on its own. It goes on
+  by itself, or cancel it and run the tool again with your key." (`chained-run`). Nor does a run a
+  tool made for one of the account's projects (a Cinema take, a Storyboard board, a short, a Faceless
+  or Content Factory run), even a take of one step: moved alone, it would leave its project, where it
+  would show Canceled. `replaces` on it answers 409 "This run is part of one of your projects, so it
+  can't move to your key on its own. It goes on by itself, or cancel it and run it again in its
+  project with your key." (`project-run`). Only a run made on its own (`POST /api/generations`, as a
+  studio's Generate makes it, or Image to 3D) moves: the server marks it so when it makes it, and the
+  tile offers the button only where a press can act. The Library's card shows the same buttons. Each cause has its own time from when it was first seen: a
+  GPU that is off 30 minutes, one starting up 10 minutes, and 40 minutes in all. Before the run
+  fails, the GPU is asked once more. When the account saves a new address (or password) while a
+  run waits, the run goes there; when it disconnects its GPU, the run stops and says so, with
+  **Connect your GPU**. A provider that is busy (429) or down (503) at submit is tried again for 1
+  to 3 minutes; a 502 or 504 at submit is not, because the job may have started. The same holds on
+  the GPU: a failure at ComfyUI's `/prompt` is tried again only when it proves nothing arrived
+  (nothing listening, no such name, a stopped pod, a tunnel that is down). Waiting never retries
+  what it can't fix: a refused key, an empty balance, a missing add-on or file, or an input the
+  model refuses. A 403 that isn't about the key (a model the key may not run) says to pick another
+  model; the key stays as it is. A wait is kept with the run (`external_meta_json`), and the server
+  that waits holds the run's turn to send it (`submit_turns`, the same turn every run has; each
+  app process says every 5 seconds that it still runs, and the turn of one that has said nothing for
+  20 seconds is free): after a restart, or when a deploy's new instance takes over, the run goes on
+  with what is left of its wait (its tries and its time), on one instance only; so does a step of a
+  longer run. Another instance never fails, takes or sends a run whose turn a running instance
+  holds. A server that is stopping sends no more tries and gives its waiting runs' turns back at
+  once, for the next instance; it launches no new step of a longer run and takes over no wait,
+  and a step whose first send it had begun is left unsent, for the next instance to launch. A run that
+  waited, and a step of a longer run on any try (its first too), is marked just before the try sends
+  the job itself: a server cut off in the middle of that send leaves a job the GPU or provider may
+  already have, so the next instance doesn't send it again, and the run fails with "This run was
+  interrupted while it was being sent. Press Retry." Its tile doesn't say **Not billed**, because
+  the provider may have the job. A try the provider turned down as it was sent (a refused key, an
+  empty balance, a model gone: a 4xx answer) still says **Not billed**. A run planned for
+  another provider by then stops in plain words. Runs that wait for the GPU count apart from the 4
+  runs at once (up to 4 more wait); a fifth waiting run answers 429 "You have 4 runs waiting for
+  your GPU. Cancel one, or run one with your key, to start another." Runs that wait on a key (its
+  provider busy or down) count among the 4 runs at once.
 - **A paired ComfyUI.** A run for a ComfyUI paired with a code (Fuobe Connect) that is off says
   "Waiting for your paired ComfyUI. Start ComfyUI there (or start your pod), and this run goes on
-  by itself." It doesn't ask for a Fuobe tab, because a paired ComfyUI needs none.
+  by itself." It doesn't ask for a Fuobe tab, because a paired ComfyUI needs none. A Fuobe tab
+  that runs this computer's ComfyUI and is signed out says so, with **Log in**.
 - **While it runs.** A GPU or provider that stops answering mid-run is asked again with a growing
-  wait, and after 3 misses the tile says "Your GPU stopped answering. Waiting for it to come back".
-  It stops after 15 minutes (10 for a key's provider) in plain words. A key refused or a balance
-  gone while a run is polled fails it at once, and the job is stopped there. A ComfyUI that
-  restarted and lost a run gets it sent once more. A run whose account moved to another address
-  says so. A result that can't be copied is tried 3 times first. A graph that needs a second
-  ComfyUI (ThinkSound, LatentSync 1.6) is refused before anything is sent.
-- **A failed run.** The tile shows the sentence, the details line, and up to three buttons: **Start
-  your pod**, **Check my GPU** (the Test above, on the saved address), **Open Settings → Your GPU**
-  or **Your keys** (**Replace key**), **Add credit on fal.ai** (or Replicate), **Run with your
-  Replicate key** when the other key runs the same model, and **Retry**. The Library's card shows
-  the same sentence with up to two of them. The run keeps them in `trouble`
-  (`GET /api/generations/<id>`), next to `fix` for **Fix it**.
+  wait (what it asked for in `Retry-After` up to 2 minutes, never past the run's own time), and
+  after 3 misses the tile says "Your GPU stopped answering. Waiting for it to come back".
+  On the account's GPU it stops after 15 minutes in plain words. On a key the job is accepted (and
+  paid), so it waits on until the run's own time limit; a call to fal.ai or Replicate that hangs is
+  given up after 20 seconds (60 for a submit or a result) and asked again. A key refused or a
+  balance gone while a run is polled fails it at once, and the job is stopped there. A ComfyUI that
+  restarted and lost a run gets it sent once more, as the same job of its batch (its own seed). A
+  run whose account moved to another address says so. A job in the GPU's queue waits as long as
+  the queue keeps moving (2 hours at most): its place gets nearer the front (the jobs before it are
+  the ones with a lower number in ComfyUI's queue), or the GPU starts another job ahead of it. It
+  stops when nothing has moved for 30 minutes (45 while a job runs ahead of it, the time one job
+  may take), saying the GPU was busy. A made result whose copy breaks off (a connection dropped, a 5xx) is
+  copied again at later looks for up to 15 minutes ("Your result is made. Copying it from your
+  GPU"), never made again. Sending a file to the GPU may take as long as its size needs at 128 KB/s
+  plus a minute (5 to 30 minutes).
+- **A failed run.** The tile shows the sentence, the details line, and up to three buttons (two on
+  a narrow tile; the ones that help least go first): **Start your pod**, **Run with your fal.ai
+  key** right after it, **Check my GPU** (the Test above, on the saved address), **Open Settings →
+  Your GPU** or **Your keys** (**Replace key**), **Add credit on fal.ai** (or Replicate), **Run with
+  your Replicate key** when the other key runs the same model (on that key, never back on fal.ai),
+  **Pick another model** (it opens the studio's model picker), **Try one size smaller** after a
+  run ran out of graphics memory or took too long, **Send a smaller copy** after a file was too big
+  for the address (`POST /api/generations/<id>/smaller` makes a smaller copy of the run's biggest
+  picture or clip as a new file of the account's, and the run starts again with it), and **Retry**.
+  A copy is real work, so an account makes one at a time and the server two at once (429 "Smaller
+  copies are busy right now. Try again in a minute."), a clip's encode uses two cores, files that
+  are full say so before any work, and a run gets 3 copies an hour (12 for the account). When no
+  smaller copy can be made, the message offers **Try one size smaller** (or **Pick another model**).
+  A button that starts a run stays pressed until it has, so a second click starts nothing. The
+  Library's card shows the same sentence with up to two of them (one in the list), and they act
+  there too: **Pick another model** opens the run's studio with the run loaded and its model picker
+  open (`?reuse=<id>&pick=1`). The run keeps them in `trouble` (`GET /api/generations/<id>`), next
+  to `fix` for **Fix it**.
+- **For the owner.** Each wait, heal and failure of an account's run on its own GPU or key writes
+  one JSON line to the server's log (`"evt":"own-run"`: the run, the account, the place, provider,
+  model, stage, status or network code, the kind of address, the cause, the try and the time
+  waited). A run that stops in this server's own words writes one too, with its cause: cut off by a
+  restart (`interrupted`, or `interrupted-sending` in the middle of its send), refused as its
+  account runs now (`connect-gpu`, `add-key`, `switched-off`…), its keys changed while it waited
+  (`keys-changed`), or a step whose earlier step didn't finish (`earlier-step`: the first step after
+  the failure only; the steps after it, which stop for the same reason, write none). It never holds
+  a prompt, a key, a token, an address or a file's name. A failed run also
+  keeps, for the owner only, the cause, stage, code, kind of address and the provider's own words
+  (cleaned, 2 KB at most): `ownRunNote(id)` in `src/server/run-events.ts` reads it, and no account
+  or visitor answer carries it.
 
 ## Hosted runs
 
@@ -833,7 +984,9 @@ work may read is `src/server/tenant.ts`. Your keys are `src/server/account-keys.
 `src/server/secret-box.ts` (encryption), `src/server/provider-keys.ts` (`cloudKey`, the one place a
 fal.ai or Replicate key is read) and `src/app/api/account/keys`; their tests are the
 `tests/account-keys*.test.ts` files, `tests/secret-box.test.ts`, `tests/byo-keys-static.test.ts` and
-`tests/e2e/byo-keys.mjs` (against stand-in providers). Uploads are `src/app/api/uploads/route.ts` (which makes the
+`tests/e2e/byo-keys.mjs` (against stand-in providers). Connected accounts (a key's balance and account) are
+`src/server/provider-account-info.ts` and `src/app/api/key-info`, tested in `tests/key-info.test.ts` and
+`tests/key-info-ui.test.ts`. Uploads are `src/app/api/uploads/route.ts` (which makes the
 proxy's checks itself, `src/server/direct-gate.ts`), the limits are in `src/server/account-files.ts`
 and the clean-up in `src/server/account-sweep.ts`. The owner's view of what accounts make is
 `src/server/account-admin.ts`. The tests are in `tests/public-signup.test.ts`,

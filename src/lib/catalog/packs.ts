@@ -1,5 +1,5 @@
 /**
- * Prompt packs for the image studios (docs/research/higgsfield-image-studios.md §2, §3, §6, §7):
+ * Prompt packs for the image studios (docs/research/parity-image-studios.md §2, §3, §6, §7):
  * Photodump / Instadump packs, Fashion Factory templates, Character Sheet prompts, the drawn covers' hues and
  * tones, and the pure planning steps that turn them into generation requests.
  *
@@ -733,7 +733,7 @@ export type FashionAction =
   | { type: "retried"; from: string; to: string[] }
   | { type: "reset" };
 
-/** The exact message Higgsfield shows when a step can't go on, or null. */
+/** The exact message the parity studio shows when a step can't go on, or null. */
 export function fashionBlocker(s: FashionState, action: "next" | "outfit" | "photoset" = "next"): string | null {
   if (s.step === "template" || !s.templateId) return s.templateId ? null : "Template required";
   if (s.step === "character") return s.elementId ? null : "Pick or create a character first";
@@ -861,7 +861,7 @@ export interface CastFieldData {
 
 export type CastAnswers = Record<string, string | number | string[] | undefined>;
 
-/** Higgsfield's Randomize (mirrors cinema.ts randomizeCast): genre, era, race, gender, age and archetype. */
+/** The parity studio's Randomize (mirrors cinema.ts randomizeCast): genre, era, race, gender, age and archetype. */
 export function randomCast(fields: CastFieldData[], values: CastAnswers, rand: () => number = Math.random): CastAnswers {
   const next: CastAnswers = { ...values };
   for (const key of ["genre", "era", "race", "gender", "age", "archetype"]) {

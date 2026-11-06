@@ -52,6 +52,8 @@ export const problemText = (p: GpuProblem, where: "link" | "computer" | "install
   p === "unreachable" && where === "computer" ? COMPUTER_UNREACHABLE : p === "unreachable" && where === "install" ? INSTALL_UNREACHABLE : PROBLEM_TEXT[p];
 
 const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
+/** The compiler part of system_stats' python_version, in its square brackets. */
+const PY_BUILD = /\[([^\]\n]{1,60})\]/;
 
 /** A semaphore: at most `n` jobs at once. */
 function limiter(n: number) {
@@ -186,6 +188,8 @@ export async function gatherInventory(t: ComfyTransport, idx: RequirementIndex, 
     version: clip(sys.comfyui_version, 40),
     os: clip(sys.os, 20),
     ...(sys.python_version && { python: clip(String(sys.python_version).split(" ")[0], 20) }),
+    // The build part ("3.12.9 (main, Feb 12 2025) [Clang 19.1.6 ]"): which compiler made this Python.
+    ...(PY_BUILD.test(String(sys.python_version ?? "")) && { pythonBuild: clip(PY_BUILD.exec(String(sys.python_version))![1].trim(), 60) }),
     ...(sys.pytorch_version && { torch: clip(sys.pytorch_version, 40) }),
     embeddedPython: !!sys.embedded_python,
     deployEnv: clip(sys.deploy_environment ?? "local-git", 40),

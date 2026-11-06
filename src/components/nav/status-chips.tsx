@@ -47,14 +47,14 @@ const ComputerNoteLive = dynamic(() => import("@/components/gpu/computer-runner"
 type Viewer = NonNullable<StatusInfo["viewer"]>;
 
 /** A status row of the account menu or the You sheet: its dot on the rows' icon column, its words on their label column. */
-const CHIP = "nav-row flex min-h-11 w-full flex-col justify-center gap-1 py-1.5 text-left text-[12px] text-muted-foreground";
+export const CHIP = "nav-row flex min-h-11 w-full flex-col justify-center gap-1 py-1.5 text-left text-[12px] text-muted-foreground";
 
 export function StatusDot({ ok }: { ok: boolean | undefined }) {
   return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", ok ? "bg-success" : "bg-subtle-foreground")} />;
 }
 
 /** A status dot centred in a slot as wide as the rows' icons (16 px in the menu, 18 px in the You sheet: --nav-icon). */
-function DotSlot({ ok, hidden }: { ok: boolean | undefined; hidden?: boolean }) {
+export function DotSlot({ ok, hidden }: { ok: boolean | undefined; hidden?: boolean }) {
   return (
     <span aria-hidden className="grid w-[var(--nav-icon,16px)] shrink-0 place-items-center">
       {!hidden && <StatusDot ok={ok} />}
@@ -66,7 +66,7 @@ function DotSlot({ ok, hidden }: { ok: boolean | undefined; hidden?: boolean }) 
  * A link or button as a row of a menu (`item`: arrow keys reach it, choosing it closes the menu) or as it is
  * elsewhere. The classes go through the menu item, so they win over its defaults.
  */
-function Actionable({ item, className, children }: { item?: boolean; className: string; children: React.ReactElement<{ className?: string }> }) {
+export function Actionable({ item, className, children }: { item?: boolean; className: string; children: React.ReactElement<{ className?: string }> }) {
   // A sheet row's words sit on the sheet's gutter (its fill reaches 8 px past it); a menu row's on the menu's.
   if (!item) return cloneElement(children, { className: cn("-mx-2 rounded-xl px-2", className, children.props.className) });
   return (

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { EFFECTS, getModel, getPreset, MOTIONS } from "@/lib/catalog";
 import { DOP_MODEL, DOP_LTX_MODEL, loraFamily, presetLoras } from "@/lib/catalog/dop";
@@ -7,6 +9,7 @@ import { DOP_RECIPES, OSS_LORAS } from "@/lib/catalog/oss-loras.generated";
 // The preset → LoRA map v2 (build plan O4, research §7): scripts/gen-oss-loras.py from the round-1 Wan LoRAs and the
 // research's motionsEffects rows, and how Fuobe DoP turns it into each preset's routes.
 
+const ROOT = path.resolve(__dirname, "..");
 const presets = [...MOTIONS, ...EFFECTS];
 const v2Keys = Object.keys(OSS_LORAS).filter((k) => k in DOP_RECIPES);
 
@@ -58,6 +61,15 @@ describe("the map v2", () => {
     // says so in plain words, without the research notes.
     expect(getPreset("motion-bts")!.open!.loras).toBeUndefined();
     expect(getPreset("motion-bts")!.parity).toBe("On your GPU, Fuobe DoP films this move from a written direction.");
+  });
+
+  it("leaves the research's notes in the research: the map is bundled into the site's browser code", () => {
+    const research = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/research/fuobe-originals-recipes-5.json"), "utf8"));
+    // The research's rows do have notes, so this checks something.
+    expect(research.motionsEffects.some((m: { notes?: string }) => m.notes)).toBe(true);
+    for (const [id, r] of Object.entries(DOP_RECIPES)) expect(Object.keys(r), id).not.toContain("notes");
+    for (const [key, loras] of Object.entries(OSS_LORAS)) for (const l of loras) expect(Object.keys(l), `${key} ${l.file}`).not.toContain("notes");
+    expect(fs.readFileSync(path.join(ROOT, "src/lib/catalog/oss-loras.generated.ts"), "utf8")).not.toMatch(/"notes":/);
   });
 
   it("knows each LoRA's family", () => {

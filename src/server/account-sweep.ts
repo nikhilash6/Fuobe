@@ -13,6 +13,7 @@ import { strayAccountIds } from "./auth-store";
 import { accountEvent, accountFacts } from "./billing";
 import { db } from "./db";
 import { handOversDone } from "./generations";
+import { forgetKeyNotes } from "./key-notes";
 import { deleteForever } from "./library";
 import { deleteAsset, scratchDir } from "./storage";
 import { forgetAccountPresses } from "./run-requests";
@@ -49,6 +50,7 @@ export async function purgeAccount(id: string): Promise<{ runs: number; files: n
   const files = (db().prepare("SELECT id FROM assets WHERE account_id = ?").all(id) as { id: string }[]).map((r) => r.id);
   for (const f of files) deleteAsset(f);
   clearAccountLoras(id);
+  forgetKeyNotes(id);
   deleteAccountCanvases(id);
   // A tool's own rows under its projects go before the projects themselves.
   deleteAccountCinema(id);

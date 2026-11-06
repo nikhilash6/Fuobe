@@ -62,7 +62,7 @@ const RECORD = (JSON.parse(fs.readFileSync(path.join(process.cwd(), "docs/resear
 
 describe("planning a fly path", () => {
   it("cloud: H3 Max camera-controls films the still for 5 s at 768P, with motion words that let the subject move", () => {
-    vi.useFakeTimers({ now: Date.parse("2026-10-29T12:00:00Z"), toFake: ["Date"] });
+    vi.useFakeTimers({ now: Date.parse("2026-11-06T12:00:00Z"), toFake: ["Date"] });
     const plan = planCinema(film("cloud"), ctx);
     expect(plan.blocker).toBeUndefined();
     expect(plan.model.id).toBe(PATH_MODELS.cloud);
@@ -72,17 +72,17 @@ describe("planning a fly path", () => {
     expect(req).toMatchObject({ feature: "cinema-path", op: "camera-path", inputs: { images: [STILL] }, params: { duration: 5, resolution: "768P", cameraPath: orbit } });
     expect(req.prompt).toBe(DEFAULT_MOTION);
     expect(plan.notes[0]).toMatch(/H3 Max follows your 5 keyframes from the still, with prompt expansion off/);
-    // fal's launch price until 2026-10-31: $0.052 a second at 768P.
-    expect(plan.costUsd).toBe(0.26);
+    // fal's 30% off until 2026-11-15: $0.056 a second at 768P.
+    expect(plan.costUsd).toBe(0.28);
   });
 
-  it("cloud: the price is the one of the run's date — $0.08 a second at 768P from November", () => {
-    vi.useFakeTimers({ now: Date.parse("2026-11-01T09:00:00Z"), toFake: ["Date"] });
+  it("cloud: the price is the one of the run's date — $0.08 a second at 768P from 2026-11-16", () => {
+    vi.useFakeTimers({ now: Date.parse("2026-11-16T09:00:00Z"), toFake: ["Date"] });
     expect(planCinema(film("cloud"), ctx).costUsd).toBe(0.4);
     expect(planCinema(film("cloud", { resolution: "1080p", path: { keys: orbit, duration: 10 } }), ctx).costUsd).toBe(1.6);
     expect(planCinema(film("cloud", { resolution: "480P", path: { keys: orbit, duration: 3 } }), ctx).costUsd).toBe(0.15);
-    vi.useFakeTimers({ now: Date.parse("2026-10-31T23:00:00Z"), toFake: ["Date"] });
-    expect(planCinema(film("cloud", { resolution: "1080P" }), ctx).costUsd).toBe(0.52);
+    vi.useFakeTimers({ now: Date.parse("2026-11-15T23:00:00Z"), toFake: ["Date"] });
+    expect(planCinema(film("cloud", { resolution: "1080P" }), ctx).costUsd).toBe(0.56);
   });
 
   it("cloud: the user's motion words are sent as written, and the length stays inside 1–15 s", () => {
@@ -115,12 +115,12 @@ describe("planning a fly path", () => {
   });
 
   it("shows the price that applies before the path is ready: Film never reads 'Free' for a paid run", () => {
-    vi.useFakeTimers({ now: Date.parse("2026-10-29T12:00:00Z"), toFake: ["Date"] });
+    vi.useFakeTimers({ now: Date.parse("2026-11-06T12:00:00Z"), toFake: ["Date"] });
     const start = planCinema(film("cloud", { path: { keys: [PHOTO_KEY], duration: 5 } }), ctx);
     expect(start.blocker).toBe("Add a keyframe or pick a move first");
-    expect(start.costUsd).toBe(0.26);
-    expect(planCinema(film("cloud", { resolution: "1080P", path: { keys: [PHOTO_KEY], duration: 10 } }), ctx).costUsd).toBe(1.04);
-    expect(planCinema(film("cloud", { source: undefined }), ctx)).toMatchObject({ blocker: "Pick the scene's still", costUsd: 0.26 });
+    expect(start.costUsd).toBe(0.28);
+    expect(planCinema(film("cloud", { resolution: "1080P", path: { keys: [PHOTO_KEY], duration: 10 } }), ctx).costUsd).toBe(1.12);
+    expect(planCinema(film("cloud", { source: undefined }), ctx)).toMatchObject({ blocker: "Pick the scene's still", costUsd: 0.28 });
     // The blocked step keeps what was really asked (no stand-ins), and the open engine stays free.
     expect(start.steps[0].request.inputs).toEqual({ images: [STILL] });
     expect(planCinema(film("open", { path: { keys: [PHOTO_KEY] } }), ctx)).toMatchObject({ blocker: "Add a keyframe or pick a move first", costUsd: 0 });
@@ -165,8 +165,8 @@ describe("cloud: MiniMax H3 Max camera controls (minimax/h3-max/camera-controls)
     expect(m.routes.some((r) => r.endpoint.includes("multi-angle"))).toBe(false);
     expect(m.options.resolutions).toEqual(["480P", "768P", "1080P"]);
     expect(m.defaults).toMatchObject({ duration: 5, resolution: "768P" });
-    vi.useFakeTimers({ now: Date.parse("2026-10-30T00:00:00Z"), toFake: ["Date"] });
-    expect(estimateCost(m, { duration: 5, resolution: "480P" }, 1, "camera-path")).toBe(0.163);
+    vi.useFakeTimers({ now: Date.parse("2026-11-06T00:00:00Z"), toFake: ["Date"] });
+    expect(estimateCost(m, { duration: 5, resolution: "480P" }, 1, "camera-path")).toBe(0.175);
     vi.useFakeTimers({ now: Date.parse("2026-12-01T00:00:00Z"), toFake: ["Date"] });
     expect(estimateCost(m, { duration: 5, resolution: "480P" }, 1, "camera-path")).toBe(0.25);
   });

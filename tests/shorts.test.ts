@@ -56,7 +56,7 @@ describe("Shorts presets and catalog", () => {
     expect(MOTIF_IDS.filter((id) => !ids.includes(id))).toEqual([]);
   });
 
-  it("has Higgsfield's 44 presets with Fuobe's own descriptions and looks", () => {
+  it("has the parity studio's 44 presets with Fuobe's own descriptions and looks", () => {
     expect(SHORTS_PRESETS).toHaveLength(44);
     expect(new Set(SHORTS_PRESETS.map((p) => p.id)).size).toBe(44);
     expect(new Set(SHORTS_PRESETS.map((p) => p.name)).size).toBe(44);
@@ -78,7 +78,7 @@ describe("Shorts presets and catalog", () => {
       if (typeof id === "number") continue;
       expect(getModel(id), id).toBeDefined();
     }
-    // Fuobe Shorts (O9) is the default on both engines; Gemini Omni Flash (Higgsfield's Shorts engine) stays a choice.
+    // Fuobe Shorts (O9) is the default on both engines; Gemini Omni Flash (the parity studio's Shorts engine) stays a choice.
     expect(SHORTS_MODELS.cloud.slice(0, 2)).toEqual(["fuobe-shorts", "gemini-omni-flash"]);
     expect(SHORTS_MODELS.open).toEqual(["fuobe-shorts"]);
     for (const id of SHORTS_MODELS.cloud) expect(getModel(id)!.routes.some((r) => r.op === "v2v"), id).toBe(true);
@@ -324,7 +324,7 @@ describe("Shorts pipeline shape", () => {
     expect(chainState(split)).toMatchObject({ status: "working", label: "Splitting the sound" });
   });
 
-  it("limits are Higgsfield's", () => {
+  it("limits are the researched ones", () => {
     expect(SHORTS.minSeconds).toBe(4);
     expect(SHORTS.maxSeconds).toBe(120);
     expect(SHORTS.maxBytes).toBe(200 * 1024 * 1024);

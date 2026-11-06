@@ -613,7 +613,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
           </div>
           {est.data?.notes.length && !blocker ? <p className="hidden truncate px-2 pt-1 text-[11px] text-muted-foreground sm:block">{est.data.notes[0]}</p> : null}
           {/* Phones have no hover: what blocks Generate sits under the composer (the chip says where it runs and its price). */}
-          {(blocker || est.data?.notes.length) && (
+          {(!!blocker || !!est.data?.notes.length) && (
             <p className="min-w-0 truncate px-2 pt-1 text-[11px] text-muted-foreground sm:hidden" aria-live="polite">
               {blocker ?? est.data?.notes[0] ?? ""}
             </p>

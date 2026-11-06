@@ -62,7 +62,7 @@ import { absolutePath, saveFile } from "./storage";
 import { fillSamples, isPublishedSample } from "./canvas-samples";
 
 /**
- * Canvas boards (Higgsfield Canvas): the pages the user edits (each a graph, with its groups, comments and
+ * Canvas boards (Canvas parity): the pages the user edits (each a graph, with its groups, comments and
  * drawings), plus the last run of each generator node. Running turns a page's graph into chained generations
  * (src/lib/catalog/canvas.ts plans it; createGenerations + dependsOn runs it, createPipeline for a node made in
  * several steps), so results survive restarts like any other job. graph_json holds {pages}; a row saved before
