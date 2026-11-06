@@ -28,6 +28,7 @@ import { useSetRunOn } from "@/lib/run-on";
 import { RunOnChip } from "./run-on";
 import { PlaceIntro } from "./place-intro";
 import { PoolNote } from "./pool-note";
+import { EndFrameNote } from "./end-frame-note";
 import { modelOwnSetup, pickerRules, poolRunsModel } from "@/lib/pool-rules";
 import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
@@ -2262,6 +2263,7 @@ export function Composer({ docked }: { docked: boolean }) {
       {sketched.note && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{sketched.note}</p>}
       {signed.notes.length > 0 && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{signed.notes.join(" · ")}</p>}
       {smallGpuNote && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{smallGpuNote}</p>}
+      {model && !framesOn && <EndFrameNote model={model} start={draft.slots.image} end={draft.slots.endImage} hasStartSlot={slots.some((s) => s.key === "image")} setSlot={setSlot} />}
       {model && op && model.options.endFrame === undefined && draft.slots.endImage?.ref && (
         <p className="px-2 pt-1 text-[12px] text-warning">{model.name} ignores the end frame — pick Kling 2.5, Veo 3.1, Seedance or Wan 2.2 to use it.</p>
       )}

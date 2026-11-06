@@ -610,17 +610,20 @@ model("wan-2-6", "Wan 2.6", "Alibaba Wan", "wan", "video", "Multi-shot Wan with 
 model("wan-2-5", "Wan 2.5", "Alibaba Wan", "wan", "video", "Audio-driven video up to 1080p",
       [("t2v", "fal-ai/wan-25-preview/text-to-video"), ("i2v", "fal-ai/wan-25-preview/image-to-video")],
       badges=["audio"], pricing=("second", 0.15, "1080p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
+# fal's H3, H3 Max and H3 Max Turbo image to video take an end frame alone ("It may be provided alone for end-only keyframe
+# generation; in that case the output canvas follows this image"): FieldMap.endAlone, so a run with only an end frame goes there.
+END_ALONE = {"flf2v": True, "endAlone": True}
 # Hosted MiniMax H3 makes its own sound. fal takes a whole number of seconds from 5 to 15 and bills each second by the
 # resolution (its pricing record, docs/research/new-models-7.json): 480P $0.05, 768P $0.06, 2K $0.13, 4K $0.16. Without
 # a resolution fal renders 2K, so 768P is set as the default (H3's native size, the open model's too).
 model("minimax-h3", "MiniMax H3", "MiniMax", "hailuo", "video", "Video with its own synchronized sound, 5–15 s, from words, a start frame, start and end frames, or references",
-      [("t2v", "minimax/h3/text-to-video"), ("i2v", "minimax/h3/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3/reference-to-video")],
+      [("t2v", "minimax/h3/text-to-video"), ("i2v", "minimax/h3/image-to-video", "fal", END_ALONE), ("ref2v", "minimax/h3/reference-to-video")],
       badges=["top", "audio", "new"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
       # "Reference images, videos, and audio clips must add up to at most 12 files" (reference-to-video).
       options={"maxReferences": 12},
       pricing=("second", 0.06, "768P; 480P $0.05, 2K $0.13, 4K $0.16", {"byResolution": {"480P": 0.05, "768P": 0.06, "2K": 0.13, "4K": 0.16}}))
 model("minimax-h3-max", "MiniMax H3 Max", "MiniMax", "hailuo", "video", "Top-tier MiniMax with extend",
-      [("t2v", "minimax/h3-max/text-to-video"), ("i2v", "minimax/h3-max/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3-max/reference-to-video"),
+      [("t2v", "minimax/h3-max/text-to-video"), ("i2v", "minimax/h3-max/image-to-video", "fal", END_ALONE), ("ref2v", "minimax/h3-max/reference-to-video"),
        ("extend", "minimax/h3-max/extend-video")],
       # 2K and "auto" are extend's alone: each route lists what it takes (fit_values), so a 2K text, picture or reference run
       # is made (and priced) at 1080P, and "auto" is left out where the route has no such value.
@@ -693,7 +696,7 @@ for _slug, _id, _name, _tag in (("16bit-pixel", "pixel", "16-bit Pixel", "16-bit
 # then the list rates. Its reference and extend routes are billed differently, so they are models of their own.
 model("minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax", "hailuo", "video",
       "Fast, cheap H3 Max with sound — drafts and quick takes from words or frames, 1–15 s",
-      [("t2v", "minimax/h3-max-turbo/text-to-video"), ("i2v", "minimax/h3-max-turbo/image-to-video", "fal", "+flf2v")],
+      [("t2v", "minimax/h3-max-turbo/text-to-video"), ("i2v", "minimax/h3-max-turbo/image-to-video", "fal", END_ALONE)],
       badges=["new", "fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True, fit_values=True,
       pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08 — $0.028 (480P $0.0175, 1080P $0.056) until 2026-11-15",
                {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08},
@@ -2635,6 +2638,12 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # FieldMap.publicLinks, so the server sends each file as a public https link, never a data: URI or a Files API link.
     if ropts.get("publicLinks"):
         fmap["publicLinks"] = True
+    # An end frame the endpoint takes without a start frame (FieldMap.endAlone).
+    if ropts.get("endAlone"):
+        if "endImage" in fmap:
+            fmap["endAlone"] = True
+        else:
+            warn(f"{m['id']}: {ep} has no end frame field; no endAlone")
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]

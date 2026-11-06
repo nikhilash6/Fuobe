@@ -55,6 +55,8 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
     if (req.inputs?.video && imgs && has("video-swap")) return "video-swap";
     if (req.inputs?.video && has("remove-object")) return "remove-object";
     if (imgs && req.inputs?.endImage && has("flf2v")) return "flf2v";
+    // An end frame alone goes to the start-and-end route that takes it alone (fal's H3 image to video), not to text to video.
+    if (!imgs && req.inputs?.endImage && takesEndAlone(model)) return "flf2v";
     // Several stills are keyframes when they have times, or when the model takes no references. The open
     // chain (a film of several clips) only with times: stills left over from references stay a start frame.
     if (imgs > 1 && has("keyframes") && (req.params?.keyframeTimes?.length || (!has("ref2v") && !keyframeChain(model)))) return "keyframes";
@@ -78,6 +80,22 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
     if (!imgs && has("text-to-3d")) return "text-to-3d";
   }
   return model.routes[0].op;
+}
+
+/** Every start-and-end route of the model takes the end frame without a start frame (FieldMap.endAlone: fal's H3 family). */
+export function takesEndAlone(model: Pick<ModelDef, "routes">): boolean {
+  const routes = model.routes.filter((r) => r.op === "flf2v");
+  return routes.length > 0 && routes.every((r) => !!r.map?.endAlone);
+}
+
+/**
+ * An end frame with no start frame, on a model that uses an end frame only after a start frame (Kling, Veo, H3 Lite, H3 on
+ * your GPU): the words the composer says before the run (with "Use it as the start frame") and the run's note. Null when
+ * there is no such end frame, or the model takes it alone.
+ */
+export function endFrameAloneProblem(model: Pick<ModelDef, "name" | "kind" | "options" | "routes">, inputs: GenerationRequest["inputs"]): string | null {
+  if (model.kind !== "video" || !model.options.endFrame || !inputs?.endImage || inputs.images?.length) return null;
+  return takesEndAlone(model) ? null : `${model.name} uses an end frame only after a start frame`;
 }
 
 /**
@@ -623,6 +641,9 @@ export function planGeneration(
       throw new Error("Reference clips and sound can't go with an end frame. Remove the end frame, or the clips and sound");
     }
   }
+  // An end frame alone that this model can't take is never left out without a word.
+  const endAlone = op === "t2v" || op === "ref2v" ? endFrameAloneProblem(model, req.inputs) : null;
+  if (endAlone) notes.push(`${endAlone}: this clip is made without it`);
   // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
   // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
   if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };
@@ -746,7 +767,7 @@ export function planGeneration(
     throw new Error(op === "remove-object" ? "Say what to remove, e.g. “the coffee cup in her hand”" : "Write a prompt first");
   }
 
-  const missing = missingInputs(op, req) ?? unreadInputs(model, op, req) ?? missingImages(model, req);
+  const missing = missingInputs(op, req, model) ?? unreadInputs(model, op, req) ?? missingImages(model, req);
   if (missing) throw new Error(missing);
   // Watermark Remover: the kept marks are checked and rebuilt here (never passed on as sent); a brushed run takes none.
   if (op === "watermark-remove" && params.extra && "boxes" in params.extra) {
@@ -1063,11 +1084,13 @@ const NEEDS: Partial<
 const given = (v: unknown) => (Array.isArray(v) ? v.length > 0 : !!v);
 
 /** Human message for the first missing input of an operation, or null. */
-export function missingInputs(op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
+export function missingInputs(op: Operation, req: Pick<GenerationRequest, "inputs">, model?: Pick<ModelDef, "routes">): string | null {
   const n = NEEDS[op];
   if (!n) return null;
   const i = req.inputs ?? {};
-  if (n.images && (i.images?.length ?? 0) < n.images) return n.msg;
+  // A start-and-end run with only the end frame, on routes that take it alone (FieldMap.endAlone).
+  const endAlone = op === "flf2v" && !!i.endImage && !i.images?.length && !!model && takesEndAlone(model);
+  if (n.images && (i.images?.length ?? 0) < n.images && !endAlone) return n.msg;
   if (n.video && !i.video) return n.msg;
   // A join may also be one clip and a still appended after it (an ad and its end card).
   const clips = (i.videos?.length ?? 0) + (op === "concat" && i.video && i.images?.length ? 2 : 0);

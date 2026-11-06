@@ -81,6 +81,15 @@ describe("H3 Max relight, insert and looks take no field their schema doesn't na
     expect(sent).not.toHaveProperty("tape_speed");
   });
 
+  it("lip sync sends no enable_transcription of its own, so fal's default (on) applies", () => {
+    const route = getModel("minimax-h3-max-lipsync")!.routes[0];
+    expect(route.map!.fixed ?? {}).not.toHaveProperty("enable_transcription");
+    expect(route.map!.defaults ?? {}).not.toHaveProperty("enable_transcription");
+    for (const resolution of [undefined, "480P", "768P", "1080P", "2K"]) {
+      expect(body("minimax-h3-max-lipsync", { ...(resolution && { resolution }) }), String(resolution)).not.toHaveProperty("enable_transcription");
+    }
+  });
+
   it("an open schema (lip sync) still takes any key, as fal ignores it there", () => {
     expect(getModel("minimax-h3-max-lipsync")!.routes[0].map!.closedFields).toBeUndefined();
     expect(body("minimax-h3-max-lipsync", { extra: { enable_transcription: false } }).enable_transcription).toBe(false);

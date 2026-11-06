@@ -391,6 +391,12 @@ export interface FieldMap {
   /** Array of images field, e.g. "image_urls" (receives every reference image). */
   images?: string;
   endImage?: string;
+  /**
+   * The endpoint takes the end frame without a start frame (fal's H3, H3 Max and H3 Max Turbo image to video: "It may be
+   * provided alone"; the clip then takes the end frame's shape). A run with only an end frame goes to its start-and-end
+   * route; on a model without it, the end frame needs a start frame (endFrameAloneProblem in plan.ts).
+   */
+  endAlone?: boolean;
   mask?: string;
   /** What the mask's paint means to this API: white (default), black or transparent = change. */
   maskFormat?: "white" | "black" | "alpha";
