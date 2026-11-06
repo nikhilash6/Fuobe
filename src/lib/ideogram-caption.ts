@@ -116,7 +116,7 @@ export function parseCaption(text: string): string | null {
 }
 
 /**
- * A caption's words as plain text, for a model that reads plain words (Qwen-Image 2.1 making a run Ideogram 4 declined):
+ * A caption's words as plain text, for a model that reads plain words (a fallback making a run Ideogram 4 declined):
  * its lead, its scene, then each element's words. Plain words come back as they are.
  */
 export function captionWords(text: string): string {

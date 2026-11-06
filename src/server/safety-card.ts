@@ -47,16 +47,12 @@ export function looksBlocked(png: Buffer): boolean {
 }
 
 /**
- * An Ideogram 4 run whose every picture was the card is made again once with a new seed (its refusals are often
- * random), then with Qwen-Image 2.1, before it fails (src/server/generations.ts declinedAgain): the model of the second
- * try, the words each try shows while it works, and the line a run the second try made carries (its request's notice).
+ * An Ideogram 4 run whose every picture was the card is made by Auto's fallbacks in order (src/server/generations.ts
+ * declinedAgain). The notice a run picked by name carries once one of them made it.
  */
-export const DECLINED_FALLBACK_MODEL = "oss-qwen-image-21";
-export const DECLINED_WORDS = {
-  retry: "Ideogram 4 is trying again",
-  fallback: "Making it with Qwen-Image 2.1",
-} as const;
-export const DECLINED_NOTICE = "Made with Qwen-Image 2.1 · Ideogram 4 declined this one";
+export const declinedNotice = (modelName: string): string => `Made with ${modelName} · Ideogram 4 declined this one`;
+/** Runs declined before that: stage "retry" (Ideogram 4 with a new seed), then a fallback with no model (Qwen-Image 2.1). */
+export const LEGACY_DECLINED = { retryWords: "Ideogram 4 is trying again", model: "oss-qwen-image-21" } as const;
 
 /**
  * The card's measures of a picture, for the owner's note on a declined run: `spread`, how far its colours spread (the mean

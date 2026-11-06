@@ -5,8 +5,8 @@ import { tempDir } from "./helpers/temp-dir";
 
 // Auto's runs: each is planned on the model Auto picks (Ideogram 4, Krea 2 Realism for the owner's patterns, Qwen-Image 2.1
 // for an edit) and keeps Auto with its pick. When Ideogram 4 answers a run of Auto with its grey card, Krea 2 Realism, then
-// FIBO 2 Dev, then MOSS-Image make the same run (never Ideogram 4 again), and only then does it fail. A model picked by
-// name keeps today's way (tests/ideogram-declined.test.ts). Its rules alone: tests/auto-image.test.ts.
+// FIBO 2 Dev, then MOSS-Image make the same run (never Ideogram 4 again), and only then does it fail. Ideogram 4 picked
+// by name goes the same way (tests/ideogram-declined.test.ts). Its rules alone: tests/auto-image.test.ts.
 vi.setConfig({ testTimeout: 60_000 });
 const dir = tempDir("fuobe-auto-image-runs-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -18,7 +18,7 @@ const { setSetting, getSetting, validateSetting } = await import("@/server/setti
 const { createGenerations, getGeneration, previewGeneration } = await import("@/server/generations");
 const { mockProvider } = await import("@/server/providers/mock");
 const { changeAccess } = await import("@/server/model-access");
-const { BLOCKED_CARD_MESSAGE, DECLINED_NOTICE } = await import("@/server/safety-card");
+const { BLOCKED_CARD_MESSAGE, declinedNotice } = await import("@/server/safety-card");
 const { encodePng } = await import("@/server/png");
 const { db } = await import("@/server/db");
 const { AUTO_IMAGE, DEFAULT_AUTO_PATTERNS } = await import("@/lib/auto-image");
@@ -179,7 +179,7 @@ describe("Auto after Ideogram 4 declines", () => {
     expect(handed[1].run.message).toBe("Making it with Krea 2 Realism");
     expect(rowsSince(g.id)).toBe(1);
     expect(line(g)).toContain("Auto · made with Krea 2 Realism · Ideogram 4 declined this one");
-    expect(line(g)).not.toContain(DECLINED_NOTICE);
+    expect(line(g)).not.toContain(declinedNotice("Krea 2 Realism"));
     // The owner's own run: the card, the words, and Add a pattern.
     expect(g.declinedCards).toHaveLength(1);
     expect(line(g)).toContain("Words: “a red fox in deep snow”");
@@ -230,11 +230,12 @@ describe("Auto after Ideogram 4 declines", () => {
     expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-fibo2-dev"]);
   });
 
-  it("Ideogram 4 picked by name keeps its own way: once more, then Qwen-Image 2.1", async () => {
-    ideogram = [[card], [card]];
+  it("Ideogram 4 picked by name takes the same fallbacks, and stays a run of that model with a notice", async () => {
+    ideogram = [[card]];
     const g = await run("a red fox in deep snow", {}, "oss-ideogram-4");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-ideogram-4", "oss-qwen-image-21"]);
-    expect(g.request.notice).toBe(DECLINED_NOTICE);
+    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism"]);
+    expect(g.request.modelId).toBe("oss-krea2-realism");
+    expect(g.request.notice).toBe(declinedNotice("Krea 2 Realism"));
     expect(g.request.auto).toBeUndefined();
   });
 });

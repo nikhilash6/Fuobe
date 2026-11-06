@@ -225,7 +225,7 @@ export interface RunMoney {
 export interface RunMadeBy {
   /** A run of Auto: the model it picked, and why. */
   auto?: { model: string; name: string; why: AutoWhy; words: string };
-  /** Ideogram 4 declined it: where its retries stand, and the model that made it in its place. */
+  /** Ideogram 4 declined it: its stage, and the model that made it in its place. */
   declined?: { stage?: string; words: string; model?: string; modelName?: string; askedModel?: string; askedModelName?: string };
   /** What changed while it ran (an optional input left out, another model made it), said on the result. */
   notices: string[];
@@ -494,7 +494,7 @@ export const AUTO_WHY_WORDS: Record<AutoWhy, string> = {
 
 const DECLINED_STAGE_WORDS: Record<string, string> = {
   retry: "Ideogram 4 declined it and was asked again with a new seed",
-  fallback: "Ideogram 4 declined it twice, so another model made it",
+  fallback: "Ideogram 4 declined it, so another model made it",
 };
 
 /** How a run was made: Auto's pick, Ideogram 4's declines and the model after them, and the notices it carries. */

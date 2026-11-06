@@ -67,7 +67,7 @@ import { qwen21Gpu } from "./qwen21-gpu";
 import { h3Gpu } from "./h3-gpu";
 import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
-import { BLOCKED_CARD_MESSAGE, blockedMeasures, DECLINED_FALLBACK_MODEL, DECLINED_NOTICE, DECLINED_WORDS } from "./safety-card";
+import { BLOCKED_CARD_MESSAGE, blockedMeasures, declinedNotice, LEGACY_DECLINED } from "./safety-card";
 import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
@@ -229,8 +229,8 @@ export function toGeneration(r: Row): Generation {
             "SELECT (SELECT deleted_at FROM generation_trash WHERE generation_id = ?) AS deleted_at, (SELECT folder_id FROM folder_items WHERE generation_id = ?) AS folder_id",
           )
           .get(r.id, r.id) as { deleted_at: number | null; folder_id: string | null });
-  // An Ideogram 4 run that returned its "blocked" card (declinedAgain), made again in its place: Working, saying which try
-  // it is on (never In line: nobody pressed Run again). One that waits for the account's own GPU to come back shows that.
+  // An Ideogram 4 run that returned its "blocked" card (declinedAgain), made again in its place: Working, saying which model
+  // makes it (never In line: nobody pressed Run again). One that waits for the account's own GPU to come back shows that.
   const meta = r.external_meta_json?.includes('"declined"') ? readMeta(r.external_meta_json) : undefined;
   const again = (r.status === "queued" || r.status === "running") && !(r.status === "queued" && !r.external_id && meta?.heal) ? declinedWords(meta ?? {}) : undefined;
   return {
@@ -517,23 +517,24 @@ interface PendingMeta {
   /** Who holds the run as the release before this one marked it (OLD_LEASE), and until when. */
   lease?: { by?: unknown; until?: unknown };
   /**
-   * An Ideogram 4 run that returned only its "blocked" card (declinedAgain): which try it is on now (`stage`: made again
-   * with a new seed, then with Qwen-Image 2.1), and the cards it returned (kept for the owner). Kept through every hand-over.
+   * An Ideogram 4 run that returned only its "blocked" card (declinedAgain): the fallback that makes it now, and the
+   * cards it returned (kept for the owner). Kept through every hand-over.
    */
   declined?: DeclinedMeta;
 }
 
 /** What an Ideogram 4 run that returned its "blocked" card keeps (PendingMeta.declined). */
 interface DeclinedMeta {
-  stage?: keyof typeof DECLINED_WORDS;
-  /** A run of Auto: the fallback model that makes it now (src/lib/auto-image.ts AUTO_FALLBACKS). */
+  /** "fallback": a fallback makes it now. "retry": only on runs declined before (LEGACY_DECLINED). */
+  stage?: "retry" | "fallback";
+  /** The fallback model that makes it now (src/lib/auto-image.ts AUTO_FALLBACKS); none on a legacy Qwen-Image 2.1 run. */
   model?: string;
   cards?: DeclinedCard[];
-  /** Made with Qwen-Image 2.1 now: the run as Ideogram 4's, put back when that fails too (declinedFails). */
+  /** The run as Ideogram 4's, put back when every fallback fails (declinedFails). */
   was?: DeclinedRun;
 }
 
-/** The columns of a run that Qwen-Image 2.1 changes when it makes a run Ideogram 4 declined. */
+/** The columns of a run that a fallback changes when it makes a run Ideogram 4 declined. */
 type DeclinedRun = Pick<Row, "request_json" | "model_id" | "engine" | "op" | "kind" | "prompt" | "cost_usd">;
 const declinedRun = (r: Row): DeclinedRun => ({ request_json: r.request_json, model_id: r.model_id, engine: r.engine, op: r.op, kind: r.kind, prompt: r.prompt, cost_usd: r.cost_usd });
 
@@ -2764,7 +2765,7 @@ async function pause(id: string, ms: number): Promise<boolean> {
  * account's own run, logged and noted for the owner (run-events.ts).
  */
 function failRun(id: string, e: unknown, trouble: Diagnosis | undefined, account: string | undefined, facts?: RunFacts, own = !!facts): boolean {
-  // Qwen-Image 2.1 making a run Ideogram 4 declined: it fails as the declined run.
+  // A fallback making a run Ideogram 4 declined: the next one, or it fails as the declined run.
   const declined = declinedFails(id, trouble?.words ?? String((e as Error | null)?.message ?? e));
   if (declined !== null) return declined;
   const fix = (e as { fix?: GenerationFix } | null)?.fix;
@@ -3076,9 +3077,10 @@ function resend(r: Row, account: string, words: string): boolean {
 /** The words an Ideogram 4 run made again after it declined shows while it works; undefined for any other run. */
 function declinedWords(meta: PendingMeta | Record<string, unknown>): string | undefined {
   const d = (meta as PendingMeta).declined;
-  if (!d?.stage || !Object.hasOwn(DECLINED_WORDS, d.stage)) return undefined;
-  // Auto's fallbacks name the model that makes it now.
-  return d.stage === "fallback" && d.model ? `Making it with ${getModel(d.model)?.name ?? d.model}` : DECLINED_WORDS[d.stage];
+  if (d?.stage === "retry") return LEGACY_DECLINED.retryWords;
+  if (d?.stage !== "fallback") return undefined;
+  const m = d.model ?? LEGACY_DECLINED.model;
+  return `Making it with ${getModel(m)?.name ?? m}`;
 }
 
 /**
@@ -3092,11 +3094,10 @@ function keepForOwner(assetIds: readonly string[]): void {
 }
 
 /**
- * What another model is asked when it makes a run Ideogram 4 declined (Qwen-Image 2.1, or one of Auto's fallbacks): the
- * same words in plain text (a caption given as the prompt becomes its words), the same pictures, aspect ratio, size and
- * count, and the model's own settings.
+ * What one of Auto's fallbacks is asked when it makes a run Ideogram 4 declined: the same words in plain text (a caption
+ * given as the prompt becomes its words), the same pictures, aspect ratio, size and count, and the model's own settings.
  */
-function declinedFallback(stored: GenerationRequest, modelId: string = DECLINED_FALLBACK_MODEL): GenerationRequest {
+function declinedFallback(stored: GenerationRequest, modelId: string): GenerationRequest {
   const p = stored.params ?? {};
   return {
     ...stored,
@@ -3115,13 +3116,12 @@ function declinedFallback(stored: GenerationRequest, modelId: string = DECLINED_
 /**
  * An Ideogram 4 run whose every picture was its "blocked" card is made again in its place: the same run (its id, its
  * place, its turn in the line, its billing hold), as the same job of its batch, through the same submit as every run
- * (this install's workers, the owner's ComfyUI, an account's own GPU). Ideogram 4 picked by name: first Ideogram 4 once
- * more, with the same caption and a new seed (its refusals are often random); then Qwen-Image 2.1 (declinedFallback), and
- * the run names the model that made it (its model and its request's notice). A run of Auto (src/lib/auto-image.ts):
- * never Ideogram 4 again, but its fallbacks in order (Krea 2 Realism, FIBO 2 Dev, MOSS-Image), each only when the one
- * before fails (declinedFails), its pick saying why (`why: "declined"`). None is a new press of Run: no limit counts it
- * again, and no new row or hold is made. The run's tile says which try it is on. False when every try was made already,
- * or none can go where the run went: the run fails as before. `later`: sent once the caller (a submit that failed) has
+ * (this install's workers, the owner's ComfyUI, an account's own GPU), never by Ideogram 4 again: Auto's fallbacks in
+ * order (src/lib/auto-image.ts: Krea 2 Realism, FIBO 2 Dev, MOSS-Image), the next one switched on that goes where the run
+ * went, each only when the one before fails (declinedFails). A run of Auto keeps Auto, its pick saying why
+ * (`why: "declined"`); Ideogram 4 picked by name names the model that made it (its model and its request's notice).
+ * None is a new press of Run: no limit counts it again, and no new row or hold is made. The run's tile says which model
+ * makes it. False when none is left: the run fails as before. `later`: sent once the caller (a submit that failed) has
  * let go of the run.
  */
 function declinedAgain(r: Row, declined: DeclinedMeta, later = false): boolean {
@@ -3136,49 +3136,35 @@ function declinedAgain(r: Row, declined: DeclinedMeta, later = false): boolean {
         : account
           ? asAccount(account, () => prepare(req))
           : prepare(req);
-    let next: "retry" | "fallback";
     let asked = stored;
     let model: string | undefined;
     let p: ReturnType<typeof prepare> | undefined;
-    if (auto) {
-      // The next of Auto's fallbacks that is switched on and goes where the run went.
-      for (let m = nextAutoFallback(declined.model); m && !p; m = nextAutoFallback(m)) {
-        const ask: GenerationRequest = { ...declinedFallback(stored, m), modelId: AUTO_IMAGE, auto: { model: m, why: "declined" } };
-        try {
-          const q = planned(ask);
-          if (q.providerId === r.provider) [p, asked, model] = [q, ask, m];
-        } catch {
-          // Switched off, or it can't make this run: the next one.
+    // A legacy "retry" stage has no model: it starts at the first fallback.
+    for (let m = nextAutoFallback(declined.model); m && !p; m = nextAutoFallback(m)) {
+      let ask: GenerationRequest = auto ? { ...declinedFallback(stored, m), modelId: AUTO_IMAGE, auto: { model: m, why: "declined" } } : declinedFallback(stored, m);
+      let q: ReturnType<typeof prepare> | undefined;
+      try {
+        q = planned(ask);
+      } catch {
+        // A preset with no version for this model: its words as they were planned, without the preset.
+        if (stored.presetId) {
+          try {
+            ask = { ...ask, presetId: undefined, presetOptions: undefined, signature: undefined, prompt: captionWords(planned(stored).plan.prompt) };
+            q = planned(ask);
+          } catch {
+            // Switched off, or it can't make this run: the next one.
+          }
         }
       }
-      if (!p) return false;
-      next = "fallback";
-    } else {
-      const n = !declined.stage ? "retry" : declined.stage === "retry" ? "fallback" : null;
-      if (!n) return false;
-      next = n;
-      if (next === "retry") {
-        p = planned(stored);
-        // The caption it ran with (never written again), and a new seed.
-        const caption = r.prompt ? parseCaption(r.prompt) : null;
-        p = { ...p, plan: { ...p.plan, ...(caption && { prompt: caption }), params: { ...p.plan.params, seed: crypto.randomInt(0, 2 ** 31) } } };
-      } else {
-        asked = declinedFallback(stored);
-        try {
-          p = planned(asked);
-        } catch {
-          // A preset with no Qwen-Image 2.1 version: its words as they were planned, without the preset.
-          const words = captionWords(planned(stored).plan.prompt);
-          asked = { ...asked, presetId: undefined, presetOptions: undefined, signature: undefined, prompt: words };
-          p = planned(asked);
-        }
-      }
-      if (p.providerId !== r.provider) return false;
+      if (q && q.providerId === r.provider) [p, asked, model] = [q, ask, m];
     }
+    if (!p || !model) return false;
     const go = p;
     const index = jobIndexOf(r, readMeta(r.external_meta_json));
     // The run as Ideogram 4's stays kept from the first fallback on (declinedFails puts it back).
-    const now: DeclinedMeta = { ...declined, stage: next, ...(model && { model }), ...(next === "fallback" && { was: declined.was ?? declinedRun(r) }) };
+    const was = declined.was ?? declinedRun(r);
+    const now: DeclinedMeta = { ...declined, stage: "fallback", model, was };
+    const notice = (JSON.parse(was.request_json) as GenerationRequest).notice;
     const fields: Partial<Row> = {
       external_id: null,
       external_meta_json: JSON.stringify({ jobIndex: index, declined: now }),
@@ -3186,16 +3172,14 @@ function declinedAgain(r: Row, declined: DeclinedMeta, later = false): boolean {
       status: "running",
       progress: null,
       message: declinedWords({ declined: now }) ?? null,
-      ...(next === "fallback" && {
-        model_id: go.plan.model.id,
-        engine: go.plan.model.engine,
-        op: go.plan.op,
-        kind: outputKind(go.plan.op, go.plan.model),
-        prompt: go.plan.prompt,
-        cost_usd: go.cost,
-        // Auto's own line says what made it (autoLine); Ideogram 4 picked by name carries the notice.
-        request_json: JSON.stringify(auto ? asked : { ...asked, notice: [stored.notice, DECLINED_NOTICE].filter(Boolean).join(" · ") }),
-      }),
+      model_id: go.plan.model.id,
+      engine: go.plan.model.engine,
+      op: go.plan.op,
+      kind: outputKind(go.plan.op, go.plan.model),
+      prompt: go.plan.prompt,
+      cost_usd: go.cost,
+      // Auto's own line says what made it (autoLine); Ideogram 4 picked by name carries the notice.
+      request_json: JSON.stringify(auto ? asked : { ...asked, notice: [notice, declinedNotice(go.plan.model.name)].filter(Boolean).join(" · ") }),
     };
     // (Only while the run still goes and is still the job that declined or failed: one another app process saved, ended or
     // sent again meanwhile is left as it is.) It takes its turn to be sent in the same step, and its finish turn goes.
@@ -3219,7 +3203,7 @@ function declinedAgain(r: Row, declined: DeclinedMeta, later = false): boolean {
 }
 
 /**
- * The model that made a run Ideogram 4 declined couldn't make it either. A run of Auto goes on to its next fallback
+ * The model that made a run Ideogram 4 declined couldn't make it either. The run goes on to its next fallback
  * (declinedAgain) while there is one. Otherwise the run fails as Ideogram 4's (its model, request and words put back, so
  * Retry runs what was asked), saying what to try, whether its job failed or couldn't be sent. What the model said goes
  * to the log. Null: not such a run; else whether the run was failed here (false: it still went, or goes on).
@@ -3228,7 +3212,8 @@ function declinedFails(id: string, said: string, metaJson?: string | null): bool
   const json = metaJson !== undefined ? metaJson : (db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").pluck().get(id) as string | null | undefined);
   const was = readMeta(json).declined;
   if (was?.stage !== "fallback") return null;
-  console.warn(`[generations] ${id}: ${getModel(was.model ?? DECLINED_FALLBACK_MODEL)?.name ?? was.model} after Ideogram 4 declined: ${said.slice(0, 500)}`);
+  const tried = was.model ?? LEGACY_DECLINED.model;
+  console.warn(`[generations] ${id}: ${getModel(tried)?.name ?? tried} after Ideogram 4 declined: ${said.slice(0, 500)}`);
   if (was.model && nextAutoFallback(was.model)) {
     const r = db().prepare("SELECT * FROM generations WHERE id = ?").get(id) as Row | undefined;
     if (r && (r.status === "queued" || r.status === "running") && declinedAgain(r, was, true)) return false;
@@ -4353,7 +4338,7 @@ async function pollOne(r: Row): Promise<void> {
   if (res.state === "failed") {
     // Its GPU restarted and lost the job: an account's run is sent again once, as a computer's tab does.
     if (own && res.lost && resend(r, own, RESENT_WORDS)) return;
-    // Qwen-Image 2.1 making a run Ideogram 4 declined: it fails as the declined run.
+    // A fallback making a run Ideogram 4 declined: the next one, or it fails as the declined run.
     if (declinedFails(r.id, res.error, r.external_meta_json) !== null) return;
     // An account's run: its own GPU's words (comfyui.ts), or its key's provider's read plainly; the provider's own words
     // go in the details line. The owner's runs keep the provider's words.
@@ -4497,7 +4482,7 @@ async function pollOne(r: Row): Promise<void> {
   }
   // Ideogram 4's grey "blocked by safety filter" card is no picture (src/server/safety-card.ts): it is left out of the
   // results and kept for the owner only (keepForOwner), with its measures. A run that got some real pictures keeps them.
-  // A run whose every picture was the card is made again in its place (declinedAgain: a new seed, then Qwen-Image 2.1);
+  // A run whose every picture was the card is made again in its place (declinedAgain: Auto's fallbacks in order);
   // only when it can't be does it fail, saying what to try.
   if (model.options.promptFormat === "ideogram4") {
     const cards = new Map<OutputFile, DeclinedCard>();

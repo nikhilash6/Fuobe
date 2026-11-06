@@ -190,14 +190,14 @@ describe("Run details: the owner's view of one account's run", () => {
     const card = { url: "/api/files/held/card.png", spread: 3, grey: 0.97 };
     const id = run(A, {
       status: "succeeded",
-      request: { notice: "Made with Qwen-Image 2.1 · Ideogram 4 declined this one" },
-      meta: { jobIndex: 0, declined: { stage: "fallback", cards: [card], was: { model_id: "oss-ideogram-4", request_json: "{}" } } },
+      request: { modelId: "oss-krea2-realism", notice: "Made with Krea 2 Realism · Ideogram 4 declined this one" },
+      meta: { jobIndex: 0, declined: { stage: "fallback", model: "oss-krea2-realism", cards: [card], was: { model_id: "oss-ideogram-4", request_json: "{}" } } },
     });
     const d = (await (await get(id)).json()) as RunDetails;
     expect(d.run.declinedCards).toEqual([card]);
-    expect(d.madeBy.declined).toMatchObject({ stage: "fallback", askedModel: "oss-ideogram-4" });
-    expect(d.madeBy.notices).toEqual(["Made with Qwen-Image 2.1 · Ideogram 4 declined this one"]);
-    expect(d.model).toMatchObject({ id: "oss-ideogram-4", ranOn: { id: "oss-qwen-image-21" } });
+    expect(d.madeBy.declined).toMatchObject({ stage: "fallback", words: "Ideogram 4 declined it, so another model made it", askedModel: "oss-ideogram-4", model: "oss-krea2-realism", modelName: "Krea 2 Realism" });
+    expect(d.madeBy.notices).toEqual(["Made with Krea 2 Realism · Ideogram 4 declined this one"]);
+    expect(d.model).toMatchObject({ id: "oss-ideogram-4", ranOn: { id: "oss-krea2-realism" } });
   });
 
   it("gives the timeline, its jobs and workers, and what it cost, without its hold or lease", async () => {

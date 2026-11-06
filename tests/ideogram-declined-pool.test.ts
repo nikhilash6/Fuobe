@@ -6,7 +6,7 @@ import { tempDir } from "./helpers/temp-dir";
 
 /**
  * An account's free Ideogram 4 run on this install's GPUs that comes back as the grey "blocked" card is made again in its
- * place, on the same GPUs: once more with a new seed, then with Qwen-Image 2.1. One press of Run stays one run: the
+ * place, on the same GPUs, by Auto's fallbacks (Krea 2 Realism first). One press of Run stays one run: the
  * hourly count, the runs at once and the billing hold count it once, and the billing service gets one report for it.
  * The cards are for the owner only (Accounts' runs), never the account's. (The rules themselves on the owner's runs:
  * tests/ideogram-declined.test.ts.)
@@ -51,7 +51,7 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getGeneration } = await import("@/server/generations");
 const { listAccountRuns } = await import("@/server/account-admin");
-const { DECLINED_NOTICE, DECLINED_WORDS } = await import("@/server/safety-card");
+const { declinedNotice } = await import("@/server/safety-card");
 const { encodePng } = await import("@/server/png");
 
 const HOST = "localhost:3000";
@@ -163,38 +163,36 @@ afterEach(() => {
 });
 
 describe("an account's free Ideogram 4 run on this install's GPUs that comes back as the card", () => {
-  it("is made again there, then by Qwen-Image 2.1, and counts as one run", async () => {
+  it("is made there by Krea 2 Realism, and counts as one run", async () => {
     const a = account();
     accountId = a.id;
-    ideogram = [[card], [card]];
+    ideogram = [[card]];
     const r = await post({ feature: "image", modelId: "oss-ideogram-4", prompt: "a red fox in deep snow", params: { aspectRatio: "4:5" } }, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const id = r.body.items![0].id;
     const g = await settled(id);
     expect(g.status, g.error ?? "").toBe("succeeded");
     expect(g.place).toBe("pool");
-    expect(g.modelId).toBe("oss-qwen-image-21");
-    expect(g.request.notice).toBe(DECLINED_NOTICE);
+    expect(g.modelId).toBe("oss-krea2-realism");
+    expect(g.request.notice).toBe(declinedNotice("Krea 2 Realism"));
     expect(g.outputs).toHaveLength(1);
-    // Three jobs, all for the one run, on the same GPUs.
+    // Two jobs, both for the one run, on the same GPUs: no second Ideogram 4 try.
     expect(sent.map((s) => [s.model, s.id])).toEqual([
       ["oss-ideogram-4", id],
-      ["oss-ideogram-4", id],
-      ["oss-qwen-image-21", id],
+      ["oss-krea2-realism", id],
     ]);
     // While it was made again, its tile said Working in plain words, and it was still one run going, let in once.
     expect(sent[1].tile.status).toBe("running");
-    expect(sent[1].tile.message).toBe(DECLINED_WORDS.retry);
+    expect(sent[1].tile.message).toBe("Making it with Krea 2 Realism");
     expect(sent[1].tile.queue).toBeUndefined();
-    expect(sent[2].tile.message).toBe(DECLINED_WORDS.fallback);
-    expect(sent.map((s) => s.going)).toEqual([1, 1, 1]);
-    expect(sent.map((s) => s.hourly)).toEqual([1, 1, 1]);
+    expect(sent.map((s) => s.going)).toEqual([1, 1]);
+    expect(sent.map((s) => s.hourly)).toEqual([1, 1]);
     expect(admitted(a.id)).toBe(1);
     expect(rowsOf(a.id)).toBe(1);
     // The account never sees what Ideogram 4 returned; the owner does, in Accounts' runs.
     expect(g.declinedCards).toBeUndefined();
     const listed = listAccountRuns({ account: a.id }).items.find((x) => x.id === id)!;
-    expect(listed.declinedCards).toHaveLength(2);
+    expect(listed.declinedCards).toHaveLength(1);
   });
 
   it("with a billing service: one hold, and one report for the run", async () => {
@@ -203,15 +201,15 @@ describe("an account's free Ideogram 4 run on this install's GPUs that comes bac
     billing.resetBillingCache();
     const a = account();
     accountId = a.id;
-    ideogram = [[card], [gradient]];
+    ideogram = [[card]];
     const reserves = fake.calls_of("/v1/reserve").length;
     const r = await post({ feature: "image", modelId: "oss-ideogram-4", prompt: "a lighthouse at dusk", shown: { amount: 7, priceVersion: "v7" } }, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const id = r.body.items![0].id;
     const g = await settled(id);
     expect(g.status, g.error ?? "").toBe("succeeded");
-    expect(g.modelId).toBe("oss-ideogram-4");
-    expect(sent.map((s) => s.model)).toEqual(["oss-ideogram-4", "oss-ideogram-4"]);
+    expect(g.modelId).toBe("oss-krea2-realism");
+    expect(sent.map((s) => s.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism"]);
     expect(fake.calls_of("/v1/reserve").length - reserves).toBe(1);
     expect(admitted(a.id)).toBe(1);
     queueReports();

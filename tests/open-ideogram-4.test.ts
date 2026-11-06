@@ -425,11 +425,11 @@ describe("Ideogram 4's grey safety card", () => {
   it("never keeps the card as a result: the run is made again in its place (tests/ideogram-declined.test.ts)", async () => {
     const g = await answered(card);
     expect(g.status, g.error ?? "").toBe("succeeded");
-    expect(g.modelId).toBe("oss-qwen-image-21");
+    expect(g.modelId).toBe("oss-krea2-realism");
     expect(g.outputs).toHaveLength(1);
     // The card is no result of the run (only the owner's held copy is kept with it).
     expect(listAssets({ source: "generation", limit: 1000 }).filter((a) => a.generationId === g.id)).toHaveLength(1);
-    expect(g.declinedCards?.length).toBe(2);
+    expect(g.declinedCards?.length).toBe(1);
   });
 
   it("keeps a real picture", async () => {
