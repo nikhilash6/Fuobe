@@ -547,7 +547,11 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   // Options → Prompt helper (params.extra.promptHelper) is Fuobe's own: it goes out as the API's prompt expansion, below.
   // Song lyrics (params.extra.lyrics) go out only where the route says (FieldMap.lyrics), in the models' own form.
   const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, LYRICS_PARAM, SONG_ID_PARAM, ...(asked ? [map.size!.key!] : [])]);
-  for (const [k, v] of Object.entries({ ...map.fixed, ...input.extra })) if (!(map.timeline && k === "timeline") && !ignore.has(k)) setPath(out, k, v);
+  // An endpoint that refuses fields it doesn't name (FieldMap.closedFields) gets only those.
+  const closed = map.closedFields ? new Set(map.closedFields) : undefined;
+  for (const [k, v] of Object.entries({ ...map.fixed, ...input.extra })) {
+    if (!(map.timeline && k === "timeline") && !ignore.has(k) && (!closed || closed.has(k.split(".")[0]))) setPath(out, k, v);
+  }
   // A song tool's song: one of the provider's own by its id (the fal provider sends any other song first, FieldMap.songSource).
   const songId = input.extra?.[SONG_ID_PARAM];
   if (map.songSource && typeof songId === "string" && songId.trim()) out[map.songSource.songId] = songId.trim();

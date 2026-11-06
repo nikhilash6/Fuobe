@@ -57,8 +57,7 @@ describe("MiniMax H3 and H3 Max Turbo windows", () => {
     expect([4, 7, 9, 14, 15, 20].map(take)).toEqual([4, 7, 9, 14, 15, 15]);
   });
 
-  // Skipped until scripts/gen-cloud-models.py gives minimax-h3 options.maxReferences 12 (a generator change).
-  it.skip("MiniMax H3 holds its references to 12 files in all, as Turbo does (fal: \"must add up to at most 12 files\")", () => {
+  it("MiniMax H3 holds its references to 12 files in all, as Turbo does (fal: \"must add up to at most 12 files\")", () => {
     const n = (k: number) => Array.from({ length: k }, (_, i) => `https://x/${i}.png`);
     const req = { inputs: { images: n(9), videos: n(3).map((u) => u.replace(".png", ".mp4")), audios: ["https://x/a.wav"] } };
     for (const m of [h3, refs]) expect(hostedInputProblem(m, "ref2v", "Image 1 dances", {}, req)).toMatch(/up to 12 references in all .* this run has 13: remove 1/);

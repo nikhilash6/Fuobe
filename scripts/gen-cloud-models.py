@@ -102,7 +102,7 @@ M = []
 def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=None, defaults=None, options=None, fixed=None, hidden=False,
           sliders=None, controls=None, api_defaults=None, formats=None, ranged_durations=False, fit_values=False, fps_targets=None, upscale_tiers=None,
           frame_step=None, original=False, sizes=None, keep_shape=False, licence=None, frame_fps=None, frame_multiple=None,
-          exact_size=False, tier_size=None, prompt_max=False):
+          exact_size=False, tier_size=None, prompt_max=False, length_range=False):
     """sliders / controls: [(field, label)] read from each route's research inputs (dotted = nested field; a slider's
     third item is its step, when the generic one is too coarse):
     numeric fields with minimum/maximum become sliders, enums become composer controls; both travel as params.extra.
@@ -134,6 +134,11 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
     the limits the field's description states ("256 to 4096 pixels"); the tiers become the resolutions.
     prompt_max: kept for the entries that set it; every route now gets FieldMap.promptMax from its prompt field's maxLength (or the
     limit its description states), so a longer prompt is refused before a paid call (Vidu Q4's 5,000 characters, Meshy retexture's 600).
+    On a song model, a smaller limit its prompt's description states for a prompt that comes with lyrics ("With lyrics, it ...
+    supports up to 1,024 characters": Mureka's songs) goes to ModelOptions.lyrics.promptMax.
+    length_range: the length field's own limits go to FieldMap.ranges (Mureka 9.5's whole seconds from 120 to 300, MiniMax Music 3's
+    up to 300, ElevenLabs Music v2.5's 3,000 to 600,000 ms; a list of every whole second in a run, as Replicate's H3 Lite has), so
+    an API caller's length is kept inside them.
     A route's options dict may also set max_images (FieldMap.maxImages), note, loraEndpoint (the same model with LoRAs:
     FieldMap.loras comes from its research record) and pin (a Replicate model run by version: the research's version)."""
     M.append(dict(id=id, name=name, vendor=vendor, family=family, kind=kind, tagline=tagline, routes=routes,
@@ -141,7 +146,8 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
                   sliders=sliders or [], controls=controls or [], api_defaults=api_defaults or {}, formats=formats or {},
                   ranged_durations=ranged_durations, fit_values=fit_values, fps_targets=fps_targets or [], upscale_tiers=upscale_tiers or [],
                   frame_step=frame_step, original=original, sizes=sizes, keep_shape=keep_shape, licence=licence, frame_fps=frame_fps,
-                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size, prompt_max=prompt_max))
+                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size, prompt_max=prompt_max,
+                  length_range=length_range))
 
 
 # ----- Image
@@ -654,20 +660,20 @@ H3_RES = {"480P": 0.05, "768P": 0.08, "1080P": 0.16, "2K": 0.32}
 # resolution and 1.2 times over for a video over 15 s (fal's page: 30 s at 768P costs $2.88).
 model("minimax-h3-max-lipsync", "MiniMax H3 Max Lip Sync · up to 15 min", "MiniMax", "hailuo", "video",
       "A portrait speaks your audio: 5 seconds to 15 minutes, as long as the voice, 480P to 2K",
-      [("avatar", "minimax/h3-max/lip-sync/image-to-video")], badges=["new"], defaults={"resolution": "768P"},
+      [("avatar", "minimax/h3-max/lip-sync/image-to-video")], badges=["new"], defaults={"resolution": "768P"}, fit_values=True,
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32; 1.2× for audio over 15 s", {"byResolution": H3_RES, "longFactor": {"over": 15, "factor": 1.2}}))
 # H3 Max relight: the clip (up to 15 s, resampled to 24 fps) relit to match a lit sphere, which Fuobe draws in the browser from a
 # light preset (ModelOptions.lightSphere). The result keeps the clip's shape ("adaptive") and is billed on its length.
 model("minimax-h3-max-relight", "MiniMax H3 Max Relight", "MiniMax", "hailuo", "video",
       "Real footage relit to a light you pick — direction, colour and softness — up to 15 s",
-      [("relight-video", "minimax/h3-max/relight", "fal", {"drop": ["aspectRatio"]})], badges=["new"], defaults={"resolution": "768P"},
+      [("relight-video", "minimax/h3-max/relight", "fal", {"drop": ["aspectRatio"], "closed": True})], badges=["new"], defaults={"resolution": "768P"}, fit_values=True,
       fixed={"aspect_ratio": "adaptive"}, options={"lightSphere": True, "promptOptional": True},
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32; billed on the clip's length", {"byResolution": H3_RES}))
 # H3 Max insert: a new scene of `duration` seconds generated between params.startTime and params.endTime (resume_time) of the clip;
 # only the new scene is billed (references past fal's first 4,096 tokens add $0.02 per 1,000, not counted here).
 model("minimax-h3-max-insert", "MiniMax H3 Max Insert a moment", "MiniMax", "hailuo", "video",
       "A new 5–13 s moment generated inside your clip, between two points you mark",
-      [("insert-moment", "minimax/h3-max/insert-video")], badges=["new"], defaults={"resolution": "768p", "duration": 5}, ranged_durations=True,
+      [("insert-moment", "minimax/h3-max/insert-video", "fal", {"closed": True})], badges=["new"], defaults={"resolution": "768p", "duration": 5}, ranged_durations=True, fit_values=True,
       options={"promptOptional": True}, prompt_max=True,
       pricing=("second", 0.06, "768p; 480p $0.05; only the new moment is billed; references past the first 4,096 tokens add $0.02 per 1,000",
                {"byResolution": {"480p": 0.05, "768p": 0.06}}))
@@ -680,7 +686,7 @@ for _slug, _id, _name, _tag in (("16bit-pixel", "pixel", "16-bit Pixel", "16-bit
     _ep = f"minimax/h3-max/styles/{_slug}"
     model(f"minimax-h3-max-look-{_id}", f"MiniMax H3 Max · {_name} look", "MiniMax", "hailuo", "video",
           f"A new 5–15 s clip with sound, made as {_tag}, from words or a first frame (it doesn't restyle a clip)",
-          [("t2v", _ep), ("i2v", _ep)], badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5}, ranged_durations=True,
+          [("t2v", _ep, "fal", {"closed": True}), ("i2v", _ep, "fal", {"closed": True})], badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5}, ranged_durations=True,
           controls=[("damage_level", "Tape wear")] if _slug == "vhs" else None,
           pricing=("second", 0.08, "768p, sound included"))
 # H3 Max Turbo: words, a start frame or start and end frames, 1-15 s with sound. fal's November rate runs to 2026-11-15 (30% off),
@@ -688,7 +694,7 @@ for _slug, _id, _name, _tag in (("16bit-pixel", "pixel", "16-bit Pixel", "16-bit
 model("minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax", "hailuo", "video",
       "Fast, cheap H3 Max with sound — drafts and quick takes from words or frames, 1–15 s",
       [("t2v", "minimax/h3-max-turbo/text-to-video"), ("i2v", "minimax/h3-max-turbo/image-to-video", "fal", "+flf2v")],
-      badges=["new", "fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      badges=["new", "fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True, fit_values=True,
       pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08 — $0.028 (480P $0.0175, 1080P $0.056) until 2026-11-15",
                {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08},
                 "promo": {"until": "2026-11-15", "usd": 0.028, "byResolution": {"480P": 0.0175, "768P": 0.028, "1080P": 0.056}}}))
@@ -706,11 +712,14 @@ model("minimax-h3-max-turbo-extend", "MiniMax H3 Max Turbo · extend", "MiniMax"
       pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08, 2K $0.16; only the new seconds", {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08, "2K": 0.16}}))
 # One Replicate model takes every input; each route sends only its own (a start frame is never also a reference picture).
 # HighSpeed's ratio is "adaptive" from a frame (its schema: "adaptive for image-to-video"); Lite ignores the ratio then.
+# The reference lists are plain strings ("Public URLs for up to 9 reference images"), not file fields (format: uri):
+# Replicate hands them to the model as text, so each file must go as a public link (FieldMap.publicLinks).
 def H3_REPLICATE_ROUTES(ep, adaptive=False):
     refs = ["images", "video", "audio"]
     frame = {"drop": ["aspectRatio"], "fixed": {"ratio": "adaptive"}} if adaptive else {}
     return [("t2v", ep, "replicate", {"drop": ["image", "endImage", *refs]}), ("i2v", ep, "replicate", {**frame, "drop": ["endImage", *refs, *frame.get("drop", [])]}),
-            ("flf2v", ep, "replicate", {**frame, "drop": [*refs, *frame.get("drop", [])]}), ("ref2v", ep, "replicate", {"drop": ["image", "endImage"]})]
+            ("flf2v", ep, "replicate", {**frame, "drop": [*refs, *frame.get("drop", [])]}),
+            ("ref2v", ep, "replicate", {"drop": ["image", "endImage"], "publicLinks": True})]
 
 
 # Replicate's H3 Lite (480P / 768P) and HighSpeed (one rate): words, a first frame, first and last frames, or references, 4-15 s.
@@ -719,12 +728,13 @@ def H3_REPLICATE_ROUTES(ep, adaptive=False):
 model("minimax-h3-lite", "MiniMax H3 Lite", "MiniMax", "hailuo", "video",
       "The lightest H3 with sound: words, frames or references, 4–15 s at 480P or 768P",
       H3_REPLICATE_ROUTES("minimax/h3-lite"),
-      badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, fit_values=True, options={"maxImages": 9},
+      badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, fit_values=True, options={"maxImages": 9}, length_range=True,
       pricing=("second", 0.02, "768P; 480P $0.0125", {"byResolution": {"480P": 0.0125, "768P": 0.02}}))
 model("minimax-h3-highspeed", "MiniMax H3 HighSpeed", "MiniMax", "hailuo", "video",
       "H3 tuned for speed, with sound: words, frames or references, 4–15 s",
       H3_REPLICATE_ROUTES("minimax/h3-highspeed", adaptive=True),
-      badges=["new", "audio", "fast"], defaults={"aspectRatio": "16:9", "duration": 5}, fit_values=True, options={"maxImages": 9}, pricing=("second", 0.03))
+      badges=["new", "audio", "fast"], defaults={"aspectRatio": "16:9", "duration": 5}, fit_values=True, options={"maxImages": 9}, length_range=True,
+      pricing=("second", 0.03))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})
@@ -990,6 +1000,7 @@ model("vidu-q3", "Vidu Q3", "Shengshu", "vidu", "video", "Anime-friendly video w
 model("vidu-q4", "Vidu Q4", "Shengshu", "vidu", "video", "Vidu's newest: a start frame or up to 12 references and 3 voices, 3–16 s, up to 4K",
       [("i2v", "fal-ai/vidu/q4/image-to-video"), ("ref2v", "fal-ai/vidu/q4/reference-to-video")], badges=["new", "4k", "audio"], ranged_durations=True,
       defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"maxImages": 12, "referenceAudio": "mp3"}, prompt_max=True, fit_values=True,
+      length_range=True,
       pricing=("second", 0.0665, "720p; 540p $0.0315, 1080p $0.084, 2K $0.133, 4K $0.273; sound costs nothing extra",
                {"byResolution": {"540p": 0.0315, "720p": 0.0665, "1080p": 0.084, "2K": 0.133, "4K": 0.273}}))
 model("luma-ray-3-2", "Luma Ray 3.2", "Luma", "luma", "video", "HDR, physically convincing motion",
@@ -1173,14 +1184,15 @@ model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-au
 model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres, 2 to 5 minutes",
       [("music", "mureka/v9.5/generate/song", "fal", {"ignore": ["model"]})],
       pricing=("request", 0.50, "a song from a prompt; with your lyrics $0.15", {"withLyrics": 0.15}),
-      defaults={"duration": 180}, options={"durations": [120, 180, 240, 300], "lyrics": {"instrumentalModel": "mureka-9-5-instrumental"}})
+      defaults={"duration": 180}, options={"durations": [120, 180, 240, 300], "lyrics": {"instrumentalModel": "mureka-9-5-instrumental"}},
+      prompt_max=True, length_range=True)
 model("mureka-9", "Mureka 9", "Mureka", "mureka", "audio", "Songs with vocals at a lower price, sung from your lyrics or written for you",
       [("music", "mureka/v9/generate/song")], badges=["new"], pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045", {"withLyrics": 0.045}),
-      options={"lyrics": {"instrumentalModel": "mureka-9-instrumental"}})
+      options={"lyrics": {"instrumentalModel": "mureka-9-instrumental"}}, prompt_max=True)
 model("mureka-9-5-instrumental", "Mureka 9.5 Instrumental", "Mureka", "mureka", "audio", "Mureka's newest instrumental tracks and beds, no vocals",
-      [("music", "mureka/v9.5/generate/instrumental")], badges=["new"], pricing=("request", 0.15))
+      [("music", "mureka/v9.5/generate/instrumental")], badges=["new"], pricing=("request", 0.15), prompt_max=True)
 model("mureka-9-instrumental", "Mureka 9 Instrumental", "Mureka", "mureka", "audio", "Instrumental tracks and beds, no vocals",
-      [("music", "mureka/v9/generate/instrumental")], badges=["new"], pricing=("request", 0.045))
+      [("music", "mureka/v9/generate/instrumental")], badges=["new"], pricing=("request", 0.045), prompt_max=True)
 # Mureka's earlier versions stay on the versioned route (fal serves 7.6, O2 and 8 there; 9 and 9.5 have routes of their own).
 # Its duration is a 9.5 field only, and its Version is always sent (the route's own default is 9.5). With lyrics 7.6 costs
 # $0.03, O2 and 8 $0.045; from a prompt all three $0.30.
@@ -1195,21 +1207,22 @@ model("mureka-8", "Mureka 8", "Mureka", "mureka", "audio", "Mureka's earlier ver
 # required: a run with none asks for an instrumental.
 model("minimax-music-3", "MiniMax Music 3 · both engines", "MiniMax", "minimax-music", "audio", "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
       [("music", "minimax/music-3")], badges=["new", "top"], defaults={"duration": 120}, options={"durations": [30, 60, 120, 180, 240, 300], "seed": True},
-      api_defaults={"lyrics": "[instrumental]"},
+      api_defaults={"lyrics": "[instrumental]"}, length_range=True,
       licence={"licence": "MiniMax-Music3 Community License", "commercial": True,
                "note": "MIT-style grant with notice and an Acceptable Use Policy; commercial products show \"MiniMax-Music3\" in their interface; "
                        "above US$20M yearly revenue needs MiniMax's written authorisation. The Comfy-Org repack is tagged Apache-2.0.", "checked": "2026-11-01"})
 # Its seed only goes with a composition plan (its schema says so), which Fuobe doesn't send: a prompt and a length.
 model("elevenlabs-music-2-5", "ElevenLabs Music v2.5", "ElevenLabs", "elevenlabs", "audio", "Studio-quality songs and scores up to 10 minutes",
       [("music", "elevenlabs/music/v2.5", "fal", {"drop": ["seed"]})], badges=["new"], pricing=("minute", 0.6, "billed per started minute", {"roundUp": True}),
-      defaults={"duration": 60}, options={"durations": [15, 30, 60, 120, 180, 300, 600]})
+      defaults={"duration": 60}, options={"durations": [15, 30, 60, 120, 180, 300, 600]}, prompt_max=True, length_range=True)
 # Mureka's song tools (Audio → Extend & remix, and a music result's Extend, Remix and Stems): the song is one of Mureka's own
 # (params.extra.songId, kept on its results) or a file sent first through Mureka's files/upload ($0.01, Pricing.uploadUsd).
 model("mureka-extend", "Mureka Extend", "Mureka", "mureka", "audio", "Makes a song longer with new lyrics, after its end or before its start",
       [("song-extend", "mureka/v8/song/extend")], badges=["new"], pricing=("request", 0.004, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}),
       controls=[("extend_type", "Where", {"tail": "After the end", "head": "Before the start"})])
 model("mureka-remix", "Mureka Remix", "Mureka", "mureka", "audio", "A new arrangement of a song in the style you describe, with its lyrics",
-      [("song-remix", "mureka/v8/song/remix")], badges=["new"], pricing=("request", 0.20, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}))
+      [("song-remix", "mureka/v8/song/remix")], badges=["new"], pricing=("request", 0.20, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}),
+      prompt_max=True)
 # Its stems come back as a zip (zip_url): the fal provider opens it and keeps each track as a result of its own.
 model("mureka-stems", "Mureka Stems", "Mureka", "mureka", "audio", "A song split into its vocal and instrument tracks",
       [("song-stems", "mureka/api/song/stem")], badges=["new"], pricing=("request", 0.20, "audio-separation-3, the default"))
@@ -1567,10 +1580,13 @@ K6_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["off"
              "labels": {"off": "Off · your words as typed", "on": "On · Kandinsky writes a fuller caption"}}
 K6_LICENCE = {"licence": "MIT", "commercial": True, "note": "Kandinsky Lab's weights (Pro, Lite, VSR) on Hugging Face; the Qwen2.5-VL text encoder is Apache-2.0",
               "checked": "2026-11-02"}
-_k6 = lambda op, v: (op, f"fal-ai/kandinsky6-{v}/{K6_OPS[op]}", "fal", {"when": {"param": "variant", "value": v}})
+# From a first frame fal's aspect_ratio defaults to "auto" (the supported ratio closest to the picture's, centre-cropped to it):
+# the composer offers no shape there, so the frame keeps its own, never the model's 16:9 default.
+_K6_FRAME = {"drop": ["aspectRatio"], "fixed": {"aspect_ratio": "auto"}}
+_k6 = lambda op, v: (op, f"fal-ai/kandinsky6-{v}/{K6_OPS[op]}", "fal", {"when": {"param": "variant", "value": v}, **(_K6_FRAME if op == "i2v" else {})})
 model("kandinsky-6", "Kandinsky 6.0", "Kandinsky Lab", "kandinsky", "video",
       "Kandinsky 6.0 · both engines: 5 s clips with dialogue, lip sync and sound from words or a first frame · MIT",
-      [_k6("t2v", "pro"), _k6("t2v", "lite"), _k6("i2v", "pro"), _k6("i2v", "lite")], badges=["new", "audio"],
+      [_k6("t2v", "pro"), _k6("t2v", "lite"), _k6("i2v", "pro"), _k6("i2v", "lite")], badges=["new", "audio"], fit_values=True,
       defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "480p"}, api_defaults={"enable_prompt_expansion": False},
       pricing=("video", K6_PRICES["pro"]["t2v"]["20"], "a 5 s clip at 480p: Pro about $0.027 a step ($0.24 Fast, $0.56 Standard, $1.35 Best), Lite about $0.013 ($0.08, $0.16, $0.24); from a first frame a little more",
                {"steps": {"variantKey": "variant", "stepsKey": "num_inference_steps", "prices": K6_PRICES}}),
@@ -1807,7 +1823,7 @@ def map_fields(fmap):
             out += lora_field_names(v)
         elif k == "size":
             out += [v["key"]] if v.get("key") else [v["width"], v["height"]]
-        elif k in ("seedRange", "maskFormat", "ranges", "ignore", "maxImages", "omitEmptyPrompt", "promptMax"):
+        elif k in ("seedRange", "maskFormat", "ranges", "ignore", "maxImages", "omitEmptyPrompt", "promptMax", "closedFields"):
             continue
         elif isinstance(v, str):
             out.append(v)
@@ -2504,6 +2520,22 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         fmap["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}
         opts["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}
     part4_ranges(op, inputs, fmap)
+    # A song's length inside the API's own limits (length_range): Mureka 9.5's whole seconds from 120 to 300, ElevenLabs Music
+    # v2.5's 3,000 to 600,000 ms. The composer offers lengths inside them; an API caller's is kept there.
+    if m.get("length_range") and fmap.get("duration"):
+        lkey = fmap["duration"]["key"]
+        lspec = inputs.get(lkey) or {}
+        lo, hi = num(lspec.get("minimum")), num(lspec.get("maximum"))
+        whole = lspec.get("type") == "integer"
+        # A list of every whole second in a run (Replicate's H3 Lite: 4 to 15) is that range in whole seconds.
+        vals = lspec.get("values") or []
+        if lspec.get("type") == "enum" and vals and all(isinstance(v, int) and not isinstance(v, bool) for v in vals)                 and sorted(vals) == list(range(min(vals), max(vals) + 1)):
+            lo, hi, whole = min(vals), max(vals), True
+        r = {**({"min": lo} if lo is not None else {}), **({"max": hi} if hi is not None else {}), **({"integer": True} if whole else {})}
+        if r:
+            fmap.setdefault("ranges", {})[lkey] = r
+        else:
+            warn(f"{m['id']}: {ep} states no limits for {lkey}")
     # Text-to-speech etc. carry the prompt in "text".
     if ropts.get("fixed"):
         m = {**m, "fixed": {**m["fixed"], **ropts["fixed"]}}
@@ -2567,6 +2599,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # A route's own limit, stated per use in words (PixVerse V6 Max: 5,000 characters, 2,048 with an image).
     if ropts.get("prompt_max"):
         fmap["promptMax"] = ropts["prompt_max"]
+    # A prompt that comes with lyrics, where the API reads fewer characters of it ("With lyrics, it acts as a music-style control
+    # and supports up to 1,024 characters": Mureka's songs): ModelOptions.lyrics.promptMax, checked by the plan.
+    with_lyrics = re.search(r"[Ww]ith lyrics\b[^.]*?up to ([\d,]+) characters", (pspec or {}).get("desc") or "")
+    if with_lyrics and isinstance(opts.get("lyrics"), dict):
+        opts["lyrics"]["promptMax"] = int(with_lyrics.group(1).replace(",", ""))
     if "numOutputs" in fmap:
         mx = num((inputs.get(fmap["numOutputs"]) or {}).get("maximum")) or 4
         opts["maxOutputs"] = max(opts.get("maxOutputs", 1), min(4, mx))
@@ -2590,6 +2627,14 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # A route's own limits on a number Fuobe fills (Replicate's Stable Audio 2.5: whole seconds, 1 to 190).
     if ropts.get("ranges"):
         fmap["ranges"] = {**(fmap.get("ranges") or {}), **ropts["ranges"]}
+    # An endpoint whose input schema takes no other field (additionalProperties: false: fal's H3 Max relight, insert and looks)
+    # answers 422 to one: FieldMap.closedFields lists its fields, so a params.extra key it doesn't name is left out.
+    if ropts.get("closed"):
+        fmap["closedFields"] = sorted(inputs)
+    # File lists the API reads as plain strings, not file fields (Replicate's H3 Lite reference_*_urls: "Public URLs"):
+    # FieldMap.publicLinks, so the server sends each file as a public https link, never a data: URI or a Files API link.
+    if ropts.get("publicLinks"):
+        fmap["publicLinks"] = True
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]

@@ -223,7 +223,10 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       // that runs open models only. Remix only where there are vocals to keep (with the song's lyrics, which it needs whole),
       // Stems only on an MP3 or M4A song (what Mureka separates).
       if (g.op && SONG_OPS.has(g.op) && ctx.engineMode !== "open") {
-        const song = typeof o.meta?.songId === "string" ? `&song=${q(o.meta.songId)}` : "";
+        // Mureka takes a song by its id only for a month ("Only supports songs generated within the last month": its song/extend
+        // and song/remix reference): an older song goes as its file (files/upload).
+        const byId = typeof o.meta?.songId === "string" && Date.now() - (g.completedAt ?? g.createdAt) < MUREKA_SONG_ID_MS;
+        const song = byId ? `&song=${q(o.meta!.songId as string)}` : "";
         link("extend-song", "Extend song", `/audio/song?model=mureka-extend&audio=${q(o.url)}${song}`);
         if (!instrumentalSong(g)) {
           // The whole song's words: an extension's run holds only its new part's.
@@ -300,6 +303,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
 
 /** Results that are songs: made, extended or remixed. */
 const SONG_OPS = new Set<Generation["op"]>(["music", "song-extend", "song-remix"]);
+
+/** How long one of Mureka's songs goes to its tools by id: its API takes ids of songs from the last month (a day kept spare). */
+const MUREKA_SONG_ID_MS = 29 * 24 * 60 * 60 * 1000;
 
 /** Music models that make instrumentals only, and those that make one when they're given no words to sing. */
 const INSTRUMENTAL_MODELS = new Set(["mureka-9-instrumental", "mureka-9-5-instrumental", "sonilo-music", "stable-audio-3-music", "stable-audio-2-5"]);

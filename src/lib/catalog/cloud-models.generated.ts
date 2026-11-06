@@ -8781,7 +8781,15 @@ export const CLOUD_MODELS: ModelDef[] = [
             0,
             2147483647
           ],
-          "resolution": "resolution"
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P",
+              "1080P",
+              "2K"
+            ]
+          }
         }
       }
     ],
@@ -8836,10 +8844,27 @@ export const CLOUD_MODELS: ModelDef[] = [
           "image": "reference_image_url",
           "video": "video_url",
           "seed": "seed",
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P",
+              "1080P",
+              "2K"
+            ]
+          },
           "fixed": {
             "aspect_ratio": "adaptive"
-          }
+          },
+          "closedFields": [
+            "aspect_ratio",
+            "enable_safety_checker",
+            "reference_image_url",
+            "resolution",
+            "seed",
+            "sync_mode",
+            "video_url"
+          ]
         }
       }
     ],
@@ -8905,12 +8930,31 @@ export const CLOUD_MODELS: ModelDef[] = [
             0,
             2147483647
           ],
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "768p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 50000
+          "promptMax": 50000,
+          "closedFields": [
+            "color_match",
+            "duration",
+            "enable_prompt_expansion",
+            "prompt",
+            "reference_image_urls",
+            "reference_video_urls",
+            "resolution",
+            "resume_time",
+            "seed",
+            "start_time",
+            "video_url"
+          ]
         }
       }
     ],
@@ -8970,7 +9014,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49815
+          "promptMax": 49815,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       },
       {
@@ -8995,7 +9046,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49815
+          "promptMax": 49815,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       }
     ],
@@ -9054,7 +9112,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49868
+          "promptMax": 49868,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       },
       {
@@ -9079,7 +9144,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49868
+          "promptMax": 49868,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       }
     ],
@@ -9138,7 +9210,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49914
+          "promptMax": 49914,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       },
       {
@@ -9163,7 +9242,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49914
+          "promptMax": 49914,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       }
     ],
@@ -9222,7 +9308,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49864
+          "promptMax": 49864,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       },
       {
@@ -9247,7 +9340,14 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49864
+          "promptMax": 49864,
+          "closedFields": [
+            "aspect_ratio",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       }
     ],
@@ -9306,7 +9406,15 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49910
+          "promptMax": 49910,
+          "closedFields": [
+            "aspect_ratio",
+            "damage_level",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       },
       {
@@ -9331,7 +9439,15 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
-          "promptMax": 49910
+          "promptMax": 49910,
+          "closedFields": [
+            "aspect_ratio",
+            "damage_level",
+            "duration",
+            "image_url",
+            "prompt",
+            "seed"
+          ]
         }
       }
     ],
@@ -9396,8 +9512,25 @@ export const CLOUD_MODELS: ModelDef[] = [
         "endpoint": "minimax/h3-max-turbo/text-to-video",
         "map": {
           "seed": "seed",
-          "aspectRatio": "aspect_ratio",
-          "resolution": "resolution",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P",
+              "1080P"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -9416,7 +9549,14 @@ export const CLOUD_MODELS: ModelDef[] = [
           "image": "image_url",
           "endImage": "end_image_url",
           "seed": "seed",
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P",
+              "1080P"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -9435,7 +9575,14 @@ export const CLOUD_MODELS: ModelDef[] = [
           "image": "image_url",
           "endImage": "end_image_url",
           "seed": "seed",
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P",
+              "1080P"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -9718,6 +9865,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
           }
         }
       },
@@ -9762,6 +9916,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
           }
         }
       },
@@ -9807,6 +9968,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
           }
         }
       },
@@ -9853,7 +10021,15 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
-          }
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
+          },
+          "publicLinks": true
         }
       }
     ],
@@ -9945,6 +10121,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
           }
         }
       },
@@ -9971,6 +10154,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
           },
           "fixed": {
             "ratio": "adaptive"
@@ -10001,6 +10191,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
           },
           "fixed": {
             "ratio": "adaptive"
@@ -10043,7 +10240,15 @@ export const CLOUD_MODELS: ModelDef[] = [
               14,
               15
             ]
-          }
+          },
+          "ranges": {
+            "duration": {
+              "min": 4,
+              "max": 15,
+              "integer": true
+            }
+          },
+          "publicLinks": true
         }
       }
     ],
@@ -11385,6 +11590,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "duration",
             "type": "number"
           },
+          "ranges": {
+            "duration": {
+              "min": 3,
+              "max": 16,
+              "integer": true
+            }
+          },
           "promptMax": 5000
         }
       },
@@ -11420,6 +11632,13 @@ export const CLOUD_MODELS: ModelDef[] = [
           "duration": {
             "key": "duration",
             "type": "number"
+          },
+          "ranges": {
+            "duration": {
+              "min": 3,
+              "max": 16,
+              "integer": true
+            }
           },
           "promptMax": 5000
         }
@@ -15936,6 +16155,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "lyrics",
             "max": 5000
           },
+          "ranges": {
+            "duration": {
+              "min": 120,
+              "max": 300,
+              "integer": true
+            }
+          },
           "promptMax": 2000,
           "ignore": [
             "model"
@@ -15946,6 +16172,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "options": {
       "lyrics": {
         "max": 5000,
+        "promptMax": 1024,
         "instrumentalModel": "mureka-9-5-instrumental"
       },
       "durations": [
@@ -15990,6 +16217,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "options": {
       "lyrics": {
         "max": 5000,
+        "promptMax": 1024,
         "instrumentalModel": "mureka-9-instrumental"
       }
     },
@@ -16085,8 +16313,8 @@ export const CLOUD_MODELS: ModelDef[] = [
     "options": {
       "lyrics": {
         "max": 5000,
-        "instrumentalModel": "mureka-9-instrumental",
-        "promptMax": 1024
+        "promptMax": 1024,
+        "instrumentalModel": "mureka-9-instrumental"
       },
       "controls": [
         {
@@ -16134,6 +16362,12 @@ export const CLOUD_MODELS: ModelDef[] = [
           },
           "lyrics": {
             "key": "lyrics"
+          },
+          "ranges": {
+            "duration": {
+              "min": 1,
+              "max": 300
+            }
           },
           "defaults": {
             "lyrics": "[instrumental]"
@@ -16189,6 +16423,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "key": "music_length_ms",
             "type": "number",
             "multiplier": 1000
+          },
+          "ranges": {
+            "music_length_ms": {
+              "min": 3000,
+              "max": 600000,
+              "integer": true
+            }
           },
           "promptMax": 4100
         }
@@ -20434,7 +20675,7 @@ export const CLOUD_MODELS: ModelDef[] = [
           "fixed": {
             "enable_pbr": true
           },
-          "promptMax": 600
+          "promptMax": 800
         }
       }
     ],
@@ -20492,7 +20733,7 @@ export const CLOUD_MODELS: ModelDef[] = [
           "fixed": {
             "enable_pbr": true
           },
-          "promptMax": 600
+          "promptMax": 800
         }
       }
     ],
@@ -21016,7 +21257,16 @@ export const CLOUD_MODELS: ModelDef[] = [
           "negativePrompt": "negative_prompt",
           "seed": "seed",
           "generateAudio": "generate_audio",
-          "aspectRatio": "aspect_ratio",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4"
+            ]
+          },
           "defaults": {
             "enable_prompt_expansion": false
           },
@@ -21039,7 +21289,16 @@ export const CLOUD_MODELS: ModelDef[] = [
         "map": {
           "seed": "seed",
           "generateAudio": "generate_audio",
-          "aspectRatio": "aspect_ratio",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4"
+            ]
+          },
           "defaults": {
             "enable_prompt_expansion": false
           },
@@ -21064,15 +21323,8 @@ export const CLOUD_MODELS: ModelDef[] = [
           "image": "image_url",
           "seed": "seed",
           "generateAudio": "generate_audio",
-          "aspectRatio": {
-            "key": "aspect_ratio",
-            "accepts": [
-              "16:9",
-              "9:16",
-              "1:1",
-              "4:3",
-              "3:4"
-            ]
+          "fixed": {
+            "aspect_ratio": "auto"
           },
           "defaults": {
             "enable_prompt_expansion": false
@@ -21097,15 +21349,8 @@ export const CLOUD_MODELS: ModelDef[] = [
           "image": "image_url",
           "seed": "seed",
           "generateAudio": "generate_audio",
-          "aspectRatio": {
-            "key": "aspect_ratio",
-            "accepts": [
-              "16:9",
-              "9:16",
-              "1:1",
-              "4:3",
-              "3:4"
-            ]
+          "fixed": {
+            "aspect_ratio": "auto"
           },
           "defaults": {
             "enable_prompt_expansion": false

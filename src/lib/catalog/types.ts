@@ -611,6 +611,17 @@ export interface FieldMap {
   /** params.extra keys this route has no field for (a model-wide control only its other routes read): left out. */
   ignore?: string[];
   /**
+   * Every field the endpoint takes, when its input schema refuses any other (additionalProperties: false: fal's H3 Max relight,
+   * insert and looks answer 422): a params.extra key (an API call, Assist, Canvas) it doesn't name is left out.
+   */
+  closedFields?: string[];
+  /**
+   * The route's file lists are plain strings the API passes on as text, not file fields (Replicate's H3 Lite and HighSpeed
+   * reference_*_urls: "Public URLs", with no uri format): each file must go as a public https link. Replicate fetches a
+   * data: URI or a Files API link only for a file field, so neither works here.
+   */
+  publicLinks?: boolean;
+  /**
    * Song lyrics (params.extra.lyrics, section tags such as [Verse] on lines of their own: src/lib/lyrics.ts): the API's lyrics
    * field and the most characters it takes, or (`inPrompt`) written after the prompt for an API that reads them there
    * (Lyria 3.5). A route without it never sends params.extra.lyrics. `instrumental`: the API's switch for a song with no

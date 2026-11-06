@@ -44,6 +44,8 @@ export interface SettingsShape {
   count: boolean;
   draft: boolean;
   audio: boolean;
+  /** The operation's routes send no sound setting (fal's Vidu Q4 from a first frame always has sound): the switch can't change it. */
+  audioFixed?: boolean;
   multiShot: boolean;
   enhance: boolean;
   sliders: boolean;
@@ -103,6 +105,7 @@ export function settingsShape(
     count: (kind === "image" || kind === "video") && !single,
     draft: !!o.draft,
     audio: o.audio === true,
+    audioFixed: o.audio === true && !takes.audio,
     multiShot: !!o.multiShot,
     enhance: showPrompt,
     sliders: !!o.sliders?.length,
@@ -172,7 +175,8 @@ export function settingsSummary(shape: SettingsShape, params: GenParams, model?:
   if (shape.count) parts.push(`×${params.numOutputs ?? 1}`);
   if (shape.multiShot && !params.shots && params.multiShot === "auto") parts.push("Multi-shot");
   if (shape.draft && params.draft) parts.push("Draft");
-  if (shape.audio && params.generateAudio === false) parts.push("No audio");
+  // A route that sends no sound setting makes its own sound: "No audio" would not be true.
+  if (shape.audio && !shape.audioFixed && params.generateAudio === false) parts.push("No audio");
   if (shape.fps) {
     const fps = params.targetFps ?? d.targetFps;
     if (fps) parts.push(`${fps} fps`);

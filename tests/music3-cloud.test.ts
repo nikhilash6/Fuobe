@@ -130,7 +130,7 @@ describe("Mureka's versions", () => {
   it("a Mureka song sings words: an instrumental is its instrumental model", () => {
     expect(planError({ modelId: "mureka-song", prompt: "pop", params: { extra: { lyrics: "[Instrumental]" } } })).toBe("Mureka 9.5 sings the lyrics you write: for an instrumental, pick Mureka 9.5 Instrumental");
     expect(planError({ modelId: "mureka-9", prompt: "pop", params: { extra: { lyrics: "[Instrumental]" } } })).toBe("Mureka 9 sings the lyrics you write: for an instrumental, pick Mureka 9 Instrumental");
-    expect(getModel("mureka-song")!.options.lyrics).toEqual({ max: 5000, instrumentalModel: "mureka-9-5-instrumental" });
+    expect(getModel("mureka-song")!.options.lyrics).toEqual({ max: 5000, promptMax: 1024, instrumentalModel: "mureka-9-5-instrumental" });
   });
 
   it("MiniMax Music 2.5 makes an instrumental by its own switch, with no words written for it", () => {
@@ -218,7 +218,7 @@ describe("lyrics in the plan", () => {
 
 describe("a music result's song tools", () => {
   const gen = (o: Partial<Generation> = {}, meta: Record<string, unknown> = {}): Generation =>
-    ({ id: "g1", status: "succeeded", op: "music", feature: "audio", modelId: "mureka-song", request: { feature: "audio", modelId: "mureka-song" }, outputs: [{ url: "/api/files/song.mp3", kind: "audio", meta }], createdAt: 0, ...o }) as unknown as Generation;
+    ({ id: "g1", status: "succeeded", op: "music", feature: "audio", modelId: "mureka-song", request: { feature: "audio", modelId: "mureka-song" }, outputs: [{ url: "/api/files/song.mp3", kind: "audio", meta }], createdAt: Date.now(), ...o }) as unknown as Generation;
   const ids = (g: Generation, engineMode?: "both" | "open" | "cloud") => outputActions(g, 0, { engineMode }).filter((a) => ["extend-song", "remix-song", "song-stems"].includes(a.id));
 
   it("Extend song, Remix and Stems open Extend & remix with the song (and Mureka's id for its own)", () => {
@@ -257,8 +257,11 @@ describe("a music result's song tools", () => {
     expect(songToolProblem("song-stems", { format: "flac" })).toBe("Stems take an MP3 or M4A song: this one is a FLAC file. Save it as an MP3 and add it again");
     expect(songToolProblem("song-stems", { format: "mp3", bytes: 9_000_000 })).toBeNull();
     expect(songToolProblem("song-remix", { seconds: 351 })).toBe("Remix takes a song of 0:10 to 5:50: this one is 5:51");
-    expect(songToolProblem("song-remix", { seconds: 120, format: "wav" })).toBeNull();
-    expect(songToolProblem("song-extend", { seconds: 900, format: "wav" })).toBeNull();
+    // A song Mureka didn't make goes through its files/upload, which takes an MP3 or M4A; one of its own goes by its id.
+    expect(songToolProblem("song-remix", { seconds: 120, format: "wav" }, false)).toBe("Remix takes an MP3 or M4A song: this one is a WAV file. Save it as an MP3 and add it again");
+    expect(songToolProblem("song-remix", { seconds: 120, format: "wav" }, true)).toBeNull();
+    expect(songToolProblem("song-extend", { seconds: 900, format: "wav" }, false)).toBe("Extend takes an MP3 or M4A song: this one is a WAV file. Save it as an MP3 and add it again");
+    expect(songToolProblem("song-extend", { seconds: 900, format: "wav" }, true)).toBeNull();
     // The remix of an instrumental is refused in the plan.
     expect(planError({ modelId: "mureka-remix", prompt: "jazz", inputs: { audio: "/api/files/s.mp3" }, params: { extra: { lyrics: "[Instrumental]" } } })).toMatch(/^Write the remix's lyrics.*not instrumentals\)$/);
   });

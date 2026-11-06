@@ -201,8 +201,21 @@ export function songFormat(contentType: string | undefined, name: string | undef
   return ext === "mpeg" || ext === "mpga" ? "mp3" : ext;
 }
 
-/** Why a song tool can't take this song, in plain words; null when it can (what isn't known yet is not held against it). */
-export function songToolProblem(op: string, song: { format?: string; bytes?: number; seconds?: number }): string | null {
+/**
+ * What Mureka's files/upload takes for a song Extend or Remix didn't make (platform.mureka.ai, POST /v1/files/upload, read
+ * 2026-11-06): "audio: Supported format (mp3, m4a), size limit: 10 MB" (Extend's upload_audio_id) and "remix: Supported format
+ * (mp3, m4a)" (Remix's). One of Mureka's own songs goes by its id and is never uploaded.
+ */
+export const UPLOAD_FORMATS = ["mp3", "m4a"];
+export const EXTEND_UPLOAD_MAX_BYTES = 10 * 1000 * 1000;
+
+/**
+ * Why a song tool can't take this song, in plain words; null when it can (what isn't known yet is not held against it).
+ * `byId`: true when the song is one of Mureka's own, sent by its id (params.extra.songId), so its file is never uploaded; false
+ * when it goes through Mureka's files/upload, whose format and size rules then apply. A caller that doesn't say is not held to
+ * them, so one of Mureka's own songs is never refused for its file.
+ */
+export function songToolProblem(op: string, song: { format?: string; bytes?: number; seconds?: number }, byId?: boolean): string | null {
   if (op === "song-stems") {
     if (song.format && !STEMS_FORMATS.includes(song.format)) return `Stems take an MP3 or M4A song: this one is a ${song.format.toUpperCase()} file. Save it as an MP3 and add it again`;
     if (song.bytes && song.bytes > STEMS_MAX_BYTES) {
@@ -211,6 +224,13 @@ export function songToolProblem(op: string, song: { format?: string; bytes?: num
   }
   if (op === "song-remix" && song.seconds && (song.seconds < REMIX_SECONDS.min || song.seconds > REMIX_SECONDS.max)) {
     return `Remix takes a song of ${songLength(REMIX_SECONDS.min)} to ${songLength(REMIX_SECONDS.max)}: this one is ${songLength(song.seconds)}`;
+  }
+  if ((op === "song-extend" || op === "song-remix") && byId === false) {
+    const tool = op === "song-extend" ? "Extend" : "Remix";
+    if (song.format && !UPLOAD_FORMATS.includes(song.format)) return `${tool} takes an MP3 or M4A song: this one is a ${song.format.toUpperCase()} file. Save it as an MP3 and add it again`;
+    if (op === "song-extend" && song.bytes && song.bytes > EXTEND_UPLOAD_MAX_BYTES) {
+      return `Extend takes a song of up to 10 MB: this one is ${Math.ceil(song.bytes / 100_000) / 10} MB. Save it as a smaller MP3 and add it again`;
+    }
   }
   return null;
 }

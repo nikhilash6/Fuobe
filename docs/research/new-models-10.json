@@ -5666,8 +5666,8 @@
      "nullable": true,
      "type": "string",
      "required": false,
-     "maxLength": 600,
-     "desc": "Describe your desired texture style using text. Maximum 600 characters. Required if image_style_url is not provided.",
+     "maxLength": 800,
+     "desc": "Describe your desired texture style using text. Maximum 800 characters. Required if image_style_url is not provided.",
      "examples": [
       "red and black chest"
      ]
@@ -5676,7 +5676,7 @@
      "nullable": true,
      "type": "string",
      "required": false,
-     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, and .png formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
+     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, .png, and .webp formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
     },
     "texture_resolution": {
      "type": "enum",
@@ -5744,8 +5744,8 @@
      "nullable": true,
      "type": "string",
      "required": false,
-     "maxLength": 600,
-     "desc": "Describe your desired texture style using text. Maximum 600 characters. Required if image_style_url is not provided.",
+     "maxLength": 800,
+     "desc": "Describe your desired texture style using text. Maximum 800 characters. Required if image_style_url is not provided.",
      "examples": [
       "red and black chest"
      ]
@@ -5754,7 +5754,7 @@
      "nullable": true,
      "type": "string",
      "required": false,
-     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, and .png formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
+     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, .png, and .webp formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
     },
     "texture_resolution": {
      "type": "enum",
