@@ -287,6 +287,8 @@ export function MediaSlot({
   local,
   slotKey,
   caption,
+  accept,
+  takes,
 }: {
   label: string;
   kind: MediaKind;
@@ -302,10 +304,14 @@ export function MediaSlot({
   slotKey?: string;
   /** Filled, keep the slot's role on the thumbnail ("Target", "Face"), so two photos can be told apart. */
   caption?: boolean;
+  /** The file picker's types, when the tile takes more than its kind (a song tool's slot takes a video's sound). */
+  accept?: string;
+  /** The files the tile takes, when more than its kind (with `onFile`, which turns them into its kind). */
+  takes?: (f: File) => boolean;
 }) {
   const handleFile = (f: File) => {
     // A tile takes its own kind only (a clip dropped on the Image tile would land as a video there).
-    if (kindOfFile(f) !== kind) return void toast(wrongKindMessage(kind));
+    if (!(takes ? takes(f) : kindOfFile(f) === kind)) return void toast(wrongKindMessage(kind));
     if (onFile) onFile(f);
     else void fileToSlot(f, onChange, kind);
   };
@@ -375,7 +381,7 @@ export function MediaSlot({
           <input
             ref={input}
             type="file"
-            accept={ACCEPT[kind]}
+            accept={accept ?? ACCEPT[kind]}
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];

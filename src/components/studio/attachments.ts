@@ -62,9 +62,10 @@ const MAX_AT_ONCE = 8;
  * model that takes none) is never uploaded: the person is told why instead. Someone whose upload
  * would be refused (a guest, an account with neither its own GPU nor its own key) gets that card
  * at once, before any preview is placed. With `hold` (a guest, hosted runs on), a file is kept in this browser
- * instead of uploaded, until the guest signs up (src/lib/held-files.ts).
+ * instead of uploaded, until the guest signs up (src/lib/held-files.ts). With `route`, a paste or drop the caller takes itself
+ * (a song tool's song, fitted first: src/components/av/fit-upload.tsx) goes there instead.
  */
-export function useAttach(slots: InputSlot[], refMax: number, { hold = false }: { hold?: boolean } = {}) {
+export function useAttach(slots: InputSlot[], refMax: number, { hold = false, route }: { hold?: boolean; route?: (f: File) => boolean } = {}) {
   const { config, draft, setDraft } = useStudio();
   // The latest draft, to check for room before an upload starts (callbacks outlive renders).
   const latest = useRef(draft);
@@ -143,6 +144,8 @@ export function useAttach(slots: InputSlot[], refMax: number, { hold = false }: 
     (files: File[]) => {
       // A paste, a drop on the page or the "+" menu: one card for the lot, and no toast about kinds or room on top.
       if (!hold && askFirst()) return;
+      if (route) files = files.filter((f) => !route(f));
+      if (!files.length) return;
       const frames = latest.current.frames;
       // Frames mode: each still becomes the next frame, up to ten.
       const usable = files.filter((f) => (frames ? kindOfFile(f) === "image" : kinds.has(kindOfFile(f))));
@@ -160,7 +163,7 @@ export function useAttach(slots: InputSlot[], refMax: number, { hold = false }: 
       if (rejected.length) noRoom();
       for (const i of placed) start(batch[i], place);
     },
-    [askFirst, hold, kinds, start, place, noRoom, slots, config.multiRef, refMax],
+    [askFirst, hold, route, kinds, start, place, noRoom, slots, config.multiRef, refMax],
   );
 
   /** A slot tile: replace its value (an upload it held is cancelled by the reaper). A drawing belongs to the image it was made on. */

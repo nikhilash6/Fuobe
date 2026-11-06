@@ -15,6 +15,9 @@ import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
+import { murekaSongRule, SONG_ACCEPT, SONG_FIT_OPS } from "@/lib/av/song-fit";
+import { fitSourceKind } from "@/lib/av/fit-upload";
+import { FitUploadNote, useFitUpload } from "@/components/av/fit-upload";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -625,7 +628,10 @@ export function Composer({ docked }: { docked: boolean }) {
   // Hosted runs on, a guest's files are kept in this browser until sign-up (HoldFilesForGuests), and its whole draft and
   // the run it pressed come back after it (useGuestDraft).
   const guestHold = useContext(HoldFilesCtx);
-  const attach = useAttach(slots, refMax, { hold: guestHold });
+  // A song tool's song dropped or pasted on the page goes to its slot's converter first (useSongFit, below).
+  const songRoute = useRef<((f: File) => boolean) | null>(null);
+  const routeSong = useCallback((f: File) => songRoute.current?.(f) ?? false, []);
+  const attach = useAttach(slots, refMax, { hold: guestHold, route: routeSong });
   const guestDraft = useGuestDraft({ hold: guestHold, viewer: status?.viewer?.kind, draft: typed, setDraft });
   // The price changed since its guest pressed Run: said once, and Run waits for a click.
   const [priceNote, setPriceNote] = useState<string | null>(null);
@@ -801,6 +807,22 @@ export function Composer({ docked }: { docked: boolean }) {
   // or M4A), from its name and header, as the server does. One of Mureka's own goes by its id (withSongId), never as a file.
   const songRef = config.voiceFacts && (op === "song-stems" || op === "song-remix" || op === "song-extend") ? draft.slots.audio?.ref : undefined;
   const songById = model?.family === "mureka" && !!draft.song && !!songRef && draft.song.url === songRef;
+  // One Mureka can't take as it is (another format, over 10 MB, a video's sound, longer than Remix takes) is fitted in this
+  // browser instead: converted to an MP3, or a part of it offered (src/components/av/fit-upload.tsx); what's left is said
+  // as before. One of Mureka's own songs goes by its id and is left alone.
+  const fitOp = op ?? studioOp ?? model?.routes.find((r) => SONG_FIT_OPS.has(r.op))?.op;
+  const songRule = useMemo(() => (config.voiceFacts && model?.family === "mureka" ? murekaSongRule(fitOp) : null), [config.voiceFacts, model?.family, fitOp]);
+  const songFit = useFitUpload({
+    rule: songRule,
+    value: draft.slots.audio,
+    skip: songById,
+    seconds: voice?.duration,
+    setValue: (v) => attach.setSlotValue("audio", v),
+    upload: (f) => attach.uploadToSlot("audio", f, "audio"),
+  });
+  useEffect(() => {
+    songRoute.current = (f) => songFit.wants(f) && (songFit.take(f), true);
+  });
   const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }, songById) : null;
   if (songProblem && !planError) planError = songProblem;
   if (signed.blocker) planError = signed.blocker;
@@ -1666,7 +1688,8 @@ export function Composer({ docked }: { docked: boolean }) {
                 caption
                 value={draft.slots[s.key] ?? null}
                 onChange={(v) => attach.setSlotValue(s.key, v)}
-                onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
+                onFile={(f) => (s.key === "audio" && songFit.wants(f) ? songFit.take(f) : attach.uploadToSlot(s.key, f, s.accept))}
+                {...(s.key === "audio" && songFit.on && { accept: SONG_ACCEPT, takes: (f: File) => !!fitSourceKind(f) })}
               />
             ),
           )}
@@ -1718,6 +1741,7 @@ export function Composer({ docked }: { docked: boolean }) {
       {showAttachments && !collapsed && !framesOn && refMode && (refsOpen || refClips.length > 0 || refAudios.length > 0) && (
         <ReferenceOrder images={refImages} clips={refClips.length} audios={refAudios.length} problem={refProblem} />
       )}
+      {showAttachments && !collapsed && !framesOn && <FitUploadNote fit={songFit} className="px-3" />}
       {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
       {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
       {showAttachments && !collapsed && !framesOn && voiceFirstShown && voiceFirstKind && (
