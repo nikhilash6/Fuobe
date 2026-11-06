@@ -628,6 +628,21 @@ export interface FieldMap {
   upscaleFactor?: { key: string; min?: number; max?: number };
 }
 
+/**
+ * The settings a hosted route sends (route-takes.ts): false = it has no field for it (the choice would be dropped), a list =
+ * the only values it takes (any other is fitted to one of them). A key left out: it takes any value.
+ */
+export interface RouteTakes {
+  aspectRatios?: string[] | false;
+  resolutions?: string[] | false;
+  durations?: number[] | false;
+  seed?: false;
+  negativePrompt?: false;
+  audio?: false;
+  /** No count field: one result a call. */
+  outputs?: false;
+}
+
 export interface ModelRoute {
   op: Operation;
   provider: ProviderId;
@@ -639,6 +654,11 @@ export interface ModelRoute {
    * layout is compiled at), kept by slimModel when it drops the field maps for the browser. The server reads `map`.
    */
   preview?: Pick<FieldMap, "upscaleFactor" | "numFrames" | "size">;
+  /**
+   * What `map` sends, kept by slimModel for the browser's pickers (src/lib/catalog/route-takes.ts): a setting the route has no
+   * field for, or the only values it takes. Unset: it takes every setting.
+   */
+  takes?: RouteTakes;
   /** Optional note shown in the UI (e.g. "uses Lightx2v 4-step LoRA"). */
   note?: string;
   /**

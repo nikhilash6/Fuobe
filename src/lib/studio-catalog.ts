@@ -5,6 +5,7 @@
  * provider field maps stay on the server, which plans and builds the real request itself.
  */
 import { getModel, modelsFor } from "./catalog";
+import { takesFromMap } from "./catalog/route-takes";
 import type { ModelDef } from "./catalog/types";
 import type { StudioConfig } from "@/components/studio/studio-context";
 
@@ -28,6 +29,9 @@ export function slimModel(m: ModelDef): ModelDef {
       delete copy.map;
       const { upscaleFactor, numFrames, size } = r.map ?? {};
       if (upscaleFactor || numFrames || size) copy.preview = { ...(upscaleFactor && { upscaleFactor }), ...(numFrames && { numFrames }), ...(size && { size }) };
+      // What the map sends, for the pickers: a setting it would drop or fit looks unavailable before the run.
+      const takes = takesFromMap(r, m.id);
+      if (takes) copy.takes = takes;
       return copy;
     }),
   };

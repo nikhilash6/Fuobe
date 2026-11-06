@@ -21,6 +21,7 @@ import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeL
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { qmaRunPrompt } from "@/lib/qma";
 import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
+import { oneEachCall } from "./route-takes";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
@@ -681,7 +682,9 @@ export function planGeneration(
   params = controlSets(model, params);
 
   const requested = Math.max(1, Math.min(8, params.numOutputs ?? 1));
-  const maxPerJob = Math.max(1, model.options.maxOutputs ?? 1);
+  // A route with no count field makes one result a call (Nano Banana Pro, Qwen Image Edit): each result is its own job, never
+  // a count the API never sees.
+  const maxPerJob = oneEachCall(model, op) ? 1 : Math.max(1, model.options.maxOutputs ?? 1);
   const perJobOutputs = Math.min(requested, maxPerJob);
   const jobs = Math.ceil(requested / perJobOutputs);
   return {

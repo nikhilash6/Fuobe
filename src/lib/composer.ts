@@ -15,6 +15,7 @@ import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
 import { soulPostStep } from "./catalog/soul";
 import { studioResolutions } from "./catalog/regenerate";
+import { opTakes } from "./catalog/route-takes";
 import { appModels, ownRoute, presetRoutes, type HasModel, type RecipePreset } from "./catalog/preset-recipe-routes";
 import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type PresetRoute, type VideoFormat } from "./catalog/types";
 import { formatCost } from "./format";
@@ -69,7 +70,7 @@ export interface SettingsShape {
  * transforms (Lipsync), there's still no batch count.
  */
 export function settingsShape(
-  model: (Pick<ModelDef, "options" | "defaults"> & Partial<Pick<ModelDef, "routes">>) | undefined,
+  model: (Pick<ModelDef, "options" | "defaults"> & Partial<Pick<ModelDef, "routes" | "id">>) | undefined,
   op: Operation | undefined,
   kind: MediaKind,
   showPrompt: boolean,
@@ -90,11 +91,14 @@ export function settingsShape(
   const sized = !routes.length || routes.some((r) => !r.unsized);
   // A cloud edit that follows image 1's shape at the chosen tier (ModelRoute.followsImage: fal's FLUX 3 Klein) keeps Resolution only.
   const shaped = routes.length > 0 && routes.every((r) => r.unsized || r.followsImage);
+  // A setting none of the operation's hosted routes sends (Kling O3's video edit keeps the clip's shape and length; Hailuo 02
+  // makes text to video at one size) has nothing to pick: it would be dropped.
+  const takes = model?.id && model.routes ? opTakes({ id: model.id, routes: model.routes }, op) : opTakes(undefined, op);
   return {
-    aspect: !sized || shaped || op === "i2v" || op === "flf2v" ? null : many(o.aspectRatios),
+    aspect: !sized || shaped || op === "i2v" || op === "flf2v" || !takes.aspect ? null : many(o.aspectRatios),
     // With the tiers a finishing pass reaches (MiniMax H3's 2K on your GPU: a 768p draft redrawn by Open-H3 Regenerate).
-    resolution: sized ? many(studioResolutions(o)) : null,
-    duration: params.shots ? null : many(o.durations),
+    resolution: sized && takes.resolution ? many(studioResolutions(o)) : null,
+    duration: params.shots || !takes.duration ? null : many(o.durations),
     count: (kind === "image" || kind === "video") && !single,
     draft: !!o.draft,
     audio: o.audio === true,

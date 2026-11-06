@@ -15,6 +15,9 @@ import { colormapLabel, durationLabel, formatOf, hiddenChanges, MATTE_OUTPUT_LAB
 import { ratioValue } from "@/lib/format";
 import { matchSpokenLanguage, spokenLanguageName, spokenLanguageOptions } from "@/lib/speech-languages";
 import { cn } from "@/lib/utils";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
+import { opTakes, settingUnavailable, type OpTakes } from "@/lib/catalog/route-takes";
+import type { Unavailable } from "@/lib/unavailable";
 import { SliderControls } from "./audio-controls";
 import { Chip } from "./chip";
 import { radioKeys, radioTab } from "./radio-keys";
@@ -39,27 +42,94 @@ function Section({ label, children, id }: { label: string; children: React.React
   );
 }
 
-function Segmented<T extends string | number>({ label, options, value, onChange, format = (v) => String(v) }: { label: string; options: T[]; value: T; onChange: (v: T) => void; format?: (v: T) => string }) {
+function Segmented<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+  format = (v) => String(v),
+  unavailable,
+}: {
+  label: string;
+  options: T[];
+  value: T;
+  onChange: (v: T) => void;
+  format?: (v: T) => string;
+  /** Why a value can't be had with this model and operation (src/lib/unavailable.ts): it stays in view, muted, and says why. */
+  unavailable?: (v: T) => Unavailable | undefined;
+}) {
+  const opts = options.map((o) => ({ value: o, unavailable: unavailable?.(o) }));
+  const note = useUnavailableNote(opts);
   // Nothing selected (an unexpected value): the first option takes the Tab stop.
   const current = options.includes(value) ? value : options[0];
+  // The value on show is one this run can't make (a model's default, a choice kept from another model): said at once.
+  const held = unavailable?.(value);
   return (
-    <div role="radiogroup" aria-label={label} onKeyDown={radioKeys} className="flex flex-wrap gap-0.5 rounded-full bg-muted p-0.5">
-      {options.map((o) => (
-        <button
-          key={String(o)}
-          type="button"
-          role="radio"
-          aria-checked={value === o}
-          tabIndex={radioTab(current === o)}
-          onClick={() => onChange(o)}
-          className={cn(
-            "h-7 min-w-11 flex-1 rounded-full px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground tabular-nums transition outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
-            value === o && "bg-background text-foreground shadow-soft",
-          )}
-        >
-          {format(o)}
-        </button>
-      ))}
+    <div>
+      <div role="radiogroup" aria-label={label} onKeyDown={radioKeys} className="flex flex-wrap gap-0.5 rounded-full bg-muted p-0.5">
+        {opts.map((o) => {
+          const off = note.isUnavailable(o);
+          return (
+            <button
+              key={String(o.value)}
+              type="button"
+              role="radio"
+              aria-checked={value === o.value && !off}
+              tabIndex={radioTab(current === o.value)}
+              onClick={() => note.press(o, onChange)}
+              {...note.optionProps(o)}
+              className={cn(
+                "h-7 min-w-11 flex-1 rounded-full px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground tabular-nums transition outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+                value === o.value && !off && "bg-background text-foreground shadow-soft",
+                off && UNAVAILABLE_OPTION,
+              )}
+            >
+              {format(o.value)}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} reason={note.reason ?? held} />
+    </div>
+  );
+}
+
+/** The aspect ratio grid: a shape this run can't make stays in view, muted, and pressing it says why with the closest one. */
+function AspectChoices({ options, value, onChange, unavailable }: { options: string[]; value: string; onChange: (v: string) => void; unavailable: (v: string) => Unavailable | undefined }) {
+  const opts = options.map((o) => ({ value: o, unavailable: unavailable(o) }));
+  const note = useUnavailableNote(opts);
+  const held = unavailable(value);
+  return (
+    <div>
+      <div role="radiogroup" aria-label="Aspect ratio" onKeyDown={radioKeys} className="grid grid-cols-4 gap-1 sm:grid-cols-5">
+        {opts.map((o) => {
+          const off = note.isUnavailable(o);
+          const sel = value === o.value && !off;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={sel}
+              tabIndex={radioTab(value === o.value)}
+              onClick={() => note.press(o, onChange)}
+              {...note.optionProps(o)}
+              className={cn(
+                "flex h-14 flex-col items-center justify-center gap-1.5 rounded-lg text-[11px] font-medium text-muted-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
+                sel && "bg-brand-faint text-brand-text hover:bg-brand-faint-hover",
+                off && UNAVAILABLE_OPTION,
+                off && "hover:bg-transparent",
+              )}
+            >
+              <span className="grid h-5 place-items-center">
+                <RatioGlyph ratio={o.value} />
+              </span>
+              {o.value === "auto" ? "Auto" : o.value}
+            </button>
+          );
+        })}
+      </div>
+      <UnavailableNote {...note.noteProps} reason={note.reason ?? held} />
     </div>
   );
 }
@@ -119,18 +189,33 @@ function SpokenLanguage({ codes, value, onChange }: { codes: string[]; value?: s
   );
 }
 
-function Toggle({ label, hint, checked, onChange, children }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; children?: React.ReactNode }) {
+function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+  children,
+  unavailable,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children?: React.ReactNode;
+  /** Why the switch can't change anything with this model here: it is off-limits and says so in place of its hint. */
+  unavailable?: string;
+}) {
   const id = useId();
   return (
     <div className="flex items-center gap-3 py-2">
       <div className="min-w-0 flex-1">
-        <label htmlFor={id} className="block cursor-pointer">
-          <span className="block text-[13px] font-medium">{label}</span>
-          <span className="block text-[12px] leading-snug text-muted-foreground">{hint}</span>
+        <label htmlFor={id} className={cn("block", unavailable ? "cursor-not-allowed" : "cursor-pointer")}>
+          <span className={cn("block text-[13px] font-medium", unavailable && "text-muted-foreground")}>{label}</span>
+          <span className="block text-[12px] leading-snug text-muted-foreground">{unavailable ?? hint}</span>
         </label>
         {children}
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+      <Switch id={id} checked={checked} disabled={!!unavailable} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -241,35 +326,27 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
   const [advanced, setAdvanced] = useState(p.seed !== undefined || !!negativePrompt);
   // "Rewrite my prompt now" uses the install's AI helper, which guests and accounts can't call.
   const visitor = useLikelyVisitor();
+  // What this operation's routes send (route-takes.ts): a ratio, size or length they don't make stays in view, muted, and
+  // says why with the closest one they do; a seed, negative prompt or sound switch they don't read says so.
+  const takes: OpTakes = useMemo(() => opTakes(model, op), [model, op]);
+  const why = (setting: "aspect" | "resolution" | "duration", v: string | number, apply: (x: string | number) => void, label = (x: string | number) => String(x)): Unavailable | undefined => {
+    if (!model) return undefined;
+    const u = settingUnavailable(model, op, setting, v, takes);
+    if (!u) return undefined;
+    const instead = u.instead;
+    return { why: u.why, ...(instead !== undefined && { fix: { label: `Use ${label(instead)}`, run: () => apply(instead) } }) };
+  };
   return (
     <div className="space-y-4">
       {extras && <div className="flex flex-wrap gap-1.5 sm:hidden">{extras}</div>}
       {shape.aspect && (
         <Section label="Aspect ratio">
-          <div role="radiogroup" aria-label="Aspect ratio" onKeyDown={radioKeys} className="grid grid-cols-4 gap-1 sm:grid-cols-5">
-            {shape.aspect.map((o) => {
-              const sel = (p.aspectRatio ?? d.aspectRatio ?? shape.aspect![0]) === o;
-              return (
-                <button
-                  key={o}
-                  type="button"
-                  role="radio"
-                  aria-checked={sel}
-                  tabIndex={radioTab(sel)}
-                  onClick={() => setP({ aspectRatio: o })}
-                  className={cn(
-                    "flex h-14 flex-col items-center justify-center gap-1.5 rounded-lg text-[11px] font-medium text-muted-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
-                    sel && "bg-brand-faint text-brand-text hover:bg-brand-faint-hover",
-                  )}
-                >
-                  <span className="grid h-5 place-items-center">
-                    <RatioGlyph ratio={o} />
-                  </span>
-                  {o === "auto" ? "Auto" : o}
-                </button>
-              );
-            })}
-          </div>
+          <AspectChoices
+            options={shape.aspect}
+            value={p.aspectRatio ?? d.aspectRatio ?? shape.aspect[0]}
+            onChange={(o) => setP({ aspectRatio: o })}
+            unavailable={(o) => why("aspect", o, (x) => setP({ aspectRatio: String(x) }), (x) => (x === "auto" ? "Auto" : String(x)))}
+          />
         </Section>
       )}
       {shape.formats && (
@@ -284,6 +361,7 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
             options={shape.resolution}
             value={p.resolution ?? d.resolution ?? shape.resolution[0]}
             onChange={(v) => setP({ resolution: v })}
+            unavailable={(v) => why("resolution", v, (x) => setP({ resolution: String(x) }))}
           />
           {/* MiniMax H3 (open) at 2K finishes with Open-H3 Regenerate: a visitor runs it on its own GPU (own-setup.ts). */}
           {visitor && model && shape.resolution.find((r) => wantsH3TwoK(model.id, r)) && (
@@ -313,7 +391,14 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
       )}
       {shape.duration && (
         <Section label="Duration">
-          <Segmented label="Duration" options={shape.duration} value={p.duration ?? d.duration ?? shape.duration[0]} onChange={(v) => setP({ duration: v })} format={durationLabel} />
+          <Segmented
+            label="Duration"
+            options={shape.duration}
+            value={p.duration ?? d.duration ?? shape.duration[0]}
+            onChange={(v) => setP({ duration: v })}
+            format={durationLabel}
+            unavailable={(v) => why("duration", v, (x) => setP({ duration: Number(x) }), (x) => durationLabel(Number(x)))}
+          />
         </Section>
       )}
       {shape.count && (
@@ -350,7 +435,13 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
             <Toggle label="Draft" hint={p.draft ? "Cheap 480p take — finish the one you like in 1080p" : "Preview at 480p first, then render the keeper in 1080p"} checked={!!p.draft} onChange={(v) => setP({ draft: v })} />
           )}
           {shape.audio && (
-            <Toggle label="Audio" hint={p.generateAudio === false ? "Silent video (cheaper)" : "Native sound, music and dialogue"} checked={p.generateAudio !== false} onChange={(v) => setP({ generateAudio: v })} />
+            <Toggle
+              label="Audio"
+              hint={p.generateAudio === false ? "Silent video (cheaper)" : "Native sound, music and dialogue"}
+              checked={p.generateAudio !== false}
+              onChange={(v) => setP({ generateAudio: v })}
+              unavailable={!takes.audio && model ? `${model.name} sets its own sound here: this switch can't change it` : undefined}
+            />
           )}
           {shape.enhance && (
             <Toggle label="Enhance prompt" hint="Rewrites your prompt with more detail before it runs" checked={!!p.enhancePrompt} onChange={(v) => setP({ enhancePrompt: v })}>
@@ -382,12 +473,14 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-[12px] text-muted-foreground">
               <span>Seed</span>
-              <label className="flex items-center gap-2">
+              <label className={cn("flex items-center gap-2", !takes.seed && "cursor-not-allowed opacity-60")}>
                 Random
-                <Switch checked={p.seed === undefined} onCheckedChange={(r) => setP({ seed: r ? undefined : Math.floor(Math.random() * 1e9) })} aria-label="Random seed" />
+                <Switch checked={!takes.seed || p.seed === undefined} disabled={!takes.seed} onCheckedChange={(r) => setP({ seed: r ? undefined : Math.floor(Math.random() * 1e9) })} aria-label="Random seed" />
               </label>
             </div>
-            {p.seed !== undefined && (
+            {/* A model that takes no seed here (Nano Banana Pro, Seedance 2.5): every run is new, and it says so. */}
+            {!takes.seed && model && <p className="text-[12px] leading-snug text-muted-foreground">{model.name} picks its own seed here, so each run comes out new.</p>}
+            {takes.seed && p.seed !== undefined && (
               <div className="flex gap-1.5">
                 <SeedInput value={p.seed} onChange={(seed) => setP({ seed })} />
                 <Button variant="secondary" size="icon" className="size-8" onClick={() => setP({ seed: Math.floor(Math.random() * 1e9) })} aria-label="New random seed">
@@ -403,10 +496,15 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
                 value={negativePrompt}
                 onChange={(e) => setNegativePrompt(e.target.value)}
                 rows={3}
+                disabled={!takes.negativePrompt}
                 aria-label="Negative prompt"
                 placeholder="blurry, low quality, extra fingers…"
-                className="w-full resize-none rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+                className="w-full resize-none rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
               />
+              {/* The route sends no negative prompt (Qwen Image Edit on fal, Kandinsky 6.0): said, never dropped without a word. */}
+              {!takes.negativePrompt && model && (
+                <p className="text-[12px] leading-snug text-muted-foreground">{model.name} doesn&apos;t read a negative prompt here: describe only what you want in the prompt.</p>
+              )}
             </div>
           )}
           {model && (

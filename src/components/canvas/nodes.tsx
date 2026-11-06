@@ -114,7 +114,9 @@ import {
   type PortDef,
   type PortType,
 } from "@/lib/catalog/canvas";
-import { OPERATION_LABELS, type Engine, type MediaKind, type ModelDef, type OutputFile } from "@/lib/catalog/types";
+import { OPERATION_LABELS, type Engine, type MediaKind, type ModelDef, type Operation, type OutputFile } from "@/lib/catalog/types";
+import { OPERATION_PLACE, opTakes, settingUnavailable } from "@/lib/catalog/route-takes";
+import { settingsShape } from "@/lib/composer";
 import { formatCost } from "@/lib/format";
 import { dubResult, languageStage, type DubSessionView, type DubStage } from "@/lib/av/dub";
 import { DUB_LANGUAGES, supportsTarget } from "@/lib/av/languages";
@@ -594,7 +596,22 @@ function Results({ id, r, compact }: { id: string; r: NodeResults; compact?: boo
  * A compact select. Its options mount only while it's open (a closed Radix Select still renders
  * every item, which adds up to thousands on a big board); the trigger shows the value itself.
  */
-function OptionSelect<T extends string | number>({ value, options, onChange, label, format }: { value: T | undefined; options: T[]; onChange: (v: T) => void; label: string; format?: (v: T) => string }) {
+function OptionSelect<T extends string | number>({
+  value,
+  options,
+  onChange,
+  label,
+  format,
+  unavailable,
+}: {
+  value: T | undefined;
+  options: T[];
+  onChange: (v: T) => void;
+  label: string;
+  format?: (v: T) => string;
+  /** Why a value can't be made by this node's run (route-takes.ts): listed, muted, with the reason, and never picked. */
+  unavailable?: (v: T) => string | undefined;
+}) {
   const [open, setOpen] = useState(false);
   const text = (v: T) => (format ? format(v) : String(v));
   return (
@@ -604,22 +621,35 @@ function OptionSelect<T extends string | number>({ value, options, onChange, lab
       </SelectTrigger>
       {open && (
         <SelectContent className="max-h-72">
-          {options.map((o) => (
-            <SelectItem key={String(o)} value={String(o)} className="text-[13px]">
-              {text(o)}
-            </SelectItem>
-          ))}
+          {options.map((o) => {
+            const why = unavailable?.(o);
+            return (
+              <SelectItem key={String(o)} value={String(o)} disabled={!!why} className="text-[13px]">
+                {text(o)}
+                {why && <span className="text-[11px] text-muted-foreground"> · {why}</span>}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       )}
     </Select>
   );
 }
 
-function ModelOptions({ id, model, data }: { id: string; model: ModelDef; data: CanvasNodeData }) {
+function ModelOptions({ id, model, data, runOp }: { id: string; model: ModelDef; data: CanvasNodeData; runOp?: Operation }) {
   const actions = useEditorActions();
   const p = data.params ?? {};
   const o = model.options;
   const d = model.defaults ?? {};
+  // The operation the node runs (its own, or the one Auto resolves to from what is connected): a setting it has no field for
+  // (a start frame's shape, an edit that follows image 1) isn't offered, and a value its routes don't make says so.
+  const op = data.op ?? runOp;
+  const shape = settingsShape(model, op, model.kind, true, p);
+  const takes = opTakes(model, op);
+  const off = (setting: "aspect" | "resolution" | "duration") => (v: string | number) => {
+    const u = settingUnavailable(model, op, setting, v, takes);
+    return u ? `not ${(op && OPERATION_PLACE[op]) || "here"}` : undefined;
+  };
   const set = (patch: Partial<NonNullable<CanvasNodeData["params"]>>) => actions.update(id, { params: { ...p, ...patch } });
   const extra = (p.extra ?? {}) as Record<string, unknown>;
   const setExtra = (param: string, v?: string | number) => {
@@ -630,9 +660,9 @@ function ModelOptions({ id, model, data }: { id: string; model: ModelDef; data: 
   };
   const text = model.kind === "text";
   const items: React.ReactNode[] = [];
-  if (o.aspectRatios?.length) items.push(<OptionSelect key="ar" label="Aspect ratio" value={p.aspectRatio ?? d.aspectRatio} options={o.aspectRatios} onChange={(v) => set({ aspectRatio: v })} />);
-  if (o.durations?.length && o.durations.length > 1) items.push(<OptionSelect key="dur" label="Duration" value={p.duration ?? d.duration} options={o.durations} onChange={(v) => set({ duration: v })} format={(v) => `${v}s`} />);
-  if (o.resolutions?.length && o.resolutions.length > 1) items.push(<OptionSelect key="res" label="Quality" value={p.resolution ?? d.resolution} options={o.resolutions} onChange={(v) => set({ resolution: v })} />);
+  if (shape.aspect) items.push(<OptionSelect key="ar" label="Aspect ratio" value={p.aspectRatio ?? d.aspectRatio} options={shape.aspect} onChange={(v) => set({ aspectRatio: v })} unavailable={off("aspect")} />);
+  if (shape.duration) items.push(<OptionSelect key="dur" label="Duration" value={p.duration ?? d.duration} options={shape.duration} onChange={(v) => set({ duration: v })} format={(v) => `${v}s`} unavailable={off("duration")} />);
+  if (shape.resolution) items.push(<OptionSelect key="res" label="Quality" value={p.resolution ?? d.resolution} options={shape.resolution} onChange={(v) => set({ resolution: v })} unavailable={off("resolution")} />);
   if ((o.maxOutputs ?? 1) > 1) items.push(<OptionSelect key="n" label="Count" value={p.numOutputs ?? 1} options={Array.from({ length: Math.min(4, o.maxOutputs!) }, (_, i) => i + 1)} onChange={(v) => set({ numOutputs: v })} format={(v) => `×${v}`} />);
   if (o.voices?.length) items.push(<OptionSelect key="voice" label="Voice" value={p.voice ?? d.voice ?? o.voices[0].id} options={o.voices.map((v) => v.id)} onChange={(v) => set({ voice: v })} format={(v) => o.voices!.find((x) => x.id === v)?.name ?? v} />);
   // A text model writes; picking a language makes it translate (Auto), and "Don't translate" goes back to writing.
@@ -669,7 +699,7 @@ function ModelOptions({ id, model, data }: { id: string; model: ModelDef; data: 
       </button>,
     );
   if (o.sliders?.length) items.push(<div key="sliders" className={NO_DRAG}><SlidersChip model={model} values={extra} onChange={setExtra} /></div>);
-  if (o.controls?.length) items.push(<div key="controls" className={NO_DRAG}><ControlsChip controls={o.controls} values={extra} onChange={setExtra} op={data.op} /></div>);
+  if (o.controls?.length) items.push(<div key="controls" className={NO_DRAG}><ControlsChip controls={o.controls} values={extra} onChange={setExtra} op={op} /></div>);
   if (!items.length) return null;
   return <div className={cn("flex flex-wrap gap-1 [&_button]:h-7 [&_button]:text-[12px]", NO_DRAG)}>{items}</div>;
 }
@@ -919,7 +949,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
             className={cn("field-sizing-content max-h-36 min-h-14 w-full resize-none rounded-lg bg-muted px-2.5 py-2 text-[13px] leading-snug outline-none placeholder:text-subtle-foreground focus:ring-2 focus:ring-brand-faint", NO_DRAG)}
           />
         )}
-        {model && !g.readOnly && type !== "concat" && <ModelOptions id={id} model={model} data={data} />}
+        {model && !g.readOnly && type !== "concat" && <ModelOptions id={id} model={model} data={data} runOp={v.op} />}
         {v.rows && (
           <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <Table className="size-3.5 shrink-0" /> Runs once per table row: {v.rows === 1 ? "1 run" : `${v.rows} runs`}
