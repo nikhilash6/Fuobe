@@ -71,6 +71,29 @@ describe("the worker's model files", () => {
     expect(Object.keys(JSON.parse(fs.readFileSync(cache, "utf8")))).toHaveLength(3);
   });
 
+  it('with fileCheck "size", takes a file of the exact size without reading it, and a cached hash still decides', async () => {
+    const models = tempDir("fuobe-worker-models-size-");
+    fs.mkdirSync(path.join(models, "loras"));
+    fs.writeFileSync(path.join(models, "loras", "big.safetensors"), "hello");
+    fs.writeFileSync(path.join(models, "loras", "short.safetensors"), "hi");
+    fs.writeFileSync(path.join(models, "loras", "known.safetensors"), "jello");
+    const index = {
+      files: {
+        a: { folder: "loras", file: "big.safetensors", sizeBytes: 5 },
+        b: { folder: "loras", file: "short.safetensors", sizeBytes: 5 },
+        c: { folder: "loras", file: "known.safetensors", sizeBytes: 5 },
+      },
+    };
+    const pins = { "loras/big.safetensors": sha("hello"), "loras/short.safetensors": sha("hello"), "loras/known.safetensors": sha("hello") };
+    const cache = path.join(models, "hash-cache.json");
+    // the swapped file's real hash is already known: it still doesn't count
+    await modelFiles([models], { files: { c: index.files.c } }, cache, pins);
+    const found = await modelFiles([models], index, cache, pins, { fileCheck: "size" });
+    expect(found).toEqual([{ folder: "loras", name: "big.safetensors", size: 5, sha256: sha("hello") }]);
+    // nothing new is cached for a file taken by its size
+    expect(Object.keys(JSON.parse(fs.readFileSync(cache, "utf8")))).toHaveLength(1);
+  });
+
   it("counts only the copy ComfyUI finds first: a wrong copy in an earlier folder isn't made up for by a good one later", async () => {
     const a = tempDir("fuobe-worker-models-a-");
     const b = tempDir("fuobe-worker-models-b-");

@@ -356,7 +356,7 @@ async function work(saved, deps, owner) {
 
   async function scan() {
     packs = packFolders(cfg.comfyDir, index);
-    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir }), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
+    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir, fileCheck: cfg.fileCheck }), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
     invHash = inventoryHash(inv);
   }
   // One look at a time; the next beat carries a changed hash, and the studio then asks for the list.

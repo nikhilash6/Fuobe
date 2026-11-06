@@ -211,6 +211,9 @@ export async function modelFiles(modelDirs, index, cacheFile, pins = filePins(),
     if (!st.isFile()) return null;
     if (st.size !== f.sizeBytes) return { ok: false };
     const key = `${p}|${st.size}|${st.mtimeMs}`;
+    // worker.json `fileCheck: "size"`: a file of the exact size counts as the pinned one until its hash is known (a
+    // hash already in the cache still decides), so a first start doesn't read hundreds of GB. Nothing is cached for it.
+    if (o.fileCheck === "size" && cache[key] === undefined) return { ok: true, size: st.size, sha: want };
     const sha = cache[key] ?? (cache[key] = await sha256File(p));
     return { ok: sha === want, size: st.size, sha };
   };
