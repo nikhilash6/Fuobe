@@ -1,15 +1,15 @@
 /**
  * Just enough of the common media containers to know a file's shape before a job runs: duration, displayed
  * size, frame rate / count, which tracks it has and how many audio channels. Reads MP4 / MOV / M4A (ISO-BMFF),
- * WAV, FLAC and MP3 from the bytes in memory; anything else (WebM, MKV, Ogg…) is "unknown" (null) and callers fall
- * back to safe defaults.
+ * WAV, FLAC, MP3 and Ogg (Vorbis or Opus sound) from the bytes in memory; anything else (WebM, MKV…) is "unknown" (null)
+ * and callers fall back to safe defaults.
  */
 export interface MediaInfo {
   /**
    * "webm": read by the server's WebM / Matroska reader (src/server/webm-probe.ts), for the ComfyUI uploads;
    * "image": a still's size (src/lib/image-size.ts), so "auto" can follow a start frame's shape.
    */
-  container: "mp4" | "wav" | "flac" | "mp3" | "webm" | "avi" | "image";
+  container: "mp4" | "wav" | "flac" | "mp3" | "ogg" | "webm" | "avi" | "image";
   /** Seconds (the longest track). */
   duration?: number;
   /** Seconds of picture (the video track alone). */
@@ -22,7 +22,7 @@ export interface MediaInfo {
   hasVideo: boolean;
   hasAudio: boolean;
   /**
-   * Audio channels, where the header says: WAV, FLAC, MP3, and an MP4 / MOV / M4A's first sound track (its sample
+   * Audio channels, where the header says: WAV, FLAC, MP3, Ogg, and an MP4 / MOV / M4A's first sound track (its sample
    * entry, or an AAC track's own config); the server's WebM / Matroska reader adds them for those.
    */
   channels?: number;
@@ -40,6 +40,8 @@ export function probeMedia(data: Uint8Array, size = data.length): MediaInfo | nu
     const total = Math.max(size, data.length);
     if (fourcc(data, 0) === "RIFF" && fourcc(data, 8) === "WAVE") return probeWav(data, total);
     if (fourcc(data, 0) === "fLaC") return probeFlac(data);
+    // An Ogg's length is in its last page: known when `data` is the whole file.
+    if (fourcc(data, 0) === "OggS") return probeOgg(data, size <= data.length ? data : undefined);
     if (fourcc(data, 4) === "ftyp" || ["moov", "mdat", "free", "wide", "skip"].includes(fourcc(data, 4))) return probeIsoBmff(data);
     return probeMp3(data, total);
   } catch {
@@ -76,6 +78,7 @@ export async function probeMediaRanges(read: ReadRange, size: number): Promise<M
   try {
     const head = await read(0, Math.min(size, HEAD_BYTES));
     if (head.length < 12) return null;
+    if (fourcc(head, 0) === "OggS") return probeOgg(head, size <= head.length ? head : await read(Math.max(0, size - OGG_TAIL_BYTES), size));
     if (!ISO_TOP.includes(fourcc(head, 4))) return size <= head.length ? probeMedia(head) : headerSays(head) ? probeMedia(head, size) : null;
     for (let o = 0, n = 0; o + 8 <= size; n++) {
       if (n >= MAX_TOP_BOXES) return null;
@@ -114,6 +117,7 @@ export function probeMediaRangesSync(read: ReadRangeSync, size: number, opts: { 
   try {
     const head = read(0, Math.min(size, opts.headBytes ?? HEAD_BYTES));
     if (head.length < 12) return null;
+    if (fourcc(head, 0) === "OggS") return probeOgg(head, size <= head.length ? head : read(Math.max(0, size - OGG_TAIL_BYTES), size));
     if (!ISO_TOP.includes(fourcc(head, 4))) return probeMedia(head, size);
     for (let o = 0, n = 0; o + 8 <= size; n++) {
       if (n >= MAX_TOP_BOXES) return null;
@@ -382,3 +386,51 @@ function probeMp3(data: Uint8Array, total = data.length): MediaInfo | null {
   if (!bitrate) return null;
   return { container: "mp3", duration: ((total - o) * 8) / bitrate, hasVideo: false, hasAudio: true, channels: mono ? 1 : 2 };
 }
+
+// ---------------------------------------------------------------------------
+// Ogg (Vorbis, Opus)
+
+/** The end of an Ogg read for its last page: a page is at most 65,307 bytes, so its header is always in here. */
+const OGG_TAIL_BYTES = 72 * 1024;
+
+/**
+ * An Ogg file's sound (RFC 3533 pages): the first page's identification header says the codec, channels and rate, and the
+ * last page's granule position is the samples played to its end (Vorbis I spec §A.2; Opus, RFC 7845 §4: at 48 kHz, less
+ * the pre-skip). `tail`: the file's last bytes (or the whole file), for the length; without it the length is unknown.
+ * Null for an Ogg of anything else (Theora video, FLAC in Ogg).
+ */
+function probeOgg(head: Uint8Array, tail?: Uint8Array): MediaInfo | null {
+  if (head.length < 28 || head[4] !== 0) return null;
+  const d = new DataView(head.buffer, head.byteOffset, head.byteLength);
+  const serial = d.getUint32(14, true);
+  const p = 27 + head[26];
+  const text = (o: number, n: number) => String.fromCharCode(...head.subarray(o, o + n));
+  let rate: number;
+  let channels: number;
+  let preSkip = 0;
+  if (p + 30 <= head.length && head[p] === 1 && text(p + 1, 6) === "vorbis") {
+    channels = head[p + 11];
+    rate = d.getUint32(p + 12, true);
+  } else if (p + 19 <= head.length && text(p, 8) === "OpusHead") {
+    channels = head[p + 9];
+    preSkip = d.getUint16(p + 10, true);
+    rate = 48_000; // Opus granule positions always count 48 kHz samples.
+  } else return null;
+  if (!rate || !channels) return null;
+  const info: MediaInfo = { container: "ogg", hasVideo: false, hasAudio: true, channels };
+  if (!tail) return info;
+  // The last page of the same stream with a granule position (-1 = no packet ends on that page).
+  const t = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+  for (let o = tail.length - 27; o >= 0; o--) {
+    if (tail[o] !== 0x4f || tail[o + 1] !== 0x67 || tail[o + 2] !== 0x67 || tail[o + 3] !== 0x53 || tail[o + 4] !== 0) continue;
+    if (t.getUint32(o + 14, true) !== serial) continue;
+    const lo = t.getUint32(o + 6, true);
+    const hi = t.getUint32(o + 10, true);
+    if (lo === 0xffffffff && hi === 0xffffffff) continue;
+    const samples = hi * 2 ** 32 + lo - preSkip;
+    if (samples > 0) info.duration = samples / rate;
+    break;
+  }
+  return info;
+}
+
