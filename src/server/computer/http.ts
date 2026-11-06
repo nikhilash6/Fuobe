@@ -105,8 +105,8 @@ const KIND_WORDS: Record<WantedFile["kind"], string> = { image: "a picture", vid
 
 const notWhatWasAsked = (w: WantedFile) => `Couldn't save a result from your ComfyUI: it isn't ${KIND_WORDS[w.kind] ?? "what this run makes"}.`;
 
-/** An SVG's first bytes: a byte order mark and white space, then its XML declaration, a comment or its <svg> tag. */
-const SVG_HEAD = /^﻿?\s*(<\?xml[\s?]|<!--|<svg[\s>/])/;
+/** An SVG's first bytes: white space (a byte order mark is one), then its XML declaration, a comment or its <svg> tag. */
+const SVG_HEAD = /^\s*(<\?xml[\s?]|<!--|<svg[\s>/])/;
 /** What a kept SVG never holds: scripts, event handlers, a page inside it, entities. */
 const SVG_ACTIVE = /<script\b|<foreignObject\b|<!ENTITY|\son[a-z]+\s*=|javascript:/i;
 const SVG_MAX_BYTES = 64 * 2 ** 20;
