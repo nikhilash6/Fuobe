@@ -5,6 +5,7 @@
     "bria/video/background-removal/green-screen-despill",
     "elevenlabs/music/v2.5",
     "fal-ai/deepfilternet3",
+    "fal-ai/ffmpeg-api/merge-audio-video",
     "fal-ai/kandinsky6-lite/image-to-video",
     "fal-ai/kandinsky6-lite/text-to-video",
     "fal-ai/kandinsky6-pro/image-to-video",

@@ -4,107 +4,43 @@
  *
  * - Each route's request, for every setting the studio offers it (shape, size, length, the model's own controls, sound,
  *   seed, negative words, references up to the model's limits), is built by the real planner and payload builder (as
- *   fal.ts and replicate.ts submit it) and validated with ajv against the endpoint's input schema.
+ *   fal.ts and replicate.ts submit it) and validated with ajv against the endpoint's input schema, with no field the
+ *   schema doesn't name (a song's files/upload body too).
  * - Each endpoint's answer, made from its output schema (its examples, else a value of each field's type), is read by
  *   the real result parser: it gives the files the run makes, of the kind the run makes, and nothing else.
+ *
+ * Paths these one-setting-at-a-time variants don't reach (uploads, chained steps, film gaps, lyrics, maxima together, edge
+ * values) are in tests/provider-conformance-paths.test.ts; the shared readers are in tests/helpers/provider-schemas.ts.
  *
  * A provider that changes an endpoint shows up as a fixture diff when the schemas are refreshed, and here as the request
  * or answer that no longer fits.
  */
 import fs from "node:fs";
-import path from "node:path";
-import Ajv, { type ValidateFunction } from "ajv";
 import { describe, expect, it } from "vitest";
 import { getModel, getPreset, MODELS } from "@/lib/catalog";
 import { HOSTED_UNTESTED_ENDPOINTS, isHostedUntested } from "@/lib/catalog/hosted-untested";
-import { loraEndpointFor, routeLoraField } from "@/lib/catalog/loras";
-import { buildPayload, extractOutputs } from "@/lib/catalog/payload";
+import { extractOutputs } from "@/lib/catalog/payload";
 import { planGeneration, routesFor } from "@/lib/catalog/plan";
-import { operationOutput, type GenerationRequest, type GenInput, type GenParams, type ModelDef, type ModelRoute, type Operation } from "@/lib/catalog/types";
-
-const DIR = path.join(__dirname, "fixtures/provider-schemas");
-const INDEX = JSON.parse(fs.readFileSync(path.join(DIR, "index.json"), "utf8")) as { fal: string[]; replicate: string[] };
-const fileFor = (provider: string, endpoint: string) => path.join(DIR, provider, `${endpoint.replaceAll("/", "__")}.json`);
-
-/** The parts of a JSON schema (OpenAPI 3) read here. */
-interface Schema {
-  $ref?: string;
-  examples?: unknown[];
-  example?: unknown;
-  anyOf?: Schema[];
-  oneOf?: Schema[];
-  allOf?: Schema[];
-  default?: unknown;
-  enum?: unknown[];
-  type?: string | string[];
-  properties?: Record<string, Schema>;
-  items?: Schema;
-  title?: string;
-  format?: string;
-  minimum?: number;
-}
-type Body = { content?: Record<string, { schema?: Schema }> };
-type Doc = {
-  paths?: Record<string, Record<string, { requestBody?: Body; responses?: Record<string, Body> }>>;
-  components?: { schemas?: Record<string, Schema> };
-};
-const docs = new Map<string, Doc>();
-function doc(provider: "fal" | "replicate", endpoint: string): Doc {
-  const key = `${provider}:${endpoint}`;
-  if (!docs.has(key)) {
-    const raw = JSON.parse(fs.readFileSync(fileFor(provider, endpoint), "utf8"));
-    docs.set(key, provider === "fal" ? raw : raw.openapi_schema);
-  }
-  return docs.get(key)!;
-}
-
-const refName = (s: Schema | undefined): string | undefined => (typeof s?.$ref === "string" ? s.$ref.split("/").pop() : undefined);
-
-/** The endpoint's input and output schema names (fal: the queue submit body and result; Replicate: Input and Output). */
-function schemaNames(provider: "fal" | "replicate", endpoint: string): { input: string; output: string } {
-  if (provider === "replicate") return { input: "Input", output: "Output" };
-  const d = doc(provider, endpoint);
-  const submit = d.paths?.[`/${endpoint}`]?.post;
-  const result = d.paths?.[`/${endpoint}/requests/{request_id}`]?.get;
-  const input = refName(submit?.requestBody?.content?.["application/json"]?.schema);
-  const output = refName(result?.responses?.["200"]?.content?.["application/json"]?.schema);
-  if (!input || !output) throw new Error(`${endpoint}: no input or output schema in its fixture`);
-  return { input, output };
-}
-
-// OpenAPI keywords ajv doesn't know (x-*, examples, nullable) are left to it as annotations; "uri" and other formats are
-// not checked (a run's files are URLs the provider fetches).
-const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false, validateSchema: false });
-const validators = new Map<string, ValidateFunction>();
-function validator(provider: "fal" | "replicate", endpoint: string, name: string): ValidateFunction {
-  const id = `${provider}:${endpoint}`;
-  const key = `${id}#${name}`;
-  if (!validators.has(key)) {
-    if (!ajv.getSchema(id)) ajv.addSchema({ $id: id, components: doc(provider, endpoint).components }, id);
-    validators.set(key, ajv.compile({ $ref: `${id}#/components/schemas/${name}` }));
-  }
-  return validators.get(key)!;
-}
+import { operationOutput, type GenerationRequest, type GenParams, type ModelDef, type ModelRoute, type Operation } from "@/lib/catalog/types";
+import {
+  bodyProblems,
+  CLIP,
+  documentedAnswer,
+  END,
+  GLB,
+  handOverInput,
+  IMG,
+  PROMPT,
+  routeRequest,
+  SCHEMA_INDEX as INDEX,
+  schemaFile as fileFor,
+  SONG,
+  VOICE,
+  type Variant,
+} from "./helpers/provider-schemas";
 
 // ---------------------------------------------------------------------------
 // The runs the studio can send each route.
-
-const IMG = "https://v3b.fal.media/files/in/start.png";
-const END = "https://v3b.fal.media/files/in/end.png";
-const CLIP = "https://v3b.fal.media/files/in/clip.mp4";
-const VOICE = "https://v3b.fal.media/files/in/voice.mp3";
-const SONG = "https://v3b.fal.media/files/in/song.mp3";
-const GLB = "https://v3b.fal.media/files/in/model.glb";
-const PROMPT = "A dancer in a silver coat turns slowly under warm stage light, the camera drifting closer";
-
-type Inputs = NonNullable<GenerationRequest["inputs"]>;
-interface Variant {
-  label: string;
-  inputs: Inputs;
-  params: GenParams;
-  prompt?: string;
-  negativePrompt?: string;
-}
 
 /** What each operation's run carries (a clip's length, a song's), as the studio sends it. */
 function baseRun(model: ModelDef, op: Operation): Omit<Variant, "label"> {
@@ -182,9 +118,10 @@ function variants(model: ModelDef, op: Operation): Variant[] {
     if (o.negativePrompt) add("negative words", { negativePrompt: "blur, flicker" });
     for (const s of o.sliders ?? []) for (const v of [s.min, s.max]) add(`${s.param} ${v}`, { params: { extra: { [s.param]: v } } });
     if (op === "ref2v") {
-      const imgs = Math.min(o.maxImages ?? 1, 3);
-      const vids = Math.min(o.maxVideos ?? 0, 3);
-      const auds = Math.min(o.maxAudios ?? 0, 3);
+      // Each list at the catalog's own maximum (tests/provider-conformance-paths.test.ts also sends them together).
+      const imgs = o.maxImages ?? 1;
+      const vids = o.maxVideos ?? 0;
+      const auds = o.maxAudios ?? 0;
       if (imgs > 1) add(`${imgs} pictures`, { inputs: { images: Array.from({ length: imgs }, (_, i) => `https://v3b.fal.media/files/in/ref${i}.png`) } });
       if (vids) add(`${vids} clips`, { inputs: { videos: Array.from({ length: vids }, (_, i) => `https://v3b.fal.media/files/in/ref${i}.mp4`) } });
       if (auds) add(`${auds} voices`, { inputs: { audios: Array.from({ length: auds }, (_, i) => `https://v3b.fal.media/files/in/voice${i}.mp3`) } });
@@ -194,37 +131,6 @@ function variants(model: ModelDef, op: Operation): Variant[] {
   }
   return out;
 }
-
-/** The body fal.ts or replicate.ts would send for this route (their submit: LoRA field, LoRA endpoint, a song uploaded first). */
-function request(route: ModelRoute, input: GenInput): { endpoint: string; body: Record<string, unknown> } {
-  const map = { ...route.map, loras: routeLoraField(route) };
-  const body = buildPayload(map, input);
-  const song = map.songSource;
-  if (song && body[song.songId] === undefined) body[song.uploadId] = "mureka-upload-id";
-  return { endpoint: loraEndpointFor({ ...route, map }, input.loras).split(":")[0], body };
-}
-
-/** The input the server hands the adapter (generations.ts handOver), files already uploaded. */
-function genInput(plan: ReturnType<typeof planGeneration>, v: Variant): GenInput {
-  // A song extended at its end (or, before its start, at 0) unless the run says where, as handOver sets it.
-  const extendAt = plan.op === "song-extend" && plan.params.startTime === undefined ? (plan.params.extra?.extend_type === "head" ? 0 : plan.params.sourceDuration) : undefined;
-  return {
-    ...plan.params,
-    ...(extendAt !== undefined && { startTime: extendAt }),
-    prompt: plan.prompt || undefined,
-    negativePrompt: v.negativePrompt,
-    images: v.inputs.images ?? [],
-    endImage: v.inputs.endImage,
-    video: v.inputs.video,
-    audio: v.inputs.audio,
-    videos: v.inputs.videos ?? [],
-    audios: v.inputs.audios ?? [],
-    model3d: v.inputs.model3d,
-    loras: plan.loras,
-  };
-}
-
-const errorsOf = (fn: ValidateFunction) => (fn.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message}${e.params && "allowedValues" in e.params ? ` ${JSON.stringify(e.params.allowedValues)}` : ""}`);
 
 // ---------------------------------------------------------------------------
 // The routes.
@@ -268,19 +174,21 @@ describe("provider conformance: the untested hosted routes", () => {
         }
         // The variant's route (a quality control picks Kandinsky's Pro or Lite endpoint): only this one is checked here.
         if (!routesFor(model, plan.op, plan.params).includes(route)) continue;
-        const { endpoint, body } = request(route, genInput(plan, v));
-        const fn = validator(provider, endpoint, schemaNames(provider, endpoint).input);
+        const { endpoint, body, upload } = routeRequest(route, handOverInput(plan, v));
         checked++;
-        if (!fn(body)) problems.push(`${v.label} → ${endpoint} ${JSON.stringify(body)}: ${errorsOf(fn).join("; ")}`);
+        // The schema, and no field it doesn't name (fal ignores those without a word).
+        const wrong = bodyProblems(provider, endpoint, body);
+        if (wrong.length) problems.push(`${v.label} → ${endpoint} ${JSON.stringify(body)}: ${wrong.join("; ")}`);
+        // A song Mureka didn't make goes through its files/upload first: that body too.
+        const upWrong = upload ? bodyProblems("fal", upload.endpoint, upload.body) : [];
+        if (upWrong.length) problems.push(`${v.label} → ${upload!.endpoint} ${JSON.stringify(upload!.body)}: ${upWrong.join("; ")}`);
       }
       expect(problems, problems.join("\n")).toEqual([]);
       expect(checked).toBeGreaterThan(0);
     });
 
     it(`${name}: its documented answer reads as the run's result`, () => {
-      const names = schemaNames(provider, route.endpoint.split(":")[0]);
-      const d = doc(provider, route.endpoint.split(":")[0]);
-      const answer = provider === "replicate" ? replicateAnswer(route.endpoint.split(":")[0], d) : exampleOf(d.components?.schemas?.[names.output], d);
+      const answer = documentedAnswer(provider, route.endpoint.split(":")[0]);
       // Stems come back as one zip (Mureka's zip_url), which fal.ts unpacks into one result per stem.
       if (op === "song-stems") return expect(typeof (answer as { zip_url?: unknown })?.zip_url).toBe("string");
       const outs = extractOutputs(answer, op);
@@ -290,56 +198,3 @@ describe("provider conformance: the untested hosted routes", () => {
     });
   }
 });
-
-// ---------------------------------------------------------------------------
-// Answers made from the output schemas.
-
-/** Replicate's example prediction's output (the model page's own), else one made from the Output schema. */
-function replicateAnswer(model: string, d: Doc): unknown {
-  const raw = JSON.parse(fs.readFileSync(fileFor("replicate", model), "utf8"));
-  return raw.example_prediction?.output ?? exampleOf(d.components?.schemas?.Output, d);
-}
-
-const EXT: Record<string, string> = { image: "png", video: "mp4", audio: "mp3", model3d: "glb" };
-const MIME: Record<string, string> = { image: "image/png", video: "video/mp4", audio: "audio/mpeg", model3d: "model/gltf-binary" };
-
-/**
- * A value for a schema: its own example where it has one, else one of its type. Every optional field is filled too (a
- * still fal may send beside the video is part of the answer), flags are false, and a file with no example gets a URL with
- * the extension its title or field name suggests.
- */
-function exampleOf(schema: Schema | undefined, d: Doc, key = "", depth = 0): unknown {
-  if (!schema || depth > 12) return undefined;
-  if (Array.isArray(schema.examples) && schema.examples.length) return schema.examples[0];
-  if (schema.example !== undefined) return schema.example;
-  const ref = refName(schema);
-  if (ref) return exampleOf(d.components?.schemas?.[ref], d, key, depth + 1);
-  const branch = schema.anyOf ?? schema.oneOf;
-  if (branch) return exampleOf(branch.find((b) => b.type !== "null") ?? branch[0], d, key, depth + 1);
-  if (schema.allOf) return Object.assign({}, ...schema.allOf.map((s) => exampleOf(s, d, key, depth + 1)));
-  if (schema.default !== undefined && schema.default !== null) return schema.default;
-  if (Array.isArray(schema.enum)) return schema.enum[0];
-  const type = Array.isArray(schema.type) ? schema.type.find((t) => t !== "null") : schema.type;
-  if (type === "object" || schema.properties) {
-    const props = Object.entries(schema.properties ?? {}).map(([k, s]) => [k, exampleOf(s, d, k, depth + 1)] as const);
-    const obj: Record<string, unknown> = Object.fromEntries(props.filter(([, v]) => v !== undefined));
-    // A file object with no example of its own (fal's shared File and Image schemas carry a PNG's name and type as their
-    // fields' examples): a file of the kind its field name or title says, with a URL, name and type to match.
-    if ("url" in (schema.properties ?? {})) {
-      const words = `${key} ${schema.title ?? ""}`;
-      const kind = /video/i.test(words) ? "video" : /audio|song|stem|vocal|track|voice/i.test(words) ? "audio" : /image|cover|thumb|picture/i.test(words) ? "image" : "model3d";
-      obj.url = `https://v3b.fal.media/files/out/${key || "file"}.${EXT[kind]}`;
-      if ("file_name" in obj) obj.file_name = `${key || "file"}.${EXT[kind]}`;
-      if ("content_type" in obj) obj.content_type = MIME[kind];
-    }
-    return obj;
-  }
-  if (type === "array") {
-    const item = exampleOf(schema.items, d, key, depth + 1);
-    return item === undefined ? [] : [item];
-  }
-  if (type === "boolean") return false;
-  if (type === "integer" || type === "number") return schema.minimum ?? 1;
-  if (type === "string") return /url|uri/i.test(key) || schema.format === "uri" ? `https://v3b.fal.media/files/out/${key}.bin` : "text";
-  return undefined;
-}
