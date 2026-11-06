@@ -1,5 +1,6 @@
 "use client";
 
+import { shownSettings } from "@/lib/catalog/made";
 import {
   Box,
   CalendarDays,
@@ -220,7 +221,7 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
   const finish = o?.kind === "video" && !u.tile && !finished.has(u.g.id) ? finishIn2k(u.g, engineMode) : null;
   const ownSetup = finish?.perSecond === null ? "regenerate:cinema-finish" : undefined;
   const press = useOwnSetupPress();
-  const seconds = Number(u.g.request.params?.duration ?? 0);
+  const seconds = Number(shownSettings(u.g).duration ?? 0);
   const finishPrice = !finish ? "" : finish.perSecond === null ? "Free" : seconds > 0 ? `≈ ${formatCost(finish.perSecond * seconds)}` : `$${finish.perSecond.toFixed(2)}/s`;
   return (
     <DropdownMenu>
@@ -500,7 +501,8 @@ function TileView({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-1 bg-gradient-to-t from-black/65 to-transparent p-2 pt-8 opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within/tile:opacity-100 sm:group-hover/tile:opacity-100">
           <div className="flex min-w-0 flex-wrap gap-1">
             {step && <Badge>{step}</Badge>}
-            {u.output?.kind === "video" && g.request.params?.duration ? <Badge>{g.request.params.duration}s</Badge> : null}
+            {/* The length it was made at (a route that rounds 5 s to 7 s says 7s). */}
+            {u.output?.kind === "video" && shownSettings(g).duration ? <Badge>{shownSettings(g).duration}s</Badge> : null}
           </div>
           <div className="pointer-events-auto flex shrink-0 items-center gap-0.5">
             {u.output?.kind === "video" && (

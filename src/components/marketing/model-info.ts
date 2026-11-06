@@ -1,6 +1,6 @@
 import { getModel } from "@/lib/catalog";
 import { FORMATS, formatModels, MULTIPLIER_MODELS, UGC_MODELS, type FormatId } from "@/lib/catalog/marketing";
-import { opTakes } from "@/lib/catalog/route-takes";
+import { opTakes, takesValue } from "@/lib/catalog/route-takes";
 import type { Engine, ModelDef } from "@/lib/catalog/types";
 
 /**
@@ -40,7 +40,10 @@ function editSizes(m: ModelDef): Pick<ModelInfo, "editSizes"> {
   if (!op) return {};
   // The open recreate (motion transfer) is sent no size: its graph makes its own.
   if (m.engine === "open" || !opTakes(m, op).resolution) return { editSizes: false };
-  return m.options.resolutions?.length ? { editSizes: [...m.options.resolutions] } : {};
+  // Only the sizes its edit route makes (a size it would fit to another shows as unavailable, with the one it makes).
+  const made = opTakes(m, op).resolutions;
+  const sizes = (m.options.resolutions ?? []).filter((r) => takesValue(made, r));
+  return sizes.length ? { editSizes: sizes } : m.options.resolutions?.length ? { editSizes: [...m.options.resolutions] } : {};
 }
 
 /** Every model a marketing flow can name, by id. */

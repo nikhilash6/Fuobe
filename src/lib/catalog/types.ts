@@ -10,6 +10,7 @@
 import type { CameraKey } from "@/lib/camera-path";
 import type { SignatureRecord } from "./palettes";
 import type { RunTrouble } from "@/lib/diagnose";
+import type { MadeSettings } from "./made";
 
 export type Engine = "cloud" | "open";
 
@@ -1572,6 +1573,12 @@ export interface Generation {
    * the API rounds). Only on the answer that creates it; not stored.
    */
   notes?: string[];
+  /**
+   * The settings it is made at, when they differ from what it asked (src/lib/catalog/fitted.ts: a 2K run on a model
+   * that makes up to 1080P is made at 1080P), with each change in words. Worked out from the run's model, mode and
+   * request whenever it is read, so older runs carry it too.
+   */
+  made?: MadeSettings;
 }
 
 /** Why a ComfyUI run failed, when the GPU was missing something (generations.fix_json). */

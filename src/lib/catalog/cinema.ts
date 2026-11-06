@@ -10,7 +10,8 @@ import { localOnly, needsToken, triggerOf } from "./loras";
 import { QMA_MODEL, qmaLabel, qmaView } from "@/lib/qma";
 import { studioResolutions } from "./regenerate";
 import { ANGLES_2511_LORA } from "./open-tools";
-import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
+import { composeShots, estimateCost, inferOperation, planGeneration, routesFor } from "./plan";
+import { fittedSettings } from "./fitted";
 import { soulRecipe } from "./soul";
 import { planTurnaround, type TurnaroundInput } from "./turnaround";
 import { planFlyAround } from "./fly-around";
@@ -2583,6 +2584,25 @@ export function worldTake(input: Pick<CinemaGenerateInput, "world">): CinemaTake
 
 /** Everything a Generate press would run, priced, without running it (the browser shows it live). */
 export function planCinema(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
+  return withRouteNotes(planCinemaSteps(input, ctx));
+}
+
+/**
+ * A plan with what its steps' routes make differently from what they ask (fitted.ts: a model whose hosted route makes up to
+ * 1080p, a length its route rounds), said under the prompt bar before Generate.
+ */
+function withRouteNotes(plan: CinemaPlan): CinemaPlan {
+  const notes = [...plan.notes];
+  for (const s of plan.steps) {
+    const m = getModel(s.request.modelId);
+    if (!m || m.engine === "open") continue;
+    const op = s.request.op ?? inferOperation(m, s.request);
+    for (const c of fittedSettings(m, op, { ...m.defaults, ...s.request.params }, { negativePrompt: s.request.negativePrompt }).changes) if (!notes.includes(c.note)) notes.push(c.note);
+  }
+  return notes.length === plan.notes.length ? plan : { ...plan, notes };
+}
+
+function planCinemaSteps(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   const i = { ...input, settings: input.settings ?? {}, prompt: input.prompt ?? "" };
   switch (i.action) {
     case "grid":

@@ -9,6 +9,8 @@ import { offeredModels } from "../model-access";
 import { dualEngine, runsOn } from "@/lib/catalog/engines";
 import { pricingAt } from "@/lib/catalog/promo";
 import { currentModelId } from "@/lib/catalog/replaced";
+import { fittedSettings } from "@/lib/catalog/fitted";
+import { opTakes } from "@/lib/catalog/route-takes";
 import { LAYOUT_PARAM, parseLayout } from "@/lib/layout-prompt";
 import { OPERATION_LABELS, type ChainSlot, type GenerationRequest, type MediaKind, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { type PlannedJob, totalCost } from "@/lib/assist";
@@ -44,6 +46,18 @@ const ref = z.string().describe("A file URL from the chat: an attachment or an e
 /** Output kinds: "text" = transcripts, translations and scripts; "model3d" = 3D models (.glb). */
 const KINDS = ["image", "video", "audio", "text", "model3d"] as const;
 
+/** The sizes, shapes and lengths each mode of a hosted model makes, where its routes list them (Assist picks among them). */
+function madeIn(m: ModelDef): { onlyMakes?: Record<string, Record<string, (string | number)[]>> } {
+  if (m.engine === "open") return {};
+  const out: Record<string, Record<string, (string | number)[]>> = {};
+  for (const op of new Set(m.routes.map((r) => r.op))) {
+    const t = opTakes(m, op);
+    const l = { ...(t.resolutions && { resolutions: t.resolutions }), ...(t.aspectRatios && { aspectRatios: t.aspectRatios }), ...(t.durations && { durations: t.durations }) };
+    if (Object.keys(l).length) out[op] = l;
+  }
+  return Object.keys(out).length ? { onlyMakes: out } : {};
+}
+
 function summarize(m: ModelDef) {
   const o = m.options;
   // The price of the day asked: a launch price while it lasts (the note says when it ends).
@@ -78,6 +92,8 @@ function summarize(m: ModelDef) {
     ...(o.aspectRatios && { aspectRatios: o.aspectRatios }),
     ...(o.resolutions && { resolutions: o.resolutions }),
     ...(o.durations && { durations: o.durations }),
+    // What each mode's hosted routes make, where they list it: another value is made at the closest one (fitted.ts).
+    ...madeIn(m),
     ...(o.maxImages && { maxReferenceImages: o.maxImages }),
     ...(o.maxOutputs && { maxOutputsPerRun: o.maxOutputs }),
     ...(o.audio && { nativeAudio: o.audio === "always" ? "always on" : "optional" }),
@@ -477,7 +493,9 @@ function chainJobs(jobs: JobInput[], engine?: "cloud" | "open"): ChainedJob[] {
 function plannedJob(c: ChainedJob): PlannedJob {
   if (c.preview) {
     const p = c.preview;
-    return { tool: "generate", modelId: p.model.id, modelName: p.model.name, kind: outputKind(p.op, p.model), op: p.op, prompt: c.job.prompt, count: p.outputs, costUsd: p.costUsd, demo: p.demo };
+    // A value the model's route makes differently (2K on a model that makes up to 1080p) is said on the card before it runs.
+    const changes = fittedSettings(p.model, p.op, { ...p.model.defaults, ...c.req.params }, { provider: p.route.provider, negativePrompt: c.req.negativePrompt }).changes.map((x) => x.note);
+    return { tool: "generate", modelId: p.model.id, modelName: p.model.name, kind: outputKind(p.op, p.model), op: p.op, prompt: c.job.prompt, count: p.outputs, costUsd: p.costUsd, demo: p.demo, ...(changes.length && { changes }) };
   }
   const m = getModel(c.job.model_id);
   return { tool: "generate", modelId: c.job.model_id, modelName: m?.name ?? c.job.model_id, kind: m?.kind ?? "image", op: (c.job.op as Operation) ?? "t2i", prompt: c.job.prompt, count: 0, costUsd: 0, demo: false, error: c.error };

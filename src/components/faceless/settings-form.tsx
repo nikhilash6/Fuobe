@@ -265,7 +265,13 @@ export function EpisodeSettingsForm({
           )}
           {video && video.resolutions.length > 1 && (
             <Section title="Quality" hint={frames ? "The size the camera moves render at: no model runs, larger sizes take longer and more memory." : undefined}>
-              <Segmented label="Quality" value={resolution ?? ""} options={video.resolutions.map((r) => ({ value: r, label: r }))} onChange={(r) => onChange({ resolution: r })} />
+              <Segmented label="Quality" value={resolution ?? ""} options={video.resolutions.map((r) => {
+                  // A quality the clips are made at differently: muted, with why and the one they are made at.
+                  const fit = video.madeAt?.[r];
+                  return { value: r, label: r, unavailable: fit && { why: fit.why, fix: { label: `Use ${fit.made}`, run: () => onChange({ resolution: fit.made }) } } };
+                })}
+                onChange={(r) => onChange({ resolution: r })}
+              />
             </Section>
           )}
           <p className="text-[12px] text-muted-foreground">

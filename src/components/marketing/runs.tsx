@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { shownSettings } from "@/lib/catalog/made";
 import { AlertCircle, Check, Circle, Download, Loader2, MoreHorizontal, Repeat2, Type, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,7 +52,8 @@ function StepChip({ g }: { g: Generation }) {
 }
 
 function runRatio(run: MarketingRun, g?: Generation): number {
-  const ar = g?.request.params?.aspectRatio ?? g?.aspectRatio ?? undefined;
+  // The shape it was made at.
+  const ar = (g && shownSettings(g).aspectRatio) ?? g?.aspectRatio ?? undefined;
   return ratioValue(ar && ar !== "auto" ? ar : undefined, g?.kind === "video" ? 9 / 16 : 3 / 4);
 }
 

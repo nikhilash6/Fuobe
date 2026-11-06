@@ -116,6 +116,9 @@ import {
 } from "@/lib/catalog/canvas";
 import { OPERATION_LABELS, type Engine, type MediaKind, type ModelDef, type Operation, type OutputFile } from "@/lib/catalog/types";
 import { OPERATION_PLACE, opTakes, settingUnavailable } from "@/lib/catalog/route-takes";
+import { fittedSettings, type SettingChange } from "@/lib/catalog/fitted";
+import type { Unavailable } from "@/lib/unavailable";
+import { UnavailableNote } from "@/components/ui/unavailable";
 import { settingsShape } from "@/lib/composer";
 import { formatCost } from "@/lib/format";
 import { dubResult, languageStage, type DubSessionView, type DubStage } from "@/lib/av/dub";
@@ -636,7 +639,8 @@ function OptionSelect<T extends string | number>({
   );
 }
 
-function ModelOptions({ id, model, data, runOp }: { id: string; model: ModelDef; data: CanvasNodeData; runOp?: Operation }) {
+/** A node's settings; on a read-only board (a phone) only what its run makes differently is said, without the fix. */
+function ModelOptions({ id, model, data, runOp, readOnly }: { id: string; model: ModelDef; data: CanvasNodeData; runOp?: Operation; readOnly?: boolean }) {
   const actions = useEditorActions();
   const p = data.params ?? {};
   const o = model.options;
@@ -700,8 +704,33 @@ function ModelOptions({ id, model, data, runOp }: { id: string; model: ModelDef;
     );
   if (o.sliders?.length) items.push(<div key="sliders" className={NO_DRAG}><SlidersChip model={model} values={extra} onChange={setExtra} /></div>);
   if (o.controls?.length) items.push(<div key="controls" className={NO_DRAG}><ControlsChip controls={o.controls} values={extra} onChange={setExtra} op={op} /></div>);
-  if (!items.length) return null;
-  return <div className={cn("flex flex-wrap gap-1 [&_button]:h-7 [&_button]:text-[12px]", NO_DRAG)}>{items}</div>;
+  // A value the node holds that its run makes differently (a model switch kept 2K; a template set 4K): said before the
+  // run, with the value it is made at one tap away.
+  const changes = op ? fittedSettings(model, op, { ...d, ...p }).changes : [];
+  if ((readOnly || !items.length) && !changes.length) return null;
+  return (
+    <>
+      {!readOnly && items.length > 0 && <div className={cn("flex flex-wrap gap-1 [&_button]:h-7 [&_button]:text-[12px]", NO_DRAG)}>{items}</div>}
+      {changes.map((c) => (
+        <UnavailableNote key={c.setting} className={cn("mt-0", NO_DRAG)} reason={{ why: c.note, fix: readOnly ? undefined : fixFor(c, set) }} onClose={() => undefined} />
+      ))}
+    </>
+  );
+}
+
+const FIX_PARAM: Partial<Record<SettingChange["setting"], "resolution" | "aspectRatio" | "duration" | "seed" | "numOutputs">> = {
+  resolution: "resolution",
+  aspectRatio: "aspectRatio",
+  duration: "duration",
+  seed: "seed",
+  numOutputs: "numOutputs",
+};
+
+/** The one-tap fix for a held value its run makes differently: pick the value it is made at. */
+function fixFor(c: SettingChange, set: (patch: Partial<NonNullable<CanvasNodeData["params"]>>) => void): Unavailable["fix"] {
+  if (c.use === undefined) return undefined;
+  const key = FIX_PARAM[c.setting];
+  return key ? { label: `Use ${c.made}`, run: () => set({ [key]: c.use }) } : undefined;
 }
 
 /** A model's numeric settings behind one chip (the studio composer shows them in its settings panel). */
@@ -949,7 +978,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
             className={cn("field-sizing-content max-h-36 min-h-14 w-full resize-none rounded-lg bg-muted px-2.5 py-2 text-[13px] leading-snug outline-none placeholder:text-subtle-foreground focus:ring-2 focus:ring-brand-faint", NO_DRAG)}
           />
         )}
-        {model && !g.readOnly && type !== "concat" && <ModelOptions id={id} model={model} data={data} runOp={v.op} />}
+        {model && type !== "concat" && <ModelOptions id={id} model={model} data={data} runOp={v.op} readOnly={g.readOnly} />}
         {v.rows && (
           <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <Table className="size-3.5 shrink-0" /> Runs once per table row: {v.rows === 1 ? "1 run" : `${v.rows} runs`}

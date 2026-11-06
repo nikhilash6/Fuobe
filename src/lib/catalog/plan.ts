@@ -185,6 +185,9 @@ function fitToRoutes(model: ModelDef, op: Operation, req: GenerationRequest, par
   return out;
 }
 
+/** The most results one run makes (a request for more makes this many). */
+export const MAX_RESULTS = 8;
+
 /** Fewer characters than this of the overall prompt in front of a capped shot prompt say too little: it is left out. */
 const MIN_SHOT_LEAD = 40;
 
@@ -781,7 +784,7 @@ export function planGeneration(
 
   params = controlSets(model, params);
 
-  const requested = Math.max(1, Math.min(8, params.numOutputs ?? 1));
+  const requested = Math.max(1, Math.min(MAX_RESULTS, params.numOutputs ?? 1));
   // A route with no count field makes one result a call (Nano Banana Pro, Qwen Image Edit): each result is its own job, never
   // a count the API never sees.
   const maxPerJob = oneEachCall(model, op) ? 1 : Math.max(1, model.options.maxOutputs ?? 1);

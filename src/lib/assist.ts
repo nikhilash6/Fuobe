@@ -28,6 +28,8 @@ export interface PlannedJob {
   error?: string;
   /** A short extra line on the card (a studio's step, what a step waits for). */
   note?: string;
+  /** What the run makes differently from what it asks (src/lib/catalog/fitted.ts: "… makes up to 1080p, so this is made at 1080p"). */
+  changes?: string[];
   /** One step of a pipeline: it only starts when every step can, so one error blocks the run. */
   atomic?: boolean;
   /**

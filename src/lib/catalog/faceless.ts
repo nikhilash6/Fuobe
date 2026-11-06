@@ -2,6 +2,7 @@ import { describeMove, KEN_BURNS_FPS, sceneMoves } from "@/lib/av/ken-burns";
 import { SPLIT_MODEL } from "@/lib/av/split";
 import { COPY_JOIN_VIDEOS, lengthRange, plannedDurations } from "./clip-lengths";
 import { estimateCost } from "./plan";
+import { settingChange } from "./fitted";
 import { REGEN_FINISH_TIER, REGEN_MODEL, regenFinishSteps, sixteenFpsModel, type FinishStep } from "./regenerate";
 import { pricingAt } from "./promo";
 import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from "./types";
@@ -882,7 +883,10 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
   const video = frames ? m.kenBurns : settings.videoModel && m.videoChoices.includes(settings.videoModel) ? settings.videoModel : m.video;
   const videoDef = lookup(video);
   const offered = videoDef?.options.resolutions ?? [];
-  const wanted = settings.resolution && offered.includes(settings.resolution) ? settings.resolution : (DEFAULT_RESOLUTION[video]?.[settings.animation] ?? videoDef?.defaults?.resolution ?? offered[0] ?? "720p");
+  // A quality its clips are made at differently is sent as the one they are made at, so the episode says what it is.
+  const asked = settings.resolution && offered.includes(settings.resolution) ? settings.resolution : undefined;
+  const fit = asked && videoDef ? settingChange(videoDef, "i2v", "resolution", asked)?.use : undefined;
+  const wanted = asked ? (fit !== undefined ? (offered.find((o) => o.toLowerCase() === String(fit).toLowerCase()) ?? String(fit)) : asked) : (DEFAULT_RESOLUTION[video]?.[settings.animation] ?? videoDef?.defaults?.resolution ?? offered[0] ?? "720p");
   const sample = settings.voice?.kind === "sample";
   const narration = settings.engine === "open" ? m.narration : sample ? m.cloneNarration : narrationChars > m.narrationMaxChars ? m.longNarration : m.narration;
   // Style references win; attached source images otherwise go to a model that reads them.
@@ -2098,10 +2102,21 @@ export function defaultSettings(engine: Engine, genre: GenreInfo, o: { explainer
   };
 }
 
+/** The qualities a video model's clips from stills are made at differently (fitted.ts), for the Quality picker. */
+function clipFits(m: ModelDef): { madeAt?: Record<string, { made: string; why: string }> } {
+  const out: Record<string, { made: string; why: string }> = {};
+  for (const r of m.options.resolutions ?? []) {
+    const c = settingChange(m, "i2v", "resolution", r);
+    if (c?.use !== undefined) out[r] = { made: String(c.use), why: c.note };
+  }
+  return Object.keys(out).length ? { madeAt: out } : {};
+}
+
 /** Narrator voices and video model choices for the browser (built on the server, so the client needs no catalog). */
 export interface PickerData {
   voices: { id: string; name: string; hint?: string }[];
-  videoModels: { id: string; name: string; engine: Engine; resolutions: string[] }[];
+  /** `madeAt`: a quality its clips (from stills) are made at differently, and the one they are made at, with why. */
+  videoModels: { id: string; name: string; engine: Engine; resolutions: string[]; madeAt?: Record<string, { made: string; why: string }> }[];
   /** The music bed's models per engine, each with the longest bed it makes in one go (seconds; longer films loop it). */
   musicModels?: { id: string; name: string; engine: Engine; maxSeconds: number }[];
   /** Frame by frame's camera move per engine (Ken Burns) and the qualities it renders at (none: the still's own size). */
@@ -2118,7 +2133,7 @@ export function pickerData(lookup: ModelLookup): PickerData {
   const videoModels = (["cloud", "open"] as const).flatMap((engine) =>
     ENGINE_MODELS[engine].videoChoices.flatMap((id) => {
       const m = lookup(id);
-      return m ? [{ id, name: m.name, engine, resolutions: m.options.resolutions ?? [] }] : [];
+      return m ? [{ id, name: m.name, engine, resolutions: m.options.resolutions ?? [], ...clipFits(m) }] : [];
     }),
   );
   const musicModels = (["cloud", "open"] as const).flatMap((engine) =>

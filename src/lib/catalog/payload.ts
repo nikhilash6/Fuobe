@@ -73,11 +73,16 @@ function putEnum(out: Record<string, unknown>, field: string | EnumField, value:
 type Range = NonNullable<FieldMap["ranges"]>[string];
 
 /** A number inside an API's limits: rounded for whole-number fields, then clamped. */
-function inRange(n: number, r: Range): number {
+export function inRange(n: number, r: Range): number {
   let v = r.integer ? Math.round(n) : n;
   if (r.min !== undefined) v = Math.max(r.min, v);
   if (r.max !== undefined) v = Math.min(r.max, v);
   return v;
+}
+
+/** The seed a route sends for `seed` (FieldMap.seedRange: a seed outside the API's range wraps into it). */
+export function seedValue(range: readonly [number, number] | undefined, seed: number): number {
+  return range ? range[0] + (seed % (range[1] - range[0] + 1)) : seed;
 }
 
 /** How many frames a frame-count route renders for the clip (FieldMap.numFrames), or undefined when its length is unknown. */
@@ -403,10 +408,7 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   // provider's route may list fewer).
   if (map.duration && input.duration !== undefined) out[map.duration.key] = timeValue(map.duration, fitLength(map.duration.accepts, input.duration));
   if (map.numOutputs && input.numOutputs !== undefined) out[map.numOutputs] = input.numOutputs;
-  if (map.seed && input.seed !== undefined && input.seed >= 0) {
-    const r = map.seedRange;
-    out[map.seed] = r ? r[0] + (input.seed % (r[1] - r[0] + 1)) : input.seed;
-  }
+  if (map.seed && input.seed !== undefined && input.seed >= 0) out[map.seed] = seedValue(map.seedRange, input.seed);
   if (map.generateAudio && input.generateAudio !== undefined) {
     const g = map.generateAudio;
     if (typeof g === "string") out[g] = input.generateAudio;

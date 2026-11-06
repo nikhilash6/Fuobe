@@ -51,6 +51,13 @@ export function PlanJobs({ jobs, fold = 6, className }: { jobs: PlannedJob[]; fo
                   </span>
                 </p>
                 <p className={cn("mt-0.5 text-[13px] break-words", j.op === "memory" ? "text-foreground" : "line-clamp-2 text-muted-foreground")}>{j.prompt}</p>
+                {!j.error && !!j.changes?.length && (
+                  <ul className="mt-1 space-y-0.5 text-[12px] leading-snug text-muted-foreground">
+                    {j.changes.map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                )}
                 {j.error && (
                   <p className="mt-1 flex items-start gap-1 text-[12px] text-destructive">
                     <CircleAlert className="mt-0.5 size-3 shrink-0" /> {j.error}
