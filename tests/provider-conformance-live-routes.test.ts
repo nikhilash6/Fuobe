@@ -252,14 +252,13 @@ describe("Replicate routes (spec audit 2026-11-06)", () => {
     expect(body).not.toHaveProperty("steps");
   });
 
-  it.todo("hosted: Replicate Files API uploads stop at 100 MB (replicate.ts prepareFile)");
-  it.todo("hosted: owner Replicate runs copy their output again before replicate.delivery deletes it an hour later (generations.ts pollOne)");
-  it.todo("hosted: predictions are created with a Cancel-After deadline (replicate.ts submit)");
-  it.todo("hosted: a 429 waits the Retry-After Replicate gives (replicate.ts rFetch)");
-  it.todo("hosted: data_removed predictions say the result expired (replicate.ts poll)");
-  it.todo("hosted: at most 10 MB of data URIs inline per prediction (replicate.ts capInline)");
-  it.todo("hosted: a Replicate LoRA copy is reused for 20 hours, not 24 (loras.ts MIRROR_TTL_MS)");
-  it.todo("hosted: an own LoRA of 100 MB or more goes to Replicate by its fal.media URL (loras.ts sendOwnLora)");
+  // The server side of these routes is tested against stand-in providers in its own suites:
+  // - Files API uploads stop at 100 MB, and a long transcript goes as a speech copy: tests/replicate-file-limit.test.ts
+  // - the owner's output is copied again before replicate.delivery deletes it, a Cancel-After deadline, a 429's wait, and
+  //   data_removed reading as expired: tests/replicate-lifecycle.test.ts
+  // - at most 10 MB of data URIs inline per prediction, and a LoRA copy reused for 20 hours: tests/replicate-files-lifetime.test.ts
+  // - an own LoRA of 100 MB or more goes by its fal.media URL: tests/training-lora-hosted.test.ts
+  // - H3 Lite and HighSpeed references as public links: tests/replicate-public-links.test.ts
 });
 
 describe("fal.ai routes (spec audit 2026-11-06)", () => {
@@ -401,10 +400,13 @@ describe("fal.ai routes (spec audit 2026-11-06)", () => {
     expect(JSON.stringify(p)).not.toContain('"transformer":"high"');
   });
 
-  it.todo("hosted: fal uploads and results expire with Fuobe's retention (fal.ts lifecycle headers)");
-  it.todo("hosted: a 404 on a status poll ends the run as gone, not as model-unavailable (diagnose.ts + generations.ts)");
-  it.todo("hosted: a fal training given up on is cancelled at fal (training.ts cancel_url)");
-  it.todo("hosted: a voice clone that times out is cancelled at fal (fal.ts cloneVoice)");
-  it.todo("hosted: pictures outside an endpoint's documented size or format are fitted before upload (fit-still.ts)");
-  it.todo("hosted: clip and voice files are checked with clipFileProblem before upload (generations.ts prepVideo/prepVoice)");
+  // The server side of these routes is tested against stand-in providers in its own suites:
+  // - uploads and results expire with Fuobe's retention, a cancel's answer, a result fal.ai no longer has, and typed
+  //   errors: tests/fal-queue-spec.test.ts
+  // - a 404 on a status poll ends the run in words about the run, not as a model that isn't there:
+  //   tests/fal-account-queue-spec.test.ts
+  // - a training given up on is cancelled at fal.ai: tests/fal-training-queue-spec.test.ts, tests/training-lora-hosted.test.ts
+  // - a voice clone that times out is cancelled at fal.ai: tests/fal-clone-voice-cancel.test.ts
+  // - pictures outside an endpoint's documented size or format are fitted before upload, and clip and voice files are
+  //   checked with clipFileProblem before upload: tests/still-limits.test.ts, tests/hosted-input-files.test.ts
 });
