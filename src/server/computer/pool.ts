@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { FINISH_KINDS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
-import { allLanes, laneLabel, lanesFor, MEDIA_KINDS, needsOf, type Inventory, type Needs } from "@/lib/lanes";
+import { allLanes, laneLabel, lanesFor, MEDIA_KINDS, needsOf, partLanes, type Inventory, type Needs } from "@/lib/lanes";
 import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
@@ -1212,7 +1212,13 @@ export interface WorkerView {
   claimAfterMs: number;
   switchAfterMs: number;
   warmLane: string | null;
+  /** The lanes it can run every workflow of. */
   lanes: string[];
+  /**
+   * The lanes it can run only some workflows of: how many, of how many. Allowing one is safe (a task goes only to a
+   * worker that can run its own workflow), so Settings offers them with the count.
+   */
+  partLanes: Record<string, { runnable: number; of: number }>;
   /** What its PC may ever run (null: no ceiling of its own), and the allowed lanes inside it. */
   ceiling: Ceiling | null;
   lanesInside: string[];
@@ -1252,6 +1258,7 @@ export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
     switchAfterMs: w.switch_after_ms,
     warmLane: w.warm_lane,
     lanes: capableOf(w).lanes,
+    partLanes: partLanes(loadIndex(), capableOf(w).workflows, sha),
     ceiling: ceilingOf(w),
     lanesInside: lanesInside(Object.keys(allowOf(w)), ceilingOf(w)),
     cpuSlot: cpuSlotOf(w),

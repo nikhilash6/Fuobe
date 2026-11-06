@@ -160,3 +160,22 @@ export function lanesFor(
   const missing = [...lacking].map(([lane, m]) => ({ lane, label: laneLabel(index, lane, sha), files: [...m.keys()].sort(), bytes: [...m.values()].reduce((a, b) => a + b, 0) }));
   return { lanes, workflows: workflows.sort(), missing };
 }
+
+/**
+ * The lanes a worker can run only some workflows of (`workflows`: the ones it can run, as lanesFor gives them): how many
+ * it runs, of how many (isolated workflows left out, as lanesFor does). A task goes only to a worker that can run its
+ * own workflow, so such a lane may be allowed: its other workflows never reach that worker.
+ */
+export function partLanes(index: RequirementIndex, workflows: readonly string[], sha: Sha): Record<string, { runnable: number; of: number }> {
+  const can = new Set(workflows);
+  const by = new Map<string, { runnable: number; of: number }>();
+  for (const id of Object.keys(index.workflows)) {
+    if (index.workflows[id].isolated) continue;
+    const lane = laneOf(index, id, sha)!;
+    const n = by.get(lane) ?? { runnable: 0, of: 0 };
+    n.of++;
+    if (can.has(id)) n.runnable++;
+    by.set(lane, n);
+  }
+  return Object.fromEntries([...by].filter(([, n]) => n.runnable > 0 && n.runnable < n.of).sort(([a], [b]) => a.localeCompare(b)));
+}

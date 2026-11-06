@@ -36,7 +36,10 @@ interface WorkerView {
   autoResume: boolean | null;
   hours: Hours | null;
   allow: Record<string, { delayMs: number }>;
+  /** The lanes it can run every workflow of. */
   lanes: string[];
+  /** The lanes it can run only some workflows of (a server from before sends none). */
+  partLanes?: Record<string, { runnable: number; of: number }>;
   warmLane: string | null;
   facts: { device?: string; vramBytes?: number; version?: string };
   seenAt: number | null;
@@ -136,62 +139,98 @@ function HoursEditor({ w, onSave }: { w: WorkerView; onSave: (hours: Hours | nul
   );
 }
 
-function LanesEditor({ w, lanes, onSave }: { w: WorkerView; lanes: Lane[]; onSave: (allow: Record<string, { delayMs: number }>) => void }) {
+/** How much of a lane a worker can run: every workflow, some of them, or none (its files are missing). */
+export type LaneFit = { kind: "all" } | { kind: "some"; runnable: number; of: number } | { kind: "none" };
+
+type LaneSource = Pick<WorkerView, "lanes" | "partLanes">;
+
+export function laneFit(w: LaneSource, lane: string): LaneFit {
+  if (w.lanes.includes(lane)) return { kind: "all" };
+  const part = w.partLanes?.[lane];
+  return part && part.runnable > 0 ? { kind: "some", runnable: part.runnable, of: part.of } : { kind: "none" };
+}
+
+/** The note after a lane's name: none when it runs every workflow, "(24 of 26 workflows)", or "(files missing)". */
+export function laneNote(fit: LaneFit): string | null {
+  if (fit.kind === "all") return null;
+  return fit.kind === "some" ? `(${fit.runnable} of ${fit.of} workflows)` : "(files missing)";
+}
+
+/** Every lane it can run at least one workflow of. */
+export const runnableLanes = (w: LaneSource): string[] => [...new Set([...w.lanes, ...Object.keys(w.partLanes ?? {})])];
+
+/**
+ * The lanes Allow all it can run allows: each one it can run any workflow of (a task goes only to a worker that can run
+ * its own workflow, so a lane it runs part of is safe to allow), each keeping a wait it already had.
+ */
+export function allowAllItCanRun(w: LaneSource, allow: Record<string, { delayMs: number }>): Record<string, { delayMs: number }> {
+  const next: Record<string, { delayMs: number }> = {};
+  for (const lane of runnableLanes(w)) next[lane] = allow[lane] ?? { delayMs: 0 };
+  return next;
+}
+
+const FIT_RANK = { all: 0, some: 1, none: 2 } as const;
+
+export function LanesEditor({ w, lanes, onSave }: { w: WorkerView; lanes: Lane[]; onSave: (allow: Record<string, { delayMs: number }>) => void }) {
   const [allow, setAllow] = useState(w.allow);
-  const capable = new Set(w.lanes);
-  const sorted = [...lanes].sort((a, b) => Number(capable.has(b.lane)) - Number(capable.has(a.lane)) || a.label.localeCompare(b.label));
+  // Every workflow first, then some of them, then none; by name within each.
+  const sorted = [...lanes].sort((a, b) => FIT_RANK[laneFit(w, a.lane).kind] - FIT_RANK[laneFit(w, b.lane).kind] || a.label.localeCompare(b.label));
+  const runnable = runnableLanes(w).length;
   return (
     <details className="text-[13px]">
       <summary className="cursor-pointer text-muted-foreground">
-        Lanes it may run: {Object.keys(w.allow).length} of {lanes.length} ({w.lanes.length} it has the files for)
+        Lanes it may run: {Object.keys(w.allow).length} of {lanes.length} ({runnable} it can run)
       </summary>
       <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto">
-        {sorted.map((l) => (
-          <li key={l.lane} className="flex flex-wrap items-center gap-2">
-            <label className="flex min-w-0 flex-1 items-center gap-2">
-              <input
-                type="checkbox"
-                checked={l.lane in allow}
-                onChange={(e) => {
-                  const next = { ...allow };
-                  if (e.target.checked) next[l.lane] = { delayMs: 0 };
-                  else delete next[l.lane];
-                  setAllow(next);
-                }}
-              />
-              <span className={cn("truncate", !capable.has(l.lane) && "text-muted-foreground")}>{l.label}</span>
-              {!capable.has(l.lane) && <span className="text-[11px] text-muted-foreground">(files missing)</span>}
-            </label>
-            {l.lane in allow && (
-              <label className="flex items-center gap-1 text-[12px] text-muted-foreground">
-                wait
-                <Input
-                  aria-label={`Delay for ${l.label}`}
-                  className="h-7 w-14"
-                  inputMode="numeric"
-                  value={String(Math.round((allow[l.lane]?.delayMs ?? 0) / 1000))}
-                  onChange={(e) => setAllow({ ...allow, [l.lane]: { delayMs: Math.max(0, Number(e.target.value) || 0) * 1000 } })}
+        {sorted.map((l) => {
+          const fit = laneFit(w, l.lane);
+          const note = laneNote(fit);
+          return (
+            <li key={l.lane} className="flex flex-wrap items-center gap-2">
+              <label className="flex min-w-0 flex-1 items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={l.lane in allow}
+                  onChange={(e) => {
+                    const next = { ...allow };
+                    if (e.target.checked) next[l.lane] = { delayMs: 0 };
+                    else delete next[l.lane];
+                    setAllow(next);
+                  }}
                 />
-                s first
+                <span className={cn("truncate", fit.kind === "none" && "text-muted-foreground")}>{l.label}</span>
+                {note && <span className="text-[11px] text-muted-foreground">{note}</span>}
               </label>
-            )}
-          </li>
-        ))}
+              {l.lane in allow && (
+                <label className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                  wait
+                  <Input
+                    aria-label={`Delay for ${l.label}`}
+                    className="h-7 w-14"
+                    inputMode="numeric"
+                    value={String(Math.round((allow[l.lane]?.delayMs ?? 0) / 1000))}
+                    onChange={(e) => setAllow({ ...allow, [l.lane]: { delayMs: Math.max(0, Number(e.target.value) || 0) * 1000 } })}
+                  />
+                  s first
+                </label>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {/* One click for every lane the PC has the files for (each keeps a wait it already had), saved at once. */}
+        {/* One click for every lane the PC can run any workflow of (each keeps a wait it already had), saved at once. */}
         <Button
           size="sm"
           className="h-8"
-          disabled={!w.lanes.length}
+          disabled={!runnable}
           onClick={() => {
-            const next: Record<string, { delayMs: number }> = {};
-            for (const lane of w.lanes) next[lane] = allow[lane] ?? { delayMs: 0 };
+            const next = allowAllItCanRun(w, allow);
             setAllow(next);
             onSave(next);
           }}
         >
-          Allow all it can run ({w.lanes.length})
+          Allow all it can run ({runnable})
         </Button>
         <Button size="sm" variant="ghost" className="h-8" disabled={!Object.keys(allow).length} onClick={() => setAllow({})}>
           Clear

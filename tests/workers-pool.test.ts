@@ -1003,3 +1003,46 @@ describe("a worker's own reports: giving a job back, its execution time, the inp
     expect(JSON.parse(row(w).inventory_json ?? "{}").media).toEqual(["image"]);
   });
 });
+
+describe("a lane a worker can run only some workflows of", () => {
+  const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+  /** A real lane of the catalog with at least two workflows (isolated ones left out, as lanesFor does). */
+  function sharedLane() {
+    const index = loadIndex();
+    const by = new Map<string, string[]>();
+    for (const id of Object.keys(index.workflows)) {
+      if (index.workflows[id].isolated) continue;
+      const lane = laneOf(index, id, sha)!;
+      by.set(lane, [...(by.get(lane) ?? []), id]);
+    }
+    const [lane, ids] = [...by].find(([, ids]) => ids.length >= 2)!;
+    return { index, lane, ids: [...ids].sort() };
+  }
+
+  it("is counted per workflow: every one, some, or none of them", () => {
+    const { index, lane, ids } = sharedLane();
+    const some = ids.slice(0, -1);
+    expect(lanesModule.partLanes(index, some, sha)[lane]).toEqual({ runnable: some.length, of: ids.length });
+    // Every workflow, or none: not a part lane (the first is in lanesFor's lanes, the second has its files missing).
+    expect(lanesModule.partLanes(index, ids, sha)[lane]).toBeUndefined();
+    expect(lanesModule.partLanes(index, [], sha)[lane]).toBeUndefined();
+  });
+
+  it("the owner's view says how many it runs, and a task of a workflow it runs is claimed there once the lane is allowed", () => {
+    const { lane, ids } = sharedLane();
+    const runs = ids.slice(0, -1);
+    const missing = ids.at(-1)!;
+    const w = worker("part-lane", { lanes: [lane], workflows: runs });
+    // Its full lanes stay as they were (none here); the part lane comes with its count.
+    db().prepare("UPDATE relay_workers SET lanes_json = ? WHERE id = ?").run(JSON.stringify({ lanes: [], workflows: runs }), w.id);
+    const view = pool.listWorkers(clock).find((x) => x.id === w.id)!;
+    expect(view.lanes).not.toContain(lane);
+    expect(view.partLanes[lane]).toEqual({ runnable: runs.length, of: ids.length });
+    // A task of the workflow it lacks never reaches it; one of a workflow it runs does.
+    const lacking = task({ lane, workflow: missing });
+    expect(claim(w)).toBeNull();
+    expect(state(lacking).state).toBe("waiting");
+    const runnable = task({ lane, workflow: runs[0] });
+    expect(claim(w)?.id).toBe(runnable);
+  });
+});
