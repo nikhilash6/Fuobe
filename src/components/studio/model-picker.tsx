@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { ownSetupLabel } from "@/lib/own-setup";
 import { answerPickModel } from "@/lib/pick-model";
 import { addKeyLabel, billedTo, CLOUD_KEY, CLOUD_PROVIDERS, needsKey, type CloudProvider } from "@/lib/your-keys";
-import { CLOUD_SECTION_LABEL, cloudModelAsk, openCloudPanel, visitorEngine } from "@/lib/engine-ux";
+import { CLOUD_PICKER_NOTE, CLOUD_SECTION_LABEL, cloudModelAsk, openCloudPanel, visitorEngine } from "@/lib/engine-ux";
 import { EngineSwitch } from "./engine-switch";
 import { ResponsivePanel } from "./responsive-panel";
 import { RECENT_MODELS, STARRED_MODELS, useStoredList } from "./stored-list";
@@ -395,7 +395,8 @@ export function PickerList({
         <div className="min-w-0 flex-1 [&_[data-slot=command-input-wrapper]]:p-0">
           <CommandInput value={q} onValueChange={setQ} placeholder={mobile ? "Search" : mode === "both" ? "Search all models" : "Search models"} aria-label="Search models" autoFocus={!mobile} />
         </div>
-        <EngineSwitch value={engine} onChange={onEngineChange} size="sm" />
+        {/* A visitor's two-line switch keeps to its icons on a phone, so the search field keeps its room. */}
+        <EngineSwitch value={engine} onChange={onEngineChange} size="sm" compact={hostedVisitor || undefined} />
       </div>
       <div className="flex items-baseline gap-x-2 px-3 pb-1.5 leading-snug text-[11px] text-muted-foreground sm:px-3.5">
         <span className="shrink-0 whitespace-nowrap tabular-nums">
@@ -416,7 +417,7 @@ export function PickerList({
             <>
               <span aria-hidden>·</span>
               <span className="min-w-0">
-                Paid models like Nano Banana and Kling need your own fal.ai or Replicate key ·{" "}
+                {hostedVisitor ? CLOUD_PICKER_NOTE : "Paid models like Nano Banana and Kling need your own fal.ai or Replicate key"} ·{" "}
                 {guest ? (
                   <button
                     type="button"

@@ -177,6 +177,9 @@ describe("the model picker", () => {
     expect(text.indexOf(open.name)).toBeLessThan(text.indexOf(ux.CLOUD_SECTION_LABEL));
     expect(text.indexOf(ux.CLOUD_SECTION_LABEL)).toBeLessThan(text.indexOf(cloud.name));
     expect(html).toContain(`aria-label="${cloud.name} needs your fal.ai key"`);
+    expect(text).toContain(ux.CLOUD_PICKER_NOTE);
+    // Its own switch keeps to icons on a phone (the search field keeps its room).
+    expect(html).toMatch(/data-engine-switch="visitor"[\s\S]*class="hidden sm:inline">Open source</);
     expect(ux.cloudModelAsk(state.status)).toBe("panel");
   });
 
@@ -190,6 +193,7 @@ describe("the model picker", () => {
     state.status = hostedStatus({ hosted: false, placeName: undefined });
     const text = textOf(list());
     expect(text).toContain("Paid models · with your own key");
+    expect(text).toContain("Paid models like Nano Banana and Kling need your own fal.ai or Replicate key");
     expect(text).not.toContain(ux.CLOUD_SECTION_LABEL);
   });
 });
@@ -218,7 +222,7 @@ describe("the words", () => {
       expect(ux.addProviderKeyLabel("replicate")).toBe("Add a Replicate key");
       expect(`${hint.lead} ${hint.rest}`).toBe(`Free open-source models run on ${place.text}. Want frontier models? Switch to Cloud with your own key.`);
       expect(ux.engineCaption.open(place)).toBe(`Free · ${place.label}`);
-      const all = [...Object.values(panel), ...Object.values(hint), ux.engineCaption.open(place), ux.engineCaption.cloud, ux.CLOUD_KEYLESS_TIP, ux.CLOUD_SECTION_LABEL, ...ux.CLOUD_SHOWCASE.map((s) => s.why)];
+      const all = [...Object.values(panel), ...Object.values(hint), ux.engineCaption.open(place), ux.engineCaption.cloud, ux.CLOUD_KEYLESS_TIP, ux.CLOUD_SECTION_LABEL, ux.CLOUD_PICKER_NOTE, ...ux.CLOUD_SHOWCASE.map((s) => s.why)];
       for (const w of all) {
         expect(w, w).not.toMatch(FORBIDDEN);
         // Short sentences: none over 25 words.

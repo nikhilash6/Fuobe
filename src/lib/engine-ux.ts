@@ -86,6 +86,9 @@ export const engineHintText = (place: Place) => ({
 /** The picker's section of Cloud models for a visitor without a key. */
 export const CLOUD_SECTION_LABEL = "Cloud · your key";
 
+/** The picker's line above its list for a visitor without a key. */
+export const CLOUD_PICKER_NOTE = "Cloud models like Nano Banana and Kling run on your own fal.ai or Replicate key";
+
 /** Where the browser remembers that an account closed the hint: one key per account (its email, hashed). */
 export function engineHintKey(email: string): string {
   let h = 5381;
