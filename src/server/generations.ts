@@ -18,7 +18,7 @@ import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type Rev
 import { checkWatermarkBoxes, COPY as WATERMARK_COPY, parseScanReport, rejectedRepair, type WatermarkQuality } from "@/lib/watermark";
 import { sideMultipleProblem, upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
+import { clipBytesProblem, clipFileProblem, clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, hasReferenceVoiceWindow, insertRangeProblem, portraitShapeProblem, referenceClipsProblem, referenceSeconds, referenceVoiceProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, sourceLengthProblem, withoutTriggers } from "@/lib/catalog/plan";
 import { formatCost } from "@/lib/format";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
@@ -126,6 +126,7 @@ import { offeredLoras, offeredRoutes, requireOffered } from "./model-access";
 import { llmBackends, llmLabel, llmMissing, llmUsesClaude, probeLocal } from "./providers/llm";
 import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./providers/types";
 import { mediaFacts } from "./media-facts";
+import { fitStill } from "./fit-still";
 import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
@@ -3332,7 +3333,11 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
       if (was) return was;
       return gate(async () => {
         const f = await readRef(ref);
-        return upload(`file:${ref}`, f.data, f.contentType, f.name);
+        // A picture outside the limits its endpoint documents (Qwen Image 3 edit: 384-2048 px, 10 MB, PNG without alpha;
+        // Recraft Crisp: PNG only) goes as a fitted copy, or is refused here before it is queued and paid for. Anything that
+        // isn't a picture, and endpoints with no stated limits, pass through unchanged.
+        const g = providerId === "mock" || plan.model.engine === "open" ? f : await fitStill(route.endpoint, f);
+        return upload(`file:${ref}`, g.data, g.contentType, g.name);
       });
     };
     // An end-frame step crops the start frame before the edit (the recipe's crop of the subject).
@@ -3349,11 +3354,21 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     };
     // The input clip's header (size, frame rate, length): upscalers that take a factor and frame-count routes read it.
     let source: Pick<GenInput, "sourceSize" | "sourceFps" | "sourceDuration"> = {};
+    /** The input clip's file size (fal's H3 Max Turbo extend takes up to 50 MB: clipBytesProblem). */
+    let sourceBytes: number | undefined;
+    // A clip or voice in a container or of a size the endpoint documents it refuses (Kling O3 edit: .mp4/.mov up to 200 MB;
+    // FLUX.3 edit: MP4 under 50 MB; OmniHuman 2: a WAV or MP3 voice up to 15 MB) is refused here, in Fuobe's words, before
+    // it is uploaded and sent.
+    const fileProblem = (kind: "video" | "audio", f: { contentType: string; data: Buffer }) =>
+      providerId === "mock" || plan.model.engine === "open" ? null : clipFileProblem(plan.model, plan.op, kind, f.contentType, f.data.length);
     const prepVideo = async (ref?: string) => {
       if (!ref) return undefined;
       return gate(async () => {
         const f = await readRef(ref);
+        const kind = fileProblem("video", f);
+        if (kind) throw new Error(kind);
         const facts = mediaFacts(f.data);
+        sourceBytes = f.data.length;
         source = {
           ...(facts.width && facts.height ? { sourceSize: { width: facts.width, height: facts.height } } : {}),
           ...(facts.fps ? { sourceFps: facts.fps } : {}),
@@ -3367,6 +3382,8 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
       if (!ref) return undefined;
       return gate(async () => {
         const f = await readRef(ref);
+        const kind = fileProblem("audio", f);
+        if (kind) throw new Error(kind);
         const facts = mediaFacts(f.data);
         if (facts.duration && !source.sourceDuration) source = { ...source, sourceDuration: facts.duration };
         return upload(`file:${ref}`, f.data, f.contentType, f.name);
@@ -3391,8 +3408,28 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     // By the clip's place in inputs.videos, so a clip element (params.elements' video) finds its own length.
     const clipLengths: (number | undefined)[] = [];
     const billsClips = !!plan.model.pricing?.clipInput;
+    // Reference voices a model holds to a length (fal's Vidu Q4: 3 to 12 s each): one outside it is refused here, from its
+    // header, before it's sent or paid for. A header that says no length goes as it is.
+    const checksVoices = plan.op === "ref2v" && hasReferenceVoiceWindow(plan.model) && providerId !== "mock" && plan.model.engine !== "open";
+    // Reference clips and sound a hosted route holds to a window (fal's MiniMax H3 and H3 Max Turbo: 2–15 s each, 15 s of each
+    // kind together): their headers' lengths too, by their place in inputs.videos and inputs.audios.
+    const refWindow = providerId !== "mock" && plan.model.engine !== "open" ? referenceSeconds(plan.model.id) : undefined;
+    const audioLengths: (number | undefined)[] = [];
+    const prepRefVoice = async (ref: string | undefined, i: number) => {
+      if (!ref || !(checksVoices || refWindow?.kinds.includes("audios"))) return prep(ref);
+      const was = sent?.get(`file:${ref}`);
+      if (was) return was;
+      return gate(async () => {
+        const f = await readRef(ref);
+        const seconds = mediaFacts(f.data).duration;
+        if (seconds) audioLengths[i] = seconds;
+        const problem = seconds && checksVoices ? referenceVoiceProblem(plan.model, seconds, i + 1) : null;
+        if (problem) throw new Error(problem);
+        return upload(`file:${ref}`, f.data, f.contentType, f.name);
+      });
+    };
     const prepClip = async (ref: string | undefined, i: number) => {
-      if (!ref || !billsClips) return prep(ref);
+      if (!ref || !(billsClips || refWindow?.kinds.includes("videos"))) return prep(ref);
       return gate(async () => {
         const f = await readRef(ref);
         const facts = mediaFacts(f.data);
@@ -3482,7 +3519,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
       voiceAudio: await prep(req.inputs?.voiceAudio),
       voiceAudio2: await prep(req.inputs?.voiceAudio2),
       videos: (await Promise.all((req.inputs?.videos ?? []).map((ref, i) => prepClip(ref, i)))).filter(Boolean) as string[],
-      audios: (await Promise.all((req.inputs?.audios ?? []).map(prep))).filter(Boolean) as string[],
+      audios: (await Promise.all((req.inputs?.audios ?? []).map((ref, i) => prepRefVoice(ref, i)))).filter(Boolean) as string[],
       model3d: await prep(req.inputs?.model3d),
       loras: plan.loras,
       // Vary seeds across a batch so N jobs don't return N identical results.
@@ -3524,15 +3561,25 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     if (input.sourceDuration && !req.chain?.length && providerId !== "mock" && plan.model.engine !== "open") {
       const problem =
         plan.op === "avatar"
-          ? voiceWindowProblem(plan.model, input.sourceDuration)
-          : plan.op === "relight-video" || plan.op === "extend"
-            ? clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps)
+          ? voiceWindowProblem(plan.model, input.sourceDuration, input.resolution)
+          : plan.op === "relight-video" || plan.op === "extend" || plan.op === "reframe" || plan.op === "remove-object" || plan.op === "motion-transfer"
+            ? (clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) ??
+              (input.sourceSize ? clipSizeProblem(plan.model, input.sourceSize.width, input.sourceSize.height) : null) ??
+              clipBytesProblem(plan.model, sourceBytes))
             : plan.op === "insert-moment"
               ? (clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) ?? insertRangeProblem(input.startTime, input.endTime, input.sourceDuration))
               : null;
       if (problem) throw new Error(problem);
       // A relight is billed on the clip's length: priced for it once the header is read (an API call that didn't say).
       if (plan.op === "relight-video" && plan.params.sourceDuration === undefined) update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op) });
+    }
+    // Reference clips and sound outside the hosted route's window (fal's H3 and H3 Max Turbo: 2–15 s each, 15 s of each kind
+    // together) are refused once their headers are read, before the run is paid for.
+    if (refWindow) {
+      const problem =
+        referenceClipsProblem(plan.model, "videos", clipLengths.slice(0, req.inputs?.videos?.length ?? 0)) ??
+        referenceClipsProblem(plan.model, "audios", audioLengths.slice(0, req.inputs?.audios?.length ?? 0));
+      if (problem) throw new Error(problem);
     }
     const edits = plan.op === "v2v" || plan.op === "video-swap" || plan.op === "video-insert";
     // An edit whose route sends no length keeps the clip's own (Kling 4.0's edit, swap and insert), whatever the request
@@ -3604,6 +3651,8 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     // a task of this database, made by this send: the mark says so.)
     markSending(id, !!req.account, providerId === "comfyui" && onPoolWorkers());
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });
+    // A talking video as long as its voice: the time its render may take (runningLimitMs).
+    const runLimitMs = plan.op === "avatar" && isCloudProvider(providerId) && input.sourceDuration ? Math.round(input.sourceDuration * LONG_RENDER_MS_PER_SECOND) : 0;
     // A saved voice the cloud just cloned keeps the embedding (the owner's runs only), so its next line skips the clone.
     if (typeof res.meta?.voiceEmbedding === "string" && !req.account) void keepVoiceEmbedding(req.inputs?.voiceAudio, res.meta.voiceEmbedding).catch(() => {});
     const now = Date.now();
@@ -3628,6 +3677,7 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
             jobIndex: index,
             ...(before.resent && { resent: true }),
             ...(before.declined && { declined: before.declined }),
+            ...(runLimitMs > 0 && { runLimitMs }),
           }),
           payload: res.payload ? JSON.stringify(res.payload).slice(0, 200_000) : null,
           // A run sent again after its GPU lost it says so until its GPU reports on it; an Ideogram 4 run made again after
@@ -3669,6 +3719,13 @@ const TIMEOUT_MS = 45 * 60 * 1000;
 const WORLDCAST_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 /** …and how long it may wait in the provider's queue first (a busy local GPU works through jobs one by one). */
 const QUEUE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+/**
+ * A cloud talking video renders as long as its voice (fal's H3 Max lip sync: 5 s to 15 min, made in windows), and a cancel of a
+ * job in progress only signals fal's runner ("the request can still complete", and is billed): such a job may run this long
+ * for each second of its voice (meta.runLimitMs), never less than TIMEOUT_MS. A starting value, to be set from a live run's
+ * timings.
+ */
+const LONG_RENDER_MS_PER_SECOND = 10_000;
 /**
  * A row this old with no external id whose turn no app process that still runs holds (takeSubmitTurn) was cut off by a
  * restart: a wait goes on, a hand-over fails. Tests make it shorter.
@@ -4064,7 +4121,8 @@ async function fastTick(): Promise<void> {
  */
 function runningLimitMs(r: Pick<Row, "provider">, meta: Record<string, unknown>, account: string | undefined, onPool: boolean): number {
   if (r.provider === "worldcast") return WORLDCAST_TIMEOUT_MS;
-  if (r.provider !== "comfyui" || (account && !onPool)) return TIMEOUT_MS;
+  // (A cloud talking video as long as its voice may take longer: meta.runLimitMs, set when it was sent.)
+  if (r.provider !== "comfyui" || (account && !onPool)) return Math.max(TIMEOUT_MS, typeof meta.runLimitMs === "number" ? meta.runLimitMs : 0);
   const wf = typeof meta.workflowId === "string" && !meta.workflowId.includes("{") ? meta.workflowId : null;
   return runCeilingMs(wf ? poolLane(wf) : null);
 }

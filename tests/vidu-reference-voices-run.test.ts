@@ -62,8 +62,7 @@ const run = (voices: string[]) =>
     inputs: { images: [PNG_DATA_URI], audios: voices },
   } as import("@/lib/catalog/types").GenerationRequest)[0];
 
-// Skipped until the server side lands: src/server/generations.ts handOver reads each reference voice's header and checks referenceVoiceProblem before the job. It fails without that change.
-describe.skip("Vidu Q4's reference voices", () => {
+describe("Vidu Q4's reference voices", () => {
   it("refuses a voice shorter than 3 s or longer than 12 s before anything is sent to fal", async () => {
     for (const [voices, words] of [
       [[mp3(2)], "Vidu Q4 needs voice clips of at least 3 s, and Voice 1 is 2 s: use a longer one"],

@@ -108,8 +108,7 @@ const REFS = "minimax/h3-max-turbo/reference-to-video";
 const EXTEND = "minimax/h3-max-turbo/extend-video";
 const prompt = "Image 1 is the woman; she dances to Audio 1";
 
-// Skipped until the server side lands: src/server/generations.ts handOver reads the reference clips' and the extend clip's headers and checks referenceClipsProblem, clipSizeProblem and clipBytesProblem before the job. It fails without that change.
-describe.skip("reference clips and sound outside fal's window are refused before the job is sent", () => {
+describe("reference clips and sound outside fal's window are refused before the job is sent", () => {
   it("H3 Max Turbo references: a clip under 2 s, clips over 15 s together, sound under 2 s", async () => {
     const refs = (inputs: Record<string, unknown>) => ({ feature: "video", modelId: "minimax-h3-max-turbo-refs", op: "ref2v" as const, prompt, inputs });
     expect(await outcome(refs({ images: [still()], videos: [clip(1)] }), REFS)).toEqual({ sent: false, error: expect.stringMatching(/^Reference clip 1 is 1 s, and .* needs at least 2 s/) });

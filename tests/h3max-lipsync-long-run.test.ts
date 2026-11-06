@@ -75,8 +75,7 @@ async function after(id: string, minutes: number) {
   return row(id);
 }
 
-// Skipped until the server side lands: src/server/generations.ts runningLimitMs gives a long lip sync a run limit that follows its voice's length. It fails without that change.
-describe.skip("fal's H3 Max lip sync: a long voice's render isn't cut at 45 minutes", () => {
+describe("fal's H3 Max lip sync: a long voice's render isn't cut at 45 minutes", () => {
   it("a 10-minute voice still runs 46 minutes in, and nothing is cancelled at fal", async () => {
     const id = await lipsync(600);
     const r = await after(id, 46);
