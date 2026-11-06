@@ -1,4 +1,5 @@
 import "server-only";
+import fs from "node:fs";
 import { z } from "zod";
 import { planJoin, planLoop, CROSSFADE_MAX, JOIN_MAX_CLIPS, LOOP_MAX_SECONDS, type AudioToolPreview, type ToolPlan } from "@/lib/av/audio-tools";
 import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, planRemux, planSplit, splitTime } from "@/lib/av/split";
@@ -14,7 +15,7 @@ import { ConnectComfyError, previewChained } from "./generations";
 import { comfyDbsModels, comfyDevice, comfyReuseModels, ownGpu } from "./providers/comfyui";
 import { engineMode } from "./settings";
 import { isExampleRef } from "./example-files";
-import { storedMedia } from "./storage";
+import { absolutePath, filesRel, storedMedia } from "./storage";
 import { tenant, tenantAccount } from "./tenant";
 
 /**
@@ -208,6 +209,17 @@ function factsOf(url: string, gone = "That audio file is gone — add it again")
   return { ...(duration && { duration }), ...(info.channels && { channels: info.channels }), hasAudio: info.hasAudio };
 }
 
+/** A stored file's size in bytes (after factsOf found it), or undefined (an example input). */
+function bytesOf(url: string): number | undefined {
+  const rel = isExampleRef(url) ? null : filesRel(url);
+  if (rel === null) return undefined;
+  try {
+    return fs.statSync(/*turbopackIgnore: true*/ absolutePath(rel)).size;
+  } catch {
+    return undefined;
+  }
+}
+
 export type AudioToolPlan = ToolPlan & { engine: Engine; split?: ClipFacts; headerChannels?: number };
 
 /** Every file a request names (its clip, its clips, the mix and the video it goes on): an account's own, checked first. */
@@ -267,7 +279,7 @@ export function planAudioTool(body: AudioToolRequest): AudioToolPlan {
       const facts = factsOf(body.media);
       const seconds = facts?.duration ?? body.sourceDuration;
       const channels = facts?.channels ?? body.channels;
-      return { engine: body.engine, ...planCleanDialogue({ ...body, seconds, channels, silent: facts?.hasAudio === false }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
+      return { engine: body.engine, ...planCleanDialogue({ ...body, seconds, channels, bytes: bytesOf(body.media), silent: facts?.hasAudio === false }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
     }
     if (body.tool === "speech-edit") {
       const facts = factsOf(body.media, body.kind === "video" ? "That video is gone — add it again" : "That recording is gone — add it again");

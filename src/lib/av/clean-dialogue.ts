@@ -61,6 +61,10 @@ export const DEFAULT_CLEANER: Cleaner = "veed";
 
 /** VEED Clean Audio takes up to 30 minutes of audio (fal's model page). */
 export const VEED_MAX_SECONDS = 30 * 60;
+/** VEED Clean Audio takes a file of up to 512 MB (fal's veed/clean-audio OpenAPI, audio_url: "Up to 30 minutes and 512 MB"). */
+export const VEED_MAX_BYTES = 512 * 1024 * 1024;
+/** fal's extract-audio takes a video of up to 100 MB (its OpenAPI, video_url max_file_size 100000000). */
+export const EXTRACT_MAX_BYTES = 100_000_000;
 
 /** VEED's bill: whole seconds, then up to whole minutes, at least one, at $0.0125 a minute. */
 export function veedPrice(seconds: number): number {
@@ -99,6 +103,8 @@ export interface CleanDialogueInput {
   remux?: boolean;
   channels?: number;
   seconds?: number;
+  /** The stored file's size in bytes (fal's cloud steps have size limits). */
+  bytes?: number;
   /** The file has no sound track (from its header). */
   silent?: boolean;
 }
@@ -113,10 +119,16 @@ export interface CleanDialoguePlan extends ToolPlan {
 const nameOf = (i: Pick<CleanDialogueInput, "name" | "kind">) => i.name?.trim() || (i.kind === "video" ? "video soundtrack" : "recording");
 
 /** What's in the way of a run (in words the page shows), or null. */
-export function cleanDialogueProblem(i: Pick<CleanDialogueInput, "engine" | "media" | "kind" | "silent" | "seconds" | "cleaner">): string | null {
+export function cleanDialogueProblem(i: Pick<CleanDialogueInput, "engine" | "media" | "kind" | "silent" | "seconds" | "cleaner" | "bytes">): string | null {
   if (!i.media) return `Add the ${i.kind === "video" ? "video" : "audio"} to clean`;
   if (i.silent) return i.kind === "video" ? "This video has no sound to clean" : "This file has no sound to clean";
   if (i.engine === "cloud" && (i.cleaner ?? DEFAULT_CLEANER) === "veed" && i.seconds && i.seconds > VEED_MAX_SECONDS) return "VEED cleans up to 30 minutes — trim it first, or pick another cleaner";
+  if (i.engine === "cloud" && i.bytes) {
+    const cleaner = cleanerOf(i.cleaner ?? DEFAULT_CLEANER);
+    // fal answers file_too_large (422) after the upload: say it before anything is sent.
+    if (cleaner.id === "veed" && i.bytes > VEED_MAX_BYTES) return "VEED takes files up to 512 MB — trim or compress it first, or use the open engine";
+    if (i.kind === "video" && !cleaner.takesVideo && i.bytes > EXTRACT_MAX_BYTES) return `The cloud takes a video's soundtrack from files up to 100 MB — trim or compress it, or pick ${cleanerOf("veed").label} (up to 512 MB)`;
+  }
   return null;
 }
 
@@ -185,9 +197,10 @@ export function planCleanDialogue(i: CleanDialogueInput): CleanDialoguePlan {
   const of = (extract ? 1 : 0) + 1 + (remux ? 1 : 0);
   let index = 0;
   if (extract) {
+    // Lossless, so the denoiser hears the soundtrack as it is (fal's extract-audio makes a 192k MP3 by default).
     steps.push({
       key: "sound",
-      request: { ...base, modelId: EXTRACT_MODEL, op: "separate-audio", title: `${title} · soundtrack`, inputs: { video: i.media }, params: { ...timed }, step: { label: "The video's soundtrack", index: index++, of } },
+      request: { ...base, modelId: EXTRACT_MODEL, op: "separate-audio", title: `${title} · soundtrack`, inputs: { video: i.media }, params: { ...timed, extra: { audio_format: "flac" } }, step: { label: "The video's soundtrack", index: index++, of } },
     });
   }
   const strength = cleaner.id === "veed" && typeof i.strength === "number" && Number.isFinite(i.strength) ? Math.min(1, Math.max(0, i.strength)) : undefined;
