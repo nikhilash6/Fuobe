@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { KEY_INFO_REFRESH_GAP_MS, KEY_INFO_URL, type KeyInfoAnswer } from "@/lib/key-info";
 
 /*
@@ -57,7 +58,8 @@ export function useRefreshKeyInfo(detail = false) {
       if (detail) qc.setQueryData(keyInfoKey(false), data);
       else void qc.invalidateQueries({ queryKey: keyInfoKey(true), exact: true });
     } catch {
-      // What was shown stays: the next look asks again.
+      // What was shown stays (the next look asks again), and the press is answered: the figures on show are the earlier ones.
+      toast.error("Couldn't refresh the balance just now. The figures shown are from the last check: try again in a moment.");
     } finally {
       setBusy(false);
     }

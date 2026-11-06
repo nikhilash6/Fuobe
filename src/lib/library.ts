@@ -504,3 +504,16 @@ export function toggleAll(selected: ReadonlySet<string>, ids: readonly string[])
   }
   return next;
 }
+
+/**
+ * What a card without anything to open is, in words (the card's label for screen readers): a run still going, failed or
+ * stopped shows its state on the card, and has no pointer or hover that would promise an action.
+ */
+export function cardStateWords(status: Generation["status"]): string {
+  return status === "queued" ? "queued" : status === "running" ? "still generating" : status === "failed" ? "failed" : status === "canceled" ? "stopped" : "nothing to open";
+}
+
+/** Why the "Stack batches" view setting doesn't apply on a Library tab (Trash, Uploads), or undefined where it does. */
+export function stacksOffReason(tab: string): string | undefined {
+  return tab === "trash" ? "Trash lists every run on its own" : tab === "uploads" ? "Uploads lists every file on its own" : undefined;
+}

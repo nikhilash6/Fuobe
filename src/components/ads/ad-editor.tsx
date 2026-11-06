@@ -155,7 +155,12 @@ export function AdEditor({
               </div>
               {brand?.logo && (
                 <label className="flex items-center justify-between gap-2 text-[13px]">
-                  Show logo <Switch checked={logo} onCheckedChange={setLogo} aria-label="Show logo" />
+                  {/* Only this dialog's downloads read it: the grid's downloads always draw the brand's logo. */}
+                  <span>
+                    Show logo
+                    <span className="block text-[11px] text-muted-foreground">In the downloads made here</span>
+                  </span>
+                  <Switch checked={logo} onCheckedChange={setLogo} aria-label="Show logo in the downloads made here" />
                 </label>
               )}
               {changed && (

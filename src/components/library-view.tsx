@@ -44,7 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BULK_MAX, signInHref, useCreateGeneration, useFolders, useGenerationActions, useIsAccount, useIsGuest, useIsOwner, useIsVisitor, useLibrary, useLibraryFacets, useShares, useStatus, useUploads, type Asset, type FeedFilter } from "@/lib/api";
 import type { Generation, MediaKind, ReviewStatus } from "@/lib/catalog/types";
 import { keyCombo, useModKey } from "@/lib/keys";
-import { buildEntries, folderAndDescendants, reviewInfo, splitByDate, toggleAll, TRASH_DAYS, type LibraryEntry } from "@/lib/library";
+import { buildEntries, folderAndDescendants, reviewInfo, splitByDate, stacksOffReason, toggleAll, TRASH_DAYS, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { isExpired } from "@/lib/share";
 import { StarterSection, useStarters } from "@/components/starters/starter-section";
@@ -642,7 +642,7 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
               <CheckSquare className="size-3.5" /> <span className="hidden sm:inline">{selecting ? "Done" : "Select"}</span>
             </button>
           )}
-          <ViewOptions prefs={prefs} onChange={setPrefs} />
+          <ViewOptions prefs={prefs} onChange={setPrefs} noStacks={stacksOffReason(tab.id)} />
         </div>
       </div>
 

@@ -7,7 +7,7 @@ import { TileActions, useCanHover, type RunnerOptions } from "@/components/studi
 import { LayersStack, MediaThumb, SmallThumb } from "@/components/studio/result-media";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
 import { elapsed, timeAgo } from "@/lib/format";
-import { coverOf, trashDaysLeft, userTitle, type LibraryEntry } from "@/lib/library";
+import { cardStateWords, coverOf, trashDaysLeft, userTitle, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { PlaceholderChip } from "@/components/demo-mode";
@@ -150,6 +150,8 @@ export const AssetCard = memo(function AssetCard({
   const done = g.status === "succeeded" && g.outputs.length > 0;
   const ratio = cardRatio(entry, layout);
 
+  // A run that is still going, failed or was stopped has nothing to open yet: its card shows why, with no pointer or hover.
+  const acts = selecting || !!stack || done;
   const activate = (shift: boolean) => {
     if (selecting) api.toggle(entry.key, ids, shift);
     else if (stack) api.expand(entry.key);
@@ -160,7 +162,7 @@ export const AssetCard = memo(function AssetCard({
   const target = (
     <button
       type="button"
-      aria-label={stack ? `${title} — ${stack.label}` : selecting ? `Select “${title}”` : done ? `Open “${title}”` : title}
+      aria-label={stack ? `${title} — ${stack.label}` : selecting ? `Select “${title}”` : done ? `Open “${title}”` : `${title} — ${cardStateWords(g.status)}`}
       aria-pressed={selecting ? selected : undefined}
       aria-expanded={stack && !selecting ? !!expanded : undefined}
       onClick={(e) => {
@@ -252,7 +254,7 @@ export const AssetCard = memo(function AssetCard({
     return (
       <div
         {...common}
-        className={cn("group/card relative flex min-h-16 cursor-pointer items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent", selected && "bg-brand-faint hover:bg-brand-faint-hover")}
+        className={cn("group/card relative flex min-h-16 items-center gap-3 rounded-xl px-2 py-2", acts && "cursor-pointer hover:bg-accent", selected && "bg-brand-faint hover:bg-brand-faint-hover")}
       >
         {target}
         <div className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-muted">
@@ -321,7 +323,8 @@ export const AssetCard = memo(function AssetCard({
       <div
         {...common}
         className={cn(
-          "@container relative w-full cursor-pointer overflow-hidden rounded-xl bg-muted transition-[box-shadow]",
+          "@container relative w-full overflow-hidden rounded-xl bg-muted transition-[box-shadow]",
+          acts && "cursor-pointer",
           !selecting && done && !stack && "cursor-zoom-in",
           selected && "ring-3 ring-primary",
           expanded && "ring-2 ring-border-strong",

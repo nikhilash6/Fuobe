@@ -4,7 +4,6 @@ import { Plus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useId } from "react";
 import { IntentLink } from "@/components/intent-link";
-import { Kbd } from "@/components/ui/kbd";
 import { navActive, NEW_CREATION_HREF } from "@/lib/nav";
 import { area } from "@/lib/nav-areas";
 import { CREATE_COLUMNS, entry, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
@@ -90,9 +89,6 @@ export function CreateList({ variant, onNavigate }: { variant: "menu" | "sheet";
         <IntentLink href={NEW_CREATION_HREF} eager data-col={0} data-row={columns[0]?.entries.length ?? 0} className={cn(CARD_ROW, MENU_ROW_1, "font-medium")}>
           <Plus aria-hidden className="size-4 text-brand-text" />
           New creation
-          <Kbd aria-hidden className="ml-auto [@media(hover:none)]:hidden">
-            ↵
-          </Kbd>
         </IntentLink>
       </>
     );

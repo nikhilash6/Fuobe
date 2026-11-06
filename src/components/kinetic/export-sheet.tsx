@@ -70,6 +70,7 @@ export function ExportSheet({
   editor,
   jobs,
   blocked,
+  waiting,
   mp4,
   onSave,
 }: {
@@ -82,6 +83,8 @@ export function ExportSheet({
   jobs: KineticJobs;
   /** Why nothing can save yet (words that don't fit, MP4 that can't be made here), or null. */
   blocked: string | null;
+  /** Why saving waits a moment (the scene is still getting ready), or null: the buttons wait and say so. */
+  waiting?: string | null;
   /** Whether this browser makes an MP4 at this size (null while it checks). */
   mp4: boolean | null;
   onSave: (kind: JobKind) => void;
@@ -100,7 +103,7 @@ export function ExportSheet({
       <button
         type="button"
         onClick={() => onSave(kind)}
-        disabled={!!blocked || (kind === "clip" && r.export.format === "mp4" && mp4 === false && !jobs.guest) || (!!jobs.job && !mine)}
+        disabled={!!blocked || !!waiting || (kind === "clip" && r.export.format === "mp4" && mp4 === false && !jobs.guest) || (!!jobs.job && !mine)}
         data-kinetic-save={kind}
         className={cn("flex h-12 w-full min-w-0 items-center gap-2 rounded-xl px-4 text-[14px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", kind === "clip" ? "bg-primary text-primary-foreground hover:opacity-90" : "bg-secondary hover:bg-accent")}
       >
@@ -176,7 +179,7 @@ export function ExportSheet({
           </p>
         </div>
         <div className="sticky bottom-0 min-w-0 space-y-2 border-t bg-popover px-4 pt-3">
-          {blocked && <p className="text-[12px] text-destructive">{blocked}</p>}
+          {blocked ? <p className="text-[12px] text-destructive">{blocked}</p> : waiting && <p className="text-[12px] text-muted-foreground">{waiting}</p>}
           {out("clip", "Save clip", Clapperboard)}
           <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
             {out("frame", "Save frame", ImageIcon)}

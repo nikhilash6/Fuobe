@@ -368,7 +368,19 @@ export function Editor({ editor, doc, entry, onBack, onScene, missing }: { edito
         </>
       )}
 
-      <ExportSheet open={sheet === "export"} onClose={() => setSheet(null)} side={side} doc={doc} entry={entry} editor={editor} jobs={jobs} blocked={blocked} mp4={mp4} onSave={(k) => void save(k)} />
+      <ExportSheet
+        open={sheet === "export"}
+        onClose={() => setSheet(null)}
+        side={side}
+        doc={doc}
+        entry={entry}
+        editor={editor}
+        jobs={jobs}
+        blocked={blocked ?? (!plan && scene && inputs.ready ? "This scene can't be drawn with these settings: undo the last change, then save." : null)}
+        waiting={plan ? null : "Getting the scene ready…"}
+        mp4={mp4}
+        onSave={(k) => void save(k)}
+      />
       <VersionsSheet open={sheet === "versions"} onClose={() => setSheet(null)} side={side} jobs={jobs} onSaveVersion={() => save("version")} onRestore={restore} dirty={key !== versionKey} />
       <GroupSheet open={!!group && (!desk || large)} onClose={() => setGroup(null)} groupId={group} doc={doc} editor={editor} side={side} planWith={planWith} />
     </div>
