@@ -112,6 +112,25 @@ describe("presets kept off with their model or the kind they make", () => {
     expect(presets.filter((p) => poolRunsPreset(rules, p.id)).map((p) => p.id)).toEqual(["app-portrait", "app-cloud-only"]);
   });
 
+  it("a preset whose end frame is made first on a model these GPUs can't run is kept off with it, labelled with what its press needs", async () => {
+    const { presetOwnSetup } = await import("@/lib/pool-rules");
+    const chained = [...presets, { id: "effect-bloom", model: { id: "oss-clip", kind: "video" as const }, steps: [{ id: "oss-edit", kind: "image" as const }] }];
+    const free = tryFreeFor({ hosted: true, cardText: "Try free", gpu: { connected: false }, pool: poolRulesOf({ pool: { deny: ["oss-edit"] } }, chained) }, "both")!.runs;
+    expect(free({ id: "effect-bloom", open: true })).toBe(false);
+    expect(free({ id: "effect-melt", open: true })).toBe(true);
+    // No GPU here holds the edit model: its card says what the visitor's own setup needs for it.
+    const own = { "oss-edit": { need: "gpu" as const, vramGb: 48 } };
+    const rules = poolRulesOf({}, chained, own);
+    expect(poolRunsPreset(rules, "effect-bloom")).toBe(false);
+    expect(presetOwnSetup(rules, { id: "effect-bloom", open: { modelId: "oss-clip" }, cloud: null }, "open")).toEqual({ need: "gpu" });
+    expect(poolRunsPreset(rules, "effect-melt")).toBe(true);
+    // A press these GPUs can't run in whole (a step none of them runs, its model otherwise run): kept off with that label.
+    const whole = poolRulesOf({}, presets, {}, { "effect-melt": { need: "gpu", vramGb: 32 } });
+    expect(poolRunsPreset(whole, "effect-melt")).toBe(false);
+    expect(presetOwnSetup(whole, { id: "effect-melt", open: { modelId: "oss-clip" }, cloud: null }, "open")).toEqual({ need: "gpu", vramGb: 32 });
+    expect(poolRunsPreset(whole, "motion-orbit")).toBe(true);
+  });
+
   it("keeps the shorter list, and the policy's own app lists", () => {
     // Most presets kept off: the ones still on are listed instead.
     expect(poolRulesOf({ pool: { allow: ["oss-portrait"] } }, presets)?.apps).toEqual({ allow: ["app-portrait", "app-cloud-only"] });

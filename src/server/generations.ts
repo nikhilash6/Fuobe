@@ -2011,6 +2011,15 @@ const comfyWaits = (): Map<string, number> => (globalThis.__fuobeComfyWaits ??= 
 /** How long such a step waits for ComfyUI to answer again before chainMode fails it. */
 export const COMFY_WAIT = { ms: 60_000 };
 
+/**
+ * A chain's last step made before it kept its run's stamp (chains.ts withAsked wrote it back without one): the stamp it
+ * was asked with, so a step of a run on this install's GPUs runs there too, never on the account's own GPU.
+ */
+function withAskedStamp(req: GenerationRequest): GenerationRequest {
+  if (!req.account || req.place || req.asked?.place !== "pool") return req;
+  return { ...req, ...stampOf(req.asked), asked: withoutStamp(req.asked) };
+}
+
 /** Launch dependent jobs whose inputs finished; fail the ones whose inputs failed. Never waits for an upload. */
 async function advanceDependents(): Promise<void> {
   // A server that is stopping launches no step (the app process that goes on does), and leaves the steps it looked at.
@@ -2025,7 +2034,7 @@ async function advanceDependents(): Promise<void> {
     if (submitting().has(r.id) || isParked(r.id)) continue;
     // A step queued before its model was retired runs on what replaced it (and its row says so).
     const moved = currentRequest(JSON.parse(r.request_json) as GenerationRequest);
-    const stored = moved.request;
+    const stored = withAskedStamp(moved.request);
     const allIds = depIds(r.depends_on);
     const allSlots = slotsFor(stored, allIds.length);
     const allDeps = allIds.map(

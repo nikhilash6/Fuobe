@@ -8,6 +8,7 @@ import type { OwnerGpuView } from "@/lib/connections";
 import { runnerFacts, type Principal } from "./computer/tasks";
 import { offeredSummary } from "./model-access";
 import { getModel, PRESETS } from "@/lib/catalog";
+import { presetRoutes } from "@/lib/catalog/preset-recipe-routes";
 import { operationOutput } from "@/lib/catalog/types";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu, peekText } from "./remote-fetch";
@@ -15,9 +16,9 @@ import { redactKey } from "./provider-keys";
 import { networkCode, recordRunEvent } from "./run-events";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
-import { poolReady } from "./hosted";
+import { poolReady, poolTakes } from "./hosted";
 import { placeName } from "./place-name";
-import { poolOwnModels } from "./pool-own-setup";
+import { poolOwnModels, poolOwnPresets, type PresetPress } from "./pool-own-setup";
 import { ranOwnFirst, runOnOf, type RunOn } from "./run-on";
 import { poolRulesOf, type PoolRules, type PresetModel } from "@/lib/pool-rules";
 import { diagnoseAddress, diagnoseGpu, gpuHostOf, type Diagnosis, type GpuFailure, type GpuPlace, type GpuStage } from "@/lib/diagnose";
@@ -375,13 +376,32 @@ export interface VisitorView {
 
 declare global {
   var __fuobePresetModels: PresetModel[] | undefined;
+  var __fuobePresetPresses: PresetPress[] | undefined;
 }
 
-/** Every preset with the open model it runs on and the kind it makes (for the pickers' rules): made once. */
+/** A preset's open route as its run plans it: its recipe's (with the end frame it edits first), else its own. */
+const openRoute = (p: (typeof PRESETS)[number]) => presetRoutes(p, "open", (id) => !!getModel(id))[0] ?? p.open ?? undefined;
+
+/**
+ * Every preset with the open model it runs on and the kind it makes, and the open models of its run's other steps (the
+ * edit that makes its end frame first), for the pickers' rules: made once.
+ */
 const presetModels = (): PresetModel[] =>
   (globalThis.__fuobePresetModels ??= PRESETS.map((p) => {
     const m = p.open ? getModel(p.open.modelId) : undefined;
-    return m && p.open ? { id: p.id, model: { id: m.id, kind: operationOutput(p.open.op, m.kind) } } : { id: p.id };
+    if (!m || !p.open) return { id: p.id };
+    const step = openRoute(p)?.end;
+    const end = step && getModel(step.modelId);
+    return { id: p.id, model: { id: m.id, kind: operationOutput(p.open.op, m.kind) }, ...(step && end && { steps: [{ id: end.id, kind: operationOutput(step.op, end.kind) }] }) };
+  }));
+
+/** Every preset's press on its open route, step by step (its end frame's edit first, then its clip to that frame): made once. */
+const presetPresses = (): PresetPress[] =>
+  (globalThis.__fuobePresetPresses ??= PRESETS.flatMap((p) => {
+    const route = openRoute(p);
+    if (!route) return [];
+    const end = route.end;
+    return [{ id: p.id, steps: [...(end ? [{ modelId: end.modelId, op: end.op }] : []), { modelId: route.modelId, op: end ? "flf2v" : route.op }] }];
   }));
 
 /** Keys whose balance ran out on a run, as the status says them. */
@@ -445,7 +465,7 @@ export async function visitorStatus(account: Account | null) {
     // What this studio's GPUs keep off, the open models they can't run right now among it: shown in the pickers with
     // what the visitor needs to run them on its own setup. For every viewer, a GPU of its own or not: its runs go
     // there first too, and the label says what runs on its own GPU instead.
-    const rules = p?.hosted ? poolRulesOf(p, presetModels(), poolOwnModels()) : undefined;
+    const rules = p?.hosted ? poolRulesOf(p, presetModels(), poolOwnModels(), poolOwnPresets(presetPresses(), poolTakes)) : undefined;
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;

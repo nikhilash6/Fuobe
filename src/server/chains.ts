@@ -16,6 +16,7 @@ import { provider } from "./providers";
 import { llmLabel } from "./providers/llm";
 import { loadManifest } from "./providers/comfyui";
 import { offeredRoutes, requireOffered } from "./model-access";
+import { withoutStamp } from "./run-stamp";
 
 /**
  * Multi-step jobs built from chained generations: each step waits for the ones it needs and
@@ -65,12 +66,17 @@ export function assertOneMode(steps: ModeStep[]): void {
 function withAsked(made: Generation[], asked: GenerationRequest, engine: Engine): Generation[] {
   const [first, ...rest] = made;
   if (!first) return made;
-  // A Fuobe Original keeps the engine it ran on, as a plain row's request does (createGenerations).
-  const request = { ...asked, ...(dualEngine(getModel(asked.modelId)) && { engine }) };
+  // A Fuobe Original keeps the engine it ran on, as a plain row's request does (createGenerations). What was asked is
+  // what a retry sends again: the run's stamp (its place, its hold) is the server's, never part of it.
+  const request: GenerationRequest = withoutStamp({ ...asked, ...(dualEngine(getModel(asked.modelId)) && { engine }) });
   for (const k of ["asked", "chainFilled", "chainSkipped", "notice"] as const) delete request[k];
-  const stored: GenerationRequest = { ...first.request, asked: request };
-  db().prepare("UPDATE generations SET request_json = ? WHERE id = ?").run(JSON.stringify(stored), first.id);
-  return [{ ...first, request: stored }, ...rest];
+  // The row as it was made, with its stamp: a Generation's request has none (toGeneration), and a last step written back
+  // from it would lose its run's place (a chain on this install's GPUs would end on the account's own GPU), its hold
+  // and its output check.
+  const row = db().prepare("SELECT request_json FROM generations WHERE id = ?").get(first.id) as { request_json: string } | undefined;
+  const kept = row ? (JSON.parse(row.request_json) as GenerationRequest) : first.request;
+  db().prepare("UPDATE generations SET request_json = ? WHERE id = ?").run(JSON.stringify({ ...kept, asked: request }), first.id);
+  return [{ ...first, request: { ...first.request, asked: request } }, ...rest];
 }
 
 /** Steps still waiting for their inputs (nothing spent yet) are canceled when the chain they feed can't be made. */

@@ -14,6 +14,8 @@ import { ownSetupOnly, type OwnSetup } from "./own-setup";
  * - `kinds`: a kind set to false runs on the visitor's own GPU only (absent: every kind).
  * - `own`: open models this studio's GPUs can't run right now (none of them holds the model, serves its kind of work,
  *   or has the card it needs), each with what the visitor needs to run it on its own setup.
+ * - `presets`: presets whose press these GPUs can't run in whole right now (a step of it none of them runs, such as the
+ *   start-and-end-frame clip after its end frame), each with what the visitor needs: kept off with that label.
  */
 export interface PoolRules {
   allow?: string[];
@@ -21,24 +23,31 @@ export interface PoolRules {
   apps?: { allow?: string[]; deny?: string[] };
   kinds?: Partial<Record<MediaKind, boolean>>;
   own?: Record<string, OwnSetup>;
+  presets?: Record<string, OwnSetup>;
 }
 
-/** A preset as the rules see it: its id, and the open model it runs on with the kind it makes (none: no open route). */
+/**
+ * A preset as the rules see it: its id, and the open model it runs on with the kind it makes (none: no open route).
+ * `steps`: the open models of its run's other steps (the edit that makes its end frame first), each with the kind it makes.
+ */
 export interface PresetModel {
   id: string;
   model?: { id: string; kind: MediaKind };
+  steps?: { id: string; kind: MediaKind }[];
 }
 
 /**
  * The rules a policy's pool lists and kinds make, or undefined when they keep nothing off. `presets`: the catalog's
  * presets with their open models, so a preset is kept off with its model (by id, in the app lists: the shorter of the
  * two lists when the policy has no app allow list of its own), and with a model that runs on a visitor's own setup only.
- * `own`: the open models this studio's GPUs can't run right now (src/server/pool-own-setup.ts poolOwnSetups).
+ * `own`: the open models this studio's GPUs can't run right now (src/server/pool-own-setup.ts poolOwnSetups);
+ * `ownPresets`: the presets whose press they can't run in whole right now (poolOwnPresets).
  */
 export function poolRulesOf(
   p: { pool?: { allow?: string[]; deny?: string[]; apps?: { allow?: string[]; deny?: string[] } }; kinds?: Partial<Record<MediaKind, boolean>> },
   presets: readonly PresetModel[] = [],
   own: Record<string, OwnSetup> = {},
+  ownPresets: Record<string, OwnSetup> = {},
 ): PoolRules | undefined {
   const list = (xs: unknown) => (Array.isArray(xs) ? xs.filter((x): x is string => typeof x === "string") : undefined);
   const lists = p.pool ?? {};
@@ -50,9 +59,13 @@ export function poolRulesOf(
   const off = Object.entries(p.kinds ?? {}).filter(([, v]) => v === false);
   if (off.length) out.kinds = Object.fromEntries(off) as PoolRules["kinds"];
   if (Object.keys(own).length) out.own = own;
+  if (Object.keys(ownPresets).length) out.presets = ownPresets;
   let appsAllow = list(lists.apps?.allow);
   let appsDeny = list(lists.apps?.deny);
-  const modelOff = new Set(presets.filter((x) => x.model && (!poolRunsModel(out, { ...x.model, engine: "open" }) || ownSetupOnly(x.model.id, "open"))).map((x) => x.id));
+  // A preset whose own model, or the model of any other step of its run, these GPUs can't run is kept off with it: its
+  // card says so before the press, never a run whose later step can't go on.
+  const keptOff = (m: { id: string; kind: MediaKind }) => !poolRunsModel(out, { ...m, engine: "open" }) || !!ownSetupOnly(m.id, "open");
+  const modelOff = new Set(presets.filter((x) => !!ownPresets[x.id] || (x.model && [x.model, ...(x.steps ?? [])].some(keptOff))).map((x) => x.id));
   if (modelOff.size) {
     if (appsAllow) appsAllow = appsAllow.filter((id) => !modelOff.has(id));
     // Most presets kept off: the presets still on make the shorter list.
@@ -94,6 +107,7 @@ export function modelOwnSetup(rules: PoolRules | undefined, m: { id: string; kin
 
 /** Does this studio's GPUs run this app, camera motion or effect under the rules (no rules: yes)? */
 export function poolRunsPreset(rules: PoolRules | undefined, presetId: string): boolean {
+  if (rules?.presets?.[presetId]) return false;
   const apps = rules?.apps;
   if (!apps) return true;
   if (apps.deny?.includes(presetId)) return false;
@@ -120,7 +134,8 @@ export function presetOwnSetup(rules: PoolRules | undefined, p: { id: string; op
   // A catalog preset names its open model; a gallery card only says it has an open route.
   const open = p.open && typeof p.open === "object" ? (p.open as { modelId?: unknown }) : null;
   const model = typeof open?.modelId === "string" ? open.modelId : undefined;
-  return (model && (rules?.own?.[model] ?? ownSetupOnly(model, "open"))) || ANY_GPU;
+  // Its open model's needs first, then those of its press as a whole (a step of it these GPUs can't run).
+  return (model && (rules?.own?.[model] ?? ownSetupOnly(model, "open"))) || rules?.presets?.[p.id] || ANY_GPU;
 }
 
 /**

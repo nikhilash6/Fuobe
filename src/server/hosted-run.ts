@@ -440,6 +440,10 @@ export function poolGate(
   for (const s of steps ?? []) {
     const later = s.provider === "comfyui" ? ownSetupHere(s.modelId, "open") : null;
     if (later) return { ok: false, reason: "ownSetup", setup: later };
+    // A later step nothing here runs right now (no worker holds its files or serves its lane): the whole press runs on the
+    // visitor's own GPU, labelled with what that step needs, as the run's own step is. Never a first step run here
+    // and a later one that can't go on.
+    if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return { ok: false, reason: "ownSetup", setup: needsGpu(stepEndpoint(s)) };
   }
   const problem = steps && p ? stepsProblem(p, steps) : null;
   if (problem) return { ok: false, reason: problem === hostedWords(placeFor(p)).rtxCard ? "rtxCard" : "notOffered", setup: gpu };

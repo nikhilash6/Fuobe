@@ -154,3 +154,37 @@ export function poolCardRefuses(modelId: string): boolean {
 
 /** The open models this install's GPUs can't run right now (poolOwnSetups), for GET /api/status's pool rules. */
 export const poolOwnModels = (): Record<string, OwnSetup> => poolOwnSetups(poolTakes, poolCardRefuses);
+
+/** A preset's press as the cards see it: each step's open model and operation (its end frame's edit first, then its clip). */
+export interface PresetPress {
+  id: string;
+  steps: { modelId: string; op: string }[];
+}
+
+/**
+ * The presets whose press this install's GPUs can't run in whole right now, with what a visitor needs to run them on its
+ * own setup: a step none of whose workflows for its operation `takes` (a start-and-end-frame clip while only the plain
+ * clip's workflow is held, or an end frame's edit no worker holds). Their cards say so before the press, as the price
+ * check does (hosted-run.ts poolGate): never "Try free" for a run whose later step can't go on there. A step with no
+ * workflow for its operation is left to the price check.
+ */
+export function poolOwnPresets(presets: readonly PresetPress[], takes: (endpoint: string) => boolean): Record<string, OwnSetup> {
+  const out: Record<string, OwnSetup> = {};
+  const known = new Map<string, boolean>();
+  const taken = (e: string) => {
+    let v = known.get(e);
+    if (v === undefined) known.set(e, (v = takes(e)));
+    return v;
+  };
+  const byId = new Map(MODELS.map((m) => [m.id, m]));
+  for (const p of presets) {
+    for (const s of p.steps) {
+      const m = byId.get(s.modelId);
+      const endpoints = m ? [...new Set(m.routes.filter((r) => r.provider === "comfyui" && r.op === s.op).map((r) => r.endpoint))] : [];
+      if (!endpoints.length || endpoints.some(taken)) continue;
+      out[p.id] = needsGpu(endpoints[0]);
+      break;
+    }
+  }
+  return out;
+}
