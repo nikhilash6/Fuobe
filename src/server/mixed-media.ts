@@ -1,6 +1,7 @@
 import "server-only";
 import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { getModel } from "@/lib/catalog";
+import { routeNotes } from "@/lib/catalog/fitted";
 import {
   clampFps,
   cleanValues,
@@ -261,7 +262,8 @@ export async function estimateMixed(body: MixedBody): Promise<MixedEstimate> {
     modelId: input.modelId,
     frames,
     fps,
-    notes,
+    // What a step's route makes differently (src/lib/catalog/fitted.ts) is said with the rest.
+    notes: [...notes, ...routeNotes(plan.steps.map((s) => s.request), getModel, notes)],
     ...(input.mode && { mode: input.mode }),
     ...(perFrameUsd !== undefined && { perFrameUsd }),
   };

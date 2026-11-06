@@ -2,6 +2,7 @@ import "server-only";
 import { ORIGINAL_SOUND_IDS, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
+import { routeNotes } from "@/lib/catalog/fitted";
 import { onEngine } from "@/lib/catalog/engines";
 import {
   ANCHOR_MODELS,
@@ -694,7 +695,8 @@ export async function estimateGenjutsu(body: GenjutsuBody, viewer: GenjutsuViewe
     pieces: plan.pieces,
     seconds: Math.round((input.range.end - input.range.start) * 100) / 100,
     steps: plan.steps.length,
-    notes: cost.demo ? notes : [...notes, ...tokenBilled],
+    // What a step's route makes differently (src/lib/catalog/fitted.ts) is said with the rest.
+    notes: [...(cost.demo ? notes : [...notes, ...tokenBilled]), ...routeNotes(plan.steps.map((s) => s.request), getModel, notes)],
     ...(plan.anchors !== undefined ? { anchors: plan.anchors } : {}),
     ...(character ? { limits: [...CHARACTER_LIMITS] } : {}),
     ...(character && maker.h3 && maker.engine === "open" ? { gpu: { ...CHARACTER_GPU } } : {}),

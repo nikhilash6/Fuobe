@@ -28,6 +28,7 @@ import type { MarketingRun } from "@/lib/catalog/marketing";
 import { toastError } from "@/lib/refusals";
 import { templateCover } from "@/lib/template-covers";
 import type { ModelInfo } from "./model-info";
+import { FitNotes, type FitNote } from "@/components/studio/fit-notes";
 import { AvatarSlot, HookPicker, ProductSlot, productChoice, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
 import { ProductParam } from "./product-param";
 import { RunsList } from "./runs";
@@ -405,6 +406,11 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   // Where the run happens and its price, as the studios say it (the chip by the send button); a guest or an account is
   // told the tool isn't available here, with no price.
   const priced = est.data && !est.data.blocker ? est.data : undefined;
+  const fits = est.data?.fits;
+  // A note the fit already says (with its fix) isn't said again in the line under the composer.
+  const notes = (est.data?.notes ?? []).filter((n) => !fits?.some((c) => c.note === n));
+  const fitFix = (c: FitNote) =>
+    c.switchTo ? () => set({ modelId: c.switchTo!.id }) : c.use === undefined ? undefined : c.setting === "aspectRatio" ? () => set({ aspectRatio: String(c.use) }) : c.setting === "duration" ? () => set({ duration: Number(c.use) }) : undefined;
   // Until the run is priced (no product yet), the chip names the model Settings has picked, as the studios' model chip does.
   const access = useModelAccess();
   const picked = useMemo(() => {
@@ -611,13 +617,15 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
               <TooltipContent>{blocker ?? (template ? `Recreate template${sendTip}` : `Generate${sendTip}`)}</TooltipContent>
             </Tooltip>
           </div>
-          {est.data?.notes.length && !blocker ? <p className="hidden truncate px-2 pt-1 text-[11px] text-muted-foreground sm:block">{est.data.notes[0]}</p> : null}
+          {notes.length && !blocker ? <p className="hidden truncate px-2 pt-1 text-[11px] text-muted-foreground sm:block">{notes[0]}</p> : null}
           {/* Phones have no hover: what blocks Generate sits under the composer (the chip says where it runs and its price). */}
-          {(!!blocker || !!est.data?.notes.length) && (
+          {(!!blocker || !!notes.length) && (
             <p className="min-w-0 truncate px-2 pt-1 text-[11px] text-muted-foreground sm:hidden" aria-live="polite">
-              {blocker ?? est.data?.notes[0] ?? ""}
+              {blocker ?? notes[0] ?? ""}
             </p>
           )}
+          {/* A shape or length picked here that the run makes differently: said before it runs, with the way to what is made. */}
+          {!blocker && <FitNotes fits={fits} apply={fitFix} className="px-1" />}
         </div>
       </div>
     </div>

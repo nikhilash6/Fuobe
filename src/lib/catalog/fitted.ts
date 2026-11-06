@@ -41,7 +41,7 @@ export function fittedSettings(
   model: Pick<ModelDef, "id" | "name" | "engine" | "routes" | "defaults">,
   op: Operation,
   params: GenParams | undefined,
-  opts: { provider?: ProviderId; negativePrompt?: string } = {},
+  opts: { provider?: ProviderId; negativePrompt?: string; deliberate?: boolean } = {},
 ): MadeSettings {
   const p = params ?? {};
   const made: MadeSettings = {
@@ -68,7 +68,8 @@ export function fittedSettings(
   const place = !QUIET_PLACE.has(op) && OPERATION_PLACE[op] ? ` ${OPERATION_PLACE[op]}` : "";
   // A default every studio fills in (a shape for a start frame) that the route doesn't send isn't a choice: it is left out
   // of the made settings without a word.
-  const filled = (k: "aspectRatio" | "resolution" | "duration", v: unknown) => v === "auto" || (model.defaults as Record<string, unknown> | undefined)?.[k] === v;
+  // `deliberate`: the value was picked on purpose (a studio's own picker), so even the default is said.
+  const filled = (k: "aspectRatio" | "resolution" | "duration", v: unknown) => v === "auto" || (!opts.deliberate && (model.defaults as Record<string, unknown> | undefined)?.[k] === v);
 
   // Quality.
   const res = p.resolution;
@@ -207,4 +208,72 @@ export function settingChange(
   value: string | number,
 ): SettingChange | undefined {
   return fittedSettings(model, op, { [setting]: value }).changes.find((c) => c.setting === setting);
+}
+
+const ASKED_LABEL = { aspectRatio: "Aspect ratio", resolution: "Quality", duration: "Duration" } as const;
+const askedWords = (k: keyof typeof ASKED_LABEL, v: string | number) => (k === "duration" ? secs(Number(v)) : k === "resolution" ? tierWords(String(v)) : String(v));
+
+/**
+ * What a studio's own picker asked for against what its request is made at. The studio may have moved the value already
+ * (5:4 sent as 4:3, the closest the model lists), and the route may fit it again: one change per setting asked, with the
+ * value to pick instead (none when the model keeps the input's own shape or length).
+ */
+export function askedChanges(
+  model: Pick<ModelDef, "id" | "name" | "engine" | "routes" | "defaults">,
+  op: Operation,
+  sent: GenParams,
+  asked: Partial<Record<keyof typeof ASKED_LABEL, string | number>>,
+): SettingChange[] {
+  const made = fittedSettings(model, op, sent, { deliberate: true });
+  const out: SettingChange[] = [];
+  for (const k of Object.keys(ASKED_LABEL) as (keyof typeof ASKED_LABEL)[]) {
+    const a = asked[k];
+    if (a === undefined || sent[k] === undefined) continue;
+    const route = made.changes.find((c) => c.setting === k);
+    const m = made[k];
+    if (m === undefined) {
+      if (route) out.push({ ...route, asked: askedWords(k, a), use: undefined });
+      continue;
+    }
+    if (String(m).toLowerCase() === String(a).toLowerCase()) continue;
+    const shown = askedWords(k, m);
+    out.push({
+      setting: k,
+      label: ASKED_LABEL[k],
+      asked: askedWords(k, a),
+      made: shown,
+      reason: route?.reason ?? "the closest this model makes",
+      note: route?.note ?? `${model.name} makes ${shown}, the closest to ${askedWords(k, a)}`,
+      use: m,
+    });
+  }
+  return out;
+}
+
+/**
+ * What a run's steps make differently from what they ask (each step's route), each said once: for a studio that builds
+ * its own steps and says before the run what changes.
+ */
+export function stepChanges(
+  requests: { modelId: string; op?: Operation; params?: GenParams; negativePrompt?: string }[],
+  lookup: (id: string) => (Pick<ModelDef, "id" | "name" | "engine" | "routes" | "defaults"> & Partial<ModelDef>) | undefined,
+): SettingChange[] {
+  const out: SettingChange[] = [];
+  for (const r of requests) {
+    const m = lookup(r.modelId);
+    if (!m || m.engine === "open" || !r.op) continue;
+    for (const c of fittedSettings(m, r.op, { ...m.defaults, ...r.params }, { negativePrompt: r.negativePrompt }).changes) if (!out.some((x) => x.note === c.note)) out.push(c);
+  }
+  return out;
+}
+
+/** stepChanges as the notes a studio's estimate adds, leaving out what its own notes say already. */
+export function routeNotes(
+  requests: { modelId: string; op?: Operation; params?: GenParams; negativePrompt?: string }[],
+  lookup: Parameters<typeof stepChanges>[1],
+  said: readonly string[] = [],
+): string[] {
+  return stepChanges(requests, lookup)
+    .map((c) => c.note)
+    .filter((n) => !said.includes(n));
 }

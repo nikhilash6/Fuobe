@@ -1,6 +1,7 @@
 import "server-only";
 import { nanoid } from "nanoid";
 import { getModel, getPreset } from "@/lib/catalog";
+import { stepChanges } from "@/lib/catalog/fitted";
 import { CAST_LOOK, CAST_SHEET_MODEL, castPrompt, SOUL_BUILDER_MODEL, type CastValues } from "@/lib/catalog/cinema";
 import { soulRecipe } from "@/lib/catalog/soul";
 import {
@@ -229,6 +230,13 @@ export function previewRun(requests: GenerationRequest[], notes: string[] = []) 
     const sized = first.route.provider !== "comfyui" || !!loadManifest().workflows.find((w) => w.id === first.route.endpoint)?.bindings.width;
     const fixedAspect = !first.model.options.aspectRatios?.length || !sized;
     const asked = requests.some((r) => r.params?.aspectRatio && r.params.aspectRatio !== "auto");
+    // What a request's route makes differently (src/lib/catalog/fitted.ts), said before the run; a shape the model leaves
+    // out is the line below.
+    const said = fixedAspect && asked ? [...notes, `${first.model.name} keeps the shape of your photo — the aspect ratio doesn't apply`] : notes;
+    const routeNotes = stepChanges(
+      requests.map((r, i) => ({ ...fitted(r), op: previews[i].op })),
+      getModel,
+    ).filter((c) => !(fixedAspect && c.setting === "aspectRatio") && !said.includes(c.note));
     return {
       modelId: first.model.id,
       modelName: first.model.name,
@@ -236,7 +244,7 @@ export function previewRun(requests: GenerationRequest[], notes: string[] = []) 
       costUsd: costs.some((c) => c === null) ? null : Math.round(costs.reduce((a, b) => a! + b!, 0)! * 1000) / 1000,
       demo: previews.some((p) => p.demo),
       fixedAspect,
-      notes: fixedAspect && asked ? [...notes, `${first.model.name} keeps the shape of your photo — the aspect ratio doesn't apply`] : notes,
+      notes: [...said, ...routeNotes.map((c) => c.note)],
     };
   } catch (e) {
     return { error: (e as Error).message, notes };

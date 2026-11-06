@@ -386,20 +386,27 @@ function Editor({
       const capped = r === "4K" && cloud && (modelId === "seedream-5-flash" || original);
       // Your GPU's per-frame graph draws up to 1536 px on the long side: 2K and 4K would come out the same as 1K.
       const gpuCap = !cloud && r !== "1K";
+      // A size it would draw smaller says why, with the size it does draw one tap away.
+      const use: MixedResolution | undefined = gpuCap ? "1K" : capped ? "2K" : undefined;
       return {
         value: r,
         label: r,
         hint: undefined,
-        disabled: capped || gpuCap,
-        title: gpuCap ? "Your GPU draws each frame up to 1536 px: 2K and 4K are per frame in the cloud" : capped ? `${model?.name} draws frames up to 2K` : `Each frame at ${r}`,
+        unavailable: use
+          ? { why: gpuCap ? "Your GPU draws each frame up to 1536 px: 2K and 4K are per frame in the cloud" : `${model?.name} draws frames up to 2K`, fix: { label: `Use ${use}`, run: () => setResolution(use) } }
+          : undefined,
+        title: `Each frame at ${r}`,
       };
     }
     const at = fast ? nearestResolution(model?.resolutions, r) : undefined;
     const prev = i > 0 && fast ? nearestResolution(model?.resolutions, MIXED.resolutions[i - 1]) : undefined;
-    return { value: r, label: r, hint: at, disabled: fast && !!at && at === prev, title: fast && at === prev ? `${model?.name} renders up to ${at}` : at };
+    // Fast renders at the model's own size nearest to the one picked: a choice that lands on the same size as a smaller one
+    // says so, with the smaller one (the same render) one tap away.
+    const same = fast && !!at && at === prev ? MIXED.resolutions.find((x) => nearestResolution(model?.resolutions, x) === at) : undefined;
+    return { value: r, label: r, hint: at, unavailable: same ? { why: `${model?.name} renders up to ${at}`, fix: { label: `Use ${same}`, run: () => setResolution(same) } } : undefined, title: at };
   });
-  const showResolution = !smooth && (!fast || resOptions.some((o) => o.hint && !o.disabled && o.value !== "1K"));
-  const resShown: MixedResolution = resOptions.find((o) => o.value === resolution)?.disabled ? ([...resOptions].reverse().find((o) => !o.disabled)?.value ?? "1K") : resolution;
+  const showResolution = !smooth && (!fast || resOptions.some((o) => o.hint && !o.unavailable && o.value !== "1K"));
+  const resShown: MixedResolution = resOptions.find((o) => o.value === resolution)?.unavailable ? ([...resOptions].reverse().find((o) => !o.unavailable)?.value ?? "1K") : resolution;
   const modelRes = fast ? nearestResolution(model?.resolutions, resShown) : undefined;
   const previewImage = preview?.status === "succeeded" ? preview.outputs.find((o) => o.kind === "image") : undefined;
   // The partner editors start every run of frames from the approved preview; Fast only when the model takes a still. The

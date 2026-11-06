@@ -1,3 +1,4 @@
+import type { SettingChange } from "./made";
 import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
 
 /**
@@ -1283,7 +1284,15 @@ export interface RunEstimate {
   /** Why it can't run yet (shown on the Generate button). */
   blocker?: string;
   runs: number;
+  /**
+   * A shape, length or quality picked here that the run makes differently (src/lib/catalog/fitted.ts), said before the run
+   * with its fix: the value it is made at (`use`), or a model in the list that makes the one picked (`switchTo`).
+   */
+  fits?: PickerFit[];
 }
+
+/** One picked setting the run makes differently, and the one-tap way to what is made (or to the model that makes it). */
+export type PickerFit = SettingChange & { switchTo?: { id: string; name: string } };
 
 /** The state of a whole run: its results', else the first step that failed on its own, else running. */
 export function runStatus(r: Pick<MarketingRun, "generations" | "finalIds">): { state: "done" | "failed" | "running" | "canceled"; step?: string; error?: string } {

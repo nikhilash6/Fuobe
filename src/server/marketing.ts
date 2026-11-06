@@ -43,13 +43,14 @@ import {
   type MarketingTemplate,
   type PlannedStep,
   type Product,
+  type PickerFit,
   type RunEstimate,
   type RunFeature,
   type RunOverlay,
 } from "@/lib/catalog/marketing";
 import { dualEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
-import { opTakes } from "@/lib/catalog/route-takes";
+import { askedChanges, fittedSettings, stepChanges, type SettingChange } from "@/lib/catalog/fitted";
 import { themeFrom, type AdLayout } from "@/components/ads/layout";
 import { adDraft } from "@/lib/layout-surfaces";
 import { LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -417,7 +418,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     if (productShot) notes.push("Your product is cut out and relit into the scene, so it stays as it is");
     else if (open && op === "edit") notes.push("Qwen-Image 2.1 keeps your first photo's shape on your GPU");
     // Settings the picked model doesn't take are said before the run, never dropped without a word.
-    else if (!open && !opTakes(model, op).aspect && !model.options.aspectRatios?.length) notes.push(`${model.name} keeps your photo's shape: Aspect ratio doesn't change it`);
+    else if (!open && keepsShape(model, op, aspect)) notes.push(`${model.name} keeps your photo's shape: Aspect ratio doesn't change it`);
     else if (aspect && input.aspectRatio && aspect !== input.aspectRatio) notes.push(`${model.name} makes ${aspect}, the closest to ${input.aspectRatio}`);
     if (model.options.promptless && prompt) notes.push(`${model.name} works from your photos alone: the words aren't used`);
     return {
@@ -469,7 +470,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     const steps: Step[] = [];
     const { after: frameAfter, ...frame } = op === "i2v" ? startFrame(steps, refs[0], aspect, model, `${feature}-step`) : { after: undefined };
     if (frameAfter) notes.push(`${model.name} keeps its first frame's shape: the photo is grown to ${aspect} on Qwen-Image 2.1 first`);
-    else if (!open && op === "i2v" && !opTakes(model, "i2v").aspect) notes.push(`${model.name} keeps your photo's shape: Aspect ratio doesn't change it`);
+    else if (!open && keepsShape(model, op, aspect)) notes.push(`${model.name} keeps your photo's shape: Aspect ratio doesn't change it`);
     else if (aspect && input.aspectRatio && aspect !== input.aspectRatio) notes.push(`${model.name} makes ${aspect}, the closest to ${input.aspectRatio}`);
     steps.push(
       ...shots.map(
@@ -1158,6 +1159,45 @@ export function onPlanEngine(plan: RunPlan): RunPlan {
   return plan.steps.some((s) => pin(s) !== s) ? { ...plan, steps: plan.steps.map(pin) } : plan;
 }
 
+/** Whether a hosted model's route leaves the shape out on this mode (it keeps the photo's or its own), from its route. */
+function keepsShape(model: ModelDef, op: Operation, aspect: string | undefined): boolean {
+  return !!aspect && fittedSettings(model, op, { aspectRatio: aspect }, { deliberate: true }).aspectRatio === undefined;
+}
+
+/** Whether the plan's own notes already say a step's change (its shape, length or size), so it isn't said twice. */
+function alreadySaid(notes: string[], modelName: string, c: SettingChange): boolean {
+  const own = notes.filter((n) => n.startsWith(modelName));
+  if (c.setting === "aspectRatio") return own.some((n) => /shape|closest to/.test(n));
+  if (c.setting === "duration") return own.some((n) => /clips?/.test(n));
+  return own.some((n) => n.includes(c.made));
+}
+
+/** The steps that make what was asked for (not a helper: a photo grown first, a join, a voice), in order. */
+const MADE_OPS = new Set<Operation>(["t2i", "edit", "t2v", "i2v", "ref2v", "avatar"]);
+
+/**
+ * The shape, length and quality picked here against what the run's first making step is made at, each with its fix: the
+ * value it is made at, or (when the model keeps the photo's own shape) the first model in the list that makes the one
+ * picked.
+ */
+export function pickerFits(plan: RunPlan, asked: { aspectRatio?: string; duration?: number; resolution?: string }, choices: { id: string }[] = []): PickerFit[] {
+  const step = plan.steps.find((s) => s.request.op && MADE_OPS.has(s.request.op) && s.request.modelId !== FIT_PHOTO_MODEL);
+  const model = step && getModel(step.request.modelId);
+  if (!step || !model || !step.request.op) return [];
+  const op = step.request.op;
+  // A run of several shots is as long as its shots together: its length is the plan's, said in its notes.
+  const shots = plan.steps.filter((s) => s.request.modelId === model.id && s.request.op === op).length;
+  const fits: PickerFit[] = askedChanges(model, op, { ...model.defaults, ...step.request.params }, { ...asked, ...(shots > 1 && { duration: undefined }) });
+  // The plan's own words for a shape it leaves out ("keeps your photo's shape") are the ones said.
+  const ownShapeNote = plan.notes.find((n) => n.startsWith(model.name) && /shape/.test(n));
+  return fits.map((c) => {
+    if (c.use !== undefined || c.setting !== "aspectRatio" || !asked.aspectRatio) return c;
+    if (ownShapeNote) c = { ...c, note: ownShapeNote };
+    const other = choices.map((x) => getModel(x.id)).find((m) => m && m.id !== model.id && m.engine === model.engine && m.routes.some((r) => r.op === op) && !keepsShape(m, op, nearestAspect(asked.aspectRatio, m.options.aspectRatios)));
+    return other ? { ...c, switchTo: { id: other.id, name: other.name } } : c;
+  });
+}
+
 /** Price and validate every step with placeholders for what earlier steps make (nothing is created). */
 export function estimatePlan(input: RunPlan, runs = 1): RunEstimate {
   const plan = onPlanEngine(input);
@@ -1170,7 +1210,14 @@ export function estimatePlan(input: RunPlan, runs = 1): RunEstimate {
     steps.push({ key: s.key, label: s.label, modelId: p.model.id, modelName: p.model.name, costUsd: p.costUsd });
     total = total === null || p.costUsd === null ? null : total + p.costUsd;
   }
-  return { costUsd: total === null ? null : Math.round(total * runs * 1000) / 1000, demo, steps, notes: plan.notes, runs };
+  // What a step's route makes differently that the plan's own notes don't say yet (src/lib/catalog/fitted.ts).
+  const routeNotes: string[] = [];
+  for (const s of plan.steps) {
+    const m = getModel(s.request.modelId);
+    if (!m || !s.request.op) continue;
+    for (const c of stepChanges([{ ...s.request, op: s.request.op }], getModel)) if (!alreadySaid(plan.notes, m.name, c) && !plan.notes.includes(c.note) && !routeNotes.includes(c.note)) routeNotes.push(c.note);
+  }
+  return { costUsd: total === null ? null : Math.round(total * runs * 1000) / 1000, demo, steps, notes: [...plan.notes, ...routeNotes], runs };
 }
 
 interface RunRow {
@@ -1267,7 +1314,10 @@ export function estimateMarketing(input: MarketingInput): RunEstimate {
   const f = FORMATS[input.format];
   const script = f.pipeline === "ugc" ? input.script?.trim() || Array(wordBudget(presenterSeconds(input, ctx))).fill("word").join(" ") : undefined;
   const plan = planMarketing(input, { ...ctx, script });
-  return estimatePlan(plan, runsFor(input, plan));
+  const est = estimatePlan(plan, runsFor(input, plan));
+  const choices = formatModels(f, input.engine, { product: !!(input.productImages?.length || ctx.product?.images.length), avatar: !!input.avatar }, !!input.drawnWords && !!f.text && f.pipeline === "image");
+  const fits = pickerFits(plan, { aspectRatio: input.aspectRatio, duration: f.durations ? input.duration : undefined }, choices.filter((c) => !c.unavailable));
+  return fits.length ? { ...est, fits } : est;
 }
 
 export async function runMarketing(input: MarketingInput): Promise<{ runs: MarketingRun[]; script?: string }> {

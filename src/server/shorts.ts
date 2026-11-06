@@ -2,6 +2,7 @@ import "server-only";
 import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
+import { routeNotes } from "@/lib/catalog/fitted";
 import { maxRefsFor, reframes, resolutionFor, sourceSeconds } from "@/lib/catalog/shorts-models";
 import {
   clipLengthProblem,
@@ -522,12 +523,15 @@ export function estimateWith(body: ShortsBody, info: SourceInfo): ShortsEstimate
     segments: plan.segments.length,
     seconds: Math.round((input.range.end - input.range.start) * 10) / 10,
     refsSent: input.engine === "open" ? Math.min(SHORTS.openReferences, input.look.references?.length ?? 0) : Math.min(input.maxRefs, input.look.references?.length ?? 0),
-    notes: notesFor(input, plan.segments.length),
+    notes: withRouteNotes(notesFor(input, plan.segments.length), plan.steps),
   };
 }
 
 // ---------------------------------------------------------------------------
 // Sessions
+
+/** A plan's notes and what its steps' routes make differently (src/lib/catalog/fitted.ts). */
+const withRouteNotes = (notes: string[], steps: PlanStep[]) => [...notes, ...routeNotes(steps.map((s) => s.request), getModel, notes)];
 
 /** A plan's steps as the requests they make, with how many earlier steps each waits for (account-tool-run.ts ToolStep). */
 export const shortsSteps = (steps: PlanStep[]): { request: GenerationRequest; deps: number }[] => steps.map((s) => ({ request: withChain(s), deps: s.after?.length ?? 0 }));
