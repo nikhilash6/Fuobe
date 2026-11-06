@@ -44,7 +44,7 @@ export interface RestoreEstimate {
 export interface PromptAnswer {
   prompt: string;
   negative: string;
-  by: "claude" | "local" | "offline";
+  by: "claude" | "local" | "free" | "offline";
   why?: string;
 }
 

@@ -2,7 +2,8 @@
 // text job at a time, beside the GPU's job and the CPU slot's, and answers it with a llama.cpp server that it starts
 // itself: 127.0.0.1 only, a random port, a new key at each start, the model checked against its SHA-256 first. The
 // server starts at the first job and stops after `idleMin` minutes with none, on a pause, and when the worker ends. It
-// runs on the GPU when there is room, else on the CPU (`cpu`), and changes only between jobs.
+// runs on the GPU when there is room, else on the CPU (`cpu`), and changes only between jobs. Any GGUF chat model works;
+// with `mmproj` (its vision projector) it also takes jobs with pictures.
 import crypto from "node:crypto";
 import { spawn as spawnChild } from "node:child_process";
 import fs from "node:fs";
@@ -11,22 +12,63 @@ import { comfyEnv, killTree, pickPort, RotatingLog } from "./comfy.mjs";
 
 export const TEXT_DEFAULTS = { context: 8192, idleMin: 10, gpuMinFreeMb: 8000, cpu: true, threads: 8, startMs: 180_000, answerMs: 120_000, claimWaitMs: 20_000 };
 
-/** The graphics memory a GPU server is counted with before its log says (weights, cache and buffers of a 4B model). */
-export const TEXT_GPU_GUESS_MB = 5500;
+/** The graphics memory a GPU server is counted with before its log says (weights, cache and buffers of a small model). */
+export const TEXT_GPU_GUESS_MB = 6500;
 
-/** The model name the studio hears with each claim. */
-export const TEXT_MODEL = "nemotron-3.5-bolt-e4b";
+/**
+ * How each model family is asked: its chat template's switches (thinking off where the template has one) and the
+ * sampling its card gives. worker.json's `textSlot.chat` ({ kwargs, sampling }) overrides them.
+ */
+export const FAMILIES = [
+  { match: /nemotron/i, kwargs: { enable_thinking: false }, sampling: { temperature: 1.0, top_p: 0.95 } },
+  { match: /gemma/i, kwargs: { enable_thinking: false }, sampling: { temperature: 1.0, top_p: 0.95, top_k: 64 } },
+  { match: /qwen3-?vl/i, kwargs: null, sampling: { temperature: 0.7, top_p: 0.8, top_k: 20, presence_penalty: 1.5 } },
+];
+const PLAIN = { kwargs: null, sampling: { temperature: 0.7, top_p: 0.9 } };
+
+/** The family settings for a model file (or textSlot.name), with worker.json's own. */
+export function familyOf(slot) {
+  const name = slot.name ?? path.basename(slot.model ?? "");
+  const fam = FAMILIES.find((x) => x.match.test(name)) ?? PLAIN;
+  const chat = slot.chat && typeof slot.chat === "object" ? slot.chat : {};
+  return { kwargs: chat.kwargs === undefined ? fam.kwargs : chat.kwargs, sampling: { ...fam.sampling, ...(chat.sampling ?? {}) } };
+}
+
+/** The model name the studio hears with each claim: textSlot.name, else the file's name without .gguf. */
+export const modelName = (slot) => String(slot.name ?? path.basename(slot.model ?? "").replace(/\.gguf$/i, "")).toLowerCase().slice(0, 120);
+
+/** A picture a job may carry: a JPEG as base64, at most this long. */
+const PICTURE_B64_MAX = 700_000;
 
 const SHA = /^[0-9a-f]{64}$/i;
+
+/**
+ * The model a text slot runs when worker.json gives only `modelDir`: Gemma 4 E2B-it (Q6_K) with its vision projector, from
+ * unsloth/gemma-4-E2B-it-GGUF at commit 0314792d7f1f7e229411f620751375812bb9faf2. Any field worker.json sets wins.
+ */
+export const TEXT_DEFAULT_MODEL = {
+  model: "gemma-4-E2B-it-Q6_K.gguf",
+  sha256: "f7b8980ecc1c115898fd8d9a3d421d90becbac984194a44b478669c26815843d",
+  mmproj: "mmproj-F16.gguf",
+  mmprojSha256: "140be8d7849741f88c50757d529b84373ee8e27052cc2236855b537f4a8215fa",
+};
 
 /** worker.json's `textSlot` with defaults, or { problem } when it can't be used, or null when it isn't set. */
 export function textSlotOf(raw) {
   if (!raw || typeof raw !== "object") return null;
   const s = { ...TEXT_DEFAULTS, ...raw };
+  if (typeof s.modelDir === "string" && s.modelDir) {
+    const d = TEXT_DEFAULT_MODEL;
+    if (s.model === undefined) Object.assign(s, { model: path.join(s.modelDir, d.model), sha256: s.sha256 ?? d.sha256 });
+    if (s.mmproj === undefined) Object.assign(s, { mmproj: path.join(s.modelDir, d.mmproj), mmprojSha256: s.mmprojSha256 ?? d.mmprojSha256 });
+  }
   if (typeof s.server !== "string" || !s.server) return { problem: "textSlot needs `server`, the path of llama-server" };
   if (typeof s.model !== "string" || !s.model) return { problem: "textSlot needs `model`, the path of the GGUF file" };
   if (typeof s.sha256 !== "string" || !SHA.test(s.sha256)) return { problem: "textSlot needs `sha256`, the model file's SHA-256" };
   if (s.serverSha256 !== undefined && (typeof s.serverSha256 !== "string" || !SHA.test(s.serverSha256))) return { problem: "textSlot's `serverSha256` isn't a SHA-256" };
+  if (s.mmproj !== undefined && (typeof s.mmproj !== "string" || !s.mmproj || typeof s.mmprojSha256 !== "string" || !SHA.test(s.mmprojSha256))) {
+    return { problem: "textSlot's `mmproj` needs `mmprojSha256`, the projector file's SHA-256" };
+  }
   const num = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Math.round(Number(v)))) : d);
   return {
     ...s,
@@ -91,7 +133,8 @@ export function serverArgs(slot, o) {
     "-t", String(slot.threads),
     "--jinja",
     "--no-webui",
-    "--alias", TEXT_MODEL,
+    "--alias", modelName(slot),
+    ...(slot.mmproj ? ["--mmproj", slot.mmproj] : []),
   ];
 }
 
@@ -110,22 +153,30 @@ export function jobOf(body) {
   if (!str(j.id, 80) || !j.id || !str(j.lease, 80) || !j.lease || !str(j.system, 16_000) || !str(j.user, 16_000) || !j.user) return null;
   const maxTokens = Number(j.maxTokens);
   if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192) return null;
-  return { id: j.id, lease: j.lease, system: j.system, user: j.user, maxTokens, json: j.json === true };
+  let images = [];
+  if (j.images !== undefined) {
+    if (!Array.isArray(j.images) || j.images.length > 4) return null;
+    for (const b of j.images) {
+      // A JPEG as base64 only, never an address: llama-server would fetch a URL or read a file.
+      if (typeof b !== "string" || b.length > PICTURE_B64_MAX || !/^[A-Za-z0-9+/]+={0,2}$/.test(b) || !b.startsWith("/9j/")) return null;
+    }
+    images = j.images;
+  }
+  return { id: j.id, lease: j.lease, system: j.system, user: j.user, maxTokens, json: j.json === true, images };
 }
 
-/** The request body for one job: thinking off, the model card's sampling. */
-export function chatBody(job) {
+/** The request body for one job: the family's template switches and sampling, the pictures before the words. */
+export function chatBody(job, slot = {}) {
+  const fam = familyOf(slot);
+  const pictures = job.images ?? [];
+  const content = pictures.length ? [...pictures.map((b) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b}` } })), { type: "text", text: job.user }] : job.user;
   return {
-    model: TEXT_MODEL,
-    messages: [
-      ...(job.system ? [{ role: "system", content: job.system }] : []),
-      { role: "user", content: job.user },
-    ],
+    model: modelName(slot),
+    messages: [...(job.system ? [{ role: "system", content: job.system }] : []), { role: "user", content }],
     max_tokens: job.maxTokens,
-    temperature: 1.0,
-    top_p: 0.95,
+    ...fam.sampling,
     stream: false,
-    chat_template_kwargs: { enable_thinking: false },
+    ...(fam.kwargs && { chat_template_kwargs: fam.kwargs }),
     ...(job.json && { response_format: { type: "json_object" } }),
   };
 }
@@ -160,8 +211,10 @@ export class TextSlot {
     this.checking = (async () => {
       const model = await fileMatches(this.slot.model, this.slot.sha256, cache, hash);
       const server = fs.existsSync(this.slot.server) && (!this.slot.serverSha256 || (await fileMatches(this.slot.server, this.slot.serverSha256, cache, hash)));
-      this.ok = model && server;
-      this.log(this.ok ? "Its text slot is ready: the model's SHA-256 matches." : `Its text slot is off: ${!model ? "the model file is missing or its SHA-256 doesn't match" : "llama-server is missing or its SHA-256 doesn't match"}.`);
+      const mmproj = !this.slot.mmproj || (await fileMatches(this.slot.mmproj, this.slot.mmprojSha256, cache, hash));
+      this.ok = model && server && mmproj;
+      const why = !model ? "the model file is missing or its SHA-256 doesn't match" : !mmproj ? "the mmproj file is missing or its SHA-256 doesn't match" : "llama-server is missing or its SHA-256 doesn't match";
+      this.log(this.ok ? `Its text slot is ready (${modelName(this.slot)}${this.slot.mmproj ? ", with pictures" : ""}): the SHA-256 matches.` : `Its text slot is off: ${why}.`);
     })()
       .catch((e) => {
         this.ok = false;
@@ -212,7 +265,7 @@ export class TextSlot {
   }
 
   async claimAndRun(device) {
-    const res = await this.d.call("/api/gpu/computer/text/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: TEXT_MODEL, device, wait: this.slot.claimWaitMs }), signal: this.ending.signal });
+    const res = await this.d.call("/api/gpu/computer/text/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, wait: this.slot.claimWaitMs }), signal: this.ending.signal });
     if (res.status === 204 || !res.ok) {
       await res.body?.cancel().catch(() => {});
       return false;
@@ -221,6 +274,7 @@ export class TextSlot {
     if (!job) return false;
     let answer;
     try {
+      if (job.images.length && !this.slot.mmproj) throw new Error("this slot's model doesn't take pictures");
       await this.ensure(device);
       answer = { text: await this.complete(job) };
     } catch (e) {
@@ -241,7 +295,7 @@ export class TextSlot {
     const r = await f(`http://127.0.0.1:${s.port}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.key}` },
-      body: JSON.stringify(chatBody(job)),
+      body: JSON.stringify(chatBody(job, this.slot)),
       signal: AbortSignal.timeout(this.slot.answerMs),
     });
     if (!r.ok) throw new Error(`llama-server answered ${r.status}`);

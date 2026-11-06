@@ -1187,6 +1187,9 @@ function open(): Database.Database {
   db.exec(ADMISSION_TABLES);
   // The free text helper's line and the workers' text slots (text-helper.ts): not a numbered migration either.
   db.exec(HELPER_TABLES);
+  for (const [table, column, type] of [["helper_jobs", "images_json", "TEXT"], ["helper_slots", "vision", "INTEGER NOT NULL DEFAULT 0"]]) {
+    if (!(db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
   // Skills: the runs that wait across studios. A data folder that ran claude/fuobe-parity-4's earlier build of this
   // feature (its numbered migration at place 27, a skill_runs with no engine column and runs kept in another shape)
   // keeps that table under another name, so these runs start from an empty table. Nothing is deleted.
@@ -1313,14 +1316,16 @@ const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
     claimed_at INTEGER,
     done_at INTEGER,
     text TEXT,
-    error TEXT
+    error TEXT,
+    images_json TEXT
   );
   CREATE INDEX IF NOT EXISTS helper_jobs_line ON helper_jobs(state, created_at);
   CREATE TABLE IF NOT EXISTS helper_slots (
     worker_id TEXT PRIMARY KEY,
     seen_at INTEGER NOT NULL,
     model TEXT,
-    device TEXT
+    device TEXT,
+    vision INTEGER NOT NULL DEFAULT 0
   );`;
 
 export function db(): Database.Database {

@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { grabFrames, useRestoreActions, useRestoreEstimate, type RestoreBody } from "./hooks";
 
 const LIMITS = `MP4, MOV, WebM, MKV or AVI · up to ${RESTORE.maxSeconds / 60} minutes · ${RESTORE.maxBytes / 1024 / 1024 / 1024} GB`;
-const BY: Record<string, string> = { claude: "Written by Claude from your frames", local: "Written by a local model", offline: "Fuobe's template: edit it to fit your footage", you: "Your words" };
+const BY: Record<string, string> = { claude: "Written by Claude from your frames", local: "Written by a local model", free: "Written from your frames", offline: "Fuobe's template: edit it to fit your footage", you: "Your words" };
 const DEFAULT_NEGATIVE = restoreNegative();
 
 interface Run {

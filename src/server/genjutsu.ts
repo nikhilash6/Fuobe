@@ -61,7 +61,7 @@ import { planSegments, type PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, Generation, GenerationRequest, PixelPoint, ProviderId } from "@/lib/catalog/types";
 import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
-import { llmText, llmTextBackend } from "./enhance";
+import { freeHelperFallback, llmText, llmTextBackend } from "./enhance";
 import { AccountRunError, ConnectComfyError, createGenerations, previewChained, previewGeneration } from "./generations";
 import { db } from "./db";
 import { genjutsuLive } from "./genjutsu-live";
@@ -779,7 +779,9 @@ export async function describeCharacter(body: z.infer<typeof DescribeSchema>): P
   // A local model is asked on your GPU's engine (and when no Anthropic key is set): its server has to be running.
   const backend = llmTextBackend();
   const local = backend === "ollama" || (backend === "claude" && body.engine === "open");
-  if (getSetting("demoMode") === "on" || !backend || (local && !(await probeOllama()))) {
+  // The free helper on the workers' text slots, when its model sees pictures.
+  const free = !!backend && freeHelperFallback({ vision: true });
+  if (getSetting("demoMode") === "on" || ((!backend || (local && !(await probeOllama()))) && !free)) {
     throw new ShortsError("Describing needs a text model: add an Anthropic key, or run a vision model in Ollama, LM Studio or Unsloth Studio (Settings → AI helper)", 422);
   }
   let file: Awaited<ReturnType<typeof readRef>>;
@@ -789,7 +791,7 @@ export async function describeCharacter(body: z.infer<typeof DescribeSchema>): P
     throw new ShortsError("Couldn't read the character picture — add it again", 422);
   }
   if (!/^image\/(png|jpeg|webp|gif)$/.test(file.contentType)) throw new ShortsError("Describe works on a PNG, JPEG or WebP picture", 422);
-  const answer = await llmText(DESCRIBE_SYSTEM, "Describe the character in this picture.", [{ data: file.data, contentType: file.contentType }], { ollamaOnly: body.engine === "open" });
+  const answer = await llmText(DESCRIBE_SYSTEM, "Describe the character in this picture.", [{ data: file.data, contentType: file.contentType }], { ollamaOnly: body.engine === "open", task: "describe", waitMs: 45_000 });
   const description = cleanDescription(answer);
   if (!description) throw new ShortsError(body.engine === "open" ? `${cap(localLabel())} didn't describe the picture — it needs a vision model (qwen3-vl, gemma3…)` : "The text model didn't answer — try again, or describe your character in your own words", 422);
   return { description };

@@ -23,7 +23,7 @@ import type { PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
-import { llmText, llmTextBackend } from "./enhance";
+import { freeHelperFallback, llmText, llmTextBackend } from "./enhance";
 import { previewChained } from "./generations";
 import { gatedFileReady, gatedHint } from "./loras";
 import { isOffered, offeredModel } from "./model-access";
@@ -122,7 +122,7 @@ export interface PromptAnswer {
   prompt: string;
   negative: string;
   /** Claude, a local model (Settings → AI helper: Ollama, LM Studio, Unsloth Studio or another server), or the template. */
-  by: "claude" | "local" | "offline";
+  by: "claude" | "local" | "free" | "offline";
   why?: string;
 }
 
@@ -139,12 +139,22 @@ export async function writeRestorePrompt(body: z.infer<typeof PromptSchema>): Pr
   if (!textModel || !offeredModel(textModel)) return offline(`the text model is switched off in ${ACCESS_PLACE}`);
   const backend = llmTextBackend();
   const local = backend === "ollama" || (backend === "claude" && body.engine === "open");
+  // The free helper on the workers' text slots, when its model sees pictures (or, with no frames, any).
+  const free = !!backend && freeHelperFallback({ vision: body.frames.length > 0 });
   if (!backend) return offline("no AI helper is set up (Settings → AI helper)");
-  if (local && !(await probeLocal())) return offline(`${localWhat()} isn't running`);
+  if (local && !free && !(await probeLocal())) return offline(`${localWhat()} isn't running`);
   const images = body.frames.map((f) => ({ data: Buffer.from(f.split(",")[1], "base64"), contentType: f.slice(5, f.indexOf(";")) }));
-  const answer = parsePromptAnswer(await llmText(PROMPT_SYSTEM, promptRequest({ hint: body.hint, frames: images.length, seconds: body.seconds }), images, { ollamaOnly: body.engine === "open" }));
+  let by: PromptAnswer["by"] = local ? "local" : "claude";
+  const answer = parsePromptAnswer(
+    await llmText(PROMPT_SYSTEM, promptRequest({ hint: body.hint, frames: images.length, seconds: body.seconds }), images, {
+      ollamaOnly: body.engine === "open",
+      task: "restore",
+      waitMs: 45_000,
+      onAnswer: (who) => (by = who),
+    }),
+  );
   if (!answer) return offline(local ? `${localLabel()} didn't answer (it needs a model that sees pictures for the frames: qwen3-vl, gemma3…)` : "the text model didn't answer");
-  return { ...answer, by: local ? "local" : "claude" };
+  return { ...answer, by };
 }
 
 // ---------------------------------------------------------------------------

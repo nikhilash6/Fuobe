@@ -1162,7 +1162,7 @@ async function leafStills(draft: SkillDraft): Promise<LlmImage[]> {
  * slots in the prompts, a title, a description, when to use it and a SKILL.md body. Malformed output is ignored (null).
  */
 export async function nameDraft(draft: SkillDraft, asked: string[] = []): Promise<Naming | null> {
-  if (!llmTextBackend()) return null;
+  if (!llmTextBackend("recipe")) return null;
   const record = {
     steps: draft.recipe.steps.map((s) => {
       const d = draft.steps.find((x) => x.key === s.key);
@@ -1177,7 +1177,7 @@ export async function nameDraft(draft: SkillDraft, asked: string[] = []): Promis
     ...(asked.length && { asked: asked.slice(-6).map((w) => cut(w, 600)) }),
   };
   const images = await leafStills(draft);
-  const text = await llmText(NAMING_SYSTEM, `${images.length ? "The pictures are the results the person kept.\n" : ""}The record:\n${JSON.stringify(record, null, 2)}`, images);
+  const text = await llmText(NAMING_SYSTEM, `${images.length ? "The pictures are the results the person kept.\n" : ""}The record:\n${JSON.stringify(record, null, 2)}`, images, { task: "recipe", imagesOptional: true, waitMs: 60_000 });
   return parseNaming(text, draft);
 }
 

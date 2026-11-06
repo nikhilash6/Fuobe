@@ -93,6 +93,10 @@ export interface LlmTextOptions {
   waitMs?: number;
   /** Hears why the free helper gave no text. */
   onHelper?: (a: Exclude<HelperAnswer, { text: string }>) => void;
+  /** Hears who answered. */
+  onAnswer?: (by: "claude" | "local" | "free") => void;
+  /** The pictures help but aren't needed: a free helper that reads words only may answer without them. */
+  imagesOptional?: boolean;
 }
 
 /** The local model in use (Ollama, LM Studio, Unsloth Studio or the custom server), thinking off where the server allows it. */
@@ -141,21 +145,35 @@ export async function llmText(system: string, user: string, images?: LlmImage[],
 export async function llmText(system: string, user: string, a: LlmImage[] | LlmTextOptions = [], b: LlmTextOptions = {}): Promise<string | null> {
   const images: LlmImage[] = Array.isArray(a) ? a : [];
   const opts: LlmTextOptions = Array.isArray(a) ? b : a;
+  const said = (by: "claude" | "local" | "free", text: string | null) => {
+    if (text !== null) opts.onAnswer?.(by);
+    return text;
+  };
   // The open engine never calls a paid API: a local model, unless the AI helper is off.
   const first = llmTextBackend(opts.task);
   const backend = opts.ollamaOnly && first === "claude" ? "ollama" : first;
-  if (backend === "claude") return viaClaude(system, user, images).catch(() => null);
-  if (backend === "ollama") {
+  if (backend === "claude") return said("claude", await viaClaude(system, user, images).catch(() => null));
+  const free = freeFor(images, opts);
+  if (backend === "ollama" || (backend === "free" && !free.on && !tenant())) {
     const local = await viaLocal(system, user, images, opts).catch(() => null);
     // Automatic (or the free helper, set but not answering a moment ago): the free helper when no local model answers.
-    if (local !== null || !opts.task || !["auto", "free"].includes(aiHelper()) || !freeHelperOn()) return local;
+    if (local !== null || !opts.task || !["auto", "free"].includes(aiHelper())) return said("local", local);
   } else if (backend !== "free") return null;
-  return viaFree(system, user, opts);
+  if (!free.on) return null;
+  return said("free", await viaFree(system, user, free.pictures, opts));
 }
 
-/** The free helper's answer (it reads the words only), or null with the reason told to `onHelper`. */
-async function viaFree(system: string, user: string, opts: LlmTextOptions): Promise<string | null> {
-  const a = await askHelper({ task: opts.task!, system, user, json: !!opts.json, who: helperWho(opts.guestKey), waitMs: opts.waitMs }).catch((): HelperAnswer => ({ error: "failed" }));
+/** The free helper for this call: a slot whose model sees pictures when the call has some (unless they are optional). */
+function freeFor(images: LlmImage[], opts: LlmTextOptions): { on: boolean; pictures: LlmImage[] } {
+  if (!opts.task) return { on: false, pictures: [] };
+  if (images.length && freeHelperOn(Date.now(), { vision: true })) return { on: true, pictures: images };
+  if (images.length && !opts.imagesOptional) return { on: false, pictures: [] };
+  return { on: freeHelperOn(), pictures: [] };
+}
+
+/** The free helper's answer, or null with the reason told to `onHelper`. */
+async function viaFree(system: string, user: string, images: LlmImage[], opts: LlmTextOptions): Promise<string | null> {
+  const a = await askHelper({ task: opts.task!, system, user, json: !!opts.json, images, who: helperWho(opts.guestKey), waitMs: opts.waitMs }).catch((): HelperAnswer => ({ error: "failed" }));
   if ("text" in a) return a.text;
   opts.onHelper?.(a);
   return null;
@@ -288,3 +306,6 @@ Rules:
 export function ideogramCaption(words: string, size: { width?: number; height?: number } = {}): Promise<string> {
   return writeCaption(words, size, (request) => llmText(IDEOGRAM_SYSTEM, request, { json: "object", ollamaOnly: true }));
 }
+
+/** The owner's AI helper may fall back to the free helper (Automatic, or the free helper picked), one that sees pictures when asked. */
+export const freeHelperFallback = (o: { vision?: boolean } = {}): boolean => ["auto", "free"].includes(aiHelper()) && freeHelperOn(Date.now(), o);

@@ -6,6 +6,7 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import sharp from "sharp";
 import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -31,6 +32,7 @@ const enhanceRoute = await import("@/app/api/enhance/route");
 const claimRoute = await import("@/app/api/gpu/computer/text/claim/route");
 const resultRoute = await import("@/app/api/gpu/computer/text/[id]/route");
 const { proxy } = await import("@/proxy");
+const { writeRestorePrompt } = await import("@/server/restore");
 
 type WorkerRow = import("@/server/computer/workers").WorkerRow;
 type W = { id: string; token: string };
@@ -48,22 +50,22 @@ const beat = (w: W) =>
   pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
 
 /** The next job this worker's text slot gets, waiting for one to come (at most `ms`). */
-async function nextJob(w: W, ms = 5000) {
+async function nextJob(w: W, ms = 5000, vision = false) {
   const end = Date.now() + ms;
   for (;;) {
-    const job = helper.claimHelperJob(workerRow(w), { model: "test", device: "gpu" });
+    const job = helper.claimHelperJob(workerRow(w), { model: "test", device: "gpu", vision });
     if (job || Date.now() > end) return job;
     await new Promise((r) => setTimeout(r, 25));
   }
 }
 
 /** A stand-in text slot: it answers every job it gets with `answer(job)`, until stopped. */
-function standIn(w: W, answer: (job: NonNullable<Awaited<ReturnType<typeof nextJob>>>) => string) {
+function standIn(w: W, answer: (job: NonNullable<Awaited<ReturnType<typeof nextJob>>>) => string, vision = false) {
   let on = true;
   const seen: string[] = [];
   const done = (async () => {
     while (on) {
-      const job = helper.claimHelperJob(workerRow(w), { model: "test", device: "gpu" });
+      const job = helper.claimHelperJob(workerRow(w), { model: "test", device: "gpu", vision });
       if (job) {
         seen.push(job.task);
         helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: answer(job) });
@@ -179,6 +181,57 @@ describe("the text slots' line", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(await helper.askHelper({ task: "enhance", system: "s", user: "3", who, waitMs: 400 })).toEqual({ error: "busy" });
     await Promise.all([a, b]);
+  });
+});
+
+describe("pictures for a slot that sees them", () => {
+  const big = () => sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#c33" } }).png().toBuffer();
+
+  it("only a slot whose model sees pictures takes the job, which carries them as JPEGs of at most 1024 px", async () => {
+    const text = addWorker();
+    const sees = addWorker();
+    helper.claimHelperJob(workerRow(text), { vision: false });
+    expect(helper.helperLive(Date.now(), { vision: true })).toBe(false);
+    expect(await helper.askHelper({ task: "describe", system: "s", user: "Describe her.", images: [{ data: await big(), contentType: "image/png" }] })).toEqual({ error: "busy" });
+    helper.claimHelperJob(workerRow(sees), { vision: true });
+    const asked = helper.askHelper({ task: "describe", system: "s", user: "Describe her.", images: [{ data: await big(), contentType: "image/png" }] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(helper.claimHelperJob(workerRow(text), { vision: false })).toBeNull();
+    const job = await nextJob(sees, 5000, true);
+    expect(job?.images).toHaveLength(1);
+    const meta = await sharp(Buffer.from(job!.images![0], "base64")).metadata();
+    expect(meta).toMatchObject({ format: "jpeg", width: 1024, height: 683 });
+    expect(meta.exif).toBeUndefined();
+    helper.finishHelperJob(workerRow(sees), job!.id, { lease: job!.lease, text: "a woman in red" });
+    expect(await asked).toEqual({ text: "a woman in red" });
+  });
+
+  it("refuses more than four pictures, or a file that isn't a picture", async () => {
+    const w = addWorker();
+    helper.claimHelperJob(workerRow(w), { vision: true });
+    const png = await big();
+    expect(await helper.helperPictures(Array(5).fill({ data: png, contentType: "image/png" }))).toBeNull();
+    expect(await helper.helperPictures([{ data: Buffer.from("<svg/>"), contentType: "image/svg+xml" }])).toBeNull();
+    expect(await helper.helperPictures([{ data: Buffer.from("not a png"), contentType: "image/png" }])).toBeNull();
+  });
+
+  it("a picture task: the free helper when its model sees them, the words alone where pictures are optional, else no answer", async () => {
+    const pic = [{ data: await big(), contentType: "image/png" }];
+    const w = addWorker();
+    const words = standIn(w, (job) => `saw ${job.images?.length ?? 0}`);
+    expect(await llmText("s", "u", pic, { task: "describe" })).toBeNull();
+    expect(await llmText("s", "u", pic, { task: "recipe", imagesOptional: true })).toBe("saw 0");
+    await words.stop();
+    db().prepare("DELETE FROM helper_slots").run();
+    const sees = standIn(w, (job) => (job.task === "restore" ? "PROMPT: a 1950s street in Mumbai, soft daylight\nNEGATIVE: cars, phones" : `saw ${job.images?.length ?? 0}`), true);
+    let by = "";
+    expect(await llmText("s", "u", pic, { task: "describe", onAnswer: (b) => (by = b) })).toBe("saw 1");
+    expect(by).toBe("free");
+    // Restore's prompt writer for the owner, with no Claude key and no local model: the free helper reads the frames.
+    const frame = `data:image/jpeg;base64,${(await sharp(await big()).jpeg().resize(320).toBuffer()).toString("base64")}`;
+    const r = await writeRestorePrompt({ engine: "cloud", frames: [frame], hint: "1950s Mumbai" });
+    expect(r).toMatchObject({ by: "free", prompt: expect.stringContaining("1950s street") });
+    await sees.stop();
   });
 });
 

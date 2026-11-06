@@ -1,5 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
+import sharp from "sharp";
 import { hoursAt, parseHours } from "@/lib/worker-hours";
 import { db } from "./db";
 import { hostedRunsOn } from "./hosted-switch";
@@ -14,7 +15,7 @@ import type { WorkerRow } from "./computer/workers";
  * GPU job; the caller waits for the answer, and the row is deleted once read.
  */
 
-export type HelperTask = "lyrics" | "enhance" | "soul" | "write" | "translate";
+export type HelperTask = "lyrics" | "enhance" | "soul" | "write" | "translate" | "describe" | "restore" | "recipe";
 
 /** The most tokens a task may write. */
 export const HELPER_TASKS: Record<HelperTask, { maxTokens: number }> = {
@@ -23,6 +24,9 @@ export const HELPER_TASKS: Record<HelperTask, { maxTokens: number }> = {
   soul: { maxTokens: 400 },
   write: { maxTokens: 4000 },
   translate: { maxTokens: 4000 },
+  describe: { maxTokens: 200 },
+  restore: { maxTokens: 500 },
+  recipe: { maxTokens: 1500 },
 };
 
 export const isHelperTask = (v: unknown): v is HelperTask => typeof v === "string" && Object.hasOwn(HELPER_TASKS, v);
@@ -50,6 +54,8 @@ export const HELPER_LIMITS = {
   waitingEach: 2,
   guest: { perMinute: 4, perHour: 20 },
   account: { perMinute: 8, perHour: 60 },
+  /** Pictures a job may carry: how many, how big each may come in, and as the small JPEG it is sent as. */
+  pictures: { count: 4, inputBytes: 20 * 2 ** 20, longEdge: 1024, outputBytes: 512 * 1024 },
 };
 
 /** Whose job: "owner", "acct:<id>", or "guest:<address key>". */
@@ -78,6 +84,7 @@ interface JobRow {
   done_at: number | null;
   text: string | null;
   error: string | null;
+  images_json: string | null;
 }
 
 /** A job as a text slot gets it. */
@@ -89,6 +96,8 @@ export interface HelperJob {
   user: string;
   maxTokens: number;
   json: boolean;
+  /** Small JPEGs, as base64, for a slot whose model sees pictures. */
+  images?: string[];
 }
 
 const json = <T,>(s: string | null, fallback: T): T => {
@@ -113,16 +122,46 @@ export function textEligible(w: WorkerRow, now = Date.now()): boolean {
   );
 }
 
-/** A text slot asked for a job in the last moments, from a worker that may take one. */
-export function helperLive(now = Date.now()): boolean {
+/** A text slot asked for a job in the last moments, from a worker that may take one (`vision`: one whose model sees pictures). */
+export function helperLive(now = Date.now(), o: { vision?: boolean } = {}): boolean {
   const rows = db()
-    .prepare("SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?")
+    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}`)
     .all(now - HELPER_TIMES.liveMs) as WorkerRow[];
   return rows.some((w) => textEligible(w, now));
 }
 
 /** May this call use the free helper now: it is live, and a visitor's call only while hosted runs are on. */
-export const freeHelperOn = (now = Date.now()): boolean => (!tenant() || hostedRunsOn()) && helperLive(now);
+export const freeHelperOn = (now = Date.now(), o: { vision?: boolean } = {}): boolean => (!tenant() || hostedRunsOn()) && helperLive(now, o);
+
+/**
+ * Pictures as the helper takes them: at most four, each from a file the caller already read for the person, made again
+ * as a JPEG of at most 1024 px on its long side, with no metadata. Null when one can't be read or stays too big.
+ */
+export async function helperPictures(images: { data: Buffer; contentType: string }[]): Promise<string[] | null> {
+  const p = HELPER_LIMITS.pictures;
+  if (images.length > p.count || images.some((i) => !/^image\/(png|jpeg|webp|gif)$/.test(i.contentType) || i.data.length > p.inputBytes)) return null;
+  const out: string[] = [];
+  for (const i of images) {
+    let jpeg: Buffer | null = null;
+    for (const quality of [82, 65, 50]) {
+      const b = await sharp(i.data, { animated: false, limitInputPixels: 64 * 2 ** 20 })
+        .rotate()
+        .resize({ width: p.longEdge, height: p.longEdge, fit: "inside", withoutEnlargement: true })
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality })
+        .toBuffer()
+        .catch(() => null);
+      if (!b) return null;
+      if (b.length <= p.outputBytes) {
+        jpeg = b;
+        break;
+      }
+    }
+    if (!jpeg) return null;
+    out.push(jpeg.toString("base64"));
+  }
+  return out;
+}
 
 /** The install has a text slot (one asked for a job today). */
 export function helperKnown(now = Date.now()): boolean {
@@ -138,24 +177,31 @@ export function sweepHelper(now = Date.now()): void {
  * The next job for this worker's text slot, or null: people's jobs first, then the owner's, oldest first. Notes the
  * slot as live either way.
  */
-export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: unknown } = {}, now = Date.now(), note = true): HelperJob | null {
+export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: unknown; vision?: unknown } = {}, now = Date.now(), note = true): HelperJob | null {
   const d = db();
   return d.transaction(() => {
     const model = typeof slot.model === "string" ? slot.model.slice(0, 120) : null;
     const device = slot.device === "gpu" || slot.device === "cpu" ? slot.device : null;
-    if (note) d.prepare("INSERT INTO helper_slots (worker_id, seen_at, model, device) VALUES (?, ?, ?, ?) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device").run(w.id, now, model, device);
+    const vision = slot.vision === true ? 1 : 0;
+    if (note) {
+      d.prepare(
+        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision) VALUES (?, ?, ?, ?, ?) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision",
+      ).run(w.id, now, model, device, vision);
+    }
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow | undefined;
     if (!fresh || !textEligible(fresh, now)) return null;
-    const row = d.prepare("SELECT * FROM helper_jobs WHERE state = 'waiting' ORDER BY CASE WHEN who = 'owner' THEN 1 ELSE 0 END, created_at LIMIT 1").get() as JobRow | undefined;
+    // A job with pictures goes only to a slot whose model sees them.
+    const row = d.prepare(`SELECT * FROM helper_jobs WHERE state = 'waiting'${vision ? "" : " AND images_json IS NULL"} ORDER BY CASE WHEN who = 'owner' THEN 1 ELSE 0 END, created_at LIMIT 1`).get() as JobRow | undefined;
     if (!row || !isHelperTask(row.task)) return null;
     const lease = crypto.randomBytes(16).toString("base64url");
     d.prepare("UPDATE helper_jobs SET state = 'running', worker_id = ?, lease = ?, claimed_at = ? WHERE id = ? AND state = 'waiting'").run(w.id, lease, now, row.id);
-    return { id: row.id, lease, task: row.task, system: row.system, user: row.user, maxTokens: row.max_tokens, json: !!row.json };
+    const images = json<string[] | null>(row.images_json, null);
+    return { id: row.id, lease, task: row.task, system: row.system, user: row.user, maxTokens: row.max_tokens, json: !!row.json, ...(images?.length && { images }) };
   }).immediate();
 }
 
 /** Is any text job waiting (a quick read before a claim)? */
-export const helperWaiting = (): boolean => !!db().prepare("SELECT 1 FROM helper_jobs WHERE state = 'waiting' LIMIT 1").get();
+export const helperWaiting = (vision = false): boolean => !!db().prepare(`SELECT 1 FROM helper_jobs WHERE state = 'waiting'${vision ? "" : " AND images_json IS NULL"} LIMIT 1`).get();
 
 /** What a model may leave around its answer: a reasoning block, a code fence around JSON. */
 export const tidyHelperText = (s: string) => s.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -182,6 +228,8 @@ export interface AskHelper {
   system: string;
   user: string;
   json?: boolean;
+  /** Pictures for a model that sees them (only a slot that does takes the job). */
+  images?: { data: Buffer; contentType: string }[];
   who?: HelperWho;
   /** False: a step of a run, which the run's own limits already count. */
   counted?: boolean;
@@ -199,7 +247,10 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   const who = o.who ?? helperWho();
   const d = db();
   sweepHelper(now());
-  if (!helperLive(now())) return { error: "busy" };
+  const vision = !!o.images?.length;
+  if (!helperLive(now(), { vision })) return { error: "busy" };
+  const pictures = vision ? await helperPictures(o.images!) : null;
+  if (vision && !pictures) return { error: "failed" };
   if (who !== "owner" && o.counted !== false) {
     const r = rateOf(who);
     for (const [key, limit, ms] of [[`helper:${who}:m`, r.perMinute, 60_000], [`helper:${who}:h`, r.perHour, 3_600_000]] as const) {
@@ -217,17 +268,17 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     const a = await checkRun({
       requestId: id,
       account: account ? { id: account } : null,
-      run: { place: "pool", model: "text-helper", op: o.task, app: null, preset: null, studio: o.task, kind: "text", engine: "open", provider: "llm", jobs: 1, outputsPerJob: 1, megapixels: null, seconds: null, fps: null, loras: 0, inputs: { image: 0, video: 0, audio: 0 }, lane: null, providerUsd: null },
+      run: { place: "pool", model: "text-helper", op: o.task, app: null, preset: null, studio: o.task, kind: "text", engine: "open", provider: "llm", jobs: 1, outputsPerJob: 1, megapixels: null, seconds: null, fps: null, loras: 0, inputs: { image: pictures?.length ?? 0, video: 0, audio: 0 }, lane: null, providerUsd: null },
       prompt: user,
       negative: null,
-      inputs: [],
+      inputs: (pictures ?? []).map((b, n) => ({ n, kind: "image" as const, sha256: crypto.createHash("sha256").update(Buffer.from(b, "base64")).digest("hex"), preview: null })),
       consent: null,
     });
     if (!a.allowed) return a.code === "paused" ? { error: "busy" } : { error: "blocked", message: a.text };
     checkOutputs = a.checkOutputs !== false;
   }
   const created = now();
-  d.prepare("INSERT INTO helper_jobs (id, who, task, system, user, max_tokens, json, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?)").run(
+  d.prepare("INSERT INTO helper_jobs (id, who, task, system, user, max_tokens, json, state, created_at, images_json) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?)").run(
     id,
     who,
     o.task,
@@ -236,6 +287,7 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     HELPER_TASKS[o.task].maxTokens,
     o.json ? 1 : 0,
     created,
+    pictures ? JSON.stringify(pictures) : null,
   );
   const waitMs = o.waitMs ?? 45_000;
   const drop = () => d.prepare("DELETE FROM helper_jobs WHERE id = ?").run(id);
