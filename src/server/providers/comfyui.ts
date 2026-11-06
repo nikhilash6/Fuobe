@@ -640,6 +640,19 @@ export function queuePlace(pending: unknown[][], promptId: string): number {
   return pending.filter((q) => typeof q[0] === "number" && q[0] < n).length;
 }
 
+/**
+ * A running job's progress (0 to 0.99), or undefined when nothing says yet: the share of the graph's nodes run so far
+ * (`nodesDone` of `total`, the running node counting as part done by its steps), and never less than the running
+ * node's own steps (`value` of `max`). The sampler takes most of a job's time while it is one node of many, so step 3
+ * of 8 shows as 3/8, not 3/8 of one node's share.
+ */
+export function runProgress(p: { nodesDone?: number; value?: number; max?: number } | undefined, total: number): number | undefined {
+  const stepFrac = p?.max ? Math.min(1, Math.max(0, (p.value ?? 0) / p.max)) : 0;
+  const nodeFrac = total > 0 ? (Math.max(1, p?.nodesDone ?? 1) - 1 + stepFrac) / total : 0;
+  const v = Math.min(0.99, Math.max(stepFrac, nodeFrac));
+  return v > 0 ? v : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Outputs
 
@@ -1845,10 +1858,7 @@ async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, u
     case "queued":
       return { state: "queued", message: down ?? queueWords(p?.position), ...(sentAt && { sentAt }) };
     case "running": {
-      const total = Number(meta.nodeCount ?? 0);
-      const stepFrac = p?.max ? (p.value ?? 0) / p.max : 0;
-      const value = total ? Math.min(0.99, (Math.max(1, p?.nodesDone ?? 1) - 1 + stepFrac) / total) : stepFrac || undefined;
-      return { state: "running", progress: value && value > 0 ? value : undefined, message: down ?? makingWords(kind, p?.value, p?.max), ...(sentAt && { sentAt }) };
+      return { state: "running", progress: runProgress(p, Number(meta.nodeCount ?? 0)), message: down ?? makingWords(kind, p?.value, p?.max), ...(sentAt && { sentAt }) };
     }
     case "collecting": {
       const got = receivedOf(t);
@@ -2116,12 +2126,9 @@ export const comfyProvider: ProviderAdapter = {
       const busy = queue.queue_running?.[0]?.[1];
       return { state: "queued", position: pendingIdx, ...(typeof busy === "string" && { busyWith: busy.slice(0, 64) }), message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
     }
-    const total = Number(meta.nodeCount ?? 0);
-    const stepFrac = p && p.max ? p.value / p.max : 0;
-    const progressValue = total ? Math.min(0.99, ((p?.nodesDone ?? 0) - 1 + stepFrac) / total) : stepFrac || undefined;
     return {
       state: "running",
-      progress: progressValue && progressValue > 0 ? progressValue : undefined,
+      progress: runProgress(p, Number(meta.nodeCount ?? 0)),
       message: p?.max ? `Sampling ${p.value}/${p.max}` : worker === "isolated" ? "Running on the isolated ComfyUI worker" : "Running on ComfyUI",
     };
   },
