@@ -25,7 +25,7 @@ import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
-import { GpuWatch, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
+import { BRIEF_COOL_DOWN_MS, BRIEF_EVERY_MS, BRIEF_PAUSE_MS, GpuWatch, MID_JOB_GRACE_MS, othersOf, readGpu, readGpuGen } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, missingModelDirs, modelFiles, packFolders, runtimeFileList } from "./inventory.mjs";
 import { freeLocal, localIdle, readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
@@ -191,7 +191,8 @@ export function siteOf(answer) {
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
  * signal, requirements, ComputerRunner, rules, pins, runtime (the run-time files it verifies: inventory.mjs
  * runtimeFileList), allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own options), readCounters,
- * readListeners, gpuEveryMs, readGpuGen, idleClaimMs (IDLE_CLAIM_MS), canCleanPictures, and for job tickets: composer
+ * readListeners, gpuEveryMs, gpuGraceMs (MID_JOB_GRACE_MS), gpuBriefMs (BRIEF_PAUSE_MS), readGpuGen, idleClaimMs
+ * (IDLE_CLAIM_MS), canCleanPictures, and for job tickets: composer
  * (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes, and codeWatch (update.mjs's CodeWatch: new
  * code on disk ends it with "update" once its jobs are done) }.
  */
@@ -264,8 +265,18 @@ async function work(saved, deps, owner) {
     : null;
   if (turns && !turns.folderOk()) log(`The turns folder ${cfg.yieldFolder} isn't there: local ComfyUI work counts as another program until it is.`);
   const busyMb = cfg.busyVramMb ?? 1024;
-  // Two busy readings in a row pause it when it tells programs apart (a reading can catch memory on its way).
-  const gpu = new GpuWatch({ autoResume: !!cfg.autoResume, resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000, resumeBelowC: cfg.resumeBelowC ?? 75, busyReadings: turns ? 2 : 1 });
+  // Two busy readings in a row pause it when it tells programs apart (a reading can catch memory on its way); during
+  // its own job, only busy readings that last the grace time.
+  const gpu = new GpuWatch({
+    autoResume: !!cfg.autoResume,
+    resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000,
+    resumeBelowC: cfg.resumeBelowC ?? 75,
+    busyReadings: turns ? 2 : 1,
+    graceMs: deps.gpuGraceMs ?? MID_JOB_GRACE_MS,
+    briefMs: deps.gpuBriefMs ?? BRIEF_PAUSE_MS,
+    briefResumeMs: BRIEF_COOL_DOWN_MS,
+    briefEveryMs: BRIEF_EVERY_MS,
+  });
   const awake = deps.awake ?? new StayAwake({ now, log });
   // Its GPU's generation, once (tests give their own reader: the GPU's own tool is never run there).
   gpuGen = await (deps.readGpuGen ?? (deps.readGpu ? async () => null : () => readGpuGen(cfg.nvidiaSmi)))().catch(() => null);
@@ -815,7 +826,7 @@ async function work(saved, deps, owner) {
         lastGpuAt = t;
         const reading = await (deps.readGpu ?? readGpu)(cfg.nvidiaSmi);
         if (reading) {
-          const own = { running: comfy.alive(), mb: await comfy.vramMb(), pid: comfy.pid, port: comfy.alive() ? comfy.port : null };
+          const own = { running: comfy.alive(), mb: await comfy.vramMb(), pid: comfy.pid, port: comfy.alive() ? comfy.port : null, job: busyJob && jobUsesGpu };
           let verdict;
           if (turns) {
             split = await splitNow(t, reading, own);
@@ -823,17 +834,18 @@ async function work(saved, deps, owner) {
             // otherwise it counts as another program, as before.
             const othersBusy = split.othersMb > busyMb;
             const workBusy = !turnsReady(t) && split.workMb > busyMb;
-            verdict = { busy: othersBusy || workBusy, who: othersBusy ? split.who : `ComfyUI${split.work.port ? ` on port ${split.work.port}` : ""}`, othersMb: split.othersMb, cause: othersBusy ? null : "work" };
+            const busy = othersBusy || workBusy;
+            verdict = { busy, who: othersBusy ? split.who : `ComfyUI${split.work.port ? ` on port ${split.work.port}` : ""}`, othersMb: split.othersMb, cause: othersBusy ? null : "work", unsure: busy && own.job && !split.ownSure, job: own.job, source: split.source };
             // A pause that only local ComfyUI work caused ends once turns work again (the next day, the folder back).
             if (!verdict.busy && gpu.paused && gpu.cause === "work") {
               gpu.clear();
               log("Local ComfyUI work no longer keeps it paused: back to work.");
             }
-          } else verdict = othersOf(reading, own, busyMb);
+          } else verdict = { ...othersOf(reading, own, busyMb), job: own.job };
           const was = gpu.paused;
           gpu.update(verdict, reading.tempC, t);
           gpuInfo = { otherApps: reading.apps.filter((a) => a.pid !== comfy.pid).map((a) => ({ pid: a.pid, name: a.name, vramBytes: (a.usedMb ?? 0) * 2 ** 20 })), tempC: reading.tempC };
-          if (!was && gpu.paused) log(`Another program is using the GPU (${gpu.who}): pausing.`);
+          if (!was && gpu.paused) log(`Another program is using the GPU (${gpu.who}): pausing (${Math.round(verdict.othersMb ?? 0)} MB not its own${verdict.source ? `, by ${verdict.source}` : ""}).`);
           if (was && !gpu.paused) log("The GPU stayed free for the whole cool-down: resuming.");
         }
       }

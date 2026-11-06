@@ -2,7 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { GpuWatch, othersOf, parseApps, parseGpu } from "../bin/lib/worker/gpu.mjs";
+import { GpuWatch, othersOf, ownOf, parseApps, parseGpu } from "../bin/lib/worker/gpu.mjs";
 import { cleanJob, vetGraph } from "../bin/lib/worker/checks.mjs";
 import { comfyArgs, OwnComfy, PortBusy, portFree } from "../bin/lib/worker/comfy.mjs";
 import { parseFor, syncedFolder } from "../bin/lib/worker/config.mjs";
@@ -30,6 +30,78 @@ describe("the GPU check (check 11)", () => {
     // Stopped, it holds nothing: a ComfyUI on 8188 that keeps its models loaded keeps the worker paused.
     expect(othersOf({ usedMb: 4000, apps: [] }, { running: false }, 1024).busy).toBe(true);
     expect(othersOf({ usedMb: 300, apps: [{ pid: 9, name: "game.exe", usedMb: 2000 }] }, { running: false }, 1024)).toMatchObject({ busy: true, who: "game.exe" });
+  });
+
+  it("during its own job, its memory that torch doesn't report (or a slow read) is no other program's: an unsure reading", () => {
+    // A 20 GB model in ComfyUI's dynamic VRAM: torch reports 2 GB, or nothing when ComfyUI is slow to answer.
+    const reading = { usedMb: 23_000, apps: [{ pid: 9, name: "ShellHost.exe", usedMb: null }] };
+    for (const mb of [2000, null]) {
+      expect(othersOf(reading, { running: true, mb, pid: 77, job: true }, 1024)).toMatchObject({ busy: true, unsure: true });
+      // Between jobs it still counts (no job to lose): the busy pause, as before.
+      expect(othersOf(reading, { running: true, mb, pid: 77 }, 1024)).toMatchObject({ busy: true, unsure: false });
+    }
+    // nvidia-smi's number for its own process, when it gives one, is its share: sure.
+    expect(ownOf({ running: true, mb: 2000, pid: 77 }, [{ pid: 77, name: "python", usedMb: 21_500 }])).toEqual({ mb: 21_500, sure: true });
+    expect(othersOf({ usedMb: 23_000, apps: [{ pid: 77, name: "python", usedMb: 21_500 }] }, { running: true, mb: 2000, pid: 77, job: true }, 1024)).toMatchObject({ busy: true, unsure: false });
+    expect(othersOf({ usedMb: 22_000, apps: [{ pid: 77, name: "python", usedMb: 21_500 }] }, { running: true, mb: 2000, pid: 77, job: true }, 1024).busy).toBe(false);
+    // A desktop process is never "loud" on its own, nor named.
+    expect(othersOf({ usedMb: 2500, apps: [{ pid: 8, name: "msedge.exe", usedMb: 2000 }, { pid: 9, name: "dwm.exe", usedMb: null }] }, { running: false }, 1024)).toMatchObject({ busy: true, who: "another program" });
+    expect(othersOf({ usedMb: 300, apps: [{ pid: 8, name: "Code.exe", usedMb: 2000 }] }, { running: false }, 1024).busy).toBe(false);
+    // Another process that shows its own use is sure, job or not.
+    expect(othersOf({ usedMb: 23_000, apps: [{ pid: 5, name: "game.exe", usedMb: 4000 }] }, { running: true, mb: 2000, pid: 77, job: true }, 1024)).toMatchObject({ busy: true, unsure: false, who: "game.exe" });
+  });
+
+  it("skips unsure readings: they neither pause nor end a pause", () => {
+    const g = new GpuWatch({ autoResume: true, resumeAfterMs: 10 * MIN, resumeBelowC: 75, busyReadings: 2 });
+    for (let t = 0; t < 60_000; t += 5000) g.update({ busy: true, unsure: true, who: "another program", job: true }, 60, t);
+    expect(g.paused).toBe(false);
+    expect(g.busyInARow).toBe(0);
+  });
+
+  it("during its own job, busy readings pause it only once they lasted the grace time; a game that stays still pauses it", () => {
+    const opts = { autoResume: true, resumeAfterMs: 10 * MIN, resumeBelowC: 75, busyReadings: 2, graceMs: 20_000 };
+    const g = new GpuWatch(opts);
+    for (let t = 0; t <= 15_000; t += 5000) g.update({ busy: true, who: "game", job: true }, 60, t);
+    expect(g.paused).toBe(false);
+    g.update({ busy: false, job: true }, 60, 20_000);
+    g.update({ busy: true, who: "game", job: true }, 60, 25_000);
+    g.update({ busy: true, who: "game", job: true }, 60, 30_000);
+    expect(g.paused).toBe(false);
+    g.update({ busy: true, who: "game", job: true }, 60, 45_000);
+    expect(g.paused).toBe(true);
+    expect(g.who).toBe("game");
+    // With no job, two readings, as before.
+    const idle = new GpuWatch(opts);
+    idle.update({ busy: true, who: "game" }, 60, 0);
+    idle.update({ busy: true, who: "game" }, 60, 5000);
+    expect(idle.paused).toBe(true);
+  });
+
+  it("a brief pause (the busy readings ended within 30 s) cools down 2 minutes, at most once an hour; one that stays, the whole 10", () => {
+    const opts = { autoResume: true, resumeAfterMs: 10 * MIN, resumeBelowC: 75, briefMs: 30_000, briefResumeMs: 2 * MIN, briefEveryMs: 60 * MIN };
+    const g = new GpuWatch(opts);
+    g.update({ busy: true, who: "x" }, 60, 0);
+    g.update({ busy: false }, 50, 5000);
+    g.update({ busy: false }, 50, 5000 + 2 * MIN - 1);
+    expect(g.paused).toBe(true);
+    g.update({ busy: false }, 50, 5000 + 2 * MIN);
+    expect(g.paused).toBe(false);
+    // A second brief one within the hour: the whole cool-down.
+    g.update({ busy: true, who: "x" }, 60, 10 * MIN);
+    g.update({ busy: false }, 50, 10 * MIN + 5000);
+    g.update({ busy: false }, 50, 10 * MIN + 5000 + 2 * MIN);
+    expect(g.paused).toBe(true);
+    g.update({ busy: false }, 50, 20 * MIN + 5000);
+    expect(g.paused).toBe(false);
+    // A program that stays past 30 s: the whole cool-down.
+    const stays = new GpuWatch(opts);
+    stays.update({ busy: true, who: "x" }, 60, 0);
+    stays.update({ busy: true, who: "x" }, 60, 40_000);
+    stays.update({ busy: false }, 50, 45_000);
+    stays.update({ busy: false }, 50, 45_000 + 2 * MIN);
+    expect(stays.paused).toBe(true);
+    stays.update({ busy: false }, 50, 45_000 + 10 * MIN);
+    expect(stays.paused).toBe(false);
   });
 
   it("pauses at once; with the automatic resume off, never resumes by itself", () => {

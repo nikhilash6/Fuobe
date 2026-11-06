@@ -117,6 +117,22 @@ describe("the port table and the GPU counters", () => {
     expect(s.who).toBe("game");
   });
 
+  it("never names a desktop process as the cause: the biggest other one, else another program", () => {
+    const names = { ...LISTING, names: { ...LISTING.names, "77": "dwm", "78": "msedge", "5555": "game" } };
+    const desktopOnly = splitMemory({ usedMb: 9000, counters: parseCounters(typeperf([[77, 1500], [78, 900]])), listing: names, own: { pid: null, port: null, running: false, mb: null }, ports: [8188, 8199], baselineMb: 600 });
+    expect(desktopOnly).toMatchObject({ othersMb: 8400, who: "another program" });
+    expect(splitMemory({ usedMb: 9000, counters: parseCounters(typeperf([[77, 3000], [5555, 2000]])), listing: names, own: { pid: null, port: null, running: false, mb: null }, ports: [8188, 8199], baselineMb: 600 }).who).toBe("game");
+    const apps = [{ pid: 12092, name: "ShellHost.exe", usedMb: null }, { pid: 5, name: "blender.exe", usedMb: null }];
+    expect(splitMemory({ usedMb: 9000, counters: null, listing: null, apps, own: { pid: null, port: null, running: false, mb: null }, baselineMb: 600, lock: null }).who).toBe("blender.exe");
+  });
+
+  it("its own ComfyUI's share is sure only when read per process (the counters), not from torch alone", () => {
+    const own = { pid: 900, port: 31337, running: true, mb: 1400 };
+    expect(splitMemory({ usedMb: 23_000, counters: parseCounters(typeperf([[900, 21_000]])), listing: LISTING, own, ports: [8188, 8199], baselineMb: 600 })).toMatchObject({ ownMb: 21_000, ownSure: true, othersMb: 1400 });
+    expect(splitMemory({ usedMb: 23_000, counters: null, listing: null, apps: [], own, baselineMb: 600, lock: null })).toMatchObject({ source: "total", ownSure: false });
+    expect(splitMemory({ usedMb: 23_000, counters: null, listing: null, apps: [], own: { ...own, running: false }, baselineMb: 600, lock: null }).ownSure).toBe(true);
+  });
+
   it("its own ComfyUI before the counters list it: torch's number, as before", () => {
     const s = splitMemory({ usedMb: 3000, counters: [], listing: LISTING, own: { pid: 900, port: 31337, running: true, mb: 1400 }, ports: [8188, 8199], baselineMb: 0 });
     expect(s.ownMb).toBe(2000);
