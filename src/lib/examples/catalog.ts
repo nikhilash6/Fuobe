@@ -271,7 +271,7 @@ function buildCard(row: PlanRow): ExampleCard {
 /** A look card's link: a page of this site that loads one of its own examples (`?example=<id>`). */
 function lookHref(row: PlanRow): string {
   const href = row.href!;
-  const id = /[?&]example=([a-z0-9-]+.d+)(?:&|$)/.exec(href)?.[1];
+  const id = /[?&]example=([a-z0-9-]+\.\d+)(?:&|$)/.exec(href)?.[1];
   if (!href.startsWith("/") || href.startsWith("//") || !id) fail(row, "a look card's link opens a page with one of its examples (/page?example=<id>)");
   if (Object.keys(row.inputs).length) fail(row, "a look card with a link shows no inputs (the link opens them)");
   return href;

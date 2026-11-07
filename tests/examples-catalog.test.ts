@@ -258,9 +258,21 @@ describe("the examples' catalog", () => {
       }
     }
     // Video upscale, FPS Boost, SDR to HDR and Export never show a still photo's app.
-    for (const m of ["video", "fps", "hdr", "export"]) expect(exampleRow(`hub:upscale/${m}` as never), m).toBeNull();
+    for (const m of ["video", "fps", "hdr", "export"]) expect(exampleRow(`hub:upscale/${m}` as never)?.cards.filter((c) => c.id.startsWith("more.")) ?? [], m).toEqual([]);
     // Every row names its page, so a linked example loads only where it belongs.
     for (const s of [...exampleSurfaces(), ...Object.keys(FALLBACK_ROWS)]) expect(exampleRow(s as never)?.surface, s).toBe(s);
+  });
+
+  it("links a card that opens another page to an example that page loads", () => {
+    for (const c of cards) {
+      if (c.load.via !== "look" || !c.load.href) continue;
+      const id = new URL(c.load.href, "https://x").searchParams.get("example")!;
+      expect(exampleById(id), `${c.id} → ${id}`).toBeTruthy();
+      const surface = exampleSurfaceOf(id)!;
+      // The link opens the page of the example it names (a Genjutsu mode's: Genjutsu, on that mode).
+      const page = surface.startsWith("tool:genjutsu/") ? `/genjutsu?mode=${surface.split("/")[1]}` : undefined;
+      if (page) expect(c.load.href.startsWith(page), c.id).toBe(true);
+    }
   });
 
   it("loads a linked example only on its own page (or a motion's, an effect's or a clip app's in the Video studio)", () => {
