@@ -92,6 +92,7 @@ export const FX_SECTIONS: readonly FxSection[] = [
       gj("swap"),
       gj("insert"),
       gj("picture"),
+      gj("reshoot"),
       "app-recast",
       "app-video-face-swap",
       "app-face-swap",
