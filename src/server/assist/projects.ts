@@ -1,6 +1,7 @@
 import "server-only";
 import { nanoid } from "nanoid";
 import { MAX_PROJECT_SOURCES, PROJECT_COLORS, PROJECT_LIMITS, type AssistProject, type ProjectColor, type ProjectSource, type SourceKind } from "@/lib/assist";
+import { bodyOf, firstInner, metaContent, stripComments, stripElements } from "@/lib/html-scan";
 import { db } from "../db";
 import { getElement } from "../elements";
 import { PdfError, pdfText } from "./pdf";
@@ -177,16 +178,14 @@ const decode = (s: string) =>
 
 /** Readable text from a web page: the title, the description, then the body without scripts, styles or navigation chrome. */
 export function htmlToText(html: string): { title: string; text: string } {
-  const title = decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
-  const desc = decode(/<meta[^>]+(?:name|property)=["'](?:og:)?description["'][^>]*content=["']([^"']*)["']/i.exec(html)?.[1] ?? "").trim();
-  let body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
-  body = body
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style|noscript|svg|template|iframe|nav|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
+  // Linear scans only (src/lib/html-scan.ts): the page is someone else's, and the server reads it on its one thread.
+  const title = decode(firstInner(html, "title") ?? "").replace(/\s+/g, " ").trim();
+  const desc = decode(metaContent(html, ["description", "og:description"])).trim();
+  const body = stripElements(stripComments(bodyOf(html)), ["script", "style", "noscript", "svg", "template", "iframe", "nav", "footer", "form"])
     .replace(/<(br|hr)\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|section|article|li|h[1-6]|tr|blockquote|pre|ul|ol|table|header|main)>/gi, "\n")
-    .replace(/<li[^>]*>/gi, "- ")
-    .replace(/<[^>]+>/g, " ");
+    .replace(/<li\b[^<>]*>/gi, "- ")
+    .replace(/<[^<>]+>/g, " ");
   const text = decode(body)
     .split("\n")
     .map((l) => l.replace(/[ \t ]+/g, " ").trim())

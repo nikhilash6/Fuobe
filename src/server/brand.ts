@@ -20,6 +20,7 @@ import { llmText } from "./enhance";
 import { fetchRemote } from "./remote-fetch";
 import { saveFile } from "./storage";
 import { normalizeWebsite } from "@/lib/website";
+import { elements, firstInner, stripComments, stripElements } from "@/lib/html-scan";
 
 /**
  * Brand kits and products, shared by Marketing Studio, Ads Studio and Click to Ad.
@@ -56,23 +57,24 @@ export function attrs(tag: string): Record<string, string> {
   return out;
 }
 
+// Every pattern here reads in time that grows with the page, never with its square (src/lib/html-scan.ts): a tag stops
+// at the next "<", and elements and comments are found by scans that read the page once.
 function tags(html: string, name: string): Record<string, string>[] {
-  return [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, "gi"))].map((m) => attrs(m[0]));
+  return [...html.matchAll(new RegExp(`<${name}\\b[^<>]*>`, "gi"))].map((m) => attrs(m[0]));
 }
 
 const strip = (html: string) =>
   decodeEntities(
-    html
-      .replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1>/gi, " ")
-      .replace(/<!--[\s\S]*?-->/g, " ")
+    stripComments(stripElements(html, ["script", "style", "noscript", "svg", "template", "iframe"]))
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/(p|div|li|h[1-6]|section|article|tr)>/gi, "\n")
-      .replace(/<[^>]+>/g, " "),
+      .replace(/<[^<>]+>/g, " "),
   )
     .replace(/[ \t\f\v\r]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
-    .replace(/\n{2,}/g, "\n")
-    .trim();
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 
 const clean = (s: string | undefined | null, max = 400) => (s ? decodeEntities(s).replace(/\s+/g, " ").trim().slice(0, max) : "");
 
@@ -118,9 +120,10 @@ export function jsonLd(html: string): Json[] {
       if (o.item && typeof o.item === "object") walk(o.item);
     }
   };
-  for (const m of html.matchAll(/<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
+  for (const e of elements(html, "script")) {
+    if (!/\btype\s*=\s*["']?application\/ld\+json/i.test(e.open)) continue;
     try {
-      walk(JSON.parse(m[1].trim()));
+      walk(JSON.parse(e.inner.trim()));
     } catch {
       // Malformed blocks are common; skip them.
     }
@@ -479,7 +482,7 @@ export function parseSite(html: string, url: string): SiteFacts {
         sameAs: urlsOf(orgRaw.sameAs),
       }
     : null;
-  const title = clean(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1], 200);
+  const title = clean(firstInner(html, "title"), 200);
   const ogSite = meta(html, "og:site_name", "application-name", "apple-mobile-web-app-title");
   const titleParts = title.split(/\s+[|–—·:-]\s+/).map((s) => s.trim()).filter(Boolean);
   const name = organization?.name || ogSite || clean(str(site?.name), 80) || shortestBrandPart(titleParts, host) || hostName(host);
@@ -499,11 +502,18 @@ export function parseSite(html: string, url: string): SiteFacts {
   const logos = [...new Set([organization?.logo, ...logoImgs, ...icons.filter((i) => i.size >= 96).map((i) => i.href), ...icons.map((i) => i.href)].filter((x): x is string => !!x))];
   // An inline <svg> logo: the first svg after an element whose class or id names a logo.
   let svgLogo: string | null = null;
-  const at = html.search(/(class|id|aria-label)\s*=\s*["'][^"']*logo[^"']*["']/i);
+  let at = -1;
+  for (const m of html.matchAll(/(?:class|id|aria-label)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    if (/logo/i.test(m[1] ?? m[2] ?? "")) {
+      at = m.index;
+      break;
+    }
+  }
   if (at >= 0) {
     const tail = html.slice(at, at + 40_000);
-    const m = /<svg\b[\s\S]*?<\/svg>/i.exec(tail);
-    if (m && m.index < 2000 && m[0].length < 30_000) svgLogo = m[0].includes("xmlns") ? m[0] : m[0].replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+    const e = elements(tail, "svg", 1)[0];
+    const svg = e && tail.slice(e.start, e.end);
+    if (e && e.start < 2000 && svg.length < 30_000) svgLogo = svg.includes("xmlns") ? svg : svg.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
   }
 
   const images = [
@@ -535,18 +545,18 @@ export function parseSite(html: string, url: string): SiteFacts {
     title,
     description,
     themeColor: meta(html, "theme-color", "msapplication-TileColor") || null,
-    lang: (/<html\b[^>]*\blang\s*=\s*["']?([a-zA-Z-]+)/i.exec(html)?.[1] ?? null)?.toLowerCase() ?? null,
+    lang: (/<html\b[^<>]*\blang\s*=\s*["']?([a-zA-Z-]+)/i.exec(html)?.[1] ?? null)?.toLowerCase() ?? null,
     logos,
     svgLogo,
     images: [...new Set(images)].slice(0, 16),
-    headings: [...html.matchAll(/<h([1-3])\b[^>]*>([\s\S]*?)<\/h\1>/gi)].map((m) => clean(strip(m[2]), 140)).filter(Boolean).slice(0, 20),
+    headings: elements(html, ["h1", "h2", "h3"], 200).map((e) => clean(strip(e.inner), 140)).filter(Boolean).slice(0, 20),
     text: text.slice(0, 20_000),
     socials,
     stylesheets: links
       .filter((l) => /stylesheet/i.test(l.rel ?? "") && l.href)
       .map((l) => resolve(l.href, url))
       .filter((x): x is string => !!x && !/fonts\.googleapis\.com/.test(x)),
-    inlineCss: [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]),
+    inlineCss: elements(html, "style").map((e) => e.inner),
     products: jsonLdProducts(ld, url),
     shopify: isShopify(html),
     organization,
@@ -575,7 +585,7 @@ function shortestBrandPart(parts: string[], host: string): string {
 export function productsFromPage(html: string, url: string): ProductDraft[] {
   const facts = parseSite(html, url);
   if (facts.products.length) return facts.products.map((p) => ({ ...p, url: p.url ?? url, images: p.images.length ? p.images : facts.images.slice(0, 5) }));
-  const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1];
+  const h1 = firstInner(html, "h1");
   const name = meta(html, "og:title", "twitter:title") || (h1 ? clean(strip(h1), 140) : "") || facts.title;
   if (!name) return [];
   return [

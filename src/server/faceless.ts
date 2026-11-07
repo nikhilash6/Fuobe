@@ -100,6 +100,7 @@ import { provider } from "./providers";
 import type { JsonSpec } from "./llm";
 import { llmBackends, probeLocal } from "./providers/llm";
 import { fetchRemote } from "./remote-fetch";
+import { firstInner, metaContent, stripElements } from "@/lib/html-scan";
 import { engineMode, getSetting } from "./settings";
 import { fileUrl, saveFile } from "./storage";
 import { firstOn, offeredModel } from "./model-access";
@@ -1746,13 +1747,14 @@ const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"'
 
 /** Readable text of an HTML page: title plus paragraphs, scripts and styles dropped. */
 export function pageText(html: string): { title: string | null; text: string } {
-  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i.exec(html)?.[1] ?? null;
-  const body = html
-    .replace(/<(head|script|style|noscript|svg|nav|footer|header|form)[\s\S]*?<\/\1>/gi, " ")
+  // Linear scans only (src/lib/html-scan.ts): the page is someone else's, and the server reads it on its one thread.
+  const title = firstInner(html, "title") ?? (metaContent(html, ["og:title"]) || null);
+  const point = (n: number, m: string) => (Number.isInteger(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m);
+  const body = stripElements(html, ["head", "script", "style", "noscript", "svg", "nav", "footer", "header", "form"])
     .replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|section|article|tr)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<[^<>]+>/g, " ")
     .replace(/&(#\d+|#x[\da-f]+|\w+);/gi, (m, e: string) =>
-      e.startsWith("#x") ? String.fromCodePoint(parseInt(e.slice(2), 16)) : e.startsWith("#") ? String.fromCodePoint(Number(e.slice(1))) : (ENTITIES[e.toLowerCase()] ?? m),
+      e.startsWith("#x") || e.startsWith("#X") ? point(parseInt(e.slice(2), 16), m) : e.startsWith("#") ? point(Number(e.slice(1)), m) : (ENTITIES[e.toLowerCase()] ?? m),
     )
     .split("\n")
     .map((l) => l.replace(/\s+/g, " ").trim())

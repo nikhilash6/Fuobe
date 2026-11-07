@@ -333,7 +333,9 @@ export function parseFrontmatter(src: string): Record<string, Yamlish> {
       }
       return t.slice(1, -1).replace(/\\(["\\])/g, "$1").replace(/\\n/g, "\n");
     }
-    return t.replace(/\s+#.*$/, "");
+    // A " # comment" goes. (Not /\s+#.*$/: from every space of a long run it reads to the run's end, which grows with
+    // the square of the run, and a skill's file comes from anywhere.)
+    return t.replace(/\s#.*$/, "").trimEnd();
   };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
