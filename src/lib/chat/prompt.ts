@@ -37,7 +37,7 @@ Prompt (image): one rich line describing the shot to make (subject, setting, lig
 Use "Prompt (video):" instead for a moving idea (describe the motion and camera move in order), and "Prompt (music):" for a song or track (genre, mood, instruments, tempo).
 Every idea ends with exactly one Prompt line.`;
 
-const CHAT_EXTRA = `When an idea for an image, a video or a song comes up, you may end with one line "Prompt (image): …" (or video, or music) so the person can make it in one tap.`;
+export const CHAT_EXTRA = `When an idea for an image, a video or a song comes up, you may end with one line "Prompt (image): …" (or video, or music) so the person can make it in one tap.`;
 
 const CHARACTER_RULES = `Stay in character at all times and write as the character, in the first person, in present tense.
 Put actions and scene details in *asterisks*. Keep replies to one to three short paragraphs and leave room for the user to act.

@@ -364,6 +364,10 @@ describe("making things in a chat", () => {
       expect(wantsToMake(s), s).toBe(true);
     for (const s of ["How do I make a reel go viral?", "What should I wear to a gallery opening?", "Write a caption for my linen post", "make sense?", "I made a video yesterday", "Ideas for a perfume ad"])
       expect(wantsToMake(s), s).toBe(false);
+    // Asking for a thing that can be made (Hindi and Hinglish asks go to the model's make tool, which describes them).
+    for (const s of ["Can I get a jingle for my shoe brand, upbeat and catchy?", "I need a poster for my bakery's grand opening", "Compose a happy birthday song for my sister Priya"])
+      expect(wantsToMake(s), s).toBe(true);
+    for (const s of ["I need ideas for a poster", "Can I get some tips for my reel?", "I need a caption for this photo", "Ek photo banao jisme ek ladki saree mein ho"]) expect(wantsToMake(s), s).toBe(false);
     // An edit or animation of a picture sent with the message.
     expect(wantsToMake("Animate this", true)).toBe(true);
     expect(wantsToMake("remove the background", true)).toBe(true);
@@ -447,6 +451,8 @@ describe("making things in a chat", () => {
       const job = seen.at(-1)!;
       expect(job.tools?.map((x) => x.function.name)).toEqual(["make"]);
       expect(job.system).toContain("call the make tool");
+      // The "Prompt (image): …" offer competes with the tool, so it isn't there when the tool is.
+      expect(job.system).not.toContain("Prompt (image)");
       // A character's story is never offered the tool.
       const c = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "character", characterId: "kai" }))).json()) as { id: string };
       await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${c.id}/reply`, "POST", { text: "Could you sing me something?" }), ctx({ id: c.id })));

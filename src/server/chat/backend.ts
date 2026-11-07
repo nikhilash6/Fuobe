@@ -1,5 +1,5 @@
 import "server-only";
-import { alternate, fitHistory, summaryAsk, tidyReply, transcript, type ChatTurn } from "@/lib/chat/prompt";
+import { alternate, CHAT_EXTRA, fitHistory, summaryAsk, tidyReply, transcript, type ChatTurn } from "@/lib/chat/prompt";
 import type { ChatEngine, ChatErrorCode } from "@/lib/chat/types";
 import { readSse } from "../llm/sse";
 import { runAsTenant } from "../tenant";
@@ -51,7 +51,7 @@ const MAKE_TOOL: HelperTool = {
   function: {
     name: "make",
     description:
-      "Make something for the person when they ask for it to be made: a picture, a video clip, a music track or a voice-over. The app shows them a plan with the price to approve. Only when they ask to make it now, never for questions or advice about making things.",
+      "Make a picture, video clip, music track or voice-over the person asks for. Call it as soon as they ask you to make, create, generate, draw, design, compose, record or show something (also banao, bana do, बनाओ, बनाकर दो): the app shows a plan with the price to approve, so don't ask first or offer options. Never for questions, tips, explanations, opinions, ideas lists, stories, games, role-play, or text to write (lyrics, captions, scripts).",
     parameters: {
       type: "object",
       properties: {
@@ -63,7 +63,14 @@ const MAKE_TOOL: HelperTool = {
   },
 };
 
-const MAKE_HINT = "When the person asks you to make a picture, a video, a music track or a voice-over now, call the make tool with what to make; don't describe it in words instead.";
+const MAKE_HINT =
+  "When the person asks you to make, create, generate, draw, design, compose, record or show them a picture, video, song, jingle, beat or voice-over (in any language, including Hindi and Hinglish), call the make tool right away with a rich description; don't reply with ideas or options first. For questions, advice, ideas, writing, stories or play, answer in words and call no tool.";
+
+/**
+ * The system prompt when the make tool is offered: the line that offers "Prompt (image): …" endings competes with the
+ * tool (measured on the free model), so it gives way to the hint.
+ */
+const withMakeTool = (system: string) => `${system.replace(`\n\n${CHAT_EXTRA}`, "").replace(CHAT_EXTRA, "")}\n\n${MAKE_HINT}`;
 
 function makeOf(calls: HelperCall[] | undefined): MakeCall | null {
   const c = calls?.find((x) => x.name === "make");
@@ -144,7 +151,7 @@ async function siteTry(ask: ReplyAsk, waitMs: number): Promise<ReplyAnswer | "bu
     const tools = ask.makeTool && freeHelperState(Date.now(), { chat: true, tools: true, vision }) !== "absent";
     const a = await askHelper({
       task: "chat",
-      system: tools ? `${ask.system}\n\n${MAKE_HINT}` : ask.system,
+      system: tools ? withMakeTool(ask.system) : ask.system,
       messages,
       ...(tools && { tools: [MAKE_TOOL], tool_choice: "auto" as const }),
       sampling: ask.temperature === undefined ? undefined : { temperature: ask.temperature },

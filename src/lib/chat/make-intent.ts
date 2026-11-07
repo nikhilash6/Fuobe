@@ -19,9 +19,18 @@ const START = new RegExp(`^${POLITE}${MAKE_VERBS}\\b`, "i");
 /** Words that make it a conversation about making, not a request to make ("how do I make a reel?"). */
 const TALK = /^(?:how|what|why|when|where|which|who|should|is|are|do|does|can i|could i|tips|ideas?|explain|tell me|write|draft|brainstorm|suggest|help me (?:think|plan|write|decide))\b/i;
 
+/**
+ * Hindi and Hinglish asks ("ek photo banao", "गाना बनाओ") are left to the model's make tool, which writes what to make as
+ * a rich description; read here, the words would go to the picture model as they are.
+ */
+
+/** "Can I get a jingle for…", "I need a poster for…": asking for a thing that can be made. */
+const ASK_FOR = /^(?:(?:hey|hi|ok|okay|so|please)[,!.]?\s+)*(?:(?:can|could|may) (?:i|we) (?:get|have)|i (?:need|want|would like|'d like)|we need)\s+(?:a|an|some|one|two|three|four|five|\d+|my|our)\b/;
+
 export function wantsToMake(text: string, hasPicture = false): boolean {
   const t = text.trim().toLowerCase().replace(/\s+/g, " ");
   if (!t) return false;
+  if (ASK_FOR.test(t) && MADE.test(t) && !/\b(ideas?|tips|advice|help|feedback|suggestions?|names?|captions?|lyrics|scripts?)\b/.test(t)) return true;
   if (TALK.test(t) && !/^(?:can|could|would|will) you (?:please )?(?:make|create|generate|render|draw|design|animate)\b/.test(t)) return false;
   const stripped = t.replace(new RegExp(`^${POLITE}`, "i"), "");
   if (hasPicture && EDIT.test(stripped)) return true;
