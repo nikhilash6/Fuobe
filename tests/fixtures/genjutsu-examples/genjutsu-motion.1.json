@@ -1,0 +1,29 @@
+{
+  "id": "genjutsu-motion.1",
+  "note": "The request body of the run that made this example (file addresses replaced by neutral ones).",
+  "body": {
+    "engine": "open",
+    "mode": "motion",
+    "modelId": "fuobe-genjutsu-motion",
+    "tier": "high",
+    "quality": "720p",
+    "references": [
+      "/api/files/example-photo1.png"
+    ],
+    "source": {
+      "url": "/api/files/example-clip.mp4",
+      "name": "clip.mp4",
+      "duration": 5.166,
+      "fps": 24,
+      "width": 1024,
+      "height": 768,
+      "hasAudio": true
+    },
+    "range": {
+      "start": 0,
+      "end": 5.166
+    },
+    "seed": 1002,
+    "originalSound": "everything"
+  }
+}

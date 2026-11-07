@@ -4784,5 +4784,37 @@
    "at": 4.717,
    "from": 0
   }
+ },
+ {
+  "id": "genjutsu-motion.1",
+  "surface": "tool:genjutsu/motion",
+  "rank": 1,
+  "caption": "Every smile, copied by a new face",
+  "words": "A talk to camera, performed by a new character at a Paris café: every smile, glance and tilt of the head comes from the clip.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "inset",
+   "went": "A 5 s clip and a photo",
+   "recipe": {
+    "mode": "motion",
+    "engine": "open",
+    "model": "fuobe-genjutsu-motion",
+    "tier": "high",
+    "quality": "720p",
+    "seed": 1002,
+    "length": 5.166,
+    "originalSound": "everything"
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-motion/1/in-clip.jpg",
+   "photo1": "/examples/genjutsu-motion/1/in-photo1.jpg"
+  },
+  "output": "/examples/genjutsu-motion/1/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-motion/1/show.peak.webp",
+   "at": 1.5,
+   "from": 0
+  }
  }
 ]

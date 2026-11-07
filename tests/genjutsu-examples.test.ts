@@ -169,7 +169,8 @@ describe("Genjutsu mode examples", () => {
   });
 
   it("a page sends only the examples open to everyone; the Finish recipe writes its settings out", () => {
-    expect(Object.keys(genjutsuExamples(() => false))).toEqual([]);
+    // Nothing open: only examples that need no feature of their own (a mode open to everyone, on a model with no gate).
+    for (const [mode, cards] of Object.entries(genjutsuExamples(() => false))) for (const c of cards!) expect(c.load.needs, `${mode}: ${c.id}`).toEqual([]);
     const live = genjutsuLive();
     const open = genjutsuExamples((f) => live[f]);
     for (const [mode, cards] of Object.entries(genjutsuExamples())) {

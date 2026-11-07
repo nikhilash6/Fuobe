@@ -142,6 +142,11 @@ export function exampleSettings(r: GenjutsuRecipe, opts: { owner?: boolean } = {
 
 /** The example a viewer sees for a mode: the best one whose mode and features are open to them (none: no card). */
 export function exampleFor(examples: ModeExamples | undefined, mode: GenjutsuMode, open: FeatureCheck): GenjutsuExampleCard | undefined {
-  if (!modeOpen(mode, open)) return undefined;
-  return examples?.[mode]?.find((c) => c.load.needs.every(open));
+  return examplesOf(examples, mode, open)[0];
+}
+
+/** Every example of a mode this viewer may see, best first. */
+export function examplesOf(examples: ModeExamples | undefined, mode: GenjutsuMode, open: FeatureCheck): GenjutsuExampleCard[] {
+  if (!modeOpen(mode, open)) return [];
+  return examples?.[mode]?.filter((c) => c.load.needs.every(open)) ?? [];
 }

@@ -164,7 +164,34 @@ export interface ModeExampleProps {
   /** Some of its features are open only to the owner (the Only you mark). */
   onlyYou?: boolean;
   onUse: () => void;
+  /** The mode's other examples: how many there are and which one shows (a number to pick each, when there are two or more). */
+  pick?: { count: number; at: number; onPick: (i: number) => void };
   className?: string;
+}
+
+/** One button per example of the mode ("1", "2", "3"), the one in view pressed. */
+function ExamplePicker({ pick }: { pick: NonNullable<ModeExampleProps["pick"]> }) {
+  if (pick.count < 2) return null;
+  return (
+    <span role="group" aria-label="Examples" className="ml-auto flex items-center gap-1">
+      {Array.from({ length: pick.count }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          aria-label={`Example ${i + 1} of ${pick.count}`}
+          aria-pressed={i === pick.at}
+          onClick={() => pick.onPick(i)}
+          data-example-pick={i}
+          className={cn(
+            "relative inline-flex size-6 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums transition-colors before:absolute before:-inset-2.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            i === pick.at ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+          )}
+        >
+          {i + 1}
+        </button>
+      ))}
+    </span>
+  );
 }
 
 /**
@@ -172,7 +199,7 @@ export interface ModeExampleProps {
  * phone. What went in and the settings sit behind "How it was made" (on a phone the words too), so the upload box stays
  * close.
  */
-export function ModeExample({ card, owner, canUse, inUse, onlyYou, onUse, className }: ModeExampleProps) {
+export function ModeExample({ card, owner, canUse, inUse, onlyYou, onUse, pick, className }: ModeExampleProps) {
   const settings = exampleSettings(card.load.recipe, { owner });
   const titleId = `gj-example-${card.id.replace(/\W/g, "-")}`;
   const words = card.words && <p className="text-[13px] leading-relaxed text-pretty text-muted-foreground">{card.words}</p>;
@@ -192,6 +219,7 @@ export function ModeExample({ card, owner, canUse, inUse, onlyYou, onUse, classN
           <p className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
             <span className="tracking-wider uppercase">Example</span>
             {onlyYou && <OnlyYou />}
+            {pick && <ExamplePicker pick={pick} />}
           </p>
           <h3 id={titleId} className="mt-1 text-[16px] leading-snug font-semibold text-balance">
             {card.caption}

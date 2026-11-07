@@ -6269,6 +6269,70 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/genjutsu-motion/1/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 7242,
+  "sha256": "e6182cfe61fd499851b85763bc17c8ba7c6e6a23daeb66440aeb5810be9fcb1f",
+  "v": "e6182cfe",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-motion/1/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 71596,
+  "sha256": "681b14afb97c6d2bcd4a57c7aa4a8212604a44db41d71f2293b1593d3d2f3fb3",
+  "v": "681b14af",
+  "w": 1024,
+  "h": 768,
+  "thumb": "/examples/genjutsu-motion/1/in-clip.384.webp?v=e6182cfe"
+ },
+ "/examples/genjutsu-motion/1/in-photo1.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 15458,
+  "sha256": "79be4958f4c863ebf4c85db20d655d2e14f63efb229ed092365f108cac8b3f54",
+  "v": "79be4958",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-motion/1/in-photo1.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 163303,
+  "sha256": "7ea8e509661a6f80a79ca23a5ff4d60945816f7008f5c6ff70af296a4396eb5c",
+  "v": "7ea8e509",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/genjutsu-motion/1/in-photo1.384.webp?v=79be4958"
+ },
+ "/examples/genjutsu-motion/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 560760,
+  "sha256": "629263fe9b522df3a2c0a72572a49d2e42cc9685d4e76e7e84d8ac53fe6befd7",
+  "v": "629263fe",
+  "poster": "/examples/genjutsu-motion/1/show.poster.webp?v=dfb8a7ee"
+ },
+ "/examples/genjutsu-motion/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 19982,
+  "sha256": "a221762a58b1bc055747300627d5004b94a463b2397e6ac80c3a4ce66f415009",
+  "v": "a221762a",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-motion/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 47476,
+  "sha256": "dfb8a7ee29dd85e3dad279447fa8511e4531dff5cff3b5f79732387c285e1c1a",
+  "v": "dfb8a7ee",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/image/1/out.512.webp": {
   "role": "show",
   "type": "image/webp",

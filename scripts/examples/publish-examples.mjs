@@ -12,6 +12,8 @@
  *               1280 px on its long side at most (never enlarged), plus its inset copy (<name>.384.webp, 40 KB at most)
  *   frame-in    the same from a clip's first frame ("at": "last" for its last)
  *   mask-in     a painted area: a black-and-white PNG, as it is
+ *   clip-in     a clip a run reads: H.264 mp4, 1280 px on its long side at most ("max"), 2.9 MB at most, no sound unless
+ *               "sound": true, plus its inset copy from its first frame (<name>.384.webp)
  *   still-out   a picture shown as an output: JPEG q84, 960 px at most, plus its poster (<name>.512.webp)
  *   clip-show   a before → after loop shown as an output (a Genjutsu mode's example): "before" (the clip that went in)
  *               and "after" (the result) baked into one muted H.264 mp4, 1024×768, 24 fps, 1.2 MB at most, as "layout":
@@ -19,8 +21,8 @@
  *               line splits the frame, the result on its left and the clip on its right: it holds in the middle for
  *               1.5 s, eases to 3/4, back to 1/4 and to the middle again, so both sides always show, a subtle change
  *               is easy to see at the line, and the loop has no seam). Plus its first frame
- *               (<name>.poster.webp, 1024 px, so the loop starts with no jump) and the result near its end
- *               (<name>.peak.webp, 512 px: where a card rests, and what reduced motion shows)
+ *               (<name>.poster.webp, 1024 px, so the loop starts with no jump) and the result near its end, or at
+ *               "peakAt" seconds (<name>.peak.webp, 512 px: where a card rests, and what reduced motion shows)
  * A published file is never replaced or removed (a run may name it): a copy whose file exists with other bytes stops
  * the script. A new version gets a new path. A file a run reads sits under /examples/ or /samples/ only: a still from
  * elsewhere in public/ (a preset's before/after, which its own script rewrites) is copied in first.
@@ -88,6 +90,32 @@ const stillIn = (src, max = 1280) =>
 const inset = (src) => fitting((q) => sharp(src).resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true }).webp({ quality: q }).toBuffer(), [78, 70, 62], 40_000);
 const poster = (src) => sharp(src).resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
 
+const CLIP_IN = { maxBytes: 2_900_000 };
+
+function writeTemp(data, ext) {
+  const file = path.join(os.tmpdir(), `fuobe-example-${process.pid}-${Date.now()}${ext}`);
+  fs.writeFileSync(file, data);
+  return file;
+}
+
+/**
+ * A clip a run reads: H.264 (yuv420p, faststart), its own frame rate, "max" px on its long side at most (never enlarged;
+ * 1280 by default), "seconds" long at most, sound kept only with "sound": true; the best quality under 2.9 MB.
+ */
+function clipIn(from, { max = 1280, seconds, sound = false }) {
+  const out = path.join(os.tmpdir(), `fuobe-example-clip-${process.pid}-${Date.now()}.mp4`);
+  const scale = `scale='if(gt(iw,ih),min(${max},iw),-2)':'if(gt(iw,ih),-2,min(${max},ih))':flags=lanczos,setsar=1,format=yuv420p`;
+  let data;
+  for (const crf of [20, 22, 24, 26]) {
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-i", from, ...(seconds ? ["-t", String(seconds)] : []), "-vf", scale, "-c:v", "libx264", "-profile:v", "high", "-preset", "slow", "-crf", String(crf), "-threads", "1", ...(sound ? ["-c:a", "aac", "-b:a", "160k"] : ["-an"]), "-movflags", "+faststart", "-map_metadata", "-1", out]);
+    data = fs.readFileSync(out);
+    if (data.length <= CLIP_IN.maxBytes) break;
+  }
+  fs.rmSync(out, { force: true });
+  if (data.length > CLIP_IN.maxBytes) throw new Error(`${from}: the clip is ${data.length} bytes, over ${CLIP_IN.maxBytes}`);
+  return data;
+}
+
 async function make(job, dry) {
   const { to, from, op } = job;
   if (!/^\/examples\/[a-z0-9-]+\/\d+\/[a-z0-9-]+\.(jpg|png|webp|mp4|m4a)$/.test(to)) throw new Error(`${to}: an example file goes at /examples/<slug>/<n>/<name>.<ext>`);
@@ -97,6 +125,10 @@ async function make(job, dry) {
     return [put(to, jpg, dry), put(withExt(to, ".384.webp"), await inset(jpg), dry)];
   }
   if (op === "mask-in") return [put(to, await sharp(fs.readFileSync(from)).greyscale().png({ compressionLevel: 9 }).toBuffer(), dry)];
+  if (op === "clip-in") {
+    const mp4 = clipIn(from, job);
+    return [put(to, mp4, dry), put(withExt(to, ".384.webp"), await inset(frameOf(writeTemp(mp4, ".mp4"))), dry)];
+  }
   if (op === "still-out") {
     const jpg = await sharp(fs.readFileSync(from)).resize({ width: 960, height: 960, fit: "inside", withoutEnlargement: true }).toColorspace("srgb").jpeg({ quality: 84, mozjpeg: true }).toBuffer();
     return [put(to, jpg, dry), put(withExt(to, ".512.webp"), await poster(jpg), dry)];
@@ -183,7 +215,7 @@ async function clipShow(job, dry) {
   const first = frameOf(mp4);
   const posterWebp = await fitting((q) => sharp(first).webp({ quality: q }).toBuffer(), [78, 70, 62, 54], 90_000);
   const peakPng = path.join(dir, "peak.png");
-  execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", ((frames / fps) - 0.45).toFixed(3), "-i", mp4, "-frames:v", "1", peakPng]);
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", (job.peakAt ?? frames / fps - 0.45).toFixed(3), "-i", mp4, "-frames:v", "1", peakPng]);
   const peakWebp = await fitting((q) => sharp(fs.readFileSync(peakPng)).resize({ width: 512 }).webp({ quality: q }).toBuffer(), [78, 70, 62], 40_000);
   fs.rmSync(dir, { recursive: true, force: true });
   console.log(`${to}: ${frames} frames, ${(data.length / 1e6).toFixed(2)} MB`);

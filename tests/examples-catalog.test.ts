@@ -6,7 +6,20 @@ import type { StudioConfig } from "@/components/studio/studio-context";
 import { HOME_CAPTION_MAX } from "@/lib/home-showcase";
 import { HUB_MODES, type HubKind } from "@/lib/hubs";
 import { GENJUTSU_MODES } from "@/lib/catalog/genjutsu";
-import { appStudio, EDIT_STUDIO, IMAGE_STUDIO, INPAINT_STUDIO, UPSCALE_STUDIO, VIDEO_STUDIO } from "@/lib/studios";
+import {
+  appStudio,
+  EDIT_STUDIO,
+  FPS_BOOST_STUDIO,
+  IMAGE_STUDIO,
+  INPAINT_STUDIO,
+  MOTION_CONTROL_STUDIO,
+  UPSCALE_STUDIO,
+  VIDEO_COLOR_MATCH_STUDIO,
+  VIDEO_DEPTH_STUDIO,
+  VIDEO_MATTE_STUDIO,
+  VIDEO_STUDIO,
+  VIDEO_UPSCALE_STUDIO,
+} from "@/lib/studios";
 import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
 import { STUDIO_COVERS, isStudioCover } from "@/lib/studio-covers";
 import { EXAMPLE_CAPTION_MAX, EXAMPLE_WORDS_MAX, EXAMPLES_HEADING, MORE_HEADING, exampleFits, type ExampleCard, type ExampleMedia } from "@/lib/examples/types";
@@ -53,6 +66,12 @@ const STUDIO_OF: Record<string, StudioConfig> = {
   "studio:edit": EDIT_STUDIO,
   "studio:inpaint": INPAINT_STUDIO,
   "hub:upscale": UPSCALE_STUDIO,
+  "hub:upscale/video": VIDEO_UPSCALE_STUDIO,
+  "hub:upscale/fps": FPS_BOOST_STUDIO,
+  "studio:motion-control": MOTION_CONTROL_STUDIO,
+  "hub:video-tools": VIDEO_MATTE_STUDIO,
+  "hub:video-tools/depth": VIDEO_DEPTH_STUDIO,
+  "hub:video-tools/colors": VIDEO_COLOR_MATCH_STUDIO,
 };
 function configOf(surface: string): StudioConfig {
   const [kind, name] = splitSurface(surface);

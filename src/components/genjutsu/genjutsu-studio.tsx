@@ -89,7 +89,7 @@ import { SetupCode } from "./setup-code";
 import { useClipCuts } from "./use-cuts";
 import { ModeExample, ModeExampleRow } from "./mode-example";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { exampleFor, MARKED_NOTE, OWN_CHARACTER_FIELDS, partLimits, sameRecipe, toRecipe, type GenjutsuExampleCard, type ModeExamples } from "@/lib/examples/genjutsu";
+import { examplesOf, MARKED_NOTE, OWN_CHARACTER_FIELDS, partLimits, sameRecipe, toRecipe, type GenjutsuExampleCard, type ModeExamples } from "@/lib/examples/genjutsu";
 
 /** The upload box's line: the mode's own window (Character swap: 5–15 s of one shot), and the clip size the viewer may upload. */
 const limits = (mode: GenjutsuMode, maxBytes: number) =>
@@ -199,6 +199,8 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   // A mode's example in the form: which one, the part's length it asks for until a clip is in, and its words that came
   // from its own clip (a note under those fields).
   const [exampleIn, setExampleIn] = useState<string | null>(null);
+  // Which of a mode's examples is in view (its first unless the viewer picked another).
+  const [exampleAt, setExampleAt] = useState<Partial<Record<GenjutsuMode, number>>>({});
   // The length asks for the mode (and model) it came with: another mode's part limits don't take it.
   const [pendingLength, setPendingLength] = useState<{ length: number; mode: GenjutsuMode; model?: string } | null>(null);
   // The mode whose seed field a pasted setup or an example filled (only that mode shows and sends it).
@@ -560,6 +562,8 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     const exMode = ex ? GENJUTSU_MODES.find((g) => shownExamples?.[g.id]?.some((c) => c.id === ex))?.id : undefined;
     if (exMode && modeOpen(exMode, open)) {
       setModeState(exMode);
+      const at = examplesOf(shownExamples, exMode, open).findIndex((c) => c.id === ex);
+      if (at >= 0) setExampleAt((was) => ({ ...was, [exMode]: at }));
       requestAnimationFrame(() => document.querySelector("[data-mode-example]")?.scrollIntoView({ block: "center" }));
     }
     const video = fresh("video");
@@ -664,7 +668,9 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   const partNow = range ? Math.round((range.endTime - range.startTime) * 1000) / 1000 : (pendingLength?.length ?? undefined);
   const fullSetup: GenjutsuSetup = { ...setup, ...(seedNumber !== undefined && !seedProblem(seedNumber) ? { seed: seedNumber } : {}), ...(partNow ? { length: partNow } : {}), originalSound };
   // This mode's example for this viewer (none: no card), and whether the form still holds it.
-  const example = exampleFor(shownExamples, mode, open);
+  const mine = examplesOf(shownExamples, mode, open);
+  const example = mine[Math.min(exampleAt[mode] ?? 0, Math.max(0, mine.length - 1))];
+  const examplePick = mine.length > 1 ? { count: mine.length, at: mine.indexOf(example!), onPick: (i: number) => setExampleAt((was) => ({ ...was, [mode]: i })) } : undefined;
   const exampleInUse = !!example && exampleIn === example.id && sameRecipe(toRecipe(fullSetup), example.load.recipe);
   const exampleOnlyYou = !!example && owner && !example.load.needs.every((f) => !!live?.[f]);
   const body: GenjutsuBody | null =
@@ -882,7 +888,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
         </ToolHero>
       )}
       {!clip && example && (
-        <ModeExample key={example.id} card={example} owner={owner} canUse inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} className="mt-6" />
+        <ModeExample key={example.id} card={example} owner={owner} canUse inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} pick={examplePick} className="mt-6" />
       )}
       <div id="gj-clip-drop" className={cn("mx-auto scroll-mt-24 rounded-2xl transition-shadow", clip ? "pt-4" : "mt-8 max-w-[640px]", dropRing && "ring-2 ring-primary ring-offset-4 ring-offset-background")}>
         {!clip ? (

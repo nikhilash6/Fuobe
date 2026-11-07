@@ -16,10 +16,16 @@ import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { STUDIO_EXAMPLES, studioExamples, type ExampleStudio } from "@/lib/studio-examples";
 import {
   EDIT_STUDIO,
+  FPS_BOOST_STUDIO,
   IMAGE_STUDIO,
   INPAINT_STUDIO,
+  MOTION_CONTROL_STUDIO,
   UPSCALE_STUDIO,
+  VIDEO_COLOR_MATCH_STUDIO,
+  VIDEO_DEPTH_STUDIO,
+  VIDEO_MATTE_STUDIO,
   VIDEO_STUDIO,
+  VIDEO_UPSCALE_STUDIO,
 } from "@/lib/studios";
 import { getMaker, GENJUTSU_MODES, modeOpen, requestFeatures, type FeatureCheck, type GenjutsuMode } from "@/lib/catalog/genjutsu";
 import { exampleSettings, genjutsuSurface, recipeProblem, type GenjutsuExampleCard, type ModeExamples } from "./genjutsu";
@@ -50,6 +56,8 @@ export interface PlanRow {
   words?: string;
   /** "draft" (the default): the composer's own path. "look": a sheet to look at. "genjutsu": a Genjutsu mode's example. */
   load?: "draft" | "look" | "genjutsu";
+  /** A "look" example with no inputs on its card: the page that runs it, with it loaded (its own `?example=` link). */
+  href?: string;
   /** A Genjutsu mode's example (load "genjutsu"): its loop's layout, what went in, the recipe, and the example's own inputs. */
   genjutsu?: {
     layout: GenjutsuExampleLoad["layout"];
@@ -80,6 +88,12 @@ const SURFACE_CONFIG: Partial<Record<string, StudioConfig>> = {
   "studio:edit": EDIT_STUDIO,
   "studio:inpaint": INPAINT_STUDIO,
   "hub:upscale": UPSCALE_STUDIO,
+  "hub:upscale/video": VIDEO_UPSCALE_STUDIO,
+  "hub:upscale/fps": FPS_BOOST_STUDIO,
+  "studio:motion-control": MOTION_CONTROL_STUDIO,
+  "hub:video-tools": VIDEO_MATTE_STUDIO,
+  "hub:video-tools/depth": VIDEO_DEPTH_STUDIO,
+  "hub:video-tools/colors": VIDEO_COLOR_MATCH_STUDIO,
 };
 
 /** Where each surface's look-only covers come from until it has examples of its own (studio-examples.ts). */
@@ -241,7 +255,7 @@ function buildCard(row: PlanRow): ExampleCard {
   // area it was made from stay out of the card (the request still has them).
   const shown = inputs.some((i) => i.slot === "sketch") ? inputs.filter((i) => i.slot !== "image" && i.slot !== "mask") : inputs;
   if (row.modelId && !getModel(row.modelId)) fail(row, `names model ${row.modelId}, which isn't in the catalog`);
-  const load: ExampleCard["load"] = row.load === "genjutsu" ? genjutsuLoad(row) : row.load === "look" ? { via: "look" } : { via: "draft", request: requestOf(row, preset) };
+  const load: ExampleCard["load"] = row.load === "genjutsu" ? genjutsuLoad(row) : row.load === "look" ? { via: "look", ...(row.href && { href: lookHref(row) }) } : { via: "draft", request: requestOf(row, preset) };
   const chips = load.via === "genjutsu" ? exampleSettings(load.recipe) : chipsOf(row, preset);
   return {
     id: row.id,
@@ -252,6 +266,15 @@ function buildCard(row: PlanRow): ExampleCard {
     output: outputMedia(row),
     load,
   };
+}
+
+/** A look card's link: a page of this site that loads one of its own examples (`?example=<id>`). */
+function lookHref(row: PlanRow): string {
+  const href = row.href!;
+  const id = /[?&]example=([a-z0-9-]+.d+)(?:&|$)/.exec(href)?.[1];
+  if (!href.startsWith("/") || href.startsWith("//") || !id) fail(row, "a look card's link opens a page with one of its examples (/page?example=<id>)");
+  if (Object.keys(row.inputs).length) fail(row, "a look card with a link shows no inputs (the link opens them)");
+  return href;
 }
 
 /** What a Genjutsu example's inputs are called on its card ("What went in"). */
