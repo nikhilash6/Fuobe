@@ -15,6 +15,9 @@ process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:7";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 process.env.FUOBE_HOSTED_RUNS = "1";
+// Short waits for the free model here (the site waits about two minutes, then retries every 10 s).
+process.env.FUOBE_CHAT_WAIT_MS = "800";
+process.env.FUOBE_CHAT_RETRY_MS = "150";
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_MODERATION_URL;
 
@@ -320,14 +323,30 @@ describe("a reply", () => {
     }
   });
 
-  it("says when the free model is busy, and keeps the person's message for Try again", async () => {
+  it("never shows an error while the free model starts up: the message waits and is answered when it's ready", async () => {
     db().prepare("DELETE FROM helper_slots").run();
     const t = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "chat" }))).json()) as { id: string };
     const ev = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", { text: "Hello?" }), ctx({ id: t.id })));
     expect(ev[0].type).toBe("user");
-    expect(ev.at(-1)).toMatchObject({ type: "error" });
-    expect(["busy", "no-model"]).toContain(ev.at(-1)?.code);
+    expect(ev.some((e) => e.type === "status" && e.status === "starting")).toBe(true);
+    expect(ev.some((e) => e.type === "error")).toBe(false);
+    expect(ev.at(-1)?.type).toBe("pending");
     expect(store.getThread(a, t.id)!.messages.map((m) => m.role)).toEqual(["user"]);
+    // Asking again meanwhile doesn't start a second wait: it says the answer is on its way.
+    const again = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", {}), ctx({ id: t.id })));
+    expect(again.map((e) => e.type)).toEqual(["pending"]);
+    // The model comes up: the kept message is answered by itself, with nobody asking again.
+    const slot = standIn(() => "Hello! I'm here.");
+    try {
+      const end = Date.now() + 15_000;
+      while (store.getThread(a, t.id)!.messages.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 100));
+      expect(store.getThread(a, t.id)!.messages.map((m) => [m.role, m.content])).toEqual([
+        ["user", "Hello?"],
+        ["assistant", "Hello! I'm here."],
+      ]);
+    } finally {
+      await slot.stop();
+    }
   });
 });
 

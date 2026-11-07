@@ -32,8 +32,16 @@ export function useCharacters(enabled = true) {
   return useQuery({ queryKey: ["chat", "characters"], queryFn: async () => json<{ items: CharacterCard[] }>(await fetch("/api/chat/characters")), staleTime: 30_000, enabled });
 }
 
-export function useChatThread(id: string, enabled = true) {
-  return useQuery({ queryKey: ["chat", "thread", id], queryFn: async () => json<ChatThreadView>(await fetch(`/api/chat/threads/${id}`)), staleTime: 0, enabled, retry: false });
+/** One chat. `poll`: look for a reply that's coming later (a message kept until the free model is ready). */
+export function useChatThread(id: string, enabled = true, poll = false) {
+  return useQuery({
+    queryKey: ["chat", "thread", id],
+    queryFn: async () => json<ChatThreadView>(await fetch(`/api/chat/threads/${id}`)),
+    staleTime: 0,
+    enabled,
+    retry: false,
+    refetchInterval: poll ? 6_000 : false,
+  });
 }
 
 export interface StartChat {
@@ -61,7 +69,9 @@ export function useStartChat() {
 
 export type ReplyState =
   | { phase: "idle" }
-  | { phase: "waiting"; position?: number }
+  | { phase: "waiting"; position?: number; starting?: boolean }
+  /** Kept: the reply comes here as soon as the free model is ready (the page looks for it meanwhile). */
+  | { phase: "pending" }
   | { phase: "writing"; text: string }
   | { phase: "failed"; message: string; code: string; retryAfterS?: number };
 
@@ -139,6 +149,11 @@ export function useReply(threadId: string) {
             }
             if (e.type === "user") patch((t) => ({ ...t, messages: [...t.messages.filter((m) => m.id !== temp?.id), e.message] }));
             else if (e.type === "queue") setState((s) => (s.phase === "waiting" ? { phase: "waiting", position: e.position } : s));
+            else if (e.type === "status") setState((s) => (s.phase === "waiting" ? { phase: "waiting", starting: true } : s));
+            else if (e.type === "pending") {
+              ended = true;
+              setState({ phase: "pending" });
+            }
             else if (e.type === "text") {
               // Only a model that streams sends text on the way; a whole reply comes with done alone.
               texts++;

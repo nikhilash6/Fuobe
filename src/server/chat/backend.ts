@@ -28,17 +28,25 @@ export interface ReplyAsk {
   onText?: (soFar: string) => void;
   /** The place in line while the free model is busy with others (1: next). */
   onQueue?: (position: number) => void;
+  /** The free model is starting up (or every slot is taken): the reply is still coming. */
+  onStatus?: (status: "starting") => void;
+  /** How long to wait for the free model before keeping the message for later (SITE_WAIT_MS). */
+  waitMs?: number;
 }
 
-export type ReplyAnswer = { text: string; dropped: number } | { error: ChatErrorCode; message: string; retryAfterS?: number };
+export type ReplyAnswer =
+  | { text: string; dropped: number }
+  /** The free model didn't come up in time: the message is kept and answered later. */
+  | { pending: true }
+  | { error: ChatErrorCode; message: string; retryAfterS?: number };
 
 export const CHAT_WORDS: Record<ChatErrorCode, string> = {
-  busy: "The free chat model is busy or resting right now. Try again in a moment.",
+  busy: "We'll answer here as soon as it's ready.",
   limit: "That's a lot of messages in a short time. Take a breather and try again soon.",
   blocked: "This message can't be answered here.",
   failed: "The reply didn't finish. Try again.",
   "sign-in": "Create a free account to chat.",
-  "no-model": "The free chat model isn't switched on here yet. Add your own OpenRouter key in chat settings to chat now.",
+  "no-model": "We'll answer here as soon as it's ready.",
   "key-refused": "OpenRouter didn't accept your key. Check it in chat settings.",
   "too-long": "This chat is as long as a chat can be. Start a new one to keep going.",
 };
@@ -63,48 +71,74 @@ function fromHelper(a: Exclude<HelperAnswer, { text: string }>): ReplyAnswer {
   return { error: code, message, ...(a.retryAfterS ? { retryAfterS: a.retryAfterS } : {}) };
 }
 
-async function siteReply(ask: ReplyAsk): Promise<ReplyAnswer> {
-  return asTenant(ask.who, async () => {
-    const vision = !!ask.image;
-    // A worker that takes chat turns: the history as real turns, the reply as it's written, the place in line.
-    if (freeHelperOn(Date.now(), { chat: true, vision })) {
-      const fit = fitHistory(ask.turns, CHAT_BUDGET);
-      const messages = alternate(fit.turns);
-      if (helperMessagesProblem(messages)) return { error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer;
-      const a = await askHelper({
-        task: "chat",
-        system: ask.system,
-        messages,
-        sampling: ask.temperature === undefined ? undefined : { temperature: ask.temperature },
-        ...(ask.image && { images: [ask.image] }),
-        signal: ask.signal,
-        onText: (t) => {
-          const tidy = tidyReply(t, ask.speaker);
-          if (tidy) ask.onText?.(tidy);
-        },
-        onQueue: ask.onQueue,
-      });
-      if ("error" in a) return fromHelper(a);
-      const text = tidyReply(a.text, ask.speaker);
-      return text ? { text, dropped: fit.dropped } : ({ error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer);
-    }
-    // A worker from before chat turns: one message, the history as a transcript.
-    const fit = fitHistory(ask.turns, SITE_BUDGET);
-    if (!freeHelperOn(Date.now(), { vision })) {
-      return { error: helperKnown() ? "busy" : "no-model", message: helperKnown() ? CHAT_WORDS.busy : CHAT_WORDS["no-model"] } as ReplyAnswer;
-    }
+/** How long a reply waits for the free model to come up before the message is kept for later. */
+export const SITE_WAIT_MS = Number(process.env.FUOBE_CHAT_WAIT_MS) || 120_000;
+
+const nap = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
+/** One try on the free model: chat turns on a worker that takes them, else the history as one transcript. */
+async function siteTry(ask: ReplyAsk, waitMs: number): Promise<ReplyAnswer | "busy"> {
+  const vision = !!ask.image;
+  if (freeHelperOn(Date.now(), { chat: true, vision })) {
+    const fit = fitHistory(ask.turns, CHAT_BUDGET);
+    const messages = alternate(fit.turns);
+    if (helperMessagesProblem(messages)) return { error: "failed", message: CHAT_WORDS.failed };
     const a = await askHelper({
-      task: "write",
+      task: "chat",
       system: ask.system,
-      user: transcript(fit.turns, ask.speaker),
+      messages,
+      sampling: ask.temperature === undefined ? undefined : { temperature: ask.temperature },
       ...(ask.image && { images: [ask.image] }),
       signal: ask.signal,
+      waitMs,
+      onText: (t) => {
+        const tidy = tidyReply(t, ask.speaker);
+        if (tidy) ask.onText?.(tidy);
+      },
+      onQueue: ask.onQueue,
     });
-    if ("error" in a) return fromHelper(a);
+    if ("error" in a) return a.error === "busy" ? "busy" : fromHelper(a);
     const text = tidyReply(a.text, ask.speaker);
-    if (!text) return { error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer;
-    // Whole, with no text on the way: the browser shows it as if written.
-    return { text, dropped: fit.dropped };
+    return text ? { text, dropped: fit.dropped } : { error: "failed", message: CHAT_WORDS.failed };
+  }
+  if (!freeHelperOn(Date.now(), { vision })) return "busy";
+  const fit = fitHistory(ask.turns, SITE_BUDGET);
+  const a = await askHelper({ task: "write", system: ask.system, user: transcript(fit.turns, ask.speaker), ...(ask.image && { images: [ask.image] }), signal: ask.signal, waitMs });
+  if ("error" in a) return a.error === "busy" ? "busy" : fromHelper(a);
+  const text = tidyReply(a.text, ask.speaker);
+  // Whole, with no text on the way: the browser shows it as if written.
+  return text ? { text, dropped: fit.dropped } : { error: "failed", message: CHAT_WORDS.failed };
+}
+
+/**
+ * A reply from the free model. While it starts up (a worker restarting for an update) or every slot is taken, this
+ * keeps waiting and asking again, saying "starting" meanwhile; past `waitMs` the message is kept for later (pending),
+ * never shown as an error.
+ */
+async function siteReply(ask: ReplyAsk): Promise<ReplyAnswer> {
+  return asTenant(ask.who, async () => {
+    const deadline = Date.now() + (ask.waitMs ?? SITE_WAIT_MS);
+    for (;;) {
+      if (ask.signal?.aborted) return { error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer;
+      const left = deadline - Date.now();
+      if (left <= 0) return { pending: true } as ReplyAnswer;
+      const r = await siteTry(ask, Math.max(5_000, Math.min(45_000, left)));
+      if (r !== "busy") return r;
+      if (Date.now() >= deadline) return { pending: true } as ReplyAnswer;
+      ask.onStatus?.("starting");
+      await nap(2_500, ask.signal);
+    }
   });
 }
 

@@ -33,10 +33,12 @@ import { Markdown, ReplyBody } from "./prose";
 export function ThreadView({ id }: { id: string }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const view = useChatThread(id);
-  const me = useChatMe();
   const { state, ask, stop, revealId: reveal } = useReply(id);
+  // A kept message: look for its reply until it's here.
+  const view = useChatThread(id, true, state.phase === "pending");
+  const me = useChatMe();
   const t = view.data;
+  const waitingForLater = state.phase === "pending" && t?.messages.at(-1)?.role === "user";
   const [sharing, setSharing] = useState(false);
   const [settings, setSettings] = useState(false);
   const [chilli, setChilli] = useState(false);
@@ -247,9 +249,38 @@ export function ThreadView({ id }: { id: string }) {
                       </Bubble>
                     )}
                   </Row>
-                  {state.phase === "waiting" && state.position !== undefined && state.position > 0 && (
-                    <p className={cn("mt-1.5 text-[12px] text-muted-foreground", c && "ml-9")}>{state.position === 1 ? "Up next" : `${ordinal(state.position)} in line`}</p>
+                  {state.phase === "waiting" && (state.starting || (state.position ?? 0) > 0) && (
+                    <p className={cn("mt-1.5 text-[12px] text-muted-foreground", c && "ml-9")}>
+                      {state.starting && !state.position ? "Starting up…" : state.position === 1 ? "Up next" : `${(state.position ?? 1) - 1} ahead of you`}
+                    </p>
                   )}
+                </li>
+              )}
+              {waitingForLater && (
+                <li className="mt-4 animate-in duration-300 fade-in-0">
+                  <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted-foreground", c && "ml-9")} role="status">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" aria-hidden />
+                      We&apos;ll answer here as soon as it&apos;s ready.
+                    </span>
+                    {me.data?.key && me.data.engine === "site" && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 rounded-full"
+                        onClick={async () => {
+                          try {
+                            qc.setQueryData(["chat", "me"], await chatSend("/api/chat/me", "PATCH", { engine: "key" }));
+                            await ask({});
+                          } catch (e) {
+                            toastError(e);
+                          }
+                        }}
+                      >
+                        Answer with my model
+                      </Button>
+                    )}
+                  </div>
                 </li>
               )}
               {state.phase === "failed" && (
@@ -340,7 +371,6 @@ function Frame({ children }: { children: React.ReactNode }) {
   return <div className="flex h-content min-w-0 flex-col">{children}</div>;
 }
 
-const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
 /** "Today 14:02", "Yesterday 09:10" or "12 Nov 18:30": the label over a run after a long pause. */
 function stamp(t: number): string {

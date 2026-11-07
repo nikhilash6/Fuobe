@@ -52,6 +52,10 @@ export interface ChatMe {
 export type ChatEvent =
   | { type: "user"; message: ChatMessage }
   | { type: "queue"; position: number }
+  /** The free model is starting up: the reply is still coming. */
+  | { type: "status"; status: "starting" }
+  /** The message is kept and answered here as soon as the free model is ready. */
+  | { type: "pending" }
   | { type: "text"; text: string }
   | { type: "done"; message: ChatMessage; title: string }
   | { type: "error"; code: ChatErrorCode; message: string; retryAfterS?: number };
