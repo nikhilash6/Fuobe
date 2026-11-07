@@ -6,7 +6,9 @@ import { laneLabel } from "@/lib/lanes";
 import { HOLDING_OTHER, HOLDING_WHY, SENT_STATES, type WorkerHolding } from "@/lib/relay";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { claimableNow, ownerWaitingNow, workerState } from "./pool";
+import { claimableNow, controlledLine, localWorkOf, ownerWaitingNow, workerState } from "./pool";
+import { controlWords, effectiveMode, liveOverrides, MODE_WORDS, overrideView, personKey, poolMode, poolModes, recentOverrides, sweepControls, workerModeOf, type EffectiveMode, type OverrideView, type QueueMode } from "./queue-controls";
+import type { LocalWork } from "@/lib/relay";
 import { json, taskCold, taskProgress, type TaskRow } from "./tasks";
 import type { WorkerRow } from "./workers";
 
@@ -41,7 +43,7 @@ export interface RunningJob {
   principal: PrincipalKind;
 }
 
-/** A job waiting in line for a worker (the oldest first). */
+/** A job waiting in line for a worker, in the order the workers serve them (the ones no worker takes now last). */
 export interface QueuedJob {
   task: string;
   generationId: string;
@@ -53,6 +55,37 @@ export interface QueuedJob {
   /** When its run was made, and its place in line (a run back in line keeps its place). */
   createdAt: number | null;
   inLineAt: number;
+  /** Its place in the line its pool's workers serve (1: next); null while no worker takes it (held, People only). */
+  rank: number | null;
+  /** Why it stands there, in words ("People first", "Run next", "Held by the owner"). */
+  why: string;
+  /** What decides it: the class's order ("class"), a run sent next ("next"), a boosted person ("boost"), or why no worker takes it now. */
+  code: "class" | "next" | "boost" | "held" | "pinned" | "paused";
+  /** The owner's override that decides it (null: none), with until when. */
+  override: { id: string; until: number | null; by: string; at: number; workerId: string | null } | null;
+  /** The person whose run it is, as a key (never an account id; null: the owner's own), and whether a guest's. */
+  person: string | null;
+  guest: boolean;
+}
+
+/** A worker's mode and the local work on its PC, for the owner's Queue page. */
+export interface WorkerControl {
+  id: string;
+  name: string;
+  pool: string;
+  mode: EffectiveMode;
+  /** Its own mode as set (null: it follows its pool). */
+  own: { mode: QueueMode; until: number | null; by: string; at: number } | null;
+  localWork: LocalWork | null;
+}
+
+/** The owner's controls in effect: each pool's mode, each worker's, the overrides, and the ones that ended lately. */
+export interface QueueControls {
+  pools: Record<string, EffectiveMode>;
+  workers: WorkerControl[];
+  overrides: OverrideView[];
+  ended: OverrideView[];
+  modes: { id: QueueMode; label: string }[];
 }
 
 /**
@@ -115,8 +148,10 @@ const mins = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 
 type GenFacts = { id: string; model_id: string; op: string; kind: string; status: string; message: string | null; created_at: number; completed_at: number | null };
 
-export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: HeldJob[]; queued: QueuedJob[]; next: NextStep[]; nextTotal: number; text: TextLine } {
+export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: HeldJob[]; queued: QueuedJob[]; next: NextStep[]; nextTotal: number; text: TextLine; controls: QueueControls } {
   const d = db();
+  // The owner's controls that ran their course end before the view is read.
+  sweepControls(now);
   const index = loadIndex();
   const workers = d.prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL").all() as WorkerRow[];
   const byId = new Map(workers.map((w) => [w.id, w]));
@@ -163,11 +198,17 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
     });
   }
 
-  // The jobs waiting in line, the oldest place first.
-  const queued: QueuedJob[] = (
-    d.prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' ORDER BY COALESCE(rank_at, created_at), id LIMIT ?").all(QUEUED_LIMIT) as TaskRow[]
-  ).map((t) => {
+  // The jobs waiting in line, in the order each pool's workers serve them under the owner's controls; then the ones no
+  // worker takes now (held, the owner's own in People only).
+  const pools = [...new Set(["pool", ...workers.map((w) => w.pool)])];
+  const lines = pools.map((pool) => controlledLine(pool, now));
+  const seen = new Set<string>();
+  const items = lines.flatMap((l) => l.items.map((x) => ({ ...x, mode: l.mode }))).filter((x) => !seen.has(x.task.id) && !!seen.add(x.task.id));
+  const ordered = [...items.filter((x) => x.rank !== null), ...items.filter((x) => x.rank === null)];
+  const nameOf = (id: string) => byId.get(id)?.name ?? null;
+  const queued: QueuedJob[] = ordered.slice(0, QUEUED_LIMIT).map(({ task: t, rank, base, control, mode }) => {
     const g = genOf(t.generation_id);
+    const o = control.by;
     return {
       task: t.id,
       generationId: t.generation_id,
@@ -178,6 +219,12 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
       principal: principalKind(t),
       createdAt: g?.created_at ?? null,
       inLineAt: t.rank_at ?? t.created_at,
+      rank,
+      why: controlWords(control, base, mode, nameOf),
+      code: control.out ?? (control.tier === 0 ? "next" : control.tier === 1 ? "boost" : "class"),
+      override: o ? { id: o.id, until: o.until, by: o.by, at: o.at, workerId: o.workerId } : null,
+      person: t.account ? personKey(t.account) : null,
+      guest: !!t.account?.startsWith("guest"),
     };
   });
 
@@ -224,5 +271,12 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
     running: number | null;
     oldest: number | null;
   };
-  return { running, holding, queued, next, nextTotal, text: { waiting: tx.waiting ?? 0, running: tx.running ?? 0, oldestAt: tx.oldest ?? null } };
+  const controls: QueueControls = {
+    pools: Object.fromEntries([...new Set(["pool", ...workers.map((w) => w.pool), ...Object.keys(poolModes(now))])].map((pool) => [pool, poolMode(pool, now)])),
+    workers: workers.map((w) => ({ id: w.id, name: w.name, pool: w.pool, mode: effectiveMode(w, now), own: workerModeOf(w), localWork: localWorkOf(w, now) })),
+    overrides: liveOverrides(now).map(overrideView),
+    ended: recentOverrides(10).map(overrideView),
+    modes: (Object.keys(MODE_WORDS) as QueueMode[]).map((id) => ({ id, label: MODE_WORDS[id] })),
+  };
+  return { running, holding, queued, next, nextTotal, text: { waiting: tx.waiting ?? 0, running: tx.running ?? 0, oldestAt: tx.oldest ?? null }, controls };
 }

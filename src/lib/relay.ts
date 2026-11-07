@@ -242,6 +242,8 @@ export interface WorkerAnswer {
   catalogVersion?: string;
   /** The lanes it may take now: the owner's allowed lanes (`lanes`), narrowed to its PC's ceiling. */
   lanesInside?: string[];
+  /** The owner's mode it follows now (absent: an older studio, which has people first). */
+  queue?: WorkerQueueMode;
 }
 
 /** What a worker says in its beat, on top of a browser's. */
@@ -293,6 +295,8 @@ export interface WorkerBeat {
    * studio (src/server/computer/worker-events.ts). At most WORKER_LOG_LIMITS.perBeat lines of lineChars characters.
    */
   log?: WorkerLogLine[];
+  /** Local work on its PC, as the helper there last wrote it (absent: none written, or an older worker program). */
+  localWork?: LocalWork | null;
 }
 
 /** A worker's log line in its beat. */
@@ -322,6 +326,31 @@ export const HOLDING_WHY: Record<string, string> = {
   "sending-kept": "Sending the results it kept first",
 };
 export const HOLDING_OTHER = "Not starting yet";
+
+/**
+ * The owner's mode as a beat answer gives it to a worker (`worker.queue`; docs/gpu-workers.md, "Who goes first"): the
+ * mode's name, what local work on its PC does in it (`localWork`: "yield" makes room for people's runs, "pause" starts
+ * nothing new, "run" keeps the GPU), and until when (null: until the owner switches it back). A worker with a turns
+ * folder writes it there as mode.json, for the helper on the PC's side.
+ */
+export interface WorkerQueueMode {
+  mode: "people-first" | "people-only" | "ours-first" | "balanced";
+  localWork: "yield" | "pause" | "run";
+  until: number | null;
+}
+
+/**
+ * Local work on a worker's PC, as the helper on the PC's side writes it to the turns folder (local.json) and the
+ * worker passes it on in its beat (`localWork`): its state, why in a short code, how many of its jobs wait, whether one
+ * runs, and when the helper wrote it. Counts and codes only: never a job's name, prompt or file.
+ */
+export interface LocalWork {
+  state: "running" | "idle" | "paused" | "yielding" | "stopped";
+  why: string | null;
+  waiting: number | null;
+  running: boolean;
+  at: number;
+}
 
 /** A worker's CPU slot: it takes light CPU work (catalog workflows marked cpu) and these finishing jobs. */
 export interface CpuSlot {

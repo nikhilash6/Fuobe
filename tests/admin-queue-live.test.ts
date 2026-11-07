@@ -201,13 +201,14 @@ describe("what the workers do now", () => {
     expect(liveQueue(clock).nextTotal).toBe(NEXT_LIMIT + 3);
   });
 
-  it("the jobs waiting in line, by their place, with when their run was made", () => {
+  it("the jobs waiting in line, in the order the workers serve them, with their place, why, and when their run was made", () => {
     const a = task({ account: "acct-5" });
     const b = task();
     db().prepare("UPDATE relay_tasks SET rank_at = ? WHERE id = ?").run(clock - 9 * MIN, b.id);
+    // People first: the account's run ahead of the owner's own, although the owner's came first.
     expect(liveQueue(clock).queued).toEqual([
-      { task: b.id, generationId: b.gid, model: "m-test", op: "t2i", lane: LANE, laneLabel: expect.any(String), principal: "owner", createdAt: clock, inLineAt: clock - 9 * MIN },
-      { task: a.id, generationId: a.gid, model: "m-test", op: "t2i", lane: LANE, laneLabel: expect.any(String), principal: "user", createdAt: clock, inLineAt: clock },
+      { task: a.id, generationId: a.gid, model: "m-test", op: "t2i", lane: LANE, laneLabel: expect.any(String), principal: "user", createdAt: clock, inLineAt: clock, rank: 1, why: "People first", code: "class", override: null, person: expect.stringMatching(/^p-[0-9a-f]{12}$/), guest: false },
+      { task: b.id, generationId: b.gid, model: "m-test", op: "t2i", lane: LANE, laneLabel: expect.any(String), principal: "owner", createdAt: clock, inLineAt: clock - 9 * MIN, rank: 2, why: "Our work: after people's runs", code: "class", override: null, person: null, guest: false },
     ]);
     // A worker takes the account's run first (people's runs go before the owner's own): the owner's stays in line.
     const w = worker("takes");
@@ -237,7 +238,7 @@ describe("GET /api/admin/queue", () => {
     const res = await queueRoute.GET(new NextRequest("http://localhost:3000/api/admin/queue", { headers: { authorization: `Bearer ${token}` } }));
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(["held", "holding", "lanes", "next", "nextTotal", "now", "queued", "running", "text"]);
+    expect(Object.keys(body).sort()).toEqual(["controls", "held", "holding", "lanes", "next", "nextTotal", "now", "queued", "running", "text"]);
     expect(body.held).toMatchObject({ mine: 0, oldestAt: null });
     expect(body.holding).toEqual([expect.objectContaining({ task: id, principal: "user" })]);
     expect(JSON.stringify(body)).not.toContain("acct-secret");

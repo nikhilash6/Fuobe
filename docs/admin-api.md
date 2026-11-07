@@ -46,8 +46,9 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/jobs`, `GET /api/admin/workers/events` |
 | `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
-| `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings` |
+| `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings`, `GET /api/admin/queue/overrides` |
 | `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share, the pick allowance and the paused budget (`pausedBudgetS`: how long a run that has started may spend back in line) |
+| `queue:control` | `POST /api/admin/queue/mode`, `POST /api/admin/queue/overrides`, `DELETE /api/admin/queue/overrides/{id}`, `POST /api/admin/queue/cancel`: who the GPUs serve first, runs and people sent first or held, and cancelling a run ([gpu-workers.md](gpu-workers.md#who-goes-first)) |
 | `site:read` | `GET /api/admin/site/uploads` |
 | `site:write` | `PATCH /api/admin/site/uploads`: the upload switches |
 | `audit:read` | `GET /api/admin/audit` |
@@ -112,7 +113,12 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `POST /api/admin/outputs/remove` | the same, and `evidence?: true` to keep the files in a locked folder | `{ removed }` |
 | `GET /api/admin/files/{path}` | `Range` works | the file; 404 for the owner's own files (held or not) and unknown paths |
 | `GET /api/admin/reports` | `limit` (1 to 500, default 100) | `{ items }`, newest first |
-| `GET /api/admin/queue` | | `{ held, lanes, running, holding, queued, next, nextTotal, text, now }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
+| `GET /api/admin/queue` | | `{ held, lanes, running, holding, queued, next, nextTotal, text, controls, now }`. `queued` is in the order the workers serve it, each with `rank` (null while no worker takes it), `why`, `code` (`class`, `next`, `boost`, `held`, `pinned`, `paused`), `override` and `person` (a key, never an account id). `controls`: `{ pools, workers, overrides, ended, modes }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
+| `POST /api/admin/queue/mode` | `{ pool?, worker?, mode, forMin? }`: `mode` is `people-first`, `people-only`, `ours-first`, `balanced`, or `null` (back to normal); `forMin` is 1 to 10080, or `null` (until switched back) | `{ mode, before }`; 400 for a value out of bounds, 404 for no such worker |
+| `GET /api/admin/queue/overrides` | | `{ live, ended }` (the last 20 that ended) |
+| `POST /api/admin/queue/overrides` | `{ kind: "run", generationId, action: "next" | "hold", worker?, forMin? }` or `{ kind: "person", person | account, action: "boost" | "hold", forMin }` (`forMin` is needed for a boost) | 201 `{ override, replaced }`; 404 for no such run, worker or person with a run on the GPUs; 409 for a run that ended |
+| `DELETE /api/admin/queue/overrides/{id}` | | `{ override }` (ended now); 404 when it isn't in effect |
+| `POST /api/admin/queue/cancel` | `{ generationId }` | `{ generationId, status }`: the run ends as the person's own Cancel ends it; 404 for no such run, 409 for one that ended |
 | `GET /api/admin/queue/settings` | | `{ settings: { runCeilingS: { default, lanes }, ownerWaitLimitS, fairShare, pickAllowanceMs, pausedBudgetS } }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
 | `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000), `pausedBudgetS` (seconds, 0 to 604800) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
 | `GET /api/admin/site/uploads` | | `{ switches: { soundConvert, soundTrim, videoTrim, photoConvert, photoCrop } }`: what a browser may do to a file that doesn't fit a tool before it is uploaded (convert a sound to MP3, offer a part of a sound or clip, convert or shrink a photo, offer a crop). All `true` by default. Every visitor reads the same values at `GET /api/site/uploads` |
@@ -129,7 +135,8 @@ A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name }
 `token.name` is the name the token had at the time. Actions: `account.disable`, `account.enable`, `account.signout`,
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
 `worker.rotate`, `worker.revoke`, `worker.revoke_all` (Sign everyone out with every API token), `queue.settings` (with
-the values before and after), `site.uploads` (the upload switches, with the values before and after), `token.create`, `token.revoke`,
+the values before and after), `queue.mode`, `queue.override`, `queue.override.end`, `queue.cancel`, `queue.mode.end`
+(actor `system` when a mode, a hold or a boost ended by itself), `site.uploads` (the upload switches, with the values before and after), `token.create`, `token.revoke`,
 `token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
 `accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
 every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account

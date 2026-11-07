@@ -43,7 +43,7 @@ import { LogRing } from "./log-ring.mjs";
 import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { TEXT_DRAIN_MS, TextSlot, textSlotOf, textTurn } from "./text.mjs";
-import { SiteTurns, writeSite } from "./turns.mjs";
+import { readLocalWork, SiteTurns, writeMode, writeSite } from "./turns.mjs";
 import { CodeWatch, restartDue, UPDATE_DEFER_MAX_MS } from "./update.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -353,6 +353,9 @@ async function work(saved, deps, owner) {
   let siteWritten = "";
   let siteAt = 0;
   let siteFailed = false;
+  // The owner's mode as last written to the turns folder and said in the log.
+  let modeFailed = false;
+  let modeSaid = null;
   const writeTurn = (t, body) => {
     const key = JSON.stringify([body.siteWaiting, body.interruptAt]);
     siteWritten = key;
@@ -673,6 +676,8 @@ async function work(saved, deps, owner) {
           ...(cpuOn && { cpuSlot: { finishes: finish.kinds }, cpuRunning: cpuRunner ? runningOf(cpuRunner) : [] }),
           // Why the line's work waits on it now (the owner's queue view shows it); older studios ignore it.
           ...(holding && { holding }),
+          // Local work on its PC, as the helper there wrote it to the turns folder (counts and codes only).
+          ...(turns && { localWork: readLocalWork(cfg.yieldFolder, now()) }),
         };
       },
       onBeat: (a) => {
@@ -690,6 +695,21 @@ async function work(saved, deps, owner) {
         if (typeof theirs === "string") studioCatalog = theirs;
         answer = a;
         takeToken(a?.worker?.token);
+        // The owner's mode (who goes first), for the helper on the PC's side: mode.json in the turns folder.
+        if (turns && a?.worker?.queue && turns.folderOk()) {
+          try {
+            writeMode(cfg.yieldFolder, a.worker.queue, now());
+            modeFailed = false;
+          } catch (e) {
+            if (!modeFailed) log(`Couldn't write the owner's mode to the turns folder: ${e.message}`);
+            modeFailed = true;
+          }
+        }
+        const q = a?.worker?.queue;
+        if (q && typeof q.mode === "string" && q.mode !== modeSaid) {
+          if (modeSaid !== null || q.mode !== "people-first") log(`The owner set who goes first: ${q.mode}${typeof q.until === "number" ? ` until ${new Date(q.until).toISOString().slice(11, 16)} UTC` : ""}.`);
+          modeSaid = q.mode;
+        }
         // A token from the environment with a lifetime: said once for each end date, so it is replaced there in time.
         const ends = Number(a?.worker?.tokenExpiresAt);
         if (envToken && Number.isFinite(ends) && ends > 0 && ends !== endWarned) {

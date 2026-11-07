@@ -52,6 +52,48 @@ export function writeSite(folder, body) {
   fs.renameSync(tmp, p);
 }
 
+/**
+ * mode.json, written whole on each beat answer that carries the owner's mode (the beat's `worker.queue`):
+ * { mode, localWork, until, at }. localWork tells the helper what local work does now: "yield" (make room for the
+ * studio's jobs, as site.json asks), "pause" (start nothing new: the owner chose people only) or "run" (keep the GPU: the
+ * owner chose their own work first). A helper counts a file older than its own limit as gone, and then does as before.
+ */
+export function writeMode(folder, q, t) {
+  const modes = ["people-first", "people-only", "ours-first", "balanced"];
+  const rules = ["yield", "pause", "run"];
+  if (!q || typeof q !== "object" || !modes.includes(q.mode) || !rules.includes(q.localWork)) return false;
+  const p = path.join(folder, "mode.json");
+  const tmp = `${p}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify({ mode: q.mode, localWork: q.localWork, until: finite(q.until) ? q.until : null, at: t })}\n`);
+  fs.renameSync(tmp, p);
+  return true;
+}
+
+/** local.json counts while it is at most this old. */
+export const LOCAL_FRESH_MS = 2 * 60_000;
+
+/**
+ * local.json, which the helper on the PC's side may write: { state, why, waiting, running, at } about local work (its
+ * own queue). Passed on in the beat (`localWork`) as plain counts and short codes only; null when there is none, it is
+ * too big, not fresh, or not one.
+ */
+export function readLocalWork(folder, t) {
+  try {
+    const p = path.join(folder, "local.json");
+    const st = fs.lstatSync(p);
+    if (!st.isFile() || st.size > 4096) return null;
+    const o = JSON.parse(fs.readFileSync(p, "utf8"));
+    if (!o || typeof o !== "object" || !finite(o.at) || t - o.at > LOCAL_FRESH_MS || o.at > t + 60_000) return null;
+    const states = ["running", "idle", "paused", "yielding", "stopped"];
+    if (!states.includes(o.state)) return null;
+    const why = typeof o.why === "string" && /^[a-z0-9][a-z0-9:-]{0,47}$/.test(o.why) ? o.why : null;
+    const waiting = finite(o.waiting) && o.waiting >= 0 ? Math.min(Math.floor(o.waiting), 1_000_000) : null;
+    return { state: o.state, why, waiting, running: o.running === true, at: Math.min(o.at, t) };
+  } catch {
+    return null;
+  }
+}
+
 /** The local day (a cap counts per day on this PC's clock). */
 const dayOf = (t) => {
   const d = new Date(t);

@@ -433,6 +433,35 @@ describe("studio jobs first", () => {
     await until(() => workerRow(w).local_why?.startsWith("gpu-busy"));
     await until(() => site(p)?.siteWaiting === 0);
   });
+
+  it("the owner's mode reaches the turns folder (mode.json), and local work's own word (local.json) reaches the studio", async () => {
+    const qc = await import("@/server/computer/queue-controls");
+    const w = addWorker();
+    const p = pc();
+    const c = qc.checkModeChange({ worker: w.id, mode: "people-only", forMin: 30 }, "owner");
+    if ("error" in c) throw new Error(c.error);
+    qc.applyModeChange(c);
+    start(w, p, fakeGpu(p, { workMb: 0 }));
+    const mode = await until(() => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(p.turns, "mode.json"), "utf8")) as { mode: string; localWork: string; until: number | null; at: number };
+      } catch {
+        return null;
+      }
+    });
+    expect(mode).toMatchObject({ mode: "people-only", localWork: "pause" });
+    expect(mode.until).toBeGreaterThan(Date.now() + 25 * 60_000);
+    await until(() => p.logs.some((l) => /The owner set who goes first: people-only/.test(l)));
+    // Back to normal: the next beat answer says people first.
+    const back = qc.checkModeChange({ worker: w.id, mode: null }, "owner");
+    if ("error" in back) throw new Error(back.error);
+    qc.applyModeChange(back);
+    await until(() => JSON.parse(fs.readFileSync(path.join(p.turns, "mode.json"), "utf8")).localWork === "yield");
+    // The helper on the PC's side writes its state: the beat carries it, codes and counts only.
+    fs.writeFileSync(path.join(p.turns, "local.json"), JSON.stringify({ state: "paused", why: "people-only", waiting: 42, running: false, at: Date.now(), job: "a secret name" }));
+    const kept = await until(() => (db().prepare("SELECT local_work_json FROM relay_workers WHERE id = ?").get(w.id) as { local_work_json: string | null }).local_work_json);
+    expect(JSON.parse(kept)).toEqual({ state: "paused", why: "people-only", waiting: 42, running: false, at: expect.any(Number) });
+  });
 });
 
 describe("its own job and the busy pause", () => {

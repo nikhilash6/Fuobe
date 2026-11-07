@@ -81,6 +81,10 @@ export interface WorkerRow {
   /** Its last claim for its GPU's slot, and the answer in words (pool.ts workerClaim). */
   asked_at?: number | null;
   asked_words?: string | null;
+  /** The owner's mode for this worker (queue-controls.ts ModeSetting), winning over its pool's while it lasts. NULL: none. */
+  mode_json?: string | null;
+  /** Local work on its PC (a queue of the owner's own), as its last beat said (src/lib/relay.ts LocalWork). NULL: none. */
+  local_work_json?: string | null;
 }
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");

@@ -812,6 +812,21 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     seen_at INTEGER
   );
   CREATE INDEX IF NOT EXISTS relay_workers_principal ON relay_workers(principal);
+  CREATE TABLE IF NOT EXISTS queue_overrides (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    target TEXT NOT NULL,
+    action TEXT NOT NULL,
+    worker_id TEXT,
+    gens_json TEXT,
+    until INTEGER,
+    set_by TEXT NOT NULL,
+    set_at INTEGER NOT NULL,
+    ended_at INTEGER,
+    ended_by TEXT,
+    end_why TEXT
+  );
+  CREATE INDEX IF NOT EXISTS queue_overrides_live ON queue_overrides(ended_at, kind, target);
   CREATE TABLE IF NOT EXISTS relay_pairings (
     id TEXT PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
@@ -1113,6 +1128,9 @@ const RELAY_COLUMNS: [string, string, string][] = [
   // A worker's last claim for its GPU's slot, and the answer in words (pool.ts workerClaim).
   ["relay_workers", "asked_at", "INTEGER"],
   ["relay_workers", "asked_words", "TEXT"],
+  // The owner's mode for one worker (computer/queue-controls.ts), and local work on its PC as its last beat said.
+  ["relay_workers", "mode_json", "TEXT"],
+  ["relay_workers", "local_work_json", "TEXT"],
 ];
 
 declare global {

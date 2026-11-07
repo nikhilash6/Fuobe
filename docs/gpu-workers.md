@@ -482,6 +482,47 @@ in words: "Took a … run", "Sent back in line: went silent", "Delivered after 4
 `log` (its own log lines, from its beat). Log lines are kept 7 days, the rest 30 days. The owner reads it at
 `GET /api/admin/workers/events` ([admin-api.md](admin-api.md)).
 
+### Who goes first
+
+The owner can change who the workers serve first, through the admin API ([admin-api.md](admin-api.md), scope
+`queue:control`). Every change is in the admin log with who made it. Every change has an end: a time, the end of the
+run it is for, or "back to normal". Workers follow a change at their next claim and beat. A held run is never refused
+or hidden: it keeps its place in line and starts after the hold ends.
+
+**The mode.** A pool has a mode, and one worker can have its own mode that wins over its pool's mode until it ends:
+
+| Mode | Order on the workers | Local work on the worker's PC |
+| --- | --- | --- |
+| `people-first` (the default) | paid runs, free runs, then the owner's own jobs | makes room for people's runs (studio jobs first) |
+| `people-only` | people's runs only; the owner's own jobs wait | starts nothing new |
+| `ours-first` | the owner's own jobs, then paid runs, then free runs | keeps the GPU while it runs; people's runs start when it is idle |
+| `balanced` | paid runs, then free runs and the owner's own jobs together, by when they came | makes room for people's runs |
+
+A mode lasts 1 minute to a week (`forMin`), or until the owner switches it back. A mode past its end is gone at the next
+beat, and the admin log gets a `queue.mode.end` row (actor `system`). In `ours-first`, the beat's `claimableNow` counts
+people's runs only when local work on the PC doesn't run (its last `localWork`), or when the owner sent the run next or
+boosted the person. So the worker asks local work for no room for them.
+
+**A run.** "Run next" sends one run to the front of every worker's line, or to the front of one worker's line
+(`worker`: that worker only, no other takes it). It ends when the run ends, or after a day at most. "Hold" keeps the
+run in its place, and no worker takes it until the hold ends. Every step that the same press of Run made gets the same
+override.
+
+**A person.** "Boost" sends an account's runs (or the guests' runs) to the front, after the runs sent next, for 1 minute
+to a week. "Hold" keeps them in place until the hold ends. A run's own override wins over its person's override. The
+queue view names a person by a key (`p-` and 12 hex digits), never by an account id.
+
+The order in one look at the line: runs sent next, then boosted people's runs, then the mode's classes, each group in
+its own order (fair share included). A person's place in line (`placeInLine`, the billing service's line facts) reads
+the same order, with the pool's mode.
+
+**The turns folder.** A worker with a turns folder writes the mode from each beat answer (`worker.queue`) to
+`mode.json` there: `{ mode, localWork, until, at }`, where `localWork` is `yield`, `pause` or `run`. The helper on the
+PC's side reads it. The helper can write `local.json`: `{ state, why, waiting, running, at }`, where `state` is
+`running`, `idle`, `paused`, `yielding` or `stopped`, `why` is a short code and `waiting` is a count. The worker sends
+it in its beat as `localWork` while it is at most 2 minutes old. The studio keeps known values only, and the Workers
+and Queue views show it. No connection ever goes to the PC: the PC reads and writes files in its own folder.
+
 ### Job tickets and the PC's ceiling
 
 An account's run reaches a worker as a job ticket, never as a graph. The ticket names a workflow of the catalog, the
