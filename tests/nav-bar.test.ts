@@ -117,13 +117,15 @@ describe("which bar item holds the page", () => {
     expect(barActive("/live-edit").create).toBe(true);
   });
 
-  it("marks the galleries, Canvas, Assist and Library on their pages", () => {
+  it("marks the galleries, Canvas, Assist, Chat and Library on their pages", () => {
     expect(barActive("/apps")).toMatchObject({ apps: true, studios: false });
     expect(barActive("/apps/app-billboard-ad").apps).toBe(true);
     expect(barActive("/motions").motions).toBe(true);
     expect(barActive("/effects").motions).toBe(true);
     expect(barActive("/canvas/p1").canvas).toBe(true);
     expect(barActive("/assist/skills").assist).toBe(true);
+    expect(barActive("/chat").chat).toBe(true);
+    expect(barActive("/chat/abc123")).toMatchObject({ chat: true, assist: false, create: false });
     expect(barActive("/library").library).toBe(true);
   });
 
@@ -281,7 +283,7 @@ describe("the bar's shell", () => {
     expect(html).toContain('aria-expanded="false"');
     // Studios is its name only: no count beside it.
     expect(html).not.toContain(`>${studioCount()}<`);
-    for (const h of ["/", "/assist", "/library", "/?new=1"]) expect(hrefs(html), h).toContain(h);
+    for (const h of ["/", "/assist", "/chat", "/library", "/?new=1"]) expect(hrefs(html), h).toContain(h);
     for (const h of ["/create", "/studios", "/apps", "/motions-and-effects", "/canvas"]) expect(html, h).toContain(`data-href="${h}"`);
     // Search's name is the words it shows (sr-only below lg).
     expect(html).toContain(">Search Fuobe</span>");
@@ -516,22 +518,23 @@ describe("menu items: one button each, the area's page inside its menu", () => {
 });
 
 describe("create and prefetch", () => {
-  it("puts the create tools in two columns of five", () => {
+  it("puts the create tools in two columns, Chat beside Assist", () => {
     const cols = createColumns(undefined);
     expect(cols.map((c) => c.label)).toEqual(["Make", "Edit a picture"]);
     expect(cols.map((c) => c.entries.map((e) => e.id))).toEqual([
-      ["image", "video", "assist", "canvas", "storyboard"],
+      ["image", "video", "assist", "chat", "canvas", "storyboard"],
       ["edit", "live-edit", "inpaint", "layers", "color-grade"],
     ]);
-    expect(CREATE_HREFS).toHaveLength(10);
-    for (const kind of ["guest", "account", "owner"] as const) expect(createColumns(kind).flatMap((c) => c.entries)).toHaveLength(10);
+    expect(CREATE_HREFS).toHaveLength(11);
+    expect(CREATE_HREFS).toContain("/chat");
+    for (const kind of ["guest", "account", "owner"] as const) expect(createColumns(kind).flatMap((c) => c.entries)).toHaveLength(11);
   });
 
   it("prefetches every launcher, create and library route once, and nothing off the site", () => {
     const list = prefetchHrefs(undefined);
     expect(new Set(list).size).toBe(list.length);
     for (const c of launcherColumns(undefined)) for (const e of [c.lead, ...c.rest]) expect(list).toContain(e.href);
-    for (const id of ["image", "video", "edit", "live-edit", "inpaint", "layers", "color-grade", "canvas", "assist", "library", "favorites"]) expect(list).toContain(entry(id)!.href);
+    for (const id of ["image", "video", "edit", "live-edit", "inpaint", "layers", "color-grade", "canvas", "assist", "chat", "library", "favorites"]) expect(list).toContain(entry(id)!.href);
     for (const h of list) expect(h.startsWith("/") && !h.includes("#"), h).toBe(true);
     // The same for every viewer: none of these is owner-only.
     expect(prefetchHrefs("owner")).toEqual(list);

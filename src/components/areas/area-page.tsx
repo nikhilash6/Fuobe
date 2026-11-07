@@ -149,10 +149,10 @@ function StudioFeatures({ section, subs }: { section: string; subs: AreaShowcase
   );
 }
 
-/** The pills at the end of an area page: the other areas, then Canvas and Assist. */
+/** The pills at the end of an area page: the other areas, then Canvas, Assist and Chat. */
 export function MoreInFuobe({ current }: { current: AreaId }) {
   const others = AREAS.filter((a) => a.id !== current).map((a) => entry(a.entryId));
-  const list = [...others, entry("canvas"), entry("assist")].filter((e): e is NavEntry => !!e);
+  const list = [...others, entry("canvas"), entry("assist"), entry("chat")].filter((e): e is NavEntry => !!e);
   return (
     <section aria-labelledby="more-in-fuobe" data-reveal className="mt-10 sm:mt-14">
       <h2 id="more-in-fuobe" className="mb-2 font-sans text-[13px] font-medium">

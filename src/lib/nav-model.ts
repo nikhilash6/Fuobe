@@ -120,6 +120,7 @@ const PAGES: NavEntry[] = [
   { id: "home", href: "/", label: "Home", what: "Start from words or a picture", kind: "home", goals: [], keywords: "start new creation home", icon: "Home", eager: true },
   { id: "new", href: NEW_CREATION_HREF, label: "New creation", what: "A fresh composer on Home", kind: "action", goals: [], keywords: "new creation start fresh blank compose", icon: "Plus" },
   { id: "assist", href: "/assist", label: "Assist", what: "Plan it with an agent", kind: "create", goals: [], keywords: "agent chat plan assistant ai helper", icon: "MessageCircle", eager: true },
+  { id: "chat", href: "/chat", label: "Chat", short: "Chat", what: "Talk, plan and write with AI", kind: "create", goals: [], keywords: "chat talk advice ideas roleplay characters write ask brainstorm", icon: "MessageCircle", newUntil: newFor30Days("2026-11-07") },
   { id: "image", href: "/image", label: "Image", what: "Text to image", kind: "create", goals: [], keywords: "text to image picture photo generate", cover: "app-poster", icon: "ImageIcon", eager: true, popular: true },
   { id: "video", href: "/video", label: "Video", what: "Text or image to video", kind: "create", goals: ["film"], keywords: "text to video image to video animate clip", cover: "motion-fpv-drone", icon: "Video", eager: true, popular: true },
   { id: "edit", href: "/edit", label: "Edit", what: "Change a picture with words", kind: "create", goals: ["edit"], keywords: "edit image change photo retouch", cover: "app-relight", icon: "Wand2" },
@@ -499,7 +500,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [...PAGES, ...STUDIOS, ...HUB_TO
  * starts from them). Storyboard plans a film, so it sits with Make (its card is in the launcher's Film column).
  */
 export const CREATE_COLUMNS = [
-  { label: "Make", ids: ["image", "video", "assist", "canvas", "storyboard"] },
+  { label: "Make", ids: ["image", "video", "assist", "chat", "canvas", "storyboard"] },
   { label: "Edit a picture", ids: ["edit", "live-edit", "inpaint", "layers", "color-grade"] },
 ] as const;
 

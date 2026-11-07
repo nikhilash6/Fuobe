@@ -78,6 +78,7 @@ export const INTENTS: readonly Intent[] = [
   { id: "channel", triggers: ["youtube", "channel", "faceless", "episode", "series", "podcast"], targets: ["faceless", "content-factory", "explainer", "audio"] },
   { id: "film", triggers: ["film", "movie", "cinematic", "scene", "shot", "director", "trailer", "music video"], targets: ["cinema", "storyboard", "motions", "katana"] },
   { id: "dance", triggers: ["dance", "choreography", "pose", "moves", "tiktok dance"], targets: ["motion-control", "app-dance", "genjutsu"] },
+  { id: "chat", triggers: ["chat", "chatbot", "talk to", "talk with", "talk about", "ask", "advice", "roleplay", "role play", "brainstorm"], targets: ["chat", "assist"] },
   { id: "talk", triggers: ["talk", "talking", "speak", "lipsync", "lip sync", "avatar", "presenter", "spokesperson"], targets: ["lipsync", "app-talking-photo", "audio-speech"] },
   { id: "sound", triggers: ["sound", "audio"], targets: ["audio", "audio-clean", "audio-sfx", "audio-music"] },
   { id: "voice", triggers: ["voice", "voiceover", "voice over", "narration", "narrator", "tts", "text to speech", "read aloud"], targets: ["audio-speech", "audio", "lipsync"] },

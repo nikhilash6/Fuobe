@@ -66,6 +66,18 @@ describe("search by what you want to make", () => {
     const top = labels("talking photo");
     expect(top).toContain("Lipsync & avatars");
     expect(top).toContain("Talking Photo");
+    expect(top).not.toContain("Chat");
+  });
+
+  it("“chat”, “talk”, “ask”, “advice”, “roleplay” → Chat, for every viewer", () => {
+    for (const entries of [GUEST, ACCOUNT, OWNER]) {
+      expect(searchNav("chat", entries).best[0]).toMatchObject({ label: "Chat", href: "/chat" });
+      for (const q of ["ask", "advice", "roleplay", "role play", "ask for advice", "talk to ai", "talk about ideas", "brainstorm ideas"]) {
+        expect(searchNav(q, entries).best.map((h) => h.href), q).toContain("/chat");
+      }
+      // "talk" alone is mostly lipsync and voices: Chat is listed with them, first of the rest.
+      expect(all("talk", entries).map((h) => h.href)).toContain("/chat");
+    }
   });
 
   it("“make my product video for amazon” → Marketing Studio first", () => {

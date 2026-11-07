@@ -15,7 +15,7 @@ import { entriesFor, type ViewerKind } from "@/lib/nav-model";
 /** A panel whose routes load when it opens: the launcher (and the Studios sheet), Create, More, Fuobe FX. */
 export type NavPanel = "studios" | "create" | "more" | "fx";
 
-const MORE_IDS = ["apps", "motions", "effects", "canvas", "assist", "area-motions"];
+const MORE_IDS = ["apps", "motions", "effects", "canvas", "assist", "chat", "area-motions"];
 /** Each panel's "See all": its area page loads with the panel's rows. */
 const AREA_OF: Record<NavPanel, string> = { studios: "area-studios", create: "area-create", more: "area-motions", fx: "area-fx" };
 

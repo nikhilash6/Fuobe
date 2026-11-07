@@ -142,14 +142,17 @@ describe("nav model: entries", () => {
     for (const [, rows] of OLD_NAV) for (const [href, label] of rows) expect(NAV_ENTRIES.find((e) => e.href === href)?.label, href).toBe(label);
   });
 
-  it("derives the groups as they were, with Kinetic Motion, and the FX studios moved from Studios to Fuobe FX: 46 rows", () => {
+  it("derives the groups as they were, with Kinetic Motion, Chat beside Assist, and the FX studios moved from Studios to Fuobe FX: 47 rows", () => {
     const FX_HREFS = ["/genjutsu", "/character-swap", "/motion-control", "/video-tools", "/extend", "/reframe"];
-    const old = OLD_NAV.map(([label, rows]) => [label, label === "Studios" ? rows.filter(([href]) => !FX_HREFS.includes(href)) : rows] as (typeof OLD_NAV)[number]);
+    const withChat = (rows: [string, string][]) => rows.flatMap((r): [string, string][] => (r[0] === "/assist" ? [r, ["/chat", "Chat"]] : [r]));
+    const old = OLD_NAV.map(
+      ([label, rows]) => [label, label === "Studios" ? rows.filter(([href]) => !FX_HREFS.includes(href)) : label === "Create" ? withChat(rows) : rows] as (typeof OLD_NAV)[number],
+    );
     const moved = OLD_NAV.find(([l]) => l === "Studios")![1].filter(([href]) => FX_HREFS.includes(href));
     expect(moved).toHaveLength(6);
     const fx: (typeof OLD_NAV)[number] = ["Fuobe FX", [["/fx", "Fuobe FX"], ...FX_HREFS.map((h) => moved.find(([href]) => href === h)!)]];
     expect(NAV.map((g) => [g.label, g.items.map((i) => [i.href, i.label])])).toEqual([...old.slice(0, 3), fx, ...old.slice(3)]);
-    expect(NAV.flatMap((g) => g.items)).toHaveLength(46);
+    expect(NAV.flatMap((g) => g.items)).toHaveLength(47);
     expect(NAV.find((g) => g.label === "Fuobe FX")?.collapsible).toBe(true);
     expect(NAV.find((g) => g.label === "Studios")?.collapsible).toBe(true);
     // The same rows prefetch eagerly, with an icon each and search words.
