@@ -1204,6 +1204,13 @@ function open(): Database.Database {
     // Why a slot takes no jobs for now ("updating": its worker restarts on new code), and since when.
     ["helper_slots", "away", "TEXT"],
     ["helper_slots", "away_at", "INTEGER"],
+    // Tool calling: the tools a chat offers and how to choose, the calls in its answer and why it stopped, the slots
+    // that take tools.
+    ["helper_jobs", "tools_json", "TEXT"],
+    ["helper_jobs", "tool_choice_json", "TEXT"],
+    ["helper_jobs", "tool_calls_json", "TEXT"],
+    ["helper_jobs", "finish", "TEXT"],
+    ["helper_slots", "tools", "INTEGER NOT NULL DEFAULT 0"],
   ]) {
     if (!(db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
@@ -1412,7 +1419,11 @@ const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
     sampling_json TEXT,
     stream INTEGER NOT NULL DEFAULT 0,
     partial TEXT,
-    partial_at INTEGER
+    partial_at INTEGER,
+    tools_json TEXT,
+    tool_choice_json TEXT,
+    tool_calls_json TEXT,
+    finish TEXT
   );
   CREATE INDEX IF NOT EXISTS helper_jobs_line ON helper_jobs(state, created_at);
   CREATE TABLE IF NOT EXISTS helper_slots (
@@ -1423,7 +1434,8 @@ const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
     vision INTEGER NOT NULL DEFAULT 0,
     chat INTEGER NOT NULL DEFAULT 0,
     away TEXT,
-    away_at INTEGER
+    away_at INTEGER,
+    tools INTEGER NOT NULL DEFAULT 0
   );`;
 
 export function db(): Database.Database {

@@ -176,64 +176,137 @@ export function jobOf(body) {
     }
     images = j.images;
   }
-  // A chat's turns: the person's and the model's, the newest the person's.
+  // A chat's turns: the person's, the model's (words, tool calls or both) and tools' results; the newest the person's
+  // or a tool's.
   let messages = null;
   if (j.messages !== undefined) {
     if (!Array.isArray(j.messages) || !j.messages.length || j.messages.length > CHAT_LIMITS.turns) return null;
     let chars = 0;
+    messages = [];
     for (const m of j.messages) {
-      if (!m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") return null;
-      chars += m.content.length;
+      const turn = turnOf(m);
+      if (!turn) return null;
+      chars += (turn.content ?? "").length + (turn.tool_calls ?? []).reduce((a, c) => a + c.function.name.length + c.function.arguments.length, 0);
+      messages.push(turn);
     }
-    if (chars > CHAT_LIMITS.chars || j.messages.at(-1).role !== "user") return null;
-    messages = j.messages.map((m) => ({ role: m.role, content: m.content }));
+    if (chars > CHAT_LIMITS.chars || !["user", "tool"].includes(messages.at(-1).role)) return null;
+  }
+  // Tools the model may call (OpenAI function definitions), and how it may choose among them.
+  let tools = null;
+  let toolChoice = null;
+  if (j.tools !== undefined) {
+    if (!messages || !Array.isArray(j.tools) || !j.tools.length || j.tools.length > CHAT_LIMITS.tools || JSON.stringify(j.tools).length > CHAT_LIMITS.toolsChars) return null;
+    tools = [];
+    for (const t of j.tools) {
+      const fn = t?.function;
+      if (t?.type !== "function" || !fn || typeof fn.name !== "string" || !TOOL_NAME.test(fn.name) || (fn.description !== undefined && typeof fn.description !== "string") || !fn.parameters || typeof fn.parameters !== "object" || Array.isArray(fn.parameters)) return null;
+      tools.push({ type: "function", function: { name: fn.name, ...(fn.description !== undefined && { description: fn.description }), parameters: fn.parameters } });
+    }
+    const c = j.toolChoice;
+    if (c === "auto" || c === "none") toolChoice = c;
+    else if (c?.type === "function" && tools.some((t) => t.function.name === c.function?.name)) toolChoice = { type: "function", function: { name: c.function.name } };
+    else if (c !== undefined) return null;
   }
   const sampling = {};
   for (const [k, [lo, hi]] of Object.entries(SAMPLING_BOUNDS)) {
     const v = j.sampling?.[k];
     if (typeof v === "number" && Number.isFinite(v)) sampling[k] = Math.min(hi, Math.max(lo, v));
   }
-  return { id: j.id, lease: j.lease, system: j.system, user: j.user, maxTokens, json: j.json === true, images, messages, sampling, stream: j.stream === true };
+  return { id: j.id, lease: j.lease, system: j.system, user: j.user, maxTokens, json: j.json === true, images, messages, sampling, stream: j.stream === true, tools, toolChoice };
 }
 
-/** What a chat may carry (the studio sends at most 24,000 characters of turns). */
-const CHAT_LIMITS = { turns: 200, chars: 32_000 };
+/** What a chat may carry (the studio sends at most 24,000 characters of turns and 32,000 of tools). */
+const CHAT_LIMITS = { turns: 200, chars: 32_000, tools: 64, toolsChars: 40_000, calls: 16, argsChars: 8000 };
+const TOOL_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+const CALL_ID = /^[A-Za-z0-9_.:-]{1,100}$/;
+
+/** One chat turn, checked, with only its own fields; null when it isn't one. */
+function turnOf(m) {
+  if (!m || typeof m !== "object") return null;
+  if (m.role === "user") return typeof m.content === "string" ? { role: "user", content: m.content } : null;
+  if (m.role === "tool") return typeof m.content === "string" && typeof m.tool_call_id === "string" && CALL_ID.test(m.tool_call_id) ? { role: "tool", tool_call_id: m.tool_call_id, content: m.content } : null;
+  if (m.role !== "assistant" || (m.content !== undefined && typeof m.content !== "string")) return null;
+  let calls = null;
+  if (m.tool_calls !== undefined) {
+    if (!Array.isArray(m.tool_calls) || !m.tool_calls.length || m.tool_calls.length > CHAT_LIMITS.calls) return null;
+    calls = [];
+    for (const c of m.tool_calls) {
+      if (c?.type !== "function" || typeof c.id !== "string" || !CALL_ID.test(c.id) || typeof c.function?.name !== "string" || !TOOL_NAME.test(c.function.name) || typeof c.function.arguments !== "string" || c.function.arguments.length > CHAT_LIMITS.argsChars) return null;
+      calls.push({ id: c.id, type: "function", function: { name: c.function.name, arguments: c.function.arguments } });
+    }
+  } else if (typeof m.content !== "string") return null;
+  return { role: "assistant", content: m.content ?? "", ...(calls && { tool_calls: calls }) };
+}
 /** The sampling a job may ask for, each inside these bounds. */
 const SAMPLING_BOUNDS = { temperature: [0, 2], top_p: [0.05, 1] };
 
 /**
  * The request body for one job: the family's template switches and sampling (the job's own over them), a chat's turns
- * as real turns, the pictures before the words of the newest turn.
+ * as real turns (tool calls and tools' results too), the pictures before the words of the person's newest turn, and the
+ * tools the model may call.
  */
 export function chatBody(job, slot = {}) {
   const fam = familyOf(slot);
   const pictures = job.images ?? [];
   const turns = job.messages?.length ? job.messages : [{ role: "user", content: job.user }];
-  const last = turns.length - 1;
+  const last = turns.findLastIndex((m) => m.role === "user");
   const withPictures = (text) => (pictures.length ? [...pictures.map((b) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b}` } })), { type: "text", text }] : text);
   return {
     model: modelName(slot),
-    messages: [...(job.system ? [{ role: "system", content: job.system }] : []), ...turns.map((m, n) => ({ role: m.role, content: n === last ? withPictures(m.content) : m.content }))],
+    messages: [...(job.system ? [{ role: "system", content: job.system }] : []), ...turns.map((m, n) => ({ ...m, content: n === last ? withPictures(m.content) : m.content }))],
     max_tokens: job.maxTokens,
     ...fam.sampling,
     ...job.sampling,
     stream: !!job.stream,
     ...(fam.kwargs && { chat_template_kwargs: fam.kwargs }),
     ...(job.json && { response_format: { type: "json_object" } }),
+    ...(job.tools?.length && { tools: job.tools, ...(job.toolChoice && { tool_choice: job.toolChoice }) }),
   };
 }
 
+/** The tool calls in an answer, as the studio takes them: { id, name, arguments } (arguments as JSON text). */
+export function callsOf(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((c) => typeof c?.function?.name === "string" && c.function.name)
+    .slice(0, CHAT_LIMITS.calls)
+    .map((c, n) => ({ id: typeof c.id === "string" && CALL_ID.test(c.id) ? c.id : `call_${n + 1}`, name: c.function.name, arguments: typeof c.function.arguments === "string" ? c.function.arguments : JSON.stringify(c.function.arguments ?? {}) }));
+}
+
+/** Why an answer stopped, as the studio takes it. */
+const finishOf = (reason, calls) => (calls.length ? "tool_calls" : reason === "length" ? "length" : "stop");
+
 /** The words in one server-sent event line of a streamed answer ("" for anything else). */
 export function streamedWords(line) {
-  if (!line.startsWith("data:")) return "";
+  return streamedPart(line).words;
+}
+
+/** One server-sent event line of a streamed answer: its words, its pieces of tool calls, and why it stopped. */
+export function streamedPart(line) {
+  const none = { words: "", calls: [], finish: null };
+  if (!line.startsWith("data:")) return none;
   const data = line.slice(5).trim();
-  if (!data || data === "[DONE]") return "";
+  if (!data || data === "[DONE]") return none;
   try {
-    const c = JSON.parse(data)?.choices?.[0]?.delta?.content;
-    return typeof c === "string" ? c : "";
+    const choice = JSON.parse(data)?.choices?.[0];
+    const c = choice?.delta?.content;
+    return { words: typeof c === "string" ? c : "", calls: Array.isArray(choice?.delta?.tool_calls) ? choice.delta.tool_calls : [], finish: typeof choice?.finish_reason === "string" ? choice.finish_reason : null };
   } catch {
-    return "";
+    return none;
   }
+}
+
+/** Tool calls put together from their streamed pieces (by index: the id and name come first, the arguments in pieces). */
+export function joinCalls(pieces) {
+  const calls = [];
+  for (const p of pieces) {
+    const n = Number.isInteger(p?.index) ? p.index : calls.length ? calls.length - 1 : 0;
+    const c = (calls[n] ??= { id: null, type: "function", function: { name: "", arguments: "" } });
+    if (typeof p.id === "string" && p.id) c.id = p.id;
+    if (typeof p.function?.name === "string") c.function.name += p.function.name;
+    if (typeof p.function?.arguments === "string") c.function.arguments += p.function.arguments;
+  }
+  return calls.filter(Boolean);
 }
 
 /** The worker's stop for a job whose caller went: its answer isn't sent. */
@@ -353,7 +426,7 @@ export class TextSlot {
       const res = await this.d.call("/api/gpu/computer/text/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, chat: true, wait: this.slot.claimWaitMs }),
+        body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, chat: true, tools: true, wait: this.slot.claimWaitMs }),
         signal: AbortSignal.any([this.ending.signal, claiming.signal]),
       });
       if (res.status === 204 || !res.ok) {
@@ -382,7 +455,8 @@ export class TextSlot {
     try {
       if (job.images.length && !this.slot.mmproj) throw new Error("this slot's model doesn't take pictures");
       await this.ensure(device);
-      answer = { text: await this.complete(job) };
+      const a = await this.complete(job);
+      answer = typeof a === "string" ? { text: a } : a;
     } catch (e) {
       this.lastJobAt = this.now();
       // The person went: the studio ended the job, so there is nothing to send.
@@ -412,9 +486,12 @@ export class TextSlot {
     });
     if (!r.ok) throw new Error(`llama-server answered ${r.status}`);
     const body = await r.json();
-    const text = body?.choices?.[0]?.message?.content;
+    const choice = body?.choices?.[0];
+    const text = choice?.message?.content;
+    const calls = job.tools?.length ? callsOf(choice?.message?.tool_calls) : [];
+    if (calls.length) return { text: typeof text === "string" ? text : "", toolCalls: calls, finish: "tool_calls" };
     if (typeof text !== "string" || !text.trim()) throw new Error("llama-server gave no text");
-    return text;
+    return job.tools?.length || job.messages ? { text, finish: finishOf(choice?.finish_reason, calls) } : text;
   }
 
   /**
@@ -435,6 +512,14 @@ export class TextSlot {
     // No words for answerMs (the prompt's own reading included): it ends.
     let idle = setTimeout(() => end("llama-server went quiet"), this.slot.answerMs);
     let text = "";
+    const pieces = [];
+    let reason = null;
+    const take = (line) => {
+      const p = streamedPart(line);
+      text += p.words;
+      pieces.push(...p.calls);
+      reason = p.finish ?? reason;
+    };
     let sent = "";
     let sentAt = 0;
     let posting = null;
@@ -480,9 +565,9 @@ export class TextSlot {
         buf += decoder.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop();
-        for (const line of lines) text += streamedWords(line.trim());
+        for (const line of lines) take(line.trim());
       }
-      text += streamedWords((buf + decoder.decode()).trim());
+      take((buf + decoder.decode()).trim());
     } catch (e) {
       if (stopped) throw new Stopped("stopped");
       if (why) throw new Error(why);
@@ -495,8 +580,9 @@ export class TextSlot {
       await posting;
     }
     if (stopped) throw new Stopped("stopped");
-    if (!text.trim()) throw new Error("llama-server gave no text");
-    return text;
+    const calls = job.tools?.length ? callsOf(joinCalls(pieces)) : [];
+    if (!text.trim() && !calls.length) throw new Error("llama-server gave no text");
+    return { text, ...(calls.length && { toolCalls: calls }), finish: finishOf(reason, calls) };
   }
 
   /** Its server on this device, started now when it isn't (another device's is stopped first). */

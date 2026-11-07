@@ -67,15 +67,51 @@ export const HELPER_LIMITS = {
   /** A chat's turns: how many, and their words together (the caller trims older turns itself). */
   chatTurns: 200,
   chatChars: 24_000,
+  /** Tools a chat may offer: how many, and their definitions as JSON together. */
+  tools: 64,
+  toolsChars: 32_000,
+  /** Tool calls in one answer or one assistant turn, and the arguments of one. */
+  toolCalls: 16,
+  toolArgsChars: 8000,
   /** Pictures a job may carry: how many, how big each may come in, and as the small JPEG it is sent as. */
   pictures: { count: 4, inputBytes: 20 * 2 ** 20, longEdge: 1024, outputBytes: 512 * 1024 },
 };
 
-/** One turn of a chat. */
-export interface HelperMessage {
-  role: "user" | "assistant";
-  content: string;
+/** A tool call as a chat's assistant turn carries it (OpenAI's shape; `arguments` is JSON text). */
+export interface HelperToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
 }
+
+/**
+ * One turn of a chat: the person's, the model's (its words, the tools it called, or both), or a tool's result for one
+ * of those calls.
+ */
+export type HelperMessage =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content?: string; tool_calls?: HelperToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+/** A tool a chat offers the model (an OpenAI function definition). */
+export interface HelperTool {
+  type: "function";
+  function: { name: string; description?: string; parameters: object };
+}
+
+export type HelperToolChoice = "auto" | "none" | { type: "function"; function: { name: string } };
+
+/** A tool the model called in its answer. */
+export interface HelperCall {
+  id: string;
+  name: string;
+  /** JSON text, as the model wrote it (the caller parses and checks it). */
+  arguments: string;
+}
+
+/** A tool's name: what OpenAI's function names allow. */
+const TOOL_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+const CALL_ID = /^[A-Za-z0-9_.:-]{1,100}$/;
 
 /** The sampling a job may ask for, each inside these bounds. */
 export const HELPER_SAMPLING = { temperature: [0, 2], top_p: [0.05, 1] } as const;
@@ -93,20 +129,102 @@ export function helperSampling(s: HelperSampling | undefined | null): HelperSamp
   return Object.keys(out).length ? out : null;
 }
 
-/** Why these chat turns can't be sent, or null: user and assistant turns, the newest the person's, within the limits. */
+/** Why these tool calls can't be kept, or null. */
+function toolCallsProblem(calls: unknown): string | null {
+  if (!Array.isArray(calls) || !calls.length || calls.length > HELPER_LIMITS.toolCalls) return "a turn's tool calls aren't a short list";
+  for (const c of calls as Partial<HelperToolCall>[]) {
+    if (!c || typeof c !== "object" || c.type !== "function" || typeof c.id !== "string" || !CALL_ID.test(c.id)) return "a tool call has no id";
+    const f = c.function;
+    if (!f || typeof f.name !== "string" || !TOOL_NAME.test(f.name) || typeof f.arguments !== "string" || f.arguments.length > HELPER_LIMITS.toolArgsChars) return "a tool call isn't a name with its arguments";
+  }
+  return null;
+}
+
+/**
+ * Why these chat turns can't be sent, or null: the person's turns, the model's (words, tool calls or both) and tools'
+ * results for calls made before them; the newest the person's or a tool's; within the limits.
+ */
 export function helperMessagesProblem(messages: unknown): string | null {
   if (!Array.isArray(messages) || !messages.length) return "no turns";
   if (messages.length > HELPER_LIMITS.chatTurns) return "too many turns";
   let chars = 0;
-  for (const m of messages as Partial<HelperMessage>[]) {
-    if (!m || typeof m !== "object" || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") return "a turn isn't a user or assistant turn with words";
-    chars += m.content.length;
+  const called = new Set<string>();
+  for (const m of messages as Record<string, unknown>[]) {
+    if (!m || typeof m !== "object") return "a turn isn't a user, assistant or tool turn";
+    if (m.role === "user") {
+      if (typeof m.content !== "string") return "a person's turn has no words";
+      chars += m.content.length;
+    } else if (m.role === "assistant") {
+      if (m.content !== undefined && typeof m.content !== "string") return "an assistant turn's words aren't text";
+      if (m.tool_calls !== undefined) {
+        const p = toolCallsProblem(m.tool_calls);
+        if (p) return p;
+        for (const c of m.tool_calls as HelperToolCall[]) {
+          called.add(c.id);
+          chars += c.function.name.length + c.function.arguments.length;
+        }
+      } else if (typeof m.content !== "string") return "an assistant turn has neither words nor tool calls";
+      chars += typeof m.content === "string" ? m.content.length : 0;
+    } else if (m.role === "tool") {
+      if (typeof m.tool_call_id !== "string" || !called.has(m.tool_call_id)) return "a tool's result answers no call before it";
+      if (typeof m.content !== "string") return "a tool's result isn't text";
+      chars += m.content.length;
+    } else return "a turn isn't a user, assistant or tool turn";
   }
   if (chars > HELPER_LIMITS.chatChars) return "too long";
   const last = messages[messages.length - 1] as HelperMessage;
-  if (last.role !== "user" || !last.content.trim()) return "the newest turn isn't the person's";
+  if (last.role === "tool") return null;
+  if (last.role !== "user" || !last.content.trim()) return "the newest turn isn't the person's or a tool's";
   return null;
 }
+
+/** Why these tools (and the choice among them) can't be offered, or null. */
+export function helperToolsProblem(tools: unknown, choice?: unknown): string | null {
+  if (!Array.isArray(tools) || !tools.length) return "no tools";
+  if (tools.length > HELPER_LIMITS.tools) return "too many tools";
+  const names = new Set<string>();
+  for (const t of tools as Partial<HelperTool>[]) {
+    const f = t?.function;
+    if (!t || t.type !== "function" || !f || typeof f.name !== "string" || !TOOL_NAME.test(f.name)) return "a tool has no name";
+    if (names.has(f.name)) return "two tools have the same name";
+    names.add(f.name);
+    if (f.description !== undefined && typeof f.description !== "string") return "a tool's description isn't text";
+    if (!f.parameters || typeof f.parameters !== "object" || Array.isArray(f.parameters)) return "a tool's parameters aren't a schema";
+  }
+  if (JSON.stringify(tools).length > HELPER_LIMITS.toolsChars) return "the tools are too long";
+  if (choice === undefined || choice === "auto" || choice === "none") return null;
+  const c = choice as { type?: unknown; function?: { name?: unknown } };
+  if (c && typeof c === "object" && c.type === "function" && typeof c.function?.name === "string" && names.has(c.function.name)) return null;
+  return "the tool choice names no tool";
+}
+
+/** The tool calls a slot sent, kept only in their shape and only for tools the job offered. */
+function callsOf(raw: unknown, offered: Set<string>): HelperCall[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HelperCall[] = [];
+  for (const c of raw.slice(0, HELPER_LIMITS.toolCalls) as Partial<HelperCall>[]) {
+    if (!c || typeof c.name !== "string" || !offered.has(c.name) || typeof c.arguments !== "string" || c.arguments.length > HELPER_LIMITS.toolArgsChars) continue;
+    out.push({ id: typeof c.id === "string" && CALL_ID.test(c.id) ? c.id : `call_${out.length + 1}`, name: c.name, arguments: c.arguments });
+  }
+  return out;
+}
+
+const FINISH = new Set(["stop", "tool_calls", "length"]);
+
+/** A checked turn with only its own fields. */
+const turnOf = (m: HelperMessage): HelperMessage =>
+  m.role === "user"
+    ? { role: "user", content: m.content }
+    : m.role === "tool"
+      ? { role: "tool", tool_call_id: m.tool_call_id, content: m.content }
+      : {
+          role: "assistant",
+          ...(m.content !== undefined && { content: m.content }),
+          ...(m.tool_calls && { tool_calls: m.tool_calls.map((c) => ({ id: c.id, type: "function" as const, function: { name: c.function.name, arguments: c.function.arguments } })) }),
+        };
+
+/** A checked tool with only its own fields. */
+const toolOf = (t: HelperTool): HelperTool => ({ type: "function", function: { name: t.function.name, ...(t.function.description !== undefined && { description: t.function.description }), parameters: t.function.parameters } });
 
 /** Whose job: "owner", "acct:<id>", or "guest:<address key>". */
 export type HelperWho = string;
@@ -140,6 +258,10 @@ interface JobRow {
   stream: number | null;
   partial: string | null;
   partial_at: number | null;
+  tools_json: string | null;
+  tool_choice_json: string | null;
+  tool_calls_json: string | null;
+  finish: string | null;
 }
 
 /** A job as a text slot gets it. */
@@ -159,6 +281,9 @@ export interface HelperJob {
   sampling?: HelperSampling;
   /** The slot sends the words so far as they come (POST /api/gpu/computer/text/:id/partial). */
   stream?: true;
+  /** Tools the model may call (only to a slot that takes tools), and how it may choose among them. */
+  tools?: HelperTool[];
+  toolChoice?: HelperToolChoice;
 }
 
 const json = <T,>(s: string | null, fallback: T): T => {
@@ -187,9 +312,9 @@ export function textEligible(w: WorkerRow, now = Date.now()): boolean {
  * A text slot asked for a job in the last moments, from a worker that may take one (`vision`: one whose model sees
  * pictures; `chat`: one that takes chats).
  */
-export function helperLive(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): boolean {
+export function helperLive(now = Date.now(), o: { vision?: boolean; chat?: boolean; tools?: boolean } = {}): boolean {
   const rows = db()
-    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ? AND s.away IS NULL${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}`)
+    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ? AND s.away IS NULL${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}${o.tools ? " AND s.tools = 1" : ""}`)
     .all(now - HELPER_TIMES.liveMs) as WorkerRow[];
   return rows.some((w) => textEligible(w, now));
 }
@@ -201,10 +326,10 @@ export function helperLive(now = Date.now(), o: { vision?: boolean; chat?: boole
  */
 export type HelperState = "ready" | "busy" | "starting" | "absent";
 
-export function helperState(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): HelperState {
+export function helperState(now = Date.now(), o: { vision?: boolean; chat?: boolean; tools?: boolean } = {}): HelperState {
   const d = db();
   const rows = d
-    .prepare(`SELECT w.*, s.seen_at AS slot_seen_at, s.away AS slot_away FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}`)
+    .prepare(`SELECT w.*, s.seen_at AS slot_seen_at, s.away AS slot_away FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}${o.tools ? " AND s.tools = 1" : ""}`)
     .all(now - HELPER_TIMES.startingMs) as (WorkerRow & { slot_seen_at: number; slot_away: string | null })[];
   const live = rows.filter((r) => r.slot_away === null && now - r.slot_seen_at <= HELPER_TIMES.liveMs && textEligible(r, now));
   if (live.length) {
@@ -235,13 +360,13 @@ export function noteHelperAway(w: WorkerRow, state: unknown, now = Date.now()): 
  * How the free helper stands for this call: helperState, and "absent" for a call that may not use it (a guest's, or an
  * account's while hosted runs are off). A chat may be asked unless "absent": it waits for a slot that is coming back.
  */
-export function freeHelperState(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): HelperState {
+export function freeHelperState(now = Date.now(), o: { vision?: boolean; chat?: boolean; tools?: boolean } = {}): HelperState {
   const t = tenant();
   return !t || (t.kind === "account" && hostedRunsOn()) ? helperState(now, o) : "absent";
 }
 
 /** May this call use the free helper now: it is live, and an account's call only while hosted runs are on (a guest's never: sign up first). */
-export function freeHelperOn(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): boolean {
+export function freeHelperOn(now = Date.now(), o: { vision?: boolean; chat?: boolean; tools?: boolean } = {}): boolean {
   const t = tenant();
   return (!t || (t.kind === "account" && hostedRunsOn())) && helperLive(now, o);
 }
@@ -287,7 +412,7 @@ export function sweepHelper(now = Date.now()): void {
 }
 
 /** The jobs a slot may take: one with pictures only where its model sees them, a chat only where the slot takes chats. */
-const takes = (vision: boolean, chat: boolean) => `${vision ? "" : " AND images_json IS NULL"}${chat ? "" : " AND messages_json IS NULL"}`;
+const takes = (vision: boolean, chat: boolean, tools = false) => `${vision ? "" : " AND images_json IS NULL"}${chat ? "" : " AND messages_json IS NULL"}${tools ? "" : " AND tools_json IS NULL"}`;
 
 /** The line's order: people's jobs first, then the owner's, oldest first. */
 const OWNER_LAST = "CASE WHEN who = 'owner' THEN 1 ELSE 0 END";
@@ -297,27 +422,30 @@ const OWNER_LAST = "CASE WHEN who = 'owner' THEN 1 ELSE 0 END";
  * slot as live either way. `chat`: the slot takes chats (turns, and words sent as they come); an older worker never
  * says so, and gets the same jobs as before.
  */
-export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: unknown; vision?: unknown; chat?: unknown } = {}, now = Date.now(), note = true): HelperJob | null {
+export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: unknown; vision?: unknown; chat?: unknown; tools?: unknown } = {}, now = Date.now(), note = true): HelperJob | null {
   const d = db();
   return d.transaction(() => {
     const model = typeof slot.model === "string" ? slot.model.slice(0, 120) : null;
     const device = slot.device === "gpu" || slot.device === "cpu" ? slot.device : null;
     const vision = slot.vision === true ? 1 : 0;
     const chat = slot.chat === true ? 1 : 0;
+    const tools = chat && slot.tools === true ? 1 : 0;
     if (note) {
       d.prepare(
-        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision, chat, away, away_at) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision, chat = excluded.chat, away = NULL, away_at = NULL",
-      ).run(w.id, now, model, device, vision, chat);
+        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision, chat, tools, away, away_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision, chat = excluded.chat, tools = excluded.tools, away = NULL, away_at = NULL",
+      ).run(w.id, now, model, device, vision, chat, tools);
     }
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow | undefined;
     if (!fresh || !textEligible(fresh, now)) return null;
-    const row = d.prepare(`SELECT * FROM helper_jobs WHERE state = 'waiting'${takes(!!vision, !!chat)} ORDER BY ${OWNER_LAST}, created_at, id LIMIT 1`).get() as JobRow | undefined;
+    const row = d.prepare(`SELECT * FROM helper_jobs WHERE state = 'waiting'${takes(!!vision, !!chat, !!tools)} ORDER BY ${OWNER_LAST}, created_at, id LIMIT 1`).get() as JobRow | undefined;
     if (!row || !isHelperTask(row.task)) return null;
     const lease = crypto.randomBytes(16).toString("base64url");
     d.prepare("UPDATE helper_jobs SET state = 'running', worker_id = ?, lease = ?, claimed_at = ? WHERE id = ? AND state = 'waiting'").run(w.id, lease, now, row.id);
     const images = json<string[] | null>(row.images_json, null);
     const messages = json<HelperMessage[] | null>(row.messages_json, null);
     const sampling = json<HelperSampling | null>(row.sampling_json, null);
+    const offered = json<HelperTool[] | null>(row.tools_json, null);
+    const toolChoice = json<HelperToolChoice | null>(row.tool_choice_json, null);
     return {
       id: row.id,
       lease,
@@ -330,12 +458,13 @@ export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: u
       ...(messages?.length && { messages }),
       ...(sampling && { sampling }),
       ...(row.stream ? { stream: true as const } : {}),
+      ...(offered?.length && { tools: offered, ...(toolChoice && { toolChoice }) }),
     };
   }).immediate();
 }
 
 /** Is any text job waiting that this slot may take (a quick read before a claim)? */
-export const helperWaiting = (vision = false, chat = false): boolean => !!db().prepare(`SELECT 1 FROM helper_jobs WHERE state = 'waiting'${takes(vision, chat)} LIMIT 1`).get();
+export const helperWaiting = (vision = false, chat = false, tools = false): boolean => !!db().prepare(`SELECT 1 FROM helper_jobs WHERE state = 'waiting'${takes(vision, chat, tools)} LIMIT 1`).get();
 
 /** Where a waiting job stands in the line: 1 is next. Null once it isn't waiting. */
 export function helperPosition(id: string): number | null {
@@ -367,20 +496,39 @@ export function partialHelperJob(w: WorkerRow, id: string, body: { lease?: unkno
 }
 
 /** A text slot's answer for its job (only with the lease its claim gave). False: not its job any more. */
-export function finishHelperJob(w: WorkerRow, id: string, body: { lease?: unknown; text?: unknown; error?: unknown }, now = Date.now()): boolean {
+export function finishHelperJob(w: WorkerRow, id: string, body: { lease?: unknown; text?: unknown; error?: unknown; toolCalls?: unknown; finish?: unknown }, now = Date.now()): boolean {
   if (typeof body.lease !== "string") return false;
+  const d = db();
   let text: string | null = null;
   let error: string | null = null;
   if (typeof body.text === "string" && Buffer.byteLength(body.text) <= HELPER_LIMITS.textBytes) text = tidyHelperText(body.text);
-  if (!text) error = typeof body.error === "string" && body.error ? body.error.slice(0, 200) : "no-text";
-  const r = db()
-    .prepare("UPDATE helper_jobs SET state = ?, text = ?, error = ?, done_at = ? WHERE id = ? AND worker_id = ? AND lease = ? AND state = 'running'")
-    .run(text ? "done" : "failed", text, error, now, id, w.id, body.lease);
+  // Tool calls count only for tools the job offered.
+  let calls: HelperCall[] = [];
+  if (body.toolCalls !== undefined) {
+    const row = d.prepare("SELECT tools_json FROM helper_jobs WHERE id = ? AND worker_id = ? AND lease = ?").get(id, w.id, body.lease) as { tools_json: string | null } | undefined;
+    const offered = new Set(json<HelperTool[]>(row?.tools_json ?? null, []).map((t) => t.function.name));
+    calls = callsOf(body.toolCalls, offered);
+  }
+  const answered = !!text || calls.length > 0;
+  if (!answered) error = typeof body.error === "string" && body.error ? body.error.slice(0, 200) : "no-text";
+  const finish = typeof body.finish === "string" && FINISH.has(body.finish) ? (calls.length ? "tool_calls" : body.finish === "tool_calls" ? "stop" : body.finish) : calls.length ? "tool_calls" : null;
+  const r = d
+    .prepare("UPDATE helper_jobs SET state = ?, text = ?, error = ?, done_at = ?, tool_calls_json = ?, finish = ? WHERE id = ? AND worker_id = ? AND lease = ? AND state = 'running'")
+    .run(answered ? "done" : "failed", answered ? (text ?? "") : null, error, now, calls.length ? JSON.stringify(calls) : null, answered ? finish : null, id, w.id, body.lease);
   return r.changes === 1;
 }
 
 /** "sign-in": a guest's call, refused before anything is checked or queued. */
-export type HelperAnswer = { text: string } | { error: "busy" | "limit" | "blocked" | "failed" | "sign-in"; message?: string; retryAfterS?: number };
+export type HelperAnswer =
+  | {
+      /** The model's words ("" when it only called tools). */
+      text: string;
+      /** The tools it called (a chat that offered tools), in order. */
+      toolCalls?: HelperCall[];
+      /** Why it stopped, from a worker that says: done, to call tools, or at its token limit. Missing: as "stop". */
+      finish?: "stop" | "tool_calls" | "length";
+    }
+  | { error: "busy" | "limit" | "blocked" | "failed" | "sign-in"; message?: string; retryAfterS?: number };
 
 const rateOf = (who: HelperWho) => (who.startsWith("acct:") ? HELPER_LIMITS.account : who === "guest:shared" ? { perMinute: HELPER_LIMITS.guest.perMinute * 10, perHour: HELPER_LIMITS.guest.perHour * 10 } : HELPER_LIMITS.guest);
 
@@ -396,6 +544,12 @@ export interface AskHelper {
   messages?: HelperMessage[];
   /** The job's own sampling, kept inside HELPER_SAMPLING; the model family's when unset. */
   sampling?: HelperSampling;
+  /**
+   * Tools the model may call (a chat only; only a slot that takes tools gets it): OpenAI function definitions, at most
+   * HELPER_LIMITS.toolsChars of JSON in all. The answer's toolCalls are the calls it made.
+   */
+  tools?: HelperTool[];
+  tool_choice?: HelperToolChoice;
   json?: boolean;
   /** Pictures for a model that sees them (only a slot that does takes the job). A chat takes one, with its newest turn. */
   images?: { data: Buffer; contentType: string }[];
@@ -433,11 +587,16 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     if (problem) return { error: "failed", message: `The conversation can't be sent: ${problem}.` };
     if ((o.images?.length ?? 0) > 1) return { error: "failed", message: "A chat turn takes one picture." };
   }
+  const tools = o.tools !== undefined;
+  if (tools) {
+    const problem = chat ? helperToolsProblem(o.tools, o.tool_choice) : "tools need a chat's turns";
+    if (problem) return { error: "failed", message: `The tools can't be offered: ${problem}.` };
+  }
   const d = db();
   sweepHelper(now());
   const vision = !!o.images?.length;
   // A chat waits for a slot that is coming back (its worker restarts on new code); another task needs one asking now.
-  if (chat ? helperState(now(), { vision, chat }) === "absent" : !helperLive(now(), { vision, chat })) return { error: "busy" };
+  if (chat ? helperState(now(), { vision, chat, tools }) === "absent" : !helperLive(now(), { vision, chat })) return { error: "busy" };
   const pictures = vision ? await helperPictures(o.images!) : null;
   if (vision && !pictures) return { error: "failed" };
   if (who !== "owner" && o.counted !== false) {
@@ -451,7 +610,9 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   const waiting = d.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN who = ? THEN 1 ELSE 0 END) AS mine FROM helper_jobs WHERE state IN ('waiting','running')").get(who) as { n: number; mine: number | null };
   if (waiting.n >= HELPER_LIMITS.waitingAll || (who !== "owner" && (waiting.mine ?? 0) >= HELPER_LIMITS.waitingEach)) return { error: "busy" };
   // A chat's newest turn is its words for moderation (the turns before it were checked when they were sent).
-  const user = (chat ? o.messages![o.messages!.length - 1].content : (o.user ?? "")).slice(0, HELPER_LIMITS.userChars);
+  // A chat's newest turn of the person's is its words for moderation (the turns before it were checked when they were sent).
+  const newest = chat ? o.messages!.findLast((m) => m.role === "user") : null;
+  const user = (chat ? newest?.content || "Continue." : (o.user ?? "")).slice(0, HELPER_LIMITS.userChars);
   const sampling = helperSampling(o.sampling);
   const stream = chat || !!o.onText;
   const id = `hlp_${crypto.randomBytes(9).toString("base64url")}`;
@@ -472,7 +633,7 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   }
   const created = now();
   d.prepare(
-    "INSERT INTO helper_jobs (id, who, task, system, user, max_tokens, json, state, created_at, images_json, messages_json, sampling_json, stream) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, ?)",
+    "INSERT INTO helper_jobs (id, who, task, system, user, max_tokens, json, state, created_at, images_json, messages_json, sampling_json, stream, tools_json, tool_choice_json) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?)",
   ).run(
     id,
     who,
@@ -483,9 +644,11 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     o.json ? 1 : 0,
     created,
     pictures ? JSON.stringify(pictures) : null,
-    chat ? JSON.stringify(o.messages!.map((m) => ({ role: m.role, content: m.content }))) : null,
+    chat ? JSON.stringify(o.messages!.map(turnOf)) : null,
     sampling ? JSON.stringify(sampling) : null,
     stream ? 1 : 0,
+    tools ? JSON.stringify(o.tools!.map(toolOf)) : null,
+    tools && o.tool_choice !== undefined ? JSON.stringify(o.tool_choice) : null,
   );
   const waitMs = o.waitMs ?? (chat ? HELPER_TIMES.chatWaitMs : 45_000);
   // A caller's hook never stops the wait.
@@ -504,13 +667,15 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
       const row = d.prepare("SELECT * FROM helper_jobs WHERE id = ?").get(id) as JobRow | undefined;
       const t = now();
       if (!row || row.state === "failed" || row.state === "canceled") return { error: row?.error === "busy" ? "busy" : "failed" };
-      if (row.state === "done" && row.text) {
-        if (checkOutputs) {
+      if (row.state === "done" && (row.text || row.tool_calls_json)) {
+        if (checkOutputs && row.text) {
           const bytes = Buffer.from(row.text);
           const c = await checkOutput({ bytes, contentType: "text/plain; charset=utf-8", generationId: id, account, assetId: id, kind: "text", sha256: crypto.createHash("sha256").update(bytes).digest("hex") });
           if (c.decision !== "show") return c.decision === "hide" && c.text ? { error: "blocked", message: c.text } : { error: "failed" };
         }
-        return { text: row.text };
+        const calls = json<HelperCall[] | null>(row.tool_calls_json, null);
+        const finish = row.finish && FINISH.has(row.finish) ? (row.finish as "stop" | "tool_calls" | "length") : null;
+        return { text: row.text ?? "", ...(calls?.length && { toolCalls: calls }), ...(finish && { finish }) };
       }
       if (row.state === "waiting") {
         if (t - created >= waitMs) {

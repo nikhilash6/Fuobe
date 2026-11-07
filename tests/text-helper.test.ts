@@ -404,8 +404,8 @@ describe("chat: turns, words as they come, ending early", () => {
   it("checks the turns: user and assistant only, the newest the person's, at most 24,000 characters; nothing is queued for a bad one", async () => {
     expect(helper.helperMessagesProblem(turns)).toBeNull();
     expect(helper.helperMessagesProblem([])).toBe("no turns");
-    expect(helper.helperMessagesProblem(turns.slice(0, 2))).toBe("the newest turn isn't the person's");
-    expect(helper.helperMessagesProblem([{ role: "system", content: "x" }, turns[2]])).toMatch(/user or assistant/);
+    expect(helper.helperMessagesProblem(turns.slice(0, 2))).toBe("the newest turn isn't the person's or a tool's");
+    expect(helper.helperMessagesProblem([{ role: "system", content: "x" }, turns[2]])).toMatch(/user, assistant or tool/);
     expect(helper.helperMessagesProblem([{ role: "user", content: "x".repeat(helper.HELPER_LIMITS.chatChars + 1) }])).toBe("too long");
     expect(helper.helperMessagesProblem([{ role: "user", content: "x".repeat(helper.HELPER_LIMITS.chatChars) }])).toBeNull();
     expect(helper.helperMessagesProblem(Array(helper.HELPER_LIMITS.chatTurns + 1).fill(turns[2]))).toBe("too many turns");
@@ -694,5 +694,107 @@ describe("what a chat waits for: a slot ready, busy, coming back or gone", () =>
     const browser = await send({ state: "stopped" }, { "sec-fetch-site": "same-origin", origin: "http://localhost:3000" }, "owner");
     expect(browser.status).not.toBe(200);
     expect(helper.helperState(Date.now(), { chat: true })).toBe("starting");
+  });
+});
+
+describe("chat with tools", () => {
+  const tools: import("@/server/text-helper").HelperTool[] = [
+    { type: "function", function: { name: "make_picture", description: "Make a picture from words", parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] } } },
+    { type: "function", function: { name: "remove_background", parameters: { type: "object", properties: {} } } },
+  ];
+  const asked = [{ role: "user" as const, content: "Make a picture of a cat" }];
+  const called: import("@/server/text-helper").HelperMessage[] = [
+    ...asked,
+    { role: "assistant", tool_calls: [{ id: "call_a", type: "function", function: { name: "make_picture", arguments: '{"prompt":"a cat"}' } }] },
+    { role: "tool", tool_call_id: "call_a", content: '{"made":"asset_1"}' },
+  ];
+  const toolWorker = (o: { tools?: boolean } = {}) => {
+    const w = addWorker();
+    helper.claimHelperJob(workerRow(w), { chat: true, tools: o.tools !== false });
+    return w;
+  };
+  const claim = async (w: W, tools = true, ms = 5000) => {
+    const end = Date.now() + ms;
+    for (;;) {
+      const job = helper.claimHelperJob(workerRow(w), { chat: true, tools });
+      if (job || Date.now() > end) return job;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  };
+
+  it("checks tools, the choice, tool calls and tools' results; the newest turn may be a tool's", () => {
+    expect(helper.helperToolsProblem(tools)).toBeNull();
+    expect(helper.helperToolsProblem(tools, "none")).toBeNull();
+    expect(helper.helperToolsProblem(tools, { type: "function", function: { name: "make_picture" } })).toBeNull();
+    expect(helper.helperToolsProblem(tools, { type: "function", function: { name: "nope" } })).toBe("the tool choice names no tool");
+    expect(helper.helperToolsProblem([])).toBe("no tools");
+    expect(helper.helperToolsProblem([tools[0], tools[0]])).toBe("two tools have the same name");
+    expect(helper.helperToolsProblem([{ type: "function", function: { name: "has space", parameters: {} } }])).toBe("a tool has no name");
+    expect(helper.helperToolsProblem([{ type: "function", function: { name: "x", parameters: [] } }])).toBe("a tool's parameters aren't a schema");
+    const big = { type: "function", function: { name: "big", description: "x".repeat(helper.HELPER_LIMITS.toolsChars), parameters: {} } };
+    expect(helper.helperToolsProblem([big])).toBe("the tools are too long");
+    expect(helper.helperMessagesProblem(called)).toBeNull();
+    expect(helper.helperMessagesProblem([...asked, { role: "tool", tool_call_id: "call_z", content: "x" }])).toBe("a tool's result answers no call before it");
+    expect(helper.helperMessagesProblem([{ role: "assistant" }, ...asked])).toBe("an assistant turn has neither words nor tool calls");
+    expect(helper.helperMessagesProblem([...asked, { role: "assistant", tool_calls: [{ id: "c", type: "function", function: { name: "x", arguments: "y".repeat(8001) } }] }, ...asked])).toMatch(/name with its arguments/);
+    expect(helper.helperMessagesProblem([...asked, { role: "assistant", tool_calls: [] }, ...asked])).toMatch(/short list/);
+  });
+
+  it("goes only to a slot that takes tools, with its tools, choice and turns as they are; tools need a chat", async () => {
+    expect(await helper.askHelper({ task: "enhance", system: "s", user: "u", tools })).toMatchObject({ error: "failed", message: expect.stringContaining("need a chat") });
+    const plain = toolWorker({ tools: false });
+    // Only a chat slot without tools is here: nothing is coming that takes tools.
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: asked, tools })).toEqual({ error: "busy" });
+    const w = toolWorker();
+    const answer = helper.askHelper({ task: "chat", system: "s", messages: called, tools, tool_choice: "auto" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(helper.claimHelperJob(workerRow(plain), { chat: true })).toBeNull();
+    const job = (await claim(w))!;
+    expect(job).toMatchObject({ tools, toolChoice: "auto", messages: called, user: "Make a picture of a cat" });
+    helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Here is your cat.", finish: "stop" });
+    expect(await answer).toEqual({ text: "Here is your cat.", finish: "stop" });
+  });
+
+  it("an answer of tool calls: only offered tools, no words needed; why it stopped comes with it", async () => {
+    const w = toolWorker();
+    const answer = helper.askHelper({ task: "chat", system: "s", messages: asked, tools });
+    const job = (await claim(w))!;
+    expect(
+      helper.finishHelperJob(workerRow(w), job.id, {
+        lease: job.lease,
+        text: "",
+        finish: "tool_calls",
+        toolCalls: [
+          { id: "call_1", name: "make_picture", arguments: '{"prompt":"a cat"}' },
+          { id: "call_2", name: "delete_everything", arguments: "{}" },
+          { name: "remove_background", arguments: "{}" },
+        ],
+      }),
+    ).toBe(true);
+    expect(await answer).toEqual({
+      text: "",
+      finish: "tool_calls",
+      toolCalls: [
+        { id: "call_1", name: "make_picture", arguments: '{"prompt":"a cat"}' },
+        { id: "call_2", name: "remove_background", arguments: "{}" },
+      ],
+    });
+    // Cut at its token limit; and calls only to tools it wasn't offered: no answer.
+    const cut = helper.askHelper({ task: "chat", system: "s", messages: asked, tools });
+    const j2 = (await claim(w))!;
+    helper.finishHelperJob(workerRow(w), j2.id, { lease: j2.lease, text: "A very long", finish: "length" });
+    expect(await cut).toEqual({ text: "A very long", finish: "length" });
+    const none = helper.askHelper({ task: "chat", system: "s", messages: asked, tools });
+    const j3 = (await claim(w))!;
+    helper.finishHelperJob(workerRow(w), j3.id, { lease: j3.lease, text: "", toolCalls: [{ id: "c", name: "delete_everything", arguments: "{}" }] });
+    expect(await none).toEqual({ error: "failed" });
+  });
+
+  it("an older slot's answer (no finish, no calls) stays just its words", async () => {
+    const w = toolWorker();
+    const answer = helper.askHelper({ task: "chat", system: "s", messages: asked });
+    const job = (await claim(w))!;
+    helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Hi" });
+    expect(await answer).toEqual({ text: "Hi" });
   });
 });

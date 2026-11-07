@@ -11,7 +11,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { othersOf } from "../bin/lib/worker/gpu.mjs";
 import { parseCounters, splitMemory } from "../bin/lib/worker/local-work.mjs";
-import { chatBody, contextOf, cudaMbOf, familyOf, fileMatches, jobOf, modelName, serverArgs, streamedWords, TextSlot, textSlotOf, textTurn } from "../bin/lib/worker/text.mjs";
+import { chatBody, contextOf, cudaMbOf, familyOf, fileMatches, jobOf, modelName, serverArgs, callsOf, joinCalls, streamedPart, streamedWords, TextSlot, textSlotOf, textTurn } from "../bin/lib/worker/text.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -45,6 +45,21 @@ http.createServer((req, res) => {
     const b = JSON.parse(body);
     const last = b.messages.at(-1).content;
     const parts = Array.isArray(last) ? last : [{ type: "text", text: last }];
+    // Tools offered: it calls the chosen one (else the first) with the words and what it was sent, nothing else.
+    if (b.tools) {
+      const name = b.tool_choice?.function?.name ?? b.tools[0].function.name;
+      const args = JSON.stringify({ prompt: parts.find((p) => p.type === "text")?.text ?? "", turns: b.messages.map((m) => m.role + (m.tool_calls ? "+calls" : "") + (m.tool_call_id ? ":" + m.tool_call_id : "")), tools: b.tools.length, choice: b.tool_choice ?? null });
+      const ev = (o) => "data: " + JSON.stringify(o) + "\\n\\n";
+      if (!b.stream) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ choices: [{ message: { content: null, tool_calls: [{ id: "call_x1", type: "function", function: { name, arguments: args } }] }, finish_reason: "tool_calls" }] }));
+      }
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.write(ev({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_x1", type: "function", function: { name, arguments: "" } }] } }] }));
+      for (const piece of args.match(/[\\s\\S]{1,7}/g)) res.write(ev({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: piece } }] } }] }));
+      res.write(ev({ choices: [{ delta: {}, finish_reason: "tool_calls" }] }));
+      return res.end("data: [DONE]\\n\\n");
+    }
     const content = JSON.stringify({ host: req.headers.host, ngl: arg("-ngl"), ctx: arg("-c"), mmproj: process.argv.includes("--mmproj"), cuda: process.env.CUDA_VISIBLE_DEVICES ?? null, token: process.env.FUOBE_WORKER_TOKEN ?? null, kwargs: b.chat_template_kwargs ?? null, temperature: b.temperature, top_p: b.top_p, user: parts.find((p) => p.type === "text").text, pictures: parts.filter((p) => p.type === "image_url").map((p) => p.image_url.url.slice(0, 23)), max: b.max_tokens, stream: b.stream, turns: b.messages.map((m) => m.role + ":" + (Array.isArray(m.content) ? m.content.map((p) => p.type).join("+") : m.content)) });
     if (!b.stream) {
       res.writeHead(200, { "content-type": "application/json" });
@@ -466,5 +481,81 @@ describe("while its worker restarts or pauses", () => {
     // The worker ends for new code: the studio hears it is coming back.
     await s.end("updating");
     expect(aways).toEqual(["updating", "paused", "updating"]);
+  });
+});
+
+describe("tool calling", () => {
+  const tools = [
+    { type: "function", function: { name: "make_picture", description: "Make a picture", parameters: { type: "object", properties: { prompt: { type: "string" } } } } },
+    { type: "function", function: { name: "remove_background", parameters: { type: "object", properties: {} } } },
+  ];
+  const history = [
+    { role: "user", content: "Make a cat" },
+    { role: "assistant", tool_calls: [{ id: "call_a", type: "function", function: { name: "make_picture", arguments: '{"prompt":"a cat"}' } }] },
+    { role: "tool", tool_call_id: "call_a", content: '{"ok":true}' },
+  ];
+  const base = { id: "j", lease: "l", system: "", user: "Make a cat", maxTokens: 900 };
+
+  it("reads tools, the choice among them, tool calls and tools' results; anything else is dropped", () => {
+    const job = jobOf({ job: { ...base, messages: history, tools, toolChoice: { type: "function", function: { name: "make_picture" } } } })!;
+    expect(job.tools).toHaveLength(2);
+    expect(job.toolChoice).toEqual({ type: "function", function: { name: "make_picture" } });
+    expect(job.messages!.map((m: { role: string }) => m.role)).toEqual(["user", "assistant", "tool"]);
+    expect(jobOf({ job: { ...base, messages: history, tools, toolChoice: { type: "function", function: { name: "nope" } } } })).toBeNull();
+    expect(jobOf({ job: { ...base, tools } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: history, tools: [{ type: "function", function: { name: "bad name!", parameters: {} } }] } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: [...history, { role: "system", content: "x" }] } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: [{ role: "assistant", tool_calls: [{ id: "c", type: "function", function: { name: "x", arguments: {} } }] }, history[2]] } })).toBeNull();
+    // An older studio's job: no tools.
+    expect(jobOf({ job: { ...base, messages: [history[0]] } })).toMatchObject({ tools: null, toolChoice: null });
+    const body = chatBody(job, { model: "gemma-4-E2B-it-Q6_K.gguf" });
+    expect(body).toMatchObject({ tools, tool_choice: { type: "function", function: { name: "make_picture" } } });
+    expect(body.messages[1]).toMatchObject({ role: "assistant", tool_calls: history[1].tool_calls });
+    expect(body.messages[2]).toEqual({ role: "tool", tool_call_id: "call_a", content: '{"ok":true}' });
+    // A picture goes with the person's newest turn, even when a tool's result comes after it.
+    const pic = chatBody({ ...job, images: [JPEG_B64] }, {});
+    expect(Array.isArray(pic.messages[0].content)).toBe(true);
+    expect(pic.messages[2].content).toBe('{"ok":true}');
+  });
+
+  it("puts streamed tool calls together from their pieces", () => {
+    const lines = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"make_pic","arguments":""}}]}}]}',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"ture","arguments":"{\\"pro"}}]}}]}',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"mpt\\":1}"}}]}}]}',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_2","function":{"name":"remove_background","arguments":"{}"}}]}}]}',
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+    ].map(streamedPart);
+    expect(lines.at(-1)!.finish).toBe("tool_calls");
+    expect(callsOf(joinCalls(lines.flatMap((l) => l.calls)))).toEqual([
+      { id: "call_1", name: "make_picture", arguments: '{"prompt":1}' },
+      { id: "call_2", name: "remove_background", arguments: "{}" },
+    ]);
+    expect(callsOf([{ function: { name: "x", arguments: { a: 1 } } }])).toEqual([{ id: "call_1", name: "x", arguments: '{"a":1}' }]);
+  });
+
+  it("says it takes tools, and sends the calls it streamed with why it stopped (no words go as partials)", async () => {
+    const site = studio([{ id: "hlp_t", lease: "Lt", user: "Make a cat", maxTokens: 900, messages: history, stream: true, tools } as never]);
+    const { s } = makeSlot(site.call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => site.answers.length === 1);
+    expect(site.claims[0]).toMatchObject({ chat: true, tools: true });
+    const a = site.answers[0].body as { text: string; toolCalls: { id: string; name: string; arguments: string }[]; finish: string };
+    expect(a).toMatchObject({ lease: "Lt", text: "", finish: "tool_calls" });
+    expect(a.toolCalls).toHaveLength(1);
+    expect(a.toolCalls[0]).toMatchObject({ id: "call_x1", name: "make_picture" });
+    expect(JSON.parse(a.toolCalls[0].arguments)).toMatchObject({ prompt: '{"ok":true}', turns: ["system", "user", "assistant+calls", "tool:call_a"], tools: 2 });
+    expect(site.partials.every((p) => p.text === "")).toBe(true);
+  });
+
+  it("not streamed: the calls come back the same way, and a chat's answer says why it stopped", async () => {
+    const site = studio([
+      { id: "hlp_u", lease: "Lu", user: "Cut her out", maxTokens: 900, messages: [{ role: "user", content: "Cut her out" }], tools, toolChoice: { type: "function", function: { name: "remove_background" } } } as never,
+      { id: "hlp_w", lease: "Lw", user: "Hi", maxTokens: 900, messages: [{ role: "user", content: "Hi" }] } as never,
+    ]);
+    const { s } = makeSlot(site.call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => site.answers.length === 2);
+    expect(site.answers[0].body).toMatchObject({ text: "", finish: "tool_calls", toolCalls: [{ id: "call_x1", name: "remove_background" }] });
+    expect(site.answers[1].body).toMatchObject({ finish: "stop" });
+    expect(site.answers[1].body).not.toHaveProperty("toolCalls");
   });
 });
