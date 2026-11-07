@@ -49,8 +49,8 @@ describe("hardware items: what a visitor sees", () => {
       expect(o!.need, id).toBe("gpu");
       for (const words of [ownSetupLabel(o!), ownSetupShort(o!), ownSetupDetail(o!)]) expect(words, id).not.toMatch(BANNED);
     }
-    expect(ownSetupLabel(ownSetupOnly("regenerate:upscale")!)).toBe("Runs on your own GPU · 48 GB");
-    expect(ownSetupLabel(ownSetupOnly("oss-kandinsky6:pro")!)).toBe("Runs on your own GPU · 80 GB");
+    expect(ownSetupLabel(ownSetupOnly("regenerate:upscale")!)).toBe("Self-hosted");
+    expect(ownSetupLabel(ownSetupOnly("oss-kandinsky6:pro")!)).toBe("Self-hosted");
     // Kandinsky 6.0 itself (Lite) runs as any other open model.
     expect(ownSetupOnly("oss-kandinsky6")).toBeNull();
   });
@@ -68,7 +68,7 @@ describe("hardware items: what a visitor sees", () => {
     const src = fs.readFileSync("src/components/cinema/prompt-bar.tsx", "utf8");
     expect(src).toMatch(/<OwnSetupChip setup="fly-around:exact-orbit"/);
     const o = ownSetupOnly("fly-around:exact-orbit")!;
-    expect(ownSetupLabel(o)).toBe("Runs on your own GPU · 48 GB or fal.ai key");
+    expect(ownSetupLabel(o)).toBe("Self-hosted");
     for (const words of [ownSetupLabel(o), ownSetupShort(o), ownSetupDetail(o)]) expect(words).not.toMatch(BANNED);
     expect(ownSetupStep(o, { kind: "guest" })).toEqual({ kind: "sign-up" });
     expect(ownSetupStep(o, { kind: "account", gpu: { connected: false }, keys: ["fal"] })).toEqual({ kind: "run" });

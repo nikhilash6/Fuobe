@@ -32,7 +32,7 @@ describe("own setup: the marks follow the GPU checks", () => {
     expect(graphsReady("nano-banana-pro", manifest(true))).toBe(false);
     const o = ownSetupOnly("cinema:world");
     expect(o).not.toBeNull();
-    expect(ownSetupLabel(o!)).toBe("Runs on your own GPU · 24 GB");
+    expect(ownSetupLabel(o!)).toBe("Self-hosted");
     expect(ownSetupLabel(o!)).not.toMatch(BANNED);
   });
 

@@ -197,18 +197,18 @@ export function runOnPool<T>(accountId: string | null, fn: () => T): T {
  * Words for runs on this install's GPUs, with the name visitors read for them (`place`, src/server/place-name.ts). Every
  * sentence fits any name: no verb agrees with it.
  *
- * What these GPUs don't run is a label, never a refusal: the price slot says where it runs ("Runs on your own GPU"), its
+ * What these GPUs don't run is a label, never a refusal: the price slot says where it runs ("Self-hosted"), its
  * tooltip says what to do (hostedDetails), and Run opens the way there (Connect your GPU, or a guest's sign-up). The
  * same labels for a guest and an account.
  */
 export function hostedWords(place: Place) {
   return {
-    notOffered: "Runs on your own GPU",
-    loras: "LoRAs run on your own GPU",
-    files: "This style runs on your own GPU",
-    inputs: "This file runs on your own GPU",
-    rtxCard: "Runs on your own RTX GPU",
-    size: "This size runs on your own GPU",
+    notOffered: "Self-hosted",
+    loras: "LoRAs run self-hosted",
+    files: "This style runs self-hosted",
+    inputs: "This file runs self-hosted",
+    rtxCard: "Self-hosted · RTX GPU",
+    size: "This size runs self-hosted",
     notHosted: `Your account can't run on ${place.text} right now. Your own GPU or key still works.`,
   };
 }

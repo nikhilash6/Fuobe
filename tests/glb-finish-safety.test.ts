@@ -12,7 +12,7 @@ const { saveFile } = await import("@/server/storage");
 const { asAccount, createGenerations } = await import("@/server/generations");
 const { db } = await import("@/server/db");
 const { withRunStamp } = await import("@/server/run-stamp");
-const MODEL3D_LABEL = "Runs on your own GPU · 24 GB";
+const MODEL3D_LABEL = "Self-hosted";
 afterAll(() => {
   delete process.env.FUOBE_TEST_SECRET;
 });

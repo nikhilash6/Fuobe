@@ -191,7 +191,7 @@ describe("hosted runs on", () => {
     const steps = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
     const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);
     expect(place.kind).toBe("refuse");
-    if (place.kind === "refuse") expect(place.refusal.body).toMatchObject({ code: "connect-gpu", error: "Runs on your own GPU", ownSetup: { need: "gpu" } });
+    if (place.kind === "refuse") expect(place.refusal.body).toMatchObject({ code: "connect-gpu", error: "Self-hosted", ownSetup: { need: "gpu" } });
     const before = reserves();
     const rows = stored("none").length;
     const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, { tool: "test", files: [], plan: () => steps, start: () => createGenerations(steps[0].request) });
@@ -199,7 +199,7 @@ describe("hosted runs on", () => {
     // Its label, and the answer opens Connect your GPU.
     if (!r.ok) {
       expect(r.response.headers.get("x-fuobe-connect-gpu")).toBe("1");
-      expect((await r.response.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "Runs on your own GPU" });
+      expect((await r.response.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "Self-hosted" });
     }
     expect(reserves()).toBe(before);
     expect(stored("none").length).toBe(rows);
@@ -512,7 +512,7 @@ describe("hosted runs on", () => {
     expect(place.kind).toBe("refuse");
     if (place.kind === "refuse") {
       expect(place.refusal.body.code).toBe("connect-gpu");
-      expect(place.refusal.body.error).toMatch(/^Runs on your own GPU · \d+ GB$/);
+      expect(place.refusal.body.error).toMatch(/^Self-hosted$/);
       expect(place.refusal.body.ownSetup).toMatchObject({ need: "gpu" });
       expect(place.refusal.body.error).not.toBe(OWN_GPU_TOOL_MESSAGE);
     }

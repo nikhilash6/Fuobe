@@ -19,7 +19,9 @@ const source = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8
 
 describe("the own-setup chip in the result panel", () => {
   it("short=always says only the short words, at every width", () => {
-    const o = ownSetupOnly("video-tools:restore")!;
+    // A key's label has longer words than its short one (a GPU's are the same: "Self-hosted").
+    const o = ownSetupOnly("lyria-3-5", "cloud")!;
+    expect(ownSetupShort(o)).not.toBe(ownSetupLabel(o));
     const html = renderToStaticMarkup(createElement(OwnSetupChip, { setup: o, short: "always" }));
     expect(html).toContain(ownSetupShort(o));
     expect(html).not.toContain(`>${ownSetupLabel(o)}<`);

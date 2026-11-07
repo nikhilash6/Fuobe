@@ -389,7 +389,7 @@ export const REGEN_COPY = {
   /** The owner's GPU line (the install detail is theirs to act on). */
   gpu: "About 3 minutes per 5 s at 2K on a 72 GB GPU. Needs about 40 GB of new files (OPEN_H3_REGEN=1 in install-comfyui.sh).",
   /** The same line for guests and accounts. */
-  gpuVisitor: "Runs on your own GPU · about 3 minutes per 5 s at 2K",
+  gpuVisitor: "Self-hosted · about 3 minutes per 5 s at 2K",
   /** Results are 16:9 or 9:16 whatever the clip's shape. */
   shape: "Comes out 16:9, or 9:16 for a tall clip: other shapes are cropped to fit.",
   /** The owner's refusal when the server's ComfyUI lacks the nodes. */

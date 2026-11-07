@@ -1,5 +1,5 @@
 import type { GenParams, ModelDef, Operation } from "./catalog/types";
-import { keyName, type OwnSetup } from "./own-setup";
+import { keyName, ownSetupLabel, type OwnSetup } from "./own-setup";
 import { modelOwnSetup, runsGoHere, type PoolRules } from "./pool-rules";
 
 /**
@@ -52,29 +52,30 @@ export function hereSetup(here: Here | null | undefined, m: Pick<ModelDef, "id" 
 export const runsHere = (here: Here | null | undefined, m: Pick<ModelDef, "id" | "kind" | "engine">): boolean => !hereSetup(here, m);
 
 /**
- * The short positive tag on a "More models" row: "With your GPU · 24 GB", "With your fal.ai key", "With your GPU or
- * fal.ai key"; the owner's "Add to a worker".
+ * The short positive tag on a "More models" row: the own-setup label ("Self-hosted", "Self-hosted · your fal.ai key");
+ * the owner's "Add to a worker".
  */
 export function hereTag(o: OwnSetup, owner = false): string {
-  if (owner) return "Add to a worker";
-  if (o.need === "key") return `With your ${keyName(o.provider)} key`;
-  if (o.orKey) return `With your GPU or ${keyName(o.orKey)} key`;
-  return `With your GPU${o.vramGb ? ` · ${o.vramGb} GB` : ""}`;
+  return owner ? "Add to a worker" : ownSetupLabel(o);
 }
 
-/** The link under the free alternative, to the model's own setup: "Use LTX-2.5 with your own GPU" (the owner: a worker). */
-export function hereOwnLink(name: string, o: OwnSetup, owner = false): string {
-  if (owner) return `Add ${name} to a worker`;
-  if (o.need === "key") return `Use ${name} with your ${keyName(o.provider)} key`;
-  if (o.orKey) return `Use ${name} with your own GPU or key`;
-  return `Use ${name} with your own GPU`;
+/** The link under the free alternative, to the model's own setup (Connect your GPU, Add your key, a guest's sign-up). */
+export const HERE_SET_UP = "Set it up";
+
+/**
+ * The primary button's words for the free alternative: "Run free on Fuobe Cloud with MiniMax H3" (the owner's runs are
+ * his: "Run with MiniMax H3").
+ */
+export const hereRunLabel = (alt: Pick<ModelDef, "name">, place: string, owner = false): string => (owner ? `Run with ${alt.name}` : `Run free on ${place} with ${alt.name}`);
+
+/**
+ * The line under it: "LTX-2.5 runs self-hosted for now — on your own GPU or with your own key." (what runs it: a GPU, a
+ * key, or either); the owner's: add its files to a worker.
+ */
+export function hereReason(m: Pick<ModelDef, "name">, o: OwnSetup, owner = false): string {
+  const how = owner ? "add its files to a worker" : o.need === "key" ? `with your own ${keyName(o.provider)} key` : o.orKey ? "on your own GPU or with your own key" : "on your own GPU";
+  return `${m.name} runs self-hosted for now — ${how}.`;
 }
-
-/** The primary button's words for the free alternative: "Run free with LTX-2.3" (the owner's runs are his: "Run with"). */
-export const hereRunLabel = (alt: Pick<ModelDef, "name">, owner = false): string => `${owner ? "Run with" : "Run free with"} ${alt.name}`;
-
-/** The one-line reason beside it: "LTX-2.5 isn't on Fuobe Cloud yet". */
-export const hereReason = (m: Pick<ModelDef, "name">, place: string): string => `${m.name} isn't on ${place} yet`;
 
 /** What the draft asks for that a stand-in should keep: its operation, settings and how many pictures it sends. */
 export interface HereAsk {

@@ -54,7 +54,7 @@ const { EngineSwitch, engineTip } = await import("@/components/studio/engine-swi
 const { TooltipProvider } = await import("@/components/ui/tooltip");
 
 /** Words no visitor reads about runs on this install's GPUs (acceptance check A11). */
-const FORBIDDEN = /studio's GPUs|\bworkers?\b|\blanes?\b|\btickets?\b|\bpool\b|\bhosted\b|\bqueue|\bcatalog|Press Retry|Try again later|isn't available here|Not available here|not checked|unverified|ComfyUI/i;
+const FORBIDDEN = /studio's GPUs|\bworkers?\b|\blanes?\b|\btickets?\b|\bpool\b|(?<!self-)\bhosted\b|\bqueue|\bcatalog|Press Retry|Try again later|isn't available here|Not available here|not checked|unverified|ComfyUI/i;
 
 const NAMED = placeOf("Studio North GPUs");
 const DEFAULT = placeOf(null);
@@ -146,7 +146,7 @@ function chipWords(place: ReturnType<typeof placeOf>): string[] {
       for (const p of [runPlace({ audience, engine: "open", hosted: true, models: ["Z-Image Turbo"], pool, place, format: String })]) out.push(p.label, p.price, p.title, p.tip, p.send);
   // A label (what runs on one's own GPU), and a tool for the studio's owner only.
   for (const audience of ["account", "guest"] as const) {
-    const labelled = runPlace({ audience, engine: "open", hosted: true, pool: { text: "Runs on your own GPU · 48 GB", refused: true, setup: { need: "gpu", vramGb: 48 } }, place, format: String });
+    const labelled = runPlace({ audience, engine: "open", hosted: true, pool: { text: "Self-hosted", refused: true, setup: { need: "gpu", vramGb: 48 } }, place, format: String });
     const ownerOnly = runPlace({ audience, engine: "cloud", hosted: true, ownerOnly: "Ads Studio", place, format: String });
     for (const p of [labelled, ownerOnly]) out.push(p.label, p.price, p.title, p.tip, p.send);
   }

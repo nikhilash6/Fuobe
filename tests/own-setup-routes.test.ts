@@ -84,8 +84,8 @@ describe("the label follows the GPU's validated graphs on the server", () => {
     }
     expect(ownSetupsNow(Object.keys(want), m)).toEqual(want);
     // Their labels say what to use, and wait for a pass of their own in gpu-tested.json (own-setup-flags.test.ts).
-    expect(ownSetupLabel(ownSetupOnly("video-tools:remove-object-void")!)).toBe("Runs on your own GPU · 40 GB");
-    expect(ownSetupLabel(ownSetupOnly("video-tools:remove-person")!)).toBe("Runs on your own GPU · 24 GB");
+    expect(ownSetupLabel(ownSetupOnly("video-tools:remove-object-void")!)).toBe("Self-hosted");
+    expect(ownSetupLabel(ownSetupOnly("video-tools:remove-person")!)).toBe("Self-hosted");
   });
 });
 

@@ -63,8 +63,8 @@ describe("Image to 3D's extra steps: the labels follow the manifest", () => {
       expect(ownSetupGraphs(id), id).toEqual([GRAPHS[id]]);
       for (const words of [ownSetupLabel(o!), ownSetupShort(o!), ownSetupDetail(o!)]) expect(words, id).not.toMatch(BANNED);
     }
-    expect(ownSetupLabel(ownSetupOnly("image-to-3d:hi3d-refine")!)).toBe("Runs on your own GPU · 24 GB");
-    expect(ownSetupLabel(ownSetupOnly("image-to-3d:idol-other-sides")!)).toBe("Runs on your own GPU · 8 GB");
+    expect(ownSetupLabel(ownSetupOnly("image-to-3d:hi3d-refine")!)).toBe("Self-hosted");
+    expect(ownSetupLabel(ownSetupOnly("image-to-3d:idol-other-sides")!)).toBe("Self-hosted");
   });
 
   it("keeps a step's label until its graph is validated, then drops it", async () => {
@@ -112,10 +112,10 @@ describe("Image to 3D's extra steps show to everyone", () => {
       const r = await render(refine, setups);
       expect(r).toContain("Refine detail · Hi3D 1.0");
       expect(r).toContain('data-slot="own-setup"');
-      expect(r).toContain("Runs on your own GPU · 24 GB");
+      expect(r).toContain("Self-hosted");
       const s = await render(sides, setups);
       expect(s).toContain("Make the other sides from the front (Idol 3D)");
-      expect(s).toContain("Runs on your own GPU · 8 GB");
+      expect(s).toContain("Self-hosted");
       for (const html of [r, s]) expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(BANNED);
     }
     // Once the graphs are validated (the page passes null), the steps show with no label.

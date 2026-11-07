@@ -38,7 +38,7 @@ import { PlaceIntro } from "./place-intro";
 import { PoolNote } from "./pool-note";
 import { EndFrameNote } from "./end-frame-note";
 import { modelOwnSetup, pickerRules } from "@/lib/pool-rules";
-import { carryParams, closestHere, hereDefault, hereOwnLink, hereReason, hereRunLabel, hereSetup, runsHere } from "@/lib/runnable-here";
+import { carryParams, closestHere, HERE_SET_UP, hereDefault, hereReason, hereRunLabel, hereSetup, runsHere } from "@/lib/runnable-here";
 import { useHere } from "@/hooks/use-pool-rules";
 import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
@@ -2224,7 +2224,7 @@ export function Composer({ docked }: { docked: boolean }) {
             className="h-10 min-w-0 shrink gap-1.5 rounded-full px-4 text-[13px] font-medium max-sm:w-full"
           >
             {altRun || create.isPending ? <Loader2 className="motion-spinner size-4 shrink-0" /> : <ArrowUp className="size-4 shrink-0" />}
-            <span className="truncate">{hereRunLabel(hereAlt, here?.owner)}</span>
+            <span className="truncate">{hereRunLabel(hereAlt, sitePlace.text, here?.owner)}</span>
           </Button>
         ) : (
         <Tooltip>
@@ -2263,10 +2263,10 @@ export function Composer({ docked }: { docked: boolean }) {
       <div aria-live="polite">
         {hereAlt && hereNeed && model && (
           <p data-here-alt className="flex flex-wrap items-center gap-x-2 px-2 text-[12px] text-muted-foreground">
-            <span className="inline-flex min-h-6 items-center">{hereReason(model, here?.owner ? "a worker" : sitePlace.text)}</span>
+            <span className="inline-flex min-h-6 items-center">{hereReason(model, hereNeed, here?.owner)}</span>
             {here?.owner ? (
               <Link href="/settings/workers" className="inline-flex min-h-6 items-center font-medium text-brand-text underline-offset-2 hover:underline">
-                {hereOwnLink(model.name, hereNeed, true)} →
+                {HERE_SET_UP} →
               </Link>
             ) : (
               <button
@@ -2276,7 +2276,7 @@ export function Composer({ docked }: { docked: boolean }) {
                 onClick={hereOwn}
                 className="inline-flex min-h-6 items-center text-left font-medium text-brand-text underline-offset-2 hover:underline"
               >
-                {hereOwnLink(model.name, hereNeed)} →
+                {HERE_SET_UP} →
               </button>
             )}
           </p>

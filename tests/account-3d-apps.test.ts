@@ -179,7 +179,7 @@ describe("an account's 3D app runs on its own ComfyUI", () => {
 
   it("the same run stamped for this install's GPUs is refused when it is made", () => {
     const req = imageTo3dApp(photo) as Parameters<typeof createGenerations>[0];
-    expect(() => asAccount(a, () => withRunStamp({ place: "pool" }, () => createGenerations(req)))).toThrow("Runs on your own GPU · 24 GB");
+    expect(() => asAccount(a, () => withRunStamp({ place: "pool" }, () => createGenerations(req)))).toThrow("Self-hosted");
     // A place in the request itself is dropped: only the stamp in scope sets it.
     const own = asAccount(a, () => createGenerations({ ...req, place: "pool" } as never));
     expect(own[0].request.place).toBeUndefined();

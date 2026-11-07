@@ -64,7 +64,7 @@ describe("a model over the memory of this install's GPUs", () => {
     const html = rowHtml(REGEN, setup);
     expect(html).toContain('data-slot="own-setup"');
     expect(html).toContain(ownSetupLabel(setup));
-    expect(ownSetupLabel(setup)).toBe("Runs on your own GPU · 48 GB");
+    expect(ownSetupLabel(setup)).toBe("Self-hosted");
     // A model that runs here has no label.
     expect(rowHtml(H3, modelOwnSetup(undefined, H3))).not.toContain('data-slot="own-setup"');
   });
@@ -95,7 +95,7 @@ describe("a model over the memory of this install's GPUs", () => {
     expect(seen).toEqual([{ type: "fuobe:connect-gpu", detail: { action: "run", gpuOnly: true, needs: "gpu" } }]);
     // With the item's label, the card says what it needs under its title.
     openOwnSetupStep(ownSetupStep(setup, ACCOUNT), ownSetupLabel(setup));
-    expect(seen[1]?.detail).toMatchObject({ requirement: "Runs on your own GPU · 48 GB" });
+    expect(seen[1]?.detail).toMatchObject({ requirement: "Self-hosted" });
   });
 
   it("an app's own tool says the label and sends Run to the setup, never a refusal", () => {
@@ -107,7 +107,7 @@ describe("a model over the memory of this install's GPUs", () => {
     expect(account.refused).toBeUndefined();
     expect(runPlace({ audience: "guest", engine: "open", hosted: true, pool, format: String }).needs).toBe("signup");
     const key = { need: "key" as const, provider: "fal" };
-    expect(runPlace({ audience: "account", engine: "open", hosted: true, pool: checkedPool(refusedCheck(key)), format: String })).toMatchObject({ needs: "key", send: "Use your own fal.ai key" });
+    expect(runPlace({ audience: "account", engine: "open", hosted: true, pool: checkedPool(refusedCheck(key)), format: String })).toMatchObject({ needs: "key", send: "Self-hosted · your fal.ai key" });
     // Any other refusal still turns the button off with its words.
     const busy = checkedPool({ place: "pool", quote: { allowed: false, text: "Busy right now." } });
     expect(runPlace({ audience: "account", engine: "open", hosted: true, pool: busy, format: String }).refused).toBe("Busy right now.");
@@ -195,7 +195,7 @@ describe("beside a setting's value", () => {
     expect(controlSetup("oss-kandinsky6", "quality", "pro")).toBe("oss-kandinsky6:pro");
     expect(controlSetup("oss-kandinsky6", "quality", "lite")).toBeUndefined();
     expect(controlSetup("oss-minimax-h3", "quality", "pro")).toBeUndefined();
-    expect(ownSetupLabel(ownSetupOnly("oss-kandinsky6:pro")!)).toBe("Runs on your own GPU · 80 GB");
+    expect(ownSetupLabel(ownSetupOnly("oss-kandinsky6:pro")!)).toBe("Self-hosted");
     expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "pro" } } })).toContain("oss-kandinsky6:pro");
     expect(requestSetupIds({ feature: "video", modelId: "oss-kandinsky6", op: "t2v", params: { extra: { quality: "lite" } } })).not.toContain("oss-kandinsky6:pro");
   });
@@ -222,7 +222,7 @@ describe("a cloud model a visitor runs on its own key only", () => {
     expect(setup).toEqual(ownSetupOnly("mureka-extend", "cloud"));
     expect(setup).not.toBeNull();
     if (setup) {
-      expect(ownSetupLabel(setup)).toBe(`Use your own ${setup.provider === "fal" ? "fal.ai" : "Replicate"} key`);
+      expect(ownSetupLabel(setup)).toBe(`Self-hosted · your ${setup.provider === "fal" ? "fal.ai" : "Replicate"} key`);
       expect(ownSetupLabel(setup)).not.toBe(costLabel({ demo: false, cost: 0, gpu: true }, String));
     }
     // An open model, or a cloud model any key runs: no key label.

@@ -126,7 +126,7 @@ const CASES: Case[] = [
   { name: "Character Sheet", route: routes.character, url: "/api/photodump/character", body: () => ({ mode: "describe", engine: "open", prompt: "a surfer from Lisbon" }) },
   // The turnaround's angle LoRA isn't one this install's GPUs carry yet, and Fly around's path is drawn from a 3D step.
   { name: "Turnaround", route: routes.turnaround, url: "/api/turnaround", body: (pic) => ({ engine: "open", views: { front: pic, back: pic } }), ownOnly: HOSTED_WORDS.notOffered },
-  { name: "Fly around", route: routes.flyAround, url: "/api/fly-around", body: (pic) => ({ engine: "open", image: pic, orbit: { degrees: 90, direction: "cw" } }), ownOnly: /^Runs on your own GPU · \d+ GB$/ },
+  { name: "Fly around", route: routes.flyAround, url: "/api/fly-around", body: (pic) => ({ engine: "open", image: pic, orbit: { degrees: 90, direction: "cw" } }), ownOnly: /^Self-hosted$/ },
 ];
 
 describe("hosted runs off: an account's app runs as any tool run, on its own GPU", () => {

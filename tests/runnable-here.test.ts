@@ -27,7 +27,7 @@ process.env.COMFYUI_URL = comfy.url;
 
 const { MODELS } = await import("@/lib/catalog/models");
 const { groupModels } = await import("@/lib/composer");
-const { carryParams, closestHere, hereDefault, hereOf, hereOwnLink, hereReason, hereRunLabel, hereSetup, hereTag, runsHere, splitHere } = await import("@/lib/runnable-here");
+const { carryParams, closestHere, HERE_SET_UP, hereDefault, hereOf, hereReason, hereRunLabel, hereSetup, hereTag, runsHere, splitHere } = await import("@/lib/runnable-here");
 const { ownSetupOnly } = await import("@/lib/own-setup");
 
 const byId = (id: string) => MODELS.find((m) => m.id === id)!;
@@ -81,24 +81,29 @@ describe("the words", () => {
     hereTag({ need: "key", provider: "fal" }),
     hereTag({ need: "gpu", orKey: "fal" }),
     hereTag({ need: "gpu" }, true),
-    hereOwnLink("LTX-2.5", { need: "gpu", vramGb: 24 }),
-    hereOwnLink("LTX-2.5", { need: "key", provider: "fal" }),
-    hereRunLabel(H3),
-    hereReason(LTX25, "Fuobe Cloud"),
+    hereRunLabel(H3, "Fuobe Cloud"),
+    hereReason(LTX25, { need: "gpu", vramGb: 24 }),
+    hereReason(LTX25, { need: "key", provider: "fal" }),
+    hereReason(LTX25, { need: "gpu", orKey: "fal" }),
+    hereReason(LTX25, { need: "gpu" }, true),
+    HERE_SET_UP,
   ];
   it("short and positive: what runs it, never a refusal", () => {
     expect(phrases).toEqual([
-      "With your GPU · 24 GB",
-      "With your fal.ai key",
-      "With your GPU or fal.ai key",
+      "Self-hosted",
+      "Self-hosted · your fal.ai key",
+      "Self-hosted",
       "Add to a worker",
-      "Use LTX-2.5 with your own GPU",
-      "Use LTX-2.5 with your fal.ai key",
-      "Run free with MiniMax H3",
-      "LTX-2.5 isn't on Fuobe Cloud yet",
+      "Run free on Fuobe Cloud with MiniMax H3",
+      "LTX-2.5 runs self-hosted for now — on your own GPU.",
+      "LTX-2.5 runs self-hosted for now — with your own fal.ai key.",
+      "LTX-2.5 runs self-hosted for now — on your own GPU or with your own key.",
+      "LTX-2.5 runs self-hosted for now — add its files to a worker.",
+      "Set it up",
     ]);
-    for (const p of phrases) expect(p).not.toMatch(/can['’]t|cannot|not available|unavailable|unsupported/i);
-    expect(hereRunLabel(H3, true)).toBe("Run with MiniMax H3");
+    // Never a refusal, and no card memory in the main line (the detail's tooltip says it).
+    for (const p of phrases) expect(p).not.toMatch(/can['’]t|cannot|not available|unavailable|unsupported|GB/i);
+    expect(hereRunLabel(H3, "Fuobe Cloud", true)).toBe("Run with MiniMax H3");
   });
 });
 

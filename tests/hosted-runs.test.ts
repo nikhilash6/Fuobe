@@ -121,7 +121,7 @@ describe("hosted runs on", () => {
     // A label, never a refusal: the answer opens Connect your GPU, with what it needs in a header.
     expect(loras.headers.get("x-fuobe-connect-gpu")).toBe("1");
     expect(JSON.parse(decodeURIComponent(loras.headers.get("x-fuobe-own-setup") ?? "null"))).toMatchObject({ need: "gpu" });
-    expect((await loras.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "LoRAs run on your own GPU" });
+    expect((await loras.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "LoRAs run self-hosted" });
     process.env.FUOBE_BILLING_URL = fake.url;
     process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
     fake.policy = { ...fake.policy, pool: { deny: ["oss-z-image-turbo"] } };
@@ -130,7 +130,7 @@ describe("hosted runs on", () => {
     // The same: its label, and the answer opens Connect your GPU (never the billing card).
     expect(denied.headers.get("x-fuobe-billing")).toBeNull();
     expect(denied.headers.get("x-fuobe-connect-gpu")).toBe("1");
-    expect((await denied.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "Runs on your own GPU" });
+    expect((await denied.json()) as { code: string; error: string }).toMatchObject({ code: "connect-gpu", error: "Self-hosted" });
   });
 
   it("an account the policy keeps off this install's GPUs gets today's answer", async () => {
@@ -204,7 +204,7 @@ describe("hosted runs on", () => {
         const { r, body, reached } = await runs(rtx);
         expect(r.status).toBe(403);
         expect(body.code).toBe("connect-gpu");
-        expect(body.error).toBe("Runs on your own RTX GPU");
+        expect(body.error).toBe("Self-hosted · RTX GPU");
         // Visitor words: no script, switch or file names.
         expect(body.error).not.toMatch(/install-comfyui|RTX_VIDEO|scripts\/|\.sh\b/);
         expect(reached).not.toContain("/v1/quote");
@@ -220,7 +220,7 @@ describe("hosted runs on", () => {
       // Frame generation needs an RTX 40 series card or newer: an RTX 3090 is refused, an RTX 4070 isn't.
       check({ name: "cuda:0 NVIDIA GeForce RTX 3090 : cudaMallocAsync", type: "cuda" });
       const fg = { feature: "fps-boost", modelId: "oss-rtx-frame-generation", op: "interpolate", inputs: { video: url }, params: { targetFps: 60 } };
-      expect((await runs(fg)).body).toMatchObject({ code: "connect-gpu", error: "Runs on your own RTX GPU" });
+      expect((await runs(fg)).body).toMatchObject({ code: "connect-gpu", error: "Self-hosted · RTX GPU" });
       check({ name: "cuda:0 NVIDIA GeForce RTX 4070 : cudaMallocAsync", type: "cuda" });
       expect((await runs(fg)).body.code).not.toBe("connect-gpu");
       // A card the name doesn't tell (a data-centre card) is never refused for its name.

@@ -165,23 +165,16 @@ export const keyName = (p: string): string => KEY_NAME[p] ?? p;
 export const MODEL3D_SETUP: OwnSetup = { need: "gpu", vramGb: 24 };
 
 /**
- * The label next to an item: "Runs on your own GPU · 48 GB", "Set up on your computer", "Use your own
- * fal.ai key". Plain and positive: what to use, never why.
+ * The label next to an item: "Self-hosted", or "Self-hosted · your fal.ai key" where only a key runs it. Plain and
+ * positive: what it is, never why; the card's memory and the steps are the detail's (ownSetupDetail).
  */
 export function ownSetupLabel(o: OwnSetup): string {
-  if (o.need === "key") return `Use your own ${keyName(o.provider)} key`;
-  const gb = o.vramGb ? ` · ${o.vramGb} GB` : "";
-  if (o.linux) return `Runs on your own Linux GPU${gb}`;
-  if (o.orKey) return `Runs on your own GPU${gb} or ${keyName(o.orKey)} key`;
-  if (!o.vramGb && o.files) return "Set up on your computer";
-  return `Runs on your own GPU${gb}`;
+  return o.need === "key" ? `Self-hosted · your ${keyName(o.provider)} key` : "Self-hosted";
 }
 
-/** The short label where a phone has no room: "Your GPU · 48 GB", "Your fal.ai key". */
+/** The short label where a phone has no room: "Self-hosted", "Self-hosted · fal.ai key". */
 export function ownSetupShort(o: OwnSetup): string {
-  if (o.need === "key") return `Your ${keyName(o.provider)} key`;
-  if (o.orKey) return `GPU or ${keyName(o.orKey)} key`;
-  return `Your GPU${o.vramGb ? ` · ${o.vramGb} GB` : ""}`;
+  return o.need === "key" ? `Self-hosted · ${keyName(o.provider)} key` : "Self-hosted";
 }
 
 /** One sentence for a tooltip or a card: what the visitor sets up, and where. */

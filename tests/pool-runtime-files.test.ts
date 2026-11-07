@@ -139,16 +139,16 @@ describe("a run that adds files at run time, on this install's GPUs", () => {
     expect(hosted.poolTakes(endpoint)).toBe(true);
     expect(hosted.poolHasFiles(endpoint, lookFiles)).toBe(false);
     const q = await poolQuote(account, soulRun, undefined);
-    expect(q?.quote).toMatchObject({ allowed: false, code: "not-offered", text: "This style runs on your own GPU", sub: "Connect your GPU to use this style, or pick another one." });
+    expect(q?.quote).toMatchObject({ allowed: false, code: "not-offered", text: "This style runs self-hosted", sub: "Connect your GPU to use this style, or pick another one." });
     expect((q!.quote as { ownSetup?: unknown }).ownSetup).toMatchObject({ need: "gpu" });
     // The press: never a run that a worker would refuse, never the LoRAs left out; Connect your GPU instead.
     const d = await decidePlace(account, soulRun, undefined);
     expect(d.kind).toBe("refuse");
     const refusal = (d as { refusal: { body: Record<string, unknown> } }).refusal;
-    expect(refusal.body).toMatchObject({ error: "This style runs on your own GPU", code: "connect-gpu" });
+    expect(refusal.body).toMatchObject({ error: "This style runs self-hosted", code: "connect-gpu" });
     const r = await press(soulRun);
     expect(r.status).toBe(403);
-    expect(r.body).toMatchObject({ error: "This style runs on your own GPU", code: "connect-gpu" });
+    expect(r.body).toMatchObject({ error: "This style runs self-hosted", code: "connect-gpu" });
     expect(db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE state = 'waiting'").get()).toEqual({ n: 0 });
   });
 
