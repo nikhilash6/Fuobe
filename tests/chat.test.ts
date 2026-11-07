@@ -204,6 +204,14 @@ describe("an account's chats are its own", () => {
     expect((await threadRoute.GET(req(cookies.a, `/api/chat/threads/${t.id}`), ctx({ id: t.id }))).status).toBe(200);
   });
 
+  it("opens a chat's page only for its own account: anyone else gets a real 404", async () => {
+    const t = store.createThread(a, { kind: "chat", mature: false });
+    const page = (cookie?: string) => proxy(new NextRequest(`http://localhost:3000/chat/${t.id}`, { headers: { host: "localhost:3000", ...(cookie && { cookie }) } }));
+    expect((await page(cookies.a)).headers.get("x-middleware-next")).toBe("1");
+    expect((await page(cookies.b)).status).toBe(404);
+    expect((await page()).status).toBe(404);
+  });
+
   it("a guest gets the sign-up answer from the routes too", async () => {
     const r = await threadsRoute.POST(new Request("http://localhost:3000/api/chat/threads", { method: "POST", headers: { host: "localhost:3000", "content-type": "application/json" }, body: "{}" }));
     expect(r.status).toBe(401);

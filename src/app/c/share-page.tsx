@@ -7,9 +7,9 @@ import { MANGO_CHILLI } from "@/lib/chat/catalog";
 import { ADULT_OK_KEY } from "@/lib/chat/share";
 import type { ChatShareSnapshot } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
-import { CharacterFace } from "./character-face";
-import { CHILLI_BG } from "./dialogs";
-import { Markdown, ReplyBody } from "./prose";
+import { CharacterFace } from "@/components/chat/character-face";
+import { CHILLI_BG } from "@/components/chat/dialogs";
+import { Markdown, ReplyBody } from "@/components/chat/prose";
 
 /**
  * A shared chat's public page (/c/<token>): the character (or the game or tool), the shared lines, and a way in for the

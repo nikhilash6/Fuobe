@@ -10,7 +10,7 @@ import { HUB_MODES, type HubKind } from "./hubs";
 import { STARTER_IDS, starterCovered } from "./starters/ids";
 import type { StarterSurface } from "./starters/types";
 
-export type RecordKind = "cinema" | "canvas" | "assist-project" | "layers" | "shorts" | "brand" | "element" | "channel" | "episode" | "explainer" | "series" | "swap-project";
+export type RecordKind = "cinema" | "canvas" | "assist-project" | "layers" | "shorts" | "brand" | "element" | "channel" | "episode" | "explainer" | "series" | "swap-project" | "chat";
 
 /** A record a page needs, with its ids in the order the lookup takes them. */
 export interface RecordRef {
@@ -35,6 +35,7 @@ const PAGES: [RegExp, (m: string[]) => RecordRef][] = [
   [new RegExp(`^/explainer/${SEG}$`), ([id]) => ({ kind: "explainer", ids: [id] })],
   [new RegExp(`^/content-factory/${SEG}$`), ([id]) => ({ kind: "series", ids: [id] })],
   [new RegExp(`^/character-swap/${SEG}$`), ([id]) => ({ kind: "swap-project", ids: [id] })],
+  [new RegExp(`^/chat/${SEG}$`), ([id]) => ({ kind: "chat", ids: [id] })],
 ];
 
 /** Static pages that a record pattern would also match (/ads/multiplier is not a brand). */

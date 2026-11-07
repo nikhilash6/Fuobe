@@ -59,7 +59,8 @@ describe("record pages (real 404s)", () => {
     // (/canvas/saved).
     // An owner-only page that reads its id through an owner-only API (Run details: /api/admin/generations/<id> answers
     // 404 itself) isn't a record page either: a 404 from the proxy would tell anyone whether that run exists.
-    const catalog = /^\/(apps|audio|video-tools|upscale|s|canvas\/(start|try|draft|saved))\/\[|\/start\/\[id\]$|^\/settings\/runs\/\[id\]$/;
+    // A shared chat (/c/<token>) is a share token too: its page checks it.
+    const catalog = /^\/(apps|audio|video-tools|upscale|s|c|canvas\/(start|try|draft|saved))\/\[|\/start\/\[id\]$|^\/settings\/runs\/\[id\]$/;
     for (const route of routes) {
       if (!route.includes("[")) {
         expect(recordForPath(route), route).toBeNull();

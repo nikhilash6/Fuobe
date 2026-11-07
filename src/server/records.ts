@@ -18,6 +18,8 @@ const LOOKUPS: Record<RecordRef["kind"], string> = {
   explainer: "SELECT 1 FROM faceless_episodes WHERE id = ?",
   series: "SELECT 1 FROM content_series WHERE id = ?",
   "swap-project": "SELECT 1 FROM swap_projects WHERE id = ?",
+  // The owner's own chats (an account's are checked by accountRecordExists).
+  chat: "SELECT 1 FROM account_chat_threads WHERE id = ? AND account_id = 'owner'",
 };
 
 /**
@@ -55,6 +57,14 @@ const SHARED_TABLE = new Set<RecordRef["kind"]>(["channel", "episode", "explaine
  * the page's kind isn't, and the check is recordExists's). Never the owner's records or another account's.
  */
 export function accountRecordExists(ref: RecordRef, accountId: string): boolean | null {
+  // Fuobe Chat keeps every account's chats in one table, by account (src/server/chat/store.ts).
+  if (ref.kind === "chat") {
+    try {
+      return !!db().prepare("SELECT 1 FROM account_chat_threads WHERE id = ? AND account_id = ?").get(ref.ids[0], accountId);
+    } catch {
+      return true;
+    }
+  }
   const kind = ACCOUNT_KINDS[ref.kind];
   if (!kind) return null;
   try {

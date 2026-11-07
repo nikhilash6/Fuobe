@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { cache, Suspense } from "react";
-import { ChatSharePage } from "@/components/chat/share-page";
+import { ChatSharePage } from "../share-page";
 import { countsAsView } from "@/lib/share";
 import { countShareView, findChatShare } from "@/server/chat/store";
 
