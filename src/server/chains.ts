@@ -4,7 +4,7 @@ import { getModel, supportsOp } from "@/lib/catalog";
 import { MODEL3D_STEP_FEATURE, stillPromptFor3d } from "@/lib/av/model3d";
 import { HI3D_CHAIN_PARAM, HI3D_MODEL, HI3D_OP, HI3D_PARAM, chainedRefine } from "@/lib/av/hi3d";
 import { chainTiming, chainedWaitMessage, frameTimes, framesWait, planKeyframeClips, spread, type KeyframeClip } from "@/lib/catalog/keyframes";
-import { gapPrompt, MAKE_FPS, requestTiming } from "@/lib/inbetween";
+import { gapPrompt, MAKE_FPS, requestTiming, resampleGap } from "@/lib/inbetween";
 import { faceMosaicStep } from "@/lib/catalog/open-tools";
 import { planVoiceFirst } from "@/lib/av/voice-first";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
@@ -269,8 +269,19 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
         maxFrames: wf?.limits?.maxFrames,
       });
   const tail = clips.some((c) => c.to === null);
+  // A hosted gap clip made longer than the gap (Replicate's fast Wan 2.2 makes at least 81 frames) is brought down to the
+  // gap's own frames inside the film: its frames taken (every Nth, or every one), then the gap's frames put back together
+  // at 16 fps (resampleGap). The open graph makes each gap at its own length.
+  const madeFrames = animation && model.engine !== "open" ? routesFor(model, "flf2v").find((r) => r.provider !== "comfyui")?.map?.numFrames?.min : undefined;
+  const fits = clips.map((c) => (madeFrames && c.to !== null ? resampleGap(madeFrames, c.frames) : null));
   assertOneMode([
     { label: `${model.name} clips`, modelId: model.id, op: "flf2v", engine: model.engine },
+    ...(fits.some(Boolean)
+      ? [
+          { label: "Taking each clip's frames", modelId: GAP_TOOLS.frames, op: "extract-frames" as const },
+          { label: "Each gap at its own length", modelId: GAP_TOOLS.assemble, op: "images-to-video" as const },
+        ]
+      : []),
     ...(tail ? [{ label: `${model.name} after the last frame`, modelId: model.id, op: "i2v" as const, engine: model.engine }] : []),
     ...(clips.length > 1 ? [{ label: "Joining the clips", modelId: joinModelId(model.engine), op: "concat" as const }] : []),
   ]);
@@ -289,6 +300,8 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
   delete rest.endImage;
   const n = clips.length;
   const made: Generation[] = [];
+  // What the film joins: each gap's clip, or the clip brought down to the gap's length.
+  const parts: string[] = [];
   try {
     for (const [i, c] of clips.entries()) {
       const label = c.to === null ? `After frame ${c.from + 1}` : `Frames ${c.from + 1} → ${c.to + 1}`;
@@ -317,11 +330,48 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
         params: { ...params, duration: c.seconds, numOutputs: 1 },
         ...(n > 1 ? { step: { label, index: i, of: n + 1 } } : {}),
       };
-      made.push(createGenerations(request, { batchId, ...(after.length && { dependsOn: after }) })[0]);
+      const clip = createGenerations(request, { batchId, ...(after.length && { dependsOn: after }) })[0];
+      made.push(clip);
+      const fit = fits[i];
+      if (!fit || !madeFrames) {
+        parts.push(clip.id);
+        continue;
+      }
+      const taken = Math.floor((madeFrames - 1) / fit.interval) + 1;
+      const tool = { feature: original.feature, ...(original.demo && { demo: true }) };
+      const frameStep = createGenerations(
+        {
+          ...tool,
+          modelId: GAP_TOOLS.frames,
+          op: "extract-frames",
+          // JPEG frames at 95: a tenth of the bytes of PNG, as Mixed Media sends them (each frame is downloaded and sent on).
+          params: { frameInterval: fit.interval, extra: { max_frames: taken, output_format: "jpg", quality: 95 } },
+          chain: [{ slot: "video" }],
+          ...(n > 1 ? { step: { label: `${label} · frames`, index: i, of: n + 1 } } : {}),
+        },
+        { batchId, dependsOn: clip.id },
+      )[0];
+      made.push(frameStep);
+      const gap = createGenerations(
+        {
+          ...tool,
+          modelId: GAP_TOOLS.assemble,
+          op: "images-to-video",
+          ...(n === 1 && { title: original.title?.trim() || tidy(original.prompt) || "Animation" }),
+          params: { fps: MAKE_FPS },
+          chain: fit.picks.map((index) => ({ slot: "images" as const, index, of: taken })),
+          ...(n > 1 ? { step: { label: `${label} · ${c.frames} frames`, index: i, of: n + 1 } } : {}),
+        },
+        { batchId, dependsOn: fit.picks.map(() => frameStep.id) },
+      )[0];
+      made.push(gap);
+      parts.push(gap.id);
     }
+    // One gap brought down to its length: that clip is the film.
+    if (n === 1 && parts[0] !== made[0].id) return withAsked([made.find((g) => g.id === parts[0])!, ...made.filter((g) => g.id !== parts[0])], original, model.engine);
     if (n === 1) return withAsked(made, original, model.engine);
     const film = joinClips(
-      made.map((c) => c.id),
+      parts,
       {
         engine: model.engine,
         feature: original.feature,
@@ -340,6 +390,9 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
     throw e;
   }
 }
+
+/** fal's FFmpeg tools that bring a hosted gap clip down to the gap's own frames (createKeyframeFilm). */
+const GAP_TOOLS = { frames: "extract-frames", assemble: "images-to-video" } as const;
 
 /** Where a frame an earlier step makes sits while the film is checked (it is never sent). */
 const WAITING_FRAME = "/api/files/placeholder.png";

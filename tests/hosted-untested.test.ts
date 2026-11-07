@@ -118,7 +118,7 @@ describe("hosted routes without a live call", () => {
     expect(song?.ownSetup).toBe("mureka-extend");
     // The Original's cloud half needs the key; its open half runs as before.
     expect(ownSetupOnly("fuobe-animation")).toBeNull();
-    expect(ownSetupOnly("fuobe-animation", "cloud")).toEqual({ need: "key", provider: "fal" });
+    expect(ownSetupOnly("fuobe-animation", "cloud")).toEqual({ need: "key", provider: "replicate" });
   });
 });
 

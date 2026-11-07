@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { keyTimes, WORKFLOW_TIMING } from "@/lib/inbetween";
+import { keyTimes, resampleGap, WORKFLOW_TIMING } from "@/lib/inbetween";
 import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Animation's runs in demo mode (no keys, no GPU): one row on your GPU, one clip per gap and a join in the cloud.
@@ -56,14 +56,24 @@ describe("Fuobe Animation runs", () => {
       params: { aspectRatio: "16:9", keyframeTimes: keyTimes(timing), extra: { inbetween: timing, stillMouth: true } },
     });
     expect(film).toMatchObject({ op: "concat" });
-    expect(clips.map((c) => c.op)).toEqual(["flf2v", "flf2v"]);
-    expect(clips.map((c) => c.request.params?.duration)).toEqual([2, 1]);
-    expect(clips.map((c) => c.request.prompt)).toEqual(["a fox leaps. it lands. mouth does not move", "a fox leaps. mouth does not move"]);
-    expect(clips.every((c) => c.request.params?.extra?.inbetween === undefined)).toBe(true);
-    expect(clips.map((c) => [c.request.inputs?.images, c.request.inputs?.endImage])).toEqual([
+    const gaps = clips.filter((c) => c.op === "flf2v");
+    expect(gaps.map((c) => c.request.params?.duration)).toEqual([2, 1]);
+    expect(gaps.map((c) => c.request.prompt)).toEqual(["a fox leaps. it lands. mouth does not move", "a fox leaps. mouth does not move"]);
+    expect(gaps.every((c) => c.request.params?.extra?.inbetween === undefined)).toBe(true);
+    expect(gaps.map((c) => [c.request.inputs?.images, c.request.inputs?.endImage])).toEqual([
       [[images[0]], images[1]],
       [[images[1]], images[2]],
     ]);
+    // Replicate makes 81 frames a clip: each gap is brought down to its own frames (33: 80 / 32 isn't whole, so
+    // every frame is taken and the nearest picked; 17: every 5th), put back together at 16 fps, then the film is joined.
+    expect(clips.map((c) => c.op)).toEqual(["flf2v", "extract-frames", "images-to-video", "flf2v", "extract-frames", "images-to-video"]);
+    const taken = clips.filter((c) => c.op === "extract-frames");
+    expect(taken.map((c) => c.request.params?.frameInterval)).toEqual([1, 5]);
+    const back = clips.filter((c) => c.op === "images-to-video");
+    expect(back.map((c) => c.request.chain?.length)).toEqual([33, 17]);
+    expect(back.map((c) => c.request.params?.fps)).toEqual([16, 16]);
+    expect(back[0].request.chain?.map((s) => s.index)).toEqual(resampleGap(81, 33)!.picks);
+    expect(back[1].request.chain?.map((s) => s.index)).toEqual(Array.from({ length: 17 }, (_, i) => i));
     expect((await settle(film.id, 60_000)).status).toBe("succeeded");
   }, 70_000);
 

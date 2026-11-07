@@ -1431,6 +1431,13 @@ function outputFramesPrice(o: NonNullable<Pricing["outputFrames"]>, params: GenP
  * at `now` (./promo): the clock when not given (the server planning a run, the browser after it hydrates); with null (a
  * page prerendering, the browser before it hydrates) a launch-priced model's price isn't known yet (null).
  */
+/** A keyframe animation's gaps: its timing's (params.extra.inbetween), else one between each two keyframe times, else one. */
+function filmGaps(params: GenParams): number {
+  const gaps = (params.extra?.inbetween as { gaps?: unknown[] } | undefined)?.gaps;
+  if (Array.isArray(gaps) && gaps.length) return gaps.length;
+  return Math.max(1, (params.keyframeTimes?.length ?? 0) - 1);
+}
+
 export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: Operation, withLoras = false, now?: PriceClock): number | null {
   if (model.engine === "open" || !model.pricing) return model.engine === "open" ? 0 : null;
   const p = pricingOn(model.pricing, now);
@@ -1451,6 +1458,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   // A voice cleaned (DeepFilterNet 3, VEED) is billed on the recording's length (params.sourceDuration: its header).
   const audioClip = op && AUDIO_LENGTH_OPS.has(op) && params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration : undefined;
   if (p.unit === "image") per = usd * n;
+  // A keyframe film billed per clip (Fuobe Animation on Replicate: one clip a gap, whatever its length).
+  if (p.unit === "video" && op === "keyframes" && model.options.inbetween) per = usd * filmGaps(params);
   // Per image by tier, but per megapixel with LoRAs (fal's FLUX 3 Klein /lora): the route's size in megapixels.
   if (withLoras && p.withLorasPerMegapixel !== undefined) per = p.withLorasPerMegapixel * (routeMegapixels(model, params, op) ?? sentMegapixels(params) ?? 1) * n;
   // Per megapixel of every image made: Soul's sizes are known (about 1 or 2 MP), so is a size sent as fal's image_size

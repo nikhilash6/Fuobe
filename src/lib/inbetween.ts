@@ -83,6 +83,22 @@ export function keptFrames(t: Pick<InbetweenTiming, "gaps">): number[] {
   return t.gaps.map((g, i) => gapSelection(g).kept + (i === 0 ? 1 : 0));
 }
 
+/**
+ * A gap made longer than its own length, brought down to it inside the film (the cloud: Replicate's fast Wan 2.2 makes at
+ * least 81 frames a clip, so a 17-frame gap is made as 81). `interval`: take every Nth made frame (1: every frame); `picks`:
+ * which of the frames taken make the gap, in order. Where the made length divides evenly (81 → 17, 21, 41: every 5th, 4th,
+ * 2nd) the frames taken are the gap exactly; otherwise every frame is taken and each of the gap's frames is the nearest
+ * made frame at its place in time (first and last land on the clip's first and last, the two keyframes). Null when the
+ * clip is already the gap's length.
+ */
+export function resampleGap(made: number, frames: number): { interval: number; picks: number[] } | null {
+  if (!(made > frames) || frames < 2) return null;
+  const span = made - 1;
+  const steps = frames - 1;
+  if (span % steps === 0) return { interval: span / steps, picks: Array.from({ length: frames }, (_, i) => i) };
+  return { interval: 1, picks: Array.from({ length: frames }, (_, i) => Math.round((i * span) / steps)) };
+}
+
 /** The film's frame count: keyframe 1, then every gap's kept frames. */
 export function totalFrames(t: Pick<InbetweenTiming, "gaps">): number {
   return t.gaps.length ? keptFrames(t).reduce((a, b) => a + b, 0) : 0;

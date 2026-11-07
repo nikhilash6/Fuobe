@@ -2888,10 +2888,11 @@ function original(spec: { id: string; open: ModelRoute[]; options: ModelOptions;
 }
 
 /**
- * Fuobe Animation's hosted gap clip (fal's Wan 2.2 A14B start/end-frame route): the cloud film's chained route takes
- * LoRAs the way each gap's clip does, so the run keeps AniSora when it is planned and each gap sends it to `/lora`.
+ * Fuobe Animation's hosted gap clip (Replicate's fast Wan 2.2 A14B, start and last image): the cloud film's chained route
+ * takes LoRAs the way each gap's clip does (one per expert), so the run keeps AniSora when it is planned and each gap
+ * sends it as the high-noise expert's weights.
  */
-const ANIMATION_GAP = ORIGINAL_HALVES.get("fuobe-animation")?.routes.find((r) => r.op === "flf2v" && r.provider === "fal");
+const ANIMATION_GAP = ORIGINAL_HALVES.get("fuobe-animation")?.routes.find((r) => r.op === "flf2v" && r.provider === "replicate");
 
 /** Fuobe DoP on both engines: a start frame (and an end frame for a transition), 3 or 5 s (49 or 81 frames at 16 fps on Wan). */
 const DOP_OPTIONS: ModelOptions = {
@@ -2981,7 +2982,7 @@ const originals: ModelDef[] = [
     ...original({
       id: "fuobe-animation",
       open: [comfy("keyframes", "wan22-inbetween-anisora", "every gap on one set of loaders: AniSora 3.2 + lightx2v 4 steps, every Nth frame, one video")],
-      tagline: "Keyframes in, the in-betweens drawn, one finished animation · Wan 2.2 + AniSora free on your GPU (24 GB), or hosted on fal",
+      tagline: "Keyframes in, the in-betweens drawn, one finished animation · Wan 2.2 + AniSora free on your GPU (24 GB), or hosted on Replicate",
       options: {
         inbetween: true,
         aspectRatios: ["auto", ...VID_AR],
@@ -2999,12 +3000,12 @@ const originals: ModelDef[] = [
       ...(ORIGINAL_HALVES.get("fuobe-animation")?.routes ?? []),
       {
         op: "keyframes",
-        provider: "fal",
-        endpoint: "fal-ai/wan/v2.2-a14b/image-to-video",
+        provider: "replicate",
+        endpoint: "wan-video/wan-2.2-i2v-fast",
         chained: true,
-        note: "one hosted clip per gap with AniSora, joined",
+        note: "one hosted clip per gap with AniSora, each brought to its gap's frames, joined",
         // Without a LoRA field here the planner leaves AniSora out of the film and refuses it (prepare's lost-LoRA check).
-        ...(ANIMATION_GAP?.map?.loras && { loraEndpoint: ANIMATION_GAP.loraEndpoint, map: { loras: ANIMATION_GAP.map.loras } }),
+        ...(ANIMATION_GAP?.map?.loras && { map: { loras: ANIMATION_GAP.map.loras } }),
       },
     ],
     engineDefaults: { open: { resolution: "720p" } },

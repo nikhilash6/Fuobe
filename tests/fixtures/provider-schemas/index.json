@@ -49,6 +49,7 @@
   ],
   "replicate": [
     "minimax/h3-highspeed",
-    "minimax/h3-lite"
+    "minimax/h3-lite",
+    "wan-video/wan-2.2-i2v-fast"
   ]
 }

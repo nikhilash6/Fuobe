@@ -65,7 +65,7 @@ export const HOSTED_UNTESTED_ENDPOINTS: ReadonlySet<string> = new Set([
   "fal-ai/wan/v2.7/text-to-image",
 ]);
 
-/** Models whose hosted routes are new even where the endpoint isn't (Fuobe Animation's LoRA run on Wan 2.2 A14B). */
+/** Models whose hosted routes are new even where the endpoint isn't (Fuobe Animation's AniSora film on Replicate's fast Wan 2.2). */
 export const HOSTED_UNTESTED_MODELS: ReadonlySet<string> = new Set(["fuobe-animation"]);
 
 const hosted = (r: Pick<ModelRoute, "provider">) => r.provider === "fal" || r.provider === "replicate";

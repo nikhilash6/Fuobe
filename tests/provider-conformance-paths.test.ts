@@ -5,8 +5,8 @@
  * - Mureka's files/upload: the upload's own body ({file_url, purpose}) and the id its answer gives; a song of Mureka's own
  *   going by its song_id instead.
  * - Clean dialogue on a video: extract-audio (FLAC), DeepFilterNet 3 and merge-audio-video, each step's body; VEED's video.
- * - Fuobe Animation's cloud film: every gap length the film sends to Wan 2.2's /lora (17-81 frames in steps of 4 at 16 fps),
- *   with the user's own LoRAs on top of AniSora.
+ * - Fuobe Animation's cloud film: every gap length the film sends to Replicate's fast Wan 2.2 (17-81 frames in steps of 4
+ *   at 16 fps, each made as 81), AniSora on the high-noise expert and a user's low-noise LoRA beside it.
  * - Songs with lyrics (Mureka, MiniMax Music 3, Lyria 3.5 in its prompt), instrumentals, and the API's limits on lengths.
  * - Pictures and clips beside the main input (Lyria's picture, Insert's references, Turbo extend's voices), each list at
  *   the catalog's own maximum, and the 12-file total.
@@ -151,12 +151,11 @@ describe("Clean dialogue on a video in the cloud: each step's body", () => {
   });
 });
 
-describe("Fuobe Animation's cloud film: every gap the film sends, against Wan 2.2's /lora schema", () => {
+describe("Fuobe Animation's cloud film: every gap the film sends, against Replicate's fast Wan 2.2 schema", () => {
   const anim = getModel("fuobe-animation")!;
-  // The user's own LoRAs (Wan 2.2 high-noise ones with a hosted copy) on top of AniSora. The schema's loras list has no
-  // maxItems; each scale must be 0 to 4 (LoRAWeight.scale).
-  const own = (n: number): LoraRef[] =>
-    Array.from({ length: n }, (_, i) => ({ file: `my-style-${i}.safetensors`, url: `https://huggingface.co/me/style-${i}/resolve/main/style.safetensors`, hostedUrl: `https://v3b.fal.media/files/loras/style-${i}.safetensors`, strength: 0.8, target: "high" }));
+  // A user's own Wan 2.2 LoRA for one expert. Replicate takes one LoRA per expert (lora_weights_transformer for high
+  // noise, _2 for low noise), by URL.
+  const own = (target: "high" | "low"): LoraRef => ({ file: `my-style-${target}.safetensors`, url: `https://huggingface.co/me/style/resolve/main/style-${target}.safetensors`, strength: 0.8, target });
 
   /** One gap's clip as createKeyframeFilm makes it: start and end frames, as long as the gap's own frames at 16 fps. */
   const gap = (frames: number, extra: Partial<Run> = {}): Run => ({
@@ -169,26 +168,28 @@ describe("Fuobe Animation's cloud film: every gap the film sends, against Wan 2.
     ...extra,
   });
 
-  it("each gap length, 17 to 81 frames in steps of 4, goes to /lora with AniSora and num_frames of that gap", () => {
+  it("each gap length, 17 to 81 frames in steps of 4, is made as 81 frames with AniSora on the high-noise expert", () => {
     for (let f = MIN_GAP_FRAMES; f <= MAX_GAP_FRAMES; f += GAP_STEP) {
       const s = sent(gap(f));
-      expect(s.endpoint, `${f}`).toBe("fal-ai/wan/v2.2-a14b/image-to-video/lora");
-      expect(s.body.num_frames, `${f}`).toBe(f);
-      expect((s.body.loras as { path: string }[]).length, `${f}`).toBe(1);
+      expect(s.endpoint, `${f}`).toBe("wan-video/wan-2.2-i2v-fast");
+      // Replicate makes 81-121 frames: the film brings the clip down to the gap's own frames (resampleGap).
+      expect(s.body.num_frames, `${f}`).toBe(81);
+      expect(s.body, `${f}`).toMatchObject({ frames_per_second: 16, interpolate_output: false, last_image: END });
+      expect(s.body.lora_weights_transformer, `${f}`).toMatch(/AniSora/);
+      expect(s.body.lora_weights_transformer_2, `${f}`).toBeUndefined();
       fits(gap(f));
     }
   });
 
-  it("the user's own LoRAs go on top of AniSora, AniSora first", () => {
-    for (const n of [1, 2, 3, 4]) {
-      const run = gap(41, { loras: own(n) });
-      const s = sent(run);
-      const loras = s.body.loras as { path: string; scale: number; transformer: string }[];
-      expect(loras.length, `${n}`).toBe(n + 1);
-      expect(loras[0].path, `${n}`).toMatch(/anisora/i);
-      for (const l of loras) expect(["high", "low", "both"]).toContain(l.transformer);
-      fits(run);
-    }
+  it("a user's low-noise LoRA goes beside AniSora; a high-noise one can't (AniSora holds that expert)", () => {
+    const low = sent(gap(41, { loras: [own("low")] }));
+    expect(low.body.lora_weights_transformer).toMatch(/AniSora/);
+    expect(low.body.lora_weights_transformer_2).toBe(own("low").url);
+    fits(gap(41, { loras: [own("low")] }));
+    const high = sent(gap(41, { loras: [own("high")] }));
+    expect(high.body.lora_weights_transformer).toMatch(/AniSora/);
+    expect(high.body.lora_weights_transformer_2).toBeUndefined();
+    fits(gap(41, { loras: [own("high")] }));
   });
 
   it("every shape and size the studio offers the film fits", () => {

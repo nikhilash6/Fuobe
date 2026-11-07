@@ -90,7 +90,7 @@ describe("Fuobe Animation in the catalog", () => {
     expect(m.options.loras?.map((l) => [l.file, l.target])).toEqual([["Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors", "high"]]);
     expect(m.routes.filter((r) => r.op === "keyframes").map((r) => [r.provider, r.endpoint, !!r.chained])).toEqual([
       ["comfyui", "wan22-inbetween-anisora", false],
-      ["fal", "fal-ai/wan/v2.2-a14b/image-to-video", true],
+      ["replicate", "wan-video/wan-2.2-i2v-fast", true],
     ]);
   });
 

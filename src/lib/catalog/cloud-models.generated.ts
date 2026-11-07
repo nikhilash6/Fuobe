@@ -24230,126 +24230,91 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "routes": [
       {
         "op": "i2v",
-        "provider": "fal",
-        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "provider": "replicate",
+        "endpoint": "wan-video/wan-2.2-i2v-fast",
         "map": {
-          "negativePrompt": "negative_prompt",
-          "image": "image_url",
-          "endImage": "end_image_url",
+          "image": "image",
+          "endImage": "last_image",
           "seed": "seed",
           "numFrames": {
             "key": "num_frames",
             "fps": 16,
-            "min": 17,
-            "max": 161,
+            "min": 81,
+            "max": 121,
             "step": 4
-          },
-          "aspectRatio": {
-            "key": "aspect_ratio",
-            "accepts": [
-              "auto",
-              "16:9",
-              "9:16",
-              "1:1"
-            ]
           },
           "resolution": {
             "key": "resolution",
             "accepts": [
               "480p",
-              "580p",
               "720p"
             ]
           },
           "fixed": {
-            "interpolator_model": "none",
+            "interpolate_output": false,
             "frames_per_second": 16
           },
           "loras": {
-            "shape": "items",
-            "key": "loras",
-            "range": {
-              "min": 0,
-              "max": 4
+            "shape": "experts",
+            "high": {
+              "weights": "lora_weights_transformer",
+              "scale": "lora_scale_transformer"
             },
-            "transformer": "high",
-            "weightName": true
+            "low": {
+              "weights": "lora_weights_transformer_2",
+              "scale": "lora_scale_transformer_2"
+            }
           }
-        },
-        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+        }
       },
       {
         "op": "flf2v",
-        "provider": "fal",
-        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "provider": "replicate",
+        "endpoint": "wan-video/wan-2.2-i2v-fast",
         "map": {
-          "negativePrompt": "negative_prompt",
-          "image": "image_url",
-          "endImage": "end_image_url",
+          "image": "image",
+          "endImage": "last_image",
           "seed": "seed",
           "numFrames": {
             "key": "num_frames",
             "fps": 16,
-            "min": 17,
-            "max": 161,
+            "min": 81,
+            "max": 121,
             "step": 4
-          },
-          "aspectRatio": {
-            "key": "aspect_ratio",
-            "accepts": [
-              "auto",
-              "16:9",
-              "9:16",
-              "1:1"
-            ]
           },
           "resolution": {
             "key": "resolution",
             "accepts": [
               "480p",
-              "580p",
               "720p"
             ]
           },
           "fixed": {
-            "interpolator_model": "none",
+            "interpolate_output": false,
             "frames_per_second": 16
           },
           "loras": {
-            "shape": "items",
-            "key": "loras",
-            "range": {
-              "min": 0,
-              "max": 4
+            "shape": "experts",
+            "high": {
+              "weights": "lora_weights_transformer",
+              "scale": "lora_scale_transformer"
             },
-            "transformer": "high",
-            "weightName": true
+            "low": {
+              "weights": "lora_weights_transformer_2",
+              "scale": "lora_scale_transformer_2"
+            }
           }
-        },
-        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+        }
       }
     ],
     "options": {
       "durations": [
-        3,
-        4,
-        5,
-        6,
-        8,
-        10
+        6
       ],
-      "negativePrompt": true,
       "seed": true,
       "endFrame": true,
-      "aspectRatios": [
-        "auto",
-        "16:9",
-        "9:16",
-        "1:1"
-      ],
       "resolutions": [
         "480p",
-        "580p",
         "720p"
       ],
       "maxImages": 1
@@ -24362,19 +24327,17 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     },
     "defaults": {
       "aspectRatio": "auto",
-      "duration": 5,
+      "duration": 6,
       "resolution": "720p"
     },
     "pricing": {
-      "unit": "second",
-      "usd": 0.08,
-      "note": "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+      "unit": "video",
+      "usd": 0.11,
+      "note": "per gap's clip at 720p (81 frames on Replicate); 480p $0.05",
       "byResolution": {
-        "720p": 0.08,
-        "580p": 0.06,
-        "480p": 0.04
-      },
-      "withLoras": 0.1
+        "720p": 0.11,
+        "480p": 0.05
+      }
     }
   },
   {

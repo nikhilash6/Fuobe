@@ -104,7 +104,7 @@ describe("own setup: what a visitor needs", () => {
   it("leaves everything else as it is", () => {
     for (const id of ["oss-qwen-image-21", "nano-banana-pro", "oss-kandinsky6", "oss-h3-group-swap", "no-such-model"]) expect(ownSetupOnly(id), id).toBeNull();
     expect(ownSetupOnly("fuobe-animation")).toBeNull();
-    expect(ownSetupOnly("fuobe-animation", "cloud")).toEqual({ need: "key", provider: "fal" });
+    expect(ownSetupOnly("fuobe-animation", "cloud")).toEqual({ need: "key", provider: "replicate" });
   });
 
   it("knows every id its table holds by a real model where it names one", () => {
