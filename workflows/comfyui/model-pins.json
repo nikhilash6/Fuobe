@@ -279,10 +279,10 @@
   "sizeBytes": 20430698424,
   "sha256": "318568f61951ab9da21100c7b896e3c1da67f0d2efad6421545e022cfaa2b2b4"
  },
- "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors": {
+ "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors": {
   "revision": "f68ace85e60b4a02a323e394253731947657b7d2",
-  "sizeBytes": 20533762817,
-  "sha256": "c9fdc158e46d3b61ef75f21ae866ca2fe808bf4a53643120d1c1e87c19280a4e"
+  "sizeBytes": 20499083824,
+  "sha256": "11b5af5ac601821d73930c84846c9a158e67177356daf927ce1c8d10f3963829"
  },
  "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Light-Migration.safetensors": {
   "revision": "f68ace85e60b4a02a323e394253731947657b7d2",

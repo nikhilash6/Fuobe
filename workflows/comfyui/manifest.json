@@ -1913,10 +1913,10 @@
           "sizeGb": 0.25
         },
         {
-          "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+          "file": "qwen_image_edit_2511_int8_convrot.safetensors",
           "folder": "diffusion_models",
-          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
-          "sizeGb": 20.53
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors",
+          "sizeGb": 20.5
         },
         {
           "file": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
@@ -2014,10 +2014,10 @@
           "sizeGb": 0.25
         },
         {
-          "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+          "file": "qwen_image_edit_2511_int8_convrot.safetensors",
           "folder": "diffusion_models",
-          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
-          "sizeGb": 20.53
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors",
+          "sizeGb": 20.5
         },
         {
           "file": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
@@ -12479,10 +12479,10 @@
       },
       "models": [
         {
-          "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+          "file": "qwen_image_edit_2511_int8_convrot.safetensors",
           "folder": "diffusion_models",
-          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
-          "sizeGb": 20.53
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors",
+          "sizeGb": 20.5
         },
         {
           "file": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",

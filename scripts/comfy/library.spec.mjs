@@ -496,7 +496,8 @@ export const KNOWN_MODELS = {
   'qwen_image_layered_fp8mixed.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Layered_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_layered_fp8mixed.safetensors' },
   'qwen_image_layered_control_bf16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/DiffSynth-Studio/Qwen-Image-Layered-Control/resolve/main/qwen_image_layered_control_bf16.safetensors' },
   'qwen_image_layered_vae.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Layered_ComfyUI/resolve/main/split_files/vae/qwen_image_layered_vae.safetensors' },
-  'qwen_image_edit_2511_fp8mixed.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors' },
+  // Qwen-Image-Edit 2511 loads Comfy-Org's int8 ConvRot build; `variants`: the same weights in another precision in the same repo.
+  'qwen_image_edit_2511_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors', variants: ['qwen_image_edit_2511_fp8mixed.safetensors'] },
   'Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors' },
   'flux-2-klein-4b-fp8.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors' },
   'flux2-vae.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors' },
@@ -1263,6 +1264,7 @@ export const SPEC = [
     export: 'image_qwen_image_edit_2511',
     transforms: [
       { op: 'resolveSwitches', booleans: { '170:168': false } },
+      { op: 'set', node: '170:161', input: 'unet_name', value: 'qwen_image_edit_2511_int8_convrot.safetensors' },
       // Single-image edit: drop the template's second (material) reference.
       { op: 'delete', node: '170:149', input: 'image2' },
       { op: 'delete', node: '170:151', input: 'image2' },
@@ -1287,6 +1289,7 @@ export const SPEC = [
     export: 'image_qwen_image_edit_2511',
     transforms: [
       { op: 'resolveSwitches', booleans: { '170:168': false } },
+      { op: 'set', node: '170:161', input: 'unet_name', value: 'qwen_image_edit_2511_int8_convrot.safetensors' },
       { op: 'addNodes', nodes: { 1201: { class_type: 'LoadImage', inputs: { image: 'reference3.png' }, _meta: { title: 'Load Image (image 3)' } } } },
       { op: 'set', node: '170:149', input: 'image3', value: ['1201', 0] },
       { op: 'set', node: '170:151', input: 'image3', value: ['1201', 0] },

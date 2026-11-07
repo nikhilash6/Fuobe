@@ -798,13 +798,13 @@
     "at": "2026-10-29T10:45:58.508Z"
   },
   "qwen-image-edit-2511": {
-    "sha256": "5deec4e50d093dabcdd74b6a97e794bcb0069a987f573ce65e8d966909c6de26",
+    "sha256": "5144ebd05728ffc9dd9ceb8b685351e9be1e6002322e080e4a6b1bb3e9d9d2db",
     "validated": true,
     "error": null,
     "at": "2026-10-22T19:21:14.050Z"
   },
   "qwen-image-edit-2511-multi": {
-    "sha256": "29278f8d1a2c84104c2bcc4cab0f8a3e33002681c32e97409afa38c5525dc641",
+    "sha256": "7ee8737c9db92ba1b4648d590ace0b153e7ff3cee4e16179061248e63063a3ad",
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:17.108Z"
@@ -960,7 +960,7 @@
     "at": "2026-10-17T21:02:01.029Z"
   },
   "style-ref-qwen-edit-2511": {
-    "sha256": "3b27e4d5db3d00122d65af1f8080c0a2d11e1d5e1a4e6305b49d462b59aa8a03",
+    "sha256": "a486a84c720bfa8dfd1b565a5900f40b581559ff8b9ca296eec99070bfdcd4b7",
     "validated": true,
     "error": null,
     "at": "2026-10-17T21:02:00.462Z"
