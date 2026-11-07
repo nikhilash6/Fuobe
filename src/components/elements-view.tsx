@@ -38,7 +38,8 @@ import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useDeleteElement, useElements, useIsVisitor, useSaveElement } from "@/lib/api";
-import { ELEMENT_KINDS, elementKindInfo, handleFor, MAX_ELEMENT_PHOTOS, type ElementKind, type StudioElement } from "@/lib/catalog/elements";
+import { ELEMENT_KINDS, elementKindInfo, handleFor, isClipRef, MAX_ELEMENT_PHOTOS, type ElementKind, type StudioElement } from "@/lib/catalog/elements";
+import { ElementThumb } from "@/components/element-thumb";
 import { isLegacySoulId, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { copyText } from "@/lib/clipboard";
 import { starterShown, type StarterCardData } from "@/lib/starters/types";
@@ -168,7 +169,7 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
   const [kind, setKind] = useState<ElementKind>(element?.kind ?? defaultKind);
   const [name, setName] = useState(element?.name ?? "");
   const [description, setDescription] = useState(element?.description ?? "");
-  const [photos, setPhotos] = useState<SlotValue[]>(() => (element?.references ?? []).map((r) => ({ id: nanoid(6), ref: r, preview: r, kind: /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(r) ? "video" : "image" })));
+  const [photos, setPhotos] = useState<SlotValue[]>(() => (element?.references ?? []).map((r) => ({ id: nanoid(6), ref: r, preview: r, kind: isClipRef(r) ? "video" : "image" })));
 
   const uploading = photos.some((p) => p.uploading);
   const refs = photos.filter((p) => p.ref).map((p) => p.ref);
@@ -363,11 +364,9 @@ function ElementCard({ el }: { el: StudioElement }) {
           <div className="grid aspect-square grid-cols-2 grid-rows-2 gap-0.5 bg-muted">
             {el.references.length ? (
               el.references.slice(0, 4).map((r, i, arr) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <ElementThumb
                   key={`${i}:${r}`}
                   src={r}
-                  alt=""
                   className={cn(
                     "size-full object-cover",
                     arr.length === 1 && "col-span-2 row-span-2",

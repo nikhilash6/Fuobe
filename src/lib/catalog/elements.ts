@@ -138,7 +138,7 @@ export interface MentionResolution {
 const ops = (m: ModelDef) => new Set(m.routes.map((r) => r.op));
 
 /** A reference that is a clip (a video element), by its file's extension. */
-const isClipRef = (ref: string) => /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(ref);
+export const isClipRef = (ref: string) => /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(ref);
 
 /** Element kinds a model's own elements stand for (Kling 4.0: "characters/objects"). */
 const ELEMENT_KINDS_AS_ELEMENTS = new Set<ElementKind>(["character", "prop"]);

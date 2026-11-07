@@ -37,7 +37,8 @@ import {
   planCinema,
   type DirectorSettings,
 } from "@/lib/catalog/cinema";
-import { applyMentions, findMentions, type StudioElement } from "@/lib/catalog/elements";
+import { applyMentions, findMentions, isClipRef, type StudioElement } from "@/lib/catalog/elements";
+import { ClipMark, ElementThumb } from "@/components/element-thumb";
 import { referenceWindow, trimLine, trimTarget, windowProblem, type ClipWindow } from "@/lib/av/reference-fit";
 import { ListFit } from "@/components/av/fit-list";
 import { ElementClipFix, useElementClipCheck } from "@/components/av/element-clip-fit";
@@ -790,16 +791,22 @@ export function PromptBar(props: PromptBarProps) {
           {mentions.map((el) => {
             const Icon = ELEMENT_ICONS[el.kind];
             const emo = settings.emotions?.[el.handle.toLowerCase()];
+            const face = (
+              <span className="grid size-6 place-items-center overflow-hidden rounded-full bg-muted">
+                {el.references[0] ? <ElementThumb src={el.references[0]} mark="none" className="size-full object-cover" /> : <Icon className="size-3.5" />}
+              </span>
+            );
             return (
               <span key={el.id} className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-background pr-2.5 pl-0.5 text-[12px] font-medium">
-                <span className="grid size-6 place-items-center overflow-hidden rounded-full bg-muted">
-                  {el.references[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={el.references[0]} alt="" className="size-full object-cover" />
-                  ) : (
-                    <Icon className="size-3.5" />
-                  )}
-                </span>
+                {/* A clip element: a still of its clip, with the clip mark on the circle's edge. */}
+                {el.references[0] && isClipRef(el.references[0]) ? (
+                  <span className="relative shrink-0">
+                    {face}
+                    <ClipMark size="xs" className="absolute -right-1 -bottom-0.5" />
+                  </span>
+                ) : (
+                  face
+                )}
                 {el.name}
                 {emo && <span className="text-[11px] text-muted-foreground">· {emo.family}</span>}
               </span>
