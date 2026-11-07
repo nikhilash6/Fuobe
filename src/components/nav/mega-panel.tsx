@@ -8,7 +8,8 @@ import { Kbd } from "@/components/ui/kbd";
 import { MEGA_AREAS, ROW_CAPS, studiosMenu, TILE_COLS, type MegaColumn, type MegaId, type MegaItem, type MegaModel } from "@/lib/mega-menus";
 import { isNew, subParent, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { CoverThumb } from "./cover-thumb";
+import { FxCompare } from "@/components/fx/fx-compare";
+import { COVER_SIZES, CoverThumb } from "./cover-thumb";
 import { useMegaMenu } from "./mega-data";
 import { megaCurrent, MegaSkeleton } from "./mega-launcher";
 import { useViewerKind } from "./nav-ui";
@@ -49,6 +50,12 @@ export function trackSizes(span: number, inset = 0): string {
   return `(min-width: 1680px) ${Math.floor(((1680 - 108) * span) / 6) + extra}px, calc((100vw - 108px) * ${span} / 6 + ${extra}px)`;
 }
 
+/** A lead card's picture box: 4:3 of the column, its height on the 4 px grid, shorter on a short window. */
+const LEAD_BOX = "h-[round(down,75cqw,4px)] rounded-none md:max-lg:max-h-[round(down,max(56px,calc(100dvh_-_460px)),4px)]";
+const LEAD_MAX = "max-h-[round(down,max(64px,calc(100dvh_-_592px)),4px)]";
+/** Under the owner's New board button (Canvas). */
+const LEAD_MAX_BELOW = "max-h-[round(down,max(64px,calc(100dvh_-_640px)),4px)]";
+
 /**
  * A column's first card: its cover, name and one line. `row` 1 under the owner's New board (Canvas), its cover shorter by
  * that button. The cover's height is rounded down to the 4 px grid (a 4:3 box of a fractional column width would put
@@ -65,18 +72,20 @@ export function LeadCard({ e, col, row = 0, span = 1, current, inside, now, clas
       data-active={inside ? "" : undefined}
       className={cn("nav-row group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground [container-type:inline-size]", className)}
     >
-      <CoverThumb
-        id={e.navCover}
-        cover={e.cover}
-        size="lead"
-        icon={e.icon}
-        eager
-        sizes={span > 1 ? trackSizes(span, 2) : undefined}
-        className={cn(
-          "h-[round(down,75cqw,4px)] rounded-none md:max-lg:max-h-[round(down,max(56px,calc(100dvh_-_460px)),4px)]",
-          row ? "max-h-[round(down,max(64px,calc(100dvh_-_640px)),4px)]" : "max-h-[round(down,max(64px,calc(100dvh_-_592px)),4px)]",
-        )}
-      />
+      {/* A Fuobe FX item shows its before and after (the menu's arrow keys stay the menu's: keys off). */}
+      {e.fx ? (
+        <FxCompare view={e.fx} sizes={span > 1 ? trackSizes(span, 2) : COVER_SIZES.lead.sizes} eager className={cn("w-full shrink-0", LEAD_BOX, row ? LEAD_MAX_BELOW : LEAD_MAX)} />
+      ) : (
+        <CoverThumb
+          id={e.navCover}
+          cover={e.cover}
+          size="lead"
+          icon={e.icon}
+          eager
+          sizes={span > 1 ? trackSizes(span, 2) : undefined}
+          className={cn(LEAD_BOX, row ? LEAD_MAX_BELOW : LEAD_MAX)}
+        />
+      )}
       <span className="nav-mark-start flex min-w-0 flex-col gap-0.5 px-[11px] pt-2.5 pb-3 md:max-lg:py-2">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[14px] leading-[18px] font-semibold md:max-lg:text-[13px]">{e.label}</span>

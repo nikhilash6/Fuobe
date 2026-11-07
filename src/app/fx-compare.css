@@ -1,0 +1,284 @@
+/*
+ * Fuobe FX's before/after cards (components/fx/fx-compare.tsx). The divider's place is one variable, --fxc-pos, set by
+ * the pointer (once a frame) or a key: the after is cut there with clip-path and the hairline moves by transform, so a
+ * hover never lays anything out. States are data attributes on the card: data-show (rest, after, before: a tap),
+ * data-hover (a mouse over it), data-follow (the divider is under the mouse: no easing), data-armed (its hover files
+ * are asked for), data-ready (they came). In @layer components, so a
+ * card's own utilities (its size, its corners) win.
+ */
+@layer components {
+  .fxc {
+    --fxc-pos: 35%;
+    --fxc-ease: cubic-bezier(0.2, 0, 0, 1);
+    --fxc-check-a: oklch(0.94 0 0);
+    --fxc-check-b: oklch(0.99 0 0);
+    position: relative;
+    display: block;
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--muted);
+    contain: paint;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dark .fxc {
+    --fxc-check-a: oklch(0.27 0.003 286);
+    --fxc-check-b: oklch(0.22 0.003 286);
+  }
+  .fxc img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    -webkit-user-drag: none;
+  }
+
+  /* The after, cut at the divider. */
+  .fxc-after {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 0 0 var(--fxc-pos));
+    transition: clip-path 260ms var(--fxc-ease);
+  }
+  .fxc[data-follow] .fxc-after,
+  .fxc[data-follow] .fxc-line {
+    transition: none;
+  }
+  /* A cut-out sits on a transparency checkerboard. */
+  .fxc[data-fxc="matte"] .fxc-after {
+    background: repeating-conic-gradient(var(--fxc-check-a) 0 25%, var(--fxc-check-b) 0 50%) 0 0 / 14px 14px;
+  }
+
+  /* The divider: a full-width layer shifted by --fxc-pos, with a hairline at its left edge. */
+  .fxc-line {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transform: translateX(var(--fxc-pos));
+    transition: transform 260ms var(--fxc-ease), opacity 160ms;
+  }
+  .fxc-line::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: -0.75px;
+    width: 1.5px;
+    background: white;
+    box-shadow: 0 0 4px rgb(0 0 0 / 40%);
+  }
+  .fxc[data-show="after"] .fxc-line,
+  .fxc[data-show="before"] .fxc-line {
+    opacity: 0;
+  }
+
+  /* "Before" and "After": tiny, on a glass chip; the side a tap shows is the one lit. */
+  .fxc-tag {
+    position: absolute;
+    top: 6px;
+    z-index: 2;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgb(0 0 0 / 52%);
+    color: rgb(255 255 255 / 92%);
+    font-size: 10px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    transition: opacity 160ms;
+  }
+  .fxc-tag[data-side="before"] {
+    left: 6px;
+  }
+  .fxc-tag[data-side="after"] {
+    right: 6px;
+  }
+  .fxc[data-show="after"] .fxc-tag[data-side="before"],
+  .fxc[data-show="before"] .fxc-tag[data-side="after"] {
+    opacity: 0;
+  }
+
+  /* Loupe: a lens under the mouse, the soft before detail on its left half and the sharp after on its right. */
+  .fxc-lens {
+    --fxc-lens: 104px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    width: var(--fxc-lens);
+    height: var(--fxc-lens);
+    margin: calc(var(--fxc-lens) / -2) 0 0 calc(var(--fxc-lens) / -2);
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--muted);
+    box-shadow:
+      0 0 0 1.5px white,
+      0 6px 18px rgb(0 0 0 / 35%);
+    pointer-events: none;
+    opacity: 0;
+    scale: 0.92;
+    transform: translate(var(--fxc-x, 0px), var(--fxc-y, 0px));
+    transition: opacity 140ms, scale 140ms;
+  }
+  .fxc[data-ready][data-hover] .fxc-lens,
+  .fxc[data-ready][data-show="after"] .fxc-lens {
+    opacity: 1;
+    scale: 1;
+  }
+  .fxc-lens-detail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(var(--fxc-lens) * 2);
+    height: calc(var(--fxc-lens) * 2);
+    transform: translate(var(--fxc-dx, 0px), var(--fxc-dy, 0px));
+  }
+  .fxc .fxc-lens-detail img {
+    object-fit: fill;
+  }
+  .fxc-lens-detail[data-side="after"] {
+    clip-path: inset(0 0 0 calc(var(--fxc-lens) / 2 - var(--fxc-dx, 0px)));
+  }
+  .fxc-lens::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: calc(50% - 0.5px);
+    width: 1px;
+    background: rgb(255 255 255 / 85%);
+  }
+
+  /*
+   * Reframe: the wide still with the tall crop's box outlined; the outside dims on hover or a tap. The still fills a card
+   * of any shape (the menu's cards get shorter on a short window) and keeps the box in view: as wide as the card or as
+   * tall as it, whichever covers it, shifted to centre the box where the still allows.
+   */
+  .fxc[data-fxc="reframe"] {
+    container-type: size;
+  }
+  .fxc-wide {
+    --fxc-w: max(100cqw, 177.7778cqh);
+    --fxc-h: max(100cqh, 56.25cqw);
+    position: absolute;
+    width: var(--fxc-w);
+    height: var(--fxc-h);
+    left: clamp(calc(100cqw - var(--fxc-w)), calc(50cqw - var(--fxc-cx) * var(--fxc-w)), 0px);
+    top: clamp(calc(100cqh - var(--fxc-h)), calc(50cqh - var(--fxc-cy) * var(--fxc-h)), 0px);
+  }
+  .fxc-rect,
+  .fxc-shade {
+    left: var(--fxc-rx);
+    top: var(--fxc-ry);
+    width: var(--fxc-rw);
+    height: var(--fxc-rh);
+  }
+  .fxc-rect .fxc-tag {
+    top: auto;
+    bottom: 6px;
+    left: 50%;
+    translate: -50% 0;
+  }
+  .fxc-rect,
+  .fxc-shade {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .fxc-rect {
+    outline: 1.5px solid white;
+    outline-offset: -0.75px;
+    border-radius: 2px;
+  }
+  /* The box itself, clear, with everything around it shaded (its shadow reaches past the card, which clips it). */
+  .fxc-shade {
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 58%);
+    opacity: 0.32;
+    transition: opacity 220ms var(--fxc-ease);
+  }
+  .fxc[data-hover] .fxc-shade,
+  .fxc[data-show="after"] .fxc-shade {
+    opacity: 1;
+  }
+
+  /* Strip: a flipbook of the output's frames, stepped while a mouse is over it (or after a tap); frame 1 at rest. */
+  .fxc-strip {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+  .fxc[data-ready] .fxc-strip {
+    opacity: 1;
+  }
+  .fxc .fxc-strip img {
+    width: calc(100% * var(--fxc-frames, 6));
+    max-width: none;
+    right: auto;
+    object-fit: fill;
+    transform: translateX(var(--fxc-shift, 0%));
+  }
+  .fxc[data-ready][data-hover] .fxc-strip img,
+  .fxc[data-ready][data-show="after"] .fxc-strip img {
+    animation: fxc-flip var(--fxc-flip, 1.1s) steps(var(--fxc-frames, 6), jump-none) infinite;
+  }
+  @keyframes fxc-flip {
+    from {
+      transform: translateX(0%);
+    }
+    to {
+      transform: translateX(var(--fxc-last, -83.3333%));
+    }
+  }
+  /* Its frames as ticks along the bottom: the first lit at rest, all of them while it plays. */
+  .fxc-ticks {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 7px;
+    z-index: 2;
+    display: flex;
+    gap: 3px;
+    pointer-events: none;
+  }
+  .fxc-ticks i {
+    flex: 1;
+    height: 2px;
+    border-radius: 1px;
+    background: rgb(255 255 255 / 38%);
+    box-shadow: 0 0 3px rgb(0 0 0 / 30%);
+  }
+  .fxc-ticks i:first-child,
+  .fxc[data-ready][data-hover] .fxc-ticks i,
+  .fxc[data-ready][data-show="after"] .fxc-ticks i {
+    background: white;
+  }
+
+  /* Less motion: nothing eases or plays by itself; a tap or a key still shows the other side (a still frame for a strip). */
+  @media (prefers-reduced-motion: reduce) {
+    .fxc-after,
+    .fxc-line,
+    .fxc-tag,
+    .fxc-lens,
+    .fxc-shade {
+      transition: none;
+    }
+    .fxc[data-ready][data-hover] .fxc-strip img,
+    .fxc[data-ready][data-show="after"] .fxc-strip img {
+      animation: none;
+    }
+    /* A tap shows the last frame, still; a hover alone shows nothing new. */
+    .fxc[data-ready][data-show="after"] .fxc-strip img {
+      transform: translateX(var(--fxc-last, -83.3333%));
+    }
+    .fxc[data-ready][data-hover]:not([data-show="after"]) .fxc-ticks i:not(:first-child) {
+      background: rgb(255 255 255 / 38%);
+    }
+    .fxc[data-hover]:not([data-show="after"]) .fxc-shade {
+      opacity: 0.32;
+    }
+  }
+}

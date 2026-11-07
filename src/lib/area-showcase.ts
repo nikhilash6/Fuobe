@@ -7,6 +7,7 @@ import "server-only";
 import { cacheLife } from "next/cache";
 import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
 import { FX_SECTIONS, fxCardable, fxCover, isFxApp } from "@/lib/fx-tools";
+import { fxView, type FxView } from "@/lib/fx-compare";
 import { HOME_EFFECTS, HOME_MOTIONS, HOME_STUDIOS, homeCard, homeShowcase, presetHref, type HomeFacts } from "@/lib/home-showcase";
 import { areaCount, areaSections, cardsToShow, PILL_ONLY, rankCards, type AreaId } from "@/lib/nav-areas";
 import { entry, NAV_ENTRIES, subLabel, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
@@ -24,6 +25,8 @@ export interface AreaCard {
   /** Its cover, as Home's cards get it. */
   card?: PresetCardData;
   drawn?: AreaDrawn;
+  /** A Fuobe FX item's before and after, shown in place of its cover (the items with a pair: fx-pairs.generated.ts). */
+  fx?: FxView;
 }
 
 export interface AreaPill {
@@ -236,7 +239,9 @@ export async function fxShowcase() {
         // A mode is named with its studio ("Genjutsu · Insert"), so it reads apart from the studios beside it.
         const parent = entry(id)?.parent;
         const label = parent && entry(parent) ? `${entry(parent)!.label} · ${it.label}` : it.label;
-        return { id: it.id, href: it.href, label, line: it.line, card: homeCard(it.cover!) };
+        // An item with a before and after shows them in place of its cover (the cover still ranks it: premium first).
+        const fx = fxView(id);
+        return { id: it.id, href: it.href, label, line: it.line, card: homeCard(it.cover!), ...(fx && { fx }) };
       }),
       pills: s.pills.map(pillOf),
       ownerPills: ownerOnly.map(pillOf),

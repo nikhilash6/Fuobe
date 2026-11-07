@@ -5,6 +5,7 @@
  * covers (mega-menus.server.ts) and fetched as small static files (/nav-menus/<id>) the first time a menu warms.
  */
 import type { CoverFraming } from "./cover-framing";
+import type { FxView } from "./fx-compare";
 import { area } from "./nav-areas";
 import type { StillSources } from "./preset-hd";
 import { entriesFor, launcherColumns, studioCount, studioSubs, STUDIO_SUBS, subLabel, subParent, type NavEntry, type NavIconName, type ViewerKind } from "./nav-model";
@@ -46,6 +47,8 @@ export interface MegaItem {
   cover?: MegaCover;
   /** Its cover as a preset id the nav's covers resolve (Studios: useNavCover). */
   navCover?: string;
+  /** A Fuobe FX item's before and after: its lead card shows them in place of the cover (rows and tiles keep the cover). */
+  fx?: FxView;
   /** Shown on the muted fill when there is no cover. */
   icon?: NavIconName;
   /** A phone tile's name (12 characters at most). */

@@ -3,6 +3,7 @@ import { Fragment } from "react";
 import { ArrowRight, AudioLines, Box, CalendarClock, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, TextCursorInput, Undo2, Video, Zap, type LucideIcon } from "lucide-react";
 import { GitHubMark } from "@/components/github-mark";
 import { BeforeAfter } from "@/components/home/before-after";
+import { FxCard } from "@/components/fx/fx-card";
 import {
   AssistAction,
   AssistExamples,
@@ -33,6 +34,7 @@ import { staggered, type AutoPlay } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 import { plainTagline } from "@/lib/plain-tagline";
 import type { PresetCardData } from "@/lib/preset-cards";
+import type { FxView } from "@/lib/fx-compare";
 
 /*
  * Home's sections under the wall. Server components: their words, numbers and links ship as HTML, and only the
@@ -354,6 +356,8 @@ export interface Destination {
   line: string;
   card?: HomeShowcase["studios"][number]["card"];
   drawn?: "live";
+  /** A Fuobe FX item's before and after, shown in place of its cover (FxCard). */
+  fx?: FxView;
 }
 
 /** A pill under the cards: its name, and its icon from the navigation. */
@@ -413,7 +417,9 @@ export function DestinationsSection({
 }) {
   const items = cards.map((s, i) => (
     <div key={s.href} className={grid ? "min-w-0" : cn(RAIL_ITEM, sm !== undefined && i >= sm && "sm:max-lg:hidden")}>
-      {s.card ? (
+      {s.fx ? (
+        <FxCard href={s.href} label={s.label} line={s.line} view={s.fx} sizes={grid ? GRID_SIZES : STUDIO_SIZES} />
+      ) : s.card ? (
         <StudioCard
           href={s.href}
           label={s.label}

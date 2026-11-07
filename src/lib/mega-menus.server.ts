@@ -25,6 +25,7 @@ import { templateStillSources } from "@/lib/template-hd";
 import { MENU_LINES } from "@/lib/menu-lines";
 import { fxSections } from "@/lib/area-showcase";
 import { FX_SECTIONS, fxCover, isFxApp } from "@/lib/fx-tools";
+import { fxView } from "@/lib/fx-compare";
 import { entry } from "@/lib/nav-model";
 
 /** A column of a preset menu: its name, its phone chip, and the catalog categories it holds. */
@@ -259,6 +260,7 @@ function fxMenuItem(id: string): MegaItem | undefined {
   const mine = fxCover(id);
   const own = mine ? presetMegaCover(mine) : undefined;
   const nav = own ? undefined : (mine ?? e.cover);
+  const fx = fxView(id);
   return {
     id,
     href: e.href,
@@ -268,6 +270,7 @@ function fxMenuItem(id: string): MegaItem | undefined {
     icon: e.icon,
     ...(own && { cover: own }),
     ...(nav && { navCover: nav }),
+    ...(fx && { fx }),
     ...(e.short && { short: e.short }),
     ...(e.newUntil && { newUntil: e.newUntil }),
   };
@@ -299,7 +302,8 @@ export function fxMenu(): MegaModel {
         .map(named);
       // The lead card is the first with a picture (a section of pills only leads with its first tool that has one).
       const lead = items.find((x) => x.cover || x.navCover) ?? items[0];
-      const rest = items.filter((x) => x !== lead);
+      // Rows show their small cover: only the lead card shows a before and after, so only it carries one.
+      const rest = items.filter((x) => x !== lead).map((x) => (x.fx ? { ...x, fx: undefined } : x));
       return { id: s.id, label: s.title, chip: FX_SECTIONS.find((x) => x.id === s.id)!.chip, ...(lead && { lead }), rows: rest.slice(0, ROW_CAPS.tall) };
     }),
   };
