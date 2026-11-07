@@ -96,7 +96,7 @@ describe("palette ranking", () => {
       { name: "playbook", title: "Playbook only", description: "x", enabled: true },
     ];
     const entries = skillEntries(skills);
-    expect(entries).toEqual([expect.objectContaining({ kind: "skill", label: "Run Lamp turntable…", href: "/assist/skills?run=lamp-turntable" })]);
+    expect(entries).toEqual([expect.objectContaining({ kind: "skill", label: "Run Lamp turntable…", href: "/chat/skills?run=lamp-turntable" })]);
     expect(rankPalette([...ALL, ...entries], "turntable").find((g) => g.kind === "skill")?.entries.map((e) => e.label)).toEqual(["Run Lamp turntable…"]);
   });
 
@@ -166,7 +166,7 @@ describe("palette index", () => {
   });
 
   it("opens a model nothing else runs in the studio of what it makes", () => {
-    const home: Record<string, string> = { image: "/image", video: "/video", audio: "/audio/speech", text: "/assist", model3d: "/image-to-3d" };
+    const home: Record<string, string> = { image: "/image", video: "/video", audio: "/audio/speech", text: "/chat/make", model3d: "/image-to-3d" };
     const fallback = index.models.filter((m) => !m.href.includes("?") && Object.values(home).includes(m.href));
     expect(fallback.length).toBeLessThan(40);
     for (const m of fallback) expect(m.href, m.id).toBe(home[getModel(m.id)!.kind]);

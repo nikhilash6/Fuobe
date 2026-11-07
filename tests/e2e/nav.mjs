@@ -344,7 +344,7 @@ try {
     check(full && (await dialog.getByRole("button", { name: /^Cancel/ }).isVisible()), `${label}: the header's search opens the full-screen palette with Cancel`);
     await dialog.getByRole("button", { name: /^Cancel/ }).tap();
     await dialog.waitFor({ state: "detached" });
-    for (const r of ["/assist"]) {
+    for (const r of ["/chat/make"]) {
       await openRoute(p, app + r);
       check(!(await tabs.isVisible()), `${label}: no tabs on ${r}`);
       await p.getByRole("button", { name: "Menu", exact: true }).first().tap();

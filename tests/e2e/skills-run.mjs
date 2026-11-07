@@ -1,5 +1,5 @@
 // Skills W1 in a real browser (demo mode: no keys, ComfyUI unreachable). A skill with a recipe is seeded over the API;
-// its card says "Runs by itself"; /assist/skills?run=<name> opens the Run form, which asks for a free test run first,
+// its card says "Runs by itself"; /chat/skills?run=<name> opens the Run form, which asks for a free test run first,
 // then runs it once from the form (a photo, a name, a shape) and three times from pasted CSV rows, each priced first
 // ("Placeholder · free" here); a switched-off skill's form says so and switches it back on; the skill's dialog says where it was
 // tested, and in amber that it needs a new test run after its route changed, and Test again clears it. ⌘K lists
@@ -83,12 +83,12 @@ try {
       const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, ...(width < 500 ? { isMobile: true, hasTouch: true } : {}) });
       const page = await context.newPage();
       // The card's chip.
-      await openRoute(page, `${app}/assist/skills`);
+      await openRoute(page, `${app}/chat/skills`);
       await page.getByRole("tab", { name: /My skills/ }).click();
       check(`${tag}: the card says "Runs by itself"`, await seen(page.getByText("Runs by itself").first()));
 
       // The Run form, by its deep link.
-      await openRoute(page, `${app}/assist/skills?run=${NAME}`);
+      await openRoute(page, `${app}/chat/skills?run=${NAME}`);
       const dialog = page.getByRole("dialog");
       check(`${tag}: ?run= opens the Run form`, await seen(dialog.getByRole("heading", { name: "Run E2E Poster" })));
       if (!flowsDone) {
@@ -129,7 +129,7 @@ try {
         check(`${tag}: one run is one batch of 2 steps with the skill's stamp`, batch.length === 2 && new Set(batch.map((g) => g.batchId)).size === 1 && batch.every((g) => g.request.batchTitle === "E2E Poster"), `${batch.length} rows`);
         check(`${tag}: the run took the form's inputs`, batch.some((g) => g.request.prompt === "Arc floor lamp on a travertine plinth, soft window light" && g.request.params?.aspectRatio === "16:9"));
         // 3. Many: three CSV rows, checked, priced together.
-        await openRoute(page, `${app}/assist/skills?run=${NAME}`);
+        await openRoute(page, `${app}/chat/skills?run=${NAME}`);
         await dialog.getByRole("tab", { name: "Many" }).click();
         await dialog.getByLabel("Rows to run").fill(`Product photo,Product name,Shape\n${photo},Desk lamp,1:1\n${photo},"Lamp, brass",9:16\n${photo},Floor lamp,16:9\n`);
         check(`${tag}: the rows are checked ("3 runs · all fine")`, await seen(dialog.getByText("3 runs · all fine")));
@@ -151,21 +151,21 @@ try {
         const rows = (await stamped()).slice(0, -before3 || undefined);
         check(`${tag}: three runs are three batches`, new Set(rows.map((g) => g.batchId)).size === 3 && rows.length === 6, `${rows.length} rows`);
         // A bad row is said inline, and nothing runs.
-        await openRoute(page, `${app}/assist/skills?run=${NAME}`);
+        await openRoute(page, `${app}/chat/skills?run=${NAME}`);
         await dialog.getByRole("tab", { name: "Many" }).click();
         await dialog.getByLabel("Rows to run").fill(`product,name\n${photo},Desk lamp\nnot-a-link,Floor lamp\n`);
         check(`${tag}: a bad row is marked inline`, await seen(dialog.getByText(/Product photo: a file from Fuobe/)));
         check(`${tag}: …and the footer says to fix it, with no price`, await seen(dialog.getByText("Fix the rows marked below")));
         // A switched-off skill's form says so (its Run is off), and switches it back on.
         await send("PATCH", `/api/assist/skills/${NAME}`, { enabled: false });
-        await openRoute(page, `${app}/assist/skills?run=${NAME}`);
+        await openRoute(page, `${app}/chat/skills?run=${NAME}`);
         check(`${tag}: a switched-off skill's form says so`, await seen(dialog.getByText("This skill is switched off")));
         check(`${tag}: …and its Run button is off`, await dialog.getByRole("button", { name: /^Run/ }).isDisabled());
         await dialog.getByRole("button", { name: "Switch it on" }).click();
         check(`${tag}: Switch it on brings the form back`, await seen(dialog.getByText("Runs in the cloud")));
         // 4. Test again: a different route than the one tested (Replicate preferred) needs a new test run, and Test again clears it.
         await send("PUT", "/api/settings", { cloudProvider: "replicate" });
-        await openRoute(page, `${app}/assist/skills?skill=${NAME}`);
+        await openRoute(page, `${app}/chat/skills?skill=${NAME}`);
         const amber = await page
           .getByText(/Needs a new test run:/)
           .first()
@@ -202,7 +202,7 @@ try {
           check(`${tag}: …and opens its Run form`, await seen(page.getByRole("heading", { name: "Run E2E Poster" })));
         }
         flowsDone = true;
-        await openRoute(page, `${app}/assist/skills?run=${NAME}`);
+        await openRoute(page, `${app}/chat/skills?run=${NAME}`);
       }
       // Layout: ready to run, at this size and scheme.
       check(`${tag}: the form is ready to run (tested on Cloud)`, await seen(dialog.getByText("Runs in the cloud")));
@@ -213,7 +213,7 @@ try {
       await dialog.getByLabel("Rows to run").fill(`Product photo,Product name,Shape\n${photo},A very long product name that keeps on going and going,16:9\n`);
       check(`${tag}: nothing scrolls sideways`, await noSideScroll(page));
       await shot(page, `layout-${width}-${scheme}`);
-      await openRoute(page, `${app}/assist/skills?skill=${NAME}`);
+      await openRoute(page, `${app}/chat/skills?skill=${NAME}`);
       check(`${tag}: the skill's dialog offers Run… and the .zip`, await seen(page.getByRole("button", { name: "Run…" })));
       await page.getByRole("button", { name: /Download/ }).click();
       check(`${tag}: …Download offers SKILL.md and the .zip`, await seen(page.getByRole("menuitem", { name: "Skill with its files (.zip)" })));

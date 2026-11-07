@@ -41,7 +41,7 @@ export default async function Page() {
     <HomeView
       openModels={roundedDown(home.facts.openModels)}
       chips={HOME_TRY}
-      assist={{ label: "Plan a perfume ad with Assist", href: `/assist?prompt=${encodeURIComponent(ASSIST_SUGGESTIONS[0])}` }}
+      assist={{ label: "Plan a perfume ad with Assist", href: `/chat/make?prompt=${encodeURIComponent(ASSIST_SUGGESTIONS[0])}` }}
       goals={<GoalRow names={goalTapNames()} />}
       bento={<HomeBento bento={home.bento} />}
       prices={starterPriceLine()}

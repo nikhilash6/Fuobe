@@ -332,7 +332,7 @@ const SUB_TOOLS: NavEntry[] = [
   { id: "marketing-click-to-ad", href: "/marketing/click-to-ad", label: "Click to Ad", what: "From a product link to an ad", kind: "tool", goals: [], keywords: "product link url to ad shop page amazon", icon: "Megaphone", parent: "marketing" },
   // A tab of Marketing Studio's suite (Marketing Studio · Click to Ad · Ads Studio · Ad Multiplier), so its studio is that one.
   { id: "ads-multiplier", href: "/ads/multiplier", label: "Ad Multiplier", what: "One ad in many versions", kind: "tool", goals: [], keywords: "variations versions sizes multiply ads studio", icon: "Target", parent: "marketing" },
-  { id: "chat-skills", href: "/assist/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation assist", icon: "MessagesSquare", parent: "chat" },
+  { id: "chat-skills", href: "/chat/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation assist", icon: "MessagesSquare", parent: "chat" },
   // An app with a page of its own that Create lists: a tool of Apps, so the bar marks Apps on its page.
   { id: "any-angle", href: "/apps/app-any-angle", label: "Any Angle", what: "See it from any angle", kind: "tool", goals: [], keywords: "angle rotate turn view camera viewpoint orbit 3d", cover: "app-any-angle", icon: "Rotate3d", parent: "apps" },
 ];
@@ -387,8 +387,8 @@ const STUDIO_FEATURES: NavEntry[] = [
   feature("photodump", "Camera", "instadump", "/photodump?tab=instadump", "From a selfie", "A photo pack from one selfie", "instadump selfie one photo pack instagram"),
   feature("cinema", "Clapperboard", "blockout", "/cinema?blockout=1", "Blockout", "Block a scene out in 3D", "blockout block out 3d layout previs scene"),
   feature("canvas", "Network", "skills", "/canvas?tab=skills", "Skills as canvases", "Chat's skills, drawn as boards", "skills recipes boards assist chat canvas", OWNER),
-  feature("chat", "MessagesSquare", "memory", "/assist/memory", "Memory", "What Chat remembers", "memory remember facts notes assist", OWNER),
-  feature("chat", "MessagesSquare", "scheduled", "/assist/scheduled", "Scheduled", "Tasks that run on a schedule", "scheduled schedule recurring tasks assist", OWNER),
+  feature("chat", "MessagesSquare", "memory", "/chat/memory", "Memory", "What Chat remembers", "memory remember facts notes assist", OWNER),
+  feature("chat", "MessagesSquare", "scheduled", "/chat/scheduled", "Scheduled", "Tasks that run on a schedule", "scheduled schedule recurring tasks assist", OWNER),
 ];
 
 /** The pages that show everything one of the bar's menus holds (src/lib/nav-areas.ts lays them out). */

@@ -257,5 +257,5 @@ export function indexEntries(index: PaletteIndex, mode: "both" | "cloud" | "open
 export function skillEntries(skills: { name: string; title: string; description: string; recipe?: boolean; enabled: boolean }[]): PaletteEntry[] {
   return skills
     .filter((s) => s.recipe && s.enabled)
-    .map((s) => ({ key: `skill:${s.name}`, kind: "skill" as const, label: `Run ${s.title}…`, hint: "Skill", href: `/assist/skills?run=${s.name}`, keywords: `${s.name} ${s.description} skill run` }));
+    .map((s) => ({ key: `skill:${s.name}`, kind: "skill" as const, label: `Run ${s.title}…`, hint: "Skill", href: `/chat/skills?run=${s.name}`, keywords: `${s.name} ${s.description} skill run` }));
 }

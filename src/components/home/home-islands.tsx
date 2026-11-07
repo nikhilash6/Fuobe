@@ -171,7 +171,7 @@ const ASSIST_ACTION =
 export function AssistAction() {
   const arrow = <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />;
   return useIsOwner() ? (
-    <IntentLink href="/assist" className={ASSIST_ACTION}>
+    <IntentLink href="/chat/make" className={ASSIST_ACTION}>
       Open Assist {arrow}
     </IntentLink>
   ) : (
@@ -196,7 +196,7 @@ export function AssistExamples({ prompts, skills }: { prompts: string[]; skills:
         {prompts.map((s) => (
           <li key={s}>
             {owner ? (
-              <IntentLink href={`/assist?prompt=${encodeURIComponent(s)}`} className={cn(row, "group transition-colors hover:bg-muted")}>
+              <IntentLink href={`/chat/make?prompt=${encodeURIComponent(s)}`} className={cn(row, "group transition-colors hover:bg-muted")}>
                 <span className="min-w-0">{s}</span>
                 <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-[3px] group-hover:text-foreground" />
               </IntentLink>
@@ -214,7 +214,7 @@ export function AssistExamples({ prompts, skills }: { prompts: string[]; skills:
           {skills.map((s) => (
             <li key={s.name}>
               {owner ? (
-                <IntentLink href={`/assist?skill=${s.name}`} className={cn(chip, "transition-colors hover:bg-accent")}>
+                <IntentLink href={`/chat/make?skill=${s.name}`} className={cn(chip, "transition-colors hover:bg-accent")}>
                   {s.title}
                 </IntentLink>
               ) : (

@@ -89,7 +89,7 @@ describe("goal row data", () => {
       const prompt = GOAL_ASSIST_PROMPTS[g.id];
       expect(prompt, g.id).toBeTruthy();
       expect(prompt!.length).toBeLessThanOrEqual(ASSIST_PROMPT_MAX);
-      expect(href).toBe(`/assist?prompt=${encodeURIComponent(prompt!)}`);
+      expect(href).toBe(`/chat/make?prompt=${encodeURIComponent(prompt!)}`);
       expect(new URL(href!, "http://x").searchParams.get("prompt")).toBe(prompt);
     }
     for (const id of Object.keys(GOAL_ASSIST_PROMPTS)) expect(GOALS.find((g) => g.id === id)?.assist, id).toBe(true);
@@ -128,7 +128,7 @@ describe("goal row markup", () => {
         expect(html).toContain(`id="goal-band-title"`);
         expect(html).toContain(g.title.replace("&", "&amp;"));
         expect(html).toContain(`aria-label="Close ${g.title.replace("&", "&amp;")}"`);
-        const links = hrefs(html).filter((h) => !h.startsWith("/assist?prompt="));
+        const links = hrefs(html).filter((h) => !h.startsWith("/chat/make?prompt="));
         expect(links).toEqual([...want.cards.map((e) => e.href), ...g.taps.map((t) => tapHref(t.preset)), ...want.finish.map((e) => e.href)]);
         expect(want.cards.length, g.id).toBeGreaterThanOrEqual(4);
         expect(want.cards.length, g.id).toBeLessThanOrEqual(5);
@@ -152,7 +152,7 @@ describe("goal row markup", () => {
         const html = band(g.id, kind);
         const shown = kind === "owner" && !!g.assist;
         expect(html.includes("Plan it with Assist"), `${g.id} ${kind}`).toBe(shown);
-        expect(hrefs(html).some((h) => h.startsWith("/assist?prompt=")), `${g.id} ${kind}`).toBe(shown);
+        expect(hrefs(html).some((h) => h.startsWith("/chat/make?prompt=")), `${g.id} ${kind}`).toBe(shown);
       }
     }
   });

@@ -31,7 +31,7 @@ const INTENTS = [
   { label: "A talking avatar", href: "/lipsync", icon: Mic2 },
   { label: "A faceless video", href: "/faceless", icon: Clapperboard },
   { label: "Voice or music", href: "/audio", icon: AudioLines },
-  { label: "Plan it with Assist", href: "/assist", icon: Bot },
+  { label: "Plan it with Assist", href: "/chat/make", icon: Bot },
 ] as const;
 
 export type IntentMode = "image" | "video" | "edit";

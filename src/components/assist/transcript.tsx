@@ -235,7 +235,7 @@ export function Transcript({
                     {item.skills.map((n) => (
                       <Link
                         key={n}
-                        href={`/assist/skills?skill=${n}`}
+                        href={`/chat/skills?skill=${n}`}
                         className="inline-flex h-7 items-center gap-1.5 rounded-full bg-brand-faint pr-2.5 pl-1 text-[12px] font-medium text-brand-text hover:bg-brand-faint-hover"
                       >
                         <SkillIcon name={n} icon={skill(n)?.icon} size="sm" className="size-5" />

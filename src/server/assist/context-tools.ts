@@ -69,7 +69,7 @@ const loadSkill = defineTool({
       if (text === null) return { content: `/${n} has no file “${file}”. Its files: ${s.files.map((f) => f.path).join(", ") || "none"}.`, isError: true };
       return { content: text.length > 40_000 ? `${text.slice(0, 40_000)}\n… (cut at 40,000 characters)` : text, items: [{ id: "", role: "tool", text: `Read ${file} from ${s.title}` }] };
     }
-    const item = { id: "", role: "tool" as const, text: `Using the ${s.title} skill`, href: `/assist/skills?skill=${s.name}` };
+    const item = { id: "", role: "tool" as const, text: `Using the ${s.title} skill`, href: `/chat/skills?skill=${s.name}` };
     // A skill with a recipe also runs by itself: its "Run it" section follows the instructions.
     const recipe = skillRecipe(n);
     const runs = recipe ? `\n\n${recipeMarkdown(recipe, { name: n })}` : "";
@@ -129,7 +129,7 @@ const remember = defineTool({
     if (replaces && replaces !== m.id) deleteMemory(replaces);
     return {
       content: JSON.stringify({ saved: m.id, category: m.category, scope: m.scope }),
-      items: [{ id: "", role: "tool", text: `Remembered: ${m.text}`, href: "/assist/memory" }],
+      items: [{ id: "", role: "tool", text: `Remembered: ${m.text}`, href: "/chat/memory" }],
     };
   },
 });

@@ -29,16 +29,16 @@ async function discoverRoutes() {
   const askFirst = await post(app, "/api/assist", { text: brief, engine: "cloud", mode: { mode: "free" } });
   const autoRun = await post(app, "/api/assist", { text: brief, engine: "cloud", autoApprove: true, mode: { mode: "free" } });
   const { urls, generated } = dynamicSamples(root, { cinema: project?.id, canvas: canvas?.id, assistProject: assistProject?.id });
-  const chats = [askFirst?.id, autoRun?.id].filter(Boolean).map((id) => `/assist?c=${id}`);
-  // A skill with a recipe: its Run form opens from /assist/skills?run=<name>.
+  const chats = [askFirst?.id, autoRun?.id].filter(Boolean).map((id) => `/chat/make?c=${id}`);
+  // A skill with a recipe: its Run form opens from /chat/skills?run=<name>.
   const recipeSkill = await recipeSkillSample();
   // Kinetic opens on a scene by its address (the editor), as well as on its scene picker (/kinetic).
   const samples = [...urls, ...chats, ...querySamples({ recipeSkill }), "/library?tab=favorites", "/kinetic?scene=big-number", "/login", "/this-page-does-not-exist"];
-  if (!recipeSkill) console.log("note: couldn't create a sample skill with a recipe, only an unknown /assist/skills?run= is checked");
+  if (!recipeSkill) console.log("note: couldn't create a sample skill with a recipe, only an unknown /chat/skills?run= is checked");
   if (!project?.id) console.log("note: couldn't create a sample cinema project, only an unknown /cinema/[id] is checked");
   if (!canvas?.id) console.log("note: couldn't create a sample canvas, only an unknown /canvas/[id] is checked");
-  if (!assistProject?.id) console.log("note: couldn't create a sample Assist project, only an unknown /assist/projects/[id] is checked");
-  if (chats.length < 2) console.log("note: couldn't start the sample Assist chats, so /assist?c=<id> isn't fully checked");
+  if (!assistProject?.id) console.log("note: couldn't create a sample Assist project, only an unknown /chat/projects/[id] is checked");
+  if (chats.length < 2) console.log("note: couldn't start the sample Assist chats, so /chat/make?c=<id> isn't fully checked");
   for (const p of generated) console.log(`note: ${p} has no sample in tests/e2e/_routes.mjs: only its not-found page is checked`);
   return [...new Set([...out, ...samples])];
 }

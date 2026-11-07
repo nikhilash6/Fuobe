@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { AssistView } from "@/components/assist-view";
 import { starterCards, starterFills } from "@/lib/starters/catalog";
 
-export const metadata: Metadata = { title: "Assist" };
+export const metadata: Metadata = { title: "Make" };
 
 export default function Page() {
   return (

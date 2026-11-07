@@ -42,7 +42,7 @@ const RESULT: Record<ScheduleResult["status"], { icon: typeof Clock; tone: strin
 
 /**
  * Assist's Scheduled tab (Supercomputer's Scheduled Tasks): every task with its rule, next run and
- * last result, to run now, pause, edit or delete. Standalone at /assist/scheduled, or one project's
+ * last result, to run now, pause, edit or delete. Standalone at /chat/scheduled, or one project's
  * tasks inside its page.
  */
 export function ScheduledView({ projectId }: { projectId?: string } = {}) {
@@ -161,7 +161,7 @@ function TaskRow({ s, showProject }: { s: ScheduleView; showProject: boolean }) 
     attempt(async () => {
       const id = await actions.runNow(s.id);
       if (!id) return void toast("The last run is still going — try again when it stops");
-      toast.success("Started", { action: { label: "Open chat", onClick: () => router.push(`/assist?c=${id}`) }, duration: 4000 });
+      toast.success("Started", { action: { label: "Open chat", onClick: () => router.push(`/chat/make?c=${id}`) }, duration: 4000 });
     });
 
   const last = s.last;
@@ -183,7 +183,7 @@ function TaskRow({ s, showProject }: { s: ScheduleView; showProject: boolean }) 
             {showProject && project && (
               <>
                 <span aria-hidden>·</span>
-                <Link href={`/assist/projects/${project.id}`} className="inline-flex items-center gap-1 hover:text-foreground">
+                <Link href={`/chat/projects/${project.id}`} className="inline-flex items-center gap-1 hover:text-foreground">
                   <ProjectDot project={project} className="size-1.5" /> {project.name}
                 </Link>
               </>
@@ -242,7 +242,7 @@ function TaskRow({ s, showProject }: { s: ScheduleView; showProject: boolean }) 
               <span className="min-w-0">
                 <span className="line-clamp-2 break-words">{last.text}</span>
                 {last.threadId && (
-                  <Link href={`/assist?c=${last.threadId}`} className="font-medium text-brand-text hover:underline">
+                  <Link href={`/chat/make?c=${last.threadId}`} className="font-medium text-brand-text hover:underline">
                     {last.status === "waiting" ? "Review the plan" : "Open chat"}
                   </Link>
                 )}

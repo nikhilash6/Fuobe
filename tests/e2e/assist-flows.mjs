@@ -93,7 +93,7 @@ const page = await ctx.newPage();
 page.on("pageerror", (e) => errors.push(e.message));
 
 await step("skill menu, chip and a chat with the skill loaded", async () => {
-  await openRoute(page, `${app}/assist`);
+  await openRoute(page, `${app}/chat/make`);
   const box = page.getByRole("textbox", { name: "Message" });
   await box.click();
   await box.type("/prod");
@@ -113,7 +113,7 @@ await step("skill menu, chip and a chat with the skill loaded", async () => {
 });
 
 await step("remember asks first, then shows on the Memory page", async () => {
-  await openRoute(page, `${app}/assist`);
+  await openRoute(page, `${app}/chat/make`);
   const box = page.getByRole("textbox", { name: "Message" });
   await box.fill("Remember that I always want vertical 9:16 videos");
   await box.press("Enter");
@@ -126,13 +126,13 @@ await step("remember asks first, then shows on the Memory page", async () => {
   // is waited for by its own words (one pattern for both matches one or two of them, depending on how fast the reply is).
   await page.getByText("Saved to memory for future chats", { exact: true }).waitFor({ timeout: 30_000 });
   await page.getByText(/^Saved to memory — every chat will follow it/).waitFor({ timeout: 30_000 });
-  await openRoute(page, `${app}/assist/memory`);
+  await openRoute(page, `${app}/chat/memory`);
   await page.getByText("I always want vertical 9:16 videos.").waitFor({ timeout: 15_000 });
   await shot(page, "flow-memory");
 });
 
 await step("a project with instructions and a note; its chats carry it", async () => {
-  await openRoute(page, `${app}/assist/skills`);
+  await openRoute(page, `${app}/chat/skills`);
   await page.getByRole("button", { name: "New project" }).first().click();
   await page.getByLabel("Name").fill("E2E Spring campaign");
   await page.getByLabel("Instructions").fill("Everything is for a spring sneaker drop: pastel palette, 9:16.");
@@ -155,7 +155,7 @@ await step("a project with instructions and a note; its chats carry it", async (
 
 await step("upload a .zip skill, open it, delete it", async () => {
   const name = `e2e-recipe-${Date.now().toString(36)}`;
-  await openRoute(page, `${app}/assist/skills`);
+  await openRoute(page, `${app}/chat/skills`);
   await page.locator('input[type="file"]').setInputFiles({ name: `${name}.zip`, mimeType: "application/zip", buffer: skillZip(name) });
   await page.getByRole("tab", { name: /My skills/ }).waitFor();
   await page.getByText("E2E Recipe Reels").first().waitFor({ timeout: 15_000 });
@@ -168,7 +168,7 @@ await step("upload a .zip skill, open it, delete it", async () => {
 });
 
 await step("mode picker offers Manual with models and effort", async () => {
-  await openRoute(page, `${app}/assist`);
+  await openRoute(page, `${app}/chat/make`);
   await page.getByRole("button", { name: /^Mode:/ }).click();
   await page.getByRole("radio", { name: "Manual" }).click();
   await page.getByRole("radio", { name: /Offline planner/ }).waitFor();
@@ -195,7 +195,7 @@ await step("save a chat as a skill, then /skill plus an attachment runs it on on
     body: JSON.stringify({ text: "Put this desk lamp on a travertine plinth, soft window light", attachments: [photo], engine: "cloud", autoApprove: false }),
   });
   savedChat = (await res.json()).id;
-  await openRoute(page, `${app}/assist?c=${savedChat}`);
+  await openRoute(page, `${app}/chat/make?c=${savedChat}`);
   await page.getByRole("button", { name: /^Run/ }).click({ timeout: 30_000 });
   await page.getByRole("button", { name: /^Open / }).first().waitFor({ timeout: 60_000 });
   // Every take finished (a step still running can't be saved yet).
@@ -219,7 +219,7 @@ await step("save a chat as a skill, then /skill plus an attachment runs it on on
   const view = await (await fetch(`${app}/api/assist/skills/${savedSkill}/recipe`)).json();
   if (view?.recipe?.source?.from !== "assist" || view.recipe.params.length !== 1) throw new Error(`saved recipe: ${JSON.stringify(view?.recipe?.source)} ${view?.recipe?.params?.length} inputs`);
   // A new chat: /name and a new photo → one card titled by the skill → Run.
-  await openRoute(page, `${app}/assist`, { settleMs: 2000 });
+  await openRoute(page, `${app}/chat/make`, { settleMs: 2000 });
   const box = page.getByRole("textbox", { name: "Message" });
   await box.click();
   // The whole name typed: the skill's chip shows above the words (its menu has nothing left to offer).
@@ -246,7 +246,7 @@ await step("phone: Save as skill stays in the header and its review fits", async
   const phone = await browser.newContext({ ...PHONE, colorScheme: scheme });
   const p = await phone.newPage();
   p.on("pageerror", (e) => errors.push(e.message));
-  await openRoute(p, `${app}/assist?c=${savedChat}`);
+  await openRoute(p, `${app}/chat/make?c=${savedChat}`);
   await p.getByRole("button", { name: "Save as skill" }).click();
   await p.getByRole("dialog").getByText("What changes next time").waitFor({ timeout: 30_000 });
   await p.waitForTimeout(400);
@@ -261,12 +261,12 @@ await step("phone: the sidebar opens as a sheet; no sideways scroll", async () =
   const phone = await browser.newContext({ ...PHONE, colorScheme: scheme });
   const p = await phone.newPage();
   p.on("pageerror", (e) => errors.push(e.message));
-  for (const r of ["/assist", "/assist/skills", "/assist/memory", "/assist/scheduled"]) {
+  for (const r of ["/chat/make", "/chat/skills", "/chat/memory", "/chat/scheduled"]) {
     await openRoute(p, app + r);
     const wide = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (wide > 0) throw new Error(`${r} is ${wide}px too wide`);
   }
-  await openRoute(p, `${app}/assist`);
+  await openRoute(p, `${app}/chat/make`);
   await p.getByRole("button", { name: "Chats, projects, skills, memory and scheduled tasks" }).click();
   await p.getByRole("dialog").getByRole("link", { name: "Skills" }).waitFor();
   await p.getByRole("dialog").getByRole("link", { name: "Scheduled" }).waitFor();

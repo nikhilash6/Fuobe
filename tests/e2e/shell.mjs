@@ -183,7 +183,7 @@ try {
       page.evaluate(() =>
         document.documentElement.hasAttribute("data-fullscreen-studio"),
       );
-    await openRoute(page, `${app}/assist`);
+    await openRoute(page, `${app}/chat/make`);
     assert.ok(await marked(), "marked on Assist");
     assert.ok(
       await page.locator("[data-top-bar]").isVisible(),
@@ -209,7 +209,7 @@ try {
     step(
       "phone: a full-screen studio hides the tabs, and its header's Menu opens the menu sheet",
     );
-    await openRoute(page, `${app}/assist`);
+    await openRoute(page, `${app}/chat/make`);
     assert.ok(
       !(await page.locator("[data-phone-tabs]").isVisible()),
       "no tabs on Assist",

@@ -119,7 +119,7 @@ describe("a chat's context", () => {
     expect(sysText(second.at(-1)!)).toContain("### /thumbnail-generation — Thumbnail Generator");
     const v = agent.getThread(t.id)!;
     expect(v.thread.skills).toEqual(["thumbnail-generation"]);
-    expect(v.thread.items.find((i) => i.role === "tool")).toMatchObject({ text: "Using the Thumbnail Generator skill", href: "/assist/skills?skill=thumbnail-generation" });
+    expect(v.thread.items.find((i) => i.role === "tool")).toMatchObject({ text: "Using the Thumbnail Generator skill", href: "/chat/skills?skill=thumbnail-generation" });
   });
 
   it("asks before remembering in ask-first mode, then saves the memory where the chat lives", async () => {

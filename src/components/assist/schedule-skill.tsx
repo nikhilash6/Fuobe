@@ -167,7 +167,7 @@ export function SkillTaskFields({
         ) : skills.length === 0 ? (
           <p className="rounded-xl bg-muted/60 px-3.5 py-2.5 text-[13px] text-muted-foreground">
             No skills that run by themselves yet. Make one from a result you like (its ⋯ menu → Make a skill), or save a chat as a skill, then schedule it here.{" "}
-            <Link href="/assist/skills" className="font-medium text-brand-text underline-offset-2 hover:underline">
+            <Link href="/chat/skills" className="font-medium text-brand-text underline-offset-2 hover:underline">
               Open Skills
             </Link>
           </p>

@@ -186,7 +186,7 @@ function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: Recipe
             : r.demo
               ? "Placeholder results, free — placeholders are on in Settings"
               : `${view.title}: same steps, new take`,
-        action: staged ? { label: "See its steps", onClick: () => router.push(`/assist/skills?skill=${encodeURIComponent(name)}`) } : { label: `Open in ${studio}`, onClick: () => router.push(href) },
+        action: staged ? { label: "See its steps", onClick: () => router.push(`/chat/skills?skill=${encodeURIComponent(name)}`) } : { label: `Open in ${studio}`, onClick: () => router.push(href) },
       });
       onClose();
     } catch (e) {

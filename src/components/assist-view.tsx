@@ -92,7 +92,7 @@ export function NewChatControls({
 
 /**
  * starters: the ready jobs under the composer (the covered ones, from the page; the owner's view loads the rest);
- * fills: what each one types into the composer ("/skill words"), by id, also for /assist?starter=<id>.
+ * fills: what each one types into the composer ("/skill words"), by id, also for /chat/make?starter=<id>.
  */
 export function AssistView({ starters: given = [], fills: givenFills = {} }: { starters?: StarterCardData[]; fills?: Record<string, StarterFill> } = {}) {
   const { owner, starters, fills } = useStarters("assist", given, givenFills);
@@ -102,11 +102,11 @@ export function AssistView({ starters: given = [], fills: givenFills = {} }: { s
   const [engine, setEngine] = useEngine();
   const [askFirst, setAskFirst] = useState(true);
   const [open, setOpen] = useState<{ g: Generation; i: number } | null>(null);
-  // "Use in a new chat" on a skill opens /assist?skill=<name>: the composer starts with "/name ". Home's examples open
-  // /assist?prompt=<text>: the composer starts with the text. Neither sends anything.
+  // "Use in a new chat" on a skill opens /chat/make?skill=<name>: the composer starts with "/name ". Home's examples open
+  // /chat/make?prompt=<text>: the composer starts with the text. Neither sends anything.
   const skillParam = params.get("skill");
   const [draft, setDraft] = useState(() => ({ key: 0, text: assistDraft(skillParam, params.get("prompt")) }));
-  // A ready job (its card here, or /assist?starter=<id>) types its skill and words in: one this viewer may see only.
+  // A ready job (its card here, or /chat/make?starter=<id>) types its skill and words in: one this viewer may see only.
   const fillStarter = (sid: string) => {
     const f = Object.hasOwn(fills, sid) ? fills[sid] : undefined;
     if (f?.kind !== "assist") return false;
@@ -127,7 +127,7 @@ export function AssistView({ starters: given = [], fills: givenFills = {} }: { s
   const [scheduling, setScheduling] = useState(false);
   const builder = useSkillBuilder();
 
-  const go = (next: string | null) => router.replace(next ? `/assist?c=${next}` : "/assist", { scroll: false });
+  const go = (next: string | null) => router.replace(next ? `/chat/make?c=${next}` : "/chat/make", { scroll: false });
   const thread = view.data?.thread;
   const project = thread?.projectId ? projects.data?.find((p) => p.id === thread.projectId) : null;
   const available = chatSkills(skills.data, project);
@@ -174,13 +174,13 @@ export function AssistView({ starters: given = [], fills: givenFills = {} }: { s
         <RailButton />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {project && (
-            <Link href={`/assist/projects/${project.id}`} className="hidden min-w-0 shrink items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground sm:inline-flex">
+            <Link href={`/chat/projects/${project.id}`} className="hidden min-w-0 shrink items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground sm:inline-flex">
               <ProjectDot project={project} />
               <span className="truncate">{project.name}</span>
               <span aria-hidden>/</span>
             </Link>
           )}
-          <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">{thread?.title ?? "Assist"}</h1>
+          <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">{thread?.title ?? "Make"}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {agentBadge}
@@ -219,7 +219,7 @@ export function AssistView({ starters: given = [], fills: givenFills = {} }: { s
           <div className="w-full max-w-[760px]">
             <div className="mb-6 text-center">
               <h2 className="font-heading text-display text-balance">What are we creating today?</h2>
-              <p className="mt-2 text-[14px] text-pretty text-muted-foreground">Describe the whole job. Assist picks the models, shows you the plan and cost, then runs every step. Type / to use a skill.</p>
+              <p className="mt-2 text-[14px] text-pretty text-muted-foreground">Describe the whole job. Chat picks the models, shows you the plan and cost, then runs every step. Type / to use a skill.</p>
             </div>
             <AssistVisitorNote className="mb-4" />
             <AssistComposer
@@ -388,7 +388,7 @@ export function SkillStarters({
         <p className="text-[12px] font-medium text-muted-foreground">Start with a skill</p>
         <span className="flex items-center gap-3">
           {extra}
-          <Link href="/assist/skills" className="text-[12px] text-brand-text hover:underline">
+          <Link href="/chat/skills" className="text-[12px] text-brand-text hover:underline">
             All skills
           </Link>
         </span>

@@ -25,7 +25,7 @@ import { ProjectDot } from "./project-dot";
 export function AssistShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1">
-      <aside className="sticky top-chrome hidden h-content w-64 shrink-0 flex-col border-r bg-sidebar/40 xl:flex" aria-label="Assist">
+      <aside className="sticky top-chrome hidden h-content w-64 shrink-0 flex-col border-r bg-sidebar/40 xl:flex" aria-label="Make">
         <Suspense fallback={<RailSkeleton />}>
           <Rail />
         </Suspense>
@@ -50,7 +50,7 @@ export function RailButton({ className }: { className?: string }) {
       </Tooltip>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-[min(86vw,320px)] gap-0 p-0" aria-describedby={undefined} onOpenAutoFocus={(e) => e.preventDefault()}>
-          <SheetTitle className="sr-only">Assist</SheetTitle>
+          <SheetTitle className="sr-only">Make</SheetTitle>
           <SheetDescription className="sr-only">Chats, projects, skills, memory and scheduled tasks</SheetDescription>
           <Suspense fallback={<RailSkeleton />}>
             <Rail onNavigate={() => setOpen(false)} />
@@ -105,7 +105,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("space-y-2 p-3 pb-2", onNavigate && "pt-12")}>
         <Button asChild variant="outline" className="h-9 w-full justify-start rounded-full">
-          <Link href="/assist" onClick={onNavigate}>
+          <Link href="/chat/make" onClick={onNavigate}>
             <MessageSquarePlus /> New chat
           </Link>
         </Button>
@@ -118,10 +118,10 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
             </button>
           )}
         </div>
-        <nav className="space-y-0.5" aria-label="Assist pages">
-          <RailLink href="/assist/skills" icon={Sparkles} label="Skills" active={pathname.startsWith("/assist/skills")} onNavigate={onNavigate} />
-          <RailLink href="/assist/memory" icon={Brain} label="Memory" active={pathname.startsWith("/assist/memory")} onNavigate={onNavigate} />
-          <RailLink href="/assist/scheduled" icon={CalendarClock} label="Scheduled" active={pathname.startsWith("/assist/scheduled")} onNavigate={onNavigate} />
+        <nav className="space-y-0.5" aria-label="Make pages">
+          <RailLink href="/chat/skills" icon={Sparkles} label="Skills" active={pathname.startsWith("/chat/skills")} onNavigate={onNavigate} />
+          <RailLink href="/chat/memory" icon={Brain} label="Memory" active={pathname.startsWith("/chat/memory")} onNavigate={onNavigate} />
+          <RailLink href="/chat/scheduled" icon={CalendarClock} label="Scheduled" active={pathname.startsWith("/chat/scheduled")} onNavigate={onNavigate} />
         </nav>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
@@ -147,11 +147,11 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
             ) : projects.data?.length ? (
               <ul className="space-y-0.5">
                 {projects.data.map((p) => {
-                  const active = pathname === `/assist/projects/${p.id}`;
+                  const active = pathname === `/chat/projects/${p.id}`;
                   return (
                     <li key={p.id}>
                       <Link
-                        href={`/assist/projects/${p.id}`}
+                        href={`/chat/projects/${p.id}`}
                         onClick={onNavigate}
                         aria-current={active ? "page" : undefined}
                         className={cn("flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors hover:bg-accent", active ? "bg-accent font-medium" : "text-foreground/85")}
@@ -190,7 +190,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
                 return (
                   <li key={t.id} className="group/chat relative">
                     <Link
-                      href={`/assist?c=${t.id}`}
+                      href={`/chat/make?c=${t.id}`}
                       onClick={onNavigate}
                       aria-current={t.id === current ? "page" : undefined}
                       className={cn("flex min-h-8 flex-col justify-center rounded-lg py-1.5 pr-8 pl-2.5 transition-colors hover:bg-accent", t.id === current && "bg-accent")}
@@ -206,7 +206,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
                     </Link>
                     <ChatMenu
                       chat={t}
-                      onDeleted={() => t.id === current && router.replace("/assist", { scroll: false })}
+                      onDeleted={() => t.id === current && router.replace("/chat/make", { scroll: false })}
                       className="absolute top-1/2 right-1 size-7 -translate-y-1/2 opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 sm:opacity-0 sm:group-hover/chat:opacity-100"
                     />
                   </li>
@@ -223,7 +223,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
         onOpenChange={setCreating}
         onSaved={(p) => {
           onNavigate?.();
-          router.push(`/assist/projects/${p.id}`);
+          router.push(`/chat/projects/${p.id}`);
         }}
       />
     </div>

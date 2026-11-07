@@ -22,7 +22,7 @@ describe("record pages (real 404s)", () => {
   it("names the record behind every id page", () => {
     expect(recordForPath("/cinema/abc")).toEqual({ kind: "cinema", ids: ["abc"] });
     expect(recordForPath("/canvas/abc/")).toEqual({ kind: "canvas", ids: ["abc"] });
-    expect(recordForPath("/assist/projects/p1")).toEqual({ kind: "assist-project", ids: ["p1"] });
+    expect(recordForPath("/chat/projects/p1")).toEqual({ kind: "assist-project", ids: ["p1"] });
     expect(recordForPath("/layers/l1")).toEqual({ kind: "layers", ids: ["l1"] });
     expect(recordForPath("/shorts/s1")).toEqual({ kind: "shorts", ids: ["s1"] });
     expect(recordForPath("/ads/b1")).toEqual({ kind: "brand", ids: ["b1"] });
@@ -35,7 +35,7 @@ describe("record pages (real 404s)", () => {
   });
 
   it("leaves list pages and fixed sub-pages alone", () => {
-    for (const p of ["/", "/cinema", "/canvas/", "/ads", "/ads/multiplier", "/assist/projects", "/assist/skills", "/faceless", "/explainer", "/content-factory", "/library", "/apps/app-face-swap", "/cinema/a/b"]) {
+    for (const p of ["/", "/cinema", "/canvas/", "/ads", "/ads/multiplier", "/chat/skills", "/chat/make", "/chat/memory", "/faceless", "/explainer", "/content-factory", "/library", "/apps/app-face-swap", "/cinema/a/b"]) {
       expect(recordForPath(p), p).toBeNull();
     }
   });

@@ -148,10 +148,10 @@ try {
       const page = await ctx.newPage();
 
       // W6 + W7: the skill's History, and the run that waits across studios.
-      await openRoute(page, `${app}/assist/skills?skill=${POSTER}`);
+      await openRoute(page, `${app}/chat/skills?skill=${POSTER}`);
       check(`${tag} history: the skill's runs show in its dialog`, await seen(page.getByRole("dialog").getByText(/\b\d+ runs?\b/)));
       await shot(page, `history-${tag}`);
-      await openRoute(page, `${app}/assist/skills?skill=${SHORT}`);
+      await openRoute(page, `${app}/chat/skills?skill=${SHORT}`);
       check(`${tag} runs in stages: each step's progress shows`, await seen(page.getByRole("dialog").locator("[data-skill-run]")));
       check(`${tag} runs in stages: the steps are named`, await seen(page.getByRole("dialog").getByText(/Captions ·/)));
       check(`${tag} history: nothing scrolls sideways`, await noSideScroll(page));

@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** Static routes ("/", "/assist/skills") and dynamic patterns ("/cinema/[id]") under (studio). */
+/** Static routes ("/", "/chat/skills") and dynamic patterns ("/cinema/[id]") under (studio). */
 export function studioRoutes(root) {
   const base = path.join(root, "src/app/(studio)");
   const routes = [];
@@ -47,7 +47,7 @@ export function dynamicSamples(root, ids = {}) {
     "/elements/[id]": ["/elements/does-not-exist"],
     "/cinema/[id]": [ids.cinema && `/cinema/${ids.cinema}`, "/cinema/does-not-exist"],
     "/canvas/[id]": [ids.canvas && `/canvas/${ids.canvas}`, "/canvas/does-not-exist"],
-    "/assist/projects/[id]": [ids.assistProject && `/assist/projects/${ids.assistProject}`, "/assist/projects/does-not-exist"],
+    "/chat/projects/[id]": [ids.assistProject && `/chat/projects/${ids.assistProject}`, "/chat/projects/does-not-exist"],
   };
   const hubs = hubModePaths(root);
   const { patterns } = studioRoutes(root);
@@ -71,11 +71,11 @@ export function dynamicSamples(root, ids = {}) {
 
 /**
  * Pages a query opens a dialog on, with sample values: `ids.recipeSkill` names a skill with a recipe (its Run form,
- * /assist/skills?run=…); an unknown one is visited too (the form says so in the dialog).
+ * /chat/skills?run=…); an unknown one is visited too (the form says so in the dialog).
  */
 export function querySamples(ids = {}) {
   // Genjutsu's From picture and Finish tabs (a visitor lands on Motion transfer until they open), and Marketing's
   // code-drawn templates open in their own panel (a tall one, a 4:5 one with cards, one with a picture, the end card).
   const kinetic = ["ms-kinetic-headline", "ms-feature-cards", "m2-line-reveal", "ms-end-card"].map((id) => `/marketing?template=${id}`);
-  return [ids.recipeSkill && `/assist/skills?run=${ids.recipeSkill}`, "/assist/skills?run=does-not-exist", "/genjutsu?mode=picture", "/genjutsu?mode=finish", ...kinetic].filter(Boolean);
+  return [ids.recipeSkill && `/chat/skills?run=${ids.recipeSkill}`, "/chat/skills?run=does-not-exist", "/genjutsu?mode=picture", "/genjutsu?mode=finish", ...kinetic].filter(Boolean);
 }

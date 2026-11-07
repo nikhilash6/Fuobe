@@ -131,7 +131,7 @@ export const ASSIST_SUGGESTIONS = [
   "A 10-second vertical video of a model in a red silk gown running through falling snow at night, with sound",
 ] as const;
 
-/** The longest prompt a link can type into a new chat (/assist?prompt=). */
+/** The longest prompt a link can type into a new chat (/chat/make?prompt=). */
 export const ASSIST_PROMPT_MAX = 2000;
 
 /**

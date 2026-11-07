@@ -74,7 +74,7 @@ try {
       const page = await context.newPage();
       page.on("pageerror", (e) => errors.push(`${tag}: ${e.message}`));
       page.on("console", (m) => m.type() === "error" && !/Failed to load resource/.test(m.text()) && errors.push(`${tag}: ${m.text()}`));
-      await openRoute(page, `${app}/assist/scheduled`);
+      await openRoute(page, `${app}/chat/scheduled`);
       await page.getByRole("button", { name: /Schedule a task|^New$|^Schedule$/ }).first().click();
       const dialog = page.getByRole("dialog");
       check(`${tag}: the dialog asks what to run`, await seen(dialog.getByRole("radio", { name: "A skill" })));
@@ -113,7 +113,7 @@ try {
         const items = thread?.thread?.items ?? [];
         check(`${tag}: Run now: its plan waits for approval, priced`, items.some((i) => i.role === "approval" && i.status === "pending" && i.summary === TITLE));
         check(`${tag}: Run now: the newest upload is attached`, items.some((i) => i.role === "user" && i.attachments?.[0] === newest));
-        await openRoute(page, `${app}/assist?c=${threadId}`);
+        await openRoute(page, `${app}/chat/make?c=${threadId}`);
         check(`${tag}: the chat shows the skill's card`, await seen(page.getByText(TITLE).first()));
         await shot(page, `schedule-skill-chat-${width}-${scheme}`);
         saved = true;
@@ -121,7 +121,7 @@ try {
         await page.keyboard.press("Escape");
       }
       // Edit reopens a skill task in skill mode.
-      await openRoute(page, `${app}/assist/scheduled`);
+      await openRoute(page, `${app}/chat/scheduled`);
       await page.getByRole("button", { name: `More for ${TITLE}`, exact: true }).click();
       await page.getByRole("menuitem", { name: /Edit/ }).click();
       const edit = page.getByRole("dialog");

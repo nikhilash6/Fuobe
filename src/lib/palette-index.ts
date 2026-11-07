@@ -76,7 +76,7 @@ const IN_3D = new Set([...ALL_MODELS_3D.map((m) => m.id), RIG_MODEL, ...RETEXTUR
 /** The Layers editor's tools (cut-out, layers, text detection…): its project list is where they start. */
 const IN_LAYERS = new Set(Object.values(TOOL_MODELS).flatMap((t) => [...t.cloud, ...t.open]));
 /** Where a model no studio, app or tool offers opens: the studio of what it makes. */
-const KIND_HOME: Record<ModelDef["kind"], string> = { image: "/image", video: "/video", audio: "/audio/speech", text: "/assist", model3d: "/image-to-3d" };
+const KIND_HOME: Record<ModelDef["kind"], string> = { image: "/image", video: "/video", audio: "/audio/speech", text: "/chat/make", model3d: "/image-to-3d" };
 /** Tools with their own flow (and their own model choice), by operation. */
 const TOOL_PAGES: [string, Operation][] = [
   ["/video-tools/captions", "captions"],

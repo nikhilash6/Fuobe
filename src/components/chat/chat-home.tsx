@@ -387,7 +387,7 @@ function Recent({ threads, assist, loading }: { threads: ChatThreadSummary[] | u
       mature: false,
       preview: "Plans and makes",
       updatedAt: a.updatedAt,
-      href: `/assist?c=${a.id}`,
+      href: `/chat/make?c=${a.id}`,
       making: true,
     })),
   ].sort((x, y) => y.updatedAt - x.updatedAt);

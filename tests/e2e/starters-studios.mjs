@@ -32,7 +32,7 @@ const check = (name, ok, detail = "") => {
  */
 const SURFACES = [
   // Assist's starters sit in one row of three under the composer (See all opens the rest).
-  { path: "/assist", heading: "Start from a ready job", n: 5, shown: 0, page: "assist.jewel-campaign", words: "candlelit palace hall", row: 3 },
+  { path: "/chat/make", heading: "Start from a ready job", n: 5, shown: 0, page: "assist.jewel-campaign", words: "candlelit palace hall", row: 3 },
   { path: "/library", heading: "Make your first", n: 4, shown: 3, link: true },
   { path: "/cinema", heading: "Start from a ready film", n: 3, shown: 0, page: "cinema.riviera-night", words: "Monte Carlo casino" },
   { path: "/storyboard", heading: "Start from a ready story", n: 3, shown: 0, page: "storyboard.perfume-ad", words: "Nuit Noire perfume ad" },
@@ -165,7 +165,7 @@ try {
 
       // A starter page whose id isn't that studio's answers a real 404.
       if (size === "1440") {
-        for (const bad of ["/cinema/start/elements.amara", "/elements/start/nope.x", "/assist/start/storyboard.heist"]) {
+        for (const bad of ["/cinema/start/elements.amara", "/elements/start/nope.x", "/chat/make/start/storyboard.heist"]) {
           const r = await page.goto(`${app}${bad}`, { waitUntil: "load" });
           check(`${tag}: ${bad} is a real 404`, r?.status() === 404, String(r?.status()));
         }
@@ -190,7 +190,7 @@ try {
         await story.waitFor({ timeout: 60_000 });
         await page.waitForTimeout(1500);
         check(`${tag}: ?starter= of a story with no cover leaves a visitor's composer empty`, !/Capri/.test(await story.inputValue()));
-        await page.goto(`${app}/assist?starter=assist.serum-ugc`, { waitUntil: "load" });
+        await page.goto(`${app}/chat/make?starter=assist.serum-ugc`, { waitUntil: "load" });
         await page.waitForTimeout(2500);
         const typedIn = (await page.locator("textarea").first().inputValue().catch(() => "")) ?? "";
         check(`${tag}: ?starter= of a job with no cover types nothing into a visitor's Assist`, !/serum/.test(typedIn), typedIn.slice(0, 40));
@@ -211,12 +211,12 @@ try {
         check(`${tag}: a ready job types its words into Assist`, /^A campaign for an emerald and diamond necklace/.test(typed), typed.slice(0, 60));
         check(`${tag}: nothing was sent`, !/[?&]c=/.test(page.url()));
         await shot("assist-filled");
-        await page.goto(`${app}/assist?starter=assist.serum-ugc`, { waitUntil: "load" });
+        await page.goto(`${app}/chat/make?starter=assist.serum-ugc`, { waitUntil: "load" });
         await page.waitForTimeout(1500);
         check(`${tag}: ?starter= types a ready job in too`, /^A 15-second vertical creator video/.test(await page.locator("textarea").first().inputValue()));
         if (size === "390") {
           // On a phone the ready jobs sit below the skills: a link beside "All skills" goes to them.
-          await page.goto(`${app}/assist`, { waitUntil: "load" });
+          await page.goto(`${app}/chat/make`, { waitUntil: "load" });
           const ready = page.getByRole("link", { name: "Ready jobs" });
           await ready.waitFor({ timeout: 60_000 }).catch(() => {});
           check(`${tag}: a phone's Assist links to the ready jobs`, await ready.isVisible().catch(() => false));

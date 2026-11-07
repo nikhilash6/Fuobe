@@ -42,7 +42,7 @@ export function MakeBox({ owner, guest }: { owner: boolean; guest: boolean }) {
     try {
       const t = await actions.start({ text, engine, autoApprove: false });
       if ((t as { note?: string }).note) toast((t as { note?: string }).note);
-      router.push(`/assist?c=${t.id}`);
+      router.push(`/chat/make?c=${t.id}`);
     } catch (e) {
       toastError(e);
       setBusy(false);
@@ -115,17 +115,17 @@ export function MoreMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuItem asChild>
-          <Link href="/assist/skills">
+          <Link href="/chat/skills">
             <BookOpen /> Skills
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/assist/memory">
+          <Link href="/chat/memory">
             <Brain /> Memory
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/assist/scheduled">
+          <Link href="/chat/scheduled">
             <CalendarClock /> Scheduled tasks
           </Link>
         </DropdownMenuItem>

@@ -148,7 +148,7 @@ const SECTIONS: { prefix: string; label: string; missing?: string; why?: string 
   { prefix: "/content-factory", label: "Back to Content Factory", missing: "This series isn’t here" },
   { prefix: "/character-swap", label: "Back to Character Swap", missing: "This project isn’t here" },
   { prefix: "/layers", label: "Back to Layers", missing: "This project isn’t here" },
-  { prefix: "/assist", label: "Back to Assist", missing: "This project isn’t here" },
+  { prefix: "/chat/projects", label: "Back to Chat", missing: "This project isn’t here" },
   { prefix: "/audio", label: "Back to Audio" },
   { prefix: "/video-tools", label: "Back to Video tools" },
   { prefix: "/upscale", label: "Back to Upscale" },

@@ -456,7 +456,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
               </div>
               {!owner ? null : s.recipe ? (
                 <div className="flex flex-wrap gap-1.5">
-                  <Button variant="ghost" size="sm" onClick={() => router.push(`/assist?skill=${s.name}`)} disabled={!s.enabled}>
+                  <Button variant="ghost" size="sm" onClick={() => router.push(`/chat/make?skill=${s.name}`)} disabled={!s.enabled}>
                     <MessageSquarePlus /> Use in a new chat
                   </Button>
                   <Button size="sm" onClick={() => onRun(s.name)} disabled={!s.enabled}>
@@ -464,7 +464,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
                   </Button>
                 </div>
               ) : (
-                <Button size="sm" onClick={() => router.push(`/assist?skill=${s.name}`)} disabled={!s.enabled}>
+                <Button size="sm" onClick={() => router.push(`/chat/make?skill=${s.name}`)} disabled={!s.enabled}>
                   <MessageSquarePlus /> Use in a new chat
                 </Button>
               )}

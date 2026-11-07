@@ -30,19 +30,19 @@ describe("/apps/<unknown> is a real 404", () => {
 describe("the 390 px sweep visits dynamic routes", () => {
   it("finds every dynamic route and has a sample for each", () => {
     const { routes, patterns } = studioRoutes(root) as { routes: string[]; patterns: string[] };
-    expect(routes).toContain("/assist/skills");
-    expect(patterns).toEqual(expect.arrayContaining(["/audio/[mode]", "/video-tools/[mode]", "/upscale/[mode]", "/cinema/[id]", "/canvas/[id]", "/apps/[id]", "/assist/projects/[id]"]));
+    expect(routes).toContain("/chat/skills");
+    expect(patterns).toEqual(expect.arrayContaining(["/audio/[mode]", "/video-tools/[mode]", "/upscale/[mode]", "/cinema/[id]", "/canvas/[id]", "/apps/[id]", "/chat/projects/[id]"]));
     const { urls, byPattern } = dynamicSamples(root, { cinema: "c1", canvas: "v1", assistProject: "p1" }) as { urls: string[]; byPattern: Record<string, string[]> };
     // Every dynamic route is visited at least once, and no sample still has a [param] in it.
     for (const p of patterns) expect(byPattern[p]?.length, p).toBeGreaterThan(0);
     expect(urls.filter((u) => /\[/.test(u))).toEqual([]);
-    expect(urls).toEqual(expect.arrayContaining(["/cinema/c1", "/cinema/does-not-exist", "/canvas/v1", "/canvas/does-not-exist", "/assist/projects/p1", "/apps/does-not-exist"]));
+    expect(urls).toEqual(expect.arrayContaining(["/cinema/c1", "/cinema/does-not-exist", "/canvas/v1", "/canvas/does-not-exist", "/chat/projects/p1", "/apps/does-not-exist"]));
     // Dialogs and tabs a query opens: a skill's Run form, Genjutsu's From picture and Finish tabs, Marketing's
     // code-drawn templates.
     const genjutsu = ["/genjutsu?mode=picture", "/genjutsu?mode=finish"];
     const kinetic = ["ms-kinetic-headline", "ms-feature-cards", "m2-line-reveal", "ms-end-card"].map((id) => `/marketing?template=${id}`);
-    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
-    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
+    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/chat/skills?run=lamp", "/chat/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
+    expect(querySamples()).toEqual(["/chat/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
   });
 
   it("gives a route added later (another branch's /faceless/[id]/[episode]) a not-found sample by itself", () => {

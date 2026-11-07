@@ -13,12 +13,12 @@ export type StarterSurface = "assist" | "library" | "cinema" | "storyboard" | "e
  */
 export const STARTER_SURFACES: Record<StarterSurface, { base: string; name: string; section: string; note: string; visitorNote?: string; unavailable: string }> = {
   assist: {
-    base: "/assist",
-    name: "Assist",
+    base: "/chat/make",
+    name: "Chat",
     section: "Start from a ready job",
     note: "Each one types a whole job into the box above. Change anything, then send.",
     visitorNote: "A whole job in one message. See how each one is made.",
-    unavailable: "Assist isn't available here.",
+    unavailable: "Chat isn't available here.",
   },
   library: { base: "/library", name: "Library", section: "Make your first", note: "Each one opens a studio with everything in place. Change anything, then make it.", unavailable: "" },
   cinema: {

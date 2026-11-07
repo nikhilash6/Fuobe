@@ -138,7 +138,7 @@ function Project({ p }: { p: AssistProject }) {
               onSend={async (text, attachments) => {
                 const t = await actions.start({ text, attachments, engine, autoApprove: !askFirst, projectId: p.id, mode: choice ?? undefined });
                 if (t.note) toast(t.note);
-                router.push(`/assist?c=${t.id}`);
+                router.push(`/chat/make?c=${t.id}`);
               }}
               footer={<NewChatControls choice={choice} setChoice={setChoice} can={can} engine={engine} setEngine={setEngine} askFirst={askFirst} setAskFirst={setAskFirst} />}
             />
@@ -171,7 +171,7 @@ function Project({ p }: { p: AssistProject }) {
               <ul className="divide-y rounded-2xl border bg-background">
                 {chats.data.threads.map((t) => (
                   <li key={t.id} className="relative">
-                    <Link href={`/assist?c=${t.id}`} className="flex items-center gap-3 py-3 pr-12 pl-4 transition-colors hover:bg-accent">
+                    <Link href={`/chat/make?c=${t.id}`} className="flex items-center gap-3 py-3 pr-12 pl-4 transition-colors hover:bg-accent">
                       <span className="min-w-0 flex-1 truncate text-[14px]">{t.title}</span>
                       <span className="shrink-0 text-[12px] text-muted-foreground">{t.status === "running" ? "Working…" : t.status === "waiting" ? "Waiting for you" : timeAgo(t.updatedAt)}</span>
                     </Link>
@@ -212,7 +212,7 @@ function Project({ p }: { p: AssistProject }) {
                 try {
                   await projectActions.remove(p.id);
                   toast("Project deleted", { duration: 1500 });
-                  router.push("/assist");
+                  router.push("/chat/make");
                 } catch (e) {
                   toastError(e);
                 }

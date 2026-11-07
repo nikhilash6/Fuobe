@@ -101,7 +101,7 @@ async function generateImage(page) {
 
 /** Send a message in Assist, and wait for the server's answer. */
 async function sendInAssist(page) {
-  await openRoute(page, `${app}/assist`);
+  await openRoute(page, `${app}/chat/make`);
   const box = page.locator("textarea").first();
   await box.fill("Plan a three-shot teaser for a summer coat");
   const answered = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/assist" && r.request().method() === "POST");

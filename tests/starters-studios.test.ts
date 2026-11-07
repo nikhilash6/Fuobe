@@ -90,8 +90,8 @@ describe("Assist starters", () => {
       if (s.seed.skill) expect(getSkill(s.seed.skill), s.id).toBeTruthy();
       const text = s.seed.skill ? `/${s.seed.skill} ${s.seed.prompt}` : s.seed.prompt;
       expect(text.length, s.id).toBeLessThanOrEqual(ASSIST_PROMPT_MAX);
-      expect(card(s).use).toEqual({ kind: "fill", href: `/assist?starter=${encodeURIComponent(s.id)}` });
-      expect(starterHref(card(s))).toBe(`/assist/start/${s.id}`);
+      expect(card(s).use).toEqual({ kind: "fill", href: `/chat/make?starter=${encodeURIComponent(s.id)}` });
+      expect(starterHref(card(s))).toBe(`/chat/make/start/${s.id}`);
       expect(fills[s.id]).toEqual({ kind: "assist", text });
     }
     // A page's fills, like its cards, are the covered starters' only: an owner-only job's words never reach a visitor.
@@ -205,7 +205,7 @@ describe("starter pages and the owner's tap", () => {
   });
 
   it("a guest reads the pages; making a starter is the owner's (guest 401, account 403 library)", () => {
-    for (const p of ["/assist/start/assist.jewel-campaign", "/cinema/start/cinema.riviera-night", "/storyboard/start/storyboard.heist", "/elements/start/elements.amara"]) expect(guestRead(p).kind, p).toBe("pass");
+    for (const p of ["/chat/make/start/assist.jewel-campaign", "/cinema/start/cinema.riviera-night", "/storyboard/start/storyboard.heist", "/elements/start/elements.amara"]) expect(guestRead(p).kind, p).toBe("pass");
     expect(isLibraryChange("POST", "/api/starters/cinema.riviera-night")).toBe(true);
     expect(isLibraryChange("POST", "/api/starters/elements.amara")).toBe(true);
   });

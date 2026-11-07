@@ -45,7 +45,7 @@ export const GOAL_ASSIST_PROMPTS: Partial<Record<GoalId, string>> = {
 /** The Assist link for a goal, or undefined when it has none. */
 export function goalAssistHref(id: GoalId): string | undefined {
   const prompt = GOAL_ASSIST_PROMPTS[id];
-  return prompt ? `/assist?prompt=${encodeURIComponent(prompt)}` : undefined;
+  return prompt ? `/chat/make?prompt=${encodeURIComponent(prompt)}` : undefined;
 }
 
 /**
