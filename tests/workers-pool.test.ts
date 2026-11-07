@@ -459,6 +459,83 @@ describe("order (checks 8, 9)", () => {
   });
 });
 
+describe("people first: the owner's own job on a worker makes room for a person's run", () => {
+  const PAUSED = "Paused for a moment · starts again automatically";
+
+  it("the beat stops the owner's job, which goes back in line with no attempt counted and its place kept; the person's run is claimed next; then the owner's job runs again", () => {
+    const w = worker("preempt");
+    const owner1 = task({ rankAgoMs: 10 * MIN });
+    const owner2 = task({ rankAgoMs: 5 * MIN });
+    expect(claim(w)?.id).toBe(owner1);
+    const rank = state(owner1).rank_at;
+    // No person waits: the owner's job goes on.
+    expect(beat(w, {}, [owner1]).stops).toEqual([]);
+    const person = task({ account: "acct-p" });
+    const a = beat(w, {}, [owner1]);
+    expect(a.stops.map((x) => x.task)).toEqual([owner1]);
+    const back = state(owner1);
+    expect(back.state).toBe("waiting");
+    expect(back.requeues).toBe(0);
+    expect(back.worker_id).toBeNull();
+    expect(back.rank_at).toBe(rank);
+    expect(pool.poolWaitWords(back, clock)).toBe(PAUSED);
+    // The next claim takes the person's run, then the owner's jobs in their own order.
+    expect(claim(w)?.id).toBe(person);
+    expect(beat(w, {}, [person]).stops).toEqual([]);
+    db().prepare("UPDATE relay_tasks SET state = 'done' WHERE id = ?").run(person);
+    expect(claim(w)?.id).toBe(owner1);
+    expect(JSON.parse(state(owner1).extra_json ?? "{}").preempted).toBeUndefined();
+    expect(state(owner2).state).toBe("waiting");
+    expect(pool.poolWaitWords(state(owner2), clock)).not.toBe(PAUSED);
+  });
+
+  it("never a person's run for another person, paid or free", () => {
+    const w = worker("people");
+    const a = task({ account: "acct-a", rankAgoMs: 2 * MIN });
+    expect(claim(w)?.id).toBe(a);
+    task({ account: "acct-b" });
+    db().prepare("UPDATE relay_tasks SET class = 'paid' WHERE state = 'waiting' AND account = 'acct-b'").run();
+    expect(beat(w, {}, [a]).stops).toEqual([]);
+    expect(state(a).worker_id).toBe(w.id);
+  });
+
+  it("not while another free worker can take the person's run, nor a job saving its results, nor one whose results the worker keeps", () => {
+    const w = worker("busy-owner");
+    const own = task({ rankAgoMs: 5 * MIN });
+    expect(claim(w)?.id).toBe(own);
+    const idle = worker("idle");
+    task({ account: "acct-p" });
+    expect(beat(w, {}, [own]).stops).toEqual([]);
+    // The other worker goes away: now the owner's job makes room, unless its results are being saved or kept.
+    pool.patchWorker(idle.id, { paused: true });
+    db().prepare("UPDATE relay_tasks SET state = 'collecting' WHERE id = ?").run(own);
+    expect(beat(w, {}, [own]).stops).toEqual([]);
+    db().prepare("UPDATE relay_tasks SET state = 'running' WHERE id = ?").run(own);
+    const b = pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [{ task: own }], stopped: [], held: [own] }), clock);
+    expect(b.stops).toEqual([]);
+    expect(beat(w, {}, [own]).stops.map((x) => x.task)).toEqual([own]);
+  });
+
+  it("not when the person's run can't run on this worker, nor while the worker may take no work", () => {
+    const w = worker("other-lane", { lanes: [LANE_A] });
+    const own = task({ rankAgoMs: 5 * MIN });
+    expect(claim(w)?.id).toBe(own);
+    task({ account: "acct-p", lane: LANE_B });
+    expect(beat(w, {}, [own]).stops).toEqual([]);
+    task({ account: "acct-q" });
+    // Our work first and Balanced keep the owner's job going; People first (the default) makes room.
+    for (const mode of ["ours-first", "balanced"]) {
+      db().prepare("UPDATE relay_workers SET mode_json = ? WHERE id = ?").run(JSON.stringify({ mode, until: null, by: "test", at: clock }), w.id);
+      expect(beat(w, {}, [own]).stops).toEqual([]);
+    }
+    db().prepare("UPDATE relay_workers SET mode_json = NULL WHERE id = ?").run(w.id);
+    pool.patchWorker(w.id, { drain: true });
+    expect(beat(w, {}, [own]).stops).toEqual([]);
+    pool.patchWorker(w.id, { drain: false });
+    expect(beat(w, {}, [own]).stops.map((x) => x.task)).toEqual([own]);
+  });
+});
+
 describe("people's runs this worker may take now (the beat's claimableNow)", () => {
   it("counts people's waiting runs it can run here, never the owner's own, and not runs for other lanes, files or VRAM", () => {
     const w = worker("counts", { lanes: [LANE_A], workflows: ["wf-a"], vram: 12 * GB });

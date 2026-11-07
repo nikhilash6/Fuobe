@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { FINISH_KINDS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
 import { allLanes, hasFiles, laneLabel, lanesFor, MEDIA_KINDS, needsOf, packKey, partLanes, unloadedNodes, type FileNeed, type Inventory, type NodePack, type Needs } from "@/lib/lanes";
-import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat, type WorkerHolding } from "@/lib/relay";
+import { POOL_WORDS, RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat, type WorkerHolding } from "@/lib/relay";
 import { runtimeFileKeys } from "@/lib/runtime-files";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
@@ -378,6 +378,16 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         stops.push({ task: t.id, promptId: t.prompt_id, ...(t.prefix && { prefix: t.prefix }) });
       }
       d.prepare("UPDATE relay_workers SET stop_now = 0 WHERE id = ?").run(w.id);
+    } else {
+      // People first: the owner's own job on its GPU goes back in line when a person's run waits that this worker can
+      // take and no other free worker can. No attempt counted, its place among the owner's jobs kept; it runs again
+      // from the start once no person waits. Never a person's run, never its CPU slot's task.
+      for (const t of ownerJobsToPreempt(fresh, new Set(b.held ?? []), now)) {
+        if (!backInLine(t, { blame: false, sentBack: "made room for a person's run" })) continue;
+        const back = taskById(t.id);
+        if (back) setTask(t.id, { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(back.extra_json, {}), preempted: now }) });
+        stops.push({ task: t.id, promptId: t.prompt_id, ...(t.prefix && { prefix: t.prefix }) });
+      }
     }
     const state = workerState(fresh, now);
     if (state.state !== before?.state) {
@@ -428,6 +438,31 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
 }
 
 /**
+ * The owner's own jobs this worker's GPU runs that go back in line for people (workerBeat), in People first and People
+ * only: while it may take work, a person's run waits that it can take, and no other worker that is free (taking work,
+ * its GPU's slot empty) can take that run. Not one that is saving its results, nor one whose finished results the
+ * worker keeps, nor light CPU work.
+ */
+function ownerJobsToPreempt(w: WorkerRow, held: Set<string>, now: number): TaskRow[] {
+  // Only where people come before the owner's own jobs (People first, People only); never in Our work first or Balanced.
+  const mode = effectiveMode(w, now).mode;
+  if (mode !== "people-first" && mode !== "people-only") return [];
+  if (!eligible(w, now)) return [];
+  const d = db();
+  const mine = (d.prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND device = ? AND state IN ('sending','queued','running') AND stop = 0").all(w.id, slotDevice(w, "gpu")) as TaskRow[]).filter(
+    (t) => classRank(t) === OWNER_CLASS && t.slot !== "cpu" && !t.finish_json && !held.has(t.id),
+  );
+  if (!mine.length) return [];
+  const people = gpuClaimableRows(w, now, "people");
+  if (!people.length) return [];
+  const others = (d.prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL AND id != ?").all(w.id) as WorkerRow[]).filter(
+    (o) => eligible(o, now) && !d.prepare("SELECT 1 FROM relay_tasks WHERE worker_id = ? AND device = ? AND state IN ('sending','queued','running','collecting')").get(o.id, slotDevice(o, "gpu")),
+  );
+  const someoneElse = (t: TaskRow) => others.some((o) => fitsSlot(t, o, now, "gpu") && retryOk(t, o, now) && beforeWindowEnds(t, o, now));
+  return people.some((t) => !someoneElse(t)) ? mine : [];
+}
+
+/**
  * People's tasks (an account's, never the owner's own) this worker may claim right now: in its pool, in a lane it is
  * allowed and able to run, with the files and VRAM they need, past their delays, and ending before its hours do. Its
  * own pause doesn't count here (its machine reads this to know whether a person's run waits for it); a pause on the
@@ -446,13 +481,17 @@ export function ownerWaitingNow(w: WorkerRow, now = Date.now()): number {
 }
 
 function gpuClaimable(w: WorkerRow, now: number, whose: "people" | "owner"): number {
-  if (w.kind !== "pool" || w.revoked_at || w.paused_server || w.drain || (w.protocol ?? 0) < MIN_PROTOCOL || !hoursAt(hoursOf(w), now).inside) return 0;
+  return gpuClaimableRows(w, now, whose).length;
+}
+
+function gpuClaimableRows(w: WorkerRow, now: number, whose: "people" | "owner"): TaskRow[] {
+  if (w.kind !== "pool" || w.revoked_at || w.paused_server || w.drain || (w.protocol ?? 0) < MIN_PROTOCOL || !hoursAt(hoursOf(w), now).inside) return [];
   const c = controlsOf(w, now);
   // Only its GPU's: work its CPU slot takes never asks local ComfyUI work to make room (left out in the query, so a long
   // line of CPU work never hides the GPU's).
   const rows = lineRows(LINE_COLS, `pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS ${whose === "people" ? "NOT NULL" : "NULL"} AND INSTR(',' || pools || ',', ?) > 0 ${slotWhere(w, "gpu")}`, [`,${w.pool},`], c, LOOK_AT);
   const fit = rows.filter((t) => fitsSlot(t, w, now, "gpu") && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
-  if (plainLine(c)) return fit.length;
+  if (plainLine(c)) return fit;
   // Held runs and people, runs pinned to another worker, and the owner's own jobs in People only don't count. In Our work
   // first, while local work on its PC runs, people's runs ask it for no room unless the owner sent them next or boosted
   // them: the owner's work keeps the GPU, and people's runs start once it is free.
@@ -460,7 +499,7 @@ function gpuClaimable(w: WorkerRow, now: number, whose: "people" | "owner"): num
   return fit.filter((t) => {
     const tc = taskControl(t, classRank(t), c, w.id);
     return !tc.out && (!keepGpu || tc.tier < 2);
-  }).length;
+  });
 }
 
 /** The controls one look at the line reads: the mode of this worker (or of a pool: `w` its name) and the live overrides. */
@@ -658,7 +697,10 @@ function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): Claimed
   // A job ticket's task keeps the time of its claim before this one, and which claim that note is for (`claimFor`, this
   // claim's time): a refusal of the ticket on this same claim, before anything ran (another catalog, more than the PC
   // allows), puts it back as it was, so a task no worker ever ran keeps its wait limit.
-  const before = t.ticket_json && t.state === "waiting" ? { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), claimedBefore: t.claimed_at ?? null, claimFor: now }) } : {};
+  // A run given back for people (workerBeat) is no longer paused once a worker takes it again.
+  const { preempted, ...extra } = json<Record<string, unknown>>(t.extra_json, {});
+  const ticketNote = !!t.ticket_json && t.state === "waiting";
+  const before = ticketNote || preempted !== undefined ? { extra_json: JSON.stringify({ ...extra, ...(ticketNote && { claimedBefore: t.claimed_at ?? null, claimFor: now }) }) } : {};
   const c = takeTask(t, device, now, { worker_id: w.id, ...before, ...(t.state !== "waiting" && t.device === device && t.claimed_at && { claimed_at: t.claimed_at }) });
   // A GPU job taken by a worker with another model loaded (or none) loads its model first: it is "getting ready" until
   // its first step reports. A light CPU job and a finishing job load none.
@@ -1455,6 +1497,8 @@ export const poolWaitMs = () => {
 
 /** The waiting words of a task for workers ("Waiting for a GPU · 2 ahead", "No GPU is on now"). */
 export function poolWaitWords(t: TaskRow, now = Date.now()): string {
+  // The owner's own run, given back so that a person's run could start first: it starts again by itself.
+  if (json<{ preempted?: unknown }>(t.extra_json, {}).preempted !== undefined) return POOL_WORDS.paused;
   const p = placeInLine(t, now);
   if (p.etaSeconds === null) return "Waiting for a GPU to come on";
   return p.place > 1 ? `Waiting for a GPU · ${p.place - 1} ahead` : "Next for a GPU";

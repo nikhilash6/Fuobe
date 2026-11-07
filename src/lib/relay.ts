@@ -538,6 +538,8 @@ export const POOL_WORDS = {
   working: "Working",
   /** Working, with its model still loading (the GPU had another one loaded): no progress yet. */
   gettingReady: "Warming up · starting in a moment",
+  /** The owner's own run, given back to the line so that a person's run could start first (pool.ts, people first). */
+  paused: "Paused for a moment · starts again automatically",
   failed: "That one didn't come out right — try again, or try a similar model.",
 } as const;
 

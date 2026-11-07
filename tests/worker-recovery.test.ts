@@ -89,7 +89,7 @@ function addWorker(): W {
 
 let gens = 0;
 /** A job for the workers that loads one input (a picture, or a clip) and saves a picture (or what `save` says). */
-function addTask(o: { clip?: Buffer; save?: { class_type: string; inputs: Record<string, unknown> } } = {}): { id: string; input: string } {
+function addTask(o: { clip?: Buffer; save?: { class_type: string; inputs: Record<string, unknown> }; account?: string } = {}): { id: string; input: string } {
   const gid = `recovery-gen-${++gens}`;
   const now = Date.now();
   db()
@@ -101,7 +101,7 @@ function addTask(o: { clip?: Buffer; save?: { class_type: string; inputs: Record
     principal: "owner",
     generationId: gid,
     graph: { "1": loader, "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } }, "9": o.save ?? { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "fuobe/worker-test" } } },
-    pool: { pools: ["pool"], rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
+    pool: { pools: ["pool"], account: o.account, rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
   });
   return { id: t.id, input };
 }
@@ -643,6 +643,33 @@ describe("the worker's timeline", () => {
     expect(stages.slice(1, -1).filter((x) => x === "loading" || x === "running").length).toBeGreaterThan(0);
     expect(stages).toContain("queued");
   });
+});
+
+describe("people first", () => {
+  it("a person's run that waits stops the owner's job on its ComfyUI: back in line with no attempt counted, then it runs again from the start", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const own = addTask();
+    start(w, s, p, { steps: 30, stepMs: 150 });
+    await until(async () => {
+      const c = comfyOf(p);
+      return state(own.id).state === "running" && c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 2;
+    });
+    // A person's run comes (this harness can't run an account's job: the worker gives it back, and the line has only
+    // the owner's job again).
+    const person = addTask({ account: "acct-preempt" });
+    await until(() => state(own.id).state === "waiting" && state(own.id));
+    expect(state(own.id).requeues).toBe(0);
+    expect(pool.poolWaitWords(state(own.id))).toBe("Paused for a moment · starts again automatically");
+    // The worker took the person's run next.
+    await until(() => state(person.id).claimed_at && state(person.id));
+    const t = await ended(own.id);
+    expect(t.state).toBe("done");
+    expect(t.requeues).toBe(0);
+    // Its ComfyUI got the owner's prompt twice: the one it stopped, and the run from the start.
+    expect(prompts(p)).toBe(2);
+  }, 120_000);
 });
 
 describe("new worker code", () => {

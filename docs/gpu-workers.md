@@ -385,7 +385,14 @@ default). It also keeps:
   and its VRAM;
 - its class: `paid` or `free` for an account's run (the billing service says which; `free` without one), `owner` for
   the owner's own jobs. People's runs always go first: the owner's jobs wait until no person's run waits that the
-  same worker could take.
+  same worker could take. In the modes People first (the default) and People only, a worker that runs one of the
+  owner's own jobs on its GPU makes room for a person: when a person's run waits that this worker can take, and no
+  other worker that is free can take it, the beat answer lists the owner's job in `stops`. The worker takes its
+  prompt off its ComfyUI, and the job goes back in line with no attempt counted and its `rank_at` kept. The worker's
+  next claim takes the person's run, and the owner's job runs again from the start once no person waits. Its run says
+  "Paused for a moment · starts again automatically" until then. A person's run is never stopped for another person,
+  and neither is a job that is saving its results, one whose finished results the worker keeps, or its CPU slot's
+  task. An older worker reads `stops` as it always did.
 - `rank_at`: `created_at`, minus the head start the billing service gave the run inside its class (at most a day). Only
   people's runs get a head start: the owner's own jobs keep `created_at`, so they go in the order they came. A job that
   goes back in line keeps its `rank_at`, so it keeps its place.
