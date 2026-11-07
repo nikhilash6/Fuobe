@@ -31,7 +31,7 @@ const { webLinks } = await import("@/lib/assist");
 
 type Block = Anthropic.Beta.BetaContentBlock;
 const text = (t: string) => ({ type: "text", text: t, citations: null }) as Block;
-const use = (id: string, name: string, input: unknown) => ({ type: "tool_use", id, name, input }) as unknown as Block;
+const toolUse = (id: string, name: string, input: unknown) => ({ type: "tool_use", id, name, input }) as unknown as Block;
 const reply = (content: Block[], stop: Anthropic.Beta.BetaStopReason) => ({ content, stop_reason: stop, stop_details: null }) as Anthropic.Beta.BetaMessage;
 
 /** A model that makes one call per turn listed, then says it's done; it records the tool results it was sent. */
@@ -42,7 +42,7 @@ function scripted(...calls: { name: string; input: unknown }[]) {
     const last = messages.at(-1);
     if (last && Array.isArray(last.content)) for (const b of last.content) if (b.type === "tool_result") results.push(JSON.stringify(b));
     const c = calls[n++];
-    return c ? reply([text("On it."), use(`toolu_${n}`, c.name, c.input)], "tool_use") : reply([text("Done.")], "end_turn");
+    return c ? reply([text("On it."), toolUse(`toolu_${n}`, c.name, c.input)], "tool_use") : reply([text("Done.")], "end_turn");
   };
   return { call, results };
 }
