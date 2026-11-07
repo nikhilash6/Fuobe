@@ -1209,6 +1209,8 @@ function open(): Database.Database {
   db.exec(SKILL_TABLES);
   // An account's own canvases (account-canvas.ts): not a numbered migration, so branches never clash over its place.
   db.exec(ACCOUNT_CANVAS_TABLES);
+  // Fuobe Chat (src/server/chat/store.ts): not a numbered migration either.
+  db.exec(CHAT_TABLES);
   // Where an account's runs go, as it picked (run-on.ts): read only while hosted runs are on, empty otherwise.
   db.exec(RUN_ON_TABLES);
   // Runs on this install's GPUs waiting to enter the line (pool-holds.ts): empty unless hosted runs are on.
@@ -1248,6 +1250,73 @@ const ACCOUNT_CANVAS_TABLES = `CREATE TABLE IF NOT EXISTS account_canvases (
     summary_json TEXT
   );
   CREATE INDEX IF NOT EXISTS account_canvases_account ON account_canvases(account_id, updated_at DESC);`;
+
+/**
+ * Fuobe Chat (src/server/chat/store.ts): chats, their messages, the characters people make, their chat settings and the
+ * public copies of shared chats. `account_id` is an account's id, or "owner" for the owner's own chats.
+ */
+const CHAT_TABLES = `CREATE TABLE IF NOT EXISTS account_chat_threads (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    character_id TEXT,
+    tool TEXT,
+    play TEXT,
+    mature INTEGER NOT NULL DEFAULT 0,
+    summary TEXT,
+    summary_upto INTEGER NOT NULL DEFAULT 0,
+    share_token TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS account_chat_threads_account ON account_chat_threads(account_id, updated_at DESC);
+  CREATE TABLE IF NOT EXISTS account_chat_messages (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    image_url TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS account_chat_messages_thread ON account_chat_messages(thread_id, seq);
+  CREATE TABLE IF NOT EXISTS account_chat_characters (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    tagline TEXT NOT NULL,
+    persona TEXT NOT NULL,
+    scenario TEXT NOT NULL,
+    greeting TEXT NOT NULL,
+    mature INTEGER NOT NULL DEFAULT 0,
+    accent TEXT NOT NULL,
+    portrait_url TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS account_chat_characters_account ON account_chat_characters(account_id, updated_at DESC);
+  CREATE TABLE IF NOT EXISTS account_chat_prefs (
+    account_id TEXT PRIMARY KEY,
+    mature_at INTEGER,
+    engine TEXT NOT NULL DEFAULT 'site',
+    key_sealed TEXT,
+    key_last4 TEXT,
+    key_model TEXT,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS account_chat_shares (
+    token TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    mature INTEGER NOT NULL DEFAULT 0,
+    snapshot_json TEXT NOT NULL,
+    portrait_url TEXT,
+    views INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS account_chat_shares_thread ON account_chat_shares(thread_id);`;
 
 /**
  * Where an account's runs go while hosted runs are on, as it picked (run-on.ts): this install's GPUs, its own GPU, or

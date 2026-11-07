@@ -844,6 +844,10 @@ export const ASSET_REFS: AssetRef[] = [
   // (skill-runs.ts STUDIO_TABLES). `account` lets a row keep only its own account's files.
   { table: "account_canvases", cols: ["pages_json"], what: "account canvas", key: "id", name: "name", account: "account_id" },
   { table: "account_projects", cols: ["data_json", "summary_json"], what: "account project", key: "id", name: "name", account: "account_id" },
+  // Fuobe Chat: a picture sent in a chat, a character's portrait, and a shared chat's portrait.
+  { table: "account_chat_messages", cols: ["image_url"], what: "chat", key: "thread_id", name: "(SELECT title FROM account_chat_threads WHERE id = thread_id)", account: "account_id" },
+  { table: "account_chat_characters", cols: ["portrait_url"], what: "chat character", key: "id", name: "name", account: "account_id" },
+  { table: "account_chat_shares", cols: ["portrait_url"], what: "shared chat", key: "token", name: "json_extract(snapshot_json, '$.title')", account: "account_id" },
 ];
 
 /**
@@ -915,6 +919,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.cpu_slot_json": "the kinds of finishing job a worker's CPU slot runs",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
   "account_canvases.summary_json": "an account board's list line: node and page counts, and its outline (node types, places and short labels)",
+  "account_chat_shares.snapshot_json": "a shared chat's words and its character's name and colours; its portrait is the row's portrait_url",
 };
 
 /** The query that finds the rows of one ASSET_REFS table naming a file (@id), except the purged generation's own (@g). */

@@ -1,0 +1,175 @@
+"use client";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useRef, useState } from "react";
+import type { CharacterCard, ChatKind } from "@/lib/chat/catalog";
+import type { ChatEvent, ChatMe, ChatMessage, ChatThreadSummary, ChatThreadView } from "@/lib/chat/types";
+import { responseError } from "@/lib/refusals";
+
+async function json<T>(res: Response): Promise<T> {
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
+  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Try again."), { status: res.status }, body.code && { code: body.code }));
+  return body;
+}
+
+export const chatSend = async <T,>(url: string, method: string, body?: unknown) =>
+  json<T>(await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }));
+
+export function useChatMe(enabled = true) {
+  return useQuery({ queryKey: ["chat", "me"], queryFn: async () => json<ChatMe>(await fetch("/api/chat/me")), staleTime: 15_000, enabled });
+}
+
+export function useChatThreads(enabled = true, q = "") {
+  return useQuery({
+    queryKey: ["chat", "threads", q.trim()],
+    queryFn: async () => json<{ items: ChatThreadSummary[] }>(await fetch(`/api/chat/threads${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`)),
+    staleTime: 5_000,
+    enabled,
+  });
+}
+
+export function useCharacters(enabled = true) {
+  return useQuery({ queryKey: ["chat", "characters"], queryFn: async () => json<{ items: CharacterCard[] }>(await fetch("/api/chat/characters")), staleTime: 30_000, enabled });
+}
+
+export function useChatThread(id: string, enabled = true) {
+  return useQuery({ queryKey: ["chat", "thread", id], queryFn: async () => json<ChatThreadView>(await fetch(`/api/chat/threads/${id}`)), staleTime: 0, enabled, retry: false });
+}
+
+export interface StartChat {
+  kind: ChatKind;
+  characterId?: string | null;
+  tool?: string | null;
+  play?: string | null;
+  text?: string | null;
+  image?: string | null;
+}
+
+/** Start a chat; the thread page asks for the first reply. */
+export function useStartChat() {
+  const qc = useQueryClient();
+  return useCallback(
+    async (s: StartChat) => {
+      const t = await chatSend<ChatThreadView>("/api/chat/threads", "POST", s);
+      qc.setQueryData(["chat", "thread", t.id], t);
+      void qc.invalidateQueries({ queryKey: ["chat", "threads"] });
+      return t;
+    },
+    [qc],
+  );
+}
+
+export type ReplyState =
+  | { phase: "idle" }
+  | { phase: "waiting" }
+  | { phase: "writing"; text: string }
+  | { phase: "failed"; message: string; code: string; retryAfterS?: number };
+
+/**
+ * Ask for a reply and follow its stream. The thread's cached view gets the person's message and the saved reply as
+ * they arrive; `state` shows what's happening in between.
+ */
+export function useReply(threadId: string) {
+  const qc = useQueryClient();
+  const [state, setState] = useState<ReplyState>({ phase: "idle" });
+  /** The reply that arrived in one piece (no text on the way): the page shows it as if written. */
+  const [revealId, setRevealId] = useState<string | null>(null);
+  const ctl = useRef<AbortController | null>(null);
+
+  const patch = useCallback(
+    (fn: (t: ChatThreadView) => ChatThreadView) => qc.setQueryData<ChatThreadView>(["chat", "thread", threadId], (t) => (t ? fn(t) : t)),
+    [qc, threadId],
+  );
+
+  const ask = useCallback(
+    async (body: { text?: string; image?: string | null; retry?: boolean; edit?: string }) => {
+      ctl.current?.abort();
+      const ac = new AbortController();
+      ctl.current = ac;
+      setState({ phase: "waiting" });
+      // Shown at once; the server's copy replaces it.
+      const temp: ChatMessage | null = body.text || body.image ? { id: `tmp_${Date.now()}`, role: "user", content: body.text ?? "", image: body.image ?? null, createdAt: Date.now() } : null;
+      patch((t) => {
+        let messages = t.messages;
+        if (body.edit) {
+          const i = messages.findIndex((m) => m.id === body.edit);
+          if (i >= 0) messages = messages.slice(0, i);
+        } else if (body.retry && messages.at(-1)?.role === "assistant" && messages.length > 1) messages = messages.slice(0, -1);
+        return { ...t, messages: temp ? [...messages, temp] : messages };
+      });
+      let res: Response;
+      try {
+        res = await fetch(`/api/chat/threads/${threadId}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: ac.signal,
+        });
+      } catch {
+        if (ac.signal.aborted) return setState({ phase: "idle" });
+        return setState({ phase: "failed", code: "failed", message: "Couldn't reach Fuobe. Check your connection and try again." });
+      }
+      if (!res.ok || !res.body) {
+        const e = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        // The guest card opens by itself (watchGuestRefusals); the message stays for Try again.
+        responseError(res, new Error(e.error ?? ""));
+        void qc.invalidateQueries({ queryKey: ["chat", "thread", threadId] });
+        return setState({ phase: "failed", code: e.code ?? "failed", message: e.error ?? "The reply didn't start. Try again." });
+      }
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buf = "";
+      let ended = false;
+      let streamed = false;
+      let texts = 0;
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += value;
+          let nl: number;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line) continue;
+            let e: ChatEvent;
+            try {
+              e = JSON.parse(line) as ChatEvent;
+            } catch {
+              continue;
+            }
+            if (e.type === "user") patch((t) => ({ ...t, messages: [...t.messages.filter((m) => m.id !== temp?.id), e.message] }));
+            else if (e.type === "text") {
+              // Only a model that streams sends text on the way; a whole reply comes with done alone.
+              texts++;
+              streamed = texts > 0;
+              setState({ phase: "writing", text: e.text });
+            } else if (e.type === "done") {
+              ended = true;
+              if (!streamed) setRevealId(e.message.id);
+              patch((t) => ({ ...t, title: e.title, messages: [...t.messages, e.message] }));
+              setState({ phase: "idle" });
+              void qc.invalidateQueries({ queryKey: ["chat", "threads"] });
+            } else if (e.type === "error") {
+              ended = true;
+              setState({ phase: "failed", code: e.code, message: e.message, retryAfterS: e.retryAfterS });
+            }
+          }
+        }
+      } catch {
+        if (ac.signal.aborted) {
+          ended = true;
+          setState({ phase: "idle" });
+        }
+      }
+      if (!ended) setState({ phase: "failed", code: "failed", message: "The reply was cut off. Try again." });
+    },
+    [patch, qc, threadId],
+  );
+
+  const stop = useCallback(() => {
+    ctl.current?.abort();
+    setState({ phase: "idle" });
+  }, []);
+
+  return { state, ask, stop, revealId };
+}

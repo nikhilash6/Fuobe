@@ -3,6 +3,7 @@ import { APPS } from "@/lib/catalog/apps";
 import { FORMER_HOME, modeHref, type HubKind } from "@/lib/hubs";
 import { hiddenStarterPage, recordForPath, unknownHubMode, unknownStarterPage } from "@/lib/record-pages";
 import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
+import { chatShareRoute } from "@/lib/chat/share";
 import {
   ACCOUNT_LIBRARY_MESSAGE,
   accountGeneration,
@@ -406,6 +407,8 @@ export function proxy(request: NextRequest) {
   const read = request.method === "GET" || request.method === "HEAD";
   const share = read && shareRoute(pathname);
   if (share) return openShare(request, share.token, !!share.file);
+  // A shared chat (Fuobe Chat) is public too: its page, its portrait and its link preview, each checking the token.
+  if (read && chatShareRoute(pathname)) return NextResponse.next();
   // Any other /s/ link is no share: the same "link unavailable" 404 as an unknown token.
   if (read && pathname.startsWith("/s/")) {
     const res = shareGone(request);

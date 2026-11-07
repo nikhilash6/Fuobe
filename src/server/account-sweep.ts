@@ -4,6 +4,7 @@ import path from "node:path";
 import { RETENTION_MS, runAccountDeletedHooks } from "./account-files";
 import { deleteAccountCanvases } from "./account-canvas";
 import { deleteAccountProjects } from "./account-projects";
+import { deleteAccountChat } from "./chat/store";
 import { deleteAccountCinema } from "./cinema";
 import { deleteAccountSeries } from "./content-factory";
 import { deleteAccountFaceless } from "./faceless";
@@ -57,6 +58,7 @@ export async function purgeAccount(id: string): Promise<{ runs: number; files: n
   deleteAccountSeries(id);
   deleteAccountFaceless(id);
   deleteAccountProjects(id);
+  deleteAccountChat(id);
   forgetAccountPresses(id);
   await runAccountDeletedHooks(id);
   return { runs, files: files.length };
