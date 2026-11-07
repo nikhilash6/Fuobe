@@ -31,6 +31,7 @@ import { decidePlace, lateRefusal, moderateRun, policyWait, poolQuote, readWishe
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { endTry, notePressRun, pressPrior, pressRun, pressTries, pressTry, readPressId } from "@/server/run-requests";
+import { limitFields, limitWords } from "@/lib/limit-words";
 
 /**
  * List generations, newest first. Filters: kind / kinds, features (`x*` = prefix), models, statuses,
@@ -138,7 +139,8 @@ function limitAnswer(r: AdmitRefused["refusal"]): Answer {
     const late = lateRefusal(r.error);
     return { status: late.status, body: late.body as Answer["body"], headers: late.headers };
   }
-  return { status: r.status, body: { error: r.error, code: r.code }, headers: r.status === 429 ? { "Retry-After": String(r.retryAfterS ?? 30) } : {} };
+  const limit = "limit" in r && r.limit ? { limit: r.limit, refreshAt: r.refreshAt } : {};
+  return { status: r.status, body: { error: r.error, code: r.code, ...limit }, headers: r.status === 429 ? { "Retry-After": String(r.retryAfterS ?? 30) } : {} };
 }
 
 /** Start a generation; `?preview=1` only says what it would run as (model, operation, jobs, outputs, cost). */
@@ -197,7 +199,7 @@ export async function POST(request: Request) {
   const ownLimits = (id: string): Response | null => {
     if (ownActiveRuns(id, { except: replaces?.ids, waitingApart: true }) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
-    if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
+    if (!rate.ok) return refuse(429, limitWords("runs", rate.retryAfterS), limitFields("runs", rate.retryAfterS), { "Retry-After": String(rate.retryAfterS) });
     rated = true;
     return null;
   };
@@ -309,7 +311,7 @@ export async function POST(request: Request) {
       if ("refuse" in plan) {
         unhitRun();
         const over = plan.refuse;
-        return refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) });
+        return refuse(over.status, over.error, { code: over.code, ...(over.limit && { limit: over.limit, refreshAt: over.refreshAt }) }, { "Retry-After": String(over.retryAfterS) });
       }
       // The request as it runs there (no more outputs than the policy's cap per run): planned and priced as it is.
       if (onPool.capped) {

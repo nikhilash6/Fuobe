@@ -22,7 +22,15 @@ export function responseError(res: Response, e: string | Error): Error {
 /** The refusal behind this error shows its own card already: no toast on top of it. */
 export const refusalShown = (e: unknown): boolean => !!(e as { refusalShown?: boolean } | null)?.refusalShown;
 
-/** The error toast for a failed upload or run (its message, else `fallback`), unless its refusal shows its own card. */
+/** What to do next after a refusal, a press away (a limit's "Run it self-hosted", src/lib/limit-words.ts). */
+export type NextStep = { label: string; run: () => void };
+
+/**
+ * The error toast for a failed upload or run (its message, else `fallback`), unless its refusal shows its own card. A
+ * refusal with a next step offers it on the toast.
+ */
 export function toastError(e: unknown, fallback?: string): void {
-  if (!refusalShown(e)) toast.error((e as Error).message || fallback);
+  if (refusalShown(e)) return;
+  const next = (e as { next?: NextStep } | null)?.next;
+  toast.error((e as Error).message || fallback, next ? { action: { label: next.label, onClick: next.run } } : undefined);
 }

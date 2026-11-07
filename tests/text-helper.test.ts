@@ -364,7 +364,7 @@ describe("the AI helper's order and the lyrics route", () => {
     process.env.FUOBE_HOSTED_RUNS = "1";
     const busy = await enhanceRoute.POST(post("/api/enhance", { prompt: "a song", target: "lyrics" }, "account"));
     expect(busy.status).toBe(503);
-    expect(await busy.json()).toEqual({ error: "Writing lyrics is busy right now. Try again in a moment, or type your own.", code: "helper-busy" });
+    expect(await busy.json()).toEqual({ error: "Lots of people are writing lyrics right now — try again in a moment, or type your own.", code: "helper-busy" });
     // A rewrite always comes back: the offline one when the helper is busy.
     const rewrite = await enhanceRoute.POST(post("/api/enhance", { prompt: "a cat" }, "account"));
     expect(((await rewrite.json()) as { prompt: string }).prompt).toMatch(/^a cat\. /);

@@ -68,9 +68,9 @@ describe("a run on its way in the studio feed", () => {
   it("the owner's job waiting with words that don't say its place: its place in the workers' line under them", () => {
     const html = feedTile(gen({ status: "queued", message: "Waiting for a GPU to come on", queue: { place: 3, etaSeconds: 130 } }));
     expect(text(html)).toContain("Waiting for a GPU to come on");
-    expect(text(html)).toContain("In line · 3rd · ready in about 2 min");
+    expect(text(html)).toContain("2 ahead of you · about 2 min");
     const next = feedTile(gen({ status: "queued", message: "Submitting", queue: { place: 1, etaSeconds: null, unknown: true } }));
-    expect(text(next)).toContain("Next in line · starts when a GPU is free");
+    expect(text(next)).toContain("Warming up · starts automatically");
   });
 
   it("the owner's job running on a worker: a ring, its step words and its progress", () => {
@@ -97,7 +97,7 @@ describe("a run on its way in the studio feed", () => {
   it("runs on this studio's GPUs keep their words, now with the ring too", () => {
     const html = render(createElement(PendingTile, { g: gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine, queue: { place: 3, etaSeconds: 130 } }), ratio: 1 }));
     expect(html).toContain("data-run-spinner");
-    expect(text(html)).toContain("In line · 3rd · ready in about 2 min");
+    expect(text(html)).toContain("2 ahead of you · about 2 min");
     expect(pendingWords({ place: "pool", status: "running", message: "", queue: undefined })).toEqual({ label: POOL_WORDS.working, place: null });
   });
 
@@ -111,7 +111,7 @@ describe("a run on its way on a Library card", () => {
     const waiting = render(createElement(StatusCover, { g: gen({ status: "queued", message: "Waiting for a GPU to come on", queue: { place: 1, etaSeconds: null, unknown: true } }) }));
     expect(waiting).toContain("data-run-spinner");
     expect(text(waiting)).toContain("Waiting for a GPU to come on");
-    expect(text(waiting)).toContain("Next in line · starts when a GPU is free");
+    expect(text(waiting)).toContain("Warming up · starts automatically");
     const running = render(createElement(StatusCover, { g: gen({ status: "running", message: "Making your picture · step 3 of 8", progress: 0.375 }) }));
     expect(text(running)).toContain("Making your picture · step 3 of 8");
     expect(text(render(createElement(StatusCover, { g: gen({ status: "queued", message: "" }) })))).toContain("Queued");

@@ -320,13 +320,13 @@ const POOL_ROWS = "json_extract(g.request_json, '$.place') = 'pool' AND g.status
 
 /**
  * How long a run on this install's GPUs may wait in line: the limit stamped on it (the policy's or the billing service's;
- * 0: as long as it takes), else FUOBE_POOL_WAIT_MIN (30).
+ * 0: as long as it takes), else FUOBE_POOL_WAIT_MIN, else as long as it takes (it stays in line and starts by itself).
  */
 export function poolWaitMs(stamped?: number): number {
   if (stamped === 0) return Infinity;
   if (stamped && stamped > 0) return stamped;
   const m = Number(process.env.FUOBE_POOL_WAIT_MIN);
-  return (Number.isFinite(m) && m > 0 ? m : 30) * 60_000;
+  return Number.isFinite(m) && m > 0 ? m * 60_000 : Infinity;
 }
 
 /** A typical run's time on this install's GPUs (the median of the last 20 that finished), or null before any. */

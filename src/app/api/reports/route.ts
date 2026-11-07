@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { isOwnerRequest, LoginGuard, requestViewer, sessionCookieOf } from "@/server/auth";
 import { listReports, report, REPORT_CATEGORIES, type ReportCategory } from "@/server/moderation";
 import { hit } from "@/server/rate";
+import { limitWords } from "@/lib/limit-words";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   const viewer = requestViewer(request);
   const who = viewer.kind === "account" ? `account:${viewer.account.id}` : viewer.kind === "owner" ? "owner" : `guest:${LoginGuard.clientKey(request.headers)}`;
   const rate = hit(`report:${who}`, 20, 60 * 60_000);
-  if (!rate.ok) return Response.json({ error: "Too many reports. Try again later." }, { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterS) } });
+  if (!rate.ok) return Response.json({ error: limitWords("reports", rate.retryAfterS) }, { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterS) } });
   const body = (await request.json().catch(() => null)) as { target?: Record<string, unknown>; category?: unknown; text?: unknown; email?: unknown } | null;
   const t = body?.target ?? {};
   const id = (v: unknown) => (typeof v === "string" && /^[\w-]{1,64}$/.test(v) ? v : undefined);

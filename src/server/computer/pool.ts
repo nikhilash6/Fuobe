@@ -1,4 +1,5 @@
 import "server-only";
+import { ENGINE_WORDS } from "@/lib/engine-error";
 import crypto from "node:crypto";
 import { FINISH_KINDS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
@@ -773,7 +774,7 @@ function sweepLine(d: ReturnType<typeof db>, now: number): void {
     }
   }
   const late = d.prepare("SELECT id FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND claimed_at IS NULL AND not_after IS NOT NULL AND not_after < ?").all(now) as { id: string }[];
-  for (const t of late) endTask(t.id, "failed", { error: "The GPUs were busy. Not charged." });
+  for (const t of late) endTask(t.id, "failed", { error: ENGINE_WORDS["long-wait"] });
 }
 
 /** The longest sleep a worker's beat may report (a week). */
@@ -1255,10 +1256,13 @@ export function gettingReady(generationId: string): boolean {
   return !!t && taskCold(t);
 }
 
-/** FUOBE_POOL_WAIT_MIN: how long a task for workers waits before it fails (30 minutes). */
+/**
+ * FUOBE_POOL_WAIT_MIN: how long a task for workers waits before it fails. 0 when it isn't set: a run waits in line as
+ * long as it takes, and starts by itself.
+ */
 export const poolWaitMs = () => {
   const m = Number(process.env.FUOBE_POOL_WAIT_MIN);
-  return (Number.isFinite(m) && m > 0 ? m : 30) * 60_000;
+  return Number.isFinite(m) && m > 0 ? m * 60_000 : 0;
 };
 
 /** The waiting words of a task for workers ("Waiting for a GPU · 2 ahead", "No GPU is on now"). */

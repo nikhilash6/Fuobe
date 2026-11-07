@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const key = typeof body?.key === "string" && /^[\w.:-]{1,80}$/.test(body.key) ? body.key : null;
   if (!key) return Response.json({ error: "Which offer?" }, { status: 400, headers: NO_STORE });
   const rate = hit(`interest:${account.id}`, 30, 60 * 60_000);
-  if (!rate.ok) return Response.json({ error: "Too many clicks. Try again later." }, { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterS) } });
+  if (!rate.ok) return Response.json({ error: "Thanks — we have your interest. You can tell us more in a little while." }, { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterS) } });
   const a = await interest(account.id, key);
   if (!a) return Response.json({ error: "Not available right now" }, { status: 404, headers: NO_STORE });
   return Response.json({ ok: true, text: a.text }, { headers: NO_STORE });

@@ -1,6 +1,7 @@
 "use client";
 
 import { Cloud, Copy, Cpu, Download, FolderDown, Heart, Loader2, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { ENGINE_WORDS } from "@/lib/engine-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { pendingWords } from "@/lib/pending-words";
 import { refreshPriceChecks } from "@/lib/hosted";
@@ -183,7 +184,10 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
 }
 
 /** The sentences about the person's own files: the same run would only fail again, so changing the draft comes first. */
-const FILE_TROUBLE: readonly string[] = Object.values(FILE_TROUBLE_WORDS);
+const FILE_TROUBLE: readonly string[] = [...Object.values(FILE_TROUBLE_WORDS), ENGINE_WORDS["no-sound"], ENGINE_WORDS["unreadable-input"]];
+
+/** A failed run on this studio's GPUs: its model picker, with the run's settings back in the composer. */
+const SIMILAR_MODEL = { kind: "pick-model", label: "Try a similar model" } as const;
 
 /** The causes a failed tile offers no Retry for (src/lib/diagnose.ts): only a fix on the GPU helps. */
 const NO_RETRY_CAUSES: readonly string[] = ["gpu-comfy-known", "gpu-model-file"];
@@ -245,6 +249,19 @@ export function FailedTile({ g, ratio, onRetry, onReuse }: { g: Generation; rati
           compact
           context="run"
           more={{ onRunOnSite: () => siteRun && create.mutate(siteRunRequest(g, siteRun), { onError: (e) => toastError(e) }) }}
+        />
+      )}
+      {/* A run on this studio's GPUs that didn't come out right: another model, a tap away, beside Retry. */}
+      {poolFailed && !reuseFirst && !trouble && (
+        <RunTroubleActions
+          g={g}
+          reuse={feed?.reuse}
+          model={catalog?.getModel(g.modelId)}
+          className="mt-2 shrink-0"
+          actions={[SIMILAR_MODEL]}
+          max={1}
+          compact
+          context="run"
         />
       )}
       <div className="mt-2 flex shrink-0 flex-wrap gap-1.5">

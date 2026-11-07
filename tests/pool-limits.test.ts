@@ -324,7 +324,8 @@ describe("runs at once on this install's GPUs", () => {
       const third = await post(IMAGE, a.cookie);
       expect(third.status).toBe(429);
       expect(third.body.code).toBe("limit");
-      expect(third.body.error).toBe(limits.POOL_LIMIT_WORDS.hourly);
+      expect(third.body.error).toMatch(/^Lots of people are creating on Fuobe right now, so free runs are shared out — yours refresh in about \d+ min\.$/);
+      expect(third.body).toMatchObject({ limit: "free-hour", refreshAt: expect.any(Number) });
     } finally {
       Object.assign(billing.OPEN_POLICY.limits, was);
     }
@@ -429,7 +430,7 @@ describe("runs waiting, runs an hour, runs from one address", () => {
     expect((await post({ ...IMAGE, ...SHOWN }, b.cookie, from)).status).toBe(201);
     const third = await post({ ...IMAGE, ...SHOWN }, b.cookie, from);
     expect(third.status).toBe(429);
-    expect(third.body.error).toBe(limits.POOL_LIMIT_WORDS.address);
+    expect(third.body.error).toMatch(/^Lots of people on your network are creating right now, so free runs are shared out — yours refresh in about \d+ min\.$/);
     expect((await post({ ...IMAGE, ...SHOWN }, b.cookie, { "x-forwarded-for": "198.51.100.4" })).status).toBe(201);
     const kept = db().prepare("SELECT addr FROM pool_admissions WHERE addr IS NOT NULL").all() as { addr: string }[];
     expect(kept.length).toBeGreaterThan(0);

@@ -354,7 +354,7 @@ describe("losing a worker (checks 3, 4, 5)", () => {
     clock += 2 * MIN;
     pool.sweepPool(clock);
     expect(state(id).state).toBe("failed");
-    expect(state(id).error).toBe("The GPUs were busy. Not charged.");
+    expect(state(id).error).toBe("This one didn't start in time — try again, or try a similar model.");
   });
 
   it("a person's task with no wait limit (the policy's 0) never fails for a wait: 40 minutes with every worker paused, it is still in line", () => {

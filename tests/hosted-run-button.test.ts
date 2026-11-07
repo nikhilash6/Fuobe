@@ -24,27 +24,29 @@ const { TooltipProvider } = await import("@/components/ui/tooltip");
 const render = (node: ReactNode) => renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(TooltipProvider, null, node)));
 
 describe("the words for a place in line", () => {
-  it("says next, or the place, with when it would be ready", () => {
-    expect(lineWords({ place: 1, etaSeconds: null })).toBe("Next in line");
-    expect(lineWords({ place: 1, etaSeconds: 38 })).toBe("Next in line · ready in about 40 s");
-    expect(lineWords({ place: 3, etaSeconds: 130 })).toBe("In line · 3rd · ready in about 2 min");
-    expect(lineWords({ place: 12, etaSeconds: null })).toBe("In line · 12th");
-    expect(lineWords({ place: 22, etaSeconds: 3 })).toBe("In line · 22nd · ready in about 5 s");
-    expect(lineWords({ place: 2, etaSeconds: 3 * 3600 })).toBe("In line · 2nd · ready in about 3 h");
+  it("says you're next, or how many are ahead, with when it would be ready", () => {
+    expect(lineWords({ place: 1, etaSeconds: null })).toBe("You're next");
+    expect(lineWords({ place: 1, etaSeconds: 38 })).toBe("You're next · ready in about 40 s");
+    expect(lineWords({ place: 3, etaSeconds: 130 })).toBe("2 ahead of you · about 2 min");
+    expect(lineWords({ place: 2, etaSeconds: 3 * 3600 })).toBe("1 ahead of you · about 3 h");
+    // Lots of people only when lots really are waiting ahead.
+    expect(lineWords({ place: 12, etaSeconds: null })).toBe("11 ahead of you · lots of people are creating right now");
+    expect(lineWords({ place: 22, etaSeconds: 3 })).toBe("21 ahead of you · about 5 s · lots of people are creating right now");
     // Never a place before the first, nor a wait that can't be.
-    expect(lineWords({ place: 0, etaSeconds: -5 })).toBe("Next in line");
+    expect(lineWords({ place: 0, etaSeconds: -5 })).toBe("You're next");
   });
-  it("no GPU can take it now: it starts when one is free, or when the first is due back", () => {
+  it("no GPU can take it now: warming up, starting by itself or when the first is due back", () => {
     const now = 1_000_000_000_000;
-    expect(lineWords({ place: 3, etaSeconds: null, unknown: true }, now)).toBe("In line · 3rd · starts when a GPU is free");
-    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now + 3 * 3600_000 }, now)).toBe("Next in line · starts in about 3 h");
+    expect(lineWords({ place: 3, etaSeconds: null, unknown: true }, now)).toBe("Warming up · starts automatically");
+    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now + 3 * 3600_000 }, now)).toBe("Warming up · starts in about 3 h");
+    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now + 60_000 }, now)).toBe("Warming up · starting in a moment");
     // A return time already past says nothing it can't keep.
-    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now - 1000 }, now)).toBe("Next in line · starts when a GPU is free");
+    expect(lineWords({ place: 1, etaSeconds: null, unknown: true, returnAt: now - 1000 }, now)).toBe("Warming up · starts automatically");
   });
   it("before Run: when the result would be ready, and nothing when nothing is known", () => {
     expect(waitWords({ place: 3, etaSeconds: 130 })).toBe("ready in about 2 min");
     expect(waitWords({ place: 1, etaSeconds: 40 })).toBe("ready in about 40 s");
-    expect(waitWords({ place: 4, etaSeconds: null, unknown: true })).toBe("starts when a GPU is free");
+    expect(waitWords({ place: 4, etaSeconds: null, unknown: true })).toBe("starts automatically");
     expect(waitWords({ place: 1, etaSeconds: null, light: true })).toBe("ready in seconds");
     expect(waitWords({ place: 1, etaSeconds: null })).toBeNull();
   });
@@ -63,7 +65,7 @@ describe("Run before it is pressed (the price check's answer)", () => {
     expect(poolRunState({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "", text: "Free" }, line: { place: 2, etaSeconds: null, unknown: true, long: true } })).toEqual({
       refused: false,
       text: "Free",
-      wait: "starts when a GPU is free",
+      wait: "starts automatically",
       long: true,
     });
   });
@@ -97,8 +99,8 @@ describe("Run before it is pressed (the price check's answer)", () => {
     expect(render(createElement(PoolNote, { state: { refused: false, text: "Free" } }))).toBe("");
     // A long wait: the account's own GPU (or key, with its price) for this run, once; never on a short one.
     const offer = { label: "Run it now on your GPU", run: () => {} };
-    const long = render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "starts when a GPU is free", long: true }, offer }));
-    expect(long).toContain("Starts when a GPU is free");
+    const long = render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "starts automatically", long: true }, offer }));
+    expect(long).toContain("Starts automatically");
     expect(long).toContain("Run it now on your GPU");
     expect(render(createElement(PoolNote, { state: { refused: false, text: "Free", wait: "ready in about 40 s" }, offer }))).not.toContain("Run it now");
     const refused = render(

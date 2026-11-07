@@ -814,7 +814,7 @@ describe("runs that wait, and a file too big for the address", () => {
     globalThis.__fuobeSmallerCopies = { total: 1, accounts: new Set([a]) };
     expect(await ask()).toEqual({ status: 429, error: "Your last smaller copy is still being made. Try again once it's done." });
     globalThis.__fuobeSmallerCopies = { total: 2, accounts: new Set(["someone-else", "another"]) };
-    expect(await ask()).toEqual({ status: 429, error: "Smaller copies are busy right now. Try again in a minute." });
+    expect(await ask()).toEqual({ status: 429, error: "Lots of smaller copies are being made right now — try again in a minute." });
     globalThis.__fuobeSmallerCopies = undefined;
     // Files that are full say so before any copy is made.
     const { ACCOUNT_LIMITS } = await import("@/server/account-files");

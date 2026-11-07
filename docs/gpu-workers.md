@@ -385,7 +385,7 @@ default). It also keeps:
   same worker could take.
 - `rank_at`: `created_at`, minus the head start the billing service gave the run inside its class (at most a day). A
   job that goes back in line keeps its `rank_at`, so it keeps its place.
-- a wait limit: for an account's run, `FUOBE_POOL_WAIT_MIN` (30 minutes) or what the billing service set; for the
+- a wait limit: for an account's run, `FUOBE_POOL_WAIT_MIN` (none when it isn't set) or what the billing service set; for the
   owner's own jobs, the owner's wait limit (none by default; see the queue's settings below). It applies only until a
   worker first takes the job: past it, a job that no worker took fails with "The GPUs were busy".
 - how many results its workflow makes. An owner's job keeps no more than that (and at least 16), as an account's job

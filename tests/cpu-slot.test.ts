@@ -624,9 +624,10 @@ describe("finishing jobs and their run", () => {
 
   it("wait for a CPU slot as long as their run may wait in line; a 3D model whose finish never came keeps its raw GLB", async () => {
     const { saveFile } = await import("@/server/storage");
-    // Its run's own wait, else this install's.
+    // Its run's own wait, else this install's (none by default: it waits as long as it takes).
     const fin = modelFinish();
-    expect(row(fin).not_after).toBeGreaterThan(Date.now() + pool.poolWaitMs() - 60_000);
+    expect(pool.poolWaitMs()).toBe(0);
+    expect(row(fin).not_after).toBeNull();
     const gid = generation(accountId, "image-to-3d");
     db().prepare("UPDATE generations SET request_json = ? WHERE id = ?").run(JSON.stringify({ account: accountId, place: "pool", waitMs: 120_000 }), gid);
     const raw = saveFile({ data: Buffer.from("glTF raw model"), contentType: "model/gltf-binary", name: "model.glb", source: "generation", generationId: gid, accountId });

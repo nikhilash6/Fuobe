@@ -29,6 +29,7 @@ import { once } from "./shorts-schemas";
 import { ShortsError } from "./shorts";
 import { hostedRunsOn } from "./hosted-switch";
 import { answerPress, claimPress, pressTry, releasePress, toolPressKey, toolPressSeen, type Press, type PressAnswer, type PressClaim } from "./run-requests";
+import { limitWords } from "@/lib/limit-words";
 
 /**
  * A tool's run for a signed-in account (public sign-up): Genjutsu first, then the other tools that plan a run as a
@@ -438,7 +439,7 @@ export async function runAccountTool<T>(request: Request, account: Account, aske
   const ownLimits = (): Response | null => {
     if (activeAccountRuns(id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
-    if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
+    if (!rate.ok) return refuse(429, limitWords("runs", rate.retryAfterS), {}, { "Retry-After": String(rate.retryAfterS) });
     rated = true;
     return null;
   };

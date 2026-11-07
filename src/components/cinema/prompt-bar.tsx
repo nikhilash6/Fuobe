@@ -222,7 +222,7 @@ export function useAddRefs(setDraft: (fn: (d: CinemaDraft) => Partial<CinemaDraf
         .then((a) => setDraft((d) => ({ refs: d.refs.map((r) => (r.id === id ? { ...r, ref: a.url, preview: a.url, uploading: false } : r)) })))
         .catch((e) => {
           setDraft((d) => ({ refs: d.refs.filter((r) => r.id !== id) }));
-          toastError(e, "Upload failed. Please try again.");
+          toastError(e, "That upload didn't finish — please try again.");
         });
     }
   };

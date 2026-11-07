@@ -97,7 +97,7 @@ export function OtherSides({
       </div>
       <p className="text-[12px] text-muted-foreground" aria-live="polite">
         {failed ? (
-          <span className="text-destructive">{failed.error ?? "The sides couldn't be made. Please try again."}</span>
+          <span className="text-destructive">{failed.error ?? "The other sides didn't come out right — try again."}</span>
         ) : (
           <>
             {price ? `${price} · ` : ""}

@@ -27,7 +27,8 @@ import {
 } from "./generation-stream";
 import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
-import { markRefusalShown, refusalShown, responseError } from "./refusals";
+import { isLimitKind, limitNext, limitWordsAt } from "./limit-words";
+import { markRefusalShown, refusalShown, responseError, type NextStep } from "./refusals";
 import { OWN_SETUP_HEADER, PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER, RUNS_CHANGED_EVENT, shownHeader, SIGN_IN_CODE } from "./guest-access";
 import type { PoolRules } from "./pool-rules";
 import { HoldFilesCtx } from "./held-files";
@@ -61,7 +62,19 @@ async function json<T>(res: Response): Promise<T> {
   // Its code too, when the refusal has one (a run that waits for a place: ACTIVE_RUNS_CODE).
   const given = (body as { code?: unknown }).code;
   const code = typeof given === "string" ? given : undefined;
-  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status }, code && { code }));
+  if (!res.ok) {
+    // A limit says when it refreshes on the viewer's own clock, with the next step a press away (src/lib/limit-words.ts).
+    const { limit, refreshAt, guest } = body as { limit?: unknown; refreshAt?: unknown; guest?: unknown };
+    if (isLimitKind(limit) && typeof refreshAt === "number") {
+      const n = limitNext(limit, guest === true);
+      const next: NextStep | undefined = n && {
+        label: n.label,
+        run: n.to === "sign-up" ? () => askToSignUp("run") : () => window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { action: "run" } })),
+      };
+      throw responseError(res, Object.assign(new Error(limitWordsAt(limit, refreshAt)), { status: res.status }, code && { code }, next && { next }));
+    }
+    throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status }, code && { code }));
+  }
   return body;
 }
 

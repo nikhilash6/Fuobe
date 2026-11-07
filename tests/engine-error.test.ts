@@ -122,13 +122,15 @@ describe("what the person reads for each kind of failure", () => {
     expect(engineFailureKind("Value not in list: ckpt_name: 'x.safetensors' not in []")).toBe("missing-on-gpu");
     expect(engineFailureKind("ComfyUI restarted and lost this run. Press Retry.")).toBe("gpu-stopped");
     expect(engineFailureKind("KSampler: mat1 and mat2 shapes cannot be multiplied")).toBe("unknown");
+    expect(engineFailureKind("This one didn't start in time — try again, or try a similar model.")).toBe("long-wait");
+    expect(engineFailureKind("Stopped after 3 tries: ComfyUI kept stopping on the GPUs.")).toBe("gpu-stopped");
   });
 
   it("the example: a plain sentence for the person, the cleaned words for the owner", () => {
     const f = plainEngineFailure(VHS_ONE_LINE);
     expect(f.kind).toBe("no-sound");
     expect(f.words).toBe(ENGINE_WORDS["no-sound"]);
-    expect(f.words).toBe("This clip has no sound for this run to use. Try a clip with sound.");
+    expect(f.words).toBe("This clip has no sound for this run to use — try a clip with sound.");
     expect(f.detail).toMatch(/^VHS_LoadVideo: VHS failed to extract audio from fuobe_HFpqXpUDFs__\.mp4/);
     for (const leak of LEAKS) expect(f.detail!, `${leak}`).not.toMatch(leak);
   });
@@ -136,9 +138,9 @@ describe("what the person reads for each kind of failure", () => {
   it("every sentence is plain: no path, node, engine or dead end", () => {
     for (const w of Object.values(ENGINE_WORDS)) {
       expect(isEngineWords(w)).toBe(true);
-      expect(w).not.toMatch(/ComfyUI|GPU|worker|node|ffmpeg|VHS|support|Press Retry|[\\/]/i);
+      expect(w).not.toMatch(/ComfyUI|GPU|worker|node|ffmpeg|VHS|support|busy|queue|lane|Press Retry|try again later|[\\/!]/i);
       // What to do next is always said.
-      expect(w).toMatch(/Try|Run it again/);
+      expect(w).toMatch(/\btry\b/i);
     }
     expect(isEngineWords("VHS_LoadVideo: x")).toBe(false);
   });

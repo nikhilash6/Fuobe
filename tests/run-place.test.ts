@@ -395,7 +395,7 @@ describe("a tool page's own price check, for a run on this studio's GPUs", () =>
     const p = toolPoolPrice({ costUsd: 0, demo: false, notes: [], place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line });
     expect(p?.text).toBe("Free · ready in about 3 min");
     // Every GPU away: Run stays on, and the chip says it starts when one is free.
-    expect(toolPoolPrice({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line: { place: 2, etaSeconds: null, unknown: true } })).toMatchObject({ text: "Free · starts when a GPU is free", refused: false });
+    expect(toolPoolPrice({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "v1", text: "Free" }, line: { place: 2, etaSeconds: null, unknown: true } })).toMatchObject({ text: "Free · starts automatically", refused: false });
     // Light work: ready in seconds.
     expect(toolPoolPrice({ place: "pool", quote: { allowed: true, amount: 0, priceVersion: "", text: "Free" }, line: { place: 1, etaSeconds: null, light: true } })?.text).toBe("Free · ready in seconds");
     expect(p?.text).not.toMatch(/GPU/);

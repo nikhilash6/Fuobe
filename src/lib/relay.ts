@@ -493,8 +493,8 @@ export const POOL_WORDS = {
   inLine: "In line",
   working: "Working",
   /** Working, with its model still loading (the GPU had another one loaded): no progress yet. */
-  gettingReady: "Working · getting ready",
-  failed: "Sorry, this one couldn't be made.",
+  gettingReady: "Warming up · starting in a moment",
+  failed: "That one didn't come out right — try again, or try a similar model.",
 } as const;
 
 /**
@@ -502,8 +502,8 @@ export const POOL_WORDS = {
  * on this install's GPUs too, since they say what to change.
  */
 export const FILE_TROUBLE_WORDS = {
-  crashed: "This run couldn't finish with these files or settings.",
-  unreadable: "A clip or sound in this run couldn't be read.",
+  crashed: "That one didn't come out right with these files or settings — try another file or other settings.",
+  unreadable: "We couldn't read a clip or sound in this run — try another file (MP4, MOV or MP3 work best).",
 } as const;
 
 /** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */

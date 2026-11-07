@@ -8,6 +8,7 @@ import { dropMix, keepMix, MixExportError, PART_MAX, receiveMixPart, type Finish
 import { holdForCheck } from "@/server/output-checks";
 import { hit, unhit } from "@/server/rate";
 import { runAsTenant } from "@/server/tenant";
+import { limitWords } from "@/lib/limit-words";
 
 /**
  * Split soundtrack's Export mix, in parts: POST the WAV's bytes as the body, `?offset=` where they start, `&id=` from
@@ -56,7 +57,7 @@ async function keepAsRun(account: Account, done: FinishedMix): Promise<Response>
   const rate = hit(bucket, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
   if (!rate.ok) {
     dropMix(done.id);
-    return Response.json({ error: ACCOUNT_MESSAGES.runRate }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS), "Cache-Control": "no-store" } });
+    return Response.json({ error: limitWords("runs", rate.retryAfterS) }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS), "Cache-Control": "no-store" } });
   }
   const title = done.name.replace(/\.wav$/i, "");
   const place = account.gpu ? ("own-gpu" as const) : account.keys?.fal || account.keys?.replicate ? ("own-key" as const) : ("pool" as const);

@@ -115,7 +115,7 @@ const onPlace = (site: boolean | undefined, own: string, onSite: string): string
 const openEngine = (site: boolean | undefined): string => onPlace(site, "on the open engine", "with open models");
 
 /** The one sentence for a run that can't be made (POOL_WORDS.failed in src/lib/relay.ts, kept equal by its test). */
-export const SITE_FAILED_WORDS = "Sorry, this one couldn't be made.";
+export const SITE_FAILED_WORDS = "That one didn't come out right — try again, or try a similar model.";
 
 /** A request the composer refuses, in words (status: the HTTP status the server answers with). */
 export class ComposeError extends Error {

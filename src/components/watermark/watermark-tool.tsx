@@ -281,7 +281,7 @@ export function WatermarkTool({ app, cover }: { app: { name: string; description
     try {
       upload(await shrinkPhoto(source.preview, source.name));
     } catch {
-      toast("This photo couldn't be made smaller here. Try another photo.");
+      toast("We couldn't make this photo smaller — try another photo.");
     } finally {
       setShrinking(false);
     }

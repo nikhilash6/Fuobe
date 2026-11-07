@@ -103,7 +103,7 @@ function shrinkClip(input: string, out: string): Promise<void> {
 export async function withSmallerCopy(accountId: string, req: GenerationRequest): Promise<{ request: GenerationRequest; bytes: number }> {
   const now = making();
   if (now.accounts.has(accountId)) throw new SmallerCopyBusy("Your last smaller copy is still being made. Try again once it's done.");
-  if (now.total >= SMALLER_COPY_LIMITS.atOnce) throw new SmallerCopyBusy("Smaller copies are busy right now. Try again in a minute.");
+  if (now.total >= SMALLER_COPY_LIMITS.atOnce) throw new SmallerCopyBusy("Lots of smaller copies are being made right now — try again in a minute.");
   now.accounts.add(accountId);
   now.total++;
   try {

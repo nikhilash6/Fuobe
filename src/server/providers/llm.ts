@@ -208,7 +208,7 @@ async function viaComfy(system: string, user: string, signal: AbortSignal): Prom
 function helperTrouble(a: Exclude<HelperAnswer, { text: string }>): string {
   if (a.error === "blocked") return a.message || "This text can't be written here.";
   if (a.error === "sign-in") return GUEST_RUN_MESSAGE;
-  if (a.error === "busy") return "The writer is busy right now. Press Retry in a moment.";
+  if (a.error === "busy") return "Lots of people are writing right now — press Retry in a moment.";
   return "The writer couldn't finish this text. Press Retry.";
 }
 

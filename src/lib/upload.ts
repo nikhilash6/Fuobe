@@ -93,7 +93,7 @@ function sendWithProgress(file: File, onProgress: (p: number) => void, signal?: 
       }
       reject(err);
     };
-    xhr.onerror = () => reject(new Error("Upload failed — check your connection"));
+    xhr.onerror = () => reject(new Error("That upload didn't finish — check your connection and try again."));
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
     signal?.addEventListener("abort", () => xhr.abort());
     xhr.send(file);

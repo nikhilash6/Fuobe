@@ -14,6 +14,7 @@ import { hit, unhit } from "@/server/rate";
 import { db } from "@/server/db";
 import { absolutePath, contentTypeFor, filesRel } from "@/server/storage";
 import { runAsTenant } from "@/server/tenant";
+import { limitWords } from "@/lib/limit-words";
 
 /** Kinetic's picture results: a frame, a contact sheet, a version (PNG images; every other Kinetic result is a clip). */
 const KINETIC_IMAGE_FEATURES: readonly string[] = ["kinetic-frame", "kinetic-sheet", "kinetic-version"];
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
   // A saved result is one of the account's runs: the same hourly budget.
   const bucket = `run:${account.id}`;
   const rate = hit(bucket, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
-  if (!rate.ok) return Response.json({ error: ACCOUNT_MESSAGES.runRate }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS), "Cache-Control": "no-store" } });
+  if (!rate.ok) return Response.json({ error: limitWords("runs", rate.retryAfterS) }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS), "Cache-Control": "no-store" } });
   // The words drawn on a clip and its title (never the page's own summary of them) go through the studio's checks, and
   // are what the run keeps; a grade or a blend keeps its description, checked with its title.
   const motion = body.op === "motion";

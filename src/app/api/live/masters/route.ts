@@ -7,6 +7,7 @@ import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
 import { liveWho } from "@/server/live/access";
 import { enter, hit, unhit } from "@/server/rate";
 import { saveFile } from "@/server/storage";
+import { limitWords } from "@/lib/limit-words";
 
 /** A master is a PNG of at most 4096 px a side: this holds the largest with room to spare. */
 const MAX_BYTES = 80 * 2 ** 20;
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     if (!diskHasRoom()) return refuse(507, ACCOUNT_MESSAGES.diskLow, "space");
     if (accountUsage(who.account.id).total + body.length > accountTotalBytes(who.account.id)) return refuse(507, filesFullMessage(who.account.id), "space");
     const rate = hit(`live-masters:${who.account.id}`, ACCOUNT_MASTERS_PER_HOUR, 60 * 60_000);
-    if (!rate.ok) return refuse(429, "That's a lot of kept steps for one hour. Download them, or try again later.", "rate", { "Retry-After": String(rate.retryAfterS) });
+    if (!rate.ok) return refuse(429, limitWords("steps", rate.retryAfterS), "rate", { "Retry-After": String(rate.retryAfterS) });
     try {
       const a = saveFile({ data: body, contentType: "image/png", name: "live-edit.png", source: "derived", accountId: who.account.id });
       return Response.json({ id: a.id, url: a.url }, { status: 201, headers: { "Cache-Control": "no-store" } });

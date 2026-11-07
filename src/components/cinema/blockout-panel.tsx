@@ -240,7 +240,7 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
         prompt: null,
       }));
     } catch (e) {
-      toastError(e, "Upload failed. Please try again.");
+      toastError(e, "That upload didn't finish — please try again.");
     } finally {
       setUploading(null);
     }
@@ -273,7 +273,7 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
       .then((a) => setDraft((d) => ({ ...d, refs: d.refs.map((r) => (r.id === id ? { ...r, url: a.url, uploading: false } : r)) })))
       .catch((e) => {
         setDraft((d) => ({ ...d, refs: d.refs.filter((r) => r.id !== id) }));
-        toastError(e, "Upload failed. Please try again.");
+        toastError(e, "That upload didn't finish — please try again.");
       });
   };
 

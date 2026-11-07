@@ -170,10 +170,10 @@ describe("the third press (behind the account's own runs)", () => {
     expect(three.body.held).toEqual({ reason: "mine" });
     expect(three.body.items![0].queue).toMatchObject({ held: "mine" });
     expect(taskOf(idOf(three))).toBeUndefined();
-    expect(tile(idOf(three))).toMatch(/^In line · after your other runs/);
+    expect(tile(idOf(three))).toMatch(/^After your other runs/);
     // A reload changes nothing: the same tile, and still no task.
     await tick();
-    expect(tile(idOf(three))).toMatch(/^In line · after your other runs/);
+    expect(tile(idOf(three))).toMatch(/^After your other runs/);
     expect(taskOf(idOf(three))).toBeUndefined();
     // Another account's press meanwhile goes into line now.
     const other = await press(b.cookie);
@@ -258,7 +258,7 @@ describe("the third press (behind the account's own runs)", () => {
     expect(third.body.held).toEqual({ reason: "hour" });
     const h = heldOf(idOf(third))!;
     expect(h.start_at! - Date.now()).toBeGreaterThan(59 * 60_000);
-    expect(tile(idOf(third))).toMatch(/^In line · starts in about \d+ (min|h)$/);
+    expect(tile(idOf(third))).toMatch(/^Free runs refresh (at .+|in a moment) · this one starts then$/);
     // Not before its time; then it enters.
     expect(await release.releaseHeldRuns()).toBe(0);
     expect(await release.releaseHeldRuns(h.start_at! + 1)).toBe(1);
@@ -302,7 +302,7 @@ describe("the daily cap (H2)", () => {
     const p = await check(a.cookie);
     expect(p.body.quote).toMatchObject({ allowed: true });
     expect(p.body.line).toMatchObject({ held: "today", startAt: at, long: true });
-    expect(noteWords(p.body.line as never)).toMatch(/^Lots of runs today · starts in about \d+ (h|min)$/);
+    expect(noteWords(p.body.line as never)).toMatch(/^Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh at .+\.$/);
     const first = await press(b.cookie);
     await new Promise((r) => setTimeout(r, 5));
     const second = await press(a.cookie);
@@ -310,7 +310,7 @@ describe("the daily cap (H2)", () => {
       expect(r.status, JSON.stringify(r.body)).toBe(201);
       expect(r.body.held).toEqual({ reason: "today" });
     }
-    expect(tile(idOf(second))).toMatch(/^In line · starts in about \d+ (h|min)$/);
+    expect(tile(idOf(second))).toMatch(/^Free runs refresh (at .+|in a moment) · this one starts then$/);
     // Its hold is made at the press (the service keeps it until then).
     expect(heldOf(idOf(second))!.reserved).toBe(1);
     expect(await release.releaseHeldRuns()).toBe(0);
@@ -337,7 +337,7 @@ describe("the daily cap (H2)", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.held).toEqual({ reason: "credits" });
     const id = idOf(r);
-    expect(tile(id)).toMatch(/^In line · starts in about \d+ (h|min)$/);
+    expect(tile(id)).toMatch(/^Starts (at .+|in a moment), when your free generations renew$/);
     const h = heldOf(id)!;
     expect(h).toMatchObject({ reserved: 0, rank_rule: "release", start_at: at });
     expect(await release.releaseHeldRuns()).toBe(0);
@@ -373,7 +373,7 @@ describe("service blips (H3)", () => {
       expect(r.body.held).toEqual({ reason: "service" });
       const id = idOf(r);
       // "In line" with its place as if in line, never a bare "In line".
-      expect(tile(id)).toMatch(/^(Next in line|In line · \d+(st|nd|rd|th))/);
+      expect(tile(id)).toMatch(/^(You're next|\d+ ahead of you)/);
       // Before Run, while the service is quiet: the last price it gave, and Run stays on.
       const quiet = await check(a.cookie);
       expect(quiet.body.quote).toMatchObject({ allowed: true, text: "7 units" });
@@ -479,13 +479,13 @@ describe("service blips (H3)", () => {
     }
   });
 
-  it("H3p: while the service says runs here are paused, a press is taken and waits ('starts when a GPU is free')", async () => {
+  it("H3p: while the service says runs here are paused, a press is taken and waits ('starts automatically')", async () => {
     fake.refuse = { code: "paused", text: "Runs on our GPUs are paused for now. Your own GPU or key still works." };
     const a = account();
     const r = await press(a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.held).toEqual({ reason: "service" });
-    expect(tile(idOf(r))).toBe("In line · starts when a GPU is free");
+    expect(tile(idOf(r))).toBe("Warming up · starts automatically");
     fake.refuse = null;
     expect(await until(() => taskOf(idOf(r)))).toBeTruthy();
   });
@@ -502,7 +502,7 @@ describe("service blips (H3)", () => {
       fake.down = false;
       fake.refuse = { code: "closed", text: "Your account can't run on our GPUs right now. Your own GPU or key still works." };
       await until(() => getGeneration(idOf(r))!.status === "failed");
-      expect(getGeneration(idOf(r))!.error).toBe("Sorry, this one couldn't be made.");
+      expect(getGeneration(idOf(r))!.error).toBe("That one didn't come out right — try again, or try a similar model.");
       expect(heldOf(idOf(r))).toBeUndefined();
     } finally {
       Object.assign(billing.RESERVE_INLINE, was);

@@ -133,5 +133,5 @@ export async function waitForGeneration(id: string, o: { signal?: AbortSignal; t
     if (g.status === "failed" || g.status === "canceled") throw new Error(g.error || "It didn't finish");
     await new Promise((r) => setTimeout(r, 1500));
   }
-  throw new Error("It is taking too long — try again later");
+  throw new Error("This is taking longer than expected — try again in a moment");
 }

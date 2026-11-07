@@ -64,13 +64,15 @@ export function finishTask(generationId: string, kind: FinishKind, step = 0): Ta
 
 /**
  * The wait the run was stamped with (the billing service's limit; 0: as long as it takes, so none), else this
- * install's (FUOBE_POOL_WAIT_MIN). Undefined: no limit.
+ * install's (FUOBE_POOL_WAIT_MIN, when set). Undefined: no limit.
  */
 function runWaitMs(generationId: string): number | undefined {
   const r = db().prepare("SELECT json_extract(request_json, '$.waitMs') AS w FROM generations WHERE id = ?").get(generationId) as { w: unknown } | undefined;
   const w = r?.w === null || r?.w === undefined ? NaN : Number(r.w);
   if (w === 0) return undefined;
-  return Number.isFinite(w) && w > 0 ? w : poolWaitMs();
+  if (Number.isFinite(w) && w > 0) return w;
+  // This install's own limit, when it sets one (none by default: as long as it takes).
+  return poolWaitMs() || undefined;
 }
 
 /**

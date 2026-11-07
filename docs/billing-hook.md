@@ -16,7 +16,7 @@ the top bar and the account menu, a refusal's text, a link, an offer) comes from
 | `FUOBE_BILLING_TOKEN` | Sent as `Authorization: Bearer <token>` with every call | none |
 | `FUOBE_HOSTED_RUNS` | `1` lets accounts run on this install's GPUs (the only runs the service prices) | off |
 | `FUOBE_HOSTED_FREE` | `1` opens those runs with no service set: free for every account, within the install's own limits | off |
-| `FUOBE_POOL_WAIT_MIN` | How long a run may wait in line on this install's GPUs when the service doesn't say | 30 |
+| `FUOBE_POOL_WAIT_MIN` | How long a run may wait in line on this install's GPUs when the service doesn't say | none (as long as it takes) |
 
 ## When Fuobe calls the service
 

@@ -54,18 +54,18 @@ describe("a run's tile on this studio's GPUs", () => {
   it("in line: its place and wait, no progress (after a recovery too, whatever an earlier attempt reached)", () => {
     const html = render(createElement(PendingTile, { g: gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine, progress: 0.6, queue: { place: 3, etaSeconds: 130 } }), ratio: 1 }));
     expect(html).toContain('data-run-state="in-line"');
-    expect(html).toContain("In line · 3rd · ready in about 2 min");
+    expect(html).toContain("2 ahead of you · about 2 min");
     expect(html).not.toContain("60%");
     expect(html).not.toContain("scaleX");
   });
   it("in line while no GPU can take it now: its place, and it starts when one is free", () => {
     const html = render(createElement(PendingTile, { g: gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine, queue: { place: 3, etaSeconds: null, unknown: true } }), ratio: 1 }));
-    expect(html).toContain("In line · 3rd · starts when a GPU is free");
+    expect(html).toContain("Warming up · starts automatically");
   });
-  it("working while its model loads: Working · getting ready, with no %", () => {
+  it("working while its model loads: Warming up · starting in a moment, with no %", () => {
     const html = render(createElement(PendingTile, { g: gen({ place: "pool", status: "running", message: POOL_WORDS.gettingReady, progress: null }), ratio: 1 }));
     expect(html).toContain('data-run-state="working"');
-    expect(html).toContain("Working · getting ready");
+    expect(html).toContain("Warming up · starting in a moment");
     expect(html).not.toContain("%");
   });
   it("in line with no place known yet: In line", () => {

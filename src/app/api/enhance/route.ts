@@ -7,6 +7,7 @@ import { LoginGuard, requestViewer } from "@/server/auth";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { runAsTenant, type Tenant } from "@/server/tenant";
 import type { HelperAnswer } from "@/server/text-helper";
+import { limitFields, limitWords } from "@/lib/limit-words";
 
 type HelperTrouble = Exclude<HelperAnswer, { text: string }>;
 
@@ -18,13 +19,14 @@ function noLyrics(owner: boolean, why: HelperTrouble | null): Response {
   const headers = { "Cache-Control": "no-store" };
   if (why?.error === "sign-in") return signIn();
   if (why?.error === "limit") {
-    return Response.json({ error: "You've written a lot of lyrics just now. Try again in a minute, or type your own.", code: "helper-limit" }, { status: 429, headers: { ...headers, "Retry-After": String(why.retryAfterS ?? 60) } });
+    const wait = why.retryAfterS ?? 60;
+    return Response.json({ error: limitWords("replies", wait), code: "helper-limit", ...limitFields("replies", wait) }, { status: 429, headers: { ...headers, "Retry-After": String(wait) } });
   }
   if (why?.error === "blocked") return Response.json({ error: why.message || "These lyrics can't be written here.", code: "helper-blocked" }, { status: 403, headers });
   if (owner && !why) {
     return Response.json({ error: "Writing lyrics needs an AI helper. Set up Claude or a local model in Settings → AI helper, or type your own.", code: "no-llm" }, { status: 503, headers });
   }
-  return Response.json({ error: "Writing lyrics is busy right now. Try again in a moment, or type your own.", code: owner ? "no-llm" : "helper-busy" }, { status: 503, headers });
+  return Response.json({ error: "Lots of people are writing lyrics right now — try again in a moment, or type your own.", code: owner ? "no-llm" : "helper-busy" }, { status: 503, headers });
 }
 
 export async function POST(request: Request) {

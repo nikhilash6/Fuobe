@@ -111,7 +111,7 @@ import {
 } from "@/lib/diagnose";
 import { draining } from "./shutdown";
 import { keptText, networkCode, recordOwnRun, recordRunEvent, type HostKind } from "./run-events";
-import { cleanEngineText, isEngineWords, storedErrorText, withoutFolders } from "@/lib/engine-error";
+import { cleanEngineText, ENGINE_WORDS, isEngineWords, storedErrorText, withoutFolders } from "@/lib/engine-error";
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { MODEL3D_SETUP, ownSetupLabel } from "@/lib/own-setup";
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
@@ -2376,7 +2376,8 @@ export const OWN_GPU_ONLY = "Pick an open-source model to run it on your GPU.";
 export const OPEN_ONLY_RUN = "Pick an open-source model to run this on your GPU.";
 export const SWITCHED_OFF_RUN = "This account is closed, so its runs stopped.";
 /** A run on this install's GPUs that waited past its limit (hosted runs). */
-export const POOL_WAITED = "The GPUs were busy, so it didn't run. Not charged.";
+/** A run on this install's GPUs that waited past the limit set for it (a billing service's; none by default). */
+export const POOL_WAITED = ENGINE_WORDS["long-wait"];
 
 /**
  * Everything an account's work runs inside: as the account (tenant.ts: only its own files and runs), on its own ComfyUI
@@ -4361,7 +4362,9 @@ async function pollOne(r: Row): Promise<void> {
           .catch(() => {});
       const words =
         run.started_at || deadline
-          ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
+          ? onPool
+            ? ENGINE_WORDS.timeout
+            : `Timed out after ${Math.round(limitMs / 60_000)} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
             : onPool

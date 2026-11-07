@@ -76,7 +76,7 @@ describe("an account's limits hold for runs on its own key", () => {
     for (let i = 0; i < files.ACCOUNT_LIMITS.runsPerHour; i++) hit(`run:${A}`, files.ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
     const r = await post({});
     expect(r.status).toBe(429);
-    expect((await r.json()).error).toBe(files.ACCOUNT_MESSAGES.runRate);
+    expect((await r.json()).error).toMatch(/^You've made a lot this hour — you can run again in about \d+ min\.$/);
     expect(fal.log).toEqual([]);
   });
 

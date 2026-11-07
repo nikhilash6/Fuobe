@@ -4,6 +4,7 @@ import { AccountProjectError, projectRefsProblem } from "./account-projects";
 import { FacelessError } from "./faceless";
 import { hit } from "./rate";
 import { ShortsError } from "./shorts";
+import { limitWords } from "@/lib/limit-words";
 
 /**
  * The account side of the routes of Faceless Studio, the Explainer and Content Factory (public sign-up). A signed-in
@@ -43,5 +44,5 @@ export const READS_PER_HOUR = 30;
 /** An account's document read past its hour: 429, or null. */
 export function readsLimited(accountId: string): Response | null {
   const rate = hit(`faceless-read:${accountId}`, READS_PER_HOUR, 60 * 60_000);
-  return rate.ok ? null : Response.json({ error: "You've added a lot of files this hour. Try again later." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS) } });
+  return rate.ok ? null : Response.json({ error: limitWords("files", rate.retryAfterS) }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS) } });
 }

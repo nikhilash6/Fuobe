@@ -32,6 +32,6 @@ export async function POST(request: Request, { params }: RouteContext<"/api/star
   } catch (e) {
     // A studio's own refusal (an engine this install doesn't use, a missing photo, an account's limit of projects) keeps its status.
     const status = e instanceof StarterError ? e.status : ((e as { status?: number }).status ?? 400);
-    return Response.json({ error: (e as Error).message || "That starter couldn't be made" }, { status });
+    return Response.json({ error: (e as Error).message || "That starter didn't come out right — try again, or pick another" }, { status });
   }
 }

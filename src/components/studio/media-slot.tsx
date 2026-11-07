@@ -102,7 +102,7 @@ export async function fileToSlot(file: File, onChange: (v: SlotValue | null) => 
     if (opts.signal?.aborted || (e as Error).name === "AbortError") return;
     onChange(null);
     // Refused with its own card ("Create a free account", "Connect your GPU"): nothing on top of it.
-    toastError(e, "Upload failed. Please try again.");
+    toastError(e, "That upload didn't finish — please try again.");
   } finally {
     revoke();
   }
@@ -141,7 +141,7 @@ export async function uploadHeld(v: SlotValue): Promise<SlotValue | null> {
     void dropHeld(v.held!);
     return { ...(v.sketch && { sketch: v.sketch }), ...(v.id && { id: v.id }), ref: asset.url, preview: asset.url, kind: asset.kind ?? v.kind, name: v.name };
   } catch (e) {
-    toastError(e, "Upload failed. Please try again.");
+    toastError(e, "That upload didn't finish — please try again.");
     return null;
   }
 }

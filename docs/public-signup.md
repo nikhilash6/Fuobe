@@ -920,7 +920,7 @@ With it on:
   known; 0 turns this offer off) an account with its own GPU, or a key that runs the item's cloud version, is offered it for that one run
   ("Run it now on your GPU", "Run it now with your fal.ai key · ≈ $0.04"), and its pick of where runs go stays.
 - How long a run may wait before a GPU first takes it: the billing service's `limits.giveUpS` when its policy says
-  (0: as long as it takes), else what its reserve answer says, else `FUOBE_POOL_WAIT_MIN` minutes (30 by default).
+  (0: as long as it takes), else what its reserve answer says, else `FUOBE_POOL_WAIT_MIN` minutes (none by default: as long as it takes).
   Past that it fails with one plain sentence, not charged. A later step of a run (a chain's next step) keeps the run's
   place in line and has no wait limit.
 - When the billing service's policy says runs wait instead of being refused (`limits.held`: how many may wait behind

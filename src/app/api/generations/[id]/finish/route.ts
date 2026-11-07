@@ -3,6 +3,7 @@ import { requestAccount } from "@/server/auth";
 import { gateAsProxy, readFormWithin } from "@/server/direct-gate";
 import { FinishError, finishOutput } from "@/server/generations";
 import { enter, hit, unhit } from "@/server/rate";
+import { limitWords } from "@/lib/limit-words";
 
 const MAX_BYTES = 64 * 1024 * 1024;
 /** An account's finished picture (its own result: the proxy checks): smaller. */
@@ -44,7 +45,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/generations
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total + data.length > accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
     const rate = hit(`finish:${account.id}`, ACCOUNT_LIMITS.finishesPerHour, 60 * 60_000);
-    if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.finishRate, { "Retry-After": String(rate.retryAfterS) });
+    if (!rate.ok) return refuse(429, limitWords("pictures", rate.retryAfterS), { "Retry-After": String(rate.retryAfterS) });
   }
   try {
     return Response.json(finishOutput(id, index, data));

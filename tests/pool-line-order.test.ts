@@ -50,6 +50,7 @@ const { loadManifest, comfyProvider, onComputer, NO_WORKER_FOR_LANE } = await im
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { POOL_WORDS } = await import("@/lib/relay");
+const { ENGINE_WORDS } = await import("@/lib/engine-error");
 const hosted = await import("@/server/hosted");
 const { withRunStamp } = await import("@/server/run-stamp");
 const { getModel } = await import("@/lib/catalog");
@@ -551,7 +552,7 @@ describe("the run ceiling", () => {
     beatAs(w);
     await tick();
     expect(getGeneration(id)?.status).toBe("failed");
-    expect(getGeneration(id)?.error).toBe(POOL_WORDS.failed);
+    expect(getGeneration(id)?.error).toBe(ENGINE_WORDS.timeout);
   });
 
   it("a job a worker gives back and takes again between two polls gets its whole time again", async () => {
@@ -580,7 +581,7 @@ describe("the run ceiling", () => {
     expect(g.progress).toBeNull();
   });
 
-  it("a worker with another model loaded: Working · getting ready until the first step reports; with its model loaded, Working at once", async () => {
+  it("a worker with another model loaded: Warming up · starting in a moment until the first step reports; with its model loaded, Working at once", async () => {
     const w = standInWorker();
     const { id, t } = await accountRun("getting ready");
     const lane = rowOf(t.id).lane!;

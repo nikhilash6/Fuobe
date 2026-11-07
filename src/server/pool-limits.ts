@@ -7,6 +7,7 @@ import { heldCap, holdsOn, type Policy } from "./billing";
 import { db } from "./db";
 import { hostedRunsOn } from "./hosted-switch";
 import { heldRuns, NOT_HELD } from "./pool-holds";
+import { limitFields, limitWords, type LimitKind } from "@/lib/limit-words";
 
 /**
  * The limits on an account's runs, counted in SQLite so that requests that arrive together, in one process or in two
@@ -39,8 +40,8 @@ const KEEP_MS = 2 * HOUR;
 export const POOL_LIMIT_WORDS = {
   active: (n: number) => `You have ${n} ${n === 1 ? "run" : "runs"} going. Start this one when one finishes.`,
   waiting: (n: number) => `You have ${n} ${n === 1 ? "run" : "runs"} in line. Start this one when one of them starts.`,
-  hourly: "That's a lot of runs this hour. Try again later.",
-  address: "That's a lot of runs from your network this hour. Try again later.",
+  hourly: (retryAfterS?: number) => limitWords("free-hour", retryAfterS),
+  address: (retryAfterS?: number) => limitWords("network", retryAfterS),
   /** The one press that is turned down while runs wait: past the cap on runs waiting (`n`: the account's runs on the way). */
   heldCap: (n: number) => `You have ${n} ${n === 1 ? "run" : "runs"} on the way. Add more when one is done.`,
 };
@@ -50,6 +51,9 @@ export interface LimitRefusal {
   error: string;
   code: string;
   retryAfterS: number;
+  /** A limit on free runs: its kind and when it refreshes (epoch ms), so the page says it on the viewer's clock. */
+  limit?: LimitKind;
+  refreshAt?: number;
 }
 
 /**
@@ -259,7 +263,7 @@ export function poolLimitPlan(accountId: string, policy: Pick<Policy, "limits">,
     if (holds) startAt = hourStart("account", accountId, hourMax, now);
     else {
       const h = since("account", accountId, now - HOUR);
-      if (h.n >= hourMax) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.hourly, code: "limit", retryAfterS: retryAfter(h.oldest, now) } };
+      if (h.n >= hourMax) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.hourly(retryAfter(h.oldest, now)), code: "limit", retryAfterS: retryAfter(h.oldest, now), ...limitFields("free-hour", retryAfter(h.oldest, now), now) } };
     }
   }
   const address = addrMax ? (typeof addr === "function" ? addr() : addr) : null;
@@ -269,7 +273,7 @@ export function poolLimitPlan(accountId: string, policy: Pick<Policy, "limits">,
       if (at !== null) startAt = Math.max(startAt ?? 0, at);
     } else {
       const h = since("addr", address, now - HOUR);
-      if (h.n >= addrMax) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.address, code: "limit", retryAfterS: retryAfter(h.oldest, now) } };
+      if (h.n >= addrMax) return { refuse: { status: 429, error: POOL_LIMIT_WORDS.address(retryAfter(h.oldest, now)), code: "limit", retryAfterS: retryAfter(h.oldest, now), ...limitFields("network", retryAfter(h.oldest, now), now) } };
     }
   }
   if (!holds) return { go: true };

@@ -50,7 +50,7 @@ const idsOf = (e: LibraryEntry) => (e.type === "single" ? [e.g.id] : e.items.map
 /** A run's state in a Library list row: on this install's GPUs, the words its tile says. */
 export function listStatus(g: Pick<Generation, "status" | "place">): string {
   if (g.status === "canceled") return "Canceled";
-  if (g.place === "pool") return g.status === "failed" ? "Couldn't be made" : g.status === "queued" ? POOL_WORDS.inLine : POOL_WORDS.working;
+  if (g.place === "pool") return g.status === "failed" ? "Didn't come out right" : g.status === "queued" ? POOL_WORDS.inLine : POOL_WORDS.working;
   return g.status === "failed" ? "Failed" : g.status === "queued" ? "Queued" : "Rendering";
 }
 

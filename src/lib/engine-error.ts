@@ -200,24 +200,27 @@ export function storedErrorText(raw: string, max = STORED_ERROR_MAX): string {
 // What a person sees when a run on our GPUs fails
 
 /** The kinds of failure a run on our GPUs is told apart by. */
-export type EngineFailureKind = "no-sound" | "unreadable-input" | "out-of-memory" | "timeout" | "missing-on-gpu" | "gpu-stopped" | "unknown";
+export type EngineFailureKind = "no-sound" | "unreadable-input" | "out-of-memory" | "timeout" | "missing-on-gpu" | "gpu-stopped" | "long-wait" | "unknown";
 
 /**
- * What each kind says to the person who ran it (an account, a guest, or the owner on our GPUs): what happened and what
- * to do next, never a dead end. No place name (the install names its GPUs itself), no machinery (not even "GPU"), no
- * "Press Retry" (tests/hosted-words.test.ts, tests/pool-account-runs.test.ts); the tile's own Retry is beside it.
+ * What each kind says to the person who ran it (an account, a guest, or the owner on our GPUs): friendly, plain, and
+ * what to do next, never a dead end. No place name (the install names its GPUs itself), no machinery (not even "GPU"),
+ * no "busy", no "Press Retry" or "try again later" (tests/hosted-words.test.ts, tests/pool-account-runs.test.ts). The
+ * tile's own Retry and "Try a similar model" are beside it. `unknown` is POOL_WORDS.failed (src/lib/relay.ts).
  */
 export const ENGINE_WORDS: Record<EngineFailureKind, string> = {
-  "no-sound": "This clip has no sound for this run to use. Try a clip with sound.",
-  "unreadable-input": "A file in this run couldn't be read. Try another file, or run it again.",
-  "out-of-memory": "This run needed more memory than was free. Try a smaller size or a shorter clip.",
-  timeout: "This run took too long to finish. Try a shorter clip or a smaller size.",
-  "missing-on-gpu": "This run couldn't start just now. Run it again in a few minutes.",
-  "gpu-stopped": "This run stopped before it finished. Run it again.",
-  unknown: "This run couldn't finish. Run it again, or try other settings.",
+  "no-sound": "This clip has no sound for this run to use — try a clip with sound.",
+  "unreadable-input": "We couldn't read this file — try another one (MP4 or MOV works best for clips).",
+  "out-of-memory": "That one was too big to make in one go — try a smaller size or a shorter clip.",
+  timeout: "That one took longer than expected — try a shorter clip or a smaller size.",
+  "missing-on-gpu": "That one didn't come out right — try again in a few minutes, or try a similar model.",
+  "gpu-stopped": "That one didn't finish — try again, or try a similar model.",
+  "long-wait": "This one didn't start in time — try again, or try a similar model.",
+  unknown: "That one didn't come out right — try again, or try a similar model.",
 };
 
 const KINDS: [EngineFailureKind, RegExp][] = [
+  ["long-wait", /were busy|didn't start in time|waited (?:over|too long)|took too long to start/i],
   ["out-of-memory", /out of memory|OutOfMemoryError|allocation on device|CUDA error: out of memory|not enough memory|MemoryError/i],
   ["no-sound", /no audio stream|has no (?:audio|sound)|failed to extract audio|does not contain any (?:audio )?stream|stream map '[^']*:a[^']*' matches no streams|matches no streams|no sound to work with|without (?:audio|sound)/i],
   [

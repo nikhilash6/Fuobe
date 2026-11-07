@@ -58,7 +58,7 @@ export function useStarterUse(onFill?: (id: string) => void) {
     try {
       const res = await fetch(`/api/starters/${encodeURIComponent(s.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engine }) });
       const body = (await res.json().catch(() => ({}))) as { href?: string; note?: string; error?: string };
-      if (!res.ok || !body.href) throw responseError(res, body.error ?? "That starter couldn't be made. Please try again.");
+      if (!res.ok || !body.href) throw responseError(res, body.error ?? "That starter didn't come out right — try again, or pick another.");
       // What it made (a brand, a product, a channel, a film, an element) is in the lists the next page picks it from,
       // before it opens.
       await Promise.all(
