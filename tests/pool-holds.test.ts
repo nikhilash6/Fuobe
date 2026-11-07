@@ -293,7 +293,7 @@ describe("the daily cap (H2)", () => {
   /** The next UTC midnight: the time the billing service says the day's GPU time renews. */
   const midnight = () => (Math.floor(Date.now() / 86_400_000) + 1) * 86_400_000;
 
-  it("A4: past the day's GPU time a press makes a held run; before Run 'Lots of runs today'; at the renewal they enter in press order", async () => {
+  it("A4: past the day's GPU time a press makes a held run; before Run the free-runs line; at the renewal they enter in press order", async () => {
     const at = midnight();
     fake.reserveExtra = { startAt: at };
     fake.quoteAnswer = { allowed: true, amount: 7, priceVersion: "v7", text: "7 units", startAt: at };
@@ -302,7 +302,7 @@ describe("the daily cap (H2)", () => {
     const p = await check(a.cookie);
     expect(p.body.quote).toMatchObject({ allowed: true });
     expect(p.body.line).toMatchObject({ held: "today", startAt: at, long: true });
-    expect(noteWords(p.body.line as never)).toMatch(/^Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh at .+\.$/);
+    expect(noteWords(p.body.line as never)).toMatch(/^Free runs refresh at .+\.$/);
     const first = await press(b.cookie);
     await new Promise((r) => setTimeout(r, 5));
     const second = await press(a.cookie);

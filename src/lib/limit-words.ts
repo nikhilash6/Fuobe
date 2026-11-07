@@ -1,10 +1,11 @@
-import { aboutWords, clockWords } from "./pool-line";
+import { aboutWords, clockWords, freeLimitSentence } from "./pool-line";
 
 /**
  * What a person reads when a limit stops a press: friendly, never "try again later", and when it refreshes, from the
  * limit itself. The server says the wait ("in about 40 min", the same on every clock) and sends when it ends
- * (`refreshAt`); the page says it on the viewer's own clock ("at 14:20", limitWordsAt). With the free runs here shared
- * out, the next step is one press away: run it self-hosted (an account), or a free account for more free runs (a guest).
+ * (`refreshAt`); the page says it on the viewer's own clock ("at 14:20", limitWordsAt). Past a limit on free runs here,
+ * the next step is one press away: run it self-hosted (an account), or a free account for more free runs (a guest).
+ * The sentences for free runs and free replies are the service's display copy when it sends some (src/lib/service-copy.ts).
  */
 export type LimitKind = "free-today" | "free-hour" | "network" | "runs" | "pictures" | "files" | "reports" | "steps" | "replies";
 
@@ -16,11 +17,10 @@ export const isLimitKind = (v: unknown): v is LimitKind => typeof v === "string"
 function sentence(kind: LimitKind, when: string): string {
   switch (kind) {
     case "free-today":
-      return `Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh ${when}.`;
     case "free-hour":
-      return `Lots of people are creating on Fuobe right now, so free runs are shared out — yours refresh ${when}.`;
     case "network":
-      return `Lots of people on your network are creating right now, so free runs are shared out — yours refresh ${when}.`;
+    case "replies":
+      return freeLimitSentence(kind, when);
     case "runs":
       return `You've made a lot this hour — you can run again ${when}.`;
     case "pictures":
@@ -31,8 +31,6 @@ function sentence(kind: LimitKind, when: string): string {
       return `Thanks — we have your reports. You can send more ${when}.`;
     case "steps":
       return `You've kept a lot of steps this hour — download them now, and you can keep more ${when}.`;
-    case "replies":
-      return `Lots of people are writing on Fuobe right now, so free replies are shared out — yours refresh ${when}.`;
   }
 }
 

@@ -930,9 +930,9 @@ With it on:
   - past the account's runs at once (`limits.activeRuns`): "Starts after your other runs" before Run, "In line · after
     your other runs" on the tile; it enters at the back of the line when one of them ends, so ten fast presses never
     pass another account, and its presses enter in the order they were made;
-  - the day's GPU time used up (the service's `startAt` at the next UTC day): "Lots of runs today · starts in about
-    7 h" before Run, "In line · starts in about 7 h" on the tile; at the renewal the runs enter at their press-time
-    places, in press order;
+  - the day's GPU time used up (the service's `startAt` at the next UTC day): "Free runs refresh at 14:20." (or the
+    service's display copy, `limitDaily`) before Run, "Free runs refresh at 14:20 · this one starts then" on the
+    tile; at the renewal the runs enter at their press-time places, in press order;
   - the billing service doesn't answer within 5 s of the press (or the moderation service doesn't, at a studio's
     press): its tile shows its place as if in line, it reserves (and is checked) under its press's own request id once
     the service answers, and enters at its press-time place. While the service says runs here are paused, the line

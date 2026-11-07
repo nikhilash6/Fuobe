@@ -16,10 +16,11 @@ describe("limits", () => {
   const now = new Date(2026, 10, 8, 12, 0).getTime();
 
   it("say when free runs refresh, on the server as a wait and on the page as the viewer's clock", () => {
-    expect(limitWords("free-today", 40 * 60)).toBe("Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh in about 40 min.");
+    expect(limitWords("free-today", 40 * 60)).toBe("Free runs refresh in about 40 min.");
     const at = now + (2 * 60 + 20) * 60_000;
-    expect(limitWordsAt("free-today", at, now)).toBe(`Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh at ${clockWords(at, now)}.`);
-    expect(limitWordsAt("replies", at, now)).toMatch(/free replies are shared out — yours refresh at /);
+    expect(limitWordsAt("free-today", at, now)).toBe(`Free runs refresh at ${clockWords(at, now)}.`);
+    expect(limitWordsAt("replies", at, now)).toBe(`More free replies at ${clockWords(at, now)}.`);
+    expect(limitWords("network", 40 * 60)).toBe("Free runs on your network refresh in about 40 min.");
     // A time that has come: in a moment, never a time in the past.
     expect(limitWordsAt("free-hour", now - 1000, now)).toMatch(/refresh in a moment\.$/);
     expect(readyInWords(20)).toBe("in a moment");
@@ -66,19 +67,20 @@ describe("waits and failures", () => {
     for (const w of [POOL_WORDS.failed, ...Object.values(FILE_TROUBLE_WORDS), ...Object.values(ENGINE_WORDS)]) expect(w, w).toMatch(/\btry\b/i);
   });
 
-  it("lots of people only when lots really are waiting", () => {
+  it("a place in line says the place and the wait, however many are ahead", () => {
     expect(lineWords({ place: 2, etaSeconds: 60 }, now)).toBe("1 ahead of you · about 1 min");
-    expect(lineWords({ place: 7, etaSeconds: 600 }, now)).toBe("6 ahead of you · about 10 min · lots of people are creating right now");
+    expect(lineWords({ place: 7, etaSeconds: 600 }, now)).toBe("6 ahead of you · about 10 min");
   });
 });
 
 describe("a long wait in line", () => {
   it("keeps the run: saved, it starts by itself, with its place under it", async () => {
-    const { pendingWords, LONG_WAIT_MS, LONG_WAIT_WORDS } = await import("@/lib/pending-words");
+    const { pendingWords, LONG_WAIT_MS, longWaitWords } = await import("@/lib/pending-words");
     const now = Date.now();
     const g = { status: "queued" as const, message: null, place: "pool" as const, queue: { place: 3, etaSeconds: 120 } };
     expect(pendingWords({ ...g, createdAt: now - 60_000 }, null, now)).toEqual({ label: "2 ahead of you · about 2 min", place: null });
-    expect(pendingWords({ ...g, createdAt: now - LONG_WAIT_MS }, null, now)).toEqual({ label: LONG_WAIT_WORDS, place: "2 ahead of you · about 2 min" });
-    expect(LONG_WAIT_WORDS).not.toMatch(/\bbusy\b|queue|worker|GPU|try again later|!/i);
+    expect(pendingWords({ ...g, createdAt: now - LONG_WAIT_MS }, null, now)).toEqual({ label: longWaitWords(), place: "2 ahead of you · about 2 min" });
+    expect(longWaitWords()).toBe("Your run is saved and starts automatically; it'll appear here when it's ready.");
+    expect(longWaitWords()).not.toMatch(/\bbusy\b|queue|worker|GPU|try again later|!/i);
   });
 });

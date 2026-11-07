@@ -22,6 +22,7 @@ import { CHAT_KINDS, playFormat, writeTool, type CharacterCard } from "@/lib/cha
 import type { Generation } from "@/lib/catalog/types";
 import type { ChatMessage, ChatThreadView } from "@/lib/chat/types";
 import { toastError } from "@/lib/refusals";
+import { copyLine } from "@/lib/service-copy";
 import { cn } from "@/lib/utils";
 import { EngineLine, KindIcon, TypingDots, useReveal } from "./bits";
 import { CharacterFace } from "./character-face";
@@ -264,8 +265,8 @@ export function ThreadView({ id }: { id: string }) {
                       {state.starting && !state.position
                         ? "Warming up · just a moment"
                         : state.position === 1
-                          ? "Lots of people are chatting right now · you're next"
-                          : `Lots of people are chatting right now · ${(state.position ?? 1) - 1} ahead of you`}
+                          ? copyLine("chatNext", {}, "You're next")
+                          : copyLine("chatAhead", { n: (state.position ?? 1) - 1 }, "{n} ahead of you")}
                     </p>
                   )}
                 </li>

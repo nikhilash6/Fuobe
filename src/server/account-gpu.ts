@@ -1,6 +1,7 @@
 import "server-only";
 import dns from "node:dns/promises";
 import net from "node:net";
+import { cleanCopy, type ServiceCopy } from "@/lib/service-copy";
 import { isCloudProvider, type CloudProvider } from "@/lib/your-keys";
 import { accountEngineMode, accountKeyInfo, accountProviders, paidAllowed, usableProviders } from "./account-keys";
 import { accountGpu, type Account, type AccountGpu } from "./auth";
@@ -375,6 +376,8 @@ export interface VisitorView {
   links?: Action[];
   /** A notice to show once per id (the billing service's policy). */
   notice?: { id: string; text: string; url?: string };
+  /** The billing service's display copy (src/lib/service-copy.ts), cleaned. Only with `hosted`. */
+  copy?: ServiceCopy;
 }
 
 declare global {
@@ -478,6 +481,9 @@ export async function visitorStatus(account: Account | null) {
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;
+    // The service's display copy (wait and limit lines), for guests and accounts alike.
+    const copy = p?.hosted ? cleanCopy(p.copy) : null;
+    if (copy) viewer.copy = copy;
     const b = account ? await billingBalance(account.id) : null;
     if (b) viewer.balance = b;
   }

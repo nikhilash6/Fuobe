@@ -3,6 +3,7 @@ import type { Account } from "./auth";
 import { db } from "./db";
 import { HookDown, hookCall, hookTarget, type HookTarget } from "./hook-client";
 import { hostedRunsOn } from "./hosted-switch";
+import { noteServiceCopy } from "@/lib/service-copy";
 
 /**
  * The billing hook (docs/billing-hook.md): an install can connect an external billing service at FUOBE_BILLING_URL.
@@ -151,6 +152,11 @@ export interface Policy {
   placeName?: string;
   links?: Action[];
   notice?: { id: string; text: string; url?: string };
+  /**
+   * Display copy: sentences by key, with placeholders the app fills in (src/lib/service-copy.ts COPY_KEYS). Absent, or a
+   * key left out: the app's own plain sentence. The latest answer's copy applies to every visitor's words.
+   */
+  copy?: Record<string, string>;
   ttlS: number;
 }
 
@@ -324,6 +330,7 @@ export async function policy(accountId: string | null): Promise<Policy | null> {
     const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
     keep({ at: Date.now(), ttlMs, policy: p, goodAt: Date.now(), ...(p.prefer && { prefer: p.prefer }) });
     savePolicy(key, p);
+    noteServiceCopy(p.copy);
     return p;
   } catch (e) {
     logDown("policy", e);
@@ -628,4 +635,5 @@ export function resetBillingCache(): void {
   globalThis.__fuobeBillingBalances?.clear();
   globalThis.__fuobeBillingQuotes?.clear();
   globalThis.__fuobeBillingBadUrl = undefined;
+  globalThis.__fuobeServiceCopy = undefined;
 }

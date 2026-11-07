@@ -29,9 +29,9 @@ describe("the words for a place in line", () => {
     expect(lineWords({ place: 1, etaSeconds: 38 })).toBe("You're next · ready in about 40 s");
     expect(lineWords({ place: 3, etaSeconds: 130 })).toBe("2 ahead of you · about 2 min");
     expect(lineWords({ place: 2, etaSeconds: 3 * 3600 })).toBe("1 ahead of you · about 3 h");
-    // Lots of people only when lots really are waiting ahead.
-    expect(lineWords({ place: 12, etaSeconds: null })).toBe("11 ahead of you · lots of people are creating right now");
-    expect(lineWords({ place: 22, etaSeconds: 3 })).toBe("21 ahead of you · about 5 s · lots of people are creating right now");
+    // Many ahead: the place and the wait (with no display copy).
+    expect(lineWords({ place: 12, etaSeconds: null })).toBe("11 ahead of you");
+    expect(lineWords({ place: 22, etaSeconds: 3 })).toBe("21 ahead of you · about 5 s");
     // Never a place before the first, nor a wait that can't be.
     expect(lineWords({ place: 0, etaSeconds: -5 })).toBe("You're next");
   });

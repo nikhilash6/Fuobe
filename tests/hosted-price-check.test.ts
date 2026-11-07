@@ -271,4 +271,25 @@ describe("what this install's GPUs keep off, in the status", () => {
     billing.resetBillingCache();
     expect((await visitorStatus(auth.accountById(a)!)).viewer.cardText).toBe("Free this week");
   });
+
+  it("the status carries the billing service's display copy (known keys only), and the server's own sentences use it", async () => {
+    const { limitWords } = await import("@/lib/limit-words");
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    process.env.FUOBE_HOSTED_FREE = "1";
+    // No service: no copy, the plain sentences.
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.copy).toBeUndefined();
+    expect(limitWords("free-hour", 40 * 60)).toBe("Free runs refresh in about 40 min.");
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    fake.policy = { ...FAKE_POLICY, copy: { limitHour: "Hourly runs come back {when}.", madeUp: "x", chatNext: "Up next" } };
+    billing.resetBillingCache();
+    expect((await visitorStatus(null)).viewer.copy).toEqual({ limitHour: "Hourly runs come back {when}.", chatNext: "Up next" });
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.copy).toEqual({ limitHour: "Hourly runs come back {when}.", chatNext: "Up next" });
+    expect(limitWords("free-hour", 40 * 60)).toBe("Hourly runs come back in about 40 min.");
+    // A service that stops sending copy: the plain sentences again.
+    fake.policy = { ...FAKE_POLICY };
+    billing.resetBillingCache();
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.copy).toBeUndefined();
+    expect(limitWords("free-hour", 40 * 60)).toBe("Free runs refresh in about 40 min.");
+  });
 });

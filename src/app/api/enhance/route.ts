@@ -8,6 +8,7 @@ import { hostedRunsOn } from "@/server/hosted-switch";
 import { runAsTenant, type Tenant } from "@/server/tenant";
 import type { HelperAnswer } from "@/server/text-helper";
 import { limitFields, limitWords } from "@/lib/limit-words";
+import { copyLine } from "@/lib/service-copy";
 
 type HelperTrouble = Exclude<HelperAnswer, { text: string }>;
 
@@ -26,7 +27,7 @@ function noLyrics(owner: boolean, why: HelperTrouble | null): Response {
   if (owner && !why) {
     return Response.json({ error: "Writing lyrics needs an AI helper. Set up Claude or a local model in Settings → AI helper, or type your own.", code: "no-llm" }, { status: 503, headers });
   }
-  return Response.json({ error: "Lots of people are writing lyrics right now — try again in a moment, or type your own.", code: owner ? "no-llm" : "helper-busy" }, { status: 503, headers });
+  return Response.json({ error: copyLine("lyricsBusy", {}, "Try again in a moment, or type your own lyrics."), code: owner ? "no-llm" : "helper-busy" }, { status: 503, headers });
 }
 
 export async function POST(request: Request) {

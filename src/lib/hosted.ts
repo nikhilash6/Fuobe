@@ -179,8 +179,8 @@ export function refreshPriceChecks(qc: QueryClient): void {
  * - otherwise the price (`text`: the service's words, empty when there is none) and, under it, when the run would be
  *   ready (`wait`, inside a sentence: "ready in about 2 min", "starts when a GPU is free", "ready in seconds"; none when
  *   nothing is known), and whether the wait is long (`long`: an account's own GPU or key may be offered for this run).
- *   `note`: the line under the toolbar as a sentence of its own ("Starts after your other runs", "Lots of runs today ·
- *   starts in about 7 h"); `held`: a run pressed now waits to enter the line, and why.
+ *   `note`: the line under the toolbar as a sentence of its own ("Starts after your other runs", "Free runs refresh at
+ *   14:20."); `held`: a run pressed now waits to enter the line, and why.
  * Null while there is no answer yet.
  */
 export function poolRunState(check: HostedCheck | null | undefined): {

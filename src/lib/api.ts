@@ -40,6 +40,7 @@ import type { Diagnosis } from "./diagnose";
 import type { OwnSetup } from "./own-setup";
 import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 import { knownPlace, notePlaceName, placeOf, type Place } from "./place-name";
+import { noteServiceCopy, type ServiceCopy } from "./service-copy";
 import { ENGINE_KEY, ENGINE_SLOT_KEY, engineSlot, SHARED_SLOT, slotToCache, storedEngine, type EngineSlot, type SlotFacts } from "./engine-pref";
 
 /** What the status strip says of a GPU that didn't answer (src/server/account-gpu.ts VisitorTrouble). */
@@ -1027,6 +1028,8 @@ export interface StatusInfo {
     balance?: HostedBalance;
     links?: BillingAction[];
     notice?: { id: string; text: string; url?: string };
+    /** The billing service's display copy (src/lib/service-copy.ts): kept by useStatus for the wait and limit lines. */
+    copy?: ServiceCopy;
   };
   /**
    * The owner's ComfyUI runs on the owner's computer (Settings): what the owner's Fuobe tab there last said. Never
@@ -1078,6 +1081,7 @@ export function useStatus() {
       const s = await json<StatusInfo>(await fetchWithin("/api/status", READ_LIMIT_MS.status));
       // Kept for words made outside React (the toast that offers a run on this install's GPUs).
       notePlaceName(s.viewer?.hosted ? s.viewer.placeName : null);
+      noteServiceCopy(s.viewer?.hosted ? s.viewer.copy : null);
       return s;
     },
     staleTime: 15_000,

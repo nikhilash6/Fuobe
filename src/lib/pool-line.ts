@@ -5,12 +5,15 @@
  * only its place, "Working", then its result: it is taken whatever the line, and never ends for a wait.
  *
  * A run can also be made and wait to enter the line (`held`): behind the account's other runs ("After your other runs"),
- * until a time ("Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh at 14:20." before
- * Run, "Free runs refresh at 14:20 · this one starts then" on its tile), or while runs there are paused ("Warming up · starts automatically").
+ * until a time ("Free runs refresh at 14:20." before Run, "Free runs refresh at 14:20 · this one starts then" on its
+ * tile), or while runs there are paused ("Warming up · starts automatically").
  *
  * The words are friendly and say what happens next: never the machinery (a GPU, a worker, a queue), never "busy", never
  * "try again later" (tests/hosted-words.test.ts). They are made in the browser, so a time is the viewer's own clock.
+ * A few of them are the service's display copy when it sends some (src/lib/service-copy.ts), else the plain ones here.
  */
+
+import { copyLine } from "./service-copy";
 
 /** Why a run made now waits to enter the line (server: pool-holds.ts). */
 export type HeldReason = "mine" | "today" | "service" | "hour" | "list" | "credits";
@@ -47,6 +50,25 @@ export function clockWords(at: number, now = Date.now()): string {
   return new Date(at).toDateString() === new Date(now).toDateString() ? time : `tomorrow at ${time}`;
 }
 
+/** The display copy key for each limit on free runs and free replies (src/lib/service-copy.ts). */
+const FREE_COPY = { "free-today": "limitDaily", "free-hour": "limitHour", network: "limitNetwork", replies: "limitReplies" } as const;
+
+/** The plain sentences for those limits, when no display copy is sent. */
+const FREE_FALLBACK: Record<keyof typeof FREE_COPY, string> = {
+  "free-today": "Free runs refresh {when}.",
+  "free-hour": "Free runs refresh {when}.",
+  network: "Free runs on your network refresh {when}.",
+  replies: "More free replies {when}.",
+};
+
+/**
+ * The sentence for a limit on free runs or free replies (src/lib/limit-words.ts), `when` it refreshes ("at 14:20", "in
+ * about 40 min", "in a moment").
+ */
+export function freeLimitSentence(kind: keyof typeof FREE_COPY, when: string): string {
+  return copyLine(FREE_COPY[kind], { when }, FREE_FALLBACK[kind]);
+}
+
 /** When a run waiting for a time starts: "at 14:20" (or "in a moment" when that time has come). */
 const atWords = (startAt: number | undefined, now: number): string => (startAt && startAt - now > 60_000 ? `at ${clockWords(startAt, now)}` : "in a moment");
 
@@ -78,15 +100,15 @@ export const capitalFirst = (s: string): string => (s ? s[0].toUpperCase() + s.s
 
 /**
  * The line under the toolbar before Run, as a sentence of its own: "Ready in about 2 min", "Starts after your other
- * runs", "Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh at 14:20.", "Starts
- * at 14:20, when your free generations renew", the service's own words while runs there are paused. Null when nothing is known.
+ * runs", "Free runs refresh at 14:20.", "Starts at 14:20, when your free generations renew", the service's own words
+ * while runs there are paused. Null when nothing is known.
  */
 export function noteWords(q: LineFacts, now = Date.now()): string | null {
   if (q.held === "service" && q.paused && q.note) return q.note;
   if (q.held === "list") return "You're on the waiting list. Your runs start as soon as you're in.";
   // (The same sentences as a limit's refusal, src/lib/limit-words.ts.)
-  if (q.held === "today") return `Lots of people are creating on Fuobe today, so free runs are shared out — yours refresh ${atWords(q.startAt, now)}.`;
-  if (q.held === "hour") return `Lots of people are creating on Fuobe right now, so free runs are shared out — yours refresh ${atWords(q.startAt, now)}.`;
+  if (q.held === "today") return freeLimitSentence("free-today", atWords(q.startAt, now));
+  if (q.held === "hour") return freeLimitSentence("free-hour", atWords(q.startAt, now));
   const wait = waitWords(q, now);
   if (!wait) return null;
   if (q.held === "credits") return `${capitalFirst(wait)}, when your free generations renew`;
@@ -94,14 +116,15 @@ export function noteWords(q: LineFacts, now = Date.now()): string | null {
   return capitalFirst(wait);
 }
 
-/** How many ahead of a place in line make "lots of people" worth saying (only when people really are waiting). */
+/** How many ahead of a place in line make the display copy's longer line worth showing (`queueBusy`). */
 const MANY_AHEAD = 5;
 
 /**
  * A run's place on this install's GPUs (1: next) and its wait: "You're next · ready in about 40 s", "2 ahead of you ·
- * about 3 min", "6 ahead of you · about 9 min · lots of people are creating right now". A run waiting for a GPU to come
- * on: "Warming up · starting in a moment". A run waiting to enter the line: "After your other runs · ready in about 2
- * min", "Free runs refresh at 14:20 · this one starts then", "You're on the waiting list"; one waiting for the service, as warming up.
+ * about 3 min" (with many ahead, the display copy's `queueBusy` line around it when the service sends one). A run
+ * waiting for a GPU to come on: "Warming up · starting in a moment". A run waiting to enter the line: "After your
+ * other runs · ready in about 2 min", "Free runs refresh at 14:20 · this one starts then", "You're on the waiting
+ * list"; one waiting for the service, as warming up.
  */
 export function lineWords(q: LineFacts, now = Date.now()): string {
   if (q.held === "mine") {
@@ -119,5 +142,5 @@ export function lineWords(q: LineFacts, now = Date.now()): string {
   const head = `${ahead} ahead of you`;
   const line = eta ? `${head} · ${q.light ? "ready in seconds" : eta}` : head;
   // (The place and the wait first: a tile shows two lines.)
-  return ahead >= MANY_AHEAD ? `${line} · lots of people are creating right now` : line;
+  return ahead >= MANY_AHEAD ? copyLine("queueBusy", { line, n: ahead }, "{line}") : line;
 }

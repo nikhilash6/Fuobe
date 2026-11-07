@@ -1,6 +1,7 @@
 import type { Generation } from "./catalog/types";
 import { lineWords } from "./pool-line";
 import { POOL_WORDS } from "./relay";
+import { copyLine } from "./service-copy";
 
 /** Words that already say a run's place ("Waiting for a GPU · 1 ahead", "Next for a GPU", "In ComfyUI's queue"). */
 const SAYS_PLACE = /\bahead\b|\bnext\b|\bin line\b|queue/i;
@@ -8,8 +9,11 @@ const SAYS_PLACE = /\bahead\b|\bnext\b|\bin line\b|queue/i;
 /** How long a run on this studio's GPUs waits before its tile says it is saved and starts by itself. */
 export const LONG_WAIT_MS = 10 * 60_000;
 
-/** A run on this studio's GPUs that has waited long: it is kept, and starts by itself (never ended for a wait). */
-export const LONG_WAIT_WORDS = "High demand right now — your run is saved and starts automatically; it'll appear here when it's ready.";
+/**
+ * A run on this studio's GPUs that has waited long: it is kept, and starts by itself (never ended for a wait). The
+ * service's display copy (`queueLong`, src/lib/service-copy.ts) when it sends some.
+ */
+export const longWaitWords = (): string => copyLine("queueLong", {}, "Your run is saved and starts automatically; it'll appear here when it's ready.");
 
 /**
  * What a run on its way says on its tile or cover: its words (never empty: a blank or missing message reads "Queued" or
@@ -24,7 +28,7 @@ export function pendingWords(g: Pick<Generation, "status" | "message" | "place" 
     if (g.status === "queued") {
       const line = g.queue ? lineWords(g.queue, now) : POOL_WORDS.inLine;
       const long = !g.queue?.held && g.createdAt !== undefined && now - g.createdAt >= LONG_WAIT_MS;
-      return long ? { label: LONG_WAIT_WORDS, place: line } : { label: line, place: null };
+      return long ? { label: longWaitWords(), place: line } : { label: line, place: null };
     }
     return { label: message ?? POOL_WORDS.working, place: null };
   }

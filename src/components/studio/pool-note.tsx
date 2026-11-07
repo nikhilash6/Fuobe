@@ -8,8 +8,8 @@ type PoolState = NonNullable<ReturnType<typeof poolRunState>>;
 
 /**
  * The line under a composer's toolbar for a run on this studio's GPUs: when it would be ready, before Run is pressed
- * ("Ready in about 2 min", "Starts when a GPU is free", "Ready in seconds", "Starts after your other runs", "Lots of
- * runs today · starts in about 7 h"), with `offer` after a long wait (the account's own GPU or key for this run, once:
+ * ("Ready in about 2 min", "Starts when a GPU is free", "Ready in seconds", "Starts after your other runs", "Free
+ * runs refresh at 14:20."), with `offer` after a long wait (the account's own GPU or key for this run, once:
  * "Run it now on your GPU"); or, when the price check refused it, the words (the
  * toolbar's price slot has no room for them on a phone), with the link or offer the answer carries, and `alt`: the same
  * run another way that does run there ("Run without LoRAs").
