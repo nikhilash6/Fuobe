@@ -13,7 +13,7 @@ import { formatCost, timeAgo } from "@/lib/format";
 import { PRESETS as GRADE_PRESETS } from "@/lib/grade";
 import { trashDaysLeft, userTitle } from "@/lib/library";
 import { editOnlyFormat, isLayered, layerInfo, outputActions, type OutputAction } from "@/lib/output-actions";
-import { useEngineMode, useIsAccount, useLikelyVisitor, usePlaceName, useStatus } from "@/lib/api";
+import { useEngineMode, useIsAccount, useIsOwner, useLikelyVisitor, usePlaceName, useStatus } from "@/lib/api";
 import { knownPlace } from "@/lib/place-name";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ import { CompareSlider } from "./compare-slider";
 import { MadeNote } from "./made-note";
 import { shownSettings } from "@/lib/catalog/made";
 import { ACTION_ICONS, downloadUrl, SaveElementForm, useActionRunner } from "./result-actions";
-import { OwnSetupChip } from "@/components/own-setup";
+import { OwnSetupChip, OwnSetupMark } from "@/components/own-setup";
 import { LayersStack, ModelViewer, TextReader, VideoFileCard } from "./result-media";
 import { ReviewSelect } from "@/components/library/review";
 import { PlaceholderChip } from "@/components/demo-mode";
@@ -200,6 +200,7 @@ export function Viewer({
   const visitor = useLikelyVisitor();
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
   const account = useIsAccount();
+  const owner = useIsOwner();
   const list = useMemo(() => outputActions(g, index, { reuse: !!onReuse, compare: !!source, inViewer: true, engineMode, visitor, placeholders, account }), [g, index, onReuse, source, engineMode, visitor, placeholders, account]);
 
   // Read the latest values from the key handler without re-subscribing on every render.
@@ -260,15 +261,27 @@ export function Viewer({
     const Icon = ACTION_ICONS[a.id];
     const label = a.id === "favorite" ? (g.favorite ? "Favorited" : "Favorite") : a.id === "save-character" ? "Save as element" : a.label;
     const icon = <Icon className={cn(a.id === "favorite" && g.favorite && "fill-current text-highlight")} />;
-    const cls = cn(a.destructive && "text-destructive hover:text-destructive", opts.className);
+    // The label truncates inside its own button, so a long one never spills into the next column.
+    const text = (
+      <span className="min-w-0 truncate" title={label}>
+        {label}
+      </span>
+    );
+    const cls = cn("min-w-0", a.destructive && "text-destructive hover:text-destructive", opts.className);
     const variant = a.destructive ? "ghost" : (opts.variant ?? "secondary");
-    // An action that runs on the visitor's own setup (src/lib/own-setup.ts) says what it needs beside its name.
-    const setup = <OwnSetupChip setup={a.ownSetup} />;
+    // An action that runs on the visitor's own setup (src/lib/own-setup.ts) says what it needs beside its name: its icon
+    // in a narrow cell, the short words where the cell has room. The owner runs it as any other, so no mark.
+    const setup = a.ownSetup && !owner && (
+      <>
+        <OwnSetupMark setup={a.ownSetup} className="@min-[34rem]/actions:hidden" />
+        <OwnSetupChip setup={a.ownSetup} short="always" className="min-w-0 shrink @max-[34rem]/actions:hidden" />
+      </>
+    );
     if (a.href && a.download !== undefined) {
       return (
         <Button key={a.id} asChild variant={variant} size="sm" className={cls}>
           <a href={a.href} download={a.download} onClick={opts.onDone}>
-            {icon} {label}
+            {icon} {text}
           </a>
         </Button>
       );
@@ -277,7 +290,7 @@ export function Viewer({
       return (
         <Button key={a.id} asChild variant={variant} size="sm" className={cls}>
           <Link href={a.href} prefetch={false}>
-            {icon} {label}
+            {icon} {text}
             {setup}
           </Link>
         </Button>
@@ -288,7 +301,7 @@ export function Viewer({
         <Popover key={a.id} open={saving} onOpenChange={setSaving}>
           <PopoverTrigger asChild>
             <Button variant={variant} size="sm" className={cls}>
-              {icon} {label}
+              {icon} {text}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" collisionPadding={12} className="w-72">
@@ -309,7 +322,7 @@ export function Viewer({
           opts.onDone?.();
         }}
       >
-        {icon} {label}
+        {icon} {text}
         {setup}
       </Button>
     );
@@ -447,7 +460,7 @@ export function Viewer({
               />
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2 border-t p-3">
+          <div className="@container/actions grid grid-cols-2 gap-2 border-t p-3">
             {primary && actionButton(primary, { variant: "default" })}
             {bar.map((a) => actionButton(a))}
             {menu.filter((a) => !a.destructive && a.id !== "compare").map((a) => actionButton(a))}
@@ -498,7 +511,7 @@ export function Viewer({
             <div className="space-y-4 overflow-y-auto px-4">
               {/* The next steps first: on a phone this sheet is where they are. */}
               {!layered && <NextSteps g={g} index={index} variant="list" max={5} onNavigate={onClose} />}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="@container/actions grid grid-cols-2 gap-2">
                 {source && (
                   <Button variant="secondary" size="sm" aria-pressed={comparing} onClick={() => (setComparing((v) => !v), setDrawer(false))}>
                     <Columns2 /> {comparing ? "Hide original" : "Compare"}

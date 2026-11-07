@@ -17,9 +17,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The label: a small chip in the studios' badge style (the pickers' "Open source" and "Reads boxes" chips). `short`
- * uses the short words on a phone. Fixed height, so it never moves the row it sits in.
+ * uses the short words on a phone ("always": everywhere). Fixed height, so it never moves the row it sits in.
  */
-export function OwnSetupChip({ setup, short = true, className }: { setup: OwnSetup | string | null | undefined; short?: boolean; className?: string }) {
+export function OwnSetupChip({ setup, short = true, className }: { setup: OwnSetup | string | null | undefined; short?: boolean | "always"; className?: string }) {
   const o = typeof setup === "string" ? ownSetupOnly(setup) : setup;
   if (!o) return null;
   const Icon = o.need === "key" ? KeyRound : Cpu;
@@ -34,7 +34,9 @@ export function OwnSetupChip({ setup, short = true, className }: { setup: OwnSet
       )}
     >
       <Icon className="size-2.5! shrink-0" aria-hidden />
-      {short ? (
+      {short === "always" ? (
+        <span className="truncate">{ownSetupShort(o)}</span>
+      ) : short ? (
         <>
           <span className="truncate sm:hidden">{ownSetupShort(o)}</span>
           <span className="truncate max-sm:hidden">{label}</span>
