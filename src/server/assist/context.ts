@@ -52,7 +52,7 @@ export function engineLine(engine: Engine): string {
 export const approvalLine = (autoApprove: boolean, capUsd: number | null = null) =>
   autoApprove
     ? capUsd !== null
-      ? `Auto-run is on up to $${capUsd.toFixed(2)} for this chat: generations within it start without an approval card; a plan that would pass it, or whose price isn't known, waits for the user's approval. Keep plans within what the user asked for.`
+      ? `Auto-run is on up to $${capUsd.toFixed(2)} for this chat: generations within it start without an approval card; a plan that would pass it, or whose price isn't known, waits for the user's approval, and so does each memory you save. Keep plans within what the user asked for.`
       : "Auto-run is on: generations start without an approval card, so keep plans within what the user asked for. Memories you save are kept straight away."
     : "Ask-first is on: each generate call (and each memory you save) shows an approval card.";
 
