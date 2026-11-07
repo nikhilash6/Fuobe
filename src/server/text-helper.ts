@@ -48,6 +48,10 @@ export const HELPER_TIMES = {
   keepMs: 10 * 60_000,
   pollMs: 200,
   freshBeatMs: 30_000,
+  /** A slot seen this recently that asks for no jobs now (its worker restarts) is coming back: a chat waits for it. */
+  startingMs: 180_000,
+  /** How long a chat may wait in line or for a slot that is coming back (another task waits 45 s). */
+  chatWaitMs: 120_000,
 };
 
 export const HELPER_LIMITS = {
@@ -185,9 +189,55 @@ export function textEligible(w: WorkerRow, now = Date.now()): boolean {
  */
 export function helperLive(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): boolean {
   const rows = db()
-    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}`)
+    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ? AND s.away IS NULL${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}`)
     .all(now - HELPER_TIMES.liveMs) as WorkerRow[];
   return rows.some((w) => textEligible(w, now));
+}
+
+/**
+ * How the helper's slots stand for a job like this one. "ready": one asks for jobs and has none in hand. "busy": every
+ * one that asks has a job in hand (the line moves). "starting": none asks now, but one was here moments ago and is
+ * coming back (its worker restarts on new code, or it just went quiet). "absent": none is coming.
+ */
+export type HelperState = "ready" | "busy" | "starting" | "absent";
+
+export function helperState(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): HelperState {
+  const d = db();
+  const rows = d
+    .prepare(`SELECT w.*, s.seen_at AS slot_seen_at, s.away AS slot_away FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}`)
+    .all(now - HELPER_TIMES.startingMs) as (WorkerRow & { slot_seen_at: number; slot_away: string | null })[];
+  const live = rows.filter((r) => r.slot_away === null && now - r.slot_seen_at <= HELPER_TIMES.liveMs && textEligible(r, now));
+  if (live.length) {
+    const working = d.prepare("SELECT 1 FROM helper_jobs WHERE state = 'running' AND worker_id = ? LIMIT 1");
+    return live.every((r) => working.get(r.id)) ? "busy" : "ready";
+  }
+  // Coming back: a worker the website lets work, restarting on new code or quiet for a moment (not paused, not gone).
+  const coming = rows.some(
+    (r) =>
+      (r.slot_away === null || r.slot_away === "updating") &&
+      r.kind === "pool" &&
+      !r.revoked_at &&
+      !(r.expires_at && r.expires_at <= now) &&
+      !r.paused_server &&
+      !r.drain &&
+      hoursAt(parseHours(json<unknown>(r.hours_json, null)), now).inside,
+  );
+  return coming ? "starting" : "absent";
+}
+
+/** A worker's text slot says why it takes no jobs for now ("updating": back in moments; "paused" or "stopped"). */
+export function noteHelperAway(w: WorkerRow, state: unknown, now = Date.now()): boolean {
+  if (state !== "updating" && state !== "paused" && state !== "stopped") return false;
+  return db().prepare("UPDATE helper_slots SET away = ?, away_at = ? WHERE worker_id = ?").run(state, now, w.id).changes === 1;
+}
+
+/**
+ * How the free helper stands for this call: helperState, and "absent" for a call that may not use it (a guest's, or an
+ * account's while hosted runs are off). A chat may be asked unless "absent": it waits for a slot that is coming back.
+ */
+export function freeHelperState(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): HelperState {
+  const t = tenant();
+  return !t || (t.kind === "account" && hostedRunsOn()) ? helperState(now, o) : "absent";
 }
 
 /** May this call use the free helper now: it is live, and an account's call only while hosted runs are on (a guest's never: sign up first). */
@@ -256,7 +306,7 @@ export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: u
     const chat = slot.chat === true ? 1 : 0;
     if (note) {
       d.prepare(
-        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision, chat) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision, chat = excluded.chat",
+        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision, chat, away, away_at) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision, chat = excluded.chat, away = NULL, away_at = NULL",
       ).run(w.id, now, model, device, vision, chat);
     }
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow | undefined;
@@ -360,6 +410,11 @@ export interface AskHelper {
   onText?: (soFar: string) => void;
   /** Where the job stands in the line while it waits (1 is next), each time that changes. */
   onQueue?: (position: number) => void;
+  /**
+   * What the job waits for, each time that changes: "starting" (no slot asks for jobs now, but one is coming back: its
+   * worker restarts), "in-line" (a slot asks; onQueue says the place), "running" (a slot is writing the answer).
+   */
+  onState?: (state: "starting" | "in-line" | "running") => void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -381,7 +436,8 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   const d = db();
   sweepHelper(now());
   const vision = !!o.images?.length;
-  if (!helperLive(now(), { vision, chat })) return { error: "busy" };
+  // A chat waits for a slot that is coming back (its worker restarts on new code); another task needs one asking now.
+  if (chat ? helperState(now(), { vision, chat }) === "absent" : !helperLive(now(), { vision, chat })) return { error: "busy" };
   const pictures = vision ? await helperPictures(o.images!) : null;
   if (vision && !pictures) return { error: "failed" };
   if (who !== "owner" && o.counted !== false) {
@@ -431,7 +487,7 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     sampling ? JSON.stringify(sampling) : null,
     stream ? 1 : 0,
   );
-  const waitMs = o.waitMs ?? 45_000;
+  const waitMs = o.waitMs ?? (chat ? HELPER_TIMES.chatWaitMs : 45_000);
   // A caller's hook never stops the wait.
   const tell = <T,>(f: ((v: T) => void) | undefined, v: T) => {
     try {
@@ -440,6 +496,8 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   };
   let shown = "";
   let place = 0;
+  let said = "";
+  const say = (state: "starting" | "in-line" | "running") => state !== said && tell(o.onState, (said = state));
   try {
     for (;;) {
       if (o.signal?.aborted) return { error: "failed" };
@@ -460,12 +518,22 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
           if (d.prepare("UPDATE helper_jobs SET state = 'failed', error = 'busy' WHERE id = ? AND state = 'waiting'").run(id).changes === 1) return { error: "busy" };
           continue;
         }
+        if (chat || o.onState) {
+          const state = helperState(t, { vision, chat });
+          // No slot is coming any more (none asked for minutes, or its worker was paused): it ends now.
+          if (chat && state === "absent") {
+            if (d.prepare("UPDATE helper_jobs SET state = 'failed', error = 'busy' WHERE id = ? AND state = 'waiting'").run(id).changes === 1) return { error: "busy" };
+            continue;
+          }
+          say(state === "starting" ? "starting" : "in-line");
+        }
         if (o.onQueue) {
           const p = helperPosition(id);
           if (p && p !== place) tell(o.onQueue, (place = p));
         }
       }
       if (row.state === "running") {
+        say("running");
         if (row.partial && row.partial !== shown) tell(o.onText, (shown = row.partial));
         // A slot that sends its words has the time again with each; an older one has it from its claim.
         const claimed = row.claimed_at ?? t;

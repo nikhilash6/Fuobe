@@ -33,6 +33,7 @@ const enhanceRoute = await import("@/app/api/enhance/route");
 const claimRoute = await import("@/app/api/gpu/computer/text/claim/route");
 const resultRoute = await import("@/app/api/gpu/computer/text/[id]/route");
 const partialRoute = await import("@/app/api/gpu/computer/text/[id]/partial/route");
+const awayRoute = await import("@/app/api/gpu/computer/text/away/route");
 const { proxy } = await import("@/proxy");
 const { writeRestorePrompt } = await import("@/server/restore");
 
@@ -501,7 +502,9 @@ describe("chat: turns, words as they come, ending early", () => {
     expect((await send({ lease: job.lease, text: "more" })).status).toBe(409);
     // A slot that says it takes chats gets one through the claim route too.
     const claimed = helper.askHelper({ task: "chat", system: "s", messages: turns, waitMs: 5000 });
-    const none = await claimRoute.POST(post("/api/gpu/computer/text/claim", { model: "m", device: "cpu", wait: 300 }, undefined, auth_(w)));
+    // An older worker (no chat flag) gets nothing; one that says it takes chats gets it.
+    const older = addWorker();
+    const none = await claimRoute.POST(post("/api/gpu/computer/text/claim", { model: "m", device: "cpu", wait: 300 }, undefined, auth_(older)));
     expect(none.status).toBe(204);
     const r = await claimRoute.POST(post("/api/gpu/computer/text/claim", { model: "m", device: "cpu", chat: true, wait: 3000 }, undefined, auth_(w)));
     const { job: j2 } = (await r.json()) as { job: { id: string; lease: string; messages: unknown } };
@@ -584,5 +587,112 @@ describe("chat: turns, words as they come, ending early", () => {
     }
     expect(await Promise.all([a, b, c])).toEqual([{ text: "answer 1" }, { text: "answer 2" }, { text: "answer 0" }]);
     expect(places).toEqual({ a: [1, 2, 1], b: [2, 3, 2, 1], c: [1] });
+  });
+});
+
+describe("what a chat waits for: a slot ready, busy, coming back or gone", () => {
+  const turns = [{ role: "user" as const, content: "Hi" }];
+  const auth_ = (w: W) => ({ authorization: `Bearer ${w.token}` });
+  const chatWorker = () => {
+    const w = addWorker();
+    helper.claimHelperJob(workerRow(w), { chat: true });
+    return w;
+  };
+  const slotSeen = (w: W, ago: number) => db().prepare("UPDATE helper_slots SET seen_at = ? WHERE worker_id = ?").run(Date.now() - ago, w.id);
+
+  it("ready while a slot asks; busy while every slot has a job; starting while one restarts or just went quiet; absent after", async () => {
+    expect(helper.helperState()).toBe("absent");
+    const w = chatWorker();
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("ready");
+    const asked = helper.askHelper({ task: "chat", system: "s", messages: turns });
+    const job = (await helper.claimHelperJob(workerRow(w), { chat: true }))!;
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("busy");
+    helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Hello" });
+    expect(await asked).toEqual({ text: "Hello" });
+    // Its worker restarts on new code: coming back, whatever its last claim's age.
+    expect(helper.noteHelperAway(workerRow(w), "updating")).toBe(true);
+    expect(helper.helperLive(Date.now(), { chat: true })).toBe(false);
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("starting");
+    // Paused (by hand or for its hours) or stopped: gone.
+    helper.noteHelperAway(workerRow(w), "paused");
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("absent");
+    expect(helper.noteHelperAway(workerRow(w), "elsewhere")).toBe(false);
+    // Its next claim says it is back.
+    helper.claimHelperJob(workerRow(w), { chat: true });
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("ready");
+    // Quiet for a minute: coming back. Quiet for four, or paused on the website: gone.
+    slotSeen(w, 60_000);
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("starting");
+    pool.patchWorker(w.id, { paused: true });
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("absent");
+    pool.patchWorker(w.id, { paused: false });
+    slotSeen(w, 240_000);
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("absent");
+    // A guest, or an account while hosted runs are off, may not use it at all.
+    helper.claimHelperJob(workerRow(w), { chat: true });
+    expect(runAsTenant({ kind: "guest" }, () => helper.freeHelperState(Date.now(), { chat: true }))).toBe("absent");
+    expect(runAsTenant({ kind: "account", id: account }, () => helper.freeHelperState(Date.now(), { chat: true }))).toBe("absent");
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    expect(runAsTenant({ kind: "account", id: account }, () => helper.freeHelperState(Date.now(), { chat: true }))).toBe("ready");
+  });
+
+  it("a chat waits for a slot that is coming back, and hears so; its slot's next claim takes it", async () => {
+    const w = chatWorker();
+    helper.noteHelperAway(workerRow(w), "updating");
+    const states: string[] = [];
+    const asked = helper.askHelper({ task: "chat", system: "s", messages: turns, onState: (s) => states.push(s) });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(states).toEqual(["starting"]);
+    // Another task still needs a slot that asks now.
+    expect(await helper.askHelper({ task: "enhance", system: "s", user: "u" })).toEqual({ error: "busy" });
+    // The worker is back on new code.
+    const job = (await helper.claimHelperJob(workerRow(w), { chat: true }))!;
+    await new Promise((r) => setTimeout(r, 300));
+    helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Back" });
+    expect(await asked).toEqual({ text: "Back" });
+    expect(states).toEqual(["starting", "running"]);
+    // While a slot asks, the job is in line.
+    const seen: string[] = [];
+    const inLine = helper.askHelper({ task: "chat", system: "s", messages: turns, onState: (s) => seen.push(s) });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(seen).toEqual(["in-line"]);
+    const j2 = (await helper.claimHelperJob(workerRow(w), { chat: true }))!;
+    helper.finishHelperJob(workerRow(w), j2.id, { lease: j2.lease, text: "ok" });
+    expect(await inLine).toEqual({ text: "ok" });
+  });
+
+  it("a chat waits up to 120 s, not 45; it ends at once when no slot is coming any more", async () => {
+    expect(helper.HELPER_TIMES.chatWaitMs).toBe(120_000);
+    const w = chatWorker();
+    helper.noteHelperAway(workerRow(w), "updating");
+    let t = Date.now();
+    const start = t;
+    const waited = helper.askHelper({ task: "chat", system: "s", messages: turns, now: () => t, sleep: async () => void (t += 10_000) });
+    expect(await waited).toEqual({ error: "busy" });
+    expect(t - start).toBeGreaterThanOrEqual(120_000);
+    expect(t - start).toBeLessThan(140_000);
+    // Coming back, then gone (its worker was paused): it doesn't wait out its time.
+    helper.claimHelperJob(workerRow(w), { chat: true });
+    helper.noteHelperAway(workerRow(w), "updating");
+    const gone = helper.askHelper({ task: "chat", system: "s", messages: turns, waitMs: 60_000 });
+    await new Promise((r) => setTimeout(r, 300));
+    helper.noteHelperAway(workerRow(w), "stopped");
+    const t0 = Date.now();
+    expect(await gone).toEqual({ error: "busy" });
+    expect(Date.now() - t0).toBeLessThan(2000);
+    // Nothing coming at all: busy at once, nothing queued.
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: turns })).toEqual({ error: "busy" });
+    expect(jobs()).toEqual([]);
+  });
+
+  it("the away route: a shared worker's slot only, a known reason only", async () => {
+    const w = chatWorker();
+    const send = (body: unknown, extra: Record<string, string> = auth_(w), who?: string) => awayRoute.POST(post("/api/gpu/computer/text/away", body, who, extra));
+    expect((await send({ state: "updating" })).status).toBe(200);
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("starting");
+    expect((await send({ state: "gone fishing" })).status).toBe(400);
+    const browser = await send({ state: "stopped" }, { "sec-fetch-site": "same-origin", origin: "http://localhost:3000" }, "owner");
+    expect(browser.status).not.toBe(200);
+    expect(helper.helperState(Date.now(), { chat: true })).toBe("starting");
   });
 });

@@ -41,7 +41,7 @@ import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
 import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
-import { TextSlot, textSlotOf } from "./text.mjs";
+import { TEXT_DRAIN_MS, TextSlot, textSlotOf, textTurn } from "./text.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
 import { CodeWatch } from "./update.mjs";
 
@@ -319,6 +319,8 @@ async function work(saved, deps, owner) {
   // New code on disk (update.mjs): it takes no new job, finishes the one it has, and ends to start again on the new code.
   const codeWatch = deps.codeWatch ?? new CodeWatch({ root: ROOT, dist: path.join(here, "dist"), home: deps.home });
   let updating = false;
+  // When its last GPU or CPU job ended while it waits to restart on new code (a text job in hand may still end).
+  let textDrainAt = null;
   // Its ComfyUI's start, while it goes on (beats go on meanwhile), and the signal that ends a start when the worker stops.
   let starting = null;
   const stopStarts = new AbortController();
@@ -866,12 +868,16 @@ async function work(saved, deps, owner) {
   try {
     while (!deps.signal?.aborted) {
       const t = now();
-      // New code installed: once no job is in hand (the GPU's and the CPU slot's), it ends, and starts again on it.
+      // New code installed: once no job is in hand (the GPU's and the CPU slot's), it ends, and starts again on it. The
+      // text slot takes jobs until then; a text job in hand then gets up to TEXT_DRAIN_MS to end.
       if (!updating && codeWatch.check(t)) {
         updating = true;
         log("New worker code is installed: restarting after this job.");
       }
-      if (updating && !busyJob && !busyCpu && !text?.busy) break;
+      if (updating && !busyJob && !busyCpu) {
+        textDrainAt ??= t;
+        if (!text?.running || t - textDrainAt >= TEXT_DRAIN_MS) break;
+      }
       // Its own switch, and --for running out.
       let control = readControl(deps.home);
       if (control.paused && control.until && t >= control.until) {
@@ -1082,10 +1088,12 @@ async function work(saved, deps, owner) {
           await cpuComfy.stop();
         }
       }
-      // The text slot: never while paused by hand, on the website, outside its hours or ending for new code.
+      // The text slot: never while paused by hand, on the website or outside its hours. While the worker waits for its
+      // GPU's job to end before it restarts on new code, the text slot goes on: text jobs take seconds.
       if (text) {
         const byHand = pause.paused && /^here/.test(pause.why ?? "");
-        text.tick(t, { may: !updating && !byHand && !!answer?.worker && !answer.worker.paused && !!answer.worker.insideHours && !answer.worker.drain, room: textRoom() });
+        const turn = textTurn({ updating, gpuBusy: busyJob || busyCpu, byHand, worker: answer?.worker ?? null });
+        text.tick(t, { ...turn, room: textRoom() });
       }
       // Kept results the studio never took are deleted after a day.
       if (t - holdCheckedAt >= 60_000) {
@@ -1136,7 +1144,7 @@ async function work(saved, deps, owner) {
     runner.stop();
     cpuRunner?.stop();
     await Promise.race([Promise.all([job, cpuJob]), new Promise((r) => setTimeout(r, 10_000).unref?.())]);
-    await text?.end();
+    await text?.end(updating && !deps.signal?.aborted ? "updating" : "stopped");
     awake.set(false);
     // No turn any more: local ComfyUI work may go on at once.
     if (turns?.folderOk()) writeTurn(now(), { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null });

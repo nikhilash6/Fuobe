@@ -259,6 +259,22 @@ export class TextSlot {
     this.missedAt = -Infinity;
     // Ends a claim that waits for a job when the worker stops.
     this.ending = new AbortController();
+    // The claim that waits now (ended when the slot stops taking jobs), and whether a job is in hand.
+    this.claiming = null;
+    this.running = false;
+    // What the studio last heard of why the slot is away ("updating", "paused", "stopped"), and that call.
+    this.away = null;
+    this.awayCall = Promise.resolve();
+  }
+
+  /** Tell the studio why the slot takes no jobs for now, once for each reason (its next claim says it is back). */
+  sayAway(state) {
+    if (!this.ok || this.away === state) return;
+    this.away = state;
+    this.awayCall = this.d
+      .call("/api/gpu/computer/text/away", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }), signal: AbortSignal.timeout(5000) })
+      .then((r) => r.body?.cancel().catch(() => {}))
+      .catch(() => {});
   }
 
   /** The model (and the server, when worker.json gives its SHA-256) checked once, in the background. */
@@ -290,13 +306,20 @@ export class TextSlot {
 
   /**
    * Once a second from the worker's loop. `may`: the worker may take text jobs (not paused by hand or on the website,
-   * inside its hours). `room`: "gpu", "cpu" or null, where a new start may run now.
+   * inside its hours, not ending for new code). `away`: why not, for the studio ("updating" or "paused"), or null.
+   * `room`: "gpu", "cpu" or null, where a new start may run now.
+   * @param {number} t
+   * @param {{ may: boolean; room: "gpu" | "cpu" | null; away?: string | null }} o
    */
-  tick(t, { may, room }) {
+  tick(t, { may, room, away = null }) {
     if (!may) {
+      // A claim that waits ends now; a job in hand goes on to its answer.
+      this.claiming?.abort();
+      if (away) this.sayAway(away);
       if (this.server && !this.busy) void this.stop("paused");
       return;
     }
+    this.away = null;
     this.check();
     if (!this.ok || this.busy) return;
     if (this.server && t - this.lastJobAt >= this.slot.idleMin * 60_000) {
@@ -323,13 +346,38 @@ export class TextSlot {
   }
 
   async claimAndRun(device) {
-    const res = await this.d.call("/api/gpu/computer/text/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, chat: true, wait: this.slot.claimWaitMs }), signal: this.ending.signal });
-    if (res.status === 204 || !res.ok) {
-      await res.body?.cancel().catch(() => {});
-      return false;
+    const claiming = new AbortController();
+    this.claiming = claiming;
+    let job;
+    try {
+      const res = await this.d.call("/api/gpu/computer/text/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, chat: true, wait: this.slot.claimWaitMs }),
+        signal: AbortSignal.any([this.ending.signal, claiming.signal]),
+      });
+      if (res.status === 204 || !res.ok) {
+        await res.body?.cancel().catch(() => {});
+        return false;
+      }
+      job = jobOf(await res.json().catch(() => null));
+    } catch (e) {
+      // The slot stopped taking jobs while it waited for one: no job, nothing went wrong.
+      if (claiming.signal.aborted && !this.ending.signal.aborted) return false;
+      throw e;
+    } finally {
+      if (this.claiming === claiming) this.claiming = null;
     }
-    const job = jobOf(await res.json().catch(() => null));
     if (!job) return false;
+    this.running = true;
+    try {
+      return await this.runJob(job, device);
+    } finally {
+      this.running = false;
+    }
+  }
+
+  async runJob(job, device) {
     let answer;
     try {
       if (job.images.length && !this.slot.mmproj) throw new Error("this slot's model doesn't take pictures");
@@ -486,7 +534,7 @@ export class TextSlot {
       this.log(`llama-server didn't start: ${e.message}`);
     });
     this.server = s;
-    this.log(`Starting llama-server on the ${device === "gpu" ? "GPU" : "CPU"} for text jobs.`);
+    this.log(`Starting llama-server on the ${device === "gpu" ? "GPU" : "CPU"} for text jobs (context ${contextOf(this.slot)}).`);
     const f = this.d.fetch ?? fetch;
     const sleep = this.d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     const end = this.now() + this.slot.startMs;
@@ -514,10 +562,30 @@ export class TextSlot {
     if (s.alive && s.pid) await (this.d.kill ?? killTree)(s.pid);
   }
 
-  /** The worker ends: its job ends first (at most 10 s), then its server. */
-  async end() {
+  /**
+   * The worker ends: its job ends first (at most 10 s), the studio hears why the slot is away ("updating": it is back in
+   * moments, on new code), then its server stops.
+   */
+  async end(why = "stopped") {
     this.ending.abort();
     await Promise.race([this.job, new Promise((r) => setTimeout(r, 10_000).unref?.())]);
+    this.sayAway(why);
+    await this.awayCall;
     await this.stop("end");
   }
+}
+
+/** How long a worker that ends for new code waits for a text job in hand, once its other jobs are done. */
+export const TEXT_DRAIN_MS = 60_000;
+
+/**
+ * May the text slot take jobs now, and if not, why (for the studio). It goes on while the worker waits for its GPU's
+ * (or CPU slot's) job to end before it restarts on new code: text jobs take seconds. It stops when those jobs are done
+ * and the worker is about to restart ("updating"), and while paused by hand, on the website, outside its hours or
+ * drained ("paused"). Before the studio's first answer it waits, saying nothing.
+ */
+export function textTurn({ updating, gpuBusy, byHand, worker }) {
+  const restarting = updating && !gpuBusy;
+  const stopped = byHand || (!!worker && (!!worker.paused || !worker.insideHours || !!worker.drain));
+  return { may: !restarting && !stopped && !!worker, away: restarting ? "updating" : stopped ? "paused" : null };
 }

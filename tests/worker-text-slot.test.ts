@@ -11,7 +11,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { othersOf } from "../bin/lib/worker/gpu.mjs";
 import { parseCounters, splitMemory } from "../bin/lib/worker/local-work.mjs";
-import { chatBody, contextOf, cudaMbOf, familyOf, fileMatches, jobOf, modelName, serverArgs, streamedWords, TextSlot, textSlotOf } from "../bin/lib/worker/text.mjs";
+import { chatBody, contextOf, cudaMbOf, familyOf, fileMatches, jobOf, modelName, serverArgs, streamedWords, TextSlot, textSlotOf, textTurn } from "../bin/lib/worker/text.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -406,5 +406,65 @@ describe("chats and words as they come", () => {
     await until(s, Date.now, { may: true, room: "cpu" }, () => site.answers.length === 1);
     expect(JSON.parse(String(site.answers[0].body.text))).toMatchObject({ stream: false, user: "plain", turns: ["system:Be brief.", "user:plain"] });
     expect(site.partials).toEqual([]);
+  });
+});
+
+describe("while its worker restarts or pauses", () => {
+  it("goes on while the worker waits for its GPU's job before new code; stops (saying why) when it is about to restart, or when paused", () => {
+    const worker = { paused: false, insideHours: true, drain: false };
+    expect(textTurn({ updating: false, gpuBusy: false, byHand: false, worker })).toEqual({ may: true, away: null });
+    expect(textTurn({ updating: true, gpuBusy: true, byHand: false, worker })).toEqual({ may: true, away: null });
+    expect(textTurn({ updating: true, gpuBusy: false, byHand: false, worker })).toEqual({ may: false, away: "updating" });
+    expect(textTurn({ updating: false, gpuBusy: true, byHand: true, worker })).toEqual({ may: false, away: "paused" });
+    expect(textTurn({ updating: false, gpuBusy: false, byHand: false, worker: { ...worker, paused: true } })).toEqual({ may: false, away: "paused" });
+    expect(textTurn({ updating: false, gpuBusy: false, byHand: false, worker: { ...worker, insideHours: false } })).toEqual({ may: false, away: "paused" });
+    expect(textTurn({ updating: true, gpuBusy: true, byHand: false, worker: { ...worker, drain: true } })).toEqual({ may: false, away: "paused" });
+    // Before the studio's first answer: no claim, and nothing said.
+    expect(textTurn({ updating: false, gpuBusy: false, byHand: false, worker: null })).toEqual({ may: false, away: null });
+  });
+
+  it("a claim that waits ends when it may not take jobs; the studio hears why once; a job in hand goes on to its answer", async () => {
+    const aways: unknown[] = [];
+    let claims = 0;
+    let release: (() => void) | null = null;
+    const answers: unknown[] = [];
+    // The first claim waits until it is ended; the second gets a job.
+    const call = async (p: string, init: RequestInit = {}) => {
+      const body = JSON.parse(String(init.body ?? "{}"));
+      if (p === "/api/gpu/computer/text/away") {
+        aways.push(body.state);
+        return Response.json({ ok: true });
+      }
+      if (p === "/api/gpu/computer/text/claim") {
+        claims++;
+        if (claims === 1) {
+          return new Promise<Response>((_, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true }));
+        }
+        if (claims === 2) return Response.json({ job: { id: "hlp_r", lease: "Lr", system: "", user: "slow", maxTokens: 50, stream: true } });
+        return new Response(null, { status: 204 });
+      }
+      if (p.endsWith("/partial")) return Response.json({ ok: true });
+      answers.push(body);
+      release?.();
+      return Response.json({ ok: true });
+    };
+    const { s, logs } = makeSlot(call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => claims === 1 && s.busy);
+    expect(s.running).toBe(false);
+    s.tick(Date.now(), { may: false, room: "cpu", away: "updating" });
+    s.tick(Date.now(), { may: false, room: "cpu", away: "updating" });
+    await until(s, Date.now, { may: false, room: "cpu", away: "updating" } as never, () => !s.busy);
+    expect(aways).toEqual(["updating"]);
+    expect(logs.join("\n")).not.toContain("A text job stopped");
+    // Back: it claims again, and a job in hand runs on while the slot may not take another.
+    await until(s, Date.now, { may: true, room: "cpu" }, () => s.running);
+    s.tick(Date.now(), { may: false, room: "cpu", away: "paused" });
+    expect(s.running).toBe(true);
+    await new Promise<void>((r) => (release = r));
+    expect(answers).toHaveLength(1);
+    expect(aways).toEqual(["updating", "paused"]);
+    // The worker ends for new code: the studio hears it is coming back.
+    await s.end("updating");
+    expect(aways).toEqual(["updating", "paused", "updating"]);
   });
 });

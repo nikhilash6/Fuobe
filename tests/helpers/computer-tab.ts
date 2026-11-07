@@ -21,6 +21,9 @@ export interface ComputerRoutes {
   /** The text slot's claim and answer (the free text helper). */
   textClaim?: { POST: Handler };
   textResult?: { POST: Handler };
+  /** The words so far for a text job, and a slot saying why it takes no jobs for now. */
+  textPartial?: { POST: Handler };
+  textAway?: { POST: Handler };
 }
 
 export async function loadRoutes(): Promise<ComputerRoutes> {
@@ -33,6 +36,8 @@ export async function loadRoutes(): Promise<ComputerRoutes> {
     release: (await import("@/app/api/gpu/computer/tasks/[id]/release/route")) as never,
     textClaim: (await import("@/app/api/gpu/computer/text/claim/route")) as never,
     textResult: (await import("@/app/api/gpu/computer/text/[id]/route")) as never,
+    textPartial: (await import("@/app/api/gpu/computer/text/[id]/partial/route")) as never,
+    textAway: (await import("@/app/api/gpu/computer/text/away/route")) as never,
   };
 }
 
@@ -62,6 +67,8 @@ export function apiAs(routes: ComputerRoutes, cookie: string | null, extra: Reco
     if ((m = /^\/api\/gpu\/computer\/tasks\/([^/]+)\/outputs\/([^/]+)$/.exec(url.pathname))) return (method === "PUT" ? routes.outputs.PUT : routes.outputs.GET)(req, params({ id: m[1], n: m[2] }));
     if ((m = /^\/api\/gpu\/computer\/tasks\/([^/]+)\/release$/.exec(url.pathname))) return routes.release.POST(req, params({ id: m[1] }));
     if (url.pathname === "/api/gpu/computer/text/claim" && routes.textClaim) return routes.textClaim.POST(req, params({}));
+    if (url.pathname === "/api/gpu/computer/text/away" && routes.textAway) return routes.textAway.POST(req, params({}));
+    if ((m = /^\/api\/gpu\/computer\/text\/([^/]+)\/partial$/.exec(url.pathname)) && routes.textPartial) return routes.textPartial.POST(req, params({ id: decodeURIComponent(m[1]) }));
     if ((m = /^\/api\/gpu\/computer\/text\/([^/]+)$/.exec(url.pathname)) && routes.textResult) return routes.textResult.POST(req, params({ id: decodeURIComponent(m[1]) }));
     return new Response("no such route", { status: 404 });
   };

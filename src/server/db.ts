@@ -1201,6 +1201,9 @@ function open(): Database.Database {
     ["helper_jobs", "partial", "TEXT"],
     ["helper_jobs", "partial_at", "INTEGER"],
     ["helper_slots", "chat", "INTEGER NOT NULL DEFAULT 0"],
+    // Why a slot takes no jobs for now ("updating": its worker restarts on new code), and since when.
+    ["helper_slots", "away", "TEXT"],
+    ["helper_slots", "away_at", "INTEGER"],
   ]) {
     if (!(db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
@@ -1414,7 +1417,9 @@ const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
     model TEXT,
     device TEXT,
     vision INTEGER NOT NULL DEFAULT 0,
-    chat INTEGER NOT NULL DEFAULT 0
+    chat INTEGER NOT NULL DEFAULT 0,
+    away TEXT,
+    away_at INTEGER
   );`;
 
 export function db(): Database.Database {
