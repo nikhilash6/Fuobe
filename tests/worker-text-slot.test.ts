@@ -11,7 +11,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { othersOf } from "../bin/lib/worker/gpu.mjs";
 import { parseCounters, splitMemory } from "../bin/lib/worker/local-work.mjs";
-import { chatBody, cudaMbOf, familyOf, fileMatches, jobOf, modelName, serverArgs, TextSlot, textSlotOf } from "../bin/lib/worker/text.mjs";
+import { chatBody, contextOf, cudaMbOf, familyOf, fileMatches, jobOf, modelName, serverArgs, streamedWords, TextSlot, textSlotOf } from "../bin/lib/worker/text.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -30,6 +30,7 @@ const JPEG_B64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0
 /** A stand-in llama-server: its buffers on stderr, /health and /v1/chat/completions behind its key, the request echoed back. */
 const FAKE = `
 import http from "node:http";
+import fs from "node:fs";
 const arg = (n) => process.argv[process.argv.indexOf(n) + 1];
 const port = Number(arg("--port"));
 const key = arg("--api-key");
@@ -44,9 +45,31 @@ http.createServer((req, res) => {
     const b = JSON.parse(body);
     const last = b.messages.at(-1).content;
     const parts = Array.isArray(last) ? last : [{ type: "text", text: last }];
-    const content = JSON.stringify({ host: req.headers.host, ngl: arg("-ngl"), mmproj: process.argv.includes("--mmproj"), cuda: process.env.CUDA_VISIBLE_DEVICES ?? null, token: process.env.FUOBE_WORKER_TOKEN ?? null, kwargs: b.chat_template_kwargs ?? null, temperature: b.temperature, user: parts.find((p) => p.type === "text").text, pictures: parts.filter((p) => p.type === "image_url").map((p) => p.image_url.url.slice(0, 23)), max: b.max_tokens });
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ choices: [{ message: { content } }] }));
+    const content = JSON.stringify({ host: req.headers.host, ngl: arg("-ngl"), ctx: arg("-c"), mmproj: process.argv.includes("--mmproj"), cuda: process.env.CUDA_VISIBLE_DEVICES ?? null, token: process.env.FUOBE_WORKER_TOKEN ?? null, kwargs: b.chat_template_kwargs ?? null, temperature: b.temperature, top_p: b.top_p, user: parts.find((p) => p.type === "text").text, pictures: parts.filter((p) => p.type === "image_url").map((p) => p.image_url.url.slice(0, 23)), max: b.max_tokens, stream: b.stream, turns: b.messages.map((m) => m.role + ":" + (Array.isArray(m.content) ? m.content.map((p) => p.type).join("+") : m.content)) });
+    if (!b.stream) {
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ choices: [{ message: { content } }] }));
+    }
+    // Streamed: the words in pieces, a tenth of a second apart; a request that ends early is noted beside it.
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    const pieces = content.match(/[\\s\\S]{1,12}/g);
+    let n = 0;
+    let ended = false;
+    res.on("close", () => {
+      if (n < pieces.length) fs.writeFileSync("closed.txt", String(n));
+      ended = true;
+    });
+    const event = (o) => "data: " + JSON.stringify(o) + "\\n\\n";
+    const next = () => {
+      if (ended) return;
+      if (n >= pieces.length) {
+        res.write(event({ choices: [{ delta: {}, finish_reason: "stop" }] }));
+        return res.end("data: [DONE]\\n\\n");
+      }
+      res.write(event({ choices: [{ delta: { content: pieces[n++] } }] }));
+      setTimeout(next, Number(process.env.FAKE_PIECE_MS ?? 100));
+    };
+    next();
   });
 }).listen(port, "127.0.0.1");
 `;
@@ -68,15 +91,22 @@ const kill = async (pid: number) => {
 };
 
 /** The studio, as the slot's calls reach it: one job at a time from `line`, answers kept in `answers`. */
-function studio(line: { id: string; lease: string; user: string; maxTokens: number; system?: string; json?: boolean; images?: string[] }[]) {
+type LineJob = { id: string; lease: string; user: string; maxTokens: number; system?: string; json?: boolean; images?: string[]; messages?: { role: string; content: string }[]; sampling?: Record<string, number>; stream?: boolean };
+function studio(line: LineJob[], o: { partial?: (body: { lease: string; text: string }, n: number) => Response } = {}) {
   const answers: { id: string; body: Record<string, unknown> }[] = [];
   const claims: Record<string, unknown>[] = [];
+  const partials: { id: string; text: string }[] = [];
   const call = async (p: string, init: RequestInit = {}) => {
     const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
     if (p === "/api/gpu/computer/text/claim") {
       claims.push(body);
       const job = line.shift();
       return job ? Response.json({ job: { system: "Be brief.", json: false, ...job } }) : new Response(null, { status: 204 });
+    }
+    const pm = /^\/api\/gpu\/computer\/text\/([^/]+)\/partial$/.exec(p);
+    if (pm) {
+      partials.push({ id: decodeURIComponent(pm[1]), text: String(body.text) });
+      return o.partial ? o.partial(body as { lease: string; text: string }, partials.length) : Response.json({ ok: true });
     }
     const m = /^\/api\/gpu\/computer\/text\/([^/]+)$/.exec(p);
     if (m) {
@@ -85,7 +115,7 @@ function studio(line: { id: string; lease: string; user: string; maxTokens: numb
     }
     return new Response(null, { status: 404 });
   };
-  return { call, answers, claims };
+  return { call, answers, claims, partials };
 }
 
 const slots: InstanceType<typeof TextSlot>[] = [];
@@ -157,7 +187,7 @@ describe("the text slot's parts", () => {
     expect(qwen).toMatchObject({ temperature: 0.7, top_p: 0.8, top_k: 20, presence_penalty: 1.5 });
     expect(qwen.messages[1].content).toEqual([{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${JPEG_B64}` } }, { type: "text", text: "U" }]);
     // worker.json may set them itself.
-    expect(familyOf({ model: "other.gguf", chat: { kwargs: { reasoning: "off" }, sampling: { temperature: 0.2 } } })).toEqual({ kwargs: { reasoning: "off" }, sampling: { temperature: 0.2, top_p: 0.9 } });
+    expect(familyOf({ model: "other.gguf", chat: { kwargs: { reasoning: "off" }, sampling: { temperature: 0.2 } } })).toEqual({ kwargs: { reasoning: "off" }, sampling: { temperature: 0.2, top_p: 0.9 }, context: null });
     expect(modelName({ model: "a/b/Gemma-4-E4B-it-Q4_0.gguf" })).toBe("gemma-4-e4b-it-q4_0");
     // A picture is a JPEG as base64, never an address or a file.
     const one = (images: unknown) => jobOf({ job: { id: "j", lease: "l", system: "", user: "U", maxTokens: 10, images } });
@@ -217,7 +247,7 @@ describe("the text slot", () => {
     const said = JSON.parse(String(a.body.text));
     expect(said).toMatchObject({ ngl: "99", cuda: null, token: null, kwargs: null, user: "Write a chorus", max: 200, pictures: [], mmproj: false });
     expect(said.host).toMatch(/^127\.0\.0\.1:\d+$/);
-    expect(site.claims[0]).toMatchObject({ model: "model", device: "gpu", vision: false });
+    expect(site.claims[0]).toMatchObject({ model: "model", device: "gpu", vision: false, chat: true });
     expect(s.own().pids).toHaveLength(1);
     expect(s.own().mb).toBe(3698);
   });
@@ -285,5 +315,96 @@ describe("the text slot", () => {
     expect(off.ok).toBe(false);
     expect(bad.claims).toHaveLength(0);
     expect(logs.join("\n")).toContain("SHA-256 doesn't match");
+  });
+});
+
+describe("chats and words as they come", () => {
+  const turns = [
+    { role: "user", content: "Hi, I'm Ria." },
+    { role: "assistant", content: "Hello Ria!" },
+    { role: "user", content: "What's my name?" },
+  ];
+
+  it("reads a chat's turns and its own sampling (kept in bounds); a chat that isn't one is dropped", () => {
+    const base = { id: "j", lease: "l", system: "", user: "What's my name?", maxTokens: 900 };
+    expect(jobOf({ job: { ...base, messages: turns, sampling: { temperature: 9, top_p: 0 }, stream: true } })).toMatchObject({ messages: turns, sampling: { temperature: 2, top_p: 0.05 }, stream: true });
+    // An older studio's job: no turns, no sampling of its own, no stream.
+    expect(jobOf({ job: base })).toMatchObject({ messages: null, sampling: {}, stream: false });
+    expect(jobOf({ job: { ...base, messages: [] } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: [{ role: "system", content: "x" }, turns[2]] } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: turns.slice(0, 2) } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: [{ role: "user", content: "x".repeat(32_001) }] } })).toBeNull();
+    expect(jobOf({ job: { ...base, messages: Array(201).fill(turns[2]) } })).toBeNull();
+  });
+
+  it("sends the turns as real turns after the system words, a picture with the newest turn only, the job's sampling over the family's", () => {
+    const job = jobOf({ job: { id: "j", lease: "l", system: "S", user: "What's my name?", maxTokens: 900, messages: turns, images: [JPEG_B64], sampling: { temperature: 0.3 }, stream: true } })!;
+    const b = chatBody(job, { model: "gemma-4-E2B-it-Q6_K.gguf" });
+    expect(b).toMatchObject({ temperature: 0.3, top_p: 0.95, top_k: 64, stream: true, max_tokens: 900, chat_template_kwargs: { enable_thinking: false } });
+    expect(b.messages.map((m: { role: string }) => m.role)).toEqual(["system", "user", "assistant", "user"]);
+    expect(b.messages[1].content).toBe("Hi, I'm Ria.");
+    expect(b.messages[3].content).toEqual([{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${JPEG_B64}` } }, { type: "text", text: "What's my name?" }]);
+  });
+
+  it("starts Gemma 4 E2B's server with room for a chat even where worker.json still says 8192; another model keeps worker.json's own", () => {
+    const gemma = textSlotOf({ server: "s", modelDir: "X:/llm", context: 8192 })!;
+    expect(contextOf(gemma)).toBe(32_768);
+    expect(serverArgs(gemma, { port: 31000, key: "k", device: "cpu" })).toEqual(expect.arrayContaining(["-c", "32768"]));
+    expect(contextOf(textSlotOf({ server: "s", modelDir: "X:/llm", context: 65_536 })!)).toBe(65_536);
+    expect(contextOf(textSlotOf({ server: "s", model: "m.gguf", sha256: "a".repeat(64), context: 8192 })!)).toBe(8192);
+    expect(contextOf(textSlotOf({ server: "s", model: "m.gguf", sha256: "a".repeat(64) })!)).toBe(16_384);
+    // worker.json may set the family's context itself.
+    expect(contextOf(textSlotOf({ server: "s", modelDir: "X:/llm", context: 4096, chat: { context: 16_384 } })!)).toBe(16_384);
+  });
+
+  it("reads streamed words from the server's events", () => {
+    expect(streamedWords('data: {"choices":[{"delta":{"content":"Hel"}}]}')).toBe("Hel");
+    expect(streamedWords("data: [DONE]")).toBe("");
+    expect(streamedWords(": ping")).toBe("");
+    expect(streamedWords("data: {broken")).toBe("");
+  });
+
+  it("says it takes chats; streams a chat's words to the studio as they come, then sends the whole answer with its lease", async () => {
+    const site = studio([{ id: "hlp_c", lease: "Lc", user: "What's my name?", maxTokens: 900, messages: turns, stream: true }]);
+    const { s } = makeSlot(site.call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => site.answers.length === 1);
+    expect(site.claims[0]).toMatchObject({ chat: true });
+    const final = String(site.answers[0].body.text);
+    expect(JSON.parse(final)).toMatchObject({ stream: true, turns: ["system:Be brief.", "user:Hi, I'm Ria.", "assistant:Hello Ria!", "user:What's my name?"] });
+    expect(site.answers[0].body.lease).toBe("Lc");
+    // The words so far grow, each the start of the answer.
+    const words = site.partials.map((p) => p.text).filter(Boolean);
+    expect(words.length).toBeGreaterThanOrEqual(2);
+    for (const w of words) expect(final.startsWith(w)).toBe(true);
+    expect(new Set(site.partials.map((p) => p.id))).toEqual(new Set(["hlp_c"]));
+  });
+
+  it("stops writing when the studio says the job isn't its own any more: the request ends early and no answer is sent", async () => {
+    const site = studio([{ id: "hlp_s", lease: "Ls", user: "long", maxTokens: 900, messages: [{ role: "user", content: "long" }], stream: true }], {
+      partial: (_b, n) => (n >= 2 ? Response.json({ error: "gone", stop: true }, { status: 409 }) : Response.json({ ok: true })),
+    });
+    const { s, logs } = makeSlot(site.call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => site.partials.length >= 2 && !s.busy);
+    expect(site.answers).toEqual([]);
+    // The stand-in notes the request that ended before its last words.
+    for (let i = 0; i < 100 && !fs.existsSync(path.join(s.dir, "closed.txt")); i++) await new Promise((r) => setTimeout(r, 20));
+    expect(fs.existsSync(path.join(s.dir, "closed.txt"))).toBe(true);
+    expect(logs.join("\n")).not.toContain("has no answer");
+  });
+
+  it("a studio without the partial call (404) or a busy moment (429) changes nothing: the whole answer still goes", async () => {
+    const site = studio([{ id: "hlp_o", lease: "Lo", user: "x", maxTokens: 900, stream: true }], { partial: (_b, n) => new Response(null, { status: n % 2 ? 404 : 429 }) });
+    const { s } = makeSlot(site.call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => site.answers.length === 1);
+    expect(JSON.parse(String(site.answers[0].body.text))).toMatchObject({ stream: true, user: "x" });
+    expect(site.partials.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("an older studio's job (no stream) is answered whole, with no partial calls", async () => {
+    const site = studio([{ id: "hlp_n", lease: "Ln", user: "plain", maxTokens: 100 }]);
+    const { s } = makeSlot(site.call);
+    await until(s, Date.now, { may: true, room: "cpu" }, () => site.answers.length === 1);
+    expect(JSON.parse(String(site.answers[0].body.text))).toMatchObject({ stream: false, user: "plain", turns: ["system:Be brief.", "user:plain"] });
+    expect(site.partials).toEqual([]);
   });
 });

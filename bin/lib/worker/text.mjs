@@ -3,24 +3,31 @@
 // itself: 127.0.0.1 only, a random port, a new key at each start, the model checked against its SHA-256 first. The
 // server starts at the first job and stops after `idleMin` minutes with none, on a pause, and when the worker ends. It
 // runs on the GPU when there is room, else on the CPU (`cpu`), and changes only between jobs. Any GGUF chat model works;
-// with `mmproj` (its vision projector) it also takes jobs with pictures.
+// with `mmproj` (its vision projector) it also takes jobs with pictures. It takes chats too (their turns as real turns),
+// and for a job that asks it sends the words so far as they come; the studio's answer to them can tell it to stop.
 import crypto from "node:crypto";
 import { spawn as spawnChild } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { comfyEnv, killTree, pickPort, RotatingLog } from "./comfy.mjs";
 
-export const TEXT_DEFAULTS = { context: 8192, idleMin: 10, gpuMinFreeMb: 8000, cpu: true, threads: 8, startMs: 180_000, answerMs: 120_000, claimWaitMs: 20_000 };
+export const TEXT_DEFAULTS = { context: 16_384, idleMin: 10, gpuMinFreeMb: 8000, cpu: true, threads: 8, startMs: 180_000, answerMs: 120_000, claimWaitMs: 20_000 };
+
+/** A job that sends its words as they come: how often it sends them, how often it says it is alive with none, its whole time. */
+export const STREAM_TIMES = { partialMs: 250, aliveMs: 2000, maxMs: 300_000 };
 
 /** The graphics memory a GPU server is counted with before its log says (weights, cache and buffers of a small model). */
 export const TEXT_GPU_GUESS_MB = 6500;
 
 /**
- * How each model family is asked: its chat template's switches (thinking off where the template has one) and the
- * sampling its card gives. worker.json's `textSlot.chat` ({ kwargs, sampling }) overrides them.
+ * How each model family is asked: its chat template's switches (thinking off where the template has one), the sampling
+ * its card gives, and the context its server starts with at least (a chat's turns need room). worker.json's
+ * `textSlot.chat` ({ kwargs, sampling, context }) overrides them.
  */
 export const FAMILIES = [
   { match: /nemotron/i, kwargs: { enable_thinking: false }, sampling: { temperature: 1.0, top_p: 0.95 } },
+  // Gemma 4 E2B keeps most of its layers' cache to a short window, so a long context costs little memory.
+  { match: /gemma-?4-?e2b/i, kwargs: { enable_thinking: false }, sampling: { temperature: 1.0, top_p: 0.95, top_k: 64 }, context: 32_768 },
   { match: /gemma/i, kwargs: { enable_thinking: false }, sampling: { temperature: 1.0, top_p: 0.95, top_k: 64 } },
   { match: /qwen3-?vl/i, kwargs: null, sampling: { temperature: 0.7, top_p: 0.8, top_k: 20, presence_penalty: 1.5 } },
 ];
@@ -31,8 +38,15 @@ export function familyOf(slot) {
   const name = slot.name ?? path.basename(slot.model ?? "");
   const fam = FAMILIES.find((x) => x.match.test(name)) ?? PLAIN;
   const chat = slot.chat && typeof slot.chat === "object" ? slot.chat : {};
-  return { kwargs: chat.kwargs === undefined ? fam.kwargs : chat.kwargs, sampling: { ...fam.sampling, ...(chat.sampling ?? {}) } };
+  const context = Number.isInteger(chat.context) ? chat.context : (fam.context ?? null);
+  return { kwargs: chat.kwargs === undefined ? fam.kwargs : chat.kwargs, sampling: { ...fam.sampling, ...(chat.sampling ?? {}) }, context };
 }
+
+/**
+ * The context its server starts with: worker.json's (or the default), raised to the family's where that is larger, so a
+ * worker.json written when the default was smaller still has room for a chat. At most 131072.
+ */
+export const contextOf = (slot) => Math.min(131_072, Math.max(slot.context ?? TEXT_DEFAULTS.context, familyOf(slot).context ?? 0));
 
 /** The model name the studio hears with each claim: textSlot.name, else the file's name without .gguf. */
 export const modelName = (slot) => String(slot.name ?? path.basename(slot.model ?? "").replace(/\.gguf$/i, "")).toLowerCase().slice(0, 120);
@@ -127,7 +141,7 @@ export function serverArgs(slot, o) {
     "--host", "127.0.0.1",
     "--port", String(o.port),
     "--api-key", o.key,
-    "-c", String(slot.context),
+    "-c", String(contextOf(slot)),
     "-ngl", o.device === "gpu" ? "99" : "0",
     "-np", "1",
     "-t", String(slot.threads),
@@ -162,24 +176,68 @@ export function jobOf(body) {
     }
     images = j.images;
   }
-  return { id: j.id, lease: j.lease, system: j.system, user: j.user, maxTokens, json: j.json === true, images };
+  // A chat's turns: the person's and the model's, the newest the person's.
+  let messages = null;
+  if (j.messages !== undefined) {
+    if (!Array.isArray(j.messages) || !j.messages.length || j.messages.length > CHAT_LIMITS.turns) return null;
+    let chars = 0;
+    for (const m of j.messages) {
+      if (!m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") return null;
+      chars += m.content.length;
+    }
+    if (chars > CHAT_LIMITS.chars || j.messages.at(-1).role !== "user") return null;
+    messages = j.messages.map((m) => ({ role: m.role, content: m.content }));
+  }
+  const sampling = {};
+  for (const [k, [lo, hi]] of Object.entries(SAMPLING_BOUNDS)) {
+    const v = j.sampling?.[k];
+    if (typeof v === "number" && Number.isFinite(v)) sampling[k] = Math.min(hi, Math.max(lo, v));
+  }
+  return { id: j.id, lease: j.lease, system: j.system, user: j.user, maxTokens, json: j.json === true, images, messages, sampling, stream: j.stream === true };
 }
 
-/** The request body for one job: the family's template switches and sampling, the pictures before the words. */
+/** What a chat may carry (the studio sends at most 24,000 characters of turns). */
+const CHAT_LIMITS = { turns: 200, chars: 32_000 };
+/** The sampling a job may ask for, each inside these bounds. */
+const SAMPLING_BOUNDS = { temperature: [0, 2], top_p: [0.05, 1] };
+
+/**
+ * The request body for one job: the family's template switches and sampling (the job's own over them), a chat's turns
+ * as real turns, the pictures before the words of the newest turn.
+ */
 export function chatBody(job, slot = {}) {
   const fam = familyOf(slot);
   const pictures = job.images ?? [];
-  const content = pictures.length ? [...pictures.map((b) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b}` } })), { type: "text", text: job.user }] : job.user;
+  const turns = job.messages?.length ? job.messages : [{ role: "user", content: job.user }];
+  const last = turns.length - 1;
+  const withPictures = (text) => (pictures.length ? [...pictures.map((b) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b}` } })), { type: "text", text }] : text);
   return {
     model: modelName(slot),
-    messages: [...(job.system ? [{ role: "system", content: job.system }] : []), { role: "user", content }],
+    messages: [...(job.system ? [{ role: "system", content: job.system }] : []), ...turns.map((m, n) => ({ role: m.role, content: n === last ? withPictures(m.content) : m.content }))],
     max_tokens: job.maxTokens,
     ...fam.sampling,
-    stream: false,
+    ...job.sampling,
+    stream: !!job.stream,
     ...(fam.kwargs && { chat_template_kwargs: fam.kwargs }),
     ...(job.json && { response_format: { type: "json_object" } }),
   };
 }
+
+/** The words in one server-sent event line of a streamed answer ("" for anything else). */
+export function streamedWords(line) {
+  if (!line.startsWith("data:")) return "";
+  const data = line.slice(5).trim();
+  if (!data || data === "[DONE]") return "";
+  try {
+    const c = JSON.parse(data)?.choices?.[0]?.delta?.content;
+    return typeof c === "string" ? c : "";
+  } catch {
+    return "";
+  }
+}
+
+/** The worker's stop for a job whose caller went: its answer isn't sent. */
+class Stopped extends Error {}
 
 export class TextSlot {
   /**
@@ -265,7 +323,7 @@ export class TextSlot {
   }
 
   async claimAndRun(device) {
-    const res = await this.d.call("/api/gpu/computer/text/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, wait: this.slot.claimWaitMs }), signal: this.ending.signal });
+    const res = await this.d.call("/api/gpu/computer/text/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: modelName(this.slot), device, vision: !!this.slot.mmproj, chat: true, wait: this.slot.claimWaitMs }), signal: this.ending.signal });
     if (res.status === 204 || !res.ok) {
       await res.body?.cancel().catch(() => {});
       return false;
@@ -278,6 +336,9 @@ export class TextSlot {
       await this.ensure(device);
       answer = { text: await this.complete(job) };
     } catch (e) {
+      this.lastJobAt = this.now();
+      // The person went: the studio ended the job, so there is nothing to send.
+      if (e instanceof Stopped) return true;
       answer = { error: String(e.message ?? e).slice(0, 200) };
       this.log(`Text job ${job.id} has no answer: ${answer.error}`);
     }
@@ -292,6 +353,7 @@ export class TextSlot {
     const s = this.server;
     if (!s) throw new Error("llama-server isn't running");
     const f = this.d.fetch ?? fetch;
+    if (job.stream) return this.completeStreaming(job, s, f);
     const r = await f(`http://127.0.0.1:${s.port}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.key}` },
@@ -302,6 +364,88 @@ export class TextSlot {
     const body = await r.json();
     const text = body?.choices?.[0]?.message?.content;
     if (typeof text !== "string" || !text.trim()) throw new Error("llama-server gave no text");
+    return text;
+  }
+
+  /**
+   * The answer's words as they come: the words so far go to the studio every quarter second while they grow (and every
+   * 2 s while none come, so it knows the job is alive). When the studio answers that the job isn't this slot's any more,
+   * the request ends, and llama-server stops writing.
+   */
+  async completeStreaming(job, s, f) {
+    const t = STREAM_TIMES;
+    const ctl = new AbortController();
+    let stopped = false;
+    let why = null;
+    const end = (reason) => {
+      why ??= reason;
+      ctl.abort();
+    };
+    const cap = setTimeout(() => end("the answer took too long"), t.maxMs);
+    // No words for answerMs (the prompt's own reading included): it ends.
+    let idle = setTimeout(() => end("llama-server went quiet"), this.slot.answerMs);
+    let text = "";
+    let sent = "";
+    let sentAt = 0;
+    let posting = null;
+    const post = () => {
+      if (posting || stopped || (text === sent && this.now() - sentAt < t.aliveMs)) return;
+      const words = text;
+      sentAt = this.now();
+      posting = this.d
+        .call(`/api/gpu/computer/text/${encodeURIComponent(job.id)}/partial`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lease: job.lease, text: words }) })
+        .then(async (res) => {
+          // Only the studio's own word stops it: a studio without this call (404) or a busy moment changes nothing.
+          const b = res.status === 409 ? await res.json().catch(() => null) : (await res.body?.cancel().catch(() => {}), null);
+          if (b?.stop === true) {
+            stopped = true;
+            end("stopped");
+          } else if (res.ok) sent = words;
+        })
+        .catch(() => {})
+        .finally(() => (posting = null));
+    };
+    const tick = setInterval(post, t.partialMs);
+    const ending = () => end("the worker is ending");
+    this.ending.signal.addEventListener("abort", ending, { once: true });
+    try {
+      const r = await f(`http://127.0.0.1:${s.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.key}` },
+        body: JSON.stringify(chatBody(job, this.slot)),
+        signal: ctl.signal,
+      });
+      if (!r.ok) {
+        await r.body?.cancel().catch(() => {});
+        throw new Error(`llama-server answered ${r.status}`);
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        clearTimeout(idle);
+        idle = setTimeout(() => end("llama-server went quiet"), this.slot.answerMs);
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) text += streamedWords(line.trim());
+      }
+      text += streamedWords((buf + decoder.decode()).trim());
+    } catch (e) {
+      if (stopped) throw new Stopped("stopped");
+      if (why) throw new Error(why);
+      throw e;
+    } finally {
+      this.ending.signal.removeEventListener("abort", ending);
+      clearInterval(tick);
+      clearTimeout(cap);
+      clearTimeout(idle);
+      await posting;
+    }
+    if (stopped) throw new Stopped("stopped");
+    if (!text.trim()) throw new Error("llama-server gave no text");
     return text;
   }
 

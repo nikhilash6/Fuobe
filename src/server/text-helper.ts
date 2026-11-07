@@ -12,10 +12,11 @@ import type { WorkerRow } from "./computer/workers";
 /**
  * The free text helper: short text jobs (lyrics, a prompt rewrite, a chain's text step) run on a small open model in the
  * workers' text slots (`fuobe worker`, worker.json `textSlot`). A job waits in its own line (helper_jobs), never behind a
- * GPU job; the caller waits for the answer, and the row is deleted once read.
+ * GPU job; the caller waits for the answer, and the row is deleted once read. A chat sends its turns, and a slot that
+ * takes chats sends the words so far as they come.
  */
 
-export type HelperTask = "lyrics" | "enhance" | "soul" | "write" | "translate" | "describe" | "restore" | "recipe";
+export type HelperTask = "lyrics" | "enhance" | "soul" | "write" | "translate" | "describe" | "restore" | "recipe" | "chat";
 
 /** The most tokens a task may write. */
 export const HELPER_TASKS: Record<HelperTask, { maxTokens: number }> = {
@@ -27,6 +28,7 @@ export const HELPER_TASKS: Record<HelperTask, { maxTokens: number }> = {
   describe: { maxTokens: 200 },
   restore: { maxTokens: 500 },
   recipe: { maxTokens: 1500 },
+  chat: { maxTokens: 900 },
 };
 
 export const isHelperTask = (v: unknown): v is HelperTask => typeof v === "string" && Object.hasOwn(HELPER_TASKS, v);
@@ -38,8 +40,10 @@ export const HELPER_TIMES = {
   knownMs: 24 * 60 * 60_000,
   /** How long one claim waits for a job. */
   claimWaitMs: 20_000,
-  /** A claimed job with no answer after this fails. */
+  /** A claimed job with no answer (for a job that streams: no new words) after this fails. */
   runMs: 90_000,
+  /** A job that streams ends after this, however its words come. */
+  streamMaxMs: 300_000,
   /** Rows older than this are deleted. */
   keepMs: 10 * 60_000,
   pollMs: 200,
@@ -54,9 +58,51 @@ export const HELPER_LIMITS = {
   waitingEach: 2,
   guest: { perMinute: 4, perHour: 20 },
   account: { perMinute: 8, perHour: 60 },
+  /** Chat counts on its own key, apart from the studio's tasks. */
+  chat: { perMinute: 12, perHour: 300 },
+  /** A chat's turns: how many, and their words together (the caller trims older turns itself). */
+  chatTurns: 200,
+  chatChars: 24_000,
   /** Pictures a job may carry: how many, how big each may come in, and as the small JPEG it is sent as. */
   pictures: { count: 4, inputBytes: 20 * 2 ** 20, longEdge: 1024, outputBytes: 512 * 1024 },
 };
+
+/** One turn of a chat. */
+export interface HelperMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** The sampling a job may ask for, each inside these bounds. */
+export const HELPER_SAMPLING = { temperature: [0, 2], top_p: [0.05, 1] } as const;
+
+export type HelperSampling = { temperature?: number; top_p?: number };
+
+/** A job's own sampling, inside safe bounds; null when it asks for none (the model family's then). */
+export function helperSampling(s: HelperSampling | undefined | null): HelperSampling | null {
+  if (!s || typeof s !== "object") return null;
+  const out: HelperSampling = {};
+  for (const k of ["temperature", "top_p"] as const) {
+    const v = s[k];
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = Math.min(HELPER_SAMPLING[k][1], Math.max(HELPER_SAMPLING[k][0], v));
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Why these chat turns can't be sent, or null: user and assistant turns, the newest the person's, within the limits. */
+export function helperMessagesProblem(messages: unknown): string | null {
+  if (!Array.isArray(messages) || !messages.length) return "no turns";
+  if (messages.length > HELPER_LIMITS.chatTurns) return "too many turns";
+  let chars = 0;
+  for (const m of messages as Partial<HelperMessage>[]) {
+    if (!m || typeof m !== "object" || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") return "a turn isn't a user or assistant turn with words";
+    chars += m.content.length;
+  }
+  if (chars > HELPER_LIMITS.chatChars) return "too long";
+  const last = messages[messages.length - 1] as HelperMessage;
+  if (last.role !== "user" || !last.content.trim()) return "the newest turn isn't the person's";
+  return null;
+}
 
 /** Whose job: "owner", "acct:<id>", or "guest:<address key>". */
 export type HelperWho = string;
@@ -76,7 +122,7 @@ interface JobRow {
   user: string;
   max_tokens: number;
   json: number;
-  state: "waiting" | "running" | "done" | "failed";
+  state: "waiting" | "running" | "done" | "failed" | "canceled";
   worker_id: string | null;
   lease: string | null;
   created_at: number;
@@ -85,6 +131,11 @@ interface JobRow {
   text: string | null;
   error: string | null;
   images_json: string | null;
+  messages_json: string | null;
+  sampling_json: string | null;
+  stream: number | null;
+  partial: string | null;
+  partial_at: number | null;
 }
 
 /** A job as a text slot gets it. */
@@ -96,8 +147,14 @@ export interface HelperJob {
   user: string;
   maxTokens: number;
   json: boolean;
-  /** Small JPEGs, as base64, for a slot whose model sees pictures. */
+  /** Small JPEGs, as base64, for a slot whose model sees pictures (a chat's go with its newest turn). */
   images?: string[];
+  /** A chat's turns, sent as they are after the system words (only to a slot that takes chats). */
+  messages?: HelperMessage[];
+  /** The job's own sampling, over the model family's. */
+  sampling?: HelperSampling;
+  /** The slot sends the words so far as they come (POST /api/gpu/computer/text/:id/partial). */
+  stream?: true;
 }
 
 const json = <T,>(s: string | null, fallback: T): T => {
@@ -122,16 +179,19 @@ export function textEligible(w: WorkerRow, now = Date.now()): boolean {
   );
 }
 
-/** A text slot asked for a job in the last moments, from a worker that may take one (`vision`: one whose model sees pictures). */
-export function helperLive(now = Date.now(), o: { vision?: boolean } = {}): boolean {
+/**
+ * A text slot asked for a job in the last moments, from a worker that may take one (`vision`: one whose model sees
+ * pictures; `chat`: one that takes chats).
+ */
+export function helperLive(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): boolean {
   const rows = db()
-    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}`)
+    .prepare(`SELECT w.* FROM helper_slots s JOIN relay_workers w ON w.id = s.worker_id WHERE s.seen_at >= ?${o.vision ? " AND s.vision = 1" : ""}${o.chat ? " AND s.chat = 1" : ""}`)
     .all(now - HELPER_TIMES.liveMs) as WorkerRow[];
   return rows.some((w) => textEligible(w, now));
 }
 
 /** May this call use the free helper now: it is live, and an account's call only while hosted runs are on (a guest's never: sign up first). */
-export function freeHelperOn(now = Date.now(), o: { vision?: boolean } = {}): boolean {
+export function freeHelperOn(now = Date.now(), o: { vision?: boolean; chat?: boolean } = {}): boolean {
   const t = tenant();
   return (!t || (t.kind === "account" && hostedRunsOn())) && helperLive(now, o);
 }
@@ -176,38 +236,85 @@ export function sweepHelper(now = Date.now()): void {
   db().prepare("DELETE FROM helper_jobs WHERE created_at < ?").run(now - HELPER_TIMES.keepMs);
 }
 
+/** The jobs a slot may take: one with pictures only where its model sees them, a chat only where the slot takes chats. */
+const takes = (vision: boolean, chat: boolean) => `${vision ? "" : " AND images_json IS NULL"}${chat ? "" : " AND messages_json IS NULL"}`;
+
+/** The line's order: people's jobs first, then the owner's, oldest first. */
+const OWNER_LAST = "CASE WHEN who = 'owner' THEN 1 ELSE 0 END";
+
 /**
  * The next job for this worker's text slot, or null: people's jobs first, then the owner's, oldest first. Notes the
- * slot as live either way.
+ * slot as live either way. `chat`: the slot takes chats (turns, and words sent as they come); an older worker never
+ * says so, and gets the same jobs as before.
  */
-export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: unknown; vision?: unknown } = {}, now = Date.now(), note = true): HelperJob | null {
+export function claimHelperJob(w: WorkerRow, slot: { model?: unknown; device?: unknown; vision?: unknown; chat?: unknown } = {}, now = Date.now(), note = true): HelperJob | null {
   const d = db();
   return d.transaction(() => {
     const model = typeof slot.model === "string" ? slot.model.slice(0, 120) : null;
     const device = slot.device === "gpu" || slot.device === "cpu" ? slot.device : null;
     const vision = slot.vision === true ? 1 : 0;
+    const chat = slot.chat === true ? 1 : 0;
     if (note) {
       d.prepare(
-        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision) VALUES (?, ?, ?, ?, ?) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision",
-      ).run(w.id, now, model, device, vision);
+        "INSERT INTO helper_slots (worker_id, seen_at, model, device, vision, chat) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(worker_id) DO UPDATE SET seen_at = excluded.seen_at, model = excluded.model, device = excluded.device, vision = excluded.vision, chat = excluded.chat",
+      ).run(w.id, now, model, device, vision, chat);
     }
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow | undefined;
     if (!fresh || !textEligible(fresh, now)) return null;
-    // A job with pictures goes only to a slot whose model sees them.
-    const row = d.prepare(`SELECT * FROM helper_jobs WHERE state = 'waiting'${vision ? "" : " AND images_json IS NULL"} ORDER BY CASE WHEN who = 'owner' THEN 1 ELSE 0 END, created_at LIMIT 1`).get() as JobRow | undefined;
+    const row = d.prepare(`SELECT * FROM helper_jobs WHERE state = 'waiting'${takes(!!vision, !!chat)} ORDER BY ${OWNER_LAST}, created_at, id LIMIT 1`).get() as JobRow | undefined;
     if (!row || !isHelperTask(row.task)) return null;
     const lease = crypto.randomBytes(16).toString("base64url");
     d.prepare("UPDATE helper_jobs SET state = 'running', worker_id = ?, lease = ?, claimed_at = ? WHERE id = ? AND state = 'waiting'").run(w.id, lease, now, row.id);
     const images = json<string[] | null>(row.images_json, null);
-    return { id: row.id, lease, task: row.task, system: row.system, user: row.user, maxTokens: row.max_tokens, json: !!row.json, ...(images?.length && { images }) };
+    const messages = json<HelperMessage[] | null>(row.messages_json, null);
+    const sampling = json<HelperSampling | null>(row.sampling_json, null);
+    return {
+      id: row.id,
+      lease,
+      task: row.task,
+      system: row.system,
+      user: row.user,
+      maxTokens: row.max_tokens,
+      json: !!row.json,
+      ...(images?.length && { images }),
+      ...(messages?.length && { messages }),
+      ...(sampling && { sampling }),
+      ...(row.stream ? { stream: true as const } : {}),
+    };
   }).immediate();
 }
 
-/** Is any text job waiting (a quick read before a claim)? */
-export const helperWaiting = (vision = false): boolean => !!db().prepare(`SELECT 1 FROM helper_jobs WHERE state = 'waiting'${vision ? "" : " AND images_json IS NULL"} LIMIT 1`).get();
+/** Is any text job waiting that this slot may take (a quick read before a claim)? */
+export const helperWaiting = (vision = false, chat = false): boolean => !!db().prepare(`SELECT 1 FROM helper_jobs WHERE state = 'waiting'${takes(vision, chat)} LIMIT 1`).get();
+
+/** Where a waiting job stands in the line: 1 is next. Null once it isn't waiting. */
+export function helperPosition(id: string): number | null {
+  const d = db();
+  const row = d.prepare(`SELECT ${OWNER_LAST} AS rank, created_at, state FROM helper_jobs WHERE id = ?`).get(id) as { rank: number; created_at: number; state: string } | undefined;
+  if (!row || row.state !== "waiting") return null;
+  const ahead = d
+    .prepare(`SELECT COUNT(*) AS n FROM helper_jobs WHERE state = 'waiting' AND (${OWNER_LAST} < ? OR (${OWNER_LAST} = ? AND (created_at < ? OR (created_at = ? AND id < ?))))`)
+    .get(row.rank, row.rank, row.created_at, row.created_at, id) as { n: number };
+  return ahead.n + 1;
+}
 
 /** What a model may leave around its answer: a reasoning block, a code fence around JSON. */
 export const tidyHelperText = (s: string) => s.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+/** Words so far: a reasoning block that hasn't ended yet goes too. */
+const tidyPartial = (s: string) => tidyHelperText(s.replace(/<think>(?![\s\S]*<\/think>)[\s\S]*$/, ""));
+
+/**
+ * A text slot's words so far for its job, with the lease its claim gave. "ok": kept. "stop": not its job any more (the
+ * caller went, or the job ended), so the slot stops writing. "bad": not words it may send.
+ */
+export function partialHelperJob(w: WorkerRow, id: string, body: { lease?: unknown; text?: unknown }, now = Date.now()): "ok" | "stop" | "bad" {
+  if (typeof body.lease !== "string" || typeof body.text !== "string" || Buffer.byteLength(body.text) > HELPER_LIMITS.textBytes) return "bad";
+  const r = db()
+    .prepare("UPDATE helper_jobs SET partial = ?, partial_at = ? WHERE id = ? AND worker_id = ? AND lease = ? AND state = 'running'")
+    .run(tidyPartial(body.text), now, id, w.id, body.lease);
+  return r.changes === 1 ? "ok" : "stop";
+}
 
 /** A text slot's answer for its job (only with the lease its claim gave). False: not its job any more. */
 export function finishHelperJob(w: WorkerRow, id: string, body: { lease?: unknown; text?: unknown; error?: unknown }, now = Date.now()): boolean {
@@ -230,16 +337,29 @@ const rateOf = (who: HelperWho) => (who.startsWith("acct:") ? HELPER_LIMITS.acco
 export interface AskHelper {
   task: HelperTask;
   system: string;
-  user: string;
+  /** The words to answer (a chat sends `messages` instead). */
+  user?: string;
+  /**
+   * A chat's turns, oldest first, the newest the person's: sent as real turns after `system`, only to a slot that takes
+   * chats. At most HELPER_LIMITS.chatChars of words in all (the caller trims older turns itself).
+   */
+  messages?: HelperMessage[];
+  /** The job's own sampling, kept inside HELPER_SAMPLING; the model family's when unset. */
+  sampling?: HelperSampling;
   json?: boolean;
-  /** Pictures for a model that sees them (only a slot that does takes the job). */
+  /** Pictures for a model that sees them (only a slot that does takes the job). A chat takes one, with its newest turn. */
   images?: { data: Buffer; contentType: string }[];
   who?: HelperWho;
   /** False: a step of a run, which the run's own limits already count. */
   counted?: boolean;
   /** How long the job may wait for a text slot (the answer's own time comes after). */
   waitMs?: number;
+  /** The caller went: the job ends, and a slot writing it stops at its next words. */
   signal?: AbortSignal;
+  /** The words so far, each time more come (only from a slot that sends them; the whole answer still comes back). */
+  onText?: (soFar: string) => void;
+  /** Where the job stands in the line while it waits (1 is next), each time that changes. */
+  onQueue?: (position: number) => void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -251,22 +371,33 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   const who = o.who ?? helperWho();
   // A guest signs up first: no moderation call, no job.
   if (who.startsWith("guest:")) return { error: "sign-in" };
+  // A chat's turns: checked here, before anything is counted or queued.
+  const chat = o.messages !== undefined;
+  if (chat) {
+    const problem = helperMessagesProblem(o.messages);
+    if (problem) return { error: "failed", message: `The conversation can't be sent: ${problem}.` };
+    if ((o.images?.length ?? 0) > 1) return { error: "failed", message: "A chat turn takes one picture." };
+  }
   const d = db();
   sweepHelper(now());
   const vision = !!o.images?.length;
-  if (!helperLive(now(), { vision })) return { error: "busy" };
+  if (!helperLive(now(), { vision, chat })) return { error: "busy" };
   const pictures = vision ? await helperPictures(o.images!) : null;
   if (vision && !pictures) return { error: "failed" };
   if (who !== "owner" && o.counted !== false) {
-    const r = rateOf(who);
-    for (const [key, limit, ms] of [[`helper:${who}:m`, r.perMinute, 60_000], [`helper:${who}:h`, r.perHour, 3_600_000]] as const) {
+    // Chat has its own key, so a long talk never uses up the studio's rewrites (and the other way round).
+    const [name, r] = o.task === "chat" ? ["helper-chat", HELPER_LIMITS.chat] : ["helper", rateOf(who)];
+    for (const [key, limit, ms] of [[`${name}:${who}:m`, r.perMinute, 60_000], [`${name}:${who}:h`, r.perHour, 3_600_000]] as const) {
       const h = hit(key, limit, ms);
       if (!h.ok) return { error: "limit", retryAfterS: h.retryAfterS };
     }
   }
   const waiting = d.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN who = ? THEN 1 ELSE 0 END) AS mine FROM helper_jobs WHERE state IN ('waiting','running')").get(who) as { n: number; mine: number | null };
   if (waiting.n >= HELPER_LIMITS.waitingAll || (who !== "owner" && (waiting.mine ?? 0) >= HELPER_LIMITS.waitingEach)) return { error: "busy" };
-  const user = o.user.slice(0, HELPER_LIMITS.userChars);
+  // A chat's newest turn is its words for moderation (the turns before it were checked when they were sent).
+  const user = (chat ? o.messages![o.messages!.length - 1].content : (o.user ?? "")).slice(0, HELPER_LIMITS.userChars);
+  const sampling = helperSampling(o.sampling);
+  const stream = chat || !!o.onText;
   const id = `hlp_${crypto.randomBytes(9).toString("base64url")}`;
   const account = who.startsWith("acct:") ? who.slice(5) : null;
   let checkOutputs = false;
@@ -284,7 +415,9 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     checkOutputs = a.checkOutputs !== false;
   }
   const created = now();
-  d.prepare("INSERT INTO helper_jobs (id, who, task, system, user, max_tokens, json, state, created_at, images_json) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?)").run(
+  d.prepare(
+    "INSERT INTO helper_jobs (id, who, task, system, user, max_tokens, json, state, created_at, images_json, messages_json, sampling_json, stream) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, ?)",
+  ).run(
     id,
     who,
     o.task,
@@ -294,15 +427,25 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
     o.json ? 1 : 0,
     created,
     pictures ? JSON.stringify(pictures) : null,
+    chat ? JSON.stringify(o.messages!.map((m) => ({ role: m.role, content: m.content }))) : null,
+    sampling ? JSON.stringify(sampling) : null,
+    stream ? 1 : 0,
   );
   const waitMs = o.waitMs ?? 45_000;
-  const drop = () => d.prepare("DELETE FROM helper_jobs WHERE id = ?").run(id);
+  // A caller's hook never stops the wait.
+  const tell = <T,>(f: ((v: T) => void) | undefined, v: T) => {
+    try {
+      f?.(v);
+    } catch {}
+  };
+  let shown = "";
+  let place = 0;
   try {
     for (;;) {
       if (o.signal?.aborted) return { error: "failed" };
       const row = d.prepare("SELECT * FROM helper_jobs WHERE id = ?").get(id) as JobRow | undefined;
       const t = now();
-      if (!row || row.state === "failed") return { error: row?.error === "busy" ? "busy" : "failed" };
+      if (!row || row.state === "failed" || row.state === "canceled") return { error: row?.error === "busy" ? "busy" : "failed" };
       if (row.state === "done" && row.text) {
         if (checkOutputs) {
           const bytes = Buffer.from(row.text);
@@ -311,15 +454,28 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
         }
         return { text: row.text };
       }
-      if (row.state === "waiting" && t - created >= waitMs) {
-        // Nobody took it in time: it ends here, so a slot that comes late doesn't run it.
-        if (d.prepare("UPDATE helper_jobs SET state = 'failed', error = 'busy' WHERE id = ? AND state = 'waiting'").run(id).changes === 1) return { error: "busy" };
-        continue;
+      if (row.state === "waiting") {
+        if (t - created >= waitMs) {
+          // Nobody took it in time: it ends here, so a slot that comes late doesn't run it.
+          if (d.prepare("UPDATE helper_jobs SET state = 'failed', error = 'busy' WHERE id = ? AND state = 'waiting'").run(id).changes === 1) return { error: "busy" };
+          continue;
+        }
+        if (o.onQueue) {
+          const p = helperPosition(id);
+          if (p && p !== place) tell(o.onQueue, (place = p));
+        }
       }
-      if (row.state === "running" && t - (row.claimed_at ?? t) >= HELPER_TIMES.runMs) return { error: "failed" };
+      if (row.state === "running") {
+        if (row.partial && row.partial !== shown) tell(o.onText, (shown = row.partial));
+        // A slot that sends its words has the time again with each; an older one has it from its claim.
+        const claimed = row.claimed_at ?? t;
+        if (t - Math.max(claimed, row.partial_at ?? 0) >= HELPER_TIMES.runMs || t - claimed >= HELPER_TIMES.streamMaxMs) return { error: "failed" };
+      }
       await sleep(HELPER_TIMES.pollMs);
     }
   } finally {
-    drop();
+    // A job its slot is still writing is marked canceled, and the slot stops at its next words (the sweep deletes the
+    // row later). Any other row goes now.
+    if (d.prepare("UPDATE helper_jobs SET state = 'canceled' WHERE id = ? AND state = 'running'").run(id).changes === 0) d.prepare("DELETE FROM helper_jobs WHERE id = ?").run(id);
   }
 }

@@ -1187,7 +1187,17 @@ function open(): Database.Database {
   db.exec(ADMISSION_TABLES);
   // The free text helper's line and the workers' text slots (text-helper.ts): not a numbered migration either.
   db.exec(HELPER_TABLES);
-  for (const [table, column, type] of [["helper_jobs", "images_json", "TEXT"], ["helper_slots", "vision", "INTEGER NOT NULL DEFAULT 0"]]) {
+  for (const [table, column, type] of [
+    ["helper_jobs", "images_json", "TEXT"],
+    ["helper_slots", "vision", "INTEGER NOT NULL DEFAULT 0"],
+    // Chat: its turns, its own sampling, the words so far as its slot sends them, and the slots that take chats.
+    ["helper_jobs", "messages_json", "TEXT"],
+    ["helper_jobs", "sampling_json", "TEXT"],
+    ["helper_jobs", "stream", "INTEGER NOT NULL DEFAULT 0"],
+    ["helper_jobs", "partial", "TEXT"],
+    ["helper_jobs", "partial_at", "INTEGER"],
+    ["helper_slots", "chat", "INTEGER NOT NULL DEFAULT 0"],
+  ]) {
     if (!(db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
   // Skills: the runs that wait across studios. A data folder that ran claude/fuobe-parity-4's earlier build of this
@@ -1317,7 +1327,12 @@ const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
     done_at INTEGER,
     text TEXT,
     error TEXT,
-    images_json TEXT
+    images_json TEXT,
+    messages_json TEXT,
+    sampling_json TEXT,
+    stream INTEGER NOT NULL DEFAULT 0,
+    partial TEXT,
+    partial_at INTEGER
   );
   CREATE INDEX IF NOT EXISTS helper_jobs_line ON helper_jobs(state, created_at);
   CREATE TABLE IF NOT EXISTS helper_slots (
@@ -1325,7 +1340,8 @@ const HELPER_TABLES = `CREATE TABLE IF NOT EXISTS helper_jobs (
     seen_at INTEGER NOT NULL,
     model TEXT,
     device TEXT,
-    vision INTEGER NOT NULL DEFAULT 0
+    vision INTEGER NOT NULL DEFAULT 0,
+    chat INTEGER NOT NULL DEFAULT 0
   );`;
 
 export function db(): Database.Database {

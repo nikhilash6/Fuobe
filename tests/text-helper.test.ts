@@ -32,6 +32,7 @@ const { runAsTenant } = await import("@/server/tenant");
 const enhanceRoute = await import("@/app/api/enhance/route");
 const claimRoute = await import("@/app/api/gpu/computer/text/claim/route");
 const resultRoute = await import("@/app/api/gpu/computer/text/[id]/route");
+const partialRoute = await import("@/app/api/gpu/computer/text/[id]/partial/route");
 const { proxy } = await import("@/proxy");
 const { writeRestorePrompt } = await import("@/server/restore");
 
@@ -373,5 +374,215 @@ describe("the AI helper's order and the lyrics route", () => {
     const off = await viaProxy("/api/enhance");
     expect(passed(off)).toBe(false);
     expect(off.status).toBe(403);
+  });
+});
+
+describe("chat: turns, words as they come, ending early", () => {
+  const turns = [
+    { role: "user" as const, content: "Hi, I'm Ria." },
+    { role: "assistant" as const, content: "Hello Ria!" },
+    { role: "user" as const, content: "What's my name?" },
+  ];
+  const auth_ = (w: W) => ({ authorization: `Bearer ${w.token}` });
+  /** A worker whose slot takes chats, noted live. */
+  const chatWorker = () => {
+    const w = addWorker();
+    helper.claimHelperJob(workerRow(w), { chat: true, vision: true });
+    return w;
+  };
+  const nextChat = async (w: W, ms = 5000) => {
+    const end = Date.now() + ms;
+    for (;;) {
+      const job = helper.claimHelperJob(workerRow(w), { chat: true, vision: true });
+      if (job || Date.now() > end) return job;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  };
+  const row = (id: string) => db().prepare("SELECT state, partial FROM helper_jobs WHERE id = ?").get(id) as { state: string; partial: string | null } | undefined;
+
+  it("checks the turns: user and assistant only, the newest the person's, at most 24,000 characters; nothing is queued for a bad one", async () => {
+    expect(helper.helperMessagesProblem(turns)).toBeNull();
+    expect(helper.helperMessagesProblem([])).toBe("no turns");
+    expect(helper.helperMessagesProblem(turns.slice(0, 2))).toBe("the newest turn isn't the person's");
+    expect(helper.helperMessagesProblem([{ role: "system", content: "x" }, turns[2]])).toMatch(/user or assistant/);
+    expect(helper.helperMessagesProblem([{ role: "user", content: "x".repeat(helper.HELPER_LIMITS.chatChars + 1) }])).toBe("too long");
+    expect(helper.helperMessagesProblem([{ role: "user", content: "x".repeat(helper.HELPER_LIMITS.chatChars) }])).toBeNull();
+    expect(helper.helperMessagesProblem(Array(helper.HELPER_LIMITS.chatTurns + 1).fill(turns[2]))).toBe("too many turns");
+    chatWorker();
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: [{ role: "user", content: "x".repeat(24_001) }] })).toMatchObject({ error: "failed", message: expect.stringContaining("too long") });
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#fff" } }).png().toBuffer();
+    const two = [{ data: png, contentType: "image/png" }, { data: png, contentType: "image/png" }];
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: turns, images: two })).toMatchObject({ error: "failed" });
+    expect(jobs()).toEqual([]);
+  });
+
+  it("a chat goes only to a slot that takes chats, as real turns with its own sampling (in bounds), one picture with it", async () => {
+    const old = addWorker();
+    helper.claimHelperJob(workerRow(old));
+    // Only an older slot is live: busy at once, nothing queued.
+    expect(helper.helperLive(Date.now(), { chat: true })).toBe(false);
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: turns })).toEqual({ error: "busy" });
+    const w = chatWorker();
+    const png = await sharp({ create: { width: 2000, height: 1000, channels: 3, background: "#c33" } }).png().toBuffer();
+    const asked = helper.askHelper({ task: "chat", system: "Be kind.", messages: turns, sampling: { temperature: 5, top_p: 0.5 }, images: [{ data: png, contentType: "image/png" }] });
+    await new Promise((r) => setTimeout(r, 50));
+    // The older slot never gets it.
+    expect(helper.claimHelperJob(workerRow(old), { vision: true })).toBeNull();
+    const job = await nextChat(w);
+    expect(job).toMatchObject({ task: "chat", system: "Be kind.", user: "What's my name?", messages: turns, sampling: { temperature: 2, top_p: 0.5 }, stream: true, maxTokens: 900 });
+    expect(job!.images).toHaveLength(1);
+    helper.finishHelperJob(workerRow(w), job!.id, { lease: job!.lease, text: "You're Ria." });
+    expect(await asked).toEqual({ text: "You're Ria." });
+  });
+
+  it("the words so far reach the caller as they come, only with the job's lease; the whole answer still comes back", async () => {
+    const w = chatWorker();
+    const other = chatWorker();
+    const seen: string[] = [];
+    const asked = helper.askHelper({ task: "chat", system: "s", messages: turns, onText: (t) => seen.push(t) });
+    const job = (await nextChat(w))!;
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: "not its lease", text: "x" })).toBe("stop");
+    expect(helper.partialHelperJob(workerRow(other), job.id, { lease: job.lease, text: "x" })).toBe("stop");
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease })).toBe("bad");
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "x".repeat(helper.HELPER_LIMITS.textBytes + 1) })).toBe("bad");
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "" })).toBe("ok");
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "<think>hmm" })).toBe("ok");
+    await new Promise((r) => setTimeout(r, 300));
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "You're" })).toBe("ok");
+    await new Promise((r) => setTimeout(r, 300));
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "You're Ria" })).toBe("ok");
+    await new Promise((r) => setTimeout(r, 300));
+    helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "You're Ria." });
+    expect(await asked).toEqual({ text: "You're Ria." });
+    // An unfinished reasoning block and empty words are never shown.
+    expect(seen).toEqual(["You're", "You're Ria"]);
+    expect(jobs()).toEqual([]);
+  });
+
+  it("the caller goes: a waiting job is gone, a running one is canceled and its slot is told to stop; its answer isn't taken", async () => {
+    const w = chatWorker();
+    const early = new AbortController();
+    const waiting = helper.askHelper({ task: "chat", system: "s", messages: turns, signal: early.signal });
+    await new Promise((r) => setTimeout(r, 50));
+    early.abort();
+    expect(await waiting).toEqual({ error: "failed" });
+    expect(jobs()).toEqual([]);
+    const late = new AbortController();
+    const running = helper.askHelper({ task: "chat", system: "s", messages: turns, signal: late.signal });
+    const job = (await nextChat(w))!;
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Once upon" })).toBe("ok");
+    late.abort();
+    expect(await running).toEqual({ error: "failed" });
+    expect(row(job.id)?.state).toBe("canceled");
+    expect(helper.partialHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Once upon a time" })).toBe("stop");
+    expect(helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "Once upon a time." })).toBe(false);
+    // A canceled job doesn't count as waiting, and the sweep takes it later.
+    helper.sweepHelper(Date.now() + helper.HELPER_TIMES.keepMs + 1000);
+    expect(row(job.id)).toBeUndefined();
+  });
+
+  it("the partial route: the slot's lease or stop; a browser can't", async () => {
+    const w = chatWorker();
+    const asked = helper.askHelper({ task: "chat", system: "s", messages: turns, waitMs: 5000 });
+    const job = (await nextChat(w))!;
+    const ctx = { params: Promise.resolve({ id: job.id }) } as never;
+    const send = (body: unknown, who?: string, extra = auth_(w)) => partialRoute.POST(post(`/api/gpu/computer/text/${job.id}/partial`, body, who, extra), ctx);
+    const wrong = await send({ lease: "x", text: "no" });
+    expect(wrong.status).toBe(409);
+    expect(await wrong.json()).toMatchObject({ stop: true });
+    expect((await send({ lease: job.lease, text: "You" })).status).toBe(200);
+    expect(row(job.id)?.partial).toBe("You");
+    expect((await send({ lease: job.lease, text: 5 })).status).toBe(400);
+    const browser = await send({ lease: job.lease, text: "x" }, "owner", { "sec-fetch-site": "same-origin", origin: "http://localhost:3000" } as never);
+    expect(browser.status).not.toBe(200);
+    expect((await resultRoute.POST(post(`/api/gpu/computer/text/${job.id}`, { lease: job.lease, text: "You're Ria." }, undefined, auth_(w)), ctx)).status).toBe(200);
+    expect(await asked).toEqual({ text: "You're Ria." });
+    // Ended: the next words are told to stop.
+    expect((await send({ lease: job.lease, text: "more" })).status).toBe(409);
+    // A slot that says it takes chats gets one through the claim route too.
+    const claimed = helper.askHelper({ task: "chat", system: "s", messages: turns, waitMs: 5000 });
+    const none = await claimRoute.POST(post("/api/gpu/computer/text/claim", { model: "m", device: "cpu", wait: 300 }, undefined, auth_(w)));
+    expect(none.status).toBe(204);
+    const r = await claimRoute.POST(post("/api/gpu/computer/text/claim", { model: "m", device: "cpu", chat: true, wait: 3000 }, undefined, auth_(w)));
+    const { job: j2 } = (await r.json()) as { job: { id: string; lease: string; messages: unknown } };
+    expect(j2.messages).toEqual(turns);
+    helper.finishHelperJob(workerRow(w), j2.id, { lease: j2.lease, text: "ok" });
+    expect(await claimed).toEqual({ text: "ok" });
+  });
+
+  it("a slot that never sends words so far (an older worker) still answers a streamed job whole; its time runs from its claim", async () => {
+    const w = chatWorker();
+    const seen: string[] = [];
+    const asked = helper.askHelper({ task: "enhance", system: "s", user: "a cat", onText: (t) => seen.push(t) });
+    // An older slot claims as it always did (no chat flag): a plain job with a stream flag it ignores.
+    const job = (await nextJob(w))!;
+    expect(job).toMatchObject({ task: "enhance", user: "a cat", stream: true });
+    expect(job.messages).toBeUndefined();
+    helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: "a cat, golden light" });
+    expect(await asked).toEqual({ text: "a cat, golden light" });
+    expect(seen).toEqual([]);
+    // The worker updates: its slot says it takes chats again.
+    expect(helper.claimHelperJob(workerRow(w), { chat: true })).toBeNull();
+    // Time: with no words sent, a running job fails runMs after its claim; each new word gives it that time again.
+    // A clock that moves 20 s with each look once the job is claimed.
+    let t = 1_000_000;
+    let taken: Awaited<ReturnType<typeof nextChat>> = null;
+    let sends = 0;
+    let talk = false;
+    const sleep = async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      if (!taken) return;
+      t += 20_000;
+      // Words every 20 s, for 4 minutes; then none.
+      if (talk && sends++ < 12) helper.partialHelperJob(workerRow(w), taken.id, { lease: taken.lease, text: `w${sends}` }, t);
+    };
+    const quiet = helper.askHelper({ task: "chat", system: "s", messages: turns, now: () => t, sleep });
+    taken = await nextChat(w);
+    db().prepare("UPDATE helper_jobs SET claimed_at = ? WHERE id = ?").run(t, taken!.id);
+    expect(await quiet).toEqual({ error: "failed" });
+    expect(t - 1_000_000).toBeGreaterThanOrEqual(helper.HELPER_TIMES.runMs);
+    expect(t - 1_000_000).toBeLessThanOrEqual(helper.HELPER_TIMES.runMs + 20_000);
+    t = 2_000_000;
+    taken = null;
+    talk = true;
+    const talky = helper.askHelper({ task: "chat", system: "s", messages: turns, now: () => t, sleep });
+    taken = await nextChat(w);
+    db().prepare("UPDATE helper_jobs SET claimed_at = ? WHERE id = ?").run(t, taken!.id);
+    expect(await talky).toEqual({ error: "failed" });
+    // It went on well past runMs while words came, and ended once they stopped.
+    expect(t - 2_000_000).toBeGreaterThan(240_000);
+    expect(t - 2_000_000).toBeLessThanOrEqual(helper.HELPER_TIMES.streamMaxMs + 20_000);
+  });
+
+  it("chat has its own limits apart from the studio's: an account's 12 a minute; a guest is asked to sign in", async () => {
+    chatWorker();
+    const who = `acct:${account}`;
+    for (let i = 0; i < helper.HELPER_LIMITS.account.perMinute; i++) expect(await helper.askHelper({ task: "enhance", system: "s", user: "u", who, waitMs: 30 })).not.toMatchObject({ error: "limit" });
+    expect(await helper.askHelper({ task: "enhance", system: "s", user: "u", who, waitMs: 30 })).toMatchObject({ error: "limit" });
+    // The studio's limit is used up; chat still answers.
+    for (let i = 0; i < helper.HELPER_LIMITS.chat.perMinute; i++) expect(await helper.askHelper({ task: "chat", system: "s", messages: turns, who, waitMs: 30 })).toEqual({ error: "busy" });
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: turns, who, waitMs: 30 })).toMatchObject({ error: "limit", retryAfterS: expect.any(Number) });
+    expect(helper.HELPER_LIMITS.chat).toEqual({ perMinute: 12, perHour: 300 });
+    expect(await helper.askHelper({ task: "chat", system: "s", messages: turns, who: "guest:203.0.113.9" })).toEqual({ error: "sign-in" });
+    expect(runAsTenant({ kind: "guest" }, () => helper.freeHelperOn(Date.now(), { chat: true }))).toBe(false);
+  });
+
+  it("while it waits, the caller hears its place in the line (1 is next), people's jobs before the owner's", async () => {
+    const w = chatWorker();
+    const places: Record<string, number[]> = { a: [], b: [], c: [] };
+    const a = helper.askHelper({ task: "chat", system: "s", messages: turns, onQueue: (p) => places.a.push(p), waitMs: 10_000 });
+    await new Promise((r) => setTimeout(r, 20));
+    const b = helper.askHelper({ task: "chat", system: "s", messages: turns, onQueue: (p) => places.b.push(p), waitMs: 10_000 });
+    await new Promise((r) => setTimeout(r, 20));
+    const c = runAsTenant({ kind: "account", id: account }, () => helper.askHelper({ task: "chat", system: "s", messages: turns, onQueue: (p) => places.c.push(p), waitMs: 10_000 }));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(places).toEqual({ a: [1, 2], b: [2, 3], c: [1] });
+    for (let i = 0; i < 3; i++) {
+      const job = (await nextChat(w))!;
+      await new Promise((r) => setTimeout(r, 400));
+      helper.finishHelperJob(workerRow(w), job.id, { lease: job.lease, text: `answer ${i}` });
+    }
+    expect(await Promise.all([a, b, c])).toEqual([{ text: "answer 1" }, { text: "answer 2" }, { text: "answer 0" }]);
+    expect(places).toEqual({ a: [1, 2, 1], b: [2, 3, 2, 1], c: [1] });
   });
 });
