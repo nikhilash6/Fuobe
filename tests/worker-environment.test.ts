@@ -4,7 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { inputRules } from "../bin/lib/worker/checks.mjs";
-import { comfyArgs, comfyEnv, defaultPathsFlag, modelPathsYaml, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
+import { comfyArgs, comfyEnv, defaultPathsFlag, modelPathsYaml, OFFLINE_ENV, OwnComfy, yamlFolders } from "../bin/lib/worker/comfy.mjs";
 import { modelFiles, nodePacks, packFolders, twinFolders, yamlModelDirs } from "../bin/lib/worker/inventory.mjs";
 import { minVramBytesFor, needsOf, VRAM_TOLERANCE } from "@/lib/lanes";
 import type { RequirementIndex } from "@/lib/gpu/types";
@@ -244,6 +244,24 @@ describe("the worker's model files", () => {
     const older = searchOf(modelPathsYaml(["D:/a", "E:/b"], folders));
     expect(older.text_encoders).toEqual(["<own>/text_encoders", "<own>/clip", "D:/a/text_encoders", "D:/a/clip", "E:/b/text_encoders", "E:/b/clip"]);
     expect(older.diffusion_models.slice(2)).toEqual(["D:/a/diffusion_models", "D:/a/unet", "E:/b/diffusion_models", "E:/b/unet"]);
+  });
+
+  it("maps a folder a pack lists under another name to the subfolder where its files are (kandinsky6_audio_vae: audio_vae)", () => {
+    const index = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows", "comfyui", "requirements.json"), "utf8")) as RequirementIndex;
+    const names = yamlFolders(index);
+    expect(names).toContainEqual(["kandinsky6_audio_vae", "audio_vae"]);
+    expect(names).toContain("loras");
+    expect(names.length).toBe(index.folders.length);
+    const yaml = modelPathsYaml(["X:/models"], names, { first: true });
+    expect(yaml).toContain("\n  kandinsky6_audio_vae: audio_vae\n");
+    expect(yaml).not.toContain("kandinsky6_audio_vae: kandinsky6_audio_vae");
+    expect(yaml).toContain("\n  clip: clip\n"); // the twins are still there
+    // Where ComfyUI reads the pack's files through this yaml is where the inventory checks them (models/<folder>/<file>).
+    const d = yamlModelDirs(yaml, "/");
+    expect(d.kandinsky6_audio_vae).toEqual([path.resolve("X:/models/audio_vae")]);
+    for (const f of Object.values(index.files).filter((x) => x.listFolder)) expect(path.resolve("X:/models", f.folder)).toBe(d[f.listFolder!][0]);
+    // A plain list of names (an older caller) still writes name: name.
+    expect(modelPathsYaml(["X:/models"], ["kandinsky6_audio_vae"])).toContain("  kandinsky6_audio_vae: kandinsky6_audio_vae\n");
   });
 });
 

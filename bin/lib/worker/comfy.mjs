@@ -76,18 +76,38 @@ export const folders = (workDir) => ({
  * reverse. A folder name with an older twin (text_encoders and clip, diffusion_models and unet: ComfyUI reads both as
  * one) gets both subfolders, the name's own first (twinFolders), so a file under clip/ or unet/ is found too. The worker
  * checks the copy that this search finds first (inventory.mjs).
+ *
+ * A folder name may come as [name, subfolder] (yamlFolders): a pack that lists models/<subfolder> under another name
+ * (kandinsky6: models/audio_vae as kandinsky6_audio_vae) gets `name: subfolder`, the subfolder where the files are and
+ * where the inventory checks them.
  */
 export function modelPathsYaml(modelDirs, folderNames, o = {}) {
   const lines = [];
   const entries = modelDirs.map((dir, i) => [dir, i]);
-  // Each subfolder once, under its own name (ComfyUI maps an older name to the folder it stands for).
-  const subs = [...new Set(folderNames.flatMap((f) => twinFolders(f)))];
+  // Each name once, with its subfolder (ComfyUI maps an older name to the folder it stands for).
+  const pairs = new Map();
+  for (const f of folderNames) {
+    for (const [name, sub] of Array.isArray(f) ? [f] : twinFolders(f).map((t) => [t, t])) if (!pairs.has(name)) pairs.set(name, sub);
+  }
+  const subs = [...pairs];
   for (const [dir, i] of o.first ? entries.reverse() : entries) {
     lines.push(`fuobe_worker_${i}:`, `  base_path: ${JSON.stringify(dir)}`, ...(o.first ? ["  is_default: true"] : []));
     // is_default puts each one at the front: the twin is written before the name's own, so the name's own comes first.
-    for (const f of o.first ? [...subs].reverse() : subs) lines.push(`  ${f}: ${f}`);
+    for (const [name, sub] of o.first ? [...subs].reverse() : subs) lines.push(`  ${name}: ${sub}`);
   }
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * The catalog's folder names for modelPathsYaml (requirements.json `folders`): a name a pack lists another subfolder
+ * under (a file's `listFolder`) comes as [name, the file's folder], every other name as itself.
+ * @param {{ folders?: string[]; files?: Record<string, { folder: string; listFolder?: string }> }} index
+ * @returns {(string | [string, string])[]}
+ */
+export function yamlFolders(index) {
+  const subOf = new Map();
+  for (const f of Object.values(index?.files ?? {})) if (f?.listFolder && f.listFolder !== f.folder && !subOf.has(f.listFolder)) subOf.set(f.listFolder, f.folder);
+  return (index?.folders ?? []).map((name) => (subOf.has(name) ? [name, subOf.get(name)] : name));
 }
 
 /** This ComfyUI reads `is_default` in an extra_model_paths.yaml (an older one stops on it). */

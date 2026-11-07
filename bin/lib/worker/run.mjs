@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
-import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
+import { folders, GuardMissing, OwnComfy, PortBusy, yamlFolders } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
 import { BRIEF_COOL_DOWN_MS, BRIEF_EVERY_MS, BRIEF_PAUSE_MS, GpuWatch, MID_JOB_GRACE_MS, othersOf, readGpu, readGpuGen, readGpuTotal } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
@@ -252,7 +252,7 @@ async function work(saved, deps, owner) {
   let gpuGen = null;
   let studioCatalog = null;
   log(`This PC runs ${ceilingWords(ceiling)}${cfg.acceptGraphs === false ? ", from job tickets only" : ""}.`);
-  const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [], log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy });
+  const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: yamlFolders(index), log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy });
   // Only its own ComfyUI, and only while the process it started is up and ready: never whatever listens on that port.
   // Its results come without what a save node writes into them unasked (results.mjs).
   const ownFetch = withPlainResults((url, init) => comfy.fetch(url, init));
@@ -568,7 +568,7 @@ async function work(saved, deps, owner) {
   const cpuComfy = cpuOn
     ? new OwnComfy(
         { ...cfg, workDir: cpuDir, port: null, cpuOnly: true, ...(cfg.cpuComfyCommand && { comfyCommand: cfg.cpuComfyCommand }) },
-        { now, fetch: fetchFn, folderNames: index.folders ?? [], log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy },
+        { now, fetch: fetchFn, folderNames: yamlFolders(index), log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy },
       )
     : null;
   const cpuHold = cpuOn ? new Hold(path.join(cfg.workDir, "hold-cpu")) : null;
