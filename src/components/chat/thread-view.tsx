@@ -297,7 +297,7 @@ export function ThreadView({ id }: { id: string }) {
             onSend={send}
             footer={<EngineLine me={me.data} />}
           />
-          <p className="mt-1.5 text-center text-[11.5px] text-subtle-foreground">{c ? "Write actions in *asterisks*. Characters are fictional, written by an AI." : "Replies are written by an AI and can be wrong."}</p>
+          <p className="mt-1.5 text-center text-[11.5px] text-subtle-foreground">{c ? "Write actions in *asterisks*. Replies by an AI model." : "Replies by an AI model."}</p>
         </div>
       </div>
 

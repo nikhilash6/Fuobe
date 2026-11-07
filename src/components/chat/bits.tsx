@@ -20,8 +20,8 @@ export function EngineLine({ me, className }: { me: ChatMe | undefined; classNam
   const short = key ? me.key!.model.split("/").pop()!.replace(/:free$/, "") : null;
   return (
     <span className={cn("inline-flex min-w-0 items-center gap-1.5 px-1 text-[12.5px] text-muted-foreground", className)}>
-      <span className={cn("size-1.5 shrink-0 rounded-full", key || me.site ? "bg-emerald-500" : "bg-amber-500")} aria-hidden />
-      <span className="truncate">{key ? `Your key · ${short}` : me.site ? "Free model" : me.siteKnown ? "Free model · busy right now" : "Free model · resting"}</span>
+      {(key || me.site) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />}
+      <span className="truncate">{key ? `Your key · ${short}` : "Free model"}</span>
     </span>
   );
 }

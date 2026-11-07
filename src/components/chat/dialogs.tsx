@@ -161,7 +161,7 @@ export function ChatSettingsDialog({ open, onOpenChange, me }: { open: boolean; 
             </TabRow>
             <p className="text-[13px] leading-relaxed text-muted-foreground">
               {engine === "site"
-                ? "Free, on Fuobe's own GPUs. It can be busy at peak times."
+                ? "Free, on Fuobe's own GPUs."
                 : "Replies come from your OpenRouter account, with the model you pick. OpenRouter bills you for paid models."}
             </p>
             {me?.key ? (
