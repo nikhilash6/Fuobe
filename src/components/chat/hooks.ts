@@ -8,7 +8,7 @@ import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
-  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Try again."), { status: res.status }, body.code && { code: body.code }));
+  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "That didn't go through. Tap it once more."), { status: res.status }, body.code && { code: body.code }));
   return body;
 }
 
@@ -73,7 +73,7 @@ export type ReplyState =
   /** Kept: the reply comes here as soon as the free model is ready (the page looks for it meanwhile). */
   | { phase: "pending" }
   | { phase: "writing"; text: string }
-  | { phase: "failed"; message: string; code: string; retryAfterS?: number };
+  | { phase: "failed"; message: string; code: string; retryAfterS?: number; /** When a limit opens again (ms). */ retryAt?: number };
 
 /**
  * Ask for a reply and follow its stream. The thread's cached view gets the person's message and the saved reply as
@@ -117,14 +117,15 @@ export function useReply(threadId: string) {
         });
       } catch {
         if (ac.signal.aborted) return setState({ phase: "idle" });
-        return setState({ phase: "failed", code: "failed", message: "Couldn't reach Fuobe. Check your connection and try again." });
+        return setState({ phase: "failed", code: "failed", message: "You look offline. Your message is ready to send when you're back — tap Write it again." });
       }
       if (!res.ok || !res.body) {
         const e = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
         // The guest card opens by itself (watchGuestRefusals); the message stays for Try again.
         responseError(res, new Error(e.error ?? ""));
         void qc.invalidateQueries({ queryKey: ["chat", "thread", threadId] });
-        return setState({ phase: "failed", code: e.code ?? "failed", message: e.error ?? "The reply didn't start. Try again." });
+        const wait = Number(res.headers.get("Retry-After")) || undefined;
+        return setState({ phase: "failed", code: e.code ?? "failed", message: e.error ?? "The reply didn't start. Tap Write it again.", ...(wait && { retryAfterS: wait, retryAt: Date.now() + wait * 1000 }) });
       }
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
       let buf = "";
@@ -167,7 +168,7 @@ export function useReply(threadId: string) {
               void qc.invalidateQueries({ queryKey: ["chat", "threads"] });
             } else if (e.type === "error") {
               ended = true;
-              setState({ phase: "failed", code: e.code, message: e.message, retryAfterS: e.retryAfterS });
+              setState({ phase: "failed", code: e.code, message: e.message, retryAfterS: e.retryAfterS, ...(e.retryAfterS && { retryAt: Date.now() + e.retryAfterS * 1000 }) });
             }
           }
         }
@@ -177,7 +178,7 @@ export function useReply(threadId: string) {
           setState({ phase: "idle" });
         }
       }
-      if (!ended) setState({ phase: "failed", code: "failed", message: "The reply was cut off. Try again." });
+      if (!ended) setState({ phase: "failed", code: "failed", message: "The reply stopped part way. Tap Write it again for a fresh one." });
     },
     [patch, qc, threadId],
   );

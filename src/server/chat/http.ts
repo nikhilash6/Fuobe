@@ -20,7 +20,7 @@ export const signUp = () => Response.json({ error: GUEST_RUN_MESSAGE, code: "sig
 export function tooOften(who: string, what = "changes", limit = 60): Response | null {
   if (who === "owner") return null;
   const r = hit(`chat-${what}:${who}`, limit, 60_000);
-  return r.ok ? null : Response.json({ error: "That's a lot at once. Wait a moment, then try again.", code: "limit" }, { status: 429, headers: { "Retry-After": String(r.retryAfterS) } });
+  return r.ok ? null : Response.json({ error: "That's a lot at once — it'll work again in a few seconds.", code: "limit" }, { status: 429, headers: { "Retry-After": String(r.retryAfterS) } });
 }
 
 export function refused(e: unknown): Response {

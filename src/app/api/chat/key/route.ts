@@ -29,7 +29,7 @@ export async function PUT(request: Request) {
   if (!p.success) return Response.json({ error: "That doesn't look like an OpenRouter key. It starts with sk-or-." }, { status: 400 });
   const check = await checkOpenRouterKey(p.data.key);
   if (check === "refused") return Response.json({ error: "OpenRouter didn't accept that key. Copy it again from openrouter.ai/settings/keys." }, { status: 422 });
-  if (check === "unreachable") return Response.json({ error: "Couldn't reach OpenRouter to check the key. Try again in a moment." }, { status: 503 });
+  if (check === "unreachable") return Response.json({ error: "OpenRouter didn't pick up to check the key. Save it again in a moment." }, { status: 503 });
   const prefs = saveChatKey(v.who, p.data.key, p.data.model ?? null);
   return Response.json({ key: prefs.key, engine: prefs.engine });
 }

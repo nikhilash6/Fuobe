@@ -41,14 +41,14 @@ export type ReplyAnswer =
   | { error: ChatErrorCode; message: string; retryAfterS?: number };
 
 export const CHAT_WORDS: Record<ChatErrorCode, string> = {
-  busy: "We'll answer here as soon as it's ready.",
-  limit: "That's a lot of messages in a short time. Take a breather and try again soon.",
-  blocked: "This message can't be answered here.",
-  failed: "The reply didn't finish. Try again.",
+  busy: "Your message is saved — we'll answer here as soon as it's ready.",
+  limit: "You've chatted a lot in a short while — more free replies in a minute or two.",
+  blocked: "This one can't be answered here. Say it another way and it'll go through.",
+  failed: "The reply stopped part way. Tap Write it again for a fresh one.",
   "sign-in": "Create a free account to chat.",
-  "no-model": "We'll answer here as soon as it's ready.",
-  "key-refused": "OpenRouter didn't accept your key. Check it in chat settings.",
-  "too-long": "This chat is as long as a chat can be. Start a new one to keep going.",
+  "no-model": "Your message is saved — we'll answer here as soon as it's ready.",
+  "key-refused": "OpenRouter didn't accept your key. Update it in chat settings.",
+  "too-long": "This chat is full. Start a new one to keep going.",
 };
 
 const asTenant = <T,>(who: string, fn: () => T): T => (who === "owner" ? fn() : runAsTenant({ kind: "account", id: who }, fn));
@@ -67,7 +67,7 @@ const KEY_BUDGET = 24_000;
 
 function fromHelper(a: Exclude<HelperAnswer, { text: string }>): ReplyAnswer {
   const code: ChatErrorCode = a.error === "sign-in" ? "sign-in" : a.error === "limit" ? "limit" : a.error === "blocked" ? "blocked" : a.error === "busy" ? "busy" : "failed";
-  const message = code === "limit" && a.retryAfterS ? `That's a lot of messages in a short time. Try again in ${a.retryAfterS < 90 ? `${a.retryAfterS} s` : `${Math.ceil(a.retryAfterS / 60)} min`}.` : a.error === "blocked" && a.message ? a.message : CHAT_WORDS[code];
+  const message = code === "limit" ? CHAT_WORDS.limit : a.error === "blocked" && a.message ? a.message : CHAT_WORDS[code];
   return { error: code, message, ...(a.retryAfterS ? { retryAfterS: a.retryAfterS } : {}) };
 }
 
@@ -180,14 +180,14 @@ async function keyReply(ask: ReplyAsk, key: { key: string; model: string }): Pro
       signal: ask.signal,
     });
   } catch {
-    return { error: "failed", message: "Couldn't reach OpenRouter. Try again in a moment." };
+    return { error: "failed", message: "OpenRouter didn't pick up. Tap Write it again, or switch to Fuobe's free model in chat settings." };
   }
   if (!res.ok || !res.body) {
     if (res.status === 401 || res.status === 403) return { error: "key-refused", message: CHAT_WORDS["key-refused"] };
     if (res.status === 402) return { error: "failed", message: "Your OpenRouter account is out of credits for this model. Top it up, or pick a free model in chat settings." };
-    if (res.status === 429) return { error: "limit", message: "OpenRouter says this model is busy or your limit is reached. Try again soon, or pick another model in chat settings." };
+    if (res.status === 429) return { error: "limit", message: "This OpenRouter model has reached its limit for now. Pick another model in chat settings, or switch to Fuobe's free model." };
     if (res.status === 404 || res.status === 400) return { error: "failed", message: `OpenRouter couldn't run "${key.model}". Pick another model in chat settings.` };
-    return { error: "failed", message: "OpenRouter couldn't answer. Try again in a moment." };
+    return { error: "failed", message: "OpenRouter didn't answer this time. Tap Write it again, or switch to Fuobe's free model in chat settings." };
   }
   let text = "";
   let problem: string | null = null;

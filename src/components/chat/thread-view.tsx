@@ -251,7 +251,11 @@ export function ThreadView({ id }: { id: string }) {
                   </Row>
                   {state.phase === "waiting" && (state.starting || (state.position ?? 0) > 0) && (
                     <p className={cn("mt-1.5 text-[12px] text-muted-foreground", c && "ml-9")}>
-                      {state.starting && !state.position ? "Starting up…" : state.position === 1 ? "Up next" : `${(state.position ?? 1) - 1} ahead of you`}
+                      {state.starting && !state.position
+                        ? "Warming up · just a moment"
+                        : state.position === 1
+                          ? "Lots of people are chatting right now · you're next"
+                          : `Lots of people are chatting right now · ${(state.position ?? 1) - 1} ahead of you`}
                     </p>
                   )}
                 </li>
@@ -261,7 +265,7 @@ export function ThreadView({ id }: { id: string }) {
                   <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted-foreground", c && "ml-9")} role="status">
                     <span className="inline-flex items-center gap-2">
                       <span className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" aria-hidden />
-                      We&apos;ll answer here as soon as it&apos;s ready.
+                      Your message is saved — we&apos;ll answer here as soon as it&apos;s ready.
                     </span>
                     {me.data?.key && me.data.engine === "site" && (
                       <Button
@@ -286,7 +290,11 @@ export function ThreadView({ id }: { id: string }) {
               {state.phase === "failed" && (
                 <li className="mt-5 animate-in duration-200 fade-in-0">
                   <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-muted/40 p-3.5 text-[14px]">
-                    <p className="min-w-0 flex-1">{state.message}</p>
+                    <p className="min-w-0 flex-1">
+                      {state.code === "limit" && state.retryAt
+                        ? `You've chatted a lot in a short while — more free replies at ${new Date(state.retryAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}.`
+                        : state.message}
+                    </p>
                     {state.code === "key-refused" || state.code === "no-model" ? (
                       <Button size="sm" variant="secondary" onClick={() => setSettings(true)}>
                         Chat settings
@@ -296,10 +304,10 @@ export function ThreadView({ id }: { id: string }) {
                         Turn on Mango Chilli
                       </Button>
                     ) : null}
-                    {t.messages.at(-1)?.role === "user" && (
+                    {t.messages.at(-1)?.role === "user" && state.code !== "limit" && (
                       <Button size="sm" onClick={() => void ask({})}>
                         <RotateCcw />
-                        Try again
+                        Write it again
                       </Button>
                     )}
                   </div>
@@ -483,7 +491,7 @@ function AssistantTurn({
         <div className={cn("mt-1 flex gap-0.5 text-muted-foreground", character && "ml-9")}>
           {copy}
           {canRetry && (
-            <button type="button" onClick={onRetry} className="grid size-8 place-items-center rounded-full hover:bg-accent hover:text-foreground" aria-label="Try again" title="Try again">
+            <button type="button" onClick={onRetry} className="grid size-8 place-items-center rounded-full hover:bg-accent hover:text-foreground" aria-label="Write it again" title="Write it again">
               <RotateCcw className="size-3.5" />
             </button>
           )}
