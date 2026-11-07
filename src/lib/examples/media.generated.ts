@@ -8958,6 +8958,49 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 512,
   "h": 384
  },
+ "/examples/upscale-video/1/in-video.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 25508,
+  "sha256": "9cab632ec470cc98db0fb9d77b9c4312880f21fc54caadc9885818463b8d703a",
+  "v": "9cab632e",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/upscale-video/1/in-video.mp4": {
+  "role": "in",
+  "type": "video/mp4",
+  "bytes": 1241342,
+  "sha256": "c182d46b277804539626df43c1a3c075a5dc3f1ed851b74d18386c970968d904",
+  "v": "c182d46b",
+  "thumb": "/examples/upscale-video/1/in-video.384.webp?v=9cab632e"
+ },
+ "/examples/upscale-video/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 1013785,
+  "sha256": "2cad149938815558d81317eb7d27d6a210a39d5399389ac42da6f8916f51b7b5",
+  "v": "2cad1499",
+  "poster": "/examples/upscale-video/1/show.poster.webp?v=6f5a0f9f"
+ },
+ "/examples/upscale-video/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 14994,
+  "sha256": "bb3dcbd279906082d76b8516905c69db1de65c085427ad0c0d220761a8527ba2",
+  "v": "bb3dcbd2",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/upscale-video/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 89972,
+  "sha256": "6f5a0f9f1282554062736c993a0ebe191f62489435d4d47583699b3e5bd2aec5",
+  "v": "6f5a0f9f",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/video-tools-colors/1/in-image.384.webp": {
   "role": "show",
   "type": "image/webp",

@@ -4936,5 +4936,24 @@
    "at": 4.717,
    "from": 0
   }
+ },
+ {
+  "id": "upscale-video.1",
+  "surface": "hub:upscale/video",
+  "rank": 1,
+  "caption": "Gold sequins, sharp at 1080p",
+  "modelId": "oss-upscale-video-esrgan",
+  "params": {
+   "resolution": "1080p"
+  },
+  "inputs": {
+   "video": "/examples/upscale-video/1/in-video.mp4"
+  },
+  "output": "/examples/upscale-video/1/show.mp4",
+  "rest": {
+   "src": "/examples/upscale-video/1/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
  }
 ]

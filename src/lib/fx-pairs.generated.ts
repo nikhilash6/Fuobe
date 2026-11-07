@@ -73,6 +73,16 @@ export const FX_PAIRS: Record<string, FxPair> = {
    0.25
   ]
  },
+ "upscale-video": {
+  "v": "ff95b494",
+  "kind": "loupe",
+  "loupe": [
+   0.4361,
+   0.2046,
+   0.1875,
+   0.25
+  ]
+ },
  "video-tools": {
   "v": "5a5c1320",
   "kind": "matte"
