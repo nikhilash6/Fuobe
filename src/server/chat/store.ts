@@ -184,7 +184,13 @@ function summaryOf(who: string, r: ThreadRow, last?: string): ChatThreadSummary 
     tool: r.tool,
     play: r.play,
     mature: !!r.mature,
-    preview: (last ?? "").replace(/\s+/g, " ").slice(0, 140),
+    // Plain words for the list line: no markdown marks, no "Prompt (image):" labels.
+    preview: (last ?? "")
+      .replace(/^\s*prompt\s*(\([a-z]+\))?\s*:/gim, "")
+      .replace(/[#*_`>]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 140),
     updatedAt: r.updated_at,
   };
 }

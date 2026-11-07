@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Settings2 } from "lucide-react";
+import { Pencil, Plus, Settings2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,12 +16,15 @@ import { playMessage, toolMessage } from "@/lib/chat/prompt";
 import type { ChatThreadSummary } from "@/lib/chat/types";
 import { toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
+import { useChats } from "@/components/assist/hooks";
+import type { AssistThreadSummary } from "@/lib/assist";
 import { CharacterBuilder } from "./character-builder";
 import { CharacterFace } from "./character-face";
 import { ChatComposer } from "./composer";
 import { ChatSettingsDialog, ChilliDot, CHILLI_BG, MangoChilliDialog, PlayDialog, WriteToolDialog } from "./dialogs";
 import { chatSend, useCharacters, useChatMe, useChatThreads, useStartChat } from "./hooks";
 import { EngineLine, KindIcon, timeAgo } from "./bits";
+import { MakeBox, MoreMenu } from "./make";
 
 /**
  * Fuobe Chat's home: one box to start talking, the kinds of chat (Chat, Ideas, Write, Characters, Play), the
@@ -41,6 +44,8 @@ export function ChatHome() {
   const me = useChatMe(signedIn);
   const threads = useChatThreads(signedIn);
   const characters = useCharacters(signedIn);
+  // The owner's Assist chats sit in Recent too, until they open in Chat itself (an account's list comes back empty).
+  const assistChats = useChats();
   const start = useStartChat();
 
   // A link can open a kind, a writing tool or a game with its form (?kind=, ?tool=, ?play=).
@@ -57,6 +62,7 @@ export function ChatHome() {
   const [settings, setSettings] = useState(false);
   const [chilli, setChilli] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [making, setMaking] = useState(() => sp.get("make") === "1");
   const mature = !!me.data?.mature;
 
   const gate = () => {
@@ -140,6 +146,7 @@ export function ChatHome() {
             </Button>
           </>
         )}
+        <MoreMenu />
         <PhoneNavButton />
       </header>
 
@@ -151,14 +158,37 @@ export function ChatHome() {
           </p>
 
           <TabRow role="tablist" aria-label="Kind of chat" className="mt-8 w-fit max-w-full">
-            {CHAT_KINDS.map((x) => (
-              <button key={x.id} role="tab" aria-selected={x.id === kind} className={TAB_PILL} {...onAttr(x.id === kind)} onClick={() => setKind(x.id)}>
-                {x.label}
-              </button>
-            ))}
+            {CHAT_KINDS.flatMap((x) => {
+              const tab = (
+                <button
+                  key={x.id}
+                  role="tab"
+                  aria-selected={!making && x.id === kind}
+                  className={TAB_PILL}
+                  {...onAttr(!making && x.id === kind)}
+                  onClick={() => {
+                    setMaking(false);
+                    setKind(x.id);
+                  }}
+                >
+                  {x.label}
+                </button>
+              );
+              // Make sits beside Ideas: from talking about it to making it.
+              return x.id !== "ideas"
+                ? [tab]
+                : [
+                    tab,
+                    <button key="make" role="tab" aria-selected={making} className={TAB_PILL} {...onAttr(making)} onClick={() => setMaking(true)}>
+                      Make
+                    </button>,
+                  ];
+            })}
           </TabRow>
 
-          {typing && (
+          {making && <MakeBox owner={!!me.data?.owner} guest={known && guest} />}
+
+          {!making && typing && (
             <div className="mt-4">
               <ChatComposer
                 key={kind}
@@ -174,7 +204,7 @@ export function ChatHome() {
             </div>
           )}
 
-          <section className="mt-6">
+          <section className={cn("mt-6", making && "hidden")}>
             {kind === "chat" || kind === "ideas" ? (
               <div className="grid gap-x-6 sm:grid-cols-2">
                 {STARTERS[kind].map((s) => (
@@ -231,7 +261,7 @@ export function ChatHome() {
             ) : null}
           </section>
 
-          {(kind === "character" || kind === "chat") && (
+          {!making && (kind === "character" || kind === "chat") && (
             <section className="mt-12">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <h2 className="font-heading text-[28px] leading-none">Characters</h2>
@@ -251,7 +281,7 @@ export function ChatHome() {
             </section>
           )}
 
-          {signedIn && <Recent threads={threads.data?.items} loading={threads.isPending} />}
+          {signedIn && <Recent threads={threads.data?.items} assist={me.data?.owner ? assistChats.data?.threads : undefined} loading={threads.isPending} />}
         </div>
       </div>
 
@@ -339,10 +369,30 @@ function CharacterShelf({
   );
 }
 
-function Recent({ threads, loading }: { threads: ChatThreadSummary[] | undefined; loading: boolean }) {
+type RecentRow = ChatThreadSummary & { href: string; making?: boolean };
+
+function Recent({ threads, assist, loading }: { threads: ChatThreadSummary[] | undefined; assist?: AssistThreadSummary[]; loading: boolean }) {
   const [all, setAll] = useState(false);
-  if (!loading && !threads?.length) return null;
-  const more = (threads?.length ?? 0) - 12;
+  // Chats and (the owner's) making chats in one list, newest first.
+  const rows: RecentRow[] = [
+    ...(threads ?? []).map((t) => ({ ...t, href: `/chat/${t.id}` })),
+    ...(assist ?? []).map((a) => ({
+      id: a.id,
+      kind: "ideas" as const,
+      title: a.title,
+      characterId: null,
+      character: null,
+      tool: null,
+      play: null,
+      mature: false,
+      preview: "Plans and makes",
+      updatedAt: a.updatedAt,
+      href: `/assist?c=${a.id}`,
+      making: true,
+    })),
+  ].sort((x, y) => y.updatedAt - x.updatedAt);
+  if (!loading && !rows.length) return null;
+  const more = rows.length - 12;
   return (
     <section className="mt-12">
       <h2 className="mb-2 font-heading text-[28px] leading-none">Recent</h2>
@@ -353,14 +403,14 @@ function Recent({ threads, loading }: { threads: ChatThreadSummary[] | undefined
                 <Skeleton className="h-10 w-full" />
               </li>
             ))
-          : threads!.slice(0, all ? undefined : 12).map((t) => (
+          : rows.slice(0, all ? undefined : 12).map((t) => (
               <li key={t.id}>
-                <Link href={`/chat/${t.id}`} className="group flex items-center gap-3 py-3">
+                <Link href={t.href} className="group flex items-center gap-3 py-3">
                   {t.character ? (
                     <CharacterFace name={t.character.name} accent={t.character.accent} portrait={t.character.portrait} className="size-10" />
                   ) : (
                     <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-                      <KindIcon kind={t.kind} />
+                      {t.making ? <Sparkles className="size-[18px]" /> : <KindIcon kind={t.kind} />}
                     </span>
                   )}
                   <span className="min-w-0 flex-1">

@@ -65,6 +65,14 @@ const nextConfig: NextConfig = {
       { source: "/settings/about", destination: "/settings", permanent: true },
       // The product-link ad apps open the Click to Ad flow (src/lib/catalog/apps.ts).
       { source: "/apps/:id(app-click-to-ad|app-link-to-video-ad)", destination: "/marketing/click-to-ad", permanent: false },
+      // Chat is the one place to talk to Fuobe: a bare /assist opens it. A link to an Assist chat (?c=), a skill
+      // (?skill=), a ready-made starter (?starter=) or a request to plan (?prompt=) still opens Assist, where it runs.
+      {
+        source: "/assist",
+        missing: ["c", "skill", "starter", "prompt"].map((key) => ({ type: "query" as const, key })),
+        destination: "/chat",
+        permanent: false,
+      },
       // The Virality Predictor app became the /virality page (its frame step is the Hook Frame app).
       { source: "/apps/app-virality-predictor", destination: "/virality", permanent: true },
       // Studio hubs have one path per mode (src/lib/hubs.ts). Old `?mode=` links go to it in src/proxy.ts (hubModeLink),
