@@ -32,7 +32,7 @@ export interface NavGroupDef {
 const GROUPS: { label: string; ids: string[]; collapsible?: boolean }[] = [
   {
     label: "Create",
-    ids: ["home", "assist", "chat", "image", "video", "edit", "live-edit", "layers", "inpaint", "color-grade", "motions", "effects", "storyboard", "canvas", "apps"],
+    ids: ["home", "chat", "image", "video", "edit", "live-edit", "layers", "inpaint", "color-grade", "motions", "effects", "storyboard", "canvas", "apps"],
   },
   { label: "Library", ids: ["library", "favorites"] },
   {

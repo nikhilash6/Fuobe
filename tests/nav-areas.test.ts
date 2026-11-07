@@ -151,10 +151,9 @@ describe("/studios", () => {
 });
 
 describe("/create", () => {
-  it("shows every entry of the Create menu but Assist and Chat (items of the bar), as a card or a pill, and the menu reads the model's own columns", () => {
+  it("shows every entry of the Create menu but Chat (an item of the bar), as a card or a pill, and the menu reads the model's own columns", () => {
     const all = ids("create", "guest");
-    for (const c of CREATE_COLUMNS) for (const id of c.ids) if (id !== "assist" && id !== "chat") expect(all, id).toContain(id);
-    expect(all).not.toContain("assist");
+    for (const c of CREATE_COLUMNS) for (const id of c.ids) if (id !== "chat") expect(all, id).toContain(id);
     expect(all).not.toContain("chat");
     expect(all).not.toContain("new");
     expect(createMenu.CREATE_COLUMNS).toBe(CREATE_COLUMNS);
@@ -252,7 +251,7 @@ describe("Motions & effects and Apps", () => {
 });
 
 describe("which bar item and tab a page marks", () => {
-  it("gives each page one area, and Canvas, Assist and Chat none (they have items of their own)", () => {
+  it("gives each page one area, and Canvas and Chat (Assist's pages too) none (they have items of their own)", () => {
     const cases: [string, string | undefined][] = [
       ["/create", "create"],
       ["/image", "create"],
@@ -293,8 +292,8 @@ describe("which bar item and tab a page marks", () => {
     expect(barActive("/studios")).toMatchObject({ studios: true, create: false, page: "studios" });
     expect(barActive("/motions-and-effects")).toMatchObject({ motions: true, page: "motions" });
     expect(barActive("/canvas")).toMatchObject({ canvas: true, create: false });
-    expect(barActive("/assist")).toMatchObject({ assist: true, chat: false, create: false });
-    expect(barActive("/chat")).toMatchObject({ chat: true, assist: false, create: false });
+    expect(barActive("/assist")).toMatchObject({ chat: true, create: false });
+    expect(barActive("/chat")).toMatchObject({ chat: true, create: false });
   });
 
   it("selects the Create and Studios tabs on their own pages, and none on the galleries' page", () => {

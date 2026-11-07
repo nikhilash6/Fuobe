@@ -75,6 +75,12 @@ describe("search by what you want to make", () => {
       for (const q of ["ask", "advice", "roleplay", "role play", "ask for advice", "talk to ai", "talk about ideas", "brainstorm ideas"]) {
         expect(searchNav(q, entries).best.map((h) => h.href), q).toContain("/chat");
       }
+      // Assist is Chat now: its words find Chat.
+      for (const q of ["assist", "assistant", "agent", "planner", "make me a plan", "do it for me", "skills", "memory", "scheduled"]) {
+        expect(searchNav(q, entries).best.map((h) => h.href), q).toContain("/chat");
+      }
+      expect(searchNav("assist", entries).best[0]).toMatchObject({ label: "Chat", href: "/chat" });
+      expect(all("assist", entries).map((h) => h.label)).not.toContain("Assist");
       // "talk" alone is mostly lipsync and voices: Chat is listed with them, first of the rest.
       expect(all("talk", entries).map((h) => h.href)).toContain("/chat");
     }

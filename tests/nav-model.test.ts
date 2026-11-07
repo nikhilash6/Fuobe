@@ -138,13 +138,19 @@ describe("nav model: entries", () => {
     }
   });
 
-  it("keeps every link the sidebar had, with its label", () => {
-    for (const [, rows] of OLD_NAV) for (const [href, label] of rows) expect(NAV_ENTRIES.find((e) => e.href === href)?.label, href).toBe(label);
+  it("keeps every link the sidebar had, with its label (Assist is Chat now)", () => {
+    for (const [, rows] of OLD_NAV)
+      for (const [href, label] of rows) {
+        if (href === "/assist") continue;
+        expect(NAV_ENTRIES.find((e) => e.href === href)?.label, href).toBe(label);
+      }
+    expect(NAV_ENTRIES.find((e) => e.href === "/assist")).toBeUndefined();
+    expect(NAV_ENTRIES.some((e) => e.id === "assist" || e.label === "Assist")).toBe(false);
   });
 
-  it("derives the groups as they were, with Kinetic Motion, Chat beside Assist, and the FX studios moved from Studios to Fuobe FX: 47 rows", () => {
+  it("derives the groups as they were, with Kinetic Motion, Chat in Assist's place, and the FX studios moved from Studios to Fuobe FX: 46 rows", () => {
     const FX_HREFS = ["/genjutsu", "/character-swap", "/motion-control", "/video-tools", "/extend", "/reframe"];
-    const withChat = (rows: [string, string][]) => rows.flatMap((r): [string, string][] => (r[0] === "/assist" ? [r, ["/chat", "Chat"]] : [r]));
+    const withChat = (rows: [string, string][]) => rows.map((r): [string, string] => (r[0] === "/assist" ? ["/chat", "Chat"] : r));
     const old = OLD_NAV.map(
       ([label, rows]) => [label, label === "Studios" ? rows.filter(([href]) => !FX_HREFS.includes(href)) : label === "Create" ? withChat(rows) : rows] as (typeof OLD_NAV)[number],
     );
@@ -152,7 +158,7 @@ describe("nav model: entries", () => {
     expect(moved).toHaveLength(6);
     const fx: (typeof OLD_NAV)[number] = ["Fuobe FX", [["/fx", "Fuobe FX"], ...FX_HREFS.map((h) => moved.find(([href]) => href === h)!)]];
     expect(NAV.map((g) => [g.label, g.items.map((i) => [i.href, i.label])])).toEqual([...old.slice(0, 3), fx, ...old.slice(3)]);
-    expect(NAV.flatMap((g) => g.items)).toHaveLength(47);
+    expect(NAV.flatMap((g) => g.items)).toHaveLength(46);
     expect(NAV.find((g) => g.label === "Fuobe FX")?.collapsible).toBe(true);
     expect(NAV.find((g) => g.label === "Studios")?.collapsible).toBe(true);
     // The same rows prefetch eagerly, with an icon each and search words.
@@ -160,7 +166,7 @@ describe("nav model: entries", () => {
       NAV.flatMap((g) => g.items)
         .filter((i) => i.eager)
         .map((i) => i.href),
-    ).toEqual(["/", "/assist", "/image", "/video", "/library"]);
+    ).toEqual(["/", "/chat", "/image", "/video", "/library"]);
     for (const i of NAV.flatMap((g) => g.items)) {
       expect(typeof i.icon === "function" || typeof i.icon === "object", i.href).toBe(true);
       expect(i.keywords?.length, i.href).toBeGreaterThan(0);
@@ -328,7 +334,11 @@ describe("nav model: the current page", () => {
     expect(at("/upscale/video")).toBe("upscale");
     expect(at("/video-tools/captions")).toBe("video-tools");
     expect(at("/marketing/click-to-ad")).toBe("marketing");
-    expect(at("/assist/skills")).toBe("assist");
+    // Assist's pages, while they still answer, are Chat's.
+    expect(at("/assist")).toBe("chat");
+    expect(at("/assist/skills")).toBe("chat");
+    expect(at("/assist/projects/p1")).toBe("chat");
+    expect(at("/assistant")).not.toBe("chat");
   });
 });
 

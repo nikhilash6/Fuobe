@@ -66,7 +66,7 @@ describe("the selected tab", () => {
 
   it("is Studios in a studio, its pages and the apps, and Create in a create tool", () => {
     for (const p of ["/cinema", "/cinema/abc", "/marketing/click-to-ad", "/audio/clean", "/apps", "/apps/app-3d-figure", "/fashion-factory"]) expect(tabFor(p), p).toBe("studios");
-    for (const p of ["/image", "/video", "/edit", "/assist", "/chat", "/chat/abc", "/canvas"]) expect(tabFor(p), p).toBe("create");
+    for (const p of ["/image", "/video", "/edit", "/assist", "/assist/skills", "/chat", "/chat/abc", "/canvas"]) expect(tabFor(p), p).toBe("create");
   });
 
   it("is none on a page no tab leads to", () => {

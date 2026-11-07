@@ -27,12 +27,12 @@ import { ViewerSlot } from "./viewer-slot";
 export { prefetchHrefs } from "./nav-prefetch";
 
 /*
- * The top bar (md and up): the wordmark, Create, Studios (the launcher), Fuobe FX, Apps, Motions & effects, Canvas, Assist,
- * Chat and Library; search; New creation; who is looking. 56 px on every page. What doesn't fit moves into More, by CSS alone
+ * The top bar (md and up): the wordmark, Create, Studios (the launcher), Fuobe FX, Apps, Motions & effects, Canvas, Chat and
+ * Library; search; New creation; who is looking. 56 px on every page. What doesn't fit moves into More, by CSS alone
  * (nothing is measured, so nothing moves after the first paint):
- *   1600 and up   everything, search 280 px, a guest's Log in, items 12 px left of the words
- *   1440-1599     the same, search 184 px, items 8 px left of the words (Apps, Motions & effects and Canvas each carry a chevron)
- *   1280-1439     Canvas, Assist and Chat in More, search 200 px, items 10 px left of the words
+ *   1600 and up   everything, search 280 px, a guest's Log in
+ *   1440-1599     the same, search 220 px, items 4 px narrower a side (Apps, Motions & effects and Canvas each carry a chevron)
+ *   1280-1439     Canvas and Chat in More, search 200 px
  *   1024-1279     Fuobe FX, Apps and Motions & effects in More too
  *   768-1023      the same, search and New creation as icon buttons
  * Measured with the site's fonts for a guest, an account and the owner, a classic scrollbar's width to spare at every
@@ -40,17 +40,17 @@ export { prefetchHrefs } from "./nav-prefetch";
  */
 
 /**
- * A plain bar link (Assist, Chat, Library). Its states are the nav's (nav-states.css): the highlight on hover or keyboard
+ * A plain bar link (Chat, Library). Its states are the nav's (nav-states.css): the highlight on hover or keyboard
  * focus, and for the open page (aria-current) a pip under the words, never a fill. The items with a menu are
  * BAR_TRIGGER (bar-split.tsx).
  */
 export const BAR_ITEM =
-  "nav-row nav-mark-under group/bar-item inline-flex h-10 shrink-0 [@media(pointer:coarse)]:h-11 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] whitespace-nowrap text-foreground/80 nav-hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground data-[active]:font-semibold data-[active]:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground min-[1440px]:px-2 min-[1600px]:px-3";
+  "nav-row nav-mark-under group/bar-item inline-flex h-10 shrink-0 [@media(pointer:coarse)]:h-11 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] whitespace-nowrap text-foreground/80 nav-hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground data-[active]:font-semibold data-[active]:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground min-[1600px]:px-3.5";
 
 /**
  * Which bar item holds the open page, one item per page (areaOfPath): Create for the create tools, Studios for a studio
  * or one of its tools, Apps for the apps, Motions & effects for both galleries, each for its own area page; Canvas,
- * Assist, Chat and Library for theirs. `page`: the area whose own page this is (its name is marked aria-current).
+ * Chat (and Assist's pages) and Library for theirs. `page`: the area whose own page this is (its name is marked aria-current).
  */
 export function barActive(pathname: string): {
   create: boolean;
@@ -62,7 +62,6 @@ export function barActive(pathname: string): {
   canvas: boolean;
   /** /canvas itself (the Canvas item's own page). */
   canvasHome: boolean;
-  assist: boolean;
   chat: boolean;
   library: boolean;
   page: AreaId | undefined;
@@ -77,7 +76,6 @@ export function barActive(pathname: string): {
     fx: area === "fx",
     canvas: e?.id === "canvas",
     canvasHome: pathname === "/canvas",
-    assist: e?.id === "assist",
     chat: e?.id === "chat",
     library: e?.kind === "library",
     page: pathname ? areaPageOf(pathname) : undefined,
@@ -143,7 +141,7 @@ function MoreItems() {
         <SeeAllRow href={MOTIONS_AREA_HREF} name="See all motions & effects" data-col={0} data-row={4} className="mt-1" />
         <div role="separator" className="mx-2.5 my-1.5 h-px bg-border" />
       </div>
-      {pick(["canvas", "assist", "chat"]).map((e, i) => (
+      {pick(["canvas", "chat"]).map((e, i) => (
         <IntentLink key={e.id} href={e.href} eager={e.eager} aria-current={on(e) ? "page" : undefined} data-col={0} data-row={5 + i} className={cn(CARD_ROW, MENU_ROW_2)}>
           <span className="grid h-[27px] w-9 shrink-0 place-items-center rounded-[6px] bg-muted">
             <NavIcon name={e.icon} className="nav-icon size-4 text-muted-foreground" />
@@ -171,8 +169,8 @@ function MoreMenu({ active }: { active: Active }) {
       onOpen={warmMore}
       cardClassName="w-80"
       className="min-[1440px]:hidden"
-      // Marked when it holds the open page at this width: Canvas, Assist and Chat always; Fuobe FX, Apps, Motions and Effects below xl.
-      active={active.canvas || active.assist || active.chat}
+      // Marked when it holds the open page at this width: Canvas and Chat always; Fuobe FX, Apps, Motions and Effects below xl.
+      active={active.canvas || active.chat}
       data-narrow={active.apps || active.motions || active.fx || undefined}
     >
       <MoreItems />
@@ -196,10 +194,7 @@ function BarLinks({ active, onTap }: { active: Active; onTap?: (href: string) =>
       <MegaLauncher id="apps" active={active.apps || active.page === "apps"} className="hidden xl:inline-flex" />
       <MegaLauncher id="motions" active={active.motions || active.page === "motions"} className="hidden xl:inline-flex" />
       <MegaLauncher id="canvas" active={active.canvas || active.canvasHome} className="hidden min-[1440px]:inline-flex" />
-      <IntentLink href="/assist" eager data-bar-item="" onClick={tap("/assist")} aria-current={cur(active.assist)} className={cn(BAR_ITEM, "hidden min-[1440px]:inline-flex")}>
-        Assist
-      </IntentLink>
-      <IntentLink href="/chat" data-bar-item="" onClick={tap("/chat")} aria-current={cur(active.chat)} className={cn(BAR_ITEM, "hidden min-[1440px]:inline-flex")}>
+      <IntentLink href="/chat" eager data-bar-item="" onClick={tap("/chat")} aria-current={cur(active.chat)} className={cn(BAR_ITEM, "hidden min-[1440px]:inline-flex")}>
         Chat
       </IntentLink>
       <IntentLink href="/library" eager data-bar-item="" onClick={tap("/library")} aria-current={cur(active.library)} className={BAR_ITEM}>
@@ -231,7 +226,7 @@ function SearchField() {
       className={cn(
         "nav-focus inline-flex h-10 shrink-0 items-center gap-2 rounded-[10px] text-[13.5px] [@media(pointer:coarse)]:h-11 text-muted-foreground motion-safe:transition-colors",
         "w-10 justify-center nav-hover:bg-[var(--nav-hi)] nav-hover:text-foreground active:bg-[var(--nav-press)] [@media(pointer:coarse)]:w-11",
-        "lg:max-[1439.98px]:w-[200px] lg:justify-start lg:border lg:border-input lg:bg-background/60 lg:px-3 lg:nav-hover:border-border-strong lg:nav-hover:bg-background lg:active:bg-background min-[1440px]:max-[1599.98px]:w-[184px] min-[1600px]:w-[280px]",
+        "lg:max-[1439.98px]:w-[200px] lg:justify-start lg:border lg:border-input lg:bg-background/60 lg:px-3 lg:nav-hover:border-border-strong lg:nav-hover:bg-background lg:active:bg-background min-[1440px]:max-[1599.98px]:w-[220px] min-[1600px]:w-[280px]",
       )}
     >
       <Search aria-hidden className="size-[18px] shrink-0 lg:size-4" />

@@ -170,7 +170,7 @@ export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => 
 ];
 
 /** Destinations with a section of their own on Home, so they aren't pills as well. */
-export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps", "/live-edit"];
+export const HOME_OWN_SECTIONS = ["/motions", "/effects", "/apps", "/live-edit"];
 
 /** Live edit's moment on Home: a recorded session plays (no GPU, no requests), with one way in. */
 export const HOME_LIVE = {

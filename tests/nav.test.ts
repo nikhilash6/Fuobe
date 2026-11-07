@@ -47,7 +47,7 @@ describe("nav links' active state", () => {
 describe("nav rows", () => {
   it("prefetches only the rows most visits go to next", () => {
     const eager = NAV.flatMap((g) => g.items.filter((i) => i.eager).map((i) => i.href));
-    expect(eager).toEqual(["/", "/assist", "/image", "/video", "/library"]);
+    expect(eager).toEqual(["/", "/chat", "/image", "/video", "/library"]);
     // Every destination is unique (the palette and the sidebar key rows by href).
     const hrefs = NAV.flatMap((g) => g.items.map((i) => i.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);

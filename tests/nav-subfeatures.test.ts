@@ -108,8 +108,8 @@ describe("the catalogue of studio features", () => {
     const suite = read("src/components/marketing/shell.tsx");
     for (const id of STUDIO_SUBS.marketing.ids) expect(suite, id).toContain(`href: "${entry(id)!.href}", label: "${entry(id)!.label}"`);
     const rail = read("src/components/assist/shell.tsx");
-    for (const id of STUDIO_SUBS.assist.ids) expect(rail, id).toContain(`href="${entry(id)!.href}" icon={`);
-    for (const id of STUDIO_SUBS.assist.ids) expect(rail, id).toContain(`label="${entry(id)!.label}"`);
+    for (const id of STUDIO_SUBS.chat.ids) expect(rail, id).toContain(`href="${entry(id)!.href}" icon={`);
+    for (const id of STUDIO_SUBS.chat.ids) expect(rail, id).toContain(`label="${entry(id)!.label}"`);
     expect(read("src/components/canvas/canvas-list.tsx")).toContain(entry("canvas-skills")!.label);
     expect(read("src/components/cinema/blockout-panel.tsx")).toContain(`>${entry("cinema-blockout")!.label}<`);
   });
@@ -120,7 +120,7 @@ describe("who sees a studio's features", () => {
     // Restore & colourise shows to everyone, labelled: it runs on a visitor's own GPU or key (own-setup.ts).
     expect(entry("video-tools-restore")!.visibility).toBeUndefined();
     for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === "video-tools-restore"), kind).toBe(true);
-    for (const id of ["canvas-skills", "assist-memory", "assist-scheduled"]) {
+    for (const id of ["canvas-skills", "chat-memory", "chat-scheduled"]) {
       expect(entry(id)!.visibility, id).toEqual(["owner"]);
       for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === id), `${kind}: ${id}`).toBe(false);
     }
@@ -254,12 +254,12 @@ describe("finding a studio's features", () => {
       return [...r.best, ...r.groups.flatMap((g) => g.hits)].map((h) => h.id);
     };
     expect(hits("owner", "skills as canvases")).toContain("canvas-skills");
-    expect(hits("owner", "scheduled")).toContain("assist-scheduled");
+    expect(hits("owner", "scheduled")).toContain("chat-scheduled");
     // Cinema Studio's Blockout is everyone's ("Cinema Studio › Blockout").
     for (const kind of [...VISITORS, "owner" as const]) expect(hits(kind, "blockout"), String(kind)).toContain("cinema-blockout");
     for (const kind of VISITORS) {
       expect(hits(kind, "skills as canvases"), String(kind)).not.toContain("canvas-skills");
-      expect(hits(kind, "assist memory"), String(kind)).not.toContain("assist-memory");
+      expect(hits(kind, "assist memory"), String(kind)).not.toContain("chat-memory");
     }
   });
 });

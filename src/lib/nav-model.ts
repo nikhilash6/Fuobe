@@ -119,8 +119,20 @@ const newFor30Days = (added: string) => new Date(Date.parse(added) + 30 * 86_400
 const PAGES: NavEntry[] = [
   { id: "home", href: "/", label: "Home", what: "Start from words or a picture", kind: "home", goals: [], keywords: "start new creation home", icon: "Home", eager: true },
   { id: "new", href: NEW_CREATION_HREF, label: "New creation", what: "A fresh composer on Home", kind: "action", goals: [], keywords: "new creation start fresh blank compose", icon: "Plus" },
-  { id: "assist", href: "/assist", label: "Assist", what: "Plan it with an agent", kind: "create", goals: [], keywords: "agent chat plan assistant ai helper", icon: "MessageCircle", eager: true },
-  { id: "chat", href: "/chat", label: "Chat", short: "Chat", what: "Talk, plan and write with AI", kind: "create", goals: [], keywords: "chat talk advice ideas roleplay characters write ask brainstorm", icon: "MessagesSquare", newUntil: newFor30Days("2026-11-07") },
+  // Chat is Assist and Fuobe Chat in one: Assist's words find it, and Assist's pages count as it (activeEntry).
+  {
+    id: "chat",
+    href: "/chat",
+    label: "Chat",
+    short: "Chat",
+    what: "Talk, plan and write with AI",
+    kind: "create",
+    goals: [],
+    keywords: "chat talk advice ideas roleplay characters write ask brainstorm assist assistant agent plan planner helper ai skills memory scheduled",
+    icon: "MessagesSquare",
+    eager: true,
+    newUntil: newFor30Days("2026-11-07"),
+  },
   { id: "image", href: "/image", label: "Image", what: "Text to image", kind: "create", goals: [], keywords: "text to image picture photo generate", cover: "app-poster", icon: "ImageIcon", eager: true, popular: true },
   { id: "video", href: "/video", label: "Video", what: "Text or image to video", kind: "create", goals: ["film"], keywords: "text to video image to video animate clip", cover: "motion-fpv-drone", icon: "Video", eager: true, popular: true },
   { id: "edit", href: "/edit", label: "Edit", what: "Change a picture with words", kind: "create", goals: ["edit"], keywords: "edit image change photo retouch", cover: "app-relight", icon: "Wand2" },
@@ -320,7 +332,7 @@ const SUB_TOOLS: NavEntry[] = [
   { id: "marketing-click-to-ad", href: "/marketing/click-to-ad", label: "Click to Ad", what: "From a product link to an ad", kind: "tool", goals: [], keywords: "product link url to ad shop page amazon", icon: "Megaphone", parent: "marketing" },
   // A tab of Marketing Studio's suite (Marketing Studio · Click to Ad · Ads Studio · Ad Multiplier), so its studio is that one.
   { id: "ads-multiplier", href: "/ads/multiplier", label: "Ad Multiplier", what: "One ad in many versions", kind: "tool", goals: [], keywords: "variations versions sizes multiply ads studio", icon: "Target", parent: "marketing" },
-  { id: "assist-skills", href: "/assist/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation", icon: "MessageCircle", parent: "assist" },
+  { id: "chat-skills", href: "/assist/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation assist", icon: "MessagesSquare", parent: "chat" },
   // An app with a page of its own that Create lists: a tool of Apps, so the bar marks Apps on its page.
   { id: "any-angle", href: "/apps/app-any-angle", label: "Any Angle", what: "See it from any angle", kind: "tool", goals: [], keywords: "angle rotate turn view camera viewpoint orbit 3d", cover: "app-any-angle", icon: "Rotate3d", parent: "apps" },
 ];
@@ -342,7 +354,7 @@ const feature = (parent: string, icon: NavIconName, id: string, href: string, la
 /**
  * The modes and tabs inside the studios that have no page of their own, each opened by its link (?mode=, ?tab=):
  * Genjutsu (src/lib/catalog/genjutsu.ts), Character Sheet, Image to 3D (src/lib/av/model3d.ts), Photodump, Cinema
- * Studio, Canvas and Assist. Labels are the studio's own (a test holds them to it).
+ * Studio, Canvas and Chat (Assist's pages). Labels are the studio's own (a test holds them to it).
  */
 const STUDIO_FEATURES: NavEntry[] = [
   ...(
@@ -374,9 +386,9 @@ const STUDIO_FEATURES: NavEntry[] = [
   ).map(([id, label, what, kw]) => feature("image-to-3d", "Box", id, `/image-to-3d?mode=${id}`, label, what, kw)),
   feature("photodump", "Camera", "instadump", "/photodump?tab=instadump", "From a selfie", "A photo pack from one selfie", "instadump selfie one photo pack instagram"),
   feature("cinema", "Clapperboard", "blockout", "/cinema?blockout=1", "Blockout", "Block a scene out in 3D", "blockout block out 3d layout previs scene"),
-  feature("canvas", "Network", "skills", "/canvas?tab=skills", "Skills as canvases", "Assist's skills, drawn as boards", "skills recipes boards assist canvas", OWNER),
-  feature("assist", "MessageCircle", "memory", "/assist/memory", "Memory", "What Assist remembers", "memory remember facts notes", OWNER),
-  feature("assist", "MessageCircle", "scheduled", "/assist/scheduled", "Scheduled", "Tasks that run on a schedule", "scheduled schedule recurring tasks", OWNER),
+  feature("canvas", "Network", "skills", "/canvas?tab=skills", "Skills as canvases", "Chat's skills, drawn as boards", "skills recipes boards assist chat canvas", OWNER),
+  feature("chat", "MessagesSquare", "memory", "/assist/memory", "Memory", "What Chat remembers", "memory remember facts notes assist", OWNER),
+  feature("chat", "MessagesSquare", "scheduled", "/assist/scheduled", "Scheduled", "Tasks that run on a schedule", "scheduled schedule recurring tasks assist", OWNER),
 ];
 
 /** The pages that show everything one of the bar's menus holds (src/lib/nav-areas.ts lays them out). */
@@ -500,7 +512,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [...PAGES, ...STUDIOS, ...HUB_TO
  * starts from them). Storyboard plans a film, so it sits with Make (its card is in the launcher's Film column).
  */
 export const CREATE_COLUMNS = [
-  { label: "Make", ids: ["image", "video", "assist", "chat", "canvas", "storyboard"] },
+  { label: "Make", ids: ["image", "video", "chat", "canvas", "storyboard"] },
   { label: "Edit a picture", ids: ["edit", "live-edit", "inpaint", "layers", "color-grade"] },
 ] as const;
 
@@ -739,7 +751,7 @@ export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
   "character-sheet": { ids: ["character-sheet-reference", "character-sheet-cast", "character-sheet-describe"], menu: 0 },
   cinema: { ids: ["cinema-blockout"], menu: 0 },
   canvas: { ids: ["canvas-skills"] },
-  assist: { ids: ["assist-skills", "assist-memory", "assist-scheduled"] },
+  chat: { ids: ["chat-skills", "chat-memory", "chat-scheduled"] },
 };
 
 /**
@@ -810,6 +822,8 @@ export function goalBand(id: GoalId, kind: ViewerKind | undefined): { goal: Goal
 /** Entries that are pages of their own (no actions, no settings sections, nothing off the site). */
 const ROUTES = NAV_ENTRIES.filter((e) => e.kind !== "tool" && e.kind !== "action" && e.href.startsWith("/") && !e.href.includes("#"));
 const ROUTE_HREFS = ROUTES.map((e) => e.href);
+/** /assist and every page under it. */
+const ASSIST_PATH = /^\/assist(?:\/|$)/;
 
 /**
  * The page the path is on: the entry whose link matches best (navActive, with every other page as a sibling, so
@@ -817,6 +831,8 @@ const ROUTE_HREFS = ROUTES.map((e) => e.href);
  * pages count as the studio (/audio/clean is Audio, /marketing/click-to-ad is Marketing Studio).
  */
 export function activeEntry(pathname: string, search: URLSearchParams): NavEntry | undefined {
+  // Assist's pages, while they still answer, are Chat's (Assist became Chat): the bar and the tabs mark Chat there.
+  if (ASSIST_PATH.test(pathname)) return byId.get("chat");
   let best: NavEntry | undefined;
   for (const e of ROUTES) {
     if (!navActive(e.href, pathname, search, ROUTE_HREFS)) continue;

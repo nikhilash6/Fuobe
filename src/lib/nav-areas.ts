@@ -127,8 +127,8 @@ export const PILL_ONLY: readonly string[] = ["canvas", "layers", "explainer", "v
  */
 function createSections(): AreaSection[] {
   const [make, editPicture] = CREATE_COLUMNS;
-  // Make's own column, less what has a section of its own (Image and Video lead) and Assist and Chat (items of the bar).
-  const makeRest = make.ids.filter((id) => !["image", "video", "assist", "chat"].includes(id));
+  // Make's own column, less what has a section of its own (Image and Video lead) and Chat (an item of the bar).
+  const makeRest = make.ids.filter((id) => !["image", "video", "chat"].includes(id));
   return [
     {
       id: "make",
@@ -255,9 +255,9 @@ export function rankCards(ids: readonly string[], band: (cover: string) => numbe
 const NO_SEARCH = new URLSearchParams();
 
 /**
- * The bar item that holds a page, one per page: Create for its tools (not Canvas, Assist or Chat, which have items of
- * their own), Studios for a studio and its tools, Apps for the apps, Motions & effects for both galleries, Fuobe FX
- * for its studios (FX_HOME); and each for its own area page. None for Home, Canvas, Assist, Chat, Library and settings.
+ * The bar item that holds a page, one per page: Create for its tools (not Canvas or Chat, which have items of their
+ * own), Studios for a studio and its tools, Apps for the apps, Motions & effects for both galleries, Fuobe FX
+ * for its studios (FX_HOME); and each for its own area page. None for Home, Canvas, Chat (Assist's pages too), Library and settings.
  */
 export function areaOfPath(pathname: string): AreaId | undefined {
   const e = pathname ? activeEntry(pathname, NO_SEARCH) : undefined;
@@ -266,7 +266,7 @@ export function areaOfPath(pathname: string): AreaId | undefined {
   if (own) return own.id;
   if (e.id === "motions" || e.id === "effects") return "motions";
   if (inFx(e)) return "fx";
-  if (e.kind === "create" && e.id !== "canvas" && e.id !== "assist" && e.id !== "chat") return "create";
+  if (e.kind === "create" && e.id !== "canvas" && e.id !== "chat") return "create";
   if (e.kind === "studio") return "studios";
   return undefined;
 }
