@@ -717,7 +717,9 @@ export const WORKER_JOBS_KEEP_MS = 365 * 24 * 60 * 60_000;
  * that runs its waiting jobs, until its lease lapses) and what its tab said about its ComfyUI. relay_tasks: one per
  * ComfyUI job of a run on someone's computer, with the graph as the server built it and where the job is. relay_inputs:
  * the files staged for a job, under the names ComfyUI gets. worker_jobs: which worker took which task and when, and what
- * became of it (rows are only added; each is kept a year, like the admin API's log). Safe to run on every start.
+ * became of it (rows are only added; each is kept a year, like the admin API's log). worker_events: each worker's state
+ * changes, handoffs, stages, claims, admin actions and its own log lines (worker-events.ts; pruned after 7 or 30 days).
+ * Safe to run on every start.
  */
 export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     principal TEXT PRIMARY KEY,
@@ -846,7 +848,27 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
   CREATE TRIGGER IF NOT EXISTS worker_jobs_no_update BEFORE UPDATE ON worker_jobs BEGIN SELECT RAISE(ABORT, 'worker_jobs only grows'); END;
   CREATE TRIGGER IF NOT EXISTS worker_jobs_kept BEFORE DELETE ON worker_jobs
     WHEN OLD.at > CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${WORKER_JOBS_KEEP_MS}
-    BEGIN SELECT RAISE(ABORT, 'worker_jobs rows are kept a year'); END;`;
+    BEGIN SELECT RAISE(ABORT, 'worker_jobs rows are kept a year'); END;
+  CREATE TABLE IF NOT EXISTS worker_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    worker_id TEXT,
+    worker_name TEXT,
+    kind TEXT NOT NULL,
+    event TEXT NOT NULL,
+    words TEXT,
+    task_id TEXT,
+    generation_id TEXT,
+    lane TEXT,
+    state TEXT,
+    detail_json TEXT
+  );
+  CREATE INDEX IF NOT EXISTS worker_events_at ON worker_events(at);
+  CREATE INDEX IF NOT EXISTS worker_events_kind_at ON worker_events(kind, at);
+  CREATE INDEX IF NOT EXISTS worker_events_worker ON worker_events(worker_id, id);
+  CREATE INDEX IF NOT EXISTS worker_events_worker_kind ON worker_events(worker_id, kind, id);
+  CREATE INDEX IF NOT EXISTS worker_events_task ON worker_events(task_id);
+  CREATE INDEX IF NOT EXISTS worker_events_generation ON worker_events(generation_id);`;
 
 /**
  * The optional external services' tables (billing.ts, moderation.ts). billing_outbox: every settle, refund and release
@@ -1088,6 +1110,9 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_workers", "cpu_slot_json", "TEXT"],
   // Why a worker that may work doesn't start the line's work now, as its last beat said (WorkerBeat.holding; NULL: none).
   ["relay_workers", "holding_json", "TEXT"],
+  // A worker's last claim for its GPU's slot, and the answer in words (pool.ts workerClaim).
+  ["relay_workers", "asked_at", "INTEGER"],
+  ["relay_workers", "asked_words", "TEXT"],
 ];
 
 declare global {

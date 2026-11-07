@@ -43,7 +43,7 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `outputs:hide` | `POST /api/admin/outputs/hide` |
 | `outputs:moderate` | `POST /api/admin/outputs/hide`, `/unhide` and `/remove` |
 | `reports:read` | `GET /api/admin/reports` (reporters' emails only with `accounts:read`) |
-| `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/jobs` |
+| `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/jobs`, `GET /api/admin/workers/events` |
 | `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
 | `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings` |
@@ -117,10 +117,11 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000), `pausedBudgetS` (seconds, 0 to 604800) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
 | `GET /api/admin/site/uploads` | | `{ switches: { soundConvert, soundTrim, videoTrim, photoConvert, photoCrop } }`: what a browser may do to a file that doesn't fit a tool before it is uploaded (convert a sound to MP3, offer a part of a sound or clip, convert or shrink a photo, offer a crop). All `true` by default. Every visitor reads the same values at `GET /api/site/uploads` |
 | `PATCH /api/admin/site/uploads` | any of the five, each `true` or `false` | `{ switches }`; 400 with the reason for an unknown switch or a value that isn't a boolean. A switch that is off leaves that kind of file as it is: the tool says why it can't take it, and the server's checks apply. Browsers pick it up when they next load a page |
-| `GET /api/admin/workers` | | `{ workers, lanes }` |
+| `GET /api/admin/workers` | | `{ workers, lanes }`. Each worker adds `asked: { at, words }` or null, `jobs` (each job it holds: `{ taskId, generationId, slot, lane, laneLabel, stage, state, claimedAt, startedAt, progress, progressAt, typicalMs, etaS, owners, feature?, modelName? }`) and `lastEvent: { at, kind, event, words }` or null |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
 | `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
 | `GET /api/admin/workers/jobs` | `before`, `limit` (1 to 200, 50), `worker`, `generation` | `{ items, next }`: the workers' log, newest first. Each item: `{ id, at, event, workerId, workerName, taskId, generationId, principal, lane, execMs, device }` ([gpu-workers.md](gpu-workers.md)) |
+| `GET /api/admin/workers/events` | `worker`, `kinds` (a comma list of `state`, `job`, `stage`, `looking`, `admin`, `version`, `log`; all when not given), `before`, `after`, `generation`, `limit` (1 to 500, 100) | `{ items, next, latest }`: the workers' timeline, newest first. Each item: `{ id, at, workerId, workerName, kind, event, words, taskId, generationId, lane, laneLabel, state, detail }`. `next` pages back (as `before`); `latest` is the newest row id (as `after`, for new rows only) ([gpu-workers.md](gpu-workers.md)) |
 | `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner`, `token` or `system`), `token` (a token id), `action`, `changes=1` (changes only: no reads, file views or refusals) | `{ items, next }` |
 | `GET /api/admin/tokens/self` | | `{ id, name, prefix, scopes, expiresAt, createdAt }` |
 

@@ -25,7 +25,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/work
   const action = body.revoke ? "worker.revoke" : body.rotate ? "worker.rotate" : "worker.change";
   const keys = KEYS.filter((k) => k in body);
   try {
-    const r = patchWorker(id, body);
+    const r = patchWorker(id, body, Date.now(), access.actor.kind === "token" ? access.actor.name : "owner");
     if (!r.view && !body.revoke) {
       audit(access.actor, action, id, { keys }, 404);
       return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });

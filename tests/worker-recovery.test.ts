@@ -610,6 +610,40 @@ http.createServer((q, s) => { s.writeHead(200, { "content-type": "application/js
   });
 });
 
+describe("the worker's timeline", () => {
+  it("its log lines reach the studio masked, each in one beat; its job's handoffs and stages are rows in order", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const beats: { lines: { at: number; level: string; line: string }[] }[] = [];
+    s.intercept = (path, init) => {
+      if (path === "/api/gpu/computer/beat") beats.push({ lines: (JSON.parse(String(init.body)) as { log?: { at: number; level: string; line: string }[] }).log ?? [] });
+      return undefined;
+    };
+    const { id } = addTask();
+    start(w, s, p, { steps: 4, stepMs: 100 });
+    expect((await ended(id)).state).toBe("done");
+    await until(() => p.logs.some((l) => l.includes(`Job ${id} done`)));
+    await until(() => beats.some((b) => b.lines.some((l) => l.line.includes(`Job ${id} done`))));
+    // Each line went in one beat only (each beat got a 2xx), oldest first, never more than 40 a beat.
+    const sent = beats.flatMap((b) => b.lines);
+    expect(beats.every((b) => b.lines.length <= 40)).toBe(true);
+    expect(new Set(sent.map((l) => `${l.at} ${l.line}`)).size).toBe(sent.length);
+    const rows = db().prepare("SELECT kind, event, words, task_id FROM worker_events WHERE worker_id = ? ORDER BY id").all(w.id) as { kind: string; event: string; words: string; task_id: string | null }[];
+    const logs = rows.filter((r) => r.kind === "log").map((r) => r.words);
+    expect(logs).toContain(`Job ${id} done.`);
+    // No folder of this PC leaves it.
+    for (const folder of [p.workDir, p.comfyDir, p.home]) expect(JSON.stringify({ sent, logs })).not.toContain(folder.replace(/\\/g, "\\\\"));
+    expect(rows.filter((r) => r.kind === "job" && r.task_id === id).map((r) => r.event)).toEqual(["claimed", "finished", "done"]);
+    const stages = rows.filter((r) => r.kind === "stage" && r.task_id === id).map((r) => r.event);
+    expect(stages[0]).toBe("sending");
+    expect(stages.at(-1)).toBe("saving");
+    // Started on its ComfyUI: loading its model (taken cold) until a step reports, then running.
+    expect(stages.slice(1, -1).filter((x) => x === "loading" || x === "running").length).toBeGreaterThan(0);
+    expect(stages).toContain("queued");
+  });
+});
+
 describe("new worker code", () => {
   /** A watch on a checkout of its own (its parts taken as whole) and the PC's home folder, looked at every turn. */
   function watch(p: Pc) {

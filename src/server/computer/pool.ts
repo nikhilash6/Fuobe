@@ -12,9 +12,11 @@ import { loadIndex } from "../gpu/index-file";
 import { hostedRunsOn } from "../hosted-switch";
 import { heldView } from "../pool-holds";
 import { catalogVersion } from "./catalog-version";
-import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteCold, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, taskCold, type TaskRow } from "./tasks";
+import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteCold, noteProgress, noteStage, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, stageOf, takeTask, taskById, taskCold, taskProgress, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
+import { modelLabel } from "./queue-live";
+import { cleanLogLines, lastEventOf, lastOfKind, logWorkerEvent, logWorkerEvents, setEventNames, type NewWorkerEvent, type WorkerEventKind } from "./worker-events";
 
 /**
  * Workers (docs/gpu-workers.md): the owner's GPUs on other machines, each running `fuobe worker`, which pulls jobs from
@@ -258,6 +260,8 @@ export function cleanBeat(b: unknown): WorkerBeat {
     cpuSlot: cleanCpuSlot(o.cpuSlot),
     cpuRunning: Array.isArray(o.cpuRunning) ? (o.cpuRunning.slice(0, MAX_RUNNING) as WorkerBeat["running"]) : [],
     ...(cleanHolding(o.holding) && { holding: cleanHolding(o.holding) }),
+    // Its own log lines, masked again here (worker-events.ts); an older worker sends none.
+    ...(Array.isArray(o.log) && o.log.length > 0 && { log: cleanLogLines(o.log) }),
   };
 }
 
@@ -284,6 +288,8 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
   return d.transaction(() => {
     // A worker back after going silent finds its task back in line first (its lease no longer works).
     sweepPool(now);
+    // Its saved state and version before this beat: a timeline row only when either changes.
+    const before = d.prepare("SELECT state, version FROM relay_workers WHERE id = ?").get(w.id) as Pick<WorkerRow, "state" | "version"> | undefined;
     const facts = b.facts ? { ...b.facts, loras: undefined } : undefined;
     d.prepare(
       `UPDATE relay_workers SET seen_at = ?, device = ?, protocol = ?, version = ?, paused_local = ?, local_why = ?, local_until = ?,
@@ -330,18 +336,28 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       const held = new Set(b.held ?? []);
       // Another program on its GPU stops only its GPU's job: its CPU slot's task needs no GPU, and goes on.
       const gpuOnly = !fresh.stop_now && b.local.why !== "here-now";
+      const sentBack = fresh.stop_now ? "paused now on the website" : b.local.why === "here-now" ? "paused now on its PC" : "another program took its GPU";
       for (const t of d.prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(w.id) as TaskRow[]) {
         if (gpuOnly && t.device === slotDevice(w, "cpu")) continue;
         // Its result is being saved, or the worker keeps the finished results on its disk (the studio may not have heard
         // that it finished): let it send them, which needs no GPU, instead of running the job again.
         if (t.state === "collecting" || held.has(t.id)) continue;
-        backInLine(t, { blame: false });
+        backInLine(t, { blame: false, sentBack });
         stops.push({ task: t.id, promptId: t.prompt_id, ...(t.prefix && { prefix: t.prefix }) });
       }
       d.prepare("UPDATE relay_workers SET stop_now = 0 WHERE id = ?").run(w.id);
     }
     const state = workerState(fresh, now);
-    d.prepare("UPDATE relay_workers SET state = ? WHERE id = ?").run(state.state, w.id);
+    if (state.state !== before?.state) {
+      d.prepare("UPDATE relay_workers SET state = ? WHERE id = ?").run(state.state, w.id);
+      logWorkerEvent({ kind: "state", event: state.state, workerId: w.id, words: state.words, state: state.state, detail: { from: before?.state ?? null } }, now);
+    }
+    // Best-effort from here: the timeline never fails a beat.
+    const rows: NewWorkerEvent[] = [];
+    if (before?.version && b.version && before.version !== b.version) rows.push({ kind: "version", event: "updated", workerId: w.id, words: `Worker program updated to ${b.version}`, detail: { from: before.version, to: b.version } });
+    // Its PC's clock may run ahead of the studio's: never later than now.
+    for (const l of b.log ?? []) rows.push({ kind: "log", event: l.level, workerId: w.id, words: l.line, at: Math.min(l.at, now) });
+    logWorkerEvents(rows, now);
     // A worker that says it saves a new token (`canRotateToken` in its beat) gets its next one when half its token's life
     // is gone. (Not by its protocol number: a worker may speak a newer protocol without saving tokens.)
     const nextToken = b.canRotateToken ? offerNextToken(fresh, now) : null;
@@ -506,10 +522,41 @@ export function workerClaim(w: WorkerRow, running: string[], now = Date.now(), s
     const held = d.prepare(`SELECT * FROM relay_tasks WHERE worker_id = ? AND device = ? AND state IN ('sending','queued','running','collecting') AND stop = 0 ORDER BY ${LINE_ORDER}`).all(fresh.id, device) as TaskRow[];
     const mine = held.find((t) => !running.includes(t.id));
     if (mine) return claimed(mine, fresh, device, now);
-    if (held.length || !eligible(fresh, now)) return null;
-    const t = pick(fresh, now, slot);
+    if (held.length) return null;
+    if (!eligible(fresh, now)) {
+      if (slot === "gpu") noteAsked(fresh, "blocked", `Asked for work: not taking work (${blockedWhy(fresh, now)})`, now);
+      return null;
+    }
+    const { task: t, looked } = pick(fresh, now, slot);
+    const many = `${looked}${looked >= LOOK_AT ? "+" : ""}`;
+    if (slot === "gpu") noteAsked(fresh, t ? "found" : "nothing", t ? `Asked for work: took 1 of ${many} waiting` : looked ? `Asked for work: ${many} waiting, none it can run now` : "Asked for work: nothing waiting", now, { waiting: looked });
     return t ? claimed(t, fresh, device, now) : null;
   }).immediate();
+}
+
+/** Why a worker may not take work now, in a few words (its claim's answer). */
+function blockedWhy(w: WorkerRow, now: number): string {
+  if (w.revoked_at || (w.expires_at && w.expires_at <= now)) return "its token no longer works";
+  if (w.paused_server) return "paused on the website";
+  if (w.paused_local) return "paused on its PC";
+  if (w.drain) return "draining";
+  if ((w.protocol ?? 0) < MIN_PROTOCOL) return "its worker program is too old";
+  if (!w.seen_at || now - w.seen_at > FRESH_BEAT_MS) return "no recent beat";
+  if (!hoursAt(hoursOf(w), now).inside) return "outside its hours";
+  return "not taking work";
+}
+
+/**
+ * A claim of its GPU's slot and its answer: saved on the worker (asked_at, asked_words) at every claim, and a `looking`
+ * row when the answer differs from its last one (found, nothing, or blocked for another reason). Best-effort.
+ */
+function noteAsked(w: WorkerRow, answer: "found" | "nothing" | "blocked", words: string, now: number, detail: Record<string, unknown> = {}): void {
+  try {
+    db().prepare("UPDATE relay_workers SET asked_at = ?, asked_words = ? WHERE id = ?").run(now, words, w.id);
+    const last = lastOfKind(w.id, "looking");
+    if (last && last.event === answer && (answer !== "blocked" || last.words === words)) return;
+    logWorkerEvent({ kind: "looking", event: answer, workerId: w.id, words, detail }, now);
+  } catch {}
 }
 
 function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): ClaimedTask {
@@ -526,6 +573,7 @@ function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): Claimed
   // A GPU job taken by a worker with another model loaded (or none) loads its model first: it is "getting ready" until
   // its first step reports. A light CPU job and a finishing job load none.
   if (t.state === "waiting" && t.pools && t.slot !== "cpu" && !t.finish_json && !!t.lane && w.warm_lane !== t.lane) noteCold(t.id, now);
+  if (t.state === "waiting") noteStage(t.id, now, { slot: device.endsWith("-cpu") ? "cpu" : "gpu" }, true);
   // A job given back once for running past its limit gets the whole run ceiling on its next try (a lane's times may
   // come from shorter jobs than this one); past that, it fails. Light CPU work has the same limits in either slot. A
   // finishing job has its lane's run ceiling (queue-settings.ts, the owner's to set).
@@ -612,19 +660,20 @@ function beforeWindowEnds(t: TaskRow, w: WorkerRow, now: number): boolean {
  * the best one, in the same class, while the best one has waited less than the pick allowance (the install's setting,
  * capped by this worker's switch_after_ms; 0: strict order).
  */
-function pick(w: WorkerRow, now: number, slot: WorkerSlot = "gpu"): TaskRow | null {
+function pick(w: WorkerRow, now: number, slot: WorkerSlot = "gpu"): { task: TaskRow | null; looked: number } {
   const settings = queueSettings(now);
   // Each slot looks only at its own tasks.
   const rows = db()
     .prepare(`SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ${slotWhere(w, slot)}ORDER BY ${LINE_ORDER} LIMIT ?`)
     .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
+  const looked = rows.length;
   const ok = lineOrder(rows, settings.fairShare).filter((t) => fitsSlot(t, w, now, slot) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
-  if (!ok.length) return null;
+  if (!ok.length) return { task: null, looked };
   const best = ok[0];
   const allowance = Math.min(w.switch_after_ms, settings.pickAllowanceMs);
-  if (slot === "cpu" || allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane) return best;
+  if (slot === "cpu" || allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane) return { task: best, looked };
   const warm = ok.find((t) => t.lane === w.warm_lane && classRank(t) === classRank(best));
-  return warm && (best.rank_at ?? best.created_at) >= now - allowance ? warm : best;
+  return { task: warm && (best.rank_at ?? best.created_at) >= now - allowance ? warm : best, looked };
 }
 
 /**
@@ -705,7 +754,7 @@ const OWNER_STOP_WORDS = {
   other: "The GPUs couldn't finish this run. Press Retry.",
 };
 
-export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; whyKind?: "silent" | "down" | "stuck"; last?: boolean; lostAt?: number }): boolean {
+export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; whyKind?: "silent" | "down" | "stuck"; last?: boolean; lostAt?: number; sentBack?: string }): boolean {
   const d = db();
   return d.transaction((): boolean => {
     const now = taskById(t.id);
@@ -716,7 +765,7 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; whyKin
       endTask(t.id, "failed", { error: o.why ?? stoppedWords(o.whyKind ?? "other", requeues), requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
       return true;
     }
-    if (t.worker_id) logWorkerJob("requeued", t, t.worker_id);
+    if (t.worker_id) logWorkerJob("requeued", t, t.worker_id, Date.now(), {}, { ...(o.sentBack && { why: o.sentBack }), tries: requeues });
     // A live worker that let it go hears the stop in its beat answer; one that went silent finds its lease gone when it
     // comes back (409), and takes the prompt off its own ComfyUI. It keeps its rank, so it keeps its place in line, and
     // its wait limit no longer applies (a worker took it once).
@@ -770,11 +819,32 @@ function sweepLine(d: ReturnType<typeof db>, now: number): void {
     const sendingSince = t.sending_since ?? t.claimed_at;
     const stuck = t.state === "sending" && !!sendingSince && now - sendingSince > SENDING_MS;
     if (silent || down || stuck) {
-      backInLine(t, { blame: true, whyKind: silent ? "silent" : down ? "down" : "stuck", ...(silent && !t.w_revoked && { lostAt: now }) });
+      const sentBack = t.w_revoked ? "its token was revoked" : silent ? "went silent" : down ? "its ComfyUI stopped answering" : "still sending its files after 15 min";
+      backInLine(t, { blame: true, whyKind: silent ? "silent" : down ? "down" : "stuck", sentBack, ...(silent && !t.w_revoked && { lostAt: now }) });
     }
   }
   const late = d.prepare("SELECT id FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND claimed_at IS NULL AND not_after IS NOT NULL AND not_after < ?").all(now) as { id: string }[];
   for (const t of late) endTask(t.id, "failed", { error: ENGINE_WORDS["long-wait"] });
+  noteSilentWorkers(now);
+}
+
+/**
+ * Workers silent past the silence limit whose saved state isn't "offline" yet: saved as offline, with a state row (at
+ * the moment the limit passed). A look at the few rows of relay_workers. Best-effort.
+ */
+export function noteSilentWorkers(now = Date.now()): void {
+  try {
+    const d = db();
+    const gone = d
+      .prepare("SELECT id, state, seen_at FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL AND seen_at IS NOT NULL AND seen_at < ? AND state != 'offline'")
+      .all(now - RELAY_TIMES.poolSilentMs) as Pick<WorkerRow, "id" | "state" | "seen_at">[];
+    for (const w of gone) {
+      if (d.prepare("UPDATE relay_workers SET state = 'offline' WHERE id = ? AND state = ?").run(w.id, w.state).changes === 0) continue;
+      logWorkerEvent({ kind: "state", event: "offline", workerId: w.id, words: "Offline", state: "offline", detail: { from: w.state, seenAt: w.seen_at }, at: Math.min(now, w.seen_at! + RELAY_TIMES.poolSilentMs) }, now);
+    }
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't note silent workers: ${(e as Error).message}`);
+  }
 }
 
 /** The longest sleep a worker's beat may report (a week). */
@@ -844,25 +914,34 @@ setPoolGiveBack((t, why) => {
         const { claimedBefore, claimFor, ...rest } = json<Record<string, unknown>>(t.extra_json, {});
         const extra = { ...rest, refusedBy: [...new Set([...refusedBy(t), ...(w ? [refusalKey(w)] : [])])].slice(-64) };
         const untouched = typeof claimFor === "number" && claimFor === t.claimed_at && t.state === "sending" && !t.sent_at && !t.started_at;
-        if (!backInLine(t, untouched ? { blame: false } : { blame: true, why: GAVE_BACK_WORDS })) return;
+        const sentBack = why === "update-worker" ? "its ticket is for another catalog than the worker's" : "more than its PC runs";
+        if (!backInLine(t, untouched ? { blame: false, sentBack } : { blame: true, why: GAVE_BACK_WORDS, sentBack })) return;
         if (taskById(t.id)?.state !== "waiting") return;
         setTask(t.id, { extra_json: JSON.stringify(extra), ...(untouched && { claimed_at: typeof claimedBefore === "number" ? claimedBefore : null }) });
       })
       .immediate();
     return;
   }
+  const sentBack = GIVE_BACK_WORDS[why] ?? "the worker gave it back";
   if (why === "run-limit") {
-    if (runLimitedOf(t)) return backInLine(t, { blame: true, why: GAVE_BACK_WORDS, last: true });
+    if (runLimitedOf(t)) return backInLine(t, { blame: true, why: GAVE_BACK_WORDS, last: true, sentBack });
     setTask(t.id, { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), runLimited: true }) });
   }
-  backInLine(t, { blame: true, why: GAVE_BACK_WORDS });
+  backInLine(t, { blame: true, why: GAVE_BACK_WORDS, sentBack });
 });
 
 /**
  * A worker's ComfyUI lost its task twice on one claim (each loss sends it again once): it goes back in line with its
  * place kept, and counts as an attempt, so another worker is preferred and the third attempt fails it.
  */
-setPoolLost((t) => backInLine(t, { blame: true }));
+setPoolLost((t) => backInLine(t, { blame: true, sentBack: "its ComfyUI lost it twice" }));
+
+/** Why a worker gave a job back, in the timeline's words. */
+const GIVE_BACK_WORDS: Record<string, string> = {
+  stalled: "it stalled",
+  "run-limit": "it ran past its run limit",
+  media: "the worker can't make its clips or sound again",
+};
 
 // ---------------------------------------------------------------------------
 // Place in line and the wait (4.4)
@@ -1318,6 +1397,76 @@ export interface WorkerView {
   lastCountry: string | null;
   createdAt: number;
   current: { taskId: string; generationId: string; lane: string | null; startedAt: number | null } | null;
+  /** Its last claim for its GPU's slot and the answer in words (null: none yet). */
+  asked: { at: number; words: string } | null;
+  /** Every task it holds now, in both slots, the oldest claim first. */
+  jobs: ActiveJob[];
+  /** Its timeline's newest row other than a log line (null: none). */
+  lastEvent: { at: number; kind: WorkerEventKind; event: string; words: string | null } | null;
+}
+
+/** A task a worker holds now: where it is, and how long it should take. No prompt, no account's details. */
+export interface ActiveJob {
+  taskId: string;
+  generationId: string;
+  slot: WorkerSlot;
+  lane: string | null;
+  laneLabel: string | null;
+  stage: string | null;
+  state: string;
+  claimedAt: number | null;
+  startedAt: number | null;
+  progress: { value?: number; max?: number; node?: string; nodesDone?: number; position?: number; cold?: boolean } | null;
+  progressAt: number | null;
+  /** How long a job like it takes on this worker (its lane's bench, the task's estimate, or the lane's typical run). */
+  typicalMs: number | null;
+  /** About how long until it is done, from typicalMs and its start (null: unknown). */
+  etaS: number | null;
+  owners: "owner" | "account";
+  feature?: string;
+  modelName?: string;
+}
+
+/** A lane's label from the catalog's lanes (worked out once per index). */
+export const laneLabelOf = (lane: string | null | undefined): string | null => {
+  if (!lane) return null;
+  return catalogLanes().lanes.find((l) => l.lane === lane)?.label ?? (lane === "small" ? "Small jobs" : lane);
+};
+
+setEventNames({
+  lane: laneLabelOf,
+  run: (generationId) => modelLabel((db().prepare("SELECT model_id FROM generations WHERE id = ?").get(generationId) as { model_id: string } | undefined)?.model_id),
+});
+
+type ActiveRow = Pick<TaskRow, "id" | "generation_id" | "lane" | "state" | "device" | "slot" | "finish_json" | "claimed_at" | "started_at" | "progress_json" | "account" | "est_ms">;
+
+function activeJobs(w: WorkerRow, rows: ActiveRow[], now: number, typical: (lane: string | null) => number | null): ActiveJob[] {
+  const gen = db().prepare("SELECT feature, model_id FROM generations WHERE id = ?");
+  return rows.map((t) => {
+    const p = taskProgress(t);
+    const typicalMs = estOn(t as TaskRow, w) ?? typical(t.lane);
+    const g = gen.get(t.generation_id) as { feature: string | null; model_id: string | null } | undefined;
+    const model = modelLabel(g?.model_id);
+    const progress = p ? Object.fromEntries((["value", "max", "node", "nodesDone", "position", "cold"] as const).filter((k) => p[k] !== undefined).map((k) => [k, p[k]])) : null;
+    return {
+      taskId: t.id,
+      generationId: t.generation_id,
+      slot: t.device?.endsWith("-cpu") ? "cpu" : "gpu",
+      lane: t.lane,
+      laneLabel: laneLabelOf(t.lane),
+      stage: stageOf(t),
+      state: t.state,
+      claimedAt: t.claimed_at,
+      startedAt: t.started_at,
+      progress,
+      progressAt: p?.at ?? null,
+      typicalMs,
+      etaS: typicalMs ? Math.max(0, Math.round(((t.started_at ?? now) + typicalMs - now) / 1000)) : null,
+      owners: t.account ? "account" : "owner",
+      ...(g?.feature && { feature: g.feature }),
+      ...(model && { modelName: model }),
+    };
+  });
 }
 
 /** The packs a worker said its ComfyUI didn't load, each with the workflows that need one of those classes. */
@@ -1336,11 +1485,13 @@ export function unloadedPacks(inv: Inventory): WorkerView["unloaded"] {
     .sort((a, b) => a.pack.localeCompare(b.pack));
 }
 
-export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
+export function workerView(w: WorkerRow, now = Date.now(), typical: (lane: string | null) => number | null = memo(typicalPoolMs)): WorkerView {
   const s = workerState(w, now);
-  const cur = db().prepare("SELECT id, generation_id, lane, started_at FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting') LIMIT 1").get(w.id) as
-    | { id: string; generation_id: string; lane: string | null; started_at: number | null }
-    | undefined;
+  const held = db()
+    .prepare("SELECT id, generation_id, lane, state, device, slot, finish_json, claimed_at, started_at, progress_json, account, est_ms FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting') ORDER BY claimed_at, id")
+    .all(w.id) as ActiveRow[];
+  // `current` as before: its GPU's job (else its only job).
+  const cur = held.find((t) => !t.device?.endsWith("-cpu")) ?? held[0];
   return {
     id: w.id,
     name: w.name,
@@ -1372,11 +1523,17 @@ export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
     lastCountry: w.last_country,
     createdAt: w.created_at,
     current: cur ? { taskId: cur.id, generationId: cur.generation_id, lane: cur.lane, startedAt: cur.started_at } : null,
+    asked: w.asked_at && w.asked_words ? { at: w.asked_at, words: w.asked_words } : null,
+    jobs: activeJobs(w, held, now, typical),
+    lastEvent: lastEventOf(w.id),
   };
 }
 
 export function listWorkers(now = Date.now()): WorkerView[] {
-  return (db().prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL ORDER BY created_at").all() as WorkerRow[]).map((w) => workerView(w, now));
+  // A worker that went silent shows as offline in its timeline too, even when nothing else swept the line since.
+  noteSilentWorkers(now);
+  const typical = memo(typicalPoolMs);
+  return (db().prepare("SELECT * FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL ORDER BY created_at").all() as WorkerRow[]).map((w) => workerView(w, now, typical));
 }
 
 /** Add a worker: paused on the website, with no hours and no lanes. Its token is shown once. */
@@ -1405,7 +1562,7 @@ export interface WorkerPatch {
 /** A worker's token stops at once, and its tasks go back in line at once (not the worker's fault). */
 function revokePoolWorker(id: string, now: number): void {
   revokeWorker(id, now);
-  for (const t of db().prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(id) as TaskRow[]) backInLine(t, { blame: false });
+  for (const t of db().prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(id) as TaskRow[]) backInLine(t, { blame: false, sentBack: "its token was revoked" });
 }
 
 /**
@@ -1416,18 +1573,22 @@ export function revokeAllWorkers(now = Date.now()): number {
   const d = db();
   return d.transaction(() => {
     const ids = (d.prepare("SELECT id FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL").all() as { id: string }[]).map((r) => r.id);
-    for (const id of ids) revokePoolWorker(id, now);
+    for (const id of ids) {
+      revokePoolWorker(id, now);
+      noteAdmin(id, [["revoke", "Token revoked: everyone was signed out"]], "owner", now);
+    }
     return ids.length;
   })();
 }
 
 /** The owner changes a worker. Each change reaches it at its next beat. */
-export function patchWorker(id: string, p: WorkerPatch, now = Date.now()): { view: WorkerView | null; token?: string } {
+export function patchWorker(id: string, p: WorkerPatch, now = Date.now(), by = "owner"): { view: WorkerView | null; token?: string } {
   const d = db();
   const w = d.prepare("SELECT * FROM relay_workers WHERE id = ? AND kind = 'pool' AND revoked_at IS NULL").get(id) as WorkerRow | undefined;
   if (!w) return { view: null };
   if (p.revoke) {
     revokePoolWorker(id, now);
+    noteAdmin(id, [["revoke", "Token revoked"]], by, now);
     return { view: null };
   }
   const set: Record<string, unknown> = {};
@@ -1461,7 +1622,33 @@ export function patchWorker(id: string, p: WorkerPatch, now = Date.now()): { vie
   if (keys.length) d.prepare(`UPDATE relay_workers SET ${keys.map((k) => `${k} = @${k}`).join(", ")} WHERE id = @id`).run({ ...set, id });
   const token = p.rotate ? rotateWorker(id) ?? undefined : undefined;
   const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(id) as WorkerRow;
+  // The timeline: each action (an edit names its keys, never a value), then the state it leads to when it changed.
+  const actions: [string, string, Record<string, unknown>?][] = [];
+  if (p.pauseNow) actions.push(["pause-now", "Paused now on the website: its jobs go back in line"]);
+  else if (p.paused === true) actions.push(["pause", "Paused on the website"]);
+  if (p.paused === false) actions.push(["resume", "Resumed on the website"]);
+  if (p.drain === true) actions.push(["drain", "Set to finish its job, then pause"]);
+  else if (p.drain === false) actions.push(["undrain", "No longer pausing after its job"]);
+  const edited = (["autoResume", "hours", "allow", "claimAfterMs", "switchAfterMs"] as const).filter((k) => p[k] !== undefined);
+  if (edited.length) actions.push(["edit", `Settings changed: ${edited.join(", ")}`, { keys: edited }]);
+  if (token) actions.push(["rotate", "New token made"]);
+  noteAdmin(id, actions, by, now);
+  try {
+    const s = workerState(fresh, now);
+    if (s.state !== fresh.state && fresh.seen_at) {
+      d.prepare("UPDATE relay_workers SET state = ? WHERE id = ?").run(s.state, id);
+      logWorkerEvent({ kind: "state", event: s.state, workerId: id, words: s.words, state: s.state, detail: { from: fresh.state, by } }, now);
+    }
+  } catch {}
   return { view: workerView(fresh, now), ...(token && { token }) };
+}
+
+/** Admin actions in a worker's timeline, with who did them ("owner" or the admin token's name). Best-effort. */
+function noteAdmin(id: string, actions: [string, string, Record<string, unknown>?][], by: string, now: number): void {
+  logWorkerEvents(
+    actions.map(([event, words, detail]) => ({ kind: "admin", event, workerId: id, words, detail: { by, ...detail } })),
+    now,
+  );
 }
 
 /**

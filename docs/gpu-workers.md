@@ -469,6 +469,14 @@ median of the workers' measured runs). The billing service's line facts (`QueueF
 only. Rows are only added, and each is kept a year, like the admin API's log. The owner reads it at
 `GET /api/admin/workers/jobs` ([admin-api.md](admin-api.md)).
 
+**The workers' timeline.** `worker_events` keeps what each worker did, one row per change: `state` (its state changed;
+`detail.from` is the one before, and `offline` comes when it went silent), `job` (beside each row of the workers' log,
+in words: "Took a … run", "Sent back in line: went silent", "Delivered after 42 s"), `stage` (its job's stage:
+`sending`, `queued`, `loading`, `running`, `saving`), `looking` (the answer to its claims changed: `found`, `nothing` or
+`blocked`), `admin` (an action from the admin API, with who in `detail.by`), `version` (its program was updated) and
+`log` (its own log lines, from its beat). Log lines are kept 7 days, the rest 30 days. The owner reads it at
+`GET /api/admin/workers/events` ([admin-api.md](admin-api.md)).
+
 ### Job tickets and the PC's ceiling
 
 An account's run reaches a worker as a job ticket, never as a graph. The ticket names a workflow of the catalog, the
@@ -824,7 +832,7 @@ within 10 minutes of each other, each write an alert to the admin log (`worker.a
 its target), at most once an hour each.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
-  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept?, catalogVersion?, ceiling?, holding? }`. The answer
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept?, catalogVersion?, ceiling?, holding?, log? }`. The answer
   adds `worker: { paused, pauseNow, drain, autoResume, insideHours, nextChangeAt, lanes, lanesInside, minProtocol,
   sendInventory, token?, tokenExpiresAt?, catalogVersion? }` (`token`: the next token, above; `tokenExpiresAt`: when
   the token ends, for a token with a lifetime; `lanesInside`: the allowed lanes inside the PC's ceiling;
@@ -833,6 +841,11 @@ its target), at most once an hour each.
     waits that it could take: `starting-comfy`, `waiting-for-yield`, `local-work` (the owner's job waits for local
     ComfyUI work to finish), `gpu-check`, `updating` (it restarts on new code after its job) or `sending-kept`;
     `task` names a job it took that waits. A beat without it clears it. Older workers don't send it.
+  - `log: [{ at, level, line }]` (optional): the worker's own log lines since the last beat the studio answered with a
+    2xx, oldest first, at most 40 lines of 300 characters (`level`: `info`, `warn` or `error`). The worker keeps the last
+    200 lines and drops them once a beat that carried them gets a 2xx. Both sides mask each line: no tokens, keys,
+    bearer strings or emails, no full file paths (a model file keeps its name, anything else reads `[file]`), and URLs
+    without their query. Older studios ignore it.
   - `catalogVersion` and `ceiling` say the catalog its build composes job tickets for and what its PC may ever run
     (see "Job tickets and the PC's ceiling"). The facts it sends with its ComfyUI's add `gpuGen`, its GPU's
     generation (compute capability), when nvidia-smi can say.
@@ -917,7 +930,10 @@ Each worker counts against its own rate limits, so three workers that beat every
 - `GET /api/admin/workers` and `POST /api/admin/workers` (`{ name, pool? }`; the answer shows the token once). Each
   worker shows its PC's `ceiling`, the allowed lanes inside it (`lanesInside`), its `catalogVersion` and whether that
   is the studio's (`catalogCurrent`). Its state is `update-worker` while it is built from another catalog and accounts'
-  runs may come to the install's GPUs.
+  runs may come to the install's GPUs. `asked` is its last claim for its GPU and the answer in words, `jobs` every job it
+  holds now in either slot (stage, progress, typical run and ETA; `current` stays its GPU's job), and `lastEvent` the
+  newest row of its timeline other than a log line.
+- `GET /api/admin/workers/events`: the workers' timeline (above), newest first, by worker, kinds and run, in pages.
 - `PATCH /api/admin/workers/<id>`: `{ paused, pauseNow, drain, autoResume, hours, allow, claimAfterMs, switchAfterMs,
   rotate, revoke }`. Hours are `{ "always": true }` or `{ "tz": "Asia/Kolkata", "days": { "mon": [["01:00", "09:00"]] } }`.
   A window can go past midnight.

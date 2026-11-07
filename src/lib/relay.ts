@@ -288,7 +288,22 @@ export interface WorkerBeat {
    * is an older worker program): one of HOLDING_WHY's keys, since when, and the task it took, if it holds one.
    */
   holding?: WorkerHolding | null;
+  /**
+   * Its own log lines since the last beat the studio answered with a 2xx, oldest first, masked on the PC and again by the
+   * studio (src/server/computer/worker-events.ts). At most WORKER_LOG_LIMITS.perBeat lines of lineChars characters.
+   */
+  log?: WorkerLogLine[];
 }
+
+/** A worker's log line in its beat. */
+export interface WorkerLogLine {
+  at: number;
+  level: "info" | "warn" | "error";
+  line: string;
+}
+
+/** The caps on a beat's `log`: lines per beat, characters per line. */
+export const WORKER_LOG_LIMITS = { perBeat: 40, lineChars: 300 } as const;
 
 /** A worker's `holding` in its beat. */
 export interface WorkerHolding {

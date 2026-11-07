@@ -30,6 +30,7 @@ import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 import { runCeilingMs } from "../queue-settings";
 import { hostedRunsOn } from "../hosted-switch";
+import { jobWords, lastStage, logWorkerEvent, type JobStage } from "./worker-events";
 
 /**
  * "Use the ComfyUI on this computer" (DESIGN.md): the server keeps each ComfyUI job of a run on someone's computer as a
@@ -220,7 +221,14 @@ declare global {
  * measured time and device when the worker said them. Only ids, times and those facts: never a prompt, a file or an
  * account's details. Rows are never changed; each is kept a year, as the admin API's log is, then removed.
  */
-export function logWorkerJob(event: WorkerJobEvent, t: Pick<TaskRow, "id" | "generation_id" | "principal" | "lane">, workerId: string | null, now = Date.now(), run: { execMs?: number; device?: string } = {}): void {
+export function logWorkerJob(
+  event: WorkerJobEvent,
+  t: Pick<TaskRow, "id" | "generation_id" | "principal" | "lane"> & Partial<Pick<TaskRow, "claimed_at" | "finish_json">>,
+  workerId: string | null,
+  now = Date.now(),
+  run: { execMs?: number; device?: string } = {},
+  info: { why?: string; tries?: number } = {},
+): void {
   try {
     const name = workerId ? ((rdb().prepare("SELECT name FROM relay_workers WHERE id = ?").get(workerId) as { name: string } | undefined)?.name ?? null) : null;
     rdb()
@@ -233,7 +241,69 @@ export function logWorkerJob(event: WorkerJobEvent, t: Pick<TaskRow, "id" | "gen
   } catch (e) {
     console.warn(`[fuobe] Couldn't write the workers' log: ${(e as Error).message}`);
   }
+  // The same handoff in the worker's timeline, in words (best-effort, as above).
+  const detail = { ...(run.execMs !== undefined && { execMs: run.execMs }), ...(run.device && { device: run.device }), ...(info.why && { why: info.why }), ...(info.tries !== undefined && { tries: info.tries }) };
+  logWorkerEvent(
+    { kind: "job", event, workerId, words: jobWords(event, t, { execMs: run.execMs, why: info.why, now }), taskId: t.id, generationId: t.generation_id, lane: t.lane ?? null, detail },
+    now,
+  );
 }
+
+/** The stage of a worker's job, from its state and progress (null: it isn't with a worker now). */
+export function stageOf(t: Pick<TaskRow, "state" | "progress_json">): JobStage | null {
+  switch (t.state) {
+    case "sending":
+      return "sending";
+    case "queued":
+      return "queued";
+    case "running":
+      return taskCold(t) ? "loading" : "running";
+    case "collecting":
+      return "saving";
+    default:
+      return null;
+  }
+}
+
+/**
+ * A worker's task may have moved to another stage (a report, its first step): a stage row when it differs from the
+ * task's last one on this attempt (`fresh`: a new attempt, always a row). Called at state changes only, never on every
+ * progress report. Best-effort.
+ */
+export function noteStage(id: string, now = Date.now(), detail: Record<string, unknown> = {}, fresh = false): void {
+  try {
+    const t = rdb().prepare("SELECT id, generation_id, lane, state, progress_json, pools, worker_id, claimed_at FROM relay_tasks WHERE id = ?").get(id) as
+      | Pick<TaskRow, "id" | "generation_id" | "lane" | "state" | "progress_json" | "pools" | "worker_id" | "claimed_at">
+      | undefined;
+    if (!t?.pools || !t.worker_id) return;
+    const stage = stageOf(t);
+    if (!stage) return;
+    const last = fresh ? null : lastStage(t.id);
+    if (last && last.event === stage && last.workerId === t.worker_id && last.at >= (t.claimed_at ?? 0)) return;
+    const p = taskProgress(t);
+    logWorkerEvent(
+      {
+        kind: "stage",
+        event: stage,
+        workerId: t.worker_id,
+        words: STAGE_WORDS[stage],
+        taskId: t.id,
+        generationId: t.generation_id,
+        lane: t.lane,
+        detail: { ...detail, ...(stage === "queued" && p?.position !== undefined && { position: p.position }) },
+      },
+      now,
+    );
+  } catch {}
+}
+
+const STAGE_WORDS: Record<JobStage, string> = {
+  sending: "Sending its files to its ComfyUI",
+  queued: "In its ComfyUI's queue",
+  loading: "Loading the model",
+  running: "Running",
+  saving: "Saving the results",
+};
 
 /** A row of the workers' log as the owner reads it. */
 export interface WorkerJobRow {
@@ -578,14 +648,18 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   const node = str(r.node, 64);
   if (node) p.node = node;
   const d = rdb();
-  d.transaction(() => {
-    const cur = d.prepare(`SELECT progress_json FROM relay_tasks WHERE id = ? AND ${STILL_HELD}`).get(id, lease) as Pick<TaskRow, "progress_json"> | undefined;
-    if (!cur) return;
+  const warmed = d.transaction((): boolean => {
+    const cur = d.prepare(`SELECT progress_json, state FROM relay_tasks WHERE id = ? AND ${STILL_HELD}`).get(id, lease) as Pick<TaskRow, "progress_json" | "state"> | undefined;
+    if (!cur) return false;
     const next = { ...taskProgress(cur), ...p };
     // Its first step reported: its model is loaded (noteCold), so it is no longer getting ready.
+    const wasCold = next.cold === true;
     if (p.value !== undefined) delete next.cold;
     d.prepare(`UPDATE relay_tasks SET progress_json = ? WHERE id = ? AND ${STILL_HELD}`).run(JSON.stringify(next), id, lease);
+    return wasCold && next.cold !== true && cur.state === "running";
   }).immediate();
+  // Loading the model → running: a stage row.
+  if (warmed) noteStage(id, now);
 }
 
 /**
@@ -821,7 +895,7 @@ export function endTask(id: string, state: "done" | "failed" | "canceled", field
   const stop = takeOff && t && t.device && (SENT_STATES as readonly string[]).includes(t.state) ? 1 : 0;
   setTask(id, { state, finished_at: Date.now(), down_at: null, down_why: null, ...(stop && { stop }), ...fields });
   // A task a worker held ends: the workers' log says how.
-  if (t?.pools && t.worker_id && (ACTIVE_STATES as readonly string[]).includes(t.state)) logWorkerJob(state, t, t.worker_id);
+  if (t?.pools && t.worker_id && (ACTIVE_STATES as readonly string[]).includes(t.state)) logWorkerJob(state, t, t.worker_id, Date.now(), {}, typeof fields.error === "string" ? { why: fields.error } : {});
   dropProgress(id);
   for (const i of rdb().prepare("SELECT name FROM relay_inputs WHERE task_id = ?").all(id) as { name: string }[]) fs.rmSync(inputFile(i.name), { force: true });
   rdb().prepare("DELETE FROM relay_inputs WHERE task_id = ?").run(id);
@@ -888,6 +962,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       // Results a worker kept from an earlier try go up instead of a new render. Each send counts toward this claim's
       // sends all the same, so a ComfyUI that "loses" a job twice on one claim (a resend after each) sends it back in line.
       setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + 1 });
+      if (t.pools) noteStage(t.id, now);
       return { ok: true };
     }
     case "refused":
@@ -904,11 +979,14 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       // A worker's live preview of the job: the tile shows the latest one while the run works. Kept only from a progress
       // report of the attempt that holds the lease, for a run that shows them (notePreview, showsPreview).
       if (e.preview) notePreview({ ...(taskById(t.id) ?? t), lease_hash: t.lease_hash }, e.preview, now);
+      // Its ComfyUI started it: loading its model (taken cold) or running. Later reports change no stage here.
+      if (t.pools && t.state !== "running") noteStage(t.id, now);
       return { ok: true };
     case "finished":
     case "passes": {
       if (e.event === "passes" && e.running) {
         setTask(t.id, { ...seen, state: "running" });
+        if (t.pools && t.state !== "running") noteStage(t.id, now);
         return { ok: true };
       }
       const entries = e.event === "finished" ? [e.entry] : e.entries;
@@ -944,6 +1022,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         received_json: JSON.stringify(received),
         extra_json: JSON.stringify({ ...extraOf(t), budget: p.budget }),
       });
+      if (t.pools) noteStage(t.id, now, { files: p.wanted.length });
       return { ok: true, wanted: p.wanted };
     }
     case "give-back":
@@ -958,6 +1037,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null, ...(t.pools && { sending_since: now }) });
         dropProgress(t.id);
         rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+        if (t.pools) noteStage(t.id, now, { resent: true });
         return { ok: true };
       }
       if (t.state === "sending") return { ok: true };

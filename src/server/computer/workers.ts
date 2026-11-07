@@ -78,6 +78,9 @@ export interface WorkerRow {
   cpu_slot_json?: string | null;
   /** Why it doesn't start the line's work now (src/lib/relay.ts WorkerHolding), as its last beat said. NULL: none. */
   holding_json?: string | null;
+  /** Its last claim for its GPU's slot, and the answer in words (pool.ts workerClaim). */
+  asked_at?: number | null;
+  asked_words?: string | null;
 }
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
