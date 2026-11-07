@@ -225,7 +225,8 @@ describe("packs.json: the single source of pack pins", () => {
     const repos = CUSTOM_NODE_REPOS as Record<string, string>;
     expect(Object.keys(repos).sort()).toEqual(Object.keys(packs).sort());
     for (const [name, url] of Object.entries(repos)) {
-      const tree = /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/tree\/([0-9a-f]{40})(?:\/(.+))?$/.exec(url);
+      // A folder at a commit: on GitHub, or in a Hugging Face model repo (ComfyUI-Viggle-Remake).
+      const tree = /^(https:\/\/(?:github\.com|huggingface\.co)\/[^/]+\/[^/]+)\/tree\/([0-9a-f]{40})(?:\/(.+))?$/.exec(url);
       // One node file in a Hugging Face model repo (viggle_turbo): the repo, the commit and the file.
       const hfFile = /^(https:\/\/huggingface\.co\/[^/]+\/[^/]+)\/resolve\/([0-9a-f]{40})\/(.+\.py)$/.exec(url);
       if (hfFile) {

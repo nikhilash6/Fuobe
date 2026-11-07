@@ -433,6 +433,38 @@ SHA
 fi
 # --- end ComfyUI-RE-USE
 
+# --- ComfyUI-Viggle-Remake (Genjutsu's Fuobe Reshoot): two Python files in Viggle's model repository (Apache-2.0), at a
+# pinned revision, each checked with sha256sum -c. No pip: they use only torch and ComfyUI. Opt-in (RESHOOT=1), since each
+# of its two graphs loads its own 21 GB int8 transformer; RESHOOT_WEIGHTS=1 also fetches those into models/diffusion_models.
+RESHOOT_REF="${RESHOOT_REF:-21665fa7a1e038e0a5312fb15f37b18d0f06f117}"
+if [ "${RESHOOT:-0}" = "1" ]; then
+  RS_DIR="$COMFYUI_DIR/custom_nodes/ComfyUI-Viggle-Remake"
+  mkdir -p "$RS_DIR"
+  for f in __init__.py nodes.py; do
+    curl -fsSL --retry 3 -o "$RS_DIR/$f.part" "https://huggingface.co/Viggle/Viggle-Remake/resolve/$RESHOOT_REF/comfyui/ComfyUI-Viggle-Remake/$f" && mv "$RS_DIR/$f.part" "$RS_DIR/$f" || echo "warn: could not download ComfyUI-Viggle-Remake/$f"
+  done
+  (cd "$RS_DIR" && sha256sum -c --quiet <<'SHA'
+4c0f96b0f0006df5a559d09d44b8d521a32d7992383223310b5ba2a3f88e3e42  __init__.py
+e4dc1b975c0886fd635ea535d1c9007b1fbd6a61c89f95fed48ca7dec78d0e08  nodes.py
+SHA
+  ) || { echo "warn: ComfyUI-Viggle-Remake failed its SHA-256 check: removed"; rm -rf "$RS_DIR"; }
+  if [ "${RESHOOT_WEIGHTS:-0}" = "1" ]; then
+    DM_DIR="$COMFYUI_DIR/models/diffusion_models"
+    mkdir -p "$DM_DIR"
+    for mode in swap edit; do
+      f="viggle_remake_${mode}_pruned_int8_convrot.safetensors"
+      [ -s "$DM_DIR/$f" ] && continue
+      curl -fsSL --retry 3 -o "$DM_DIR/$f.part" "https://huggingface.co/Viggle/Viggle-Remake/resolve/$RESHOOT_REF/int8/$f" && mv "$DM_DIR/$f.part" "$DM_DIR/$f" || echo "warn: could not download $f"
+    done
+    (cd "$DM_DIR" && sha256sum -c --quiet <<'SHA'
+7ba8cf79f8f09944f743f99b69d85300a70a4bc9493156cb1fff3a68a9716a47  viggle_remake_swap_pruned_int8_convrot.safetensors
+ff13b0b61d1e0e702e21de6a2bbc284b9e0006a31f3cd047daec303dab6b3155  viggle_remake_edit_pruned_int8_convrot.safetensors
+SHA
+    ) || echo "warn: a Viggle Remake weight file is missing or failed its SHA-256 check (delete it and re-run)"
+  fi
+fi
+# --- end ComfyUI-Viggle-Remake
+
 # --- SAM ViT-B (image-watermark-remove-qwen21: sticker outlines), 375 MB (Meta's file, from a pinned Hugging Face mirror), into models/sams, checked with
 # sha256sum -c before it is kept (a .pth can run code when it loads). Only with REAL_MODELS=1 (validation needs no weights).
 if [ "${REAL_MODELS:-0}" = "1" ]; then

@@ -21257,6 +21257,209 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "RemakeConditioning": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP"
+        ],
+        "vae": [
+          "VAE"
+        ],
+        "audio_vae": [
+          "VAE"
+        ],
+        "source": [
+          "IMAGE",
+          {
+            "tooltip": "The source clip's frames, at 24 fps. Supplies motion, camera, framing and everything the prompt does not change."
+          }
+        ],
+        "prompt": [
+          "STRING",
+          {
+            "multiline": true,
+            "tooltip": "The six-section prompt, used verbatim."
+          }
+        ],
+        "ref_1": [
+          "IMAGE",
+          {
+            "tooltip": "<Picture 1>: usually a frame of the source painted in an image editor."
+          }
+        ],
+        "pins": [
+          "STRING",
+          {
+            "default": "",
+            "tooltip": "Optional: one output frame per reference image, e.g. '12, 190'. Each reference is then pinned as a keyframe at that frame for the first part of the denoise."
+          }
+        ],
+        "frames": [
+          "INT",
+          {
+            "default": 124,
+            "min": 90,
+            "max": 345,
+            "step": 17,
+            "tooltip": "Output length at 24 fps, 17n+5."
+          }
+        ],
+        "short_edge": [
+          "INT",
+          {
+            "default": 480,
+            "min": 480,
+            "max": 736,
+            "step": 32,
+            "tooltip": "480 (832x480 for 16:9) or 736 (1280x736)."
+          }
+        ]
+      },
+      "optional": {
+        "audio": [
+          "AUDIO",
+          {
+            "tooltip": "The soundtrack kept in the output, usually the source's own. Silence when not connected."
+          }
+        ],
+        "ref_2": [
+          "IMAGE"
+        ],
+        "ref_3": [
+          "IMAGE"
+        ],
+        "ref_4": [
+          "IMAGE"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "vae",
+        "audio_vae",
+        "source",
+        "prompt",
+        "ref_1",
+        "pins",
+        "frames",
+        "short_edge"
+      ],
+      "optional": [
+        "audio",
+        "ref_2",
+        "ref_3",
+        "ref_4"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "latent"
+    ],
+    "name": "RemakeConditioning",
+    "display_name": "Viggle Remake Conditioning",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Viggle-Remake",
+    "category": "Viggle Remake",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "RemakeKeyframeUntil": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL"
+        ],
+        "keyframe_until": [
+          "FLOAT",
+          {
+            "default": 0.9,
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "tooltip": "The keyframes condition every forward whose sigma is at least this; below it they are dropped and the references alone remain."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "keyframe_until"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "RemakeKeyframeUntil",
+    "display_name": "Viggle Remake Keyframe Until",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Viggle-Remake",
+    "category": "Viggle Remake",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "RemakeNoise": {
+    "input": {
+      "required": {
+        "positive": [
+          "CONDITIONING"
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 18446744073709552000,
+            "control_after_generate": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "positive",
+        "seed"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "NOISE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "NOISE"
+    ],
+    "name": "RemakeNoise",
+    "display_name": "Viggle Remake Noise",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Viggle-Remake",
+    "category": "Viggle Remake",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "RemeshMesh": {
     "input": {
       "required": {

@@ -40,14 +40,14 @@ const step = (p: ReturnType<typeof planGenjutsu>, key: string) => {
 
 describe("Genjutsu: the Openjutsu modes", () => {
   it("two new tabs; each opens with its features (the owner sees all), and visitors see nothing new until then", () => {
-    expect(GENJUTSU_MODES.map((m) => m.id)).toEqual(["motion", "character", "swap", "restyle", "insert", "picture", "finish"]);
+    expect(GENJUTSU_MODES.map((m) => m.id)).toEqual(["motion", "character", "swap", "restyle", "insert", "picture", "finish", "reshoot"]);
     expect(GENJUTSU_MODES.filter((m) => modeOpen(m.id, none)).map((m) => m.id)).toEqual(["motion", "character", "swap", "restyle", "insert"]);
     expect(modeOpen("finish", (f) => f === "finish-colours")).toBe(true);
     expect(modeOpen("picture", (f) => f === "picture-light")).toBe(false);
     for (const mode of ["character", "swap", "picture", "finish"] as const) {
       for (const m of makersFor("open", mode, mode === "swap" || mode === "character" ? "type" : undefined, none)) expect(m.features, m.id).toBeUndefined();
     }
-    expect(Object.keys(GENJUTSU_FEATURES)).toHaveLength(12);
+    expect(Object.keys(GENJUTSU_FEATURES)).toHaveLength(14);
   });
 
   it("Motion transfer's MiniMax H3: a model choice the owner sees after the Original, a visitor only once it opens", () => {

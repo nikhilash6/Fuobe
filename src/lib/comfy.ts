@@ -685,7 +685,7 @@ export function tagMetaBatch(wf: ComfyWorkflow, job: string): ComfyWorkflow {
 }
 
 /** Inputs that may go without sound: a VHS soundtrack link into them is dropped for a silent clip. */
-const OPTIONAL_SOUND: Record<string, string[]> = { VHS_VideoCombine: ["audio"], CreateVideo: ["audio"], TextGenerate: ["audio"] };
+const OPTIONAL_SOUND: Record<string, string[]> = { VHS_VideoCombine: ["audio"], CreateVideo: ["audio"], TextGenerate: ["audio"], RemakeConditioning: ["audio"] };
 /** Nodes that pad the sound they get to the loaded frames themselves: an empty track is enough (and never too long). */
 const PADS_TO_FRAMES = new Set(["H3SoundtrackOrSilence"]);
 /**

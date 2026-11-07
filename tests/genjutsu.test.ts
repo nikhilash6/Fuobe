@@ -113,7 +113,7 @@ describe("Genjutsu: which model runs", () => {
   });
 
   it("every maker is a catalog model that does its mode's operation on its engine", () => {
-    const ops = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v", picture: "picture-video", finish: "tone-video" } as const;
+    const ops = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v", picture: "picture-video", finish: "tone-video", reshoot: "video-swap" } as const;
     const opOf = (m: Maker, mode: keyof typeof ops) =>
       m.group ? "group-swap" : m.actions ? "scene-edit" : m.review ? "picture-video" : m.tool === "faces" ? "face-fix-video" : m.tool === "colours" ? "tone-video" : ops[mode];
     for (const m of MAKERS) {

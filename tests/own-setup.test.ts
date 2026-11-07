@@ -34,6 +34,7 @@ const INVENTORY: Record<string, string[]> = {
   "Genjutsu From picture H3 renderer": ["genjutsu:picture-h3-renderer"],
   "Genjutsu Fix faces": ["genjutsu:finish-faces", "oss-h3-fix-faces"],
   "Genjutsu Motion transfer H3": ["genjutsu:motion-h3", "oss-h3-motion"],
+  "Genjutsu Fuobe Reshoot": ["genjutsu:reshoot-swap", "genjutsu:reshoot-edit", "oss-h3-reshoot"],
   "Clean the voice first": ["sound:clean-voice-first"],
   WorldCast: ["oss-worldcast", "worldcast:film"],
   "Exact orbit": ["fly-around:exact-orbit", "oss-uni3c-path"],

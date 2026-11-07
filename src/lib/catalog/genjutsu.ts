@@ -68,8 +68,9 @@ import { soulLook } from "./soul";
 import { filmSize, SHARPEN_COPY, sharpenPrompt, sharpenSteps, sharpenTierFor, type SharpenTier } from "./sharpen";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
 import { withOriginalSound, type OriginalSound } from "../av/original-sound";
+import { describerPrompt, paintPrompt, RESHOOT, RESHOOT_MODEL, RESHOOT_WORKFLOWS, reshootFrames, reshootPrompt, reshootProblem, reshootQuality, type ReshootChoice, type ReshootOptions } from "./reshoot";
 
-export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert" | "picture" | "finish";
+export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert" | "picture" | "finish" | "reshoot";
 /** How you say what changes (Object swap and Insert) or who (Character swap): words, clicks on the first frame, or paint on it. */
 export type GenjutsuTarget = RemoveMode;
 /** Genjutsu's qualities; 2K and 4K are the Character swap's finishing sizes (sharpen.ts). */
@@ -114,18 +115,25 @@ export const GENJUTSU_MODES: { id: GenjutsuMode; label: string; hint: string; re
     refs: "Your character",
   },
   { id: "finish", label: "Finish", hint: "Give a finished video sharper faces or a soft film finish.", refs: "Character photo" },
+  {
+    id: "reshoot",
+    label: "Fuobe Reshoot",
+    hint: "Same shot, anything you change: say who or what changes — the motion, camera and sound stay as filmed.",
+    refs: "Who plays the part",
+  },
 ];
 
 export const getMode = (id: GenjutsuMode) => GENJUTSU_MODES.find((m) => m.id === id)!;
 
 /** The ways of saying what changes, per mode (Motion transfer and Restyle change the whole shot; Character swap says who). */
-export const MODE_TARGETS: Record<GenjutsuMode, GenjutsuTarget[]> = { motion: [], restyle: [], character: ["type", "click"], swap: ["type", "click", "paint"], insert: ["type", "paint"], picture: [], finish: [] };
+export const MODE_TARGETS: Record<GenjutsuMode, GenjutsuTarget[]> = { motion: [], restyle: [], character: ["type", "click"], swap: ["type", "click", "paint"], insert: ["type", "paint"], picture: [], finish: [], reshoot: [] };
 
 export const TARGET_LABELS: Record<GenjutsuMode, Partial<Record<GenjutsuTarget, { label: string; hint: string }>>> = {
   motion: {},
   restyle: {},
   picture: {},
   finish: {},
+  reshoot: {},
   character: {
     type: { label: "Pick who", hint: "The largest, leftmost or rightmost person, or a number" },
     click: { label: "Click them", hint: "Click the person on the part's first frame" },
@@ -160,7 +168,9 @@ export type GenjutsuFeature =
   | "picture-h3-renderer"
   | "finish-faces"
   | "finish-colours"
-  | "motion-h3";
+  | "motion-h3"
+  | "reshoot-swap"
+  | "reshoot-edit";
 
 export const GENJUTSU_FEATURES: Record<GenjutsuFeature, { mode: GenjutsuMode; workflows: string[]; maker: string }> = {
   "group-swap": { mode: "character", workflows: ["video-group-swap-h3"], maker: "oss-h3-group-swap" },
@@ -175,7 +185,12 @@ export const GENJUTSU_FEATURES: Record<GenjutsuFeature, { mode: GenjutsuMode; wo
   "finish-faces": { mode: "finish", workflows: ["video-fix-faces-h3"], maker: "oss-h3-fix-faces" },
   "finish-colours": { mode: "finish", workflows: ["video-fix-colours"], maker: "oss-fix-colours" },
   "motion-h3": { mode: "motion", workflows: ["video-motion-transfer-h3"], maker: "oss-h3-motion" },
+  "reshoot-swap": { mode: "reshoot", workflows: [RESHOOT_WORKFLOWS.swap], maker: RESHOOT_MODEL },
+  "reshoot-edit": { mode: "reshoot", workflows: [RESHOOT_WORKFLOWS.edit], maker: RESHOOT_MODEL },
 };
+
+/** Fuobe Reshoot's feature for a choice. */
+export const reshootFeature = (choice: ReshootChoice | undefined): GenjutsuFeature => (choice === "edit" ? "reshoot-edit" : "reshoot-swap");
 
 export const GENJUTSU_FEATURE_KEYS = Object.keys(GENJUTSU_FEATURES) as GenjutsuFeature[];
 
@@ -197,6 +212,7 @@ export const ALL_FEATURES: FeatureCheck = () => true;
 export function modeOpen(mode: GenjutsuMode, open: FeatureCheck = ALL_FEATURES): boolean {
   if (mode === "picture") return open("picture");
   if (mode === "finish") return open("finish-faces") || open("finish-colours");
+  if (mode === "reshoot") return open("reshoot-swap") || open("reshoot-edit");
   return true;
 }
 
@@ -260,8 +276,9 @@ export const FINISH_COLOURS_DEFAULT: Required<Pick<FinishOptions, "finish" | "st
 export const OPENJUTSU_LIMITS = { minSeconds: 2, maxSeconds: 15, facesMaxSeconds: 10, coloursMaxSeconds: 60, maxCharacters: 4, roleChars: 80, lightChars: 300, sceneChars: 2000 } as const;
 
 /** The feature a request needs (null: an existing Genjutsu feature, always open). */
-export function requestFeatures(o: { mode: GenjutsuMode; maker: Maker; character?: CharacterOptions; object?: ObjectEdit; picture?: PictureOptions; finish?: FinishOptions }): GenjutsuFeature[] {
+export function requestFeatures(o: { mode: GenjutsuMode; maker: Maker; character?: CharacterOptions; object?: ObjectEdit; picture?: PictureOptions; finish?: FinishOptions; reshoot?: ReshootOptions }): GenjutsuFeature[] {
   const m = o.maker;
+  if (m.reshoot) return [reshootFeature(o.reshoot?.choice)];
   if (m.group) return o.character?.onePerPerson ? ["group-swap", "group-swap-one-by-one"] : ["group-swap"];
   if (m.actions) return [SCENE_ACTIONS.find((a) => a.id === (o.object?.action ?? "change"))!.feature];
   if (m.review) {
@@ -304,6 +321,8 @@ export function directRunFeatures(modelId: string, settings: Record<string, unkn
       return ["finish-colours"];
     case MOTION_H3:
       return ["motion-h3"];
+    case RESHOOT_MODEL:
+      return [reshootFeature(s.choice === "edit" ? "edit" : "swap")];
     default:
       return null;
   }
@@ -376,6 +395,8 @@ export interface Maker {
   tool?: "faces" | "colours";
   /** The part it takes, when it isn't the mode's own (seconds). */
   part?: { min: number; max: number };
+  /** Fuobe Reshoot: who's in it or what's in it, from a painted first frame. */
+  reshoot?: boolean;
 }
 
 /** fal's hosted Wan VACE (2.1 14B and 2.2 Fun): 17–241 frames (4n+1, the clip's own count and rate), at most 30 fps. */
@@ -815,6 +836,21 @@ export const MAKERS: Maker[] = [
     part: { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds },
   },
   {
+    id: RESHOOT_MODEL,
+    engine: "open",
+    modes: ["reshoot"],
+    label: "Fuobe Reshoot",
+    note: `Same shot. Anything you change · keeps the clip's motion, camera and sound · ${RESHOOT.minSeconds}–${RESHOOT.maxSeconds} s`,
+    source: "open",
+    refs: { min: 0, max: RESHOOT.maxPictures },
+    keepsSound: true,
+    qualities: [...RESHOOT.qualities],
+    promptOptional: true,
+    reshoot: true,
+    features: ["reshoot-swap", "reshoot-edit"],
+    part: { min: RESHOOT.minSeconds, max: RESHOOT.maxSeconds },
+  },
+  {
     id: "oss-from-picture",
     engine: "open",
     modes: ["picture"],
@@ -1246,11 +1282,14 @@ export interface GenjutsuCheck {
   object?: ObjectEdit;
   picture?: PictureOptions;
   finish?: FinishOptions;
+  reshoot?: ReshootOptions;
+  quality?: string;
 }
 
 /** The first thing that stops a request on one of the Openjutsu makers, in words, or null. */
 function openjutsuProblem(c: GenjutsuCheck): string | null {
   const m = c.maker;
+  if (m.reshoot) return reshootProblem(c.reshoot, c.references, c.range.end - c.range.start, reshootQuality(c.quality));
   if (m.group) {
     if (c.references < 1) return REFS_MISSING.character;
     if (c.references > OPENJUTSU_LIMITS.maxCharacters) return "Up to four characters";
@@ -1302,6 +1341,7 @@ const REFS_MISSING: Record<GenjutsuMode, string> = {
   restyle: "",
   picture: "Add a picture of your character",
   finish: "Add the character photo",
+  reshoot: "Add a picture of who plays the part",
 };
 
 /** The first thing that stops this request, in words, or null. */
@@ -1309,7 +1349,7 @@ export function genjutsuProblem(c: GenjutsuCheck): string | null {
   const general = rangeProblem(c.source, c.range, c.mode, c.maker);
   if (general) return general;
   const m = c.maker;
-  if (m.group || m.actions || m.review || m.tool) return openjutsuProblem(c);
+  if (m.group || m.actions || m.review || m.tool || m.reshoot) return openjutsuProblem(c);
   const len = c.range.end - c.range.start;
   const { width: w, height: h } = c.source;
   const target = MODE_TARGETS[c.mode].length ? (c.target ?? MODE_TARGETS[c.mode][0]) : undefined;
@@ -1399,6 +1439,8 @@ export interface GenjutsuPlanInput {
   finish?: FinishOptions;
   /** Scene edit's painted area, as the pack's keyframe (the server reads it from the paint). */
   paint?: PaintKeyframe[];
+  /** Fuobe Reshoot's settings. */
+  reshoot?: ReshootOptions;
   /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts; the cloud: Everything only). */
   originalSound?: OriginalSound;
 }
@@ -1421,7 +1463,7 @@ const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
 const pieceLabel = (p: Piece, n: number, what: string) => ({ label: n > 1 ? `Piece ${p.index + 1} of ${n} · ${what}` : what[0].toUpperCase() + what.slice(1), index: p.index, of: n });
 
-const OP: Record<GenjutsuMode, GenerationRequest["op"]> = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v", picture: "picture-video", finish: "tone-video" };
+const OP: Record<GenjutsuMode, GenerationRequest["op"]> = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v", picture: "picture-video", finish: "tone-video", reshoot: "video-swap" };
 
 /** Steps on a model that runs on both engines say which one (Originals, the Soul look's first frame). */
 function pinEngines(steps: PlanStep[], engine: Engine): PlanStep[] {
@@ -1449,6 +1491,7 @@ export function planGenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
 
 function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
   const om = input.maker;
+  if (om.reshoot) return planReshoot(input);
   if (om.group || om.actions || om.review || om.tool || om.id === MOTION_H3) return planOpenjutsu(input);
   if (input.mode === "character" && input.maker.h3) return planCharacterSwap(input);
   if (input.mode === "restyle" && input.maker.id === ORIGINALS.restyle && input.maker.engine === "cloud") return planCloudRestyle(input);
@@ -1861,6 +1904,87 @@ export function sceneWords(o: ObjectEdit | undefined, subject?: string): { targe
  * the clip's sound: video-fit-clip, so ComfyUI never decodes more of the clip than it needs), then one job on the
  * Openjutsu graph with its settings (params.extra.openjutsu). From picture's first frame reads the clip itself (one frame).
  */
+/**
+ * Fuobe Reshoot on your GPU (src/lib/catalog/reshoot.ts): the part fitted to 24 fps on Remake's canvas (both sides on
+ * 32 px steps), its first frame painted with the change (Qwen-Image 2.1 with the pictures; or your own painted frame),
+ * then one Remake render pinned to it, the clip's sound kept in the render.
+ */
+function planReshoot(input: GenjutsuPlanInput): GenjutsuPlan {
+  const r: ReshootOptions = input.reshoot ?? { choice: "swap" };
+  const base = { feature: GENJUTSU.feature, batchTitle: input.title, title: input.title };
+  const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
+  const seed = input.seed !== undefined ? { seed: input.seed } : {};
+  const quality = reshootQuality(input.quality);
+  const start = r3(input.range.start);
+  const frames = reshootFrames(input.range.end - input.range.start, quality);
+  if (!frames) throw new Error(`Pick at least ${RESHOOT.minSeconds} seconds`);
+  const pictures = input.references.slice(0, RESHOOT.maxPictures);
+  const steps: PlanStep[] = [];
+  const w = input.source.width;
+  const h = input.source.height;
+  const size = w && h ? reshootCanvas(w, h, RESHOOT.shortEdge[quality]) : null;
+  // Two frames past the render, so the part never comes up a frame short after the cut.
+  const end = r3(start + (frames + 2) / RESHOOT.fps);
+  steps.push({
+    key: "part",
+    request: { ...helper, modelId: SHARPEN_TOOLS.fit, op: "trim", inputs: { video: input.source.url }, params: { startTime: start, endTime: end, fps: RESHOOT.fps, ...(size ? { extra: { ...size } } : {}) }, step: { label: "The part at 24 fps", index: 0, of: 1 } },
+  });
+  const chain: ChainSlot[] = [{ slot: "video" }];
+  const after = ["part"];
+  let images: string[] = [];
+  if (r.painted) {
+    if (!pictures.length) throw new Error("Add your painted first frame");
+    images = pictures.slice(0, 1);
+  } else {
+    const am = anchorModel("open");
+    const aspect = anchorAspect(getModel(am.id)?.options.aspectRatios, size ?? input.source);
+    steps.push({
+      key: "frame",
+      request: { ...helper, modelId: "oss-extract-frame", op: "frame", params: { startTime: 0, endTime: 0.5, extra: { frameIndex: 0 } }, step: { label: "The part's first frame", index: 0, of: 1 } },
+      after: ["part"],
+      chain: [{ slot: "video" }],
+    });
+    steps.push({
+      key: "paint",
+      request: {
+        ...helper,
+        modelId: am.id,
+        op: "edit",
+        prompt: paintPrompt(r, pictures.length),
+        ...(pictures.length ? { inputs: { images: pictures } } : {}),
+        params: { ...(aspect ? { aspectRatio: aspect } : {}), ...(am.extra ? { extra: { ...am.extra } } : {}), ...seed },
+        step: { label: r.choice === "swap" ? `Paint the new person into the first frame (${am.label})` : `Paint the change into the first frame (${am.label})`, index: 0, of: 1 },
+      },
+      after: ["frame"],
+      chain: [{ slot: "images", position: "first" }],
+    });
+    after.push("paint");
+    chain.push({ slot: "images", position: "first" });
+  }
+  steps.push({
+    key: "reshoot",
+    request: {
+      ...base,
+      modelId: input.maker.id,
+      op: r.choice === "edit" ? "scene-edit" : "video-swap",
+      prompt: reshootPrompt(r, frames),
+      ...(images.length ? { inputs: { images } } : {}),
+      params: { ...seed, resolution: quality, extra: { openjutsu: { choice: r.choice, frames, quality, describe: describerPrompt(r), ...seed } } },
+      step: { label: r.choice === "edit" ? "Reshoot what's in it" : "Reshoot who's in it", index: 0, of: 1 },
+    },
+    after,
+    chain,
+  });
+  return { steps, final: "reshoot", pieces: 1, sound: false, tracked: false };
+}
+
+/** Remake's canvas for a clip: the short edge at `short`, both sides on 32 px steps (the nodes keep such a canvas as it is). */
+export function reshootCanvas(width: number, height: number, short: number): { width: number; height: number } {
+  const k = short / Math.min(width, height);
+  const side = (v: number) => Math.max(32, Math.round((v * k) / 32) * 32);
+  return width <= height ? { width: short, height: side(height) } : { width: side(width), height: short };
+}
+
 function planOpenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
   const m = input.maker;
   const base = { feature: GENJUTSU.feature, batchTitle: input.title, title: input.title };
@@ -2113,6 +2237,8 @@ export interface GenjutsuSetup {
   /** From picture's settings (not the frame or the words: they belong to a run). */
   picture?: Omit<PictureOptions, "frame" | "scene" | "stage">;
   finish?: FinishOptions;
+  /** Fuobe Reshoot's settings. */
+  reshoot?: ReshootOptions;
   /** The run's seed (blank in the form: a new one each time). */
   seed?: number;
   /** How long the part is, in seconds (it starts where the part of the clip starts). */
@@ -2250,6 +2376,21 @@ export function cleanFinish(v: unknown): FinishOptions | undefined {
   return out;
 }
 
+/** Fuobe Reshoot's settings as they travel in a code. */
+export function cleanReshoot(v: unknown): ReshootOptions | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const choice = oneOf(o.choice, ["swap", "edit"] as const);
+  if (!choice) return undefined;
+  const out: ReshootOptions = { choice };
+  const who = str(o.who, RESHOOT.whoChars);
+  if (who) out.who = who;
+  const words = str(o.words, RESHOOT.wordsChars);
+  if (words) out.words = words;
+  if (o.painted === true) out.painted = true;
+  return out;
+}
+
 const ANCHOR_IDS = new Set(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-edit"]);
 
 /**
@@ -2273,6 +2414,7 @@ export function encodeSetup(s: GenjutsuSetup): string {
     o: s.object && cleanObject(s.object),
     i: s.picture && cleanPicture(s.picture),
     f: s.finish && cleanFinish(s.finish),
+    rs: s.reshoot && cleanReshoot(s.reshoot),
     sd: s.seed !== undefined && !seedProblem(s.seed) ? s.seed : undefined,
     pl: lengthOf(s.length),
     os: s.originalSound,
@@ -2345,6 +2487,8 @@ export function decodeSetup(input: string, open: FeatureCheck = ALL_FEATURES): G
   }
   const finish = mode === "finish" ? cleanFinish(o.f) : undefined;
   if (finish && open(finish.tool === "faces" ? "finish-faces" : "finish-colours")) out.finish = finish;
+  const reshoot = mode === "reshoot" ? cleanReshoot(o.rs) : undefined;
+  if (reshoot && open(reshootFeature(reshoot.choice))) out.reshoot = reshoot;
   if (typeof o.sd === "number" && !seedProblem(o.sd)) out.seed = o.sd;
   const length = lengthOf(o.pl);
   if (length !== undefined) out.length = length;

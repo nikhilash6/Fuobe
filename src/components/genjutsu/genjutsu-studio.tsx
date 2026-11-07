@@ -88,12 +88,14 @@ import { LookPicker, type LookSource } from "./look-picker";
 import { SetupCode } from "./setup-code";
 import { useClipCuts } from "./use-cuts";
 import { ModeExample, ModeExampleRow } from "./mode-example";
+import { ReshootFields } from "./reshoot-fields";
+import { RESHOOT, type ReshootOptions } from "@/lib/catalog/reshoot";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { examplesOf, MARKED_NOTE, OWN_CHARACTER_FIELDS, partLimits, sameRecipe, toRecipe, type GenjutsuExampleCard, type ModeExamples } from "@/lib/examples/genjutsu";
 
 /** The upload box's line: the mode's own window (Character swap: 5–15 s of one shot), and the clip size the viewer may upload. */
 const limits = (mode: GenjutsuMode, maxBytes: number) =>
-  `MP4, MOV or WebM · ${mode === "character" ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds}` : mode === "picture" ? "2–15" : mode === "finish" ? "up to 60" : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds}`} s are used · ${limitMb(maxBytes)} MB`;
+  `MP4, MOV or WebM · ${mode === "character" ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds}` : mode === "picture" ? "2–15" : mode === "finish" ? "up to 60" : mode === "reshoot" ? `${RESHOOT.minSeconds}–${RESHOOT.maxSeconds}` : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds}`} s are used · ${limitMb(maxBytes)} MB`;
 
 interface Paint {
   mask: string;
@@ -195,6 +197,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   const [scene, setScene] = useState("");
   const [describing, setDescribing] = useState(false);
   const [finish, setFinish] = useState<FinishOptions>({ tool: "colours" });
+  const [reshoot, setReshoot] = useState<ReshootOptions>({ choice: "swap" });
   const [tapFor, setTapFor] = useState<number | null>(null);
   // A mode's example in the form: which one, the part's length it asks for until a clip is in, and its words that came
   // from its own clip (a note under those fields).
@@ -225,9 +228,9 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
 
   const lookSource: LookSource = lookChoice;
   const isCharacter = mode === "character";
-  const modeMax = mode === "picture" ? 15 : mode === "finish" ? 60 : null;
+  const modeMax = mode === "picture" ? 15 : mode === "finish" ? 60 : mode === "reshoot" ? RESHOOT.maxSeconds : null;
   const partMax = isCharacter ? (longPart ? CHARACTER_SWAP.maxContinued : CHARACTER_SWAP.maxSeconds) : (modeMax ?? GENJUTSU.maxSeconds);
-  const partMin = isCharacter ? CHARACTER_SWAP.minSeconds : mode === "picture" ? 2 : mode === "finish" ? 1 : GENJUTSU.minSeconds;
+  const partMin = isCharacter ? CHARACTER_SWAP.minSeconds : mode === "picture" ? 2 : mode === "finish" ? 1 : mode === "reshoot" ? RESHOOT.minSeconds : GENJUTSU.minSeconds;
 
   const setMode = (m: GenjutsuMode) => {
     setModeState(m);
@@ -238,7 +241,9 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     }
     if (pendingLength && pendingLength.mode !== m) setPendingLength(null);
     // Character swap takes a 5–15 s part: a longer selection is cut back to its first 15 s (From picture: 15 s too).
-    const most = m === "character" || m === "picture" ? CHARACTER_SWAP.maxSeconds : null;
+    const most = m === "character" || m === "picture" ? CHARACTER_SWAP.maxSeconds : m === "reshoot" ? RESHOOT.maxSeconds : null;
+    // Reshoot renders 480p by default (720p takes a shorter part).
+    if (m === "reshoot" && m !== mode && quality !== "480p") setQuality(RESHOOT.defaultQuality as GenjutsuQuality);
     if (most && range && range.endTime - range.startTime > most + 0.05) {
       setLongPart(false);
       setRange({ ...range, endTime: Math.round((range.startTime + most) * 100) / 100 });
@@ -287,12 +292,12 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     setAction(firstOpenAction);
     setObjectEdit((o) => ({ ...o, action: firstOpenAction }));
   }
-  const fresh = !!(maker?.group || maker?.actions || maker?.review || maker?.tool);
+  const fresh = !!(maker?.group || maker?.actions || maker?.review || maker?.tool || maker?.reshoot);
   const references = mode === "restyle" || (sceneEdit && action === "remove") || (mode === "picture" && picture.ownPerson) || (mode === "finish" && finish.tool === "colours") ? [] : ready(refs);
   const showRefs = mode !== "restyle" && !(sceneEdit && action === "remove") && !(mode === "picture" && picture.ownPerson) && !(mode === "finish" && finish.tool === "colours");
   // Two characters or more move the swap to Group swap on your GPU (once it is open to this viewer).
   const groupOn = isCharacter && engine === "open" && makersFor(engine, "character", target, open).some((m) => m.group);
-  const maxRefs = isCharacter ? Math.max(1, maker?.refs.max ?? 1, groupOn ? 4 : 1) : mode === "picture" || mode === "finish" || sceneEdit ? 1 : GENJUTSU.maxReferences;
+  const maxRefs = isCharacter ? Math.max(1, maker?.refs.max ?? 1, groupOn ? 4 : 1) : mode === "picture" || mode === "finish" || sceneEdit || (mode === "reshoot" && reshoot.painted) ? 1 : mode === "reshoot" ? RESHOOT.maxPictures : GENJUTSU.maxReferences;
   const needsFrame = ((mode === "swap" || isCharacter) && target === "click") || ((mode === "swap" || mode === "insert") && target === "paint") || group || mode === "picture";
   // Character swap: the clip's hard cuts (found in the browser), for the "one continuous shot" warning.
   const cuts = useClipCuts(clip?.preview, isCharacter && !!clip && !clip.error);
@@ -498,6 +503,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     }
     if (s.picture) setPicture({ ...s.picture, stage: "frame" });
     if (s.finish) setFinish(s.finish);
+    if (s.reshoot) setReshoot(s.reshoot);
     if (s.references?.length) setRefs(s.references.map(asSlot));
     // gj2 and examples: the seed, the part's length and the sound too (an example with no seed: a new one each time).
     if (s.seed !== undefined || example) {
@@ -590,7 +596,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     setOwnerLinked(true);
     const p = new URLSearchParams(window.location.search);
     const m = p.get("mode");
-    if (isMode(m) && (m === "picture" || m === "finish")) setModeState(m);
+    if (isMode(m) && (m === "picture" || m === "finish" || m === "reshoot")) setModeState(m);
     const tool = p.get("tool");
     if (tool === "faces" || tool === "colours") setFinish({ tool });
     const fr = p.get("frame");
@@ -615,6 +621,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     ...(sceneEdit ? { object: { ...objectEdit, action } } : {}),
     ...(mode === "picture" ? { picture: { ...(picture.light ? { light: picture.light } : {}), ...(picture.ownPerson ? { ownPerson: true } : {}), ...(picture.keepCrop ? { keepCrop: true } : {}), ...(picture.adjust ? { adjust: picture.adjust } : {}) } } : {}),
     ...(mode === "finish" ? { finish } : {}),
+    ...(mode === "reshoot" ? { reshoot } : {}),
   };
 
   function clearMarks() {
@@ -657,6 +664,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
           ...(sceneEdit ? { object: { ...objectEdit, action } } : {}),
           ...(mode === "picture" ? { picture: { ...picture, stage: pictureStage, ...(frameUrl ? { frame: frameUrl } : {}) } } : {}),
           ...(mode === "finish" ? { finish } : {}),
+          ...(mode === "reshoot" ? { reshoot, quality } : {}),
         })
       : null;
   // What of the clip's sound goes back where it's put back: Everything until the split has passed a real run, then Music & effects only when a character is swapped on your GPU.
@@ -697,13 +705,14 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
           ...(sceneEdit ? { object: { ...objectEdit, action } } : {}),
           ...(mode === "picture" ? { picture: { ...picture, stage: pictureStage, ...(frameUrl ? { frame: frameUrl } : {}), ...(scene.trim() ? { scene: scene.trim() } : {}) } } : {}),
           ...(mode === "finish" ? { finish } : {}),
-          ...(originalSound !== "everything" && { originalSound }),
+          ...(mode === "reshoot" ? { reshoot } : {}),
+          ...(originalSound !== "everything" && mode !== "reshoot" && { originalSound }),
         }
       : null;
   const estimate = useGenjutsuEstimate(body);
   const est = estimate.data && !estimate.isError ? estimate.data : undefined;
   // What Generate needs of a visitor's own setup: the first feature of this run that hasn't opened on this studio's GPU.
-  const needFeature = body && maker && !owner ? requestFeatures({ mode: body.mode, maker, character: body.character, object: body.object, picture: body.picture, finish: body.finish }).find((f) => !live?.[f]) : undefined;
+  const needFeature = body && maker && !owner ? requestFeatures({ mode: body.mode, maker, character: body.character, object: body.object, picture: body.picture, finish: body.finish, reshoot: body.reshoot }).find((f) => !live?.[f]) : undefined;
   const setupNeed = needFeature ? ownSetupItem(`genjutsu:${needFeature}`) : null;
 
   const blocker = !clip
@@ -925,7 +934,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                         ? longPart
                           ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxContinued} s; past 15 s it continues window by window`
                           : `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds} s of one continuous shot, the person in its first frame`
-                        : mode === "motion" && maker?.part
+                        : (mode === "motion" || mode === "reshoot") && maker?.part
                           ? duration && duration > maker.part.max
                             ? `Pick up to ${maker.part.max} s — only that part comes out`
                             : `${maker.part.min}–${maker.part.max} s; the whole clip, or just the part you need`
@@ -1040,7 +1049,19 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                 <Panel
                   id="gj-refs"
                   className="scroll-mt-24"
-                  title={sceneEdit ? (action === "background" ? "The new place (optional)" : "What goes in (optional)") : modeInfo.refs}
+                  title={
+                    sceneEdit
+                      ? action === "background"
+                        ? "The new place (optional)"
+                        : "What goes in (optional)"
+                      : mode === "reshoot"
+                        ? reshoot.painted
+                          ? "Your painted first frame"
+                          : reshoot.choice === "edit"
+                            ? "How it looks (optional)"
+                            : modeInfo.refs
+                        : modeInfo.refs
+                  }
                   aside={<span className="text-[12px] text-muted-foreground tabular-nums">{refs.length}/{maxRefs}</span>}
                 >
                   <div className={cn("flex flex-wrap gap-2", isCharacter && maxRefs > 1 && "grid grid-cols-2 sm:flex")}>
@@ -1060,7 +1081,15 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                     )}
                   </div>
                   <p className="mt-2 text-[12px] text-muted-foreground">
-                    {group ? "Up to four characters, each taking over one person in the clip — same moves, same scene, same sound." : REF_HINT[mode]}
+                    {group
+                      ? "Up to four characters, each taking over one person in the clip — same moves, same scene, same sound."
+                      : mode === "reshoot"
+                        ? reshoot.painted
+                          ? "The part's first frame with the change already in it, the same size as the clip."
+                          : reshoot.choice === "edit"
+                            ? "A new outfit, an object or a place to match. Leave it empty to go by your words."
+                            : REF_HINT[mode]
+                        : REF_HINT[mode]}
                     {maker && maker.refs.max > 0 && maker.refs.max < maxRefs && ` ${maker.label} uses ${maker.refs.max === 1 ? "the first one" : `up to ${maker.refs.max}`}.`}
                   </p>
                 </Panel>
@@ -1164,6 +1193,8 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                 />
               )}
               {sceneEdit && marked.target && objectEdit.target && <p className="-mt-2 text-[12px] text-muted-foreground">{MARKED_NOTE}</p>}
+
+              {mode === "reshoot" && <ReshootFields value={reshoot} onChange={setReshoot} open={open} mark={mark} seed={seed} onSeed={setSeed} />}
 
               {group && (
                 <WhoBecomesWho
@@ -1273,7 +1304,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                 </Field>
               )}
 
-              {clip?.info?.hasAudio !== false && mode !== "picture" && <OriginalSoundPicker engine={soundEngine} value={originalSound} onChange={setOriginalSound} />}
+              {clip?.info?.hasAudio !== false && mode !== "picture" && mode !== "reshoot" && <OriginalSoundPicker engine={soundEngine} value={originalSound} onChange={setOriginalSound} />}
 
               <div className="space-y-3 border-t pt-3">
                 <div className="flex items-center gap-2">
@@ -1415,7 +1446,7 @@ function lookPlaceholder(s: LookSource): GenjutsuLook {
 
 const CLICK_ON_GPU = "Clicking runs on your GPU (SAM 3.1 marks them) — on the cloud, pick who in words";
 
-const TARGET_QUESTION: Record<GenjutsuMode, string> = { motion: "", restyle: "", character: "Who gets swapped?", swap: "What gets swapped?", insert: "Where does it go?", picture: "", finish: "" };
+const TARGET_QUESTION: Record<GenjutsuMode, string> = { motion: "", restyle: "", character: "Who gets swapped?", swap: "What gets swapped?", insert: "Where does it go?", picture: "", finish: "", reshoot: "" };
 
 const REF_CTA: Record<GenjutsuMode, string> = {
   motion: "Add your character",
@@ -1425,6 +1456,7 @@ const REF_CTA: Record<GenjutsuMode, string> = {
   restyle: "Add a character",
   picture: "Add your character",
   finish: "Add the character photo",
+  reshoot: "Add a picture",
 };
 
 const REF_HINT: Record<GenjutsuMode, string> = {
@@ -1435,6 +1467,7 @@ const REF_HINT: Record<GenjutsuMode, string> = {
   restyle: "Optional: characters who should appear in the look.",
   picture: "One picture gives both the look and the setting. Full body, in the place you want them.",
   finish: "The face to match: a clear, front-facing photo of your character.",
+  reshoot: "A clear picture of who plays the part, head to toe. More angles help.",
 };
 
 const PROMPT_LABEL: Record<GenjutsuMode, (t?: GenjutsuTarget) => string> = {
@@ -1445,6 +1478,7 @@ const PROMPT_LABEL: Record<GenjutsuMode, (t?: GenjutsuTarget) => string> = {
   restyle: () => "Anything to keep (optional)",
   picture: () => "Adjust (optional)",
   finish: () => "",
+  reshoot: () => "",
 };
 
 const PROMPT_PLACEHOLDER: Record<GenjutsuMode, string> = {
@@ -1455,6 +1489,7 @@ const PROMPT_PLACEHOLDER: Record<GenjutsuMode, string> = {
   restyle: "e.g. “keep her pink hair the same in every shot”",
   picture: "e.g. “arms crossed, chin up”",
   finish: "",
+  reshoot: "",
 };
 
 function frameHint(mode: GenjutsuMode, target: GenjutsuTarget | undefined, points: number, painted: boolean): string {

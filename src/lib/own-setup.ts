@@ -70,12 +70,15 @@ const ITEMS: Record<string, Entry> = {
   "genjutsu:picture-h3-renderer": { setup: gpu(24, { files: true }), passes: "picture-h3-renderer" },
   "genjutsu:finish-faces": { setup: gpu(24, { files: true }), passes: "finish-faces" },
   "genjutsu:motion-h3": { setup: gpu(24, { files: true }), passes: "motion-h3" },
+  "genjutsu:reshoot-swap": { setup: gpu(32, { files: true }), passes: "reshoot-swap" },
+  "genjutsu:reshoot-edit": { setup: gpu(32, { files: true }), passes: "reshoot-edit" },
   // Genjutsu's makers that only those features use.
   "oss-h3-scene-edit": { setup: gpu(24, { files: true }), passes: "object-change" },
   "oss-from-picture": { setup: gpu(24, { files: true }), passes: "picture" },
   "oss-from-picture-frame": { setup: gpu(24, { files: true }), passes: "picture" },
   "oss-h3-fix-faces": { setup: gpu(24, { files: true }), passes: "finish-faces" },
   "oss-h3-motion": { setup: gpu(24, { files: true }), passes: "motion-h3" },
+  "oss-h3-reshoot": { setup: gpu(32, { files: true }), passes: "reshoot-swap" },
   // "Clean the voice first": a light voice split on any GPU, or a fal.ai key.
   "sound:clean-voice-first": { setup: gpu(undefined, { orKey: "fal" }), passes: "clean-voice-first" },
   // WorldCast filming: a Linux computer with a 48 GB card.

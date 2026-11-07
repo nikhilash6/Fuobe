@@ -5,6 +5,7 @@
  * viewer's to give. Client-safe: the catalog (catalog.ts) checks every row with these same rules when it is built.
  */
 import { CHARACTER_SWAP } from "@/lib/catalog/character-swap";
+import { RESHOOT } from "@/lib/catalog/reshoot";
 import {
   ALL_FEATURES,
   decodeSetup,
@@ -51,6 +52,7 @@ export function partLimits(mode: GenjutsuMode, model?: string): { min: number; m
   if (mode === "character") return { min: CHARACTER_SWAP.minSeconds, max: CHARACTER_SWAP.maxSeconds };
   if (mode === "picture") return { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds };
   if (mode === "finish") return { min: 1, max: OPENJUTSU_LIMITS.coloursMaxSeconds };
+  if (mode === "reshoot") return { min: RESHOOT.minSeconds, max: RESHOOT.maxSeconds };
   return { min: GENJUTSU.minSeconds, max: GENJUTSU.maxSeconds };
 }
 

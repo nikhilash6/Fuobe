@@ -90,6 +90,7 @@ import { maskMemoryProblem } from "@/lib/catalog/swap-studio";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { maskGraph, segmentGraph, type MaskGraphOptions, type SegmentGraphOptions } from "@/lib/swap-studio-graphs";
 import { OPENJUTSU_IDS, openjutsuGraph, openjutsuLeftOut, type OpenjutsuSettings } from "@/lib/openjutsu-graphs";
+import { RESHOOT_IDS, reshootGraph, type ReshootSettings } from "@/lib/reshoot-graph";
 import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@/lib/restore-graph";
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, REVIEW_EXTRA, reuseOf, targetPhrase, type RemovalReview } from "@/lib/catalog/remove-object";
@@ -798,6 +799,8 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
   // Genjutsu's Openjutsu modes (src/lib/openjutsu-graphs.ts): the settings travel as params.extra.openjutsu and are written
   // into the graph by node title after the media are bound; the pictures a request leaves out go with their branches.
   const openjutsu = OPENJUTSU_IDS.has(manifest.id) ? ((extra.openjutsu && typeof extra.openjutsu === "object" ? extra.openjutsu : {}) as OpenjutsuSettings) : null;
+  // Fuobe Reshoot (src/lib/reshoot-graph.ts): its settings travel the same way, so the own-setup checks read them too.
+  const reshoot = RESHOOT_IDS.has(manifest.id) ? ((extra.openjutsu && typeof extra.openjutsu === "object" ? extra.openjutsu : {}) as ReshootSettings) : null;
   delete extra.openjutsu;
   // Genjutsu's Character swap (MiniMax H3 on the h3_character_swap / H3 Relay packs): the part, the quality as the
   // unpatched pack's string, who to swap (SAM words, largest / leftmost / rightmost / index, or clicks moved into H3's
@@ -1285,6 +1288,14 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     try {
       const seed = typeof openjutsu.seed === "number" ? openjutsu.seed : typeof values.seed === "number" ? values.seed : randomSeed();
       wf = openjutsuGraph(manifest.id, wf, { ...openjutsu, seed }, { generationId: ctx.generationId, clip: clip ? { width: clip.width, height: clip.height } : undefined });
+    } catch (e) {
+      throw new ComposeError((e as Error).message, 400);
+    }
+  }
+  if (reshoot) {
+    const seed = typeof reshoot.seed === "number" ? reshoot.seed : typeof values.seed === "number" ? values.seed : randomSeed();
+    try {
+      wf = reshootGraph(wf, { ...reshoot, seed });
     } catch (e) {
       throw new ComposeError((e as Error).message, 400);
     }

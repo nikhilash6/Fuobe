@@ -278,6 +278,8 @@ export const CUSTOM_NODE_REPOS = {
   'comfyui-image-detail-contrast': 'https://github.com/D3voz/comfyui-image-detail-contrast/tree/485a5e246424ce012b998862b45f06d21e8d63b2',
   Orion4D_FXMax: 'https://github.com/orion4d/Orion4D_FXMax/tree/7048e8423ad7d1a6a52119d0d4870c2b7fc2885f',
   SolarRenderer: 'https://github.com/Enderfga/SolarRenderer/tree/0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d',
+  // Fuobe Reshoot: two Python files in Viggle's model repository, downloaded at a pinned revision (install-comfyui.sh RESHOOT=1).
+  'ComfyUI-Viggle-Remake': 'https://huggingface.co/Viggle/Viggle-Remake/tree/21665fa7a1e038e0a5312fb15f37b18d0f06f117/comfyui/ComfyUI-Viggle-Remake',
   'ComfyUI-H3-FaceRefine': 'https://github.com/Carasibana/ComfyUI-H3-FaceRefine',
   'ComfyUI-Impact-Pack': 'https://github.com/ltdrdata/ComfyUI-Impact-Pack',
   comfyui_controlnet_aux: 'https://github.com/Fannovel16/comfyui_controlnet_aux/tree/a587a4c1594524c1d2de5cd1a86cd868ff448e1c',
@@ -328,6 +330,7 @@ export const PACK_CLASSES = {
   'comfyui-image-detail-contrast': /^ImageDetailContrast$/,
   Orion4D_FXMax: /^Orion4D_FXMax_/,
   SolarRenderer: /^SolarRenderer(Model|LoraLoader|Conditioning|Sigmas)$/,
+  'ComfyUI-Viggle-Remake': /^Remake(Conditioning|KeyframeUntil|Noise)$/,
   'ComfyUI-H3-FaceRefine': /^H3Face(TrackCrop|MaskSAM|Stitch)$/,
   'ComfyUI-Impact-Pack': /^SAMLoader$/,
   comfyui_controlnet_aux: /^Metric3D-NormalMapPreprocessor$/,
@@ -441,6 +444,9 @@ export const KNOWN_MODELS = {
   'minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/3ec17a324ced54151364f24f8b5fb6bf7e26414f/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors' },
   // Regenerate in Cinema (n7-10): LightX2V's FL2V Turbo 4-step v1.2 (Apache-2.0 in its card at 3ec17a3), the 768p draft of rdh's "Prompt to 2K".
   'minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/3ec17a324ced54151364f24f8b5fb6bf7e26414f/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors' },
+  // Fuobe Reshoot: Viggle Remake's swap and edit weights, each merged into H3's transformer at fp32 and quantized to int8.
+  'viggle_remake_swap_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Viggle/Viggle-Remake/resolve/21665fa7a1e038e0a5312fb15f37b18d0f06f117/int8/viggle_remake_swap_pruned_int8_convrot.safetensors' },
+  'viggle_remake_edit_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Viggle/Viggle-Remake/resolve/21665fa7a1e038e0a5312fb15f37b18d0f06f117/int8/viggle_remake_edit_pruned_int8_convrot.safetensors' },
   'h3_character_swap_v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/d06323b7c8e70e97cdab48b78a1e05f786c8cba9/h3_character_swap_v1.5.safetensors' },
   'h3_character_swap_pro4500_1000.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/a665bb7e3bb9804e487d2925f67744f554c8ad49/h3_character_swap_pro4500_1000.safetensors' },
   'H3-Person-Remover-V1.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors' },
@@ -6401,6 +6407,33 @@ export const SPEC = [
     license: `${OJ_H3_LICENCE} · Metric3D BSD-2-Clause`,
     notes: 'Genjutsu Motion transfer\'s "MiniMax H3" model (oss-h3-motion): video-from-picture-h3 with the character photo itself as Picture 1 (no prepared first frame) and words that put the character in the photo\'s setting. video = the part fitted at 24 fps, image = the character photo. params.extra.openjutsu: seconds, quality 480p | 720p, motion 0 | 512 | 768, seed (the same settings as From picture\'s video).',
   },
+  // Fuobe Reshoot (Genjutsu): Viggle Remake (Viggle AI) on ComfyUI's own MiniMax H3, its swap or edit weights merged at
+  // fp32 and quantized to int8 (one file replaces the base model and the LoRA), the pack's three nodes (keyframes pinned
+  // at real frames, the clip's soundtrack held clean, the reference noise order), 6 steps. Qwen3-VL 8B describes the part's
+  // motion and its paragraph goes where the six-section prompt says {scene}. Genjutsu fits the part first (24 fps, the
+  // canvas's short edge on 32 px steps) and paints its first frame; the provider writes the settings by node title
+  // (src/lib/reshoot-graph.ts).
+  ...['swap', 'edit'].map((mode) => ({
+    id: `video-reshoot-${mode}-h3`,
+    title: mode === 'swap'
+      ? 'Fuobe Reshoot, who\'s in it: a new person plays the part, from a painted first frame (Viggle Remake swap on MiniMax H3, int8), the clip\'s motion, camera, timing and sound kept'
+      : 'Fuobe Reshoot, what\'s in it: an outfit, an object, the place, the weather or the light changed from a painted first frame (Viggle Remake edit on MiniMax H3, int8), the rest of the shot and its sound kept',
+    capability: mode === 'swap' ? 'video-swap' : 'video-scene-edit',
+    handBuilt: `hand-built/video-reshoot-${mode}-h3.json`,
+    packs: ['ComfyUI-Viggle-Remake', 'ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('6', 'video')], image: [b('7', 'image')], prompt: [b('12', 'string')], seed: [b('14', 'seed')] },
+    outputs: [{ node: '20', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 12.25 },
+    vramGb: 30,
+    license:
+      'Viggle Remake weights: MiniMax H3 Community License (a Model Derivative of MiniMax H3, © Viggle AI); show "MiniMax H3" on the product\'s interface; commercial use above US$20M yearly revenue needs MiniMax\'s written authorization · ' +
+      'ComfyUI-Viggle-Remake nodes Apache-2.0 · MiniMax H3 text encoder and VAEs under the MiniMax H3 Community License · Qwen3-VL 8B describer Apache-2.0',
+    notes:
+      'video = the part fitted at 24 fps on the canvas (short edge 480 or 736, both sides on 32 px steps), image = the painted first frame (pinned at frame 0), prompt = Remake\'s six-section prompt with {scene} where the motion paragraph goes. ' +
+      'params.extra.openjutsu: frames (17n + 5, 90-294 at 480p, 90-175 at 720p), quality 480p | 720p, describe (the describer\'s instruction), seed. ' +
+      'Weights touched one stage after another: describer 9.4 GB, NVFP4 text encoder 15.7 GB, Remake int8 21 GB, VAEs 5.8 GB. The authors measured 832x480 x 226 frames in about 14 s a step on a B200 (6 steps).',
+  })),
   {
     id: 'video-fix-faces-h3',
     title: 'Fix faces: H3-FaceRefine tracks the character\'s face, MiniMax H3 redraws it in overlapping sections and it is pasted back (faces over 20 % of the frame are left alone)',

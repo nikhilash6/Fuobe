@@ -23,6 +23,7 @@ import {
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { CHARACTER_DESCRIBER, cleanDescription, DESCRIBE_PICTURE } from "@/lib/character-description";
 import { openCapNote, SHARPEN_COPY, SHARPEN_SIGMA_RANGE } from "@/lib/catalog/sharpen";
+import { RESHOOT, reshootFrames, reshootQuality, type ReshootOptions } from "@/lib/catalog/reshoot";
 import {
   ALL_FEATURES,
   chooseMaker,
@@ -121,6 +122,8 @@ export interface GenjutsuBody {
   picture?: PictureOptions;
   /** Finish: Fix faces or Fix colours. */
   finish?: FinishOptions;
+  /** Fuobe Reshoot: who's in it or what's in it. */
+  reshoot?: ReshootOptions;
 }
 
 /**
@@ -193,6 +196,12 @@ const picture = z.object({
   renderer: z.enum(["solar", "h3"]).optional(),
   motionDetail: z.union([z.literal(0), z.literal(512), z.literal(768)]).optional(),
 });
+const reshoot = z.object({
+  choice: z.enum(["swap", "edit"]),
+  who: z.string().max(RESHOOT.whoChars).optional(),
+  words: z.string().max(RESHOOT.wordsChars).optional(),
+  painted: z.boolean().optional(),
+});
 const finish = z.object({
   tool: z.enum(["faces", "colours"]),
   faceStyle: z.enum(["photo", "mouth"]).optional(),
@@ -205,7 +214,7 @@ const finish = z.object({
 /** The body of /api/genjutsu (and /estimate). */
 export const GenjutsuBodySchema = z.object({
   engine: z.enum(["cloud", "open"]),
-  mode: z.enum(["motion", "character", "swap", "restyle", "insert", "picture", "finish"]),
+  mode: z.enum(["motion", "character", "swap", "restyle", "insert", "picture", "finish", "reshoot"]),
   modelId: z.string().max(80).optional(),
   tier: z.enum(["standard", "high"]).optional(),
   quality: z.enum(["480p", "720p", "768p", "1080p", "2K", "4K"]).optional(),
@@ -232,6 +241,7 @@ export const GenjutsuBodySchema = z.object({
   object: objectEdit.optional(),
   picture: picture.optional(),
   finish: finish.optional(),
+  reshoot: reshoot.optional(),
   cuts: z.array(seconds).max(200).optional(),
   /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts). */
   originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
@@ -296,7 +306,7 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: Ge
   }
   const maker = picked.maker;
   // A setting that hasn't opened (one by one, a light, the clip's own person…): the owner's alone.
-  if (requestFeatures({ mode: body.mode, maker, character: body.character, object: body.object, picture: body.picture, finish: body.finish }).some((f) => !open(f))) throw new ShortsError(NOT_HERE, 422);
+  if (requestFeatures({ mode: body.mode, maker, character: body.character, object: body.object, picture: body.picture, finish: body.finish, reshoot: body.reshoot }).some((f) => !open(f))) throw new ShortsError(NOT_HERE, 422);
   // The header's facts win over what the browser read (the estimate runs before the upload is read).
   const info = opts.probe ? await probeSource(body.source.url) : {};
   const source: RemoveSource = {
@@ -316,7 +326,7 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: Ge
   const target = MODE_TARGETS[body.mode].length ? (body.target ?? MODE_TARGETS[body.mode][0]) : undefined;
   const references = body.references ?? [];
   const clicks = (body.points ?? []).filter((p) => p.label !== "negative").length;
-  const problem = genjutsuProblem({ mode: body.mode, maker, source, range, references: references.length, target, subject: body.subject, prompt: body.prompt, points: clicks, mask: !!body.mask, look: body.look, seed: body.seed, character: body.character, object: body.object, picture: body.picture, finish: body.finish });
+  const problem = genjutsuProblem({ mode: body.mode, maker, source, range, references: references.length, target, subject: body.subject, prompt: body.prompt, points: clicks, mask: !!body.mask, look: body.look, seed: body.seed, character: body.character, object: body.object, picture: body.picture, finish: body.finish, reshoot: body.reshoot, quality: body.quality });
   if (problem) throw new ShortsError(problem, 422);
   // From picture's video starts from a first frame this install made (the review step can't be skipped).
   if (maker.review && body.picture?.stage === "video" && opts.probe && !madeFrame(body.picture.frame)) throw new ShortsError("Make and pick the first frame first", 422);
@@ -362,6 +372,7 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: Ge
       ...(body.object ? { object: body.object } : {}),
       ...(body.picture ? { picture: body.picture } : {}),
       ...(body.finish ? { finish: body.finish } : {}),
+      ...(body.mode === "reshoot" ? { reshoot: body.reshoot ?? { choice: "swap" as const } } : {}),
       ...(paint ? { paint } : {}),
       // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
       ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, maker.engine) }),
@@ -434,6 +445,15 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
   const fps = source.fps ?? 30;
   const fuobeLook = body.mode === "restyle" && m.looks === "fuobe";
   const len = range.end - range.start;
+  if (m.reshoot) {
+    const r = body.reshoot ?? { choice: "swap" as const };
+    const quality = reshootQuality(body.quality);
+    const frames = reshootFrames(len, quality);
+    if (!r.painted) notes.push(r.choice === "swap" ? "Your picture is first painted into the part's first frame, then the whole part is remade from it" : "Your change is first painted into the part's first frame, then the whole part is remade from it");
+    if (frames && frames / RESHOOT.fps < len - 0.2) notes.push(`Makes the first ${(frames / RESHOOT.fps).toFixed(1)} s of your part at ${quality}`);
+    notes.push("The clip's motion, camera, timing and sound stay as filmed");
+    return notes;
+  }
   if (m.group || m.actions || m.review || m.tool || m.id === MOTION_H3) {
     notes.push(...openjutsuNotes(body, m, range));
     return notes;

@@ -535,6 +535,14 @@ export const NODE_PACKS: NodePack[] = [
     ...GPL,
     note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in: it registers HTTP routes when it loads",
   }),
+  // Fuobe Reshoot: the node pack in Viggle's model repository (two Python files), pinned in packs.json and
+  // install-comfyui.sh (RESHOOT=1).
+  pack("ComfyUI-Viggle-Remake", "https://huggingface.co/Viggle/Viggle-Remake/tree/21665fa7a1e038e0a5312fb15f37b18d0f06f117/comfyui/ComfyUI-Viggle-Remake", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Viggle Remake's nodes (Viggle AI): the clip, the painted frames and the soundtrack as MiniMax H3 conditioning, keyframes pinned at real frames; Apache-2.0 code. Powered by Viggle Remake (https://huggingface.co/Viggle/Viggle-Remake). The weights it runs are under the MiniMax H3 Community License",
+  }),
   // Genjutsu's Openjutsu modes (Group swap, Scene edit, From picture, Fix faces, Fix colours): pinned in packs.json and
   // install-comfyui.sh (OPENJUTSU_MODES=1). LICENSE files read at the pinned commits.
   pack("ComfyUI-MiniMaxH3-Context-Loop", "https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop/tree/43afeffcc570beb5f7382593e79e4b211c7e02f6", {

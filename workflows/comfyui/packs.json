@@ -588,5 +588,14 @@
     "folders": [
       "sams"
     ]
+  },
+  "ComfyUI-Viggle-Remake": {
+    "repo": "https://huggingface.co/Viggle/Viggle-Remake",
+    "commit": "21665fa7a1e038e0a5312fb15f37b18d0f06f117",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": "comfyui/ComfyUI-Viggle-Remake",
+    "folders": []
   }
 }

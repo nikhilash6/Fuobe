@@ -1458,5 +1458,15 @@
   "revision": "e8ddc4bfa664d69213930552493c220c3af56f41",
   "sizeBytes": 15776972360,
   "sha256": "2003b63f87917f80061d0196c3114c70374c4d60a44ce72e03cf52305eeaa5e3"
+ },
+ "https://huggingface.co/Viggle/Viggle-Remake/resolve/21665fa7a1e038e0a5312fb15f37b18d0f06f117/int8/viggle_remake_edit_pruned_int8_convrot.safetensors": {
+  "revision": "21665fa7a1e038e0a5312fb15f37b18d0f06f117",
+  "sizeBytes": 20970379616,
+  "sha256": "ff13b0b61d1e0e702e21de6a2bbc284b9e0006a31f3cd047daec303dab6b3155"
+ },
+ "https://huggingface.co/Viggle/Viggle-Remake/resolve/21665fa7a1e038e0a5312fb15f37b18d0f06f117/int8/viggle_remake_swap_pruned_int8_convrot.safetensors": {
+  "revision": "21665fa7a1e038e0a5312fb15f37b18d0f06f117",
+  "sizeBytes": 20970379616,
+  "sha256": "7ba8cf79f8f09944f743f99b69d85300a70a4bc9493156cb1fff3a68a9716a47"
  }
 }

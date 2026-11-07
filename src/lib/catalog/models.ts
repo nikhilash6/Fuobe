@@ -1409,6 +1409,21 @@ const open: ModelDef[] = [
     routes: [comfy("scene-edit", "video-scene-edit-h3", "Openjutsu object: SAM 3.1 tracks what you name, MiniMax H3 + DMAD redraw only that, clip by clip")],
     options: { seed: true, resolutions: ["480p", "720p", "1080p"], maxImages: 1 },
   }),
+  // Fuobe Reshoot (Genjutsu; src/lib/catalog/reshoot.ts): Viggle Remake on MiniMax H3, one graph per choice. Your GPU only.
+  o({
+    id: "oss-h3-reshoot",
+    name: "Fuobe Reshoot",
+    vendor: "MiniMax × Viggle",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Same shot. Anything you change: who's in it, or what's in it · the clip's motion, camera and sound kept · 32 GB GPU",
+    hidden: true,
+    routes: [
+      comfy("video-swap", "video-reshoot-swap-h3", "Viggle Remake swap (int8): a new person plays the part from the painted first frame; Qwen3-VL 8B describes the motion"),
+      comfy("scene-edit", "video-reshoot-edit-h3", "Viggle Remake edit (int8): an outfit, an object, the place, the weather or the light changes from the painted first frame"),
+    ],
+    options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1 },
+  }),
   o({
     id: "oss-from-picture-frame",
     name: "From picture · first frame",
