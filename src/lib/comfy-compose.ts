@@ -1323,7 +1323,7 @@ export async function composeWorkflow(endpointTemplate: string, input: GenInput,
     wf = seconds ? silenceVhsAudio(wf, Math.max(1, Math.round(seconds * fps)) / fps) : dropVhsAudio(wf);
   }
   if (clip && !clip.hasAudio && clip.hasVideo) {
-    wf = dropVhsAudio(wf);
+    wf = dropVhsAudio(wf, clipLength);
     // Core LoadAudio reading the clip's own sound (the end card's ad): no sound, no sound track.
     wf = dropLoadedSound(wf, (b.video ?? []).filter((t) => t.input === "audio").map((t) => t.node), outputIds);
   }
