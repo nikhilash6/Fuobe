@@ -162,7 +162,14 @@ export function tryFreeFor(
  * hosted runs are off, or with nothing kept off.
  */
 export function pickerRules(v: { hosted?: boolean; prefer?: "pool"; runOn?: string; gpu: { connected: boolean }; pool?: PoolRules } | undefined): PoolRules | undefined {
-  if (!v?.hosted || !v.pool) return undefined;
-  const here = !v.gpu.connected || v.runOn === "site" || v.runOn === "key" || (!v.runOn && v.prefer === "pool");
-  return here ? v.pool : undefined;
+  return v?.pool && runsGoHere(v) ? v.pool : undefined;
+}
+
+/**
+ * Do a visitor's open runs go to this studio's GPUs (hosted runs on, and no GPU of its own, or its pick or the install's
+ * puts them there first)? The place src/lib/runnable-here.ts orders and tags the pickers for.
+ */
+export function runsGoHere(v: { hosted?: boolean; prefer?: "pool"; runOn?: string; gpu: { connected: boolean } }): boolean {
+  if (!v.hosted) return false;
+  return !v.gpu.connected || v.runOn === "site" || v.runOn === "key" || (!v.runOn && v.prefer === "pool");
 }

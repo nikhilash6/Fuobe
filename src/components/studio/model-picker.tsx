@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Cloud, Cpu, SearchX, Sparkles, Star } from "lucide-react";
+import { ChevronDown, Cloud, Cpu, KeyRound, SearchX, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KEY_ADDED_EVENT, openAddKey } from "@/components/keys/your-keys";
@@ -21,7 +21,9 @@ import { groupModels, studioBest, toggleIn } from "@/lib/composer";
 import { readsBoxes } from "@/lib/layout-prompt";
 import { pickerPrice } from "@/lib/model-rows";
 import { cn } from "@/lib/utils";
-import { ownSetupLabel } from "@/lib/own-setup";
+import { ownSetupDetail, ownSetupLabel } from "@/lib/own-setup";
+import { useHere } from "@/hooks/use-pool-rules";
+import { hereSetup, hereTag, runsHere } from "@/lib/runnable-here";
 import { answerPickModel } from "@/lib/pick-model";
 import { addKeyLabel, billedTo, CLOUD_KEY, CLOUD_PROVIDERS, needsKey, type CloudProvider } from "@/lib/your-keys";
 import { CLOUD_PICKER_NOTE, CLOUD_SECTION_LABEL, cloudModelAsk, openCloudPanel, visitorEngine } from "@/lib/engine-ux";
@@ -98,6 +100,7 @@ export function ModelRow({
   edits,
   setup,
   guest,
+  here,
 }: {
   m: ModelDef;
   selected: boolean;
@@ -121,6 +124,11 @@ export function ModelRow({
   edits?: boolean;
   /** It runs on the visitor's own GPU or key (own-setup.ts): its label in place of the price; Run then opens that setup. */
   setup?: OwnSetup | null;
+  /**
+   * A "More models" row (runnable-here.ts): what runs it instead of this install's GPUs, as a short positive tag ("With
+   * your GPU · 24 GB", "With your fal.ai key"; the owner's "Add to a worker") in place of the price.
+   */
+  here?: { setup: OwnSetup; owner: boolean } | null;
 }) {
   return (
     <>
@@ -161,7 +169,16 @@ export function ModelRow({
           </span>
         )}
       </span>
-      {setup && !needs ? (
+      {here && !needs ? (
+        <span
+          data-slot="here-tag"
+          title={here.owner ? "No worker has its files yet: add them on the Workers page." : ownSetupDetail(here.setup)}
+          className="inline-flex h-auto min-h-4 max-w-[45%] shrink-0 items-center gap-1 overflow-hidden rounded-[4px] bg-muted px-1 text-[10px] leading-4 font-medium whitespace-nowrap text-muted-foreground"
+        >
+          {here.setup.need === "key" ? <KeyRound className="size-2.5! shrink-0" aria-hidden /> : <Cpu className="size-2.5! shrink-0" aria-hidden />}
+          <span className="truncate">{hereTag(here.setup, here.owner)}</span>
+        </span>
+      ) : setup && !needs ? (
         <OwnSetupChip setup={setup} className="h-auto min-h-4 max-w-[45%]" />
       ) : needs ? (
         // On a phone the short words, so the model's name keeps its room.
@@ -333,6 +350,9 @@ export function PickerList({
   const [recent] = useStoredList(RECENT_MODELS);
   const [starred, setStarred] = useStoredList(STARRED_MODELS);
   const today = useToday();
+  // What runs on this install's GPUs now comes first; the rest follows as "More models", each tagged with what runs it.
+  const here = useHere();
+  const runs = useMemo(() => (here ? (m: ModelDef) => runsHere(here, m) : undefined), [here]);
   // A studio for clip edits (Edit video: its first operation edits a clip) prices models as an edit bills.
   const editsClips = ops?.[0] === "v2v" || ops?.[0] === "video-swap" || ops?.[0] === "video-insert";
   const engines = useMemo<Engine[]>(() => (mode === "both" ? ["cloud", "open"] : [mode]), [mode]);
@@ -343,8 +363,8 @@ export function PickerList({
     return recipe && models.some((m) => m.id === recipe && m.engine === engine) ? [recipe, ...ranked.filter((id) => id !== recipe)] : ranked;
   }, [models, engine, defaultModels, ops, recipe]);
   const { groups, count } = useMemo(
-    () => groupModels({ models, engine, engines, query: q, recent, starred, best, flat, boxes }),
-    [models, engine, engines, q, recent, starred, best, flat, boxes],
+    () => groupModels({ models, engine, engines, query: q, recent, starred, best, flat, boxes, runs }),
+    [models, engine, engines, q, recent, starred, best, flat, boxes, runs],
   );
   const demo = placeholdersOn(status?.demoMode);
   const otherEngine = engine === "cloud" ? "open" : "cloud";
@@ -383,6 +403,10 @@ export function PickerList({
     if (needs && onNeedsKey) return onNeedsKey(m, needs[0], needs);
     onChange(m);
     onPicked();
+  };
+  const hereRow = (m: ModelDef) => {
+    const setup = hereSetup(here, m);
+    return setup && here ? { setup, owner: here.owner } : null;
   };
   const addKey = () => {
     onPicked();
@@ -480,6 +504,7 @@ export function PickerList({
                   made={m.id === madeWith}
                   edits={editsClips}
                   setup={ownSetup?.(m)}
+                  here={hereRow(m)}
                 />
               </CommandItem>
             ))}

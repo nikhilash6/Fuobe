@@ -1020,6 +1020,11 @@ export interface StatusInfo {
    * `viewer` (that is a visitor's view of the studio).
    */
   ownerGpu?: OwnerGpuView;
+  /**
+   * The owner's ComfyUI runs on the workers: the open models none of them can run now (`own`), so his pickers order, tag
+   * and default as his runs go (src/lib/runnable-here.ts). Never with `viewer`.
+   */
+  pool?: PoolRules;
 }
 
 /** The viewer's own GPU for the status strip and the header pill: an account's, or the owner's computer. */

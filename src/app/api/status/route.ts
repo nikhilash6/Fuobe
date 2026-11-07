@@ -8,6 +8,7 @@ import { llmBackends } from "@/server/providers/llm";
 import { nothingConnected, type EngineModeName } from "@/lib/connections";
 import { getSetting, setSetting } from "@/server/settings";
 import { offeredSummary } from "@/server/model-access";
+import { poolOwnModels } from "@/server/pool-own-setup";
 import { placeName } from "@/server/place-name";
 import { helperKnown, helperLive } from "@/server/text-helper";
 
@@ -39,6 +40,9 @@ export async function GET(request?: Request) {
   // ComfyUI runs on the owner's computer: what the owner's Fuobe tab there last said (ComfyUI stays "configured", so runs
   // wait for that tab instead of turning into demos).
   const ownerGpu = getSetting("comfyWhere") === "computer" ? computerView("owner") : undefined;
+  // ComfyUI runs on the workers: the open models none of them can run now (the same set a visitor's pickers read), so
+  // the owner's pickers order, tag and default as his runs will go (src/lib/runnable-here.ts).
+  const ownerPool = getSetting("comfyWhere") === "workers" ? { own: poolOwnModels() } : undefined;
   return Response.json({
     providers,
     demoMode: getSetting("demoMode"),
@@ -46,6 +50,7 @@ export async function GET(request?: Request) {
     cloudProvider: getSetting("cloudProvider"),
     onboarded,
     ...(ownerGpu && { ownerGpu }),
+    ...(ownerPool && { pool: ownerPool }),
     // Settings → Models & licences: the models switched off, so pickers leave them out (absent while everything is on).
     ...(access && { access }),
     // The text LLM: the AI helper setting, whether Claude takes text steps, the local server (no keys), and the free

@@ -37,7 +37,9 @@ import { RunOnChip } from "./run-on";
 import { PlaceIntro } from "./place-intro";
 import { PoolNote } from "./pool-note";
 import { EndFrameNote } from "./end-frame-note";
-import { modelOwnSetup, pickerRules, poolRunsModel } from "@/lib/pool-rules";
+import { modelOwnSetup, pickerRules } from "@/lib/pool-rules";
+import { carryParams, closestHere, hereDefault, hereOwnLink, hereReason, hereRunLabel, hereSetup, runsHere } from "@/lib/runnable-here";
+import { useHere } from "@/hooks/use-pool-rules";
 import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
 import { OwnSetupChip, useOwnSetupPress, useOwnSetupViewer } from "@/components/own-setup";
@@ -381,7 +383,9 @@ export function Composer({ docked }: { docked: boolean }) {
   // what runs them (their own-setup label, src/lib/pool-rules.ts), as the models that run on a visitor's own setup only
   // do: Run then opens that setup, or runs it on the viewer's own GPU at once. Only a viewer with no GPU of its own is
   // moved off an untouched default they keep off (poolOff, below).
-  const poolRules = status?.viewer?.hosted && !status.viewer.gpu.connected ? status.viewer.pool : undefined;
+  // Where this viewer's open runs go to this install's GPUs, and what they run now (runnable-here.ts): the same check as
+  // the run's (poolGate), for the default, the picker's order and the free alternative below.
+  const here = useHere();
   const labelRules = pickerRules(status?.viewer);
   const models = useMemo(() => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }), [catalog.models, config.kind, pickerOps]);
   const setupViewer = useOwnSetupViewer();
@@ -531,13 +535,11 @@ export function Composer({ docked }: { docked: boolean }) {
   // moves to the first model of its list they run. A model the person picked (or a link, a Reuse) stays, with its label,
   // and Run opens the setup that runs it.
   const untouched = !!model && (model.id === config.defaultModels[engine] || model.id === defaults[engine]);
-  const poolOff = model && untouched && !lockedModel && !presetFallback && !offModel && !poolRunsModel(poolRules, model) ? model : undefined;
-  const poolTo = poolOff
-    ? [defaults[engine], ...models.filter((m) => m.engine === engine).map((m) => m.id)].find((id) => {
-        const m = id && id !== poolOff.id ? models.find((x) => x.id === id) : undefined;
-        return !!m && poolRunsModel(poolRules, m) && !modelSetup(m);
-      })
-    : undefined;
+  // The studio's untouched default that doesn't run here now (runnable-here.ts: a visitor whose runs go to this install's
+  // GPUs, or the owner's on the workers): the default is always one that runs, so it moves to the studio's other default
+  // when that runs, else to the closest model that does (the free alternative's pick).
+  const poolOff = model && untouched && !lockedModel && !presetFallback && !offModel && !runsHere(here, model) ? model : undefined;
+  const poolTo = poolOff ? hereDefault(poolOff, defaults[engine], models, here, { params: draft.params })?.id : undefined;
   useEffect(() => {
     const m = poolOff && poolTo ? catalog.getModel(poolTo) : undefined;
     // A link that names the model keeps it.
@@ -1079,6 +1081,8 @@ export function Composer({ docked }: { docked: boolean }) {
       pressSetup(owner ? null : "fly-around:exact-orbit", () => fly.run.mutate({ engine: withKey ? "cloud" : engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature }));
       return;
     }
+    // A model that doesn't run here now: the press runs the free alternative (its own setup is the link under it).
+    if (hereAlt && !withKey && !once && !skipGpu && !signedUp && !create.isPending) return runHereAlt();
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !withKey && once !== "pool" && !create.isPending) return openGpuFix();
     // It runs on the visitor's own setup: Run opens it (Connect your GPU, Add your key, a guest's sign-up), and nothing
@@ -1453,6 +1457,50 @@ export function Composer({ docked }: { docked: boolean }) {
     const route = routeParams(appRoute(preset, m.engine, m.id, has), "app");
     setDraft((d) => ({ modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed } }));
     if (m.engine !== engine) setEngine(m.engine);
+  };
+
+  // A model picked that doesn't run on this install's GPUs now (runnable-here.ts, the run's own check): Run becomes a
+  // one-press free run on the closest model that does, with the same prompt, files and settings, and a link opens what
+  // runs the one picked (Connect your GPU, Add your key, a guest's sign-up; the owner's workers).
+  const hereNeed = model && !demo && !exact ? hereSetup(here, model) : null;
+  const altPool = lockedModel ? appPickerModels : models;
+  const hereImages = draft.refs.length + slots.filter((s) => s.accept === "image" && draft.slots[s.key]?.ref).length;
+  const hereAlt = useMemo(
+    () => (hereNeed && model ? closestHere(model, altPool, here, { op: effectiveOp, params: draft.params, images: hereImages, endFrame: !!draft.slots.endImage?.ref }) : undefined),
+    [hereNeed, model, altPool, here, effectiveOp, draft.params, hereImages, draft.slots.endImage?.ref],
+  );
+  const [altRun, setAltRun] = useState<string | null>(null);
+  const runHereAlt = () => {
+    if (!hereAlt || !model) return;
+    const keep = { aspectRatio: draft.params.aspectRatio, resolution: draft.params.resolution, duration: draft.params.duration, numOutputs: draft.params.numOutputs, generateAudio: draft.params.generateAudio, seed: draft.params.seed, enhancePrompt: draft.params.enhancePrompt };
+    const kept = Object.fromEntries(Object.entries(carryParams(keep, hereAlt)).filter(([, v]) => v !== undefined));
+    setDraft((d) => (d.modelId !== model.id ? {} : { modelId: hereAlt.id, params: { ...hereAlt.defaults, ...kept }, ...lookCleared(model, hereAlt) }));
+    if (hereAlt.engine !== engine) setEngine(hereAlt.engine);
+    setAltRun(hereAlt.id);
+  };
+  // Once the draft is on the stand-in and its files and price check have settled, it runs (as a press of Run would).
+  useEffect(() => {
+    if (!altRun) return;
+    if (model?.id !== altRun) {
+      if (model && draft.modelId !== altRun) setAltRun(null);
+      return;
+    }
+    if (settling || !priceSettled) return;
+    setAltRun(null);
+    submitRef.current();
+  }, [altRun, model, draft.modelId, settling, priceSettled]);
+  const hereOwn = () => {
+    const setup = poolSetup ?? hereNeed;
+    if (!setup || !model) return;
+    // As Run did before: the setup that runs it (an account with its GPU runs it there with this press; one whose key
+    // runs its cloud version picks, at the key's price).
+    if (viewerInfo?.gpu.connected && setup.need === "gpu") return submitRef.current(undefined, undefined, "own");
+    if (keyTwin && keyPrice && !viewerInfo?.gpu.connected) {
+      if (runOnPicked === "key") return submitRef.current(undefined, withKeyAction(keyTwin.provider, keyTwin.modelId, keyTwin.op, keyPrice));
+      return void setKeyChoice(true);
+    }
+    if (guestHold) guestDraft.keepRun(null, setup);
+    if (pressSetup(setup)) submitRef.current(undefined, undefined, "own");
   };
 
   // Frames on: the start and end frames already attached become the first frames. Off: the first and last frames
@@ -1983,7 +2031,8 @@ export function Composer({ docked }: { docked: boolean }) {
       ) : null}
 
       {/* Toolbar: one row on phones (it scrolls, with faded edges, when it does not fit); from sm up it wraps, so every chip shows. */}
-      <div className="flex items-center gap-2">
+      {/* The free alternative's button takes its own line on a phone, so the model chip keeps its name. */}
+      <div className={cn("flex items-center gap-2", hereAlt && "max-sm:flex-wrap")}>
         {/* Phones (below sm): "+", Settings (icon), the model (it shrinks to fit) and @; the other chips are in the settings sheet. */}
         <div ref={chipRow} style={fade} data-composer-toolbar className="scrollbar-none -my-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-1 sm:flex-wrap sm:overflow-x-visible">
           {kinds.length > 0 && <AttachMenu kinds={kinds} onFiles={attach.attachFiles} onPick={attach.attach} />}
@@ -2126,7 +2175,7 @@ export function Composer({ docked }: { docked: boolean }) {
             className={cn(poolRefused && runOnRows.on === "site" && "max-w-48")}
           />
         )}
-        {!runOnRows && costText && (
+        {!runOnRows && costText && !hereAlt && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -2166,6 +2215,18 @@ export function Composer({ docked }: { docked: boolean }) {
             </TooltipContent>
           </Tooltip>
         )}
+        {hereAlt && model ? (
+          <Button
+            onClick={() => submit()}
+            disabled={create.isPending || signature.lock.isPending || !!altRun}
+            aria-busy={!!altRun || create.isPending || undefined}
+            data-slot="run-free-alt"
+            className="h-10 min-w-0 shrink gap-1.5 rounded-full px-4 text-[13px] font-medium max-sm:w-full"
+          >
+            {altRun || create.isPending ? <Loader2 className="motion-spinner size-4 shrink-0" /> : <ArrowUp className="size-4 shrink-0" />}
+            <span className="truncate">{hereRunLabel(hereAlt, here?.owner)}</span>
+          </Button>
+        ) : (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -2197,8 +2258,29 @@ export function Composer({ docked }: { docked: boolean }) {
             )}
           </TooltipContent>
         </Tooltip>
+        )}
       </div>
       <div aria-live="polite">
+        {hereAlt && hereNeed && model && (
+          <p data-here-alt className="flex flex-wrap items-center gap-x-2 px-2 text-[12px] text-muted-foreground">
+            <span className="inline-flex min-h-6 items-center">{hereReason(model, here?.owner ? "a worker" : sitePlace.text)}</span>
+            {here?.owner ? (
+              <Link href="/settings/workers" className="inline-flex min-h-6 items-center font-medium text-brand-text underline-offset-2 hover:underline">
+                {hereOwnLink(model.name, hereNeed, true)} →
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={create.isPending}
+                onClick={hereOwn}
+                className="inline-flex min-h-6 items-center text-left font-medium text-brand-text underline-offset-2 hover:underline"
+              >
+                {hereOwnLink(model.name, hereNeed)} →
+              </button>
+            )}
+          </p>
+        )}
         {line && blocker && (
           // Focused from the keyboard, it stays (the composer unfolding must not hide what has the focus).
           <p className={cn("px-2 text-[12px] text-muted-foreground", line === "touch" && "[@media(hover:hover)]:hidden [@media(hover:hover)]:focus-within:block")}>
@@ -2218,7 +2300,7 @@ export function Composer({ docked }: { docked: boolean }) {
           </p>
         )}
         {/* Folded (docked, not focused), the composer stays one line: the wait shows again once it opens. */}
-        {!blocker && !gpuSetup && !ownKeyHere && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} offer={waitOffer} alt={withoutLoras} />}
+        {!blocker && !gpuSetup && !ownKeyHere && !hereAlt && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} offer={waitOffer} alt={withoutLoras} />}
         {!blocker && turnedDown && (
           <p data-key-turned-down className="flex flex-wrap items-center gap-x-2 px-2 text-[12px] text-muted-foreground">
             <span>{keyTurnedDownWords(turnedDown.provider)}</span>

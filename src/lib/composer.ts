@@ -1205,7 +1205,7 @@ export function studioBest(models: ModelDef[], engine: Engine, defaultId: string
 }
 
 export interface ModelGroup {
-  id: "boxes" | "recent" | "starred" | "best" | "all" | "results" | "paid";
+  id: "boxes" | "recent" | "starred" | "best" | "all" | "results" | "paid" | "more";
   label: string;
   models: ModelDef[];
 }
@@ -1231,6 +1231,10 @@ export function matchScore(m: Pick<ModelDef, "name" | "vendor" | "tagline" | "fa
  * models" under them, "All models" when it is the only one). `count` is still every model of
  * the engine. With a query: one list across every allowed engine, best
  * matches first.
+ *
+ * `runs` (src/lib/runnable-here.ts runsHere): the models that run on this install's GPUs now come first everywhere: the
+ * sections above hold only those, the rest of them follow as "Ready to run", and the others go last as "More models",
+ * each with what runs it. A search lists them first among equal matches.
  */
 export function groupModels(input: {
   models: ModelDef[];
@@ -1245,21 +1249,27 @@ export function groupModels(input: {
   boxes?: boolean;
   /** A short list in its own order (an app's models): one group. */
   flat?: boolean;
+  /** Does it run here now (runnable-here.ts)? Absent: every model does. */
+  runs?: (m: ModelDef) => boolean;
 }): { groups: ModelGroup[]; count: number } {
-  const { models, engine, engines, query, recent, starred, best, boxes } = input;
+  const { models, engine, engines, query, recent, starred, best, boxes, runs } = input;
+  const later = (m: ModelDef) => (runs && !runs(m) ? 1 : 0);
   const q = query.trim();
   if (q) {
     const hits = models
       .filter((m) => engines.includes(m.engine))
       .map((m, i) => ({ m, s: matchScore(m, q), i }))
       .filter((x) => x.s >= 0)
-      .sort((a, b) => a.s - b.s || (boxes ? Number(!readsBoxes(a.m)) - Number(!readsBoxes(b.m)) : 0) || Number(a.m.engine !== engine) - Number(b.m.engine !== engine) || a.i - b.i)
+      .sort((a, b) => a.s - b.s || later(a.m) - later(b.m) || (boxes ? Number(!readsBoxes(a.m)) - Number(!readsBoxes(b.m)) : 0) || Number(a.m.engine !== engine) - Number(b.m.engine !== engine) || a.i - b.i)
       .map((x) => x.m);
     return { groups: hits.length ? [{ id: "results", label: "Results", models: hits }] : [], count: hits.length };
   }
   const pool = models.filter((m) => m.engine === engine);
-  if (input.flat) return { groups: pool.length ? [{ id: "all", label: "Models", models: pool }] : [], count: pool.length };
-  const byId = new Map(pool.map((m) => [m.id, m]));
+  const more = runs ? pool.filter((m) => !runs(m)) : [];
+  const moreGroup: ModelGroup[] = more.length ? [{ id: "more", label: "More models", models: more }] : [];
+  const now = more.length ? pool.filter((m) => !more.includes(m)) : pool;
+  if (input.flat) return { groups: [...(now.length ? [{ id: "all" as const, label: "Models", models: now }] : []), ...moreGroup], count: pool.length };
+  const byId = new Map(now.map((m) => [m.id, m]));
   const used = new Set<string>();
   const take = (ids: string[], max: number) => {
     const out: ModelDef[] = [];
@@ -1273,14 +1283,15 @@ export function groupModels(input: {
   };
   const top = (
     [
-      ...(boxes ? [{ id: "boxes" as const, label: "Reads your boxes", models: take(pool.filter((m) => readsBoxes(m)).map((m) => m.id), 50) }] : []),
+      ...(boxes ? [{ id: "boxes" as const, label: "Reads your boxes", models: take(now.filter((m) => readsBoxes(m)).map((m) => m.id), 50) }] : []),
       { id: "recent", label: "Recent", models: take(recent, 3) },
       { id: "starred", label: "Starred", models: take(starred, 50) },
       { id: "best", label: "Best for this studio", models: take(best, 4) },
     ] satisfies ModelGroup[]
   ).filter((g) => g.models.length);
-  const rest = pool.filter((m) => !used.has(m.id));
-  const groups: ModelGroup[] = [...top, ...(rest.length ? [{ id: "all" as const, label: top.length ? "More models" : "All models", models: rest }] : [])];
+  const rest = now.filter((m) => !used.has(m.id));
+  const restLabel = more.length ? "Ready to run" : top.length ? "More models" : "All models";
+  const groups: ModelGroup[] = [...top, ...(rest.length ? [{ id: "all" as const, label: restLabel, models: rest }] : []), ...moreGroup];
   return { groups, count: pool.length };
 }
 
