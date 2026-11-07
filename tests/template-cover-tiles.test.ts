@@ -32,6 +32,10 @@ vi.mock("@/lib/template-covers.generated", () => ({
     "influencer/tier-freak": "920a1b26",
     "influencer/tier-total": "0a1b2c37",
     "influencer/tier-cats": "1b2c3d48",
+    // Every accessory has its cover; of the hairstyles only two.
+    ...Object.fromEntries(["acc_none", "acc_glasses", "acc_headphones", "acc_jewelry", "acc_hat", "acc_bag"].map((id, k) => [`influencer/accessory-${id}`, `5a6b7c8${k}`])),
+    "influencer/hair-hair_bald": "6b7c8d90",
+    "influencer/hair-hair_afro": "7c8d9ea1",
     "examples/character-sheet": "2c3d4e59",
     "examples/storyboard-heist": {
       poster: "/previews/templates/examples/storyboard-heist.jpg?v=3d4e5f6a",
@@ -61,8 +65,8 @@ const { PRESETS } = await import("@/lib/catalog/content-factory");
 const { templateCover } = await import("@/lib/template-covers");
 const { CuratedCover } = await import("@/components/moodboards/cards");
 const { CURATED_SETS, curatedLook } = await import("@/components/moodboards/logic");
-const { TierPanel } = await import("@/components/influencer/option-panel");
-const { INFLUENCER_START } = await import("@/lib/influencer");
+const { OptionTiles, TierPanel } = await import("@/components/influencer/option-panel");
+const { categoriesFor, INFLUENCER_START } = await import("@/lib/influencer");
 const { BoardExample, ElementsExample, SheetExample, hasBoardExample } = await import("@/components/empty-examples");
 
 /** A component's markup as the server renders it first (a memo component or a function). */
@@ -253,6 +257,26 @@ describe("AI Influencer's character types", () => {
     // Still a radio group: the picked type is checked.
     expect(h).toMatch(/role="radio" aria-checked="true"[^>]*>(?:(?!<\/button>).)*tier-normal/);
     expect(unversioned(h)).toEqual([]);
+  });
+});
+
+describe("AI Influencer's option tiles", () => {
+  const tiles = (id: string, picks: Record<string, string[]> = {}) =>
+    html(OptionTiles, { category: categoriesFor("normal").find((c) => c.id === id)!, state: { ...INFLUENCER_START, picks }, onPick: noop });
+
+  it("show photo cards for a category whose every option has its cover, the picked ones pressed", () => {
+    const h = tiles("accessory", { accessory: ["acc_hat"] });
+    expect(h.match(/<img/g)).toHaveLength(6);
+    expect(h).toContain('src="/previews/templates/influencer/accessory-acc_none.jpg?v=5a6b7c80"');
+    expect(h).toContain("/previews/templates/influencer/thumbs/accessory-acc_bag.jpg?v=5a6b7c85 320w");
+    expect(h).toMatch(/aria-pressed="true"[^>]*>(?:(?!<\/button>).)*accessory-acc_hat/);
+    expect(h).toContain(">Headphones<");
+    expect(unversioned(h)).toEqual([]);
+  });
+
+  it("keep the icon tiles for a category with options still waiting for a cover, and for categories a photo doesn't show", () => {
+    expect(tiles("hair")).not.toContain("<img");
+    expect(tiles("body_type")).not.toContain("<img");
   });
 });
 

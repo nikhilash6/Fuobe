@@ -12,7 +12,7 @@ import { MIXED_PRESETS } from "@/lib/catalog/mixed-media";
 import { FASHION, PACKS } from "@/lib/catalog/packs";
 import { SHORTS_PRESETS } from "@/lib/catalog/shorts";
 import { lookSet } from "@/lib/catalog/soul-cards";
-import { CREATURE_TYPES, HUMAN_TIERS } from "@/lib/influencer";
+import { CREATURE_TYPES, getCategory, HUMAN_TIERS } from "@/lib/influencer";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { STARTERS } from "@/lib/starters/catalog";
@@ -53,8 +53,12 @@ const TILES: Record<TemplateGroup, string[]> = {
   explainer: [...EXPLAINER_STYLE_IDS],
   // Fuobe Soul's looks, Soul 2.0's and Soul's, by look id.
   soul: [...lookSet("v2").items, ...lookSet("v1").items].map((c) => c.id),
-  // AI Influencer's character types as tier-<type>.
-  influencer: [...HUMAN_TIERS, ...CREATURE_TYPES].map((t) => `tier-${t.id}`),
+  // AI Influencer's character types as tier-<type>, and its Hairstyle, Style and Accessories options as
+  // <category>-<option id>.
+  influencer: [
+    ...[...HUMAN_TIERS, ...CREATURE_TYPES].map((t) => `tier-${t.id}`),
+    ...["hair", "aesthetic", "accessory"].flatMap((c) => getCategory(c)!.options.map((o) => `${c}-${o.id}`)),
+  ],
   // The example pictures of the empty pages: Character Sheet, Storyboard (six frames), Elements (four pictures).
   examples: ["character-sheet", "storyboard-heist", "element-maya", "element-rooftop-bar", "element-aurora", "element-together"],
   // The studios' ready-made starters, by starter id (src/lib/starters/catalog.ts).
@@ -136,12 +140,13 @@ describe("the template covers manifest", () => {
       }
     }
     // The studios' tiles (254, with Keyframes → animation, Outfit lookbook, Music video and Marketing's twelve code-drawn
-    // templates), Fuobe Soul's looks (139), AI Influencer's types (9), the empty pages' examples (6) and the studios'
+    // templates), Fuobe Soul's looks (139), AI Influencer's types (9) and options (40), the empty pages' examples (6) and the studios'
     // ready-made starters with a cover of their own (24).
-    expect(lines).toHaveLength(254 + 139 + 9 + 6 + 24);
+    expect(lines).toHaveLength(254 + 139 + 9 + 40 + 6 + 24);
     const text = `{\n${lines.join(",\n")}\n}`;
-    // More preset covers are clips now (a poster and a video each), so the shared preset entries are longer.
-    expect(text.length).toBeLessThan(38_000);
+    // More preset covers are clips now (a poster and a video each), so the shared preset entries are longer; AI
+    // Influencer's option photos add 40 short entries.
+    expect(text.length).toBeLessThan(40_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);
   });
 });

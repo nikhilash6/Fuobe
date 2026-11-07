@@ -113,6 +113,13 @@ const CREATURE_PHOTOS = allCovered(CREATURE_TYPES.map((c) => c.id));
 /** A photo card's width: a third of the panel. */
 const PHOTO_SIZES = "(min-width: 1024px) 200px, 33vw";
 
+/** The categories whose options a portrait shows best: Hairstyle, Style and Accessories. */
+const PHOTO_CATEGORIES = new Set(["hair", "aesthetic", "accessory"]);
+/** An option's real cover ("influencer/<category>-<option id>"), or undefined. */
+export const optionCover = (category: string, id: string) => (PHOTO_CATEGORIES.has(category) ? templateCover("influencer", `${category}-${id}`) : undefined);
+/** A category shows photo cards only when every option it shows has its cover; otherwise its icon tiles. */
+export const optionPhotos = (c: InfluencerCategory) => c.options.length > 0 && c.options.every((o) => optionCover(c.id, o.id));
+
 /** The Character type panel: three human tiers, six creature types, then the species and body colour. */
 export function TierPanel({ state, onTier, onSpecies, onBodyColor }: { state: InfluencerState; onTier: (t: InfluencerTier) => void; onSpecies: (s?: string) => void; onBodyColor: (c?: string) => void }) {
   const creature = CREATURE_TYPES.find((c) => c.id === state.tier);
@@ -246,6 +253,44 @@ export function OptionTiles({ category, state, onPick }: { category: InfluencerC
   const picked = state.picks[category.id] ?? [];
   const Icon = CATEGORY_ICON[category.id] ?? Sparkles;
   const colour = category.kind === "color";
+  if (optionPhotos(category)) {
+    return (
+      <div role="group" aria-label={category.label} className="grid grid-cols-3 gap-2">
+        {category.options.map((o) => {
+          const on = picked.includes(o.id);
+          const conflict = on ? null : conflictFor(state, category.id, o.id);
+          const cover = optionCover(category.id, o.id)!;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={on}
+              aria-disabled={conflict ? true : undefined}
+              title={conflict ?? undefined}
+              onClick={() => onPick(o.id)}
+              className={cn(
+                "group relative block aspect-[4/5] min-w-0 overflow-hidden rounded-xl bg-muted text-left ring-offset-2 ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                on && "ring-2 ring-primary",
+                conflict && "opacity-50",
+              )}
+            >
+              <CoverImg frame={cover.frames[0]} sizes={PHOTO_SIZES} className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.03]" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/65 to-transparent" />
+              <span className="absolute inset-x-2 bottom-2 min-w-0 text-white drop-shadow-sm">
+                <span className="block truncate text-[13px] font-medium">{o.label}</span>
+              </span>
+              {on && (
+                <span aria-hidden className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                  <Check className="size-3" />
+                </span>
+              )}
+              {conflict && <span className="sr-only">. {conflict}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div role="group" aria-label={category.label} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {category.options.map((o) => {
