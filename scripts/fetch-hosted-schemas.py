@@ -64,11 +64,12 @@ LORA = {
     # Restore IC-LoRA, gated on Hugging Face, sent through Fuobe's LoRA mirror). The archive clip is the reference video;
     # image_url, the optional first frame, takes the previous piece's last restored frame.
     "fal-ai/ltx-2.3-22b/reference-video-to-video/lora": {**LTX, "video": "video_url", "image": "image_url"},
-    "fal-ai/wan/v2.2-a14b/image-to-video/lora": {"prompt": "prompt", "image": "image_url", "endImage": "end_image_url", "negativePrompt": "negative_prompt",
-                                                 "aspectRatio": "aspect_ratio", "resolution": "resolution", "numFrames": "num_frames", "seed": "seed", "loras": "loras"},
-    "fal-ai/wan/v2.2-a14b/text-to-video/lora": {"prompt": "prompt", "negativePrompt": "negative_prompt", "aspectRatio": "aspect_ratio", "resolution": "resolution",
-                                                "numFrames": "num_frames", "seed": "seed", "loras": "loras"},
-    "fal-ai/wan/v2.2-a14b/text-to-image/lora": {"prompt": "prompt", "negativePrompt": "negative_prompt", "aspectRatio": "image_size", "seed": "seed", "loras": "loras"},
+    # Wan 2.2 A14B with LoRAs (Fuobe DoP, Fuobe Animation, Wan 2.2 A14B hosted): Replicate's fast Wan 2.2, one LoRA per
+    # expert (lora_weights_transformer for high noise, _2 for low noise), since fal removes its Wan 2.2 line on 2027-01-04.
+    "wan-video/wan-2.2-i2v-fast": {"prompt": "prompt", "image": "image", "endImage": "last_image", "resolution": "resolution", "numFrames": "num_frames",
+                                   "seed": "seed", "loras": "lora_weights_transformer"},
+    "wan-video/wan-2.2-t2v-fast": {"prompt": "prompt", "aspectRatio": "aspect_ratio", "resolution": "resolution", "numFrames": "num_frames",
+                                   "seed": "seed", "loras": "lora_weights_transformer"},
     "fal-ai/z-image/turbo/lora": {k: v for k, v in T2I.items() if k != "negativePrompt"},
     # Fuobe Soul's edit route (O2): image-to-image with the look's LoRAs; image_size "auto" keeps the picture's shape.
     "fal-ai/z-image/turbo/image-to-image/lora": {**{k: v for k, v in T2I.items() if k not in ("negativePrompt", "aspectRatio")}, "image": "image_url"},
@@ -140,8 +141,8 @@ ANIMATE = {"video": "video_url", "image": "image_url", "seed": "seed", "resoluti
 VACE14 = {"prompt": "prompt", "negativePrompt": "negative_prompt", "video": "video_url", "images": "ref_image_urls", "seed": "seed",
           "resolution": "resolution", "aspectRatio": "aspect_ratio", "fps": "frames_per_second"}
 GENJUTSU = {
-    "fal-ai/wan/v2.2-14b/animate/move": ("motion-transfer", ANIMATE),
-    "fal-ai/wan/v2.2-14b/animate/replace": ("video-swap", ANIMATE),
+    # Wan 2.2 Animate move / replace left with fal's Wan 2.2 line (2027-01-04): Genjutsu's motion and person swaps run on
+    # MiniMax H3 Max Recast (minimax/h3-max/recast, researched in paid-model-apis-3.json).
     "fal-ai/scail-2": ("motion-transfer", {"prompt": "prompt", **ANIMATE}),
     "fal-ai/wan-motion": ("motion-transfer", {"prompt": "prompt", "video": "video_url", "image": "image_url", "seed": "seed"}),
     "fal-ai/wan-vace-14b/inpainting": ("video-swap", {**VACE14, "mask": "mask_video_url"}),

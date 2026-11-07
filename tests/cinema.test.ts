@@ -323,8 +323,8 @@ describe("planCinema", () => {
     expect(arc.steps[0].request.prompt).toMatch(/^orbit 360\. /);
     expect(arc.notes.join(" ")).toMatch(/made for Wan 2.2, so this take runs on Fuobe DoP/);
     expect(arc.steps[0].request.params!.duration).toBe(5);
-    // Wan 2.2 A14B with LoRAs: $0.10/s.
-    expect(arc.costUsd).toBeCloseTo(2 * 5 * 0.1, 3);
+    // Replicate's fast Wan 2.2 with the move's LoRA: $0.11 a clip at 720p, two takes.
+    expect(arc.costUsd).toBeCloseTo(2 * 0.11, 3);
     const t2v = planCinema(base({ moves: ["arc-left"] }), ctx);
     expect(t2v.model.id).toBe("fuobe-cinema");
     expect(t2v.notes.join(" ")).toMatch(/add a start frame to drive it with its camera LoRA$/);

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
-import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
+import { estimateCost, imageLimit, layoutCanvas, mixLimit, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
 import { murekaSongRule, SONG_FIT_OPS } from "@/lib/av/song-fit";
@@ -22,7 +22,8 @@ import { FitCropNote, useCropFit } from "@/components/av/fit-crop";
 import { fitStill, stillEndpoint } from "@/components/av/fit-still";
 import { portraitRatio } from "@/lib/catalog/clip-windows";
 import { sampleFitRule, shortName, voiceFitRule } from "@/lib/av/voice-fit";
-import { dualEngine, onEngine } from "@/lib/catalog/engines";
+import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
+import type { Unavailable } from "@/lib/unavailable";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
@@ -1564,6 +1565,17 @@ export function Composer({ docked }: { docked: boolean }) {
     const own = engine === "open" ? preset.open : preset.cloud;
     return { here: false, on: scaled(own) && own!.modelId !== model.id ? catalog.getModel(own!.modelId)?.name : undefined };
   }, [preset, model, engine, has, catalog]);
+  // A Mix in the cloud on a model that takes one LoRA per expert (Fuobe DoP and Wan 2.2 A14B on Replicate): a second preset
+  // with no LoRA slot left stays in view as unavailable, with the way to run it (mixLimit, src/lib/catalog/plan.ts).
+  const mixFits = useMemo(() => {
+    if (!preset || !model || engine !== "cloud" || (preset.type !== "motion" && preset.type !== "effect")) return undefined;
+    const op = effectiveOp ?? "i2v";
+    const gpu = runsOn(model, "open");
+    return (second: Preset): Unavailable | undefined => {
+      const why = mixLimit(model, engine, op, preset, second);
+      return why ? { why, ...(gpu && { fix: { label: "Use it on your GPU", run: () => setEngine("open") } }) } : undefined;
+    };
+  }, [preset, model, engine, effectiveOp, setEngine]);
   const styleChips = (
     <>
       {(config.presetPicker || (preset && (preset.type === "motion" || preset.type === "effect"))) && (
@@ -1578,6 +1590,7 @@ export function Composer({ docked }: { docked: boolean }) {
           onPreset={pickPreset}
           onMix={(patch) => setDraft(patch)}
           engine={engine}
+          mixFits={mixFits}
         />
       )}
       {config.signature && (

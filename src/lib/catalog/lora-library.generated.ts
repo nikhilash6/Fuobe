@@ -1792,7 +1792,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-18",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2126538-camera-tilt-up-overhead",
@@ -1822,7 +1822,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-18",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2151623-camera-tilt-down-undershot-v2",
@@ -1852,7 +1852,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-26",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2151680-camera-tilt-down-undershot-v2",
@@ -1882,7 +1882,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-26",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2912574-shaky-handheld-camera",
@@ -1912,7 +1912,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2026-05-02",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2379256-luisap-extreme-handheld-camera",
@@ -1942,7 +1942,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-05",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-3203908-headmounted-camera-headbob",
@@ -1971,7 +1971,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2026-08-06",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2382055-luisap-extreme-bodycam",
@@ -2001,7 +2001,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-06",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2382131-luisap-extreme-bodycam",
@@ -2031,7 +2031,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-06",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2425167-first-person-pov-parkour",
@@ -2060,7 +2060,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-21",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2425177-first-person-pov-parkour",
@@ -2089,7 +2089,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-21",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2338590-luisap-driving-crazy",
@@ -2119,7 +2119,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-10-22",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2155019-flow-camera",
@@ -2148,7 +2148,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-27",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2180985-circular-shooting",
@@ -2177,7 +2177,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-09-04",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "wan22-14b-i2v-orbit-high-noise",
@@ -2201,7 +2201,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0"
     },
     "released": "2025-08-20",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "wan22-14b-i2v-orbit-low-noise",
@@ -2225,7 +2225,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0"
     },
     "released": "2025-08-20",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "ltx2-3-fpv-motion",
@@ -2373,7 +2373,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-10",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2490837-wiggle-redmond",
@@ -2402,7 +2402,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-10",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2376012-explosion-redmond",
@@ -2431,7 +2431,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-04",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2376017-explosion-redmond",
@@ -2460,7 +2460,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-04",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2350486-luisap-nuke",
@@ -2490,7 +2490,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-10-26",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2269611-wan-video-burst-effect",
@@ -2519,7 +2519,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-10-01",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2269626-wan-video-burst-effect",
@@ -2548,7 +2548,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-10-01",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2124764-wan-2-2-low-frozen-effects",
@@ -2576,7 +2576,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-18",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2481353-metalcification-redmond",
@@ -2605,7 +2605,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-07",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2481351-metalcification-redmond",
@@ -2634,7 +2634,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-07",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2341106-luisap-glitch-and-argue-soft",
@@ -2664,7 +2664,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-10-23",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2341111-luisap-glitch-and-argue-soft",
@@ -2694,7 +2694,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-10-23",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2368440-luisap-fly-away",
@@ -2724,7 +2724,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-02",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2368441-luisap-fly-away",
@@ -2754,7 +2754,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-02",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-2154508-item-decomposition",
@@ -2783,7 +2783,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-08-27",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "ltx-2-5-xpldv-v5-lora",
@@ -2835,7 +2835,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-19",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2421166-wan2-2-coin-fountain",
@@ -2864,7 +2864,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-19",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "civitai-3156988-lana-wind-motion-ltx-2-3",
@@ -2952,7 +2952,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-11-14",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2483698-thunderhero-redmond",
@@ -2981,7 +2981,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-08",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"
   },
   {
     "key": "civitai-2483693-thunderhero-redmond",
@@ -3010,7 +3010,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       ]
     },
     "released": "2025-12-08",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"
   },
   {
     "key": "fire-12-epochs",
@@ -3034,7 +3034,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0"
     },
     "released": "2025",
-    "hostedEndpoint": "fal-ai/wan-t2v-lora (T2V only)"
+    "hostedEndpoint": "none: your GPU runs it (fal's Wan 2.1 LoRA route leaves with the line)"
   },
   {
     "key": "qwen-image-edit-2509-relight",
@@ -3365,7 +3365,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
       "name": "Apache-2.0 (bilibili's Index-AniSora weights: GitHub bilibili/Index-anisora LICENSE and the HF card IndexTeam/Index-anisora, V3.2 released 2025-09-23); Kijai's rank-64 extraction repository states no licence of its own"
     },
     "released": "2025-09-27",
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, last_image; 81 frames brought to each gap's length)"
   },
   {
     "key": "wan22-i2v-lightx2v-4step-low",
@@ -3405,7 +3405,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3419,7 +3419,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3434,7 +3434,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3447,7 +3447,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3461,7 +3461,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3476,7 +3476,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3490,7 +3490,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3504,7 +3504,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3519,7 +3519,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3533,7 +3533,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3548,7 +3548,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "motion",
@@ -3795,7 +3795,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     "loras": [],
     "bothEnginesToday": false,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-14b/animate/move or fal-ai/scail-2 (mode=animation)"
+    "hostedEndpoint": "minimax/h3-max/recast or fal-ai/scail-2 (mode=animation)"
   },
   {
     "kind": "effect",
@@ -3810,7 +3810,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3823,7 +3823,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3838,7 +3838,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3851,7 +3851,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3865,7 +3865,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3880,7 +3880,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3896,7 +3896,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3910,7 +3910,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3924,7 +3924,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -3989,7 +3989,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -4023,7 +4023,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": false,
-    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",
@@ -4073,7 +4073,7 @@ export const MOTION_EFFECT_LORAS: MotionEffectLoras[] = [
     ],
     "bothEnginesToday": true,
     "newSinceMid2026": true,
-    "hostedEndpoint": "fal-ai/qwen-image-edit-plus-lora (relight the start frame) then fal-ai/wan/v2.2-a14b/image-to-video/lora"
+    "hostedEndpoint": "fal-ai/qwen-image-edit-plus-lora (relight the start frame) then Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"
   },
   {
     "kind": "effect",

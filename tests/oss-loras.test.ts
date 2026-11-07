@@ -163,13 +163,13 @@ describe("every motion and effect on Fuobe DoP", () => {
     expect(wiggle.cloud!.loras).toBeUndefined();
     expect(wiggle.cloud!.promptTemplate).toBeUndefined();
     expect(wiggle.parity).toBe("On your GPU, Fuobe DoP uses a style trained for this move.");
-    // Sent to fal (a Mix, a hand-made request), it goes (its licence is on Thanks & licences)...
-    const fal = getModel(DOP_MODEL)!.routes.find((r) => r.provider === "fal" && r.op === "i2v")!;
-    const sent = fitLoras(wiggle.open!.loras ?? [], fal);
+    // Sent to the cloud (a hand-made request; Replicate's fast Wan 2.2, one per expert), it goes (its licence is on Thanks & licences)...
+    const cloud = getModel(DOP_MODEL)!.routes.find((r) => r.provider === "replicate" && r.op === "i2v")!;
+    const sent = fitLoras(wiggle.open!.loras ?? [], cloud);
     expect(sent.loras).toHaveLength(2);
     expect(sent.notes).toEqual([]);
     // ...unless Settings → Models & licences keeps such LoRAs on the GPU.
-    const kept = fitLoras((wiggle.open!.loras ?? []).map((l) => ({ ...l, keepOnGpu: true as const })), fal);
+    const kept = fitLoras((wiggle.open!.loras ?? []).map((l) => ({ ...l, keepOnGpu: true as const })), cloud);
     expect(kept.loras).toEqual([]);
     expect(kept.notes.join(" ")).toMatch(/keeps such LoRAs off the cloud/);
   });

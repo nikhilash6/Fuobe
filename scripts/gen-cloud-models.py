@@ -752,19 +752,18 @@ model("flux-3-video", "FLUX.3 Video", "Black Forest Labs", "flux", "video", "BFL
        ("flf2v", "blackforestlabs/flux-3/first-last-frame-to-video"), ("v2v", "blackforestlabs/flux-3/edit-video"),
        ("extend", "blackforestlabs/flux-3/extend-video")],
       badges=["new"], defaults={"aspectRatio": "16:9"})
-# Originals (O1): Wan 2.2 A14B and LTX-2.3 22B open weights on fal / Replicate, with camera and effect LoRAs.
-# fal's Wan 2.2 interpolates to 32 fps by default (doubled frames): interpolator_model none keeps 16 fps (research §3.1).
-WAN22_FAL = {"interpolator_model": "none"}
+# Originals (O1): Wan 2.2 A14B and LTX-2.3 22B open weights hosted, with camera and effect LoRAs. fal removes its Wan 2.2
+# line on 2027-01-04: Wan 2.2 A14B runs on Replicate's fast Wan 2.2, which takes one LoRA per expert
+# (lora_weights_transformer = high noise, _2 = low noise; a Mix's extra LoRAs run on your GPU) and makes 81-121 frames.
+# Replicate's t2v interpolates to 30 fps by default (interpolate_output true): off, so both stay at 16 fps. Replicate bills
+# each clip: 480p $0.05, 720p $0.11 from a picture and $0.10 from words (model pages, 2026-11-07).
 WAN22_REPLICATE = {"interpolate_output": False}
+WAN22_REPLICATE_PRICE = ("video", 0.11, "per clip of 81 frames at 720p on Replicate ($0.10 from words); 480p $0.05",
+                         {"byResolution": {"720p": 0.11, "480p": 0.05}})
 model("wan-2-2-a14b-cloud", "Wan 2.2 A14B (hosted)", "Alibaba Wan", "wan", "video", "Open-weights Wan 2.2 that takes camera and effect LoRAs",
-      [("t2v", "fal-ai/wan/v2.2-a14b/text-to-video", "fal", {"loraEndpoint": "fal-ai/wan/v2.2-a14b/text-to-video/lora", "defaults": WAN22_FAL}),
-       ("i2v", "fal-ai/wan/v2.2-a14b/image-to-video", "fal", {"loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora", "defaults": WAN22_FAL}),
-       # One LoRA per expert (lora_weights_transformer = high noise, _2 = low noise): a Mix runs on fal.
-       # Replicate's t2v interpolates to 30 fps by default (interpolate_output true): off, so both stay at 16 fps.
-       ("t2v", "wan-video/wan-2.2-t2v-fast", "replicate", {"defaults": WAN22_REPLICATE}),
-       ("i2v", "wan-video/wan-2.2-i2v-fast", "replicate", {"defaults": WAN22_REPLICATE})],
-      pricing=("second", 0.08, "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s",
-               {"byResolution": {"720p": 0.08, "580p": 0.06, "480p": 0.04}, "withLoras": 0.1}),
+      [("t2v", "wan-video/wan-2.2-t2v-fast", "replicate", {"defaults": WAN22_REPLICATE}),
+       ("i2v", "wan-video/wan-2.2-i2v-fast", "replicate", {"defaults": WAN22_REPLICATE, "flf2v": True})],
+      pricing=WAN22_REPLICATE_PRICE,
       # Replicate takes 480p / 720p only and t2v only 16:9 / 9:16: each route lists what it takes (fit_values).
       defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, frame_step=4, fit_values=True)
 # LTX-2.3 22B (LTX-2 Community licence: free under US$10M annual revenue). Prompt expansion is on by default and would
@@ -778,17 +777,14 @@ model("ltx-2-3-22b-cloud", "LTX-2.3 22B (hosted)", "Lightricks", "ltx", "video",
       pricing=("second", 0.036, "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)", {"withLoras": 0.04}),
       defaults={"aspectRatio": "16:9", "duration": 5}, frame_step=8)
 # ----- Originals (O4): Fuobe DoP's cloud halves, camera motions and effects on hosted open weights (research §3.1, §7.5).
-# DoP clips are 49 or 81 frames at 16 fps (3 or 5 s): fal's Wan 2.2 interpolates to 32 fps by default, so
-# interpolator_model none, at 20 steps. Each LoRA goes to its expert (transformer high / low / both per file); a Mix
-# sends both presets' LoRAs. Replicate's fast Wan takes one LoRA per expert (a Mix runs on fal) and makes 81–121 frames.
-DOP_FAL = {"interpolator_model": "none", "frames_per_second": 16, "num_inference_steps": 20}
+# fal removes its Wan 2.2 line on 2027-01-04: DoP's Wan half runs on Replicate's fast Wan 2.2 (a start frame, and
+# last_image for a transition), 16 fps. Each LoRA goes to its expert, one per expert: a Mix's extra LoRAs run on your GPU
+# (the composer says so, with "Use it on your GPU"). Replicate makes 81-121 frames, so a 3 s clip is made as 5 s.
 model("fuobe-dop", "Fuobe DoP", "Fuobe Original", "fuobe-dop", "video",
       "Camera motions and effects with their LoRAs on Wan 2.2: 3 or 5 s at 16 fps",
-      [("i2v", "fal-ai/wan/v2.2-a14b/image-to-video", "fal", {"loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora", "fixed": DOP_FAL, "flf2v": True}),
-       ("i2v", "wan-video/wan-2.2-i2v-fast", "replicate", {"fixed": WAN22_REPLICATE})],
+      [("i2v", "wan-video/wan-2.2-i2v-fast", "replicate", {"fixed": WAN22_REPLICATE, "flf2v": True})],
       original=True,
-      pricing=("second", 0.08, "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s",
-               {"byResolution": {"720p": 0.08, "580p": 0.06, "480p": 0.04}, "withLoras": 0.1}),
+      pricing=WAN22_REPLICATE_PRICE,
       options={"durations": [3, 5]}, defaults={"aspectRatio": "auto", "duration": 5, "resolution": "720p"}, frame_step=4, fit_values=True)
 # The LTX-2.3 presets (FPV Drone, Wind to Face, the transitions with an end frame) and LTX-2.3's built-in camera LoRA
 # (camera_lora: dolly, jib, static) for the moves it covers. Prompt expansion off; sound off unless asked.

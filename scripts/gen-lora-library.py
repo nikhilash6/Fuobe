@@ -57,6 +57,29 @@ DEFAULT_STATUSES = {"add-lora", "replace", "relight-route", "weak-candidate", "l
 errors = []
 notes = []
 
+# The hosted routes the research checked LoRAs on, as they run now: fal removes its Wan 2.1 / 2.2 line on 2027-01-04
+# (the Wan 2.2 LoRAs run on Replicate's fast Wan 2.2, one per expert; motion transfer on fal's named successor). Exact
+# texts of the research, longest first; the research itself stays as it was read.
+HOSTED_NOW = [
+    ("fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)",
+     "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, last_image; 81 frames brought to each gap's length)"),
+    ("fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high); Replicate wan-video/wan-2.2-i2v-fast",
+     "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer, the high-noise expert)"),
+    ("fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=low); Replicate wan-video/wan-2.2-i2v-fast",
+     "Replicate wan-video/wan-2.2-i2v-fast (lora_weights_transformer_2, the low-noise expert)"),
+    ("fal-ai/wan/v2.2-a14b/image-to-video/lora", "Replicate wan-video/wan-2.2-i2v-fast (one LoRA per expert)"),
+    ("fal-ai/wan/v2.2-14b/animate/move", "minimax/h3-max/recast"),
+    ("fal-ai/wan-t2v-lora (T2V only)", "none: your GPU runs it (fal's Wan 2.1 LoRA route leaves with the line)"),
+]
+
+
+def hosted_now(text):
+    """A research hostedEndpoint text with each retired fal Wan route replaced by the one that runs it now."""
+    for old, new in HOSTED_NOW:
+        if old in text:
+            return text.replace(old, new)
+    return text
+
 
 def slug(s):
     return re.sub(r"^-|-$", "", re.sub(r"[^a-z0-9]+", "-", s.lower()))
@@ -127,7 +150,7 @@ def entry(raw, key, group, checked=None, spare=False):
     out["licence"] = licence
     for k in ("released", "hostedEndpoint"):
         if raw.get(k):
-            out[k] = raw[k]
+            out[k] = hosted_now(raw[k]) if k == "hostedEndpoint" else raw[k]
     if spare:
         out["spare"] = True
 
@@ -199,7 +222,7 @@ for m in DATA["motionsEffects"]:
            "bothEnginesToday": bool(m.get("bothEnginesToday")), "newSinceMid2026": bool(m.get("newSinceMid2026"))}
     hosted = (m.get("hosted") or {}).get("endpoint")
     if hosted:
-        row["hostedEndpoint"] = hosted
+        row["hostedEndpoint"] = hosted_now(hosted)
     motions.append(row)
 
 # Adapters: a LoRA an Original's recipe always loads (Fuobe Try-On's try-on LoRA, build plan O10). Its licence is said
@@ -289,5 +312,6 @@ ts = (
     "/** Fuobe Mixed Media's looks (research studios[mixed-media].original.looks): preset id → the LORA_LIBRARY keys its frames are drawn with. */\n"
     f"export const MIXED_MEDIA_LOOK_LORAS: Record<string, {{ key: string; strength: number }}[]> = {json.dumps(mixed, indent=2, ensure_ascii=False)};\n"
 )
-(ROOT / "src/lib/catalog/lora-library.generated.ts").write_text(ts, encoding="utf-8")
+# LF on every platform, so a second run leaves the file as it is.
+(ROOT / "src/lib/catalog/lora-library.generated.ts").write_text(ts, encoding="utf-8", newline="\n")
 print(f"wrote {len(library)} LoRAs ({sum(1 for e in library if e['group'] == 'look')} looks), {len(motions)} motion / effect rows, {len(mixed)} Mixed Media looks and {len(planned)} planned own LoRAs")

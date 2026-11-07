@@ -9,6 +9,8 @@ import { presetCover } from "@/lib/preset-covers";
 import { featuredAll } from "@/lib/preset-featured";
 import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
+import type { Unavailable } from "@/lib/unavailable";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { usePoolRules } from "@/hooks/use-pool-rules";
@@ -28,11 +30,26 @@ import { Chip, ClearableChip } from "./chip";
 
 const tileClass = "group flex flex-col items-start gap-1 overflow-hidden rounded-lg p-1 text-left ring-primary transition hover:bg-accent";
 
-function PresetTile({ preset: p, picked, onPick, setup }: { preset: Preset; picked: boolean; onPick: () => void; setup?: OwnSetup | null }) {
+function PresetTile({
+  preset: p,
+  picked,
+  onPick,
+  setup,
+  muted,
+  aria,
+}: {
+  preset: Preset;
+  picked: boolean;
+  onPick: () => void;
+  setup?: OwnSetup | null;
+  /** It can't be picked here (the shared unavailable look); pressing it says why. */
+  muted?: boolean;
+  aria?: Record<string, unknown>;
+}) {
   const { playing, handlers } = usePickerPlayback(p.id, { picked });
   const PI = PRESET_ICONS[p.look.icon] ?? Film;
   return (
-    <button type="button" aria-pressed={picked} onClick={onPick} {...handlers} className={cn(tileClass, picked && "ring-2")}>
+    <button type="button" aria-pressed={picked} onClick={onPick} {...handlers} {...aria} className={cn(tileClass, picked && "ring-2", muted && UNAVAILABLE_OPTION)}>
       <CoverTile
         cover={presetCover(p.id)}
         playing={playing}
@@ -61,6 +78,7 @@ export function PresetGrid({
   noneLabel,
   rules,
   engine,
+  unavailable,
 }: {
   list: Preset[] | null;
   value?: string;
@@ -68,10 +86,14 @@ export function PresetGrid({
   noneLabel: string;
   rules?: PoolRules;
   engine?: "open" | "cloud";
+  /** Why a preset can't be picked here (a Mix that has no LoRA slot left in the cloud), with the way to get it. */
+  unavailable?: (p: Preset) => Unavailable | undefined;
 }) {
   const [cat, setCat] = useState<string>("All");
   const box = useRef<HTMLDivElement>(null);
   const ordered = useMemo(() => (list ? featuredAll(list) : null), [list]);
+  const options = useMemo(() => (ordered ?? []).map((p) => ({ value: p.id, unavailable: unavailable?.(p) })), [ordered, unavailable]);
+  const note = useUnavailableNote(options);
   if (!list || !ordered)
     return (
       <div className="grid h-40 place-items-center" role="status" aria-label="Loading presets">
@@ -109,12 +131,24 @@ export function PresetGrid({
             )}
             {ordered
               .filter((p) => cat === "All" || p.category === cat)
-              .map((p) => (
-                <PresetTile key={p.id} preset={p} picked={value === p.id} onPick={() => onPick(p.id)} setup={presetOwnSetup(rules, p, engine)} />
-              ))}
+              .map((p) => {
+                const o = options.find((x) => x.value === p.id) ?? { value: p.id };
+                return (
+                  <PresetTile
+                    key={p.id}
+                    preset={p}
+                    picked={value === p.id && !note.isUnavailable(o)}
+                    onPick={() => note.press(o, (id) => onPick(id))}
+                    setup={presetOwnSetup(rules, p, engine)}
+                    muted={note.isUnavailable(o)}
+                    aria={note.optionProps(o)}
+                  />
+                );
+              })}
           </div>
         </div>
       </CoverScrollBox>
+      <UnavailableNote {...note.noteProps} />
     </>
   );
 }
@@ -201,6 +235,7 @@ export function MixChip({
   mix,
   onChange,
   engine,
+  mixFits,
 }: {
   primary: Preset;
   strength: number;
@@ -210,6 +245,8 @@ export function MixChip({
   onChange: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
   /** The composer's engine: a preset with a cloud route stays on the cloud engine whatever this studio's GPUs run. */
   engine?: "open" | "cloud";
+  /** Why a second preset can't join the first on this model here (one LoRA per expert in the cloud), with the fix. */
+  mixFits?: (second: Preset) => Unavailable | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const { chip, side, measure } = usePickerSide();
@@ -255,6 +292,7 @@ export function MixChip({
                 <span className="font-medium text-foreground">{primary.name}</span> runs at full strength{strengthOn ? `; its strength can be set on ${strengthOn}` : ""}.
               </p>
             )}
+            {second && mix && mixFits?.(second) && <UnavailableNote reason={mixFits(second)} onClose={() => undefined} className="mt-0" />}
             {second && mix && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[12px]">
@@ -272,6 +310,7 @@ export function MixChip({
             rules={rules}
             engine={engine}
             noneLabel="No mix"
+            unavailable={mixFits}
             onPick={(id) => onChange({ mix: id ? { presetId: id, strength: mix?.strength ?? 0.6 } : undefined })}
           />
         </PopoverContent>
@@ -292,6 +331,7 @@ export default function PresetChips({
   onPreset,
   onMix,
   engine,
+  mixFits,
 }: {
   picker?: "motion" | "effect";
   preset?: Preset;
@@ -305,11 +345,13 @@ export default function PresetChips({
   onMix: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
   /** The composer's engine (the pickers keep a preset with a cloud route off the open engine only). */
   engine?: "open" | "cloud";
+  /** Why a second preset can't join the first here, with the way to get it (MixChip). */
+  mixFits?: (second: Preset) => Unavailable | undefined;
 }) {
   return (
     <>
       {picker && <PresetChip type={picker} value={presetId} onChange={onPreset} engine={engine} />}
-      {preset && (preset.type === "motion" || preset.type === "effect") && <MixChip primary={preset} strength={strength} takesStrength={takesStrength} strengthOn={strengthOn} mix={mix} onChange={onMix} engine={engine} />}
+      {preset && (preset.type === "motion" || preset.type === "effect") && <MixChip primary={preset} strength={strength} takesStrength={takesStrength} strengthOn={strengthOn} mix={mix} onChange={onMix} engine={engine} mixFits={mixFits} />}
     </>
   );
 }

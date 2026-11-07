@@ -27,7 +27,47 @@ async function submit(route: ModelRoute, input: GenInput): Promise<{ url: string
   return seen!;
 }
 
+/**
+ * fal's Wan 2.2 A14B routes as the catalog generated them until fal removed its Wan 2.2 line (2027-01-04; Wan 2.2 A14B runs
+ * on Replicate now): the payload code's items-with-transformer LoRA shape, kept under test on them.
+ */
+const FAL_WAN22: Record<string, ModelRoute> = {
+  t2v: {
+    op: "t2v",
+    provider: "fal",
+    endpoint: "fal-ai/wan/v2.2-a14b/text-to-video",
+    loraEndpoint: "fal-ai/wan/v2.2-a14b/text-to-video/lora",
+    map: {
+      negativePrompt: "negative_prompt",
+      seed: "seed",
+      numFrames: { key: "num_frames", fps: 16, min: 17, max: 161, step: 4 },
+      aspectRatio: { key: "aspect_ratio", accepts: ["16:9", "9:16", "1:1"] },
+      resolution: { key: "resolution", accepts: ["480p", "580p", "720p"] },
+      defaults: { interpolator_model: "none" },
+      loras: { shape: "items", key: "loras", range: { min: 0, max: 4 }, transformer: "high", weightName: true },
+    },
+  },
+  i2v: {
+    op: "i2v",
+    provider: "fal",
+    endpoint: "fal-ai/wan/v2.2-a14b/image-to-video",
+    loraEndpoint: "fal-ai/wan/v2.2-a14b/image-to-video/lora",
+    map: {
+      negativePrompt: "negative_prompt",
+      image: "image_url",
+      endImage: "end_image_url",
+      seed: "seed",
+      numFrames: { key: "num_frames", fps: 16, min: 17, max: 161, step: 4 },
+      aspectRatio: { key: "aspect_ratio", accepts: ["auto", "16:9", "9:16", "1:1"] },
+      resolution: { key: "resolution", accepts: ["480p", "580p", "720p"] },
+      defaults: { interpolator_model: "none" },
+      loras: { shape: "items", key: "loras", range: { min: 0, max: 4 }, transformer: "high", weightName: true },
+    },
+  },
+};
+
 const route = (modelId: string, op: string, provider = "fal") => {
+  if (modelId === "wan-2-2-a14b-cloud" && provider === "fal") return FAL_WAN22[op];
   const r = getModel(modelId)?.routes.find((x) => x.op === op && x.provider === provider);
   if (!r) throw new Error(`${modelId} has no ${provider} ${op} route`);
   return r;
@@ -137,9 +177,10 @@ describe("fal LoRA payloads (generated FieldMap.loras)", () => {
     expect(z.pricing).toMatchObject({ unit: "megapixel", usd: 0.005, withLoras: 0.0085 });
     expect(estimateCost(z, {}, 1, "t2i")).toBe(0.005);
     expect(estimateCost(z, {}, 1, "t2i", true)).toBe(0.009);
+    // Replicate's fast Wan 2.2 bills the clip, LoRAs or not.
     const wan = getModel("wan-2-2-a14b-cloud")!;
-    expect(estimateCost(wan, { duration: 5, resolution: "480p" }, 1, "i2v")).toBe(0.2);
-    expect(estimateCost(wan, { duration: 5, resolution: "480p" }, 1, "i2v", true)).toBe(0.5);
+    expect(estimateCost(wan, { duration: 5, resolution: "480p" }, 1, "i2v")).toBe(0.05);
+    expect(estimateCost(wan, { duration: 5, resolution: "480p" }, 1, "i2v", true)).toBe(0.05);
   });
 
   it("keeps frame counts in the 4n+1 / 8n+1 form inside the API's limits", () => {

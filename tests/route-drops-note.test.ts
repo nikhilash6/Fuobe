@@ -66,24 +66,25 @@ describe("a setting the chosen route has no field for", () => {
   });
 });
 
-/** Wan 2.2 t2v: Replicate takes 16:9/9:16 and no negative prompt; fal takes 1:1 and one. */
+/** Qwen-Image-Edit 2511: Replicate makes 1:1, 16:9, 9:16, 4:3 or 3:4 and takes no negative prompt; fal takes 3:2 and one. */
 describe("a run whose route can't honour a setting", () => {
-  const wan = { feature: "video" as const, modelId: "wan-2-2-a14b-cloud", engine: "cloud" as const, prompt: "a slow dolly past a quiet harbour", negativePrompt: "blur", params: { aspectRatio: "1:1" } };
-  const sent = (log: { method: string; path: string; body: string }[]) => log.filter((r) => r.method === "POST" && /predictions|wan/.test(r.path)).map((r) => JSON.parse(r.body || "{}"));
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const qwen = { feature: "image" as const, modelId: "qwen-image-edit-2511-cloud", engine: "cloud" as const, prompt: "the harbour at dusk", negativePrompt: "blur", inputs: { images: [PNG] }, params: { aspectRatio: "3:2" } };
+  const sent = (log: { method: string; path: string; body: string }[]) => log.filter((r) => r.method === "POST" && /predictions|qwen-image-edit/.test(r.path)).map((r) => JSON.parse(r.body || "{}"));
 
   it("runs anyway on the only route ready: the closest shape, no negative prompt, and a note it keeps", async () => {
     setSetting("falKey", "");
     rep.log.length = 0;
-    const [g] = gens.createGenerations(wan);
+    const [g] = gens.createGenerations(qwen);
     expect(g.provider).toBe("replicate");
     expect(g.notes).toEqual(
-      expect.arrayContaining(["Wan 2.2 A14B (hosted) on Replicate doesn't take a negative prompt: this run goes without", "Wan 2.2 A14B (hosted) on Replicate doesn't make 1:1: this run is made at 16:9"]),
+      expect.arrayContaining(["Qwen-Image-Edit 2511 (hosted) on Replicate doesn't take a negative prompt: this run goes without", "Qwen-Image-Edit 2511 (hosted) on Replicate doesn't make 3:2: this run is made at 4:3"]),
     );
     const done = await settle(g.id);
     expect(done.status).toBe("succeeded");
-    expect(done.request.notice).toBe("Replicate's Wan 2.2 A14B made this at 16:9 in place of 1:1 and without the negative prompt.");
+    expect(done.request.notice).toBe("Replicate's Qwen-Image-Edit 2511 made this at 4:3 in place of 3:2 and without the negative prompt.");
     const input = sent(rep.log).at(-1)?.input ?? {};
-    expect(input.aspect_ratio).toBe("16:9");
+    expect(input.aspect_ratio).toBe("4:3");
     expect(input).not.toHaveProperty("negative_prompt");
   });
 
@@ -92,19 +93,19 @@ describe("a run whose route can't honour a setting", () => {
     setSetting("cloudProvider", "replicate");
     try {
       fal.log.length = 0;
-      const [g] = gens.createGenerations({ ...wan, prefer: "fal" });
+      const [g] = gens.createGenerations({ ...qwen, prefer: "fal" });
       expect(g.provider).toBe("fal");
       expect((g.notes ?? []).join(" ")).not.toMatch(/doesn't (take|make)/);
       const done = await settle(g.id);
       expect(done.status).toBe("succeeded");
       expect(done.request.notice).toBeUndefined();
       const body = sent(fal.log).at(-1) ?? {};
-      expect(body.aspect_ratio).toBe("1:1");
+      expect(body.image_size).toBe("landscape_4_3");
       expect(body.negative_prompt).toBe("blur");
-      // Named Replicate ("Run anyway" on it), it stays there although fal.ai is ready and makes 1:1.
-      const [r] = gens.createGenerations({ ...wan, prefer: "replicate" });
+      // Named Replicate ("Run anyway" on it), it stays there although fal.ai is ready and makes 3:2.
+      const [r] = gens.createGenerations({ ...qwen, prefer: "replicate" });
       expect(r.provider).toBe("replicate");
-      expect((await settle(r.id)).request.notice).toMatch(/^Replicate's Wan 2.2 A14B made this at 16:9/);
+      expect((await settle(r.id)).request.notice).toMatch(/^Replicate's Qwen-Image-Edit 2511 made this at 4:3/);
     } finally {
       setSetting("cloudProvider", "auto");
       setSetting("falKey", "");
@@ -112,7 +113,7 @@ describe("a run whose route can't honour a setting", () => {
   });
 
   it("says nothing on a shape and settings the route takes", async () => {
-    const [g] = gens.createGenerations({ ...wan, negativePrompt: undefined, params: { aspectRatio: "9:16" } });
+    const [g] = gens.createGenerations({ ...qwen, negativePrompt: undefined, params: { aspectRatio: "16:9" } });
     expect(g.provider).toBe("replicate");
     expect((g.notes ?? []).join(" ")).not.toMatch(/doesn't (take|make)/);
     expect((await settle(g.id)).request.notice).toBeUndefined();

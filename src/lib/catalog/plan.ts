@@ -18,7 +18,7 @@ import type {
 import { billedClipSeconds, editClipsProblem, insertRangeProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { requestTiming } from "@/lib/inbetween";
-import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
+import { cloudPath, fitLoras, gated, localOnly, loraCapacity, lorasFit, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { qmaRunPrompt } from "@/lib/qma";
 import { askedSize, clipWords, fitLength, fitValue, numFramesValue, sizeValue } from "./payload";
@@ -339,6 +339,22 @@ export function mixLoras(second: Preset, modelId: string, engine: Engine, streng
   }
   const k = clamp01(strength);
   return { loras: loras.map((l) => ({ ...l, strength: round2((l.strength ?? 1) * k) })), trigger: triggerOf(loras) };
+}
+
+/**
+ * Why a Mix's second preset can't join the first on this model in the cloud, or undefined when it can: a route that takes
+ * one LoRA per expert (Replicate's fast Wan 2.2, where Fuobe DoP and Wan 2.2 A14B run in the cloud) has no slot left for
+ * the second preset's LoRA when the first's already holds that expert. On the GPU every LoRA loads.
+ */
+export function mixLimit(model: ModelDef, engine: Engine, op: Operation, primary: Preset, second: Preset): string | undefined {
+  if (engine !== "cloud") return undefined;
+  const route = (model.routes ?? []).find((r) => r.op === op && r.provider !== "comfyui" && r.provider !== "mock");
+  if (!route || routeLoraField(route)?.shape !== "experts") return undefined;
+  const own = presetRoute(primary, "cloud");
+  const first = own?.modelId === model.id ? (own.loras ?? []) : [];
+  const extra = mixLoras(second, model.id, "cloud", 1).loras;
+  if (!extra.length || lorasFit(route, [...first, ...extra])) return undefined;
+  return `${model.name} in the cloud takes one LoRA per expert (high and low noise), so ${second.name} can't join ${primary.name} there`;
 }
 
 export interface Plan {

@@ -82,21 +82,21 @@ describe("Replicate LoRA payloads", () => {
     expect(body.input).toMatchObject({ image: ["https://x/a.png"], lora_weights: expect.stringContaining("relight"), lora_scale: 0.9 });
   });
 
-  it("runs a Mix on fal when Replicate's one-per-expert model can't carry it, even with Replicate preferred", () => {
+  it("runs a Mix on Replicate's one-per-expert model, the LoRA with no expert left out with the reason", () => {
     setSetting("falKey", "id:secret");
     setSetting("replicateToken", "r8_test");
-    setSetting("cloudProvider", "replicate");
     setSetting("demoMode", "auto");
+    // fal's Wan 2.2 A14B is gone (2027-01-04): Replicate's fast Wan 2.2 is the only cloud route, whatever the LoRAs.
     const routes = getModel("wan-2-2-a14b-cloud")!.routes.filter((r) => r.op === "i2v");
     const one = [hf("motion_high.safetensors", { target: "high" })];
     const mix = [...one, hf("effect_high.safetensors", { target: "high" })];
     expect(chooseRoute(routes, 1, one).route.provider).toBe("replicate");
-    expect(chooseRoute(routes, 1, mix).route.provider).toBe("fal");
-    // A LoRA licensed for the GPU only goes to the cloud like any other (licences are information)...
-    const wiggle = loraRef(loraEntry("civitai-2490836-wiggle-redmond")!);
-    expect(chooseRoute(routes, 1, [...one, wiggle]).route.provider).toBe("fal");
-    // ...and doesn't count while Settings → Models & licences keeps such LoRAs on the GPU (the run marks them).
-    expect(chooseRoute(routes, 1, [...one, { ...wiggle, keepOnGpu: true }]).route.provider).toBe("replicate");
+    expect(chooseRoute(routes, 1, mix).route.provider).toBe("replicate");
+    const fit = fitLoras(mix, routes[0]);
+    expect(fit.loras.map((l) => l.file)).toEqual(["motion_high.safetensors"]);
+    expect(fit.notes.join(" "), fit.notes.join(" ")).toMatch(/one LoRA per expert/);
+    // A high and a low one fit side by side.
+    expect(fitLoras([...one, hf("effect_low.safetensors", { target: "low" })], routes[0]).loras).toHaveLength(2);
   });
 
   it("wan-2.2 t2v fast: stays at 16 fps (interpolate_output off) and gets only values it takes", async () => {
@@ -107,8 +107,9 @@ describe("Replicate LoRA payloads", () => {
     expect(body.input).toMatchObject({ interpolate_output: false, aspect_ratio: "16:9", resolution: "480p", num_frames: 81 });
     const i2v = await submit(route("wan-2-2-a14b-cloud", "i2v"), { prompt: "go", images: ["https://x/a.png"], resolution: "720p", duration: 5 });
     expect(i2v.body.input).toMatchObject({ interpolate_output: false, resolution: "720p" });
-    // fal's routes take every value the model offers.
-    expect(route("wan-2-2-a14b-cloud", "t2v", "fal").map?.resolution).toEqual({ key: "resolution", accepts: ["480p", "580p", "720p"] });
+    // Replicate is its only route now: the model offers what Replicate makes.
+    expect(getModel("wan-2-2-a14b-cloud")!.routes.every((r) => r.provider === "replicate")).toBe(true);
+    expect(getModel("wan-2-2-a14b-cloud")!.options.resolutions).toEqual(["480p", "720p"]);
   });
 
   it("qwen-image-edit-2511: an aspect ratio Replicate lacks goes as the nearest one it takes", async () => {
@@ -117,18 +118,14 @@ describe("Replicate LoRA payloads", () => {
     expect((body.input as Record<string, unknown>).aspect_ratio).toBe("16:9");
   });
 
-  it("prefers a route that makes the length asked, and says what a route that can't makes", () => {
-    setSetting("falKey", "id:secret");
+  it("says what Replicate's fast Wan 2.2 makes when the length asked is outside its 81–121 frames", () => {
+    setSetting("falKey", "");
     setSetting("replicateToken", "r8_test");
     setSetting("cloudProvider", "replicate");
     setSetting("demoMode", "auto");
     const routes = getModel("wan-2-2-a14b-cloud")!.routes.filter((r) => r.op === "i2v");
-    // Replicate's fast model renders 81–121 frames (5–7.5 s at 16 fps); fal's 17–161.
-    expect(chooseRoute(routes, 1, [], 5).route.provider).toBe("replicate");
-    expect(chooseRoute(routes, 1, [], 10).route.provider).toBe("fal");
-    expect(chooseRoute(routes, 1, [], 3).route.provider).toBe("fal");
-    // Only Replicate connected: it runs, and the plan says the clip is shorter than asked.
-    setSetting("falKey", "");
+    // Replicate's fast model renders 81–121 frames (5–7.5 s at 16 fps), its only route.
+    for (const s of [3, 5, 10]) expect(chooseRoute(routes, 1, [], s).route.provider).toBe("replicate");
     const req = { feature: "video", modelId: "wan-2-2-a14b-cloud", prompt: "a wave", inputs: { images: ["https://x/a.png"] }, params: { duration: 10 } };
     const p = previewGeneration(req);
     expect(p.providerId).toBe("replicate");

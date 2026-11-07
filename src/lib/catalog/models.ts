@@ -2954,7 +2954,7 @@ const originals: ModelDef[] = [
         // Frames mode: one start/end-frame clip per pair of frames, the motion's LoRAs on each, then joined.
         KEYFRAME_FILM,
       ],
-      tagline: "Camera motions and effects with their LoRAs on Wan 2.2 · free on your GPU (24 GB), or hosted on fal",
+      tagline: "Camera motions and effects with their LoRAs on Wan 2.2 · free on your GPU (24 GB), or hosted on Replicate",
       options: DOP_OPTIONS,
     }),
     // 480p on the user's GPU (720p takes about three times as long); 720p in the cloud, where a run with LoRAs costs the same.

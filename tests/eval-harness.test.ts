@@ -348,6 +348,8 @@ describe("the runner on the demo provider", () => {
     type Plan = { jobs: { case: string; variant: string; model: string; skip?: string; costUsd?: number | null }[] };
     const dry = async (args: string[]) => JSON.parse((await cli(["run", ...args, "--dry-run", "--json"])).stdout) as Plan;
     setSetting("falKey", "fal-test-key");
+    // Fuobe DoP's cloud half runs on Replicate's fast Wan 2.2.
+    setSetting("replicateToken", "rep-test-token");
     // Group swap, Scene edit, From picture and Finish run on your GPU only: on the cloud their jobs say so and skip.
     const cloud = (p: Plan) => {
       const gpu = p.jobs.filter((j) => j.skip === "runs on open only");
@@ -446,6 +448,7 @@ describe("the runner on the demo provider", () => {
       expect(open.jobs.every((j) => j.skip === "the partner variant runs on cloud only")).toBe(true);
     } finally {
       setSetting("falKey", "");
+      setSetting("replicateToken", "");
     }
   });
 
@@ -548,6 +551,8 @@ describe("the runner on the demo provider", () => {
     expect(rows.every((x) => (x.request as { modelId: string }).modelId === "fuobe-cinema")).toBe(true);
     type Plan = { jobs: { case: string; variant: string; model: string; skip?: string }[] };
     setSetting("falKey", "fal-test-key");
+    // The wan variant's Wan 2.2 A14B runs on Replicate.
+    setSetting("replicateToken", "rep-test-token");
     try {
       const plan = JSON.parse((await cli(["run", "--suite", "cinema", "--engine", "cloud", "--cases", "cinema/move-dolly-in", "--variants", "original,words,expansion,wan", "--dry-run", "--json"])).stdout) as Plan;
       const by = Object.fromEntries(plan.jobs.map((j) => [j.variant, j]));
@@ -559,6 +564,7 @@ describe("the runner on the demo provider", () => {
       expect(open.jobs.every((j) => !!j.skip)).toBe(true);
     } finally {
       setSetting("falKey", "");
+      setSetting("replicateToken", "");
     }
   });
 

@@ -14,9 +14,10 @@ const { setSetting } = await import("@/server/settings");
 const { createGenerations, previewGeneration } = await import("@/server/generations");
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
 const { falProvider } = await import("@/server/providers/fal");
+const { replicateProvider } = await import("@/server/providers/replicate");
 const { EFFECTS, getModel, getPreset, modelsFor, MOTIONS } = await import("@/lib/catalog");
 const { onEngine } = await import("@/lib/catalog/engines");
-const { estimateCost, planGeneration, routesFor } = await import("@/lib/catalog/plan");
+const { estimateCost, mixLimit, planGeneration, routesFor } = await import("@/lib/catalog/plan");
 const { engineSwitchModel, followEngineParams, presetModel, presetOriginal, presetParams, prestepCost } = await import("@/lib/composer");
 const { gradeOf, nextSteps } = await import("@/lib/output-actions");
 const { lorasFit } = await import("@/lib/catalog/loras");
@@ -32,6 +33,24 @@ const plan = (engine: "open" | "cloud", req: Partial<GenerationRequest> & { pres
   return planGeneration({ feature: "motion", modelId: m.id, prompt: "a woman in a red coat on a bridge", inputs: { images: ["/a.png"] }, ...req }, (id) => (id === m.id ? m : getModel(id)), getPreset);
 };
 const falRoute = (m: ModelDef, op = "i2v") => m.routes.find((r) => r.provider === "fal" && r.op === op)!;
+
+const replicateRoute = (m: ModelDef, op = "i2v") => m.routes.find((r) => r.provider === "replicate" && r.op === op)!;
+
+/** Submit through the Replicate adapter and return the URL and the prediction's input. */
+async function submitReplicate(model: ModelDef, route: ModelRoute, input: GenInput): Promise<{ url: string; input: Record<string, unknown> }> {
+  const real = globalThis.fetch;
+  let seen: { url: string; input: Record<string, unknown> } | undefined;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    seen = { url: String(url), input: JSON.parse(String(init?.body ?? "{}")).input ?? {} };
+    return new Response(JSON.stringify({ id: "p1" }), { status: 201 });
+  }) as typeof fetch;
+  try {
+    await replicateProvider.submit({ generationId: "g", model, route, input });
+  } finally {
+    globalThis.fetch = real;
+  }
+  return seen!;
+}
 
 /** Submit through the fal adapter and return the URL and JSON body it posted. */
 async function submit(model: ModelDef, route: ModelRoute, input: GenInput): Promise<{ url: string; body: Record<string, unknown> }> {
@@ -62,7 +81,8 @@ describe("Fuobe DoP on both engines", () => {
     const m = getModel("fuobe-dop")!;
     expect(m.engines).toEqual(["open", "cloud"]);
     expect(view("fuobe-dop", "open").routes.map((r) => [r.op, r.endpoint])).toEqual([["i2v", "wan22-i2v-14b"], ["flf2v", "wan22-flf2v-14b"], ["keyframes", "wan22-flf2v-14b"]]);
-    expect(new Set(view("fuobe-dop", "cloud").routes.map((r) => r.provider))).toEqual(new Set(["fal", "replicate"]));
+    // fal removes its Wan 2.2 A14B line on 2027-01-04: the cloud half is Replicate's fast Wan 2.2 alone.
+    expect(new Set(view("fuobe-dop", "cloud").routes.map((r) => r.provider))).toEqual(new Set(["replicate"]));
     expect(view("fuobe-dop", "open").defaults).toMatchObject({ resolution: "480p", duration: 5, aspectRatio: "auto" });
     expect(view("fuobe-dop", "cloud").defaults).toMatchObject({ resolution: "720p", duration: 5 });
     expect(view("fuobe-dop-ltx", "open").routes.map((r) => [r.op, r.endpoint])).toEqual([["i2v", "ltx23-i2v-lora"], ["flf2v", "ltx23-flf2v-lora"]]);
@@ -73,28 +93,30 @@ describe("Fuobe DoP on both engines", () => {
     expect(() => plan("open", { inputs: undefined, prompt: "a slow push in" })).toThrow(/start frame/);
   });
 
-  it("sends 49 or 81 frames at 16 fps with interpolation off and 20 steps, each LoRA on its expert", async () => {
+  it("sends 81 frames at 16 fps with interpolation off, each LoRA on its expert, on Replicate's fast Wan 2.2", async () => {
     const m = view("fuobe-dop", "cloud");
     const p = plan("cloud", { presetId: "motion-overhead" });
     expect(p.loras.map((l) => l.target)).toEqual(["high", "low"]);
     const loras = p.loras.map((l) => ({ ...l, hostedUrl: `https://v3.fal.media/files/${l.version}.safetensors` }));
-    for (const [duration, frames] of [[5, 81], [3, 49]] as const) {
-      const { url, body } = await submit(m, falRoute(m), { ...p.params, duration, prompt: p.prompt, images: ["https://fal.media/a.png"], loras });
-      expect(url).toContain("fal-ai/wan/v2.2-a14b/image-to-video/lora");
-      expect(body).toMatchObject({ num_frames: frames, frames_per_second: 16, interpolator_model: "none", num_inference_steps: 20, resolution: "720p" });
-      expect((body.loras as { transformer: string }[]).map((l) => l.transformer)).toEqual(["high", "low"]);
+    // Replicate makes 81-121 frames: a 3 s clip is made as 5 s.
+    for (const duration of [5, 3]) {
+      const { url, input } = await submitReplicate(m, replicateRoute(m), { ...p.params, duration, prompt: p.prompt, images: ["https://fal.media/a.png"], loras });
+      expect(url).toContain("wan-video/wan-2.2-i2v-fast");
+      expect(input).toMatchObject({ num_frames: 81, interpolate_output: false, resolution: "720p" });
+      expect(input.lora_weights_transformer).toBe(loras[0].hostedUrl);
+      expect(input.lora_weights_transformer_2).toBe(loras[1].hostedUrl);
     }
-    // Without a LoRA (a move on its words, Fuobe DoP picked) the plain endpoint, at the same frame rate.
+    // Without a LoRA (a move on its words, Fuobe DoP picked): no LoRA fields.
     const words = plan("cloud", { presetId: "motion-whip-pan" }, "fuobe-dop");
-    const plain = await submit(m, falRoute(m), { ...words.params, prompt: words.prompt, images: ["https://fal.media/a.png"] });
-    expect(plain.url).toMatch(/fal-ai\/wan\/v2\.2-a14b\/image-to-video$/);
-    expect(plain.body).toMatchObject({ num_frames: 81, frames_per_second: 16, interpolator_model: "none" });
+    const plain = await submitReplicate(m, replicateRoute(m), { ...words.params, prompt: words.prompt, images: ["https://fal.media/a.png"] });
+    expect(plain.input).toMatchObject({ num_frames: 81, interpolate_output: false });
+    expect(plain.input).not.toHaveProperty("lora_weights_transformer");
   });
 
-  it("prices the clip: free on the GPU, the LoRA endpoint's $0.10/s in the cloud", () => {
+  it("prices the clip: free on the GPU, Replicate's price per clip in the cloud", () => {
     const p = plan("cloud", { presetId: "motion-overhead" });
-    expect(estimateCost(view("fuobe-dop", "cloud"), p.params, 1, "i2v", true)).toBeCloseTo(0.5);
-    expect(estimateCost(view("fuobe-dop", "cloud"), { ...p.params, duration: 3 }, 1, "i2v", true)).toBeCloseTo(0.3);
+    expect(estimateCost(view("fuobe-dop", "cloud"), p.params, 1, "i2v", true)).toBeCloseTo(0.11);
+    expect(estimateCost(view("fuobe-dop", "cloud"), { ...p.params, duration: 3, resolution: "480p" }, 1, "i2v", true)).toBeCloseTo(0.05);
     expect(estimateCost(view("fuobe-dop", "open"), p.params, 1, "i2v")).toBe(0);
   });
 });
@@ -107,11 +129,14 @@ describe("Mix on both engines", () => {
       expect(p.loras.slice(2).every((l) => /explosion-redmond/.test(l.file))).toBe(true);
       expect(p.prompt).toMatch(/Also, more subtly: explosion, /);
     }
-    // Two Wan 2.2 pairs fit fal's list, not Replicate's one LoRA per expert: the run goes to fal.
+    // Two Wan 2.2 pairs don't fit Replicate's one LoRA per expert: in the cloud the Mix's second preset is unavailable,
+    // with the reason (the composer adds "Use it on your GPU"); on the GPU both load.
     const both = plan("cloud", { presetId: "motion-overhead", mix: { presetId: "effect-building-explosion", strength: 0.5 } });
     const m = view("fuobe-dop", "cloud");
-    expect(lorasFit(falRoute(m), both.loras)).toBe(true);
-    expect(lorasFit(m.routes.find((r) => r.provider === "replicate")!, both.loras)).toBe(false);
+    expect(lorasFit(replicateRoute(m), both.loras)).toBe(false);
+    const dop = getModel("fuobe-dop")!;
+    expect(mixLimit(dop, "cloud", "i2v", getPreset("motion-overhead")!, getPreset("effect-building-explosion")!)).toMatch(/one LoRA per expert/);
+    expect(mixLimit(dop, "open", "i2v", getPreset("motion-overhead")!, getPreset("effect-building-explosion")!)).toBeUndefined();
   });
 
   it("joins a preset whose LoRA is for another base as words, and says so", () => {
@@ -340,7 +365,7 @@ describe("review fixes", () => {
     const p = plan("cloud", { presetId: "motion-wiggle" }, "fuobe-dop");
     expect(p.loras).toEqual([]);
     expect(p.prompt.startsWith("Wiggle. ")).toBe(false);
-    expect(estimateCost(view("fuobe-dop", "cloud"), p.params, 1, "i2v", false)).toBeCloseTo(0.4);
+    expect(estimateCost(view("fuobe-dop", "cloud"), p.params, 1, "i2v", false)).toBeCloseTo(0.11);
   });
 
   it("leads with a LoRA's trigger once, without its full stop or brackets", () => {
@@ -360,7 +385,7 @@ describe("review fixes", () => {
       const p = previewGeneration(req);
       expect(p.route).toMatchObject({ provider: "replicate" });
       expect(p.notes?.join(" ")).toMatch(/about 5 s, not 3 s/);
-      expect(p.costUsd).toBeCloseTo(0.4);
+      expect(p.costUsd).toBeCloseTo(0.11);
     } finally {
       setSetting("replicateToken", "");
     }
