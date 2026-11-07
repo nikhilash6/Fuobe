@@ -26,7 +26,10 @@ describe("Fuobe FX cover pairs", () => {
       if (pair.kind === "matte") expect((await sharp(path.join(dir(id), "after.480.webp")).metadata()).hasAlpha, id).toBe(true);
       if (pair.kind === "loupe") for (const f of ["before.loupe.webp", "after.loupe.webp", "before.loupe2x.webp", "after.loupe2x.webp"]) expect(fs.existsSync(path.join(dir(id), f)), `${id} ${f}`).toBe(true);
       if (pair.kind === "strip") expect((await sharp(path.join(dir(id), "strip.webp")).metadata()).width, id).toBe(480 * 6);
-      if (pair.kind === "reframe") expect(pair.rect?.length, id).toBe(4);
+      if (pair.kind === "reframe") {
+        expect(pair.rect?.length, id).toBe(4);
+        expect((await sharp(path.join(dir(id), "wide.480.webp")).metadata()).height, id).toBe(270);
+      }
       expect(fxPairSrc(id, "after.480.webp"), id).toBe(`/previews/fx/${id}/after.480.webp?v=${pair.v}`);
     }
   });
