@@ -114,6 +114,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
           return;
         }
         const answer = await answerThread(v.who, id, {
+          from: request,
           signal: abort.signal,
           onText: (t) => {
             text = t;

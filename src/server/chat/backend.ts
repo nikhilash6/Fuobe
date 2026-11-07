@@ -3,7 +3,7 @@ import { alternate, fitHistory, summaryAsk, tidyReply, transcript, type ChatTurn
 import type { ChatEngine, ChatErrorCode } from "@/lib/chat/types";
 import { readSse } from "../llm/sse";
 import { runAsTenant } from "../tenant";
-import { askHelper, freeHelperOn, freeHelperState, helperKnown, HELPER_LIMITS, helperMessagesProblem, type HelperAnswer } from "../text-helper";
+import { askHelper, freeHelperOn, freeHelperState, helperKnown, HELPER_LIMITS, helperMessagesProblem, type HelperAnswer, type HelperCall, type HelperTool } from "../text-helper";
 
 /**
  * Where Fuobe Chat's replies come from:
@@ -32,10 +32,55 @@ export interface ReplyAsk {
   onStatus?: (status: "starting") => void;
   /** How long to wait for the free model before keeping the message for later (SITE_WAIT_MS). */
   waitMs?: number;
+  /** Offer the model the make tool (a chat that can make things: not a character's story). */
+  makeTool?: boolean;
+}
+
+/** What the model asked to make, in its own clean words. */
+export interface MakeCall {
+  what: string;
+  kind: "image" | "video" | "music" | "voice";
+}
+
+/**
+ * The one tool Chat offers the free model: one plain tool it picks reliably (pictures sent with a message are read
+ * before the model, by src/lib/chat/make-intent.ts, where near-neighbour tools would confuse it).
+ */
+const MAKE_TOOL: HelperTool = {
+  type: "function",
+  function: {
+    name: "make",
+    description:
+      "Make something for the person when they ask for it to be made: a picture, a video clip, a music track or a voice-over. The app shows them a plan with the price to approve. Only when they ask to make it now, never for questions or advice about making things.",
+    parameters: {
+      type: "object",
+      properties: {
+        what: { type: "string", description: "A rich, specific description of what to make, in the person's language: subject, setting, look, mood; for a voice-over, the exact words to say." },
+        kind: { type: "string", enum: ["image", "video", "music", "voice"], description: "What it is: image (a picture), video (a clip), music (a track or song) or voice (a voice-over)." },
+      },
+      required: ["what", "kind"],
+    },
+  },
+};
+
+const MAKE_HINT = "When the person asks you to make a picture, a video, a music track or a voice-over now, call the make tool with what to make; don't describe it in words instead.";
+
+function makeOf(calls: HelperCall[] | undefined): MakeCall | null {
+  const c = calls?.find((x) => x.name === "make");
+  if (!c) return null;
+  try {
+    const a = JSON.parse(c.arguments) as { what?: unknown; kind?: unknown };
+    const what = typeof a.what === "string" ? a.what.trim().slice(0, 2000) : "";
+    const kind = a.kind === "video" || a.kind === "music" || a.kind === "voice" ? a.kind : "image";
+    return what.length >= 3 ? { what, kind } : null;
+  } catch {
+    return null;
+  }
 }
 
 export type ReplyAnswer =
-  | { text: string; dropped: number }
+  /** `make`: the model asked to make something (its words, if any, are in `text`). */
+  | { text: string; dropped: number; make?: MakeCall }
   /** The free model didn't come up in time: the message is kept and answered later. */
   | { pending: true }
   | { error: ChatErrorCode; message: string; retryAfterS?: number };
@@ -95,10 +140,13 @@ async function siteTry(ask: ReplyAsk, waitMs: number): Promise<ReplyAnswer | "bu
     const fit = fitHistory(ask.turns, CHAT_BUDGET);
     const messages = alternate(fit.turns);
     if (helperMessagesProblem(messages)) return { error: "failed", message: CHAT_WORDS.failed };
+    // The make tool, on a slot that takes tool jobs (an older one answers in words, as before).
+    const tools = ask.makeTool && freeHelperState(Date.now(), { chat: true, tools: true, vision }) !== "absent";
     const a = await askHelper({
       task: "chat",
-      system: ask.system,
+      system: tools ? `${ask.system}\n\n${MAKE_HINT}` : ask.system,
       messages,
+      ...(tools && { tools: [MAKE_TOOL], tool_choice: "auto" as const }),
       sampling: ask.temperature === undefined ? undefined : { temperature: ask.temperature },
       ...(ask.image && { images: [ask.image] }),
       signal: ask.signal,
@@ -114,6 +162,8 @@ async function siteTry(ask: ReplyAsk, waitMs: number): Promise<ReplyAnswer | "bu
     });
     if ("error" in a) return a.error === "busy" ? "busy" : fromHelper(a);
     const text = tidyReply(a.text, ask.speaker);
+    const make = tools ? makeOf(a.toolCalls) : null;
+    if (make) return { text, dropped: fit.dropped, make };
     return text ? { text, dropped: fit.dropped } : { error: "failed", message: CHAT_WORDS.failed };
   }
   if (!freeHelperOn(Date.now(), { vision })) return "busy";

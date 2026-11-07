@@ -414,6 +414,49 @@ describe("making things in a chat", () => {
     for (const g of ran.ids) expect(db().prepare("SELECT json_extract(request_json, '$.account') AS a FROM generations WHERE id = ?").get(g)).toEqual({ a });
   });
 
+  it("lets the free model ask to make something with its one tool, and turns that into a plan", async () => {
+    let on = true;
+    const seen: { tools?: { function: { name: string } }[]; system: string }[] = [];
+    const slot = (async () => {
+      while (on) {
+        beat();
+        const job = helper.claimHelperJob(workerRow(worker), { model: "test", device: "gpu", chat: true, tools: true });
+        if (!job) {
+          await new Promise((r) => setTimeout(r, 20));
+          continue;
+        }
+        seen.push(job as never);
+        const offered = (job as { tools?: unknown[] }).tools?.length;
+        helper.finishHelperJob(
+          workerRow(worker),
+          job.id,
+          offered
+            ? { lease: job.lease, text: "", toolCalls: [{ id: "call_1", name: "make", arguments: JSON.stringify({ what: "A red fox in fresh snow at dusk, soft rim light", kind: "image" }) }], finish: "tool_calls" }
+            : { lease: job.lease, text: "*smiles* A song? Let me hum you something." },
+        );
+      }
+    })();
+    try {
+      // Words the careful check leaves to the model.
+      const t = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "chat" }))).json()) as { id: string };
+      expect(wantsToMake("I'd love a picture of a red fox in the snow")).toBe(false);
+      const ev = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", { text: "I'd love a picture of a red fox in the snow" }), ctx({ id: t.id })));
+      const done = ev.find((e) => e.type === "done")?.message as { plan?: { jobs: { kind: string }[]; requests: { prompt?: string }[] } } | undefined;
+      expect(done?.plan?.jobs[0].kind).toBe("image");
+      expect(done?.plan?.requests[0].prompt).toContain("red fox in fresh snow");
+      const job = seen.at(-1)!;
+      expect(job.tools?.map((x) => x.function.name)).toEqual(["make"]);
+      expect(job.system).toContain("call the make tool");
+      // A character's story is never offered the tool.
+      const c = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "character", characterId: "kai" }))).json()) as { id: string };
+      await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${c.id}/reply`, "POST", { text: "Could you sing me something?" }), ctx({ id: c.id })));
+      expect(seen.at(-1)!.tools).toBeUndefined();
+    } finally {
+      on = false;
+      await slot;
+    }
+  });
+
   it("keeps talk as talk, and characters stay in their story", async () => {
     const slot = standIn(() => "Pick a dark wool coat.");
     try {
