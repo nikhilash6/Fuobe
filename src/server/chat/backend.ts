@@ -1,9 +1,9 @@
 import "server-only";
-import { fitHistory, summaryAsk, tidyReply, transcript, type ChatTurn } from "@/lib/chat/prompt";
+import { alternate, fitHistory, summaryAsk, tidyReply, transcript, type ChatTurn } from "@/lib/chat/prompt";
 import type { ChatEngine, ChatErrorCode } from "@/lib/chat/types";
 import { readSse } from "../llm/sse";
 import { runAsTenant } from "../tenant";
-import { askHelper, freeHelperOn, helperKnown, HELPER_LIMITS, type HelperAnswer } from "../text-helper";
+import { askHelper, freeHelperOn, helperKnown, HELPER_LIMITS, helperMessagesProblem, type HelperAnswer } from "../text-helper";
 
 /**
  * Where Fuobe Chat's replies come from:
@@ -24,8 +24,10 @@ export interface ReplyAsk {
   image?: { data: Buffer; contentType: string } | null;
   temperature?: number;
   signal?: AbortSignal;
-  /** The reply so far, as it is written (a model that doesn't stream says it once, at the end). */
+  /** The reply so far, as it is written (a model that doesn't stream says nothing until the end). */
   onText?: (soFar: string) => void;
+  /** The place in line while the free model is busy with others (1: next). */
+  onQueue?: (position: number) => void;
 }
 
 export type ReplyAnswer = { text: string; dropped: number } | { error: ChatErrorCode; message: string; retryAfterS?: number };
@@ -50,6 +52,8 @@ export function siteStatus(who: string): { on: boolean; known: boolean } {
 
 /** History room for the free helper: its message limit, less the transcript's own words. */
 const SITE_BUDGET = HELPER_LIMITS.userChars - 600;
+/** History room for chat turns on the free helper (its own limit for all turns, with room for joining them). */
+const CHAT_BUDGET = HELPER_LIMITS.chatChars - 800;
 /** History room for a hosted model through the person's key (its context is far larger). */
 const KEY_BUDGET = 24_000;
 
@@ -60,9 +64,33 @@ function fromHelper(a: Exclude<HelperAnswer, { text: string }>): ReplyAnswer {
 }
 
 async function siteReply(ask: ReplyAsk): Promise<ReplyAnswer> {
-  const fit = fitHistory(ask.turns, SITE_BUDGET);
   return asTenant(ask.who, async () => {
-    if (!freeHelperOn(Date.now(), { vision: !!ask.image })) {
+    const vision = !!ask.image;
+    // A worker that takes chat turns: the history as real turns, the reply as it's written, the place in line.
+    if (freeHelperOn(Date.now(), { chat: true, vision })) {
+      const fit = fitHistory(ask.turns, CHAT_BUDGET);
+      const messages = alternate(fit.turns);
+      if (helperMessagesProblem(messages)) return { error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer;
+      const a = await askHelper({
+        task: "chat",
+        system: ask.system,
+        messages,
+        sampling: ask.temperature === undefined ? undefined : { temperature: ask.temperature },
+        ...(ask.image && { images: [ask.image] }),
+        signal: ask.signal,
+        onText: (t) => {
+          const tidy = tidyReply(t, ask.speaker);
+          if (tidy) ask.onText?.(tidy);
+        },
+        onQueue: ask.onQueue,
+      });
+      if ("error" in a) return fromHelper(a);
+      const text = tidyReply(a.text, ask.speaker);
+      return text ? { text, dropped: fit.dropped } : ({ error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer);
+    }
+    // A worker from before chat turns: one message, the history as a transcript.
+    const fit = fitHistory(ask.turns, SITE_BUDGET);
+    if (!freeHelperOn(Date.now(), { vision })) {
       return { error: helperKnown() ? "busy" : "no-model", message: helperKnown() ? CHAT_WORDS.busy : CHAT_WORDS["no-model"] } as ReplyAnswer;
     }
     const a = await askHelper({
@@ -95,8 +123,9 @@ export async function checkOpenRouterKey(key: string, signal?: AbortSignal): Pro
 async function keyReply(ask: ReplyAsk, key: { key: string; model: string }): Promise<ReplyAnswer> {
   const fit = fitHistory(ask.turns, KEY_BUDGET);
   const messages: unknown[] = [{ role: "system", content: ask.system }];
-  fit.turns.forEach((t, i) => {
-    const last = i === fit.turns.length - 1;
+  const turns = alternate(fit.turns);
+  turns.forEach((t, i) => {
+    const last = i === turns.length - 1;
     if (last && t.role === "user" && ask.image) {
       messages.push({
         role: "user",

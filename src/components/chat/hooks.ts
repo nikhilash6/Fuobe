@@ -61,7 +61,7 @@ export function useStartChat() {
 
 export type ReplyState =
   | { phase: "idle" }
-  | { phase: "waiting" }
+  | { phase: "waiting"; position?: number }
   | { phase: "writing"; text: string }
   | { phase: "failed"; message: string; code: string; retryAfterS?: number };
 
@@ -138,6 +138,7 @@ export function useReply(threadId: string) {
               continue;
             }
             if (e.type === "user") patch((t) => ({ ...t, messages: [...t.messages.filter((m) => m.id !== temp?.id), e.message] }));
+            else if (e.type === "queue") setState((s) => (s.phase === "waiting" ? { phase: "waiting", position: e.position } : s));
             else if (e.type === "text") {
               // Only a model that streams sends text on the way; a whole reply comes with done alone.
               texts++;

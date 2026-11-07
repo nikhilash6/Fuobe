@@ -99,6 +99,23 @@ export function fitHistory(turns: ChatTurn[], budget: number): { turns: ChatTurn
 }
 
 /**
+ * Turns as strict chat templates want them (Gemma's): the person first, then strictly taking turns. Back-to-back
+ * messages from one side are joined, and a story that opens with the character's greeting gets a short cue before it.
+ */
+export function alternate(turns: ChatTurn[]): ChatTurn[] {
+  const out: ChatTurn[] = [];
+  for (const t of turns) {
+    const content = t.content.trim();
+    if (!content) continue;
+    const last = out.at(-1);
+    if (last && last.role === t.role) last.content = `${last.content}\n\n${content}`;
+    else out.push({ role: t.role, content });
+  }
+  if (out[0]?.role === "assistant") out.unshift({ role: "user", content: "*The scene begins.*" });
+  return out;
+}
+
+/**
  * One text for a model that takes a single message (the free helper before it took chat turns): the history as a
  * transcript, then the ask to write the next reply.
  */

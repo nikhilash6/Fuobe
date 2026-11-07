@@ -122,6 +122,20 @@ describe("what the model reads", () => {
     expect(prompt.makeItHref({ studio: "music", prompt: "lo-fi & rain" })).toBe("/audio/music?prompt=lo-fi%20%26%20rain");
   });
 
+  it("hands strict chat templates turns that start with the person and take turns", () => {
+    const out = prompt.alternate([
+      { role: "assistant", content: "*looks up* Hello." },
+      { role: "user", content: "Hi" },
+      { role: "user", content: "Are you there?" },
+      { role: "assistant", content: "" },
+      { role: "assistant", content: "Yes." },
+      { role: "user", content: "Good." },
+    ]);
+    expect(out.map((t) => t.role)).toEqual(["user", "assistant", "user", "assistant", "user"]);
+    expect(out[2].content).toBe("Hi\n\nAre you there?");
+    expect(helper.helperMessagesProblem(out)).toBeNull();
+  });
+
   it("names a chat from its first line, and tidies a reply", () => {
     expect(prompt.titleFrom("  Plan a shoot  ")).toBe("Plan a shoot");
     expect(prompt.titleFrom("word ".repeat(30)).length).toBeLessThanOrEqual(61);
@@ -259,6 +273,42 @@ describe("a reply", () => {
       expect(store.getThread(a, t.id)!.messages).toHaveLength(4);
     } finally {
       await slot.stop();
+    }
+  });
+
+  it("streams a reply from a chat slot as real turns, with the words as they come", async () => {
+    let on = true;
+    const seen: { messages?: { role: string; content: string }[]; task: string; system: string }[] = [];
+    const slot = (async () => {
+      while (on) {
+        beat();
+        const job = helper.claimHelperJob(workerRow(worker), { model: "test", device: "gpu", chat: true });
+        if (!job) {
+          await new Promise((r) => setTimeout(r, 20));
+          continue;
+        }
+        seen.push(job as never);
+        for (const part of ["Ten", "Ten minutes.", "Ten minutes. Show me"]) {
+          helper.partialHelperJob(workerRow(worker), job.id, { lease: job.lease, text: part });
+          await new Promise((r) => setTimeout(r, 300));
+        }
+        helper.finishHelperJob(workerRow(worker), job.id, { lease: job.lease, text: "Ten minutes. Show me what you brought." });
+      }
+    })();
+    try {
+      const t = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "character", characterId: "sienna-vale", text: "Hi Sienna" }))).json()) as { id: string };
+      const ev = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", {}), ctx({ id: t.id })));
+      const texts = ev.filter((e) => e.type === "text").map((e) => e.text);
+      expect(texts.length).toBeGreaterThan(1);
+      expect(ev.at(-1)).toMatchObject({ type: "done", message: { content: "Ten minutes. Show me what you brought." } });
+      const job = seen.find((j) => j.task === "chat")!;
+      // The greeting opens with a cue, then the turns alternate and end with the person's.
+      expect(job.messages?.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+      expect(job.messages?.at(-1)?.content).toBe("Hi Sienna");
+      expect(job.system).toContain("You are Sienna Vale.");
+    } finally {
+      on = false;
+      await slot;
     }
   });
 

@@ -247,6 +247,9 @@ export function ThreadView({ id }: { id: string }) {
                       </Bubble>
                     )}
                   </Row>
+                  {state.phase === "waiting" && state.position !== undefined && state.position > 0 && (
+                    <p className={cn("mt-1.5 text-[12px] text-muted-foreground", c && "ml-9")}>{state.position === 1 ? "Up next" : `${ordinal(state.position)} in line`}</p>
+                  )}
                 </li>
               )}
               {state.phase === "failed" && (
@@ -336,6 +339,8 @@ export function ThreadView({ id }: { id: string }) {
 function Frame({ children }: { children: React.ReactNode }) {
   return <div className="flex h-content min-w-0 flex-col">{children}</div>;
 }
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
 /** "Today 14:02", "Yesterday 09:10" or "12 Nov 18:30": the label over a run after a long pause. */
 function stamp(t: number): string {

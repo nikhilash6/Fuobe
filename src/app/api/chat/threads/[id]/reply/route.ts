@@ -133,6 +133,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
               pending = t;
               timer ??= setTimeout(flush, 60);
             },
+            onQueue: (position) => send({ type: "queue", position }),
           },
           key,
         );
