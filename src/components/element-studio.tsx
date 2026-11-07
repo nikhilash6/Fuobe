@@ -14,6 +14,7 @@ import { TurnaroundButton, useCharacterPictures } from "@/components/turnaround/
 import { Button } from "@/components/ui/button";
 import { useElement } from "@/lib/api";
 import { loraFamily, TRAINING_FAMILIES } from "@/lib/catalog/training";
+import { isClipRef } from "@/lib/catalog/elements";
 
 const NO_REFS: string[] = [];
 
@@ -27,7 +28,7 @@ export function ElementStudio({ id }: { id: string }) {
   const [training, setTraining] = useState(false);
   const el = q.data;
   // A character's pictures (a wide one is its sheet) for "Fly around this character".
-  const pictures = useCharacterPictures(el?.kind === "character" ? el.references.slice(0, 12) : NO_REFS);
+  const pictures = useCharacterPictures(el?.kind === "character" ? el.references.filter((r) => !isClipRef(r)).slice(0, 12) : NO_REFS);
   const config = useMemo<StudioConfig | null>(() => {
     if (!el) return null;
     // A trained Soul ID runs on its family's lead model (Fuobe Soul, Soul HD, FLUX…): start there, on each engine it has.

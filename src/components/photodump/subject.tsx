@@ -15,12 +15,14 @@ import { SOUL_ID_COPY, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { usePhotoCharacters, useSaveCharacter } from "./hooks";
+import { ElementThumb } from "@/components/element-thumb";
+import { referenceWords } from "@/lib/clip-thumb";
 
-/** What a character brings: a trained Soul ID (Fuobe Soul), an older one to retrain, or just photos. */
+/** What a character brings: a trained Soul ID (Fuobe Soul), an older one to retrain, or just its photos and clips. */
 export function identityLabel(el: StudioElement): string {
   if (el.loras.some((l) => !l.referenceId && !l.demo)) return "Soul ID";
   if (el.loras.some((l) => l.referenceId)) return "Retrain Soul ID";
-  return `${el.references.length} photo${el.references.length === 1 ? "" : "s"}`;
+  return referenceWords(el.references) || "0 photos";
 }
 
 /** The character-creation copy (src/lib/catalog/training.ts SOUL_ID_COPY, the researched rules): saving is the consent. */
@@ -158,8 +160,7 @@ export function CharacterPicker({ value, onChange }: { value?: string; onChange:
                 >
                   <span className="block aspect-[3/4]">
                     {el.references[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={el.references[0]} alt="" loading="lazy" className="size-full object-cover" />
+                      <ElementThumb src={el.references[0]} loading="lazy" markClassName="top-1.5 bottom-auto" className="size-full object-cover" />
                     ) : (
                       <span className="grid size-full place-items-center text-muted-foreground">
                         <UserRound className="size-6" />

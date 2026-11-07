@@ -24,6 +24,7 @@ import { ClipBed } from "./clip-bed";
 import { Section, Segmented, ToggleRow } from "./controls";
 import { NarratorList } from "./narrator";
 import { StyleGrid } from "./style-art";
+import { ClipAvatar, ElementThumb } from "@/components/element-thumb";
 
 /** Up to 3 style reference images (they replace the preset); `max` is what the engine's picture model reads. */
 export function StyleRefs({ value, onChange, max = MAX_STYLE_REFS }: { value: string[]; onChange: (urls: string[]) => void; max?: number }) {
@@ -98,8 +99,9 @@ export function ElementsPicker({ value, onChange }: { value: string[]; onChange:
             )}
           >
             {e.references[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={e.references[0]} alt="" className="size-6 rounded-full object-cover" />
+              <ClipAvatar src={e.references[0]}>
+                <ElementThumb src={e.references[0]} mark="none" className="size-6 rounded-full object-cover" />
+              </ClipAvatar>
             ) : (
               <AtSign className="ml-1 size-3.5" />
             )}

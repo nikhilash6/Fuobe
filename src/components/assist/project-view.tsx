@@ -60,6 +60,7 @@ import { useModeChoice } from "./mode-picker";
 import { ProjectDialog } from "./project-dialog";
 import { ScheduledView } from "./scheduled-view";
 import { ProjectDot, RailButton } from "./shell";
+import { ElementThumb } from "@/components/element-thumb";
 
 const SOURCE_ICON: Record<SourceKind, typeof FileText> = { link: Link2, file: FileText, image: ImageIcon, video: Video, audio: AudioLines, element: AtSign, text: NotebookPen };
 
@@ -364,8 +365,7 @@ function Sources({ p }: { p: AssistProject }) {
                       className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-accent disabled:opacity-50"
                     >
                       {el.references[0] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={el.references[0]} alt="" className="size-8 shrink-0 rounded-md object-cover" />
+                        <ElementThumb src={el.references[0]} mark="small" className="size-8 shrink-0 rounded-md object-cover" />
                       ) : (
                         <span className="grid size-8 place-items-center rounded-md bg-muted">
                           <AtSign className="size-4" />

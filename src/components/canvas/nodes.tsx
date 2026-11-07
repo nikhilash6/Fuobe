@@ -138,6 +138,7 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { PATH_PRESETS } from "@/lib/camera-path";
 import { exactDefaults } from "@/lib/exact-orbit";
 import { EXAMPLE_FEATURE, NodeIcon, PORT_COLOR, useEditorActions, useEditorGlobals, useEditorSelector, useNodeResults, useNodeView, type EditorSnapshot, type NodeResults } from "./canvas-context";
+import { ElementThumb } from "@/components/element-thumb";
 
 /** A node on the board: a graph node, or a group, comment pin or drawing (./board.tsx). */
 export type FlowNode = Node<CanvasNodeData, CanvasNodeType | BoardType>;
@@ -1561,8 +1562,7 @@ function ElementList({ current, onPick }: { current?: string; onPick: (patch: Pa
           className={cn("flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-accent", e.id === current && "bg-brand-faint")}
         >
           <span className="size-8 shrink-0 overflow-hidden rounded-md bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {e.references[0] && <img src={e.references[0]} alt="" className="size-full object-cover" />}
+            {e.references[0] && <ElementThumb src={e.references[0]} mark="small" className="size-full object-cover" />}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium">{e.name}</span>
@@ -1586,8 +1586,7 @@ const ElementNode = memo(function ElementNode({ id, type, data, selected }: Node
         {data.handle ? (
           <div className="flex items-center gap-2.5">
             <span className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {data.preview && <img src={data.preview} alt="" className="size-full object-cover" />}
+              {data.preview && <ElementThumb src={data.preview} mark="small" className="size-full object-cover" />}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-[13px] font-medium">{data.name ?? data.handle}</span>

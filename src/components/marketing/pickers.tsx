@@ -17,6 +17,7 @@ import type { ModelDef } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import type { ModelInfo } from "./model-info";
 import { useProducts } from "./hooks";
+import { firstPhoto } from "@/lib/clip-thumb";
 
 /** The product a run uses: a saved product, or a one-off photo. */
 export interface ProductChoice {
@@ -122,7 +123,10 @@ export function ProductSlot({ value, onChange, required, brandId, pulse }: { val
 export function AvatarSlot({ value, onChange, pulse }: { value: SlotValue | null; onChange: (v: SlotValue | null) => void; pulse?: boolean }) {
   const [open, setOpen] = useState(false);
   const elements = useElements();
-  const people = (elements.data ?? []).filter((e) => e.kind === "character" && e.references[0]);
+  const people = (elements.data ?? []).flatMap((e) => {
+    const photo = e.kind === "character" ? firstPhoto(e.references) : undefined;
+    return photo ? [{ ...e, photo }] : [];
+  });
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const choose = (v: SlotValue) => {
@@ -175,9 +179,9 @@ export function AvatarSlot({ value, onChange, pulse }: { value: SlotValue | null
             {people.length ? (
               <div className="grid grid-cols-4 gap-2">
                 {people.map((e) => (
-                  <button key={e.id} type="button" onClick={() => choose({ ref: e.references[0], preview: e.references[0], kind: "image", name: e.name })} className={cn("min-w-0 rounded-lg p-1 hover:bg-accent", value?.ref === e.references[0] && "bg-brand-faint")}>
+                  <button key={e.id} type="button" onClick={() => choose({ ref: e.photo, preview: e.photo, kind: "image", name: e.name })} className={cn("min-w-0 rounded-lg p-1 hover:bg-accent", value?.ref === e.photo && "bg-brand-faint")}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={e.references[0]} alt="" className="aspect-square w-full rounded-md object-cover" />
+                    <img src={e.photo} alt="" className="aspect-square w-full rounded-md object-cover" />
                     <span className="mt-1 block truncate text-[11px]">{e.name}</span>
                   </button>
                 ))}

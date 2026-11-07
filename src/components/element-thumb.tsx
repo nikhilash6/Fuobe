@@ -1,8 +1,9 @@
 "use client";
 
 import { Video } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CLIP_FRAME_AT, frameSize, stillCache, thumbSource } from "@/lib/clip-thumb";
+import { isClipRef } from "@/lib/catalog/elements";
 import { cn } from "@/lib/utils";
 
 /** One frame of a clip, scaled down and kept as a JPEG object URL; null when this browser can't read the clip. */
@@ -67,8 +68,9 @@ export function ClipMark({ className, size = "sm" }: { className?: string; size?
 /**
  * An element's reference drawn as a thumbnail. A photo is the same <img> as ever (`className` on it). A clip shows a still
  * of itself (its `poster` when one is known, else a frame grabbed in the browser), in a box that takes `className`, with
- * the clip mark in its corner (`mark="none"` leaves it to the caller, as a chip too small for it does). A clip that can't
- * be read shows the mark alone, never a broken image.
+ * the clip mark in its corner: `corner` on cards, `small` on tiles of about 28-48 px, `none` when the caller places it (a
+ * round avatar: ClipAvatar). `markClassName` moves the mark (away from a caption). A clip that can't be read shows a
+ * camera alone, never a broken image.
  */
 export function ElementThumb({
   src,
@@ -77,23 +79,41 @@ export function ElementThumb({
   className,
   loading,
   mark = "corner",
+  markClassName,
 }: {
   src: string;
   poster?: string | null;
   alt?: string;
   className?: string;
   loading?: "lazy" | "eager";
-  mark?: "corner" | "none";
+  mark?: "corner" | "small" | "none";
+  markClassName?: string;
 }) {
   const s = thumbSource(src, poster);
   if (s.kind === "image") {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={s.src} alt={alt} loading={loading} className={className} />;
   }
-  return <ClipStill clip={s.clip} poster={s.poster} alt={alt} className={className} loading={loading} mark={mark} />;
+  return <ClipStill clip={s.clip} poster={s.poster} alt={alt} className={className} loading={loading} mark={mark} markClassName={markClassName} />;
 }
 
-function ClipStill({ clip, poster, alt, className, loading, mark }: { clip: string; poster?: string; alt: string; className?: string; loading?: "lazy" | "eager"; mark: "corner" | "none" }) {
+function ClipStill({
+  clip,
+  poster,
+  alt,
+  className,
+  loading,
+  mark,
+  markClassName,
+}: {
+  clip: string;
+  poster?: string;
+  alt: string;
+  className?: string;
+  loading?: "lazy" | "eager";
+  mark: "corner" | "small" | "none";
+  markClassName?: string;
+}) {
   // The poster first; if it fails to load, a frame from the clip.
   const [posterFailed, setPosterFailed] = useState(false);
   const usePoster = !!poster && !posterFailed;
@@ -121,10 +141,26 @@ function ClipStill({ clip, poster, alt, className, loading, mark }: { clip: stri
       )}
       {!usePoster && still === null && (
         <span className="absolute inset-0 grid place-items-center text-muted-foreground">
-          <Video className={mark === "corner" ? "size-7" : "size-3.5"} />
+          <Video className={mark === "corner" ? "size-7" : "size-4"} />
         </span>
       )}
-      {mark === "corner" && (usePoster || still !== null) && <ClipMark className="absolute right-1.5 bottom-1.5" />}
+      {mark !== "none" && (usePoster || still !== null) && (
+        <ClipMark size={mark === "small" ? "xs" : "sm"} className={cn("absolute", mark === "small" ? "right-0.5 bottom-0.5" : "right-1.5 bottom-1.5", markClassName)} />
+      )}
+    </span>
+  );
+}
+
+/**
+ * A round avatar (a chip's face) that may show a clip: the clip mark sits on the circle's edge, outside its clipping. A photo
+ * (or no reference) gets the avatar alone, as before.
+ */
+export function ClipAvatar({ src, children, className }: { src?: string | null; children: ReactNode; className?: string }) {
+  if (!src || !isClipRef(src)) return <>{children}</>;
+  return (
+    <span className={cn("relative inline-flex shrink-0", className)}>
+      {children}
+      <ClipMark size="xs" className="absolute -right-1 -bottom-0.5" />
     </span>
   );
 }

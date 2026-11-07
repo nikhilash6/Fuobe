@@ -11,6 +11,11 @@ export function thumbSource(ref: string, poster?: string | null): ThumbSource {
   return poster && !isClipRef(poster) ? { kind: "clip", clip: ref, poster } : { kind: "clip", clip: ref };
 }
 
+/** An element's first photo (not a clip): what goes where a picture is needed, such as an avatar or an image reference. */
+export function firstPhoto(references: readonly string[]): string | undefined {
+  return references.find((r) => !isClipRef(r));
+}
+
 /** Where in a clip its still is taken (seconds): just past the start, as the Video studio's chip shows it. */
 export const CLIP_FRAME_AT = 0.1;
 
@@ -65,4 +70,12 @@ export function stillCache(grab: (clip: string) => Promise<string | null>, limit
       return p;
     },
   };
+}
+
+/** An element's references in words for a menu row: "2 photos", "1 clip", "3 photos · 1 clip" ("" for none). */
+export function referenceWords(references: readonly string[]): string {
+  const clips = references.filter(isClipRef).length;
+  const photos = references.length - clips;
+  const words = [photos && `${photos} photo${photos > 1 ? "s" : ""}`, clips && `${clips} clip${clips > 1 ? "s" : ""}`].filter(Boolean);
+  return words.join(" · ");
 }

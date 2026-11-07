@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { MoveChips, MoveList, prefetchMoves } from "./camera-moves";
 import { PaletteEditor } from "./palette-editor";
+import { ClipAvatar, ElementThumb } from "@/components/element-thumb";
 
 type Patch = (p: Partial<DirectorSettings>) => void;
 
@@ -600,10 +601,11 @@ export function EmotionChip({ settings, onChange, characters }: { settings: Dire
               return (
                 <div key={c.id} className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="grid size-6 place-items-center overflow-hidden rounded-full bg-muted" style={step ? { boxShadow: `0 0 0 2px ${step.color}` } : undefined}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {c.references[0] ? <img src={c.references[0]} alt="" className="size-full object-cover" /> : null}
-                    </span>
+                    <ClipAvatar src={c.references[0]}>
+                      <span className="grid size-6 place-items-center overflow-hidden rounded-full bg-muted" style={step ? { boxShadow: `0 0 0 2px ${step.color}` } : undefined}>
+                        {c.references[0] ? <ElementThumb src={c.references[0]} mark="none" className="size-full object-cover" /> : null}
+                      </span>
+                    </ClipAvatar>
                     <span className="text-[13px] font-medium">@{c.handle}</span>
                     {step && <span className="truncate text-[12px] text-muted-foreground">{step.prompt}</span>}
                   </div>

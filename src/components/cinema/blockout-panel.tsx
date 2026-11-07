@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import type { BuiltBlockout } from "./blockout-builder";
 import { useCinemaGenerate } from "./hooks";
 import { mediaDuration } from "./media";
+import { firstPhoto } from "@/lib/clip-thumb";
 
 /**
  * Blockout to film in Cinema's take composer (package blockout-film): the blockout (an uploaded grey-box render from any
@@ -466,15 +467,15 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
                   <button type="button" onClick={() => refInput.current?.click()} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[13px] font-medium hover:bg-accent">
                     <Upload className="size-4" /> Upload a picture
                   </button>
-                  {!!elements.data?.some((e) => e.references.length && e.kind !== "voice") && <p className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Elements · Soul Cast · Soul Location</p>}
+                  {!!elements.data?.some((e) => firstPhoto(e.references) && e.kind !== "voice") && <p className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Elements · Soul Cast · Soul Location</p>}
                   <div className="max-h-40 space-y-0.5 overflow-y-auto">
                     {(elements.data ?? [])
-                      .filter((e) => e.references.length && e.kind !== "voice")
+                      .filter((e) => firstPhoto(e.references) && e.kind !== "voice")
                       .slice(0, 30)
                       .map((e) => (
-                        <button key={e.id} type="button" onClick={() => addRef({ url: e.references[0], role: roleFor({ category: e.kind }), name: e.name })} className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] hover:bg-accent">
+                        <button key={e.id} type="button" onClick={() => addRef({ url: firstPhoto(e.references)!, role: roleFor({ category: e.kind }), name: e.name })} className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] hover:bg-accent">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={e.references[0]} alt="" className="size-7 rounded object-cover" />
+                          <img src={firstPhoto(e.references)} alt="" className="size-7 rounded object-cover" />
                           <span className="min-w-0 flex-1 truncate">{e.name}</span>
                           <span className="text-[11.5px] text-muted-foreground capitalize">{e.kind}</span>
                         </button>

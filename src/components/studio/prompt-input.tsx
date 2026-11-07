@@ -6,6 +6,8 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, u
 import { elementKindInfo, mentionAtCaret, type ElementKind, type StudioElement } from "@/lib/catalog/elements";
 import { hasMention } from "@/lib/composer";
 import { cn } from "@/lib/utils";
+import { ElementThumb } from "@/components/element-thumb";
+import { referenceWords } from "@/lib/clip-thumb";
 
 export const ELEMENT_ICONS: Record<ElementKind, typeof ScanFace> = {
   character: ScanFace,
@@ -236,8 +238,7 @@ export const PromptInput = forwardRef<
               >
                 <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-muted text-muted-foreground">
                   {el.references[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={el.references[0]} alt="" className="size-full object-cover" />
+                    <ElementThumb src={el.references[0]} mark="small" className="size-full object-cover" />
                   ) : (
                     <Icon className="size-4" />
                   )}
@@ -246,7 +247,7 @@ export const PromptInput = forwardRef<
                   <span className="block truncate text-[13px] font-medium">@{el.handle}</span>
                   <span className="block truncate text-[11px] text-muted-foreground">
                     {elementKindInfo(el.kind).label}
-                    {el.references.length ? ` · ${el.references.length} photo${el.references.length > 1 ? "s" : ""}` : ""}
+                    {el.references.length ? ` · ${referenceWords(el.references)}` : ""}
                     {el.loras.length ? " · trained" : ""}
                   </span>
                 </span>

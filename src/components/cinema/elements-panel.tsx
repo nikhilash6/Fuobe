@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ELEMENT_ICONS } from "@/components/studio/prompt-input";
 import { useElements } from "@/lib/api";
 import { ELEMENT_KINDS, type StudioElement } from "@/lib/catalog/elements";
+import { ElementThumb } from "@/components/element-thumb";
 
 /** "My Elements": the characters, locations and props every shot can @mention. */
 export function ElementsPanel({ onMention, onCast, onLocation }: { onMention: (el: StudioElement) => void; onCast: () => void; onLocation: () => void }) {
@@ -56,8 +57,7 @@ export function ElementsPanel({ onMention, onCast, onLocation }: { onMention: (e
                       <button type="button" onClick={() => onMention(el)} className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Add @${el.handle} to the prompt`}>
                         <div className="aspect-[4/3] bg-muted">
                           {el.references[0] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={el.references[0]} alt="" loading="lazy" className="size-full object-cover" />
+                            <ElementThumb src={el.references[0]} loading="lazy" className="size-full object-cover" />
                           ) : (
                             <Icon className="m-auto mt-[22%] size-6 text-muted-foreground" />
                           )}

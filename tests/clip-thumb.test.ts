@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frameSize, stillCache, thumbSource } from "@/lib/clip-thumb";
+import { firstPhoto, frameSize, referenceWords, stillCache, thumbSource } from "@/lib/clip-thumb";
 
 describe("thumbSource", () => {
   it("draws a photo as itself", () => {
@@ -55,5 +55,24 @@ describe("stillCache", () => {
     expect(cache.peek("/bad.mp4")).toBeNull();
     await cache.get("/bad.mp4");
     expect(calls).toHaveLength(5);
+  });
+});
+
+describe("firstPhoto", () => {
+  it("gives the first reference that is not a clip", () => {
+    expect(firstPhoto(["/api/files/a.mp4", "/api/files/b.jpg", "/api/files/c.png"])).toBe("/api/files/b.jpg");
+    expect(firstPhoto(["/api/files/b.jpg"])).toBe("/api/files/b.jpg");
+    expect(firstPhoto(["/api/files/a.mp4", "/api/files/a.mov"])).toBeUndefined();
+    expect(firstPhoto([])).toBeUndefined();
+  });
+});
+
+describe("referenceWords", () => {
+  it("counts photos and clips apart", () => {
+    expect(referenceWords(["/a.jpg"])).toBe("1 photo");
+    expect(referenceWords(["/a.jpg", "/b.png"])).toBe("2 photos");
+    expect(referenceWords(["/a.mp4"])).toBe("1 clip");
+    expect(referenceWords(["/a.mp4", "/b.jpg", "/c.webm", "/d.jpg", "/e.jpg"])).toBe("3 photos · 2 clips");
+    expect(referenceWords([])).toBe("");
   });
 });
