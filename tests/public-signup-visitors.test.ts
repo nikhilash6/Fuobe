@@ -158,6 +158,16 @@ describe("Assist is the owner's", () => {
     for (const [method, p] of changes) expect(passed(proxy(req(p, { method, cookie: owner }))), `${method} ${p}`).toBe(true);
   });
 
+  it("shows a visitor an empty chat list and nothing of the install's AI setup", async () => {
+    for (const cookie of [undefined, account]) expect(toldGuest(proxy(req("/api/assist", { cookie })))).toBe(true);
+    const { GET } = await import("@/app/api/assist/route");
+    const visitor = await (await GET(new Request("http://localhost:3000/api/assist", { headers: { [access.GUEST_HEADER]: "1" } }))).json();
+    expect(visitor).toEqual({ threads: [] });
+    const own = await (await GET(new Request("http://localhost:3000/api/assist"))).json();
+    expect(own).toHaveProperty("availability");
+    expect(own).toHaveProperty("agent");
+  });
+
   it("says an owner-only read is the owner's to see", async () => {
     expect((await proxy(req("/api/assist/connectors", { cookie: account })).json()).error).toMatch(/aren't part of your account/);
     expect((await proxy(req("/api/assist/connectors", { method: "POST", cookie: account })).json()).error).toMatch(/aren't part of your account/);

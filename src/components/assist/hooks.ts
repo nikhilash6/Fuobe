@@ -58,8 +58,9 @@ const send = async <T,>(url: string, method: string, body?: unknown) =>
 
 export interface ChatList {
   threads: AssistThreadSummary[];
-  agent: AssistThread["agent"];
-  availability: AssistAvailability;
+  /** Left out for a visitor (public sign-up): the install's AI setup is the owner's. */
+  agent?: AssistThread["agent"];
+  availability?: AssistAvailability;
 }
 
 /** Chats, optionally one project's (or "none": chats outside projects), with a search. */

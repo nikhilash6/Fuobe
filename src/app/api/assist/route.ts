@@ -13,13 +13,15 @@ const Create = AssistMessage.extend({
 
 /**
  * Chats (all, `?project=<id>`, or `?project=none` for chats outside projects; `?q=` searches), with what can run.
- * A guest's or an account's list (GUEST_HEADER) is empty: the chats are the owner's.
+ * A guest's or an account's answer (GUEST_HEADER) is an empty list and nothing else: the chats, and the install's AI
+ * setup (which providers have keys, the local server and its models, a free plan's use), are the owner's.
  */
 export async function GET(request: Request) {
   await connection();
+  if (isGuest(request)) return Response.json({ threads: [] });
   const sp = new URL(request.url).searchParams;
   const project = sp.get("project");
-  const threads = isGuest(request) ? [] : listThreads({ project: project === "none" ? null : (project ?? undefined), q: sp.get("q") ?? undefined });
+  const threads = listThreads({ project: project === "none" ? null : (project ?? undefined), q: sp.get("q") ?? undefined });
   const [agent, can] = await Promise.all([resolveAgent(), availability()]);
   return Response.json({ threads, agent, availability: can });
 }
