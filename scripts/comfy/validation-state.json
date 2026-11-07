@@ -1375,15 +1375,15 @@
   },
   "video-reshoot-edit-h3": {
     "sha256": "6bd2bac1d5a18e93afe8802288082ba1e38f5464709d53f32dc9e1020546a3a8",
-    "validated": false,
-    "error": "HTTP 400: prompt_outputs_failed_validation: Prompt outputs failed validation | node 1 (UNETLoader): Value not in list - unet_name: 'viggle_remake_edit_pruned_int8_convrot.safetensors' not in (list of length 94)",
-    "at": "2026-11-07T14:33:41.201Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-07T15:43:34.647Z"
   },
   "video-reshoot-swap-h3": {
     "sha256": "c09f97985be985c8dfee656d5f39c9e5417b5dd81cd0bb51730415db2ba599bb",
-    "validated": false,
-    "error": "HTTP 400: prompt_outputs_failed_validation: Prompt outputs failed validation | node 1 (UNETLoader): Value not in list - unet_name: 'viggle_remake_swap_pruned_int8_convrot.safetensors' not in (list of length 94)",
-    "at": "2026-11-07T14:33:40.888Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-07T15:43:34.636Z"
   },
   "video-restore-ltx25-tiled": {
     "sha256": "5da276f2353f7394c408dee24bf62110f74061efde401a9ba5741f85aa6d7c85",
