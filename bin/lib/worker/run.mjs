@@ -39,6 +39,7 @@ import { modelAgain, modelFormat } from "./model-file.mjs";
 import { canCleanPictures, cleanPicture, isPicture } from "./picture.mjs";
 import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
+import { LogRing } from "./log-ring.mjs";
 import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { TEXT_DRAIN_MS, TextSlot, textSlotOf, textTurn } from "./text.mjs";
@@ -217,7 +218,13 @@ export async function runWorker(saved, deps) {
 async function work(saved, deps, owner) {
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const log = deps.log ?? ((line) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${line}`));
+  const say = deps.log ?? ((line) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${line}`));
+  // Each line also goes to the studio, masked, in the next beats (log-ring.mjs).
+  const ring = deps.logRing ?? new LogRing({ now });
+  const log = (line) => {
+    say(line);
+    ring.add(line);
+  };
   const cfg = withoutOldPort(saved);
   if (cfg !== saved) log(`worker.json pins port ${OLD_SETUP_PORT}, from an older setup: its ComfyUI takes a free port at each start instead. Run fuobe worker setup again to save the new settings.`);
   const fetchFn = deps.fetch ?? fetch;
@@ -637,7 +644,10 @@ async function work(saved, deps, owner) {
       },
       beatExtra: () => {
         sleptSent = slept;
+        const lines = ring.take();
         return {
+          // Its log lines since the last beat the studio answered; older studios ignore them.
+          ...(lines.length && { log: lines }),
           // Without its picture tool, it takes no job ticket: the studio sends it the owner's own jobs only.
           protocol: protocolOf(pictureTool),
           version: VERSION,
@@ -664,6 +674,8 @@ async function work(saved, deps, owner) {
         // The studio heard about the sleep.
         slept = Math.max(0, slept - sleptSent);
         sleptSent = 0;
+        // The studio has the log lines that beat carried.
+        ring.ack();
         // A studio that takes jobs only from a newer worker program: say so once (it sends this worker none).
         const min = Number(a?.worker?.minProtocol);
         if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
