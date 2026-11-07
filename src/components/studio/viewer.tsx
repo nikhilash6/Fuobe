@@ -151,6 +151,10 @@ function LayerList({ g, index, all, onPick, onAll }: { g: Generation; index: num
   );
 }
 
+/** The two-column action grid: a long label wraps to a second line, and the buttons of a row share its height. */
+const ACTION_GRID =
+  "@container/actions grid grid-cols-2 gap-2 [&>*]:h-auto [&>*]:min-h-7 [&>*]:py-1 [&>*]:whitespace-normal [&_[data-label]]:line-clamp-2 [&_[data-label]]:whitespace-normal [&_[data-label]]:text-center [&_[data-label]]:leading-tight";
+
 export function Viewer({
   generation: g,
   index,
@@ -261,9 +265,9 @@ export function Viewer({
     const Icon = ACTION_ICONS[a.id];
     const label = a.id === "favorite" ? (g.favorite ? "Favorited" : "Favorite") : a.id === "save-character" ? "Save as element" : a.label;
     const icon = <Icon className={cn(a.id === "favorite" && g.favorite && "fill-current text-highlight")} />;
-    // The label truncates inside its own button, so a long one never spills into the next column.
+    // The label stays inside its own button (one line here, up to two in the action grid), never in the next column.
     const text = (
-      <span className="min-w-0 truncate" title={label}>
+      <span data-label className="min-w-0 truncate" title={label}>
         {label}
       </span>
     );
@@ -460,7 +464,7 @@ export function Viewer({
               />
             )}
           </div>
-          <div className="@container/actions grid grid-cols-2 gap-2 border-t p-3">
+          <div className={cn(ACTION_GRID, "border-t p-3")}>
             {primary && actionButton(primary, { variant: "default" })}
             {bar.map((a) => actionButton(a))}
             {menu.filter((a) => !a.destructive && a.id !== "compare").map((a) => actionButton(a))}
@@ -511,7 +515,7 @@ export function Viewer({
             <div className="space-y-4 overflow-y-auto px-4">
               {/* The next steps first: on a phone this sheet is where they are. */}
               {!layered && <NextSteps g={g} index={index} variant="list" max={5} onNavigate={onClose} />}
-              <div className="@container/actions grid grid-cols-2 gap-2">
+              <div className={ACTION_GRID}>
                 {source && (
                   <Button variant="secondary" size="sm" aria-pressed={comparing} onClick={() => (setComparing((v) => !v), setDrawer(false))}>
                     <Columns2 /> {comparing ? "Hide original" : "Compare"}
