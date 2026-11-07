@@ -104,8 +104,11 @@ export async function planMake(from: Request, who: string, text: string, image: 
     });
     requests.push(req);
   }
-  const say = then ? `${read.say.replace(/\s*[—-]\s*the video starts by itself.*$/i, ".")} Once it's ready, tap Animate on the one you like.` : read.say;
-  return { say, plan: { summary: input.summary ?? text.slice(0, 80), jobs: out, requests, status: "ready", ids: [], errors: [], ...(then && { then }) } };
+  // The planner's words, without its machinery ("with the default image model"), and what to do next.
+  const base = read.say.replace(/\s+with the default (?:image|video|music|audio) model/i, "").replace(/\s*[—-]\s*the video starts by itself.*$/i, ".");
+  const say = then ? `${base} Once it's ready, tap Animate on the one you like.` : `${base} Tap Make it to start.`;
+  const summary = (input.summary ?? text.slice(0, 80)).replace(/^(?:image|video|edit|write):\s*/i, "");
+  return { say, plan: { summary: summary.charAt(0).toUpperCase() + summary.slice(1), jobs: out, requests, status: "ready", ids: [], errors: [], ...(then && { then }) } };
 }
 
 /** Run a plan's steps through the studios' route, as the person; each refusal is kept in its own words. */

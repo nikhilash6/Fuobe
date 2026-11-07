@@ -993,6 +993,18 @@ const TAKE_NOUN = /^(?:takes?|versions?|variations?|options?)$/i;
 const CONTENT_WORD = /\b(?:with|of|showing|featuring|containing|including|holding|having|and|plus|from|in|on)\b/i;
 /** What a still can be called, singular or plural, before "then animate it". */
 const STILL = /\b(stills?|photos?|pictures?|images?|portraits?|headshots?|posters?|frames?|shots?|renders?|key ?visuals?)\b/i;
+
+/**
+ * Does a request ask for moving pictures? "film" as a photo's look ("35mm film", "film grain", "film noir") doesn't, and
+ * an ad that names a still ("a poster ad", "portraits for an ad") stays a still.
+ */
+function asksForMotion(t: string): boolean {
+  const words = t
+    .replace(/\b(\d+\s?mm|analog(?:ue)?|on|kodak|fuji|portra|polaroid|instant|medium[- ]format|large[- ]format|black[- ]and[- ]white)\s+film\b/g, " ")
+    .replace(/\bfilm[- ](grain|look|stock|photo\w*|camera|still|emulsion|aesthetic|noir|style|tones?|colou?rs?)\b/g, " ");
+  if (/\b(videos?|clips?|animate|animation|motion|films?|footage|movies?|trailers?)\b/.test(words)) return true;
+  return /\b(commercials?|ads?)\b/.test(words) && !STILL.test(words);
+}
 /** "… then pick the best and animate it": the person chooses which take moves. */
 const PICK_WORDS = /\b(best|favou?rite|pick|choose|select|strongest|one of them)\b/;
 
@@ -1235,7 +1247,7 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
   }
   const isSpeech = !isMusic && (/\b(voice ?over|narrat\w*|read (this|it|out)|say|speak|text to speech|tts)\b/.test(t) || hint?.kind === "audio");
   const isVideo =
-    !isMusic && !isSpeech && (files.some((f) => f.kind === "video") || !!shots || /\b(videos?|clips?|animate|animation|motion|films?|footage|movies?|trailers?|commercials?|ads?)\b/.test(t) || hint?.kind === "video");
+    !isMusic && !isSpeech && (files.some((f) => f.kind === "video") || !!shots || asksForMotion(t) || hint?.kind === "video");
   if (isMusic || isSpeech) {
     const quoted = /["“]([^"”]+)["”]/.exec(text)?.[1] ?? text.replace(/^.*?:\s*/, "");
     return {

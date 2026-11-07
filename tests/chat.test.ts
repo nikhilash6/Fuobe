@@ -25,6 +25,7 @@ const prompt = await import("@/lib/chat/prompt");
 const catalog = await import("@/lib/chat/catalog");
 const { chatShareRoute } = await import("@/lib/chat/share");
 const { wantsToMake } = await import("@/lib/chat/make-intent");
+const catalogModels = await import("@/lib/catalog");
 const auth = await import("@/server/auth");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
@@ -367,6 +368,20 @@ describe("making things in a chat", () => {
     expect(wantsToMake("Animate this", true)).toBe(true);
     expect(wantsToMake("remove the background", true)).toBe(true);
     expect(wantsToMake("Animate this", false)).toBe(false);
+  });
+
+  it("reads film as a photo's look, not a video, and an ad that names a still as a still", async () => {
+    const { offlinePlan } = await import("@/server/assist/agent");
+    const kindOf = (s: string) => {
+      const p = offlinePlan(s, "open");
+      const job = (p?.input as { jobs?: { model_id: string }[] } | undefined)?.jobs?.[0];
+      return job ? (catalogModels.getModel(job.model_id)?.kind ?? null) : null;
+    };
+    expect(kindOf("Four moody portraits of a model in a black velvet suit, 35mm film")).toBe("image");
+    expect(kindOf("A portrait with film grain and a film noir look")).toBe("image");
+    expect(kindOf("A poster ad for a perfume")).toBe("image");
+    expect(kindOf("A short film of a tailor in Naples")).toBe("video");
+    expect(kindOf("An ad for a gold watch")).toBe("video");
   });
 
   it("answers a request to make with a plan priced by the studio's own check, and a plan can be put aside", async () => {
