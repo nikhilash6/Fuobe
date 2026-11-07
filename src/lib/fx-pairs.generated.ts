@@ -73,6 +73,10 @@ export const FX_PAIRS: Record<string, FxPair> = {
    0.25
   ]
  },
+ "video-tools": {
+  "v": "5a5c1320",
+  "kind": "matte"
+ },
  "video-tools-colors": {
   "v": "84eb8101",
   "kind": "pair"

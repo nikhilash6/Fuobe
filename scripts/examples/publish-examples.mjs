@@ -285,6 +285,15 @@ async function writeManifest(dry) {
       const p = posterFor(row.output);
       if (p) e.poster = `${p}?v=${(await add(p, media[p]?.role ?? "show")).v}`;
     }
+    // A card that opens a tool with an example's files (its link's ?video=, ?image=…): files a run reads too.
+    if (row.href) {
+      for (const v of new URL(row.href, "https://fuobe.invalid").searchParams.values()) {
+        if (!/^\/examples\//.test(v)) continue;
+        const e = await add(v, "in");
+        const t = thumbFor(v);
+        if (t) e.thumb = `${t}?v=${(await add(t, media[t]?.role ?? "show")).v}`;
+      }
+    }
     // The still a clip's card rests on (cut-example-peaks.mjs).
     if (row.rest) await add(row.rest.src, media[row.rest.src]?.role ?? "show");
   }

@@ -266,7 +266,11 @@ describe("the examples' catalog", () => {
   it("links a card that opens another page to an example that page loads", () => {
     for (const c of cards) {
       if (c.load.via !== "look" || !c.load.href) continue;
-      const id = new URL(c.load.href, "https://x").searchParams.get("example")!;
+      const sp = new URL(c.load.href, "https://x").searchParams;
+      // The files it hands over are published inputs a run may read.
+      for (const v of sp.values()) if (v.startsWith("/examples/")) expect(EXAMPLE_MEDIA[v]?.role, `${c.id}: ${v}`).toBe("in");
+      const id = sp.get("example");
+      if (!id) continue;
       expect(exampleById(id), `${c.id} → ${id}`).toBeTruthy();
       const surface = exampleSurfaceOf(id)!;
       // The link opens the page of the example it names (a Genjutsu mode's: Genjutsu, on that mode).
