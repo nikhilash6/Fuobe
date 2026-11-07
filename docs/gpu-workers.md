@@ -824,11 +824,15 @@ within 10 minutes of each other, each write an alert to the admin log (`worker.a
 its target), at most once an hour each.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
-  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept?, catalogVersion?, ceiling? }`. The answer
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept?, catalogVersion?, ceiling?, holding? }`. The answer
   adds `worker: { paused, pauseNow, drain, autoResume, insideHours, nextChangeAt, lanes, lanesInside, minProtocol,
   sendInventory, token?, tokenExpiresAt?, catalogVersion? }` (`token`: the next token, above; `tokenExpiresAt`: when
   the token ends, for a token with a lifetime; `lanesInside`: the allowed lanes inside the PC's ceiling;
   `catalogVersion`: the studio's).
+  - `holding: { why, since, task? }` says why it doesn't start the line's work now although it may work, while work
+    waits that it could take: `starting-comfy`, `waiting-for-yield`, `local-work` (the owner's job waits for local
+    ComfyUI work to finish), `gpu-check`, `updating` (it restarts on new code after its job) or `sending-kept`;
+    `task` names a job it took that waits. A beat without it clears it. Older workers don't send it.
   - `catalogVersion` and `ceiling` say the catalog its build composes job tickets for and what its PC may ever run
     (see "Job tickets and the PC's ceiling"). The facts it sends with its ComfyUI's add `gpuGen`, its GPU's
     generation (compute capability), when nvidia-smi can say.
@@ -918,7 +922,12 @@ Each worker counts against its own rate limits, so three workers that beat every
   rotate, revoke }`. Hours are `{ "always": true }` or `{ "tz": "Asia/Kolkata", "days": { "mon": [["01:00", "09:00"]] } }`.
   A window can go past midnight.
 - `GET /api/admin/queue`: the jobs that wait in each lane, the oldest job, the estimate, and which workers have the
-  lane warm.
+  lane warm; and what the workers do now: `running` (each job a worker runs: its run, model, worker, step, progress,
+  start, when its run was made, and whose run it is: `user`, `guest` or `owner`), `queued` (the oldest 50 jobs waiting
+  in line, with when each run was made and its place in line), `holding` (a job a worker took that doesn't run yet, or a
+  worker that holds back jobs it could take, with the reason in plain words and since when), `next` and `nextTotal`
+  (the later steps of chains that wait for their earlier steps, with what they wait for and when each ended) and `text` (the text
+  helper's jobs waiting and running).
 - `GET` and `PATCH /api/admin/queue/settings`: the queue's settings (above).
 
 ### Behind Cloudflare

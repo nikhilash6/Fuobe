@@ -917,6 +917,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.seen_json": "the countries and network hashes a worker's token was used from",
   "relay_workers.ceiling_json": "the most a worker's PC may run: lanes, workflow ids and sizes",
   "relay_workers.cpu_slot_json": "the kinds of finishing job a worker's CPU slot runs",
+  "relay_workers.holding_json": "why a worker doesn't start the line's work now: a short reason, since when and a task id",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
   "account_canvases.summary_json": "an account board's list line: node and page counts, and its outline (node types, places and short labels)",
   "account_chat_shares.snapshot_json": "a shared chat's words and its character's name and colours; its portrait is the row's portrait_url",

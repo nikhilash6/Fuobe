@@ -76,6 +76,8 @@ export interface WorkerRow {
   ceiling_json?: string | null;
   /** Its CPU slot (src/lib/relay.ts CpuSlot), as its last beat said. NULL: none. */
   cpu_slot_json?: string | null;
+  /** Why it doesn't start the line's work now (src/lib/relay.ts WorkerHolding), as its last beat said. NULL: none. */
+  holding_json?: string | null;
 }
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");

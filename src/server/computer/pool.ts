@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { FINISH_KINDS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
 import { allLanes, hasFiles, laneLabel, lanesFor, MEDIA_KINDS, needsOf, packKey, partLanes, unloadedNodes, type FileNeed, type Inventory, type NodePack, type Needs } from "@/lib/lanes";
-import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
+import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat, type WorkerHolding } from "@/lib/relay";
 import { runtimeFileKeys } from "@/lib/runtime-files";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
@@ -256,7 +256,19 @@ export function cleanBeat(b: unknown): WorkerBeat {
     ...((num(o.slept) ?? 0) > 0 && { slept: Math.min(num(o.slept)!, MAX_SLEPT_MS) }),
     cpuSlot: cleanCpuSlot(o.cpuSlot),
     cpuRunning: Array.isArray(o.cpuRunning) ? (o.cpuRunning.slice(0, MAX_RUNNING) as WorkerBeat["running"]) : [],
+    ...(cleanHolding(o.holding) && { holding: cleanHolding(o.holding) }),
   };
+}
+
+/** A beat's `holding` as it may be kept: a short reason in lower-case words, since when, and a task id; else null. */
+export function cleanHolding(v: unknown): WorkerHolding | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const why = typeof o.why === "string" && /^[a-z0-9][a-z0-9:-]{0,47}$/.test(o.why) ? o.why : null;
+  const since = num(o.since);
+  if (!why || since === null || since <= 0) return null;
+  const task = typeof o.task === "string" && /^[\w-]{1,64}$/.test(o.task) ? o.task : null;
+  return { why, since, ...(task && { task }) };
 }
 
 /**
@@ -274,8 +286,24 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     const facts = b.facts ? { ...b.facts, loras: undefined } : undefined;
     d.prepare(
       `UPDATE relay_workers SET seen_at = ?, device = ?, protocol = ?, version = ?, paused_local = ?, local_why = ?, local_until = ?,
-         warm_lane = ?, facts_json = COALESCE(?, facts_json), catalog_version = ?, ceiling_json = ?, cpu_slot_json = ? WHERE id = ?`,
-    ).run(now, device, b.protocol, b.version, b.local.paused ? 1 : 0, b.local.why, b.local.until, b.warmLane, facts ? JSON.stringify(facts) : null, b.catalogVersion ?? null, b.ceiling ? JSON.stringify(b.ceiling) : null, b.cpuSlot ? JSON.stringify(b.cpuSlot) : null, w.id);
+         warm_lane = ?, facts_json = COALESCE(?, facts_json), catalog_version = ?, ceiling_json = ?, cpu_slot_json = ?, holding_json = ? WHERE id = ?`,
+    ).run(
+      now,
+      device,
+      b.protocol,
+      b.version,
+      b.local.paused ? 1 : 0,
+      b.local.why,
+      b.local.until,
+      b.warmLane,
+      facts ? JSON.stringify(facts) : null,
+      b.catalogVersion ?? null,
+      b.ceiling ? JSON.stringify(b.ceiling) : null,
+      b.cpuSlot ? JSON.stringify(b.cpuSlot) : null,
+      // Its own "since" is never later than now (a PC clock ahead of the studio's).
+      b.holding ? JSON.stringify({ ...b.holding, since: Math.min(b.holding.since, now) }) : null,
+      w.id,
+    );
     // Its PC slept: a job taken back from it for going quiet meanwhile counts against no one.
     if (b.slept) forgiveSleep(w, b.slept, now);
     // The tasks of both its slots stay alive, with their progress.

@@ -62,7 +62,9 @@ beforeEach(() => {
 
 type W = { id: string; token: string };
 const task = (id: string) => db().prepare("SELECT * FROM relay_tasks WHERE id = ?").get(id) as import("@/server/computer/tasks").TaskRow;
-const workerRow = (w: W) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as { local_why: string | null; paused_local: number; local_until: number | null };
+const workerRow = (w: W) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as { local_why: string | null; paused_local: number; local_until: number | null; holding_json: string | null };
+/** Why the worker holds the line's work back, as its last beat said (the owner's queue view shows it). */
+const holdingWhy = (w: W) => (JSON.parse(workerRow(w).holding_json ?? "null") as { why: string } | null)?.why ?? null;
 
 function addWorker(): W {
   const w = pool.addWorker(`pc-${Math.random().toString(36).slice(2, 8)}`);
@@ -289,6 +291,8 @@ describe("studio jobs first", () => {
     await until(() => workerRow(w).local_why === "waiting-for-yield");
     expect(workerRow(w).paused_local).toBe(0);
     await until(() => comfyAnswers(p));
+    // Its beat says why the job waits on it.
+    await until(() => holdingWhy(w) === "waiting-for-yield");
     await sleep(1500);
     expect(task(id).state).toBe("waiting");
     expect(task(id).worker_id).toBeNull();
@@ -303,6 +307,8 @@ describe("studio jobs first", () => {
     await until(() => site(p)?.siteWaiting === 0, 20_000);
     expect(p.logs.some((l) => /lets go of its memory/.test(l))).toBe(true);
     expect(workerRow(w).local_why).toBeNull();
+    // Nothing waits for it: it holds nothing back.
+    expect(holdingWhy(w)).toBeNull();
   });
 
   it("a game holds the GPU: the busy pause, and no turn is asked for", async () => {
@@ -363,6 +369,11 @@ describe("studio jobs first", () => {
     expect(local.calls.length).toBeGreaterThan(0);
     expect(new Set(local.calls)).toEqual(new Set(["GET 127.0.0.1:8188/queue"]));
     expect(p.logs.some((l) => /owner's job waits for local ComfyUI work to finish/.test(l))).toBe(true);
+    // The studio hears why: the owner's queue view shows the worker holding the job back, and since when.
+    await until(() => holdingWhy(w) === "local-work");
+    const { liveQueue } = await import("@/server/computer/queue-live");
+    expect(liveQueue().holding).toEqual([expect.objectContaining({ task: null, code: "local-work", why: "Waiting for local ComfyUI work to finish", waiting: 1 })]);
+    expect(liveQueue().holding[0].since).toBeLessThanOrEqual(Date.now());
   });
 
   it("only the owner's own job waits and local ComfyUI work runs nothing: it is asked to free its memory, and the job runs", async () => {

@@ -283,7 +283,30 @@ export interface WorkerBeat {
   cpuSlot?: CpuSlot | null;
   /** The tasks its CPU slot works on, with where each is (as `running` for its GPU's). */
   cpuRunning?: { task: string; position?: number; value?: number; max?: number; node?: string; nodesDone?: number }[];
+  /**
+   * Why it doesn't start the line's work now although it may work, when it says (absent: it holds nothing back, or it
+   * is an older worker program): one of HOLDING_WHY's keys, since when, and the task it took, if it holds one.
+   */
+  holding?: WorkerHolding | null;
 }
+
+/** A worker's `holding` in its beat. */
+export interface WorkerHolding {
+  why: string;
+  since: number;
+  task?: string;
+}
+
+/** What a worker's `holding.why` says, in plain words. Another value reads as HOLDING_OTHER. */
+export const HOLDING_WHY: Record<string, string> = {
+  "starting-comfy": "Starting its ComfyUI",
+  "waiting-for-yield": "Waiting for local ComfyUI work to make room",
+  "local-work": "Waiting for local ComfyUI work to finish",
+  "gpu-check": "Checking what else uses its GPU",
+  updating: "Restarting on new worker code after its job",
+  "sending-kept": "Sending the results it kept first",
+};
+export const HOLDING_OTHER = "Not starting yet";
 
 /** A worker's CPU slot: it takes light CPU work (catalog workflows marked cpu) and these finishing jobs. */
 export interface CpuSlot {

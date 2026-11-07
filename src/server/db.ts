@@ -1084,6 +1084,8 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "slot", "TEXT"],
   ["relay_tasks", "finish_json", "TEXT"],
   ["relay_workers", "cpu_slot_json", "TEXT"],
+  // Why a worker that may work doesn't start the line's work now, as its last beat said (WorkerBeat.holding; NULL: none).
+  ["relay_workers", "holding_json", "TEXT"],
 ];
 
 declare global {

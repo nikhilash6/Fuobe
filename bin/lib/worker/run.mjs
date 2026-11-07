@@ -312,6 +312,8 @@ async function work(saved, deps, owner) {
   // How long the PC slept since the studio last answered a beat (ms), and how much of it the beat in flight carries.
   let slept = 0;
   let sleptSent = 0;
+  // Why it doesn't start the line's work now although it may (the beat's `holding`: { why, since }), or null.
+  let holding = null;
   // New code on disk (update.mjs): it takes no new job, finishes the one it has, and ends to start again on the new code.
   const codeWatch = deps.codeWatch ?? new CodeWatch({ root: ROOT, dist: path.join(here, "dist"), home: deps.home });
   let updating = false;
@@ -650,6 +652,8 @@ async function work(saved, deps, owner) {
           ...(slept > 0 && { slept }),
           // Its CPU slot: the finishing jobs it runs, and the task it works on.
           ...(cpuOn && { cpuSlot: { finishes: finish.kinds }, cpuRunning: cpuRunner ? runningOf(cpuRunner) : [] }),
+          // Why the line's work waits on it now (the owner's queue view shows it); older studios ignore it.
+          ...(holding && { holding }),
         };
       },
       onBeat: (a) => {
@@ -1089,6 +1093,22 @@ async function work(saved, deps, owner) {
       // Kept results go up first, and even while it may not work (or waits for its turn): they need no GPU and no ComfyUI.
       // Not while it ends for new code: they stay for its next start.
       if (!busyJob && answer && heldFirst && !updating) take({ onlyHeld: true });
+      // Why the line's work waits on it, while the studio says work waits that it could take (the beat's `holding`, with
+      // since when): a pause of its own or on the website is said by the beat already, and a job of its own runs.
+      {
+        const s = siteOf(answer);
+        let why = null;
+        if ((s.claimable ?? 0) + s.owner > 0) {
+          if (updating) why = "updating";
+          else if ((busyJob && jobUsesGpu) || !mayWork() || !answer?.runner) why = null;
+          else if (heldFirst || busyJob) why = "sending-kept";
+          else if (!comfy.ready) why = "starting-comfy";
+          else if (turn.waitForYield) why = "waiting-for-yield";
+          else if (gpu.busyInARow > 0) why = "gpu-check";
+          else if (holdBack) why = "local-work";
+        }
+        holding = why ? { why, since: holding?.why === why ? holding.since : now() } : null;
+      }
       // Awake while it holds a job, has results to send, or waits for work.
       awake.set(!!answer?.worker && (busyJob || busyCpu || hold.ids().length > 0 || !!mayWork()));
       // A taken port is tried again (a bind test, never a connection) once a minute.
