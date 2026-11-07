@@ -48,7 +48,7 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { placeOf } from "@/lib/place-name";
-import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsGuest, useIsOwner, useLikelyVisitor, useNewestRun, useStatus } from "@/lib/api";
+import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useNewestRun, useStatus, useViewer } from "@/lib/api";
 import { keyTurnedDown, keyTurnedDownWords, siteRunOf, siteRunRequest } from "@/lib/site-run";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
@@ -900,8 +900,10 @@ export function Composer({ docked }: { docked: boolean }) {
       const swap = (l?: SlotValue[]) => l?.map((r) => ((from.id ? r.id === from.id : r.ref === from.ref) ? { ...to, id: to.id ?? r.id } : r));
       return { refClips: swap(d.refClips), refAudios: swap(d.refAudios) };
     });
-  // A guest's clips and voices are kept in this browser: a long one gets its part offered before it is added.
-  const guest = useIsGuest();
+  // A guest's clips and voices are kept in this browser (and who is visiting may not be known yet): a long one gets its part
+  // offered before it is added. An account's are offered once stored (ListFit below).
+  const viewer = useViewer().data;
+  const guest = !viewer || (viewer.publicSignup && !viewer.signedIn);
   const clipAdd = useAddFit({ kind: "video", max: refMode && guest ? H3_REFERENCE_LIMITS.maxSec : undefined, min: H3_REFERENCE_LIMITS.minSec, tool: "H3", add: (f) => attach.addListFile("refClips", f, refMode?.videos ?? 0) });
   const voiceAdd = useAddFit({ kind: "audio", max: refMode && guest ? H3_REFERENCE_LIMITS.maxSec : undefined, min: H3_REFERENCE_LIMITS.minSec, tool: "H3", add: (f) => attach.addListFile("refAudios", f, refMode?.audios ?? 0) });
   // Clip elements mentioned by name (Kling 4.0: 3–8 s each, 30 s of clips in all): said before the run, with the fix.
