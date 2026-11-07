@@ -1,14 +1,20 @@
+import { requestViewer } from "@/server/auth";
 import { badBody, recipeFailure, RunBody } from "@/server/recipe-routes";
 import { estimateRecipe } from "@/server/recipes";
+import { getSkill } from "@/server/skills";
 import { priceAs } from "@/server/visitor";
 
 /** Price a run of a skill's recipe, or many (`rows` or `csv`, priced together with a total). Starts nothing. */
 async function post(request: Request, ctx: RouteContext<"/api/assist/skills/[name]/estimate">) {
+  const { name } = await ctx.params;
+  // A guest or an account prices the built-in skills only, as the skill's other routes show them: the owner's own skills
+  // (their steps and prompts) stay the owner's, and a visitor isn't told whether one exists.
+  if (requestViewer(request).kind !== "owner" && getSkill(name)?.source !== "builtin") return Response.json({ error: "No such skill" }, { status: 404 });
   const parsed = RunBody.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return badBody(parsed.error.issues);
   try {
     const { engine, ...input } = parsed.data;
-    return Response.json(estimateRecipe((await ctx.params).name, input, engine));
+    return Response.json(estimateRecipe(name, input, engine));
   } catch (e) {
     return recipeFailure(e);
   }
