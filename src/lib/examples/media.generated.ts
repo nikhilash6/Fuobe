@@ -8958,6 +8958,130 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 512,
   "h": 384
  },
+ "/examples/video-tools-colors/1/in-image.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 8892,
+  "sha256": "5e4d608f8e3b58c468274fce9d1b732b35afc1373db791d9c09bad85944ef589",
+  "v": "5e4d608f",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/video-tools-colors/1/in-image.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 105953,
+  "sha256": "728e4b3555ea638686213590d9134bf2d123baeaaf4644a1d85362450beb0443",
+  "v": "728e4b35",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/video-tools-colors/1/in-image.384.webp?v=5e4d608f"
+ },
+ "/examples/video-tools-colors/1/in-video.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 10652,
+  "sha256": "f96b67acd985e2905d5be350b156d5edce1b3a75d75c3339aaee767101c1ba40",
+  "v": "f96b67ac",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/video-tools-colors/1/in-video.mp4": {
+  "role": "in",
+  "type": "video/mp4",
+  "bytes": 1904226,
+  "sha256": "d114ddcb3bf371eb71349f06c76c068c04abe40ed41d966be31e75b7be4e3f67",
+  "v": "d114ddcb",
+  "thumb": "/examples/video-tools-colors/1/in-video.384.webp?v=f96b67ac"
+ },
+ "/examples/video-tools-colors/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 956880,
+  "sha256": "5e51b6359900a16c58adf7ddadbe06a295063521459ef68c38573f8315bf535e",
+  "v": "5e51b635",
+  "poster": "/examples/video-tools-colors/1/show.poster.webp?v=d07ab519"
+ },
+ "/examples/video-tools-colors/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 22172,
+  "sha256": "4149893569dbbe629ccadc86add4eb3959c626681ce0accc2bcfebe798437dc8",
+  "v": "41498935",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/video-tools-colors/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 49022,
+  "sha256": "d07ab5197c1a8d013645fdc10a9125907c7fa245ca7a6b763ecd28112ccd126c",
+  "v": "d07ab519",
+  "w": 1024,
+  "h": 768
+ },
+ "/examples/video-tools-colors/2/in-image.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 25174,
+  "sha256": "c5f41ee718818a262ee04505ceda35f36a842152e477d0a60be817a0ceef07fb",
+  "v": "c5f41ee7",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/video-tools-colors/2/in-image.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 246805,
+  "sha256": "62421ee902b1308960311d6a69d21b0c094a5d6824dcfa81274292b6fe4789f1",
+  "v": "62421ee9",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/video-tools-colors/2/in-image.384.webp?v=c5f41ee7"
+ },
+ "/examples/video-tools-colors/2/in-video.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 20724,
+  "sha256": "34342885480697de47bebc849fae44abcb0c520663092b8943f41d934c01b983",
+  "v": "34342885",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/video-tools-colors/2/in-video.mp4": {
+  "role": "in",
+  "type": "video/mp4",
+  "bytes": 2507731,
+  "sha256": "b46750270145985b8f15b237f5a6eb046ca3b7a713849e44576909d5d15cef06",
+  "v": "b4675027",
+  "thumb": "/examples/video-tools-colors/2/in-video.384.webp?v=34342885"
+ },
+ "/examples/video-tools-colors/2/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 994043,
+  "sha256": "74aaf92ae7100f57c1d45caec5900fb982e7d1807f2b1be3e42cb54173afc3a0",
+  "v": "74aaf92a",
+  "poster": "/examples/video-tools-colors/2/show.poster.webp?v=60ab9f70"
+ },
+ "/examples/video-tools-colors/2/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 30880,
+  "sha256": "a2780214d4b1b3baa9bd61e0d5c4f455fffff9eefef238a5bc3676df9594d810",
+  "v": "a2780214",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/video-tools-colors/2/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 80008,
+  "sha256": "60ab9f7064473ee3b25cd56d3dafd20e8de4d98139581657da5c0ba6686e3dde",
+  "v": "60ab9f70",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/video-tools-depth/1/in-video.384.webp": {
   "role": "show",
   "type": "image/webp",

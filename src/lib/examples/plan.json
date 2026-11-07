@@ -4896,5 +4896,45 @@
    "at": 2.5,
    "from": 0
   }
+ },
+ {
+  "id": "video-tools-colors.1",
+  "surface": "hub:video-tools/colors",
+  "rank": 1,
+  "caption": "A cool corridor, warmed to sunset tones",
+  "modelId": "oss-palette-video",
+  "params": {
+   "strength": 0.5
+  },
+  "inputs": {
+   "video": "/examples/video-tools-colors/1/in-video.mp4",
+   "image": "/examples/video-tools-colors/1/in-image.jpg"
+  },
+  "output": "/examples/video-tools-colors/1/show.mp4",
+  "rest": {
+   "src": "/examples/video-tools-colors/1/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
+ },
+ {
+  "id": "video-tools-colors.2",
+  "surface": "hub:video-tools/colors",
+  "rank": 2,
+  "caption": "Glacier shore in warm Riviera tones",
+  "modelId": "oss-palette-video",
+  "params": {
+   "strength": 0.5
+  },
+  "inputs": {
+   "video": "/examples/video-tools-colors/2/in-video.mp4",
+   "image": "/examples/video-tools-colors/2/in-image.jpg"
+  },
+  "output": "/examples/video-tools-colors/2/show.mp4",
+  "rest": {
+   "src": "/examples/video-tools-colors/2/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
  }
 ]
