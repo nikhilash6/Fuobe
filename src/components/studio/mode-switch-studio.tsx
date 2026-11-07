@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { exampleRow } from "@/lib/examples/catalog";
+import type { ExampleRowData } from "@/lib/examples/types";
 import {
   AUDIO_STUDIO,
   DIALOGUE_STUDIO,
@@ -67,7 +68,7 @@ const CONFIGS: Record<HubKind, Record<string, StudioConfig>> = {
 };
 
 /** Modes that are their own tool rather than a composer studio (Translate & dub, Loop / extend, Join, Split soundtrack, Clean up voice, Design a voice, Edit speech, Remove object, Remove dialogue, Evolution, Restore & colourise, Captions, Trim). */
-const TOOLS: Partial<Record<HubKind, Record<string, () => React.ReactNode>>> = {
+const TOOLS: Partial<Record<HubKind, Record<string, (examples: ExampleRowData | null) => React.ReactNode>>> = {
   audio: {
     translate: () => <DubStudio />,
     loop: () => <AudioLoopTool />,
@@ -79,8 +80,8 @@ const TOOLS: Partial<Record<HubKind, Record<string, () => React.ReactNode>>> = {
     "edit-speech": () => <SpeechEditTool setup={ownSetupsNow(["audio:edit-speech"])["audio:edit-speech"]} />,
   },
   "video-tools": {
-    "remove-object": () => <RemoveObjectTool />,
-    "remove-person": () => <RemoveObjectTool person />,
+    "remove-object": (examples) => <RemoveObjectTool examples={examples} />,
+    "remove-person": (examples) => <RemoveObjectTool person examples={examples} />,
     "remove-dialogue": () => <RemoveDialogueTool />,
     evolution: () => <EvolutionTool />,
     restore: () => <RestoreTool setup={ownSetupsNow(["video-tools:restore"])["video-tools:restore"]} />,
@@ -97,7 +98,8 @@ const TOOLS: Partial<Record<HubKind, Record<string, () => React.ReactNode>>> = {
 export function ModeSwitchStudio({ kind, mode }: { kind: HubKind; mode?: string }) {
   const current = mode ?? HUB_MODES[kind][0].id;
   const Tool = TOOLS[kind]?.[current];
-  if (Tool) return <Tool />;
+  // A tool of its own shows its mode's examples, each opening the tool with its clip and words in.
+  if (Tool) return Tool(exampleRow(`hub:${kind}/${current}`));
   const config = CONFIGS[kind][current];
   if (!config) notFound();
   // A composer mode's own examples ("hub:upscale", "hub:upscale/video"…), else the hub's covers that fit it. The hub's

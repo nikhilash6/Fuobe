@@ -42,6 +42,8 @@ import { toastError } from "@/lib/refusals";
 import { FrameStage, frameFromBlob, type Frame } from "./frame-stage";
 import { useRemovalActions, useRemovalEstimate, type RemovalBody } from "./hooks";
 import { VideoCompare } from "./video-compare";
+import { ExampleRow } from "@/components/studio/example-row";
+import type { ExampleRowData } from "@/lib/examples/types";
 
 const LIMITS = `MP4, MOV or WebM · up to ${REMOVE.maxSeconds} s at a time · ${REMOVE.maxBytes / 1024 / 1024} MB`;
 
@@ -79,11 +81,15 @@ interface Run {
 /** The open eraser "Remove a person" picks: H3 Person Removal (MiniMax H3 with Akatz Labs' Person Remover). */
 export const PERSON_ERASER = "oss-h3-person-remove";
 
+/** An example's clip a link may hand over: a published example file. */
+const EXAMPLE_CLIP = /^\/examples\/[a-z0-9-]+\/\d+\/[a-z0-9-]+\.mp4$/;
+
 const noSubscribe = () => () => {};
 /** ?person=1: a result's "Remove a person" link. */
 const personInUrl = () => new URLSearchParams(window.location.search).get("person") === "1";
 
-export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) {
+/** examples: the mode's examples (exampleRow(), from the page), under the clip drop until there is a run of one's own; each opens this tool with its clip and words in. */
+export function RemoveObjectTool({ person = false, examples }: { person?: boolean; examples?: ExampleRowData | null } = {}) {
   const [engine, setEngine, engineMode] = useEngine();
   const access = useModelAccess();
   const source = useSourceClip(REMOVE.maxBytes);
@@ -115,11 +121,19 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
   const reviewable = useGenerations({ features: [REMOVE.feature, REMOVE.stepFeature], models: [PERSON_ERASER], statuses: ["succeeded"], limit: 12 });
   const earlier = (reviewable.data ?? []).filter((g) => !run?.ids.includes(g.id) && reviewOfOutput(g.outputs.find((o) => o.kind === "video")?.meta));
 
-  // Hand-off: /video-tools/remove-object?video=/api/files/… (a result's menu in the Library, the feed or Cinema).
+  // Hand-off: /video-tools/remove-object?video=/api/files/… (a result's menu in the Library, the feed or Cinema), or an
+  // example's clip (/examples/…) with what to remove (?prompt=).
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const video = q.get("video");
-    if (video?.startsWith("/api/files/")) source.adopt(video, video.split("/").pop());
+    if (video?.startsWith("/api/files/") || (video && EXAMPLE_CLIP.test(video))) source.adopt(video, video.split("/").pop());
+    const words = q.get("prompt")?.trim();
+    // After the first paint (the page is prerendered with an empty field).
+    if (words)
+      void Promise.resolve().then(() => {
+        setMode("type");
+        setPrompt(words.slice(0, 300));
+      });
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -572,6 +586,8 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
           </div>
         )}
       </div>
+
+      {examples && !clip && !run && history.isSuccess && !history.data.length && <ExampleRow row={examples} layout="column" maxColumns={2} maxWidth={640} className="mt-12" />}
 
       {run && <RunPanel run={run} onAgain={start} onRedo={(r) => setRun({ ...run, final: r.final.id, ids: r.items.map((g) => g.id) })} />}
 
