@@ -4828,8 +4828,8 @@
   "inputs": {},
   "output": "/examples/genjutsu-character/1/show.mp4",
   "rest": {
-   "src": "/examples/genjutsu-character/1/show.peak.webp",
-   "at": 4.717,
+   "src": "/examples/character-swap/1/rest.webp",
+   "at": 0.6,
    "from": 0
   }
  }

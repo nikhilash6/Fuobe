@@ -1727,6 +1727,15 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 512,
   "h": 384
  },
+ "/examples/character-swap/1/rest.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 30654,
+  "sha256": "43e98bdcb014c4f786cc820fb312797db45177635eb108b92887cae831d0e104",
+  "v": "43e98bdc",
+  "w": 512,
+  "h": 384
+ },
  "/examples/effect-acid/1/in-image.384.webp": {
   "role": "show",
   "type": "image/webp",
