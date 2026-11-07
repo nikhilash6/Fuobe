@@ -4993,5 +4993,62 @@
    "at": 5,
    "from": 0
   }
+ },
+ {
+  "id": "genjutsu-character.2",
+  "surface": "tool:genjutsu/character",
+  "rank": 2,
+  "caption": "A new model takes the runway",
+  "words": "The runway walk in the palm house, now worn by a new model in an emerald satin gown. Every step, turn and the crowd stay as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "inset",
+   "went": "A 5 s clip and a photo",
+   "recipe": {
+    "mode": "character",
+    "engine": "open",
+    "model": "oss-h3-group-swap",
+    "quality": "720p",
+    "target": "type",
+    "seed": 7,
+    "length": 5.166,
+    "originalSound": "everything"
+   },
+   "own": {
+    "character": {
+     "people": [
+      {
+       "role": "the model walking the runway"
+      }
+     ]
+    }
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-character/2/in-clip.jpg",
+   "photo1": "/examples/genjutsu-character/2/in-photo1.jpg"
+  },
+  "output": "/examples/genjutsu-character/2/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-character/2/show.peak.webp",
+   "at": 3,
+   "from": 0
+  }
+ },
+ {
+  "id": "character-swap.2",
+  "surface": "tool:character-swap",
+  "rank": 2,
+  "caption": "A new model takes the runway",
+  "words": "The runway walk in the palm house, now worn by a new model in an emerald satin gown. Every step, turn and the crowd stay as filmed.",
+  "load": "look",
+  "href": "/genjutsu?mode=character&example=genjutsu-character.2",
+  "inputs": {},
+  "output": "/examples/genjutsu-character/2/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-character/2/show.peak.webp",
+   "at": 3,
+   "from": 0
+  }
  }
 ]

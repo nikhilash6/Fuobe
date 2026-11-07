@@ -6233,6 +6233,70 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/genjutsu-character/2/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 28334,
+  "sha256": "e3502de86cbd014c8e4dab7d6927d7895dbd354d566127ac3624347f4f401503",
+  "v": "e3502de8",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-character/2/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 166631,
+  "sha256": "bffdd9674febf76bab1d11dc5fc0baf79e4abe51de3113eea76502b03858da0d",
+  "v": "bffdd967",
+  "w": 1024,
+  "h": 768,
+  "thumb": "/examples/genjutsu-character/2/in-clip.384.webp?v=e3502de8"
+ },
+ "/examples/genjutsu-character/2/in-photo1.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 9904,
+  "sha256": "253800a94a4bad4c42c7d0dc4b94e02066e6af145733f9a19b2d8424732533a6",
+  "v": "253800a9",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-character/2/in-photo1.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 132363,
+  "sha256": "27b5644c11cecccfe9d2065364a9ccddce079ea49fdbbb0f0ca154df419f58b9",
+  "v": "27b5644c",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/genjutsu-character/2/in-photo1.384.webp?v=253800a9"
+ },
+ "/examples/genjutsu-character/2/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 967301,
+  "sha256": "780da2f97ab83ffdf68f40b48d924a3b37845c4fba02a21f0589da5a2b05f65e",
+  "v": "780da2f9",
+  "poster": "/examples/genjutsu-character/2/show.poster.webp?v=26766823"
+ },
+ "/examples/genjutsu-character/2/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 37146,
+  "sha256": "b794dfc3809f52d94161371130184d5815d6cb8b84202b5eb4ca8d3a2d1737ff",
+  "v": "b794dfc3",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-character/2/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 82720,
+  "sha256": "267668235facdbc060553af093b3082ecbe620346fbd337b9ff062f4773a52c7",
+  "v": "26766823",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/genjutsu-finish/1/in-clip.384.webp": {
   "role": "show",
   "type": "image/webp",

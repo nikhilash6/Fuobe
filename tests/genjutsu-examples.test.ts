@@ -14,7 +14,7 @@ import {
   type GenjutsuPlanInput,
   type GenjutsuSetup,
 } from "@/lib/catalog/genjutsu";
-import { exampleFor, exampleSettings, recipeProblem, sameRecipe, toRecipe } from "@/lib/examples/genjutsu";
+import { exampleFor, examplesOf, exampleSettings, recipeProblem, sameRecipe, toRecipe } from "@/lib/examples/genjutsu";
 import type { GenjutsuRecipe } from "@/lib/examples/types";
 import { genjutsuLive } from "@/server/genjutsu-live";
 import plan from "@/lib/examples/plan.json";
@@ -198,12 +198,11 @@ describe("Genjutsu mode examples", () => {
         .find((c) => c!.id === r.id)!;
       const mode = card.load.recipe.mode;
       // Each feature it needs closes it on its own.
-      for (const f of card.load.needs) expect(exampleFor(examples, mode, (g) => g !== f)?.id === r.id, `${r.id} without ${f}`).toBe(false);
+      for (const f of card.load.needs) expect(examplesOf(examples, mode, (g) => g !== f).some((c) => c.id === r.id), `${r.id} without ${f}`).toBe(false);
       // The committed gate (src/server/genjutsu-live.ts): what a visitor sees today.
       const live = genjutsuLive();
-      const visitor = exampleFor(examples, mode, (f) => !!live[f]);
-      if (card.load.needs.every((f) => live[f])) expect(visitor?.id, r.id).toBe(r.id);
-      else expect(visitor?.id === r.id, r.id).toBe(false);
+      const visitor = examplesOf(examples, mode, (f) => !!live[f]).map((c) => c.id);
+      expect(visitor.includes(r.id), r.id).toBe(card.load.needs.every((f) => live[f]));
     }
   });
 
