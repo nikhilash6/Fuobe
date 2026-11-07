@@ -77,6 +77,10 @@ export const FX_PAIRS: Record<string, FxPair> = {
   "v": "84eb8101",
   "kind": "pair"
  },
+ "video-tools-depth": {
+  "v": "bc0f77ce",
+  "kind": "depth"
+ },
  "video-tools-green-screen": {
   "v": "60977b78",
   "kind": "pair"

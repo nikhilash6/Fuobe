@@ -4832,5 +4832,21 @@
    "at": 0.6,
    "from": 0
   }
+ },
+ {
+  "id": "video-tools-depth.1",
+  "surface": "hub:video-tools/depth",
+  "rank": 1,
+  "caption": "A depth pass of a grand library",
+  "modelId": "oss-video-depth-da3",
+  "inputs": {
+   "video": "/examples/video-tools-depth/1/in-video.mp4"
+  },
+  "output": "/examples/video-tools-depth/1/show.mp4",
+  "rest": {
+   "src": "/examples/video-tools-depth/1/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
  }
 ]

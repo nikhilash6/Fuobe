@@ -268,11 +268,10 @@ function buildCard(row: PlanRow): ExampleCard {
   };
 }
 
-/** A look card's link: a page of this site that loads one of its own examples (`?example=<id>`). */
+/** A look card's link: a page of this site that opens with the example's files and settings in (`?example=<id>`, or the page's own link). */
 function lookHref(row: PlanRow): string {
   const href = row.href!;
-  const id = /[?&]example=([a-z0-9-]+\.\d+)(?:&|$)/.exec(href)?.[1];
-  if (!href.startsWith("/") || href.startsWith("//") || !id) fail(row, "a look card's link opens a page with one of its examples (/page?example=<id>)");
+  if (!href.startsWith("/") || href.startsWith("//")) fail(row, "a look card's link opens a page of this site");
   if (Object.keys(row.inputs).length) fail(row, "a look card with a link shows no inputs (the link opens them)");
   return href;
 }

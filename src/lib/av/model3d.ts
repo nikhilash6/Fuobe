@@ -680,7 +680,7 @@ export function linkedIdolQuality(prev: Record<string, IdolQuality>, mode: Model
 /**
  * What an Image to 3D link asks for: ?model= (⌘K, Make it 3D) picks a model, its mode and its engine; ?model=meshy-rigging
  * says where Rig & animate is; else ?mode= picks a mode. ?quality= is Idol 3D's Best or Quick look, ?image= a picture for
- * the photo slot (a file Fuobe keeps, or an https link), and ?photo=1 says it is a photo (an upload), so Idol's looser
+ * the photo slot (a file Fuobe keeps, one of its published examples' pictures, or an https link), and ?photo=1 says it is a photo (an upload), so Idol's looser
  * photo crop starts on; a picture handed over from a result starts with it off (idol-5).
  */
 export function readModel3dLink(sp: Pick<URLSearchParams, "get">): Model3dLink {
@@ -694,7 +694,7 @@ export function readModel3dLink(sp: Pick<URLSearchParams, "get">): Model3dLink {
   const quality = sp.get("quality");
   if (quality === "best" || quality === "quick") out.quality = quality;
   const image = sp.get("image");
-  if (image && /^(\/api\/files\/|https:\/\/)/.test(image) && image.length <= 2048) {
+  if (image && /^(\/api\/files\/|https:\/\/|\/examples\/[a-z0-9-]+\/\d+\/[a-z0-9-]+\.(jpg|png|webp)$)/.test(image) && image.length <= 2048) {
     out.image = image;
     out.photo = sp.get("photo") === "1";
   }
