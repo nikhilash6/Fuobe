@@ -123,7 +123,8 @@ const taskOf = (generationId: string) => db().prepare("SELECT * FROM relay_tasks
 describe("a run that adds files at run time, on this install's GPUs", () => {
   it("knows the look's LoRAs as the run's files beyond its workflow's own", () => {
     expect(lookFiles).toEqual(expect.arrayContaining(["AWPortrait-Z.safetensors"]));
-    const p = previewGeneration(soulRun);
+    // (Planned as a visitor's run on these GPUs: no worker is here yet, and the owner's own run would be refused for that.)
+    const p = hosted.runOnPool(null, () => previewGeneration(soulRun));
     expect(p.route.provider).toBe("comfyui");
     const r = runtimeNeeds(lookFiles, loadIndex(), p.route.endpoint);
     expect(r.unknown).toEqual([]);

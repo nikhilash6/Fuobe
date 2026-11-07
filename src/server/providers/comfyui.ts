@@ -93,7 +93,8 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, runPlaceOf, workersCanRun } from "../computer/pool";
+import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, runPlaceOf, workersCanRun, workersHold } from "../computer/pool";
+import { notOnGpusText } from "../runs-here";
 import { catalogVersion } from "../computer/catalog-version";
 import { ticketProblem, type JobTicket } from "@/lib/job-ticket";
 import { catalogKnows, ticketFor } from "@/lib/ticket-compose";
@@ -2006,8 +2007,11 @@ export const comfyProvider: ProviderAdapter = {
       const metaBatch = !!meta.metaBatch;
       const forPool = onWorkers(computer);
       // The owner's job that no worker is allowed and able to run would wait with no end (the owner's jobs have no wait
-      // limit unless the owner sets one): it is refused now, as an account's run is.
-      if (forPool && computer === "owner" && !workersCanRun(manifest.id)) throw new ProviderError(NO_WORKER_FOR_LANE);
+      // limit unless the owner sets one): it is refused now, as an account's run is. Its true cause in plain words: no
+      // worker has its files, or one has them but isn't allowed its lane.
+      if (forPool && computer === "owner" && !workersCanRun(manifest.id)) {
+        throw new ProviderError(workersHold(manifest.id) ? NO_WORKER_FOR_LANE : notOnGpusText(model?.name ?? "this model", "files"));
+      }
       // A job larger than every PC that could run it may ever make (its ceiling) would never be taken: refused now, the
       // owner's and an account's alike, before it waits in line.
       if (forPool && workersCanRun(manifest.id) && !workersCanRun(manifest.id, { size: prepared.size })) throw new ProviderError(computer === "owner" ? NO_WORKER_FOR_SIZE : POOL_TOO_BIG);

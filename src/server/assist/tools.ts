@@ -23,6 +23,7 @@ import { createGenerations, currentRequest, getGeneration, listGenerations, outp
 import { provider } from "../providers";
 import { llmBackends, llmLabel } from "../providers/llm";
 import { engineMode } from "../settings";
+import { NotOnGpusError, ownerGpusRun, sameJobModels } from "../runs-here";
 import { readRef } from "../storage";
 import { katanaTool } from "../katana";
 import { createStoryboard, estimateStoryboard } from "../storyboard";
@@ -89,6 +90,8 @@ function summarize(m: ModelDef) {
           ? `$${p.usd} per ${p.unit}${p.note ? ` — ${p.note}` : ""}${p.lorasUnknown ? "; with LoRAs the price is unknown (not published yet)" : ""}${p.withLorasPerMegapixel ? `; with LoRAs $${p.withLorasPerMegapixel} per megapixel` : ""}`
           : "unknown",
     connected: configured,
+    // A ComfyUI model the GPUs here can't run yet (no worker has its files, or none is allowed it): plan another one.
+    ...(!ownerGpusRun(m) && { notOnYourGpus: "Your GPUs can't run it yet: pick another model" }),
     ...(o.aspectRatios && { aspectRatios: o.aspectRatios }),
     ...(o.resolutions && { resolutions: o.resolutions }),
     ...(o.durations && { durations: o.durations }),
@@ -135,8 +138,9 @@ const searchModels = defineTool({
       });
       if (scored.some((x) => x.s)) list = scored.filter((x) => x.s).sort((a, b) => b.s - a.s).map((x) => x.m);
     }
-    // The engine the user picked first, then the rest.
-    list = [...list].sort((a, b) => Number(runsOn(b, ctx.engine)) - Number(runsOn(a, ctx.engine)));
+    // The engine the user picked first, then the rest; on each, the models the GPUs here can't run yet last.
+    const rank = (m: ModelDef) => (runsOn(m, ctx.engine) ? 0 : 2) + (ownerGpusRun(m) ? 0 : 1);
+    list = [...list].sort((a, b) => rank(a) - rank(b));
     const shown = list.slice(0, 20);
     return {
       content: JSON.stringify({ engineMode: mode, preferredEngine: ctx.engine, total: list.length, models: shown.map(summarize) }),
@@ -455,37 +459,63 @@ interface ChainedJob {
   after?: number;
   preview?: ReturnType<typeof previewChained>;
   error?: string;
+  /** The model it named can't run on the GPUs here: why (the job then runs on another model, or not at all). */
+  notOnGpus?: NotOnGpusError;
+  /** It runs on another model than the one it named, and why ("LTX-2.5 isn't on your GPUs yet, so …"). */
+  instead?: string;
+}
+
+/** How many other models a job that can't run here is planned on before it is said so. */
+const MAX_TRIES = 30;
+
+/**
+ * A job whose model the GPUs here can't run (runs-here.ts: no worker has its files, or none is allowed it) runs on the
+ * best model that does the same job and can run now, as it would be planned and priced: a model on the GPUs here first,
+ * then a cloud model with a key (never a demo). Its prompt and settings stay; a clip asked for in shots keeps them where
+ * a model makes shots. None: the job stays as it was, with the plain reason as its error, before anything runs.
+ */
+function runnableInstead(first: ChainedJob, plan: (job: JobInput) => ChainedJob): ChainedJob {
+  const miss = first.notOnGpus!;
+  const named = getModel(miss.modelId);
+  if (!named) return first;
+  const shots = (first.job.shots ?? 0) > 1;
+  for (const c of sameJobModels(named, miss.op, { multiShot: shots }).slice(0, MAX_TRIES)) {
+    const t = plan({ ...first.job, model_id: c.id, op: miss.op, engine: dualEngine(getModel(c.id)) ? c.engine : undefined });
+    if (!t.preview || t.preview.demo) continue;
+    const oneShot = shots && !t.preview.model.options.multiShot ? ` It makes the clip as one shot.` : "";
+    return { ...t, instead: `${named.name} isn't on your GPUs yet, so this step runs on ${t.preview.model.name}.${oneShot}` };
+  }
+  return first;
 }
 
 /** Validate and price the jobs of one generate call, wiring `after` into chain slots. Never throws. */
 function chainJobs(jobs: JobInput[], engine?: "cloud" | "open"): ChainedJob[] {
   const out: ChainedJob[] = [];
-  jobs.forEach((job, i) => {
-    const req = toRequest(job, engine);
-    const after = job.after;
-    if (after === undefined) {
-      try {
-        out.push({ job, req, preview: previewChained(req, 0) });
-      } catch (e) {
-        out.push({ job, req, error: (e as Error).message });
+  jobs.forEach((asked, i) => {
+    const after = asked.after;
+    const dep = after === undefined ? undefined : out[after];
+    if (after !== undefined) {
+      const req = toRequest(asked, engine);
+      if (!Number.isInteger(after) || after < 0 || after >= i || !dep) {
+        out.push({ job: asked, req, after, error: `"after" must point at an earlier job in this call (0–${i - 1})` });
+        return;
       }
-      return;
+      if (!dep.preview) {
+        out.push({ job: asked, req, after, error: `Job ${after} can't run, so this one can't either` });
+        return;
+      }
     }
-    const dep = out[after];
-    if (!Number.isInteger(after) || after < 0 || after >= i || !dep) {
-      out.push({ job, req, after, error: `"after" must point at an earlier job in this call (0–${i - 1})` });
-      return;
-    }
-    if (!dep.preview) {
-      out.push({ job, req, after, error: `Job ${after} can't run, so this one can't either` });
-      return;
-    }
-    const chained: GenerationRequest = { ...req, chain: [slotFor(outputKind(dep.preview.op, dep.preview.model), req.op)] };
-    try {
-      out.push({ job, req: chained, after, preview: previewChained(chained, 1) });
-    } catch (e) {
-      out.push({ job, req: chained, after, error: (e as Error).message });
-    }
+    const plan = (job: JobInput): ChainedJob => {
+      const own = toRequest(job, engine);
+      const req: GenerationRequest = dep?.preview ? { ...own, chain: [slotFor(outputKind(dep.preview.op, dep.preview.model), own.op)] } : own;
+      try {
+        return { job, req, ...(after !== undefined && { after }), preview: previewChained(req, dep ? 1 : 0) };
+      } catch (e) {
+        return { job, req, ...(after !== undefined && { after }), error: (e as Error).message, ...(e instanceof NotOnGpusError && { notOnGpus: e }) };
+      }
+    };
+    const first = plan(asked);
+    out.push(first.notOnGpus ? runnableInstead(first, plan) : first);
   });
   return out;
 }
@@ -493,8 +523,10 @@ function chainJobs(jobs: JobInput[], engine?: "cloud" | "open"): ChainedJob[] {
 function plannedJob(c: ChainedJob): PlannedJob {
   if (c.preview) {
     const p = c.preview;
-    // A value the model's route makes differently (2K on a model that makes up to 1080p) is said on the card before it runs.
-    const changes = fittedSettings(p.model, p.op, { ...p.model.defaults, ...c.req.params }, { provider: p.route.provider, negativePrompt: c.req.negativePrompt }).changes.map((x) => x.note);
+    // A value the model's route makes differently (2K on a model that makes up to 1080p) is said on the card before it runs,
+    // and so is a model the job moved to because the GPUs here can't run the one it named.
+    const fitted = fittedSettings(p.model, p.op, { ...p.model.defaults, ...c.req.params }, { provider: p.route.provider, negativePrompt: c.req.negativePrompt }).changes.map((x) => x.note);
+    const changes = c.instead ? [c.instead, ...fitted] : fitted;
     return { tool: "generate", modelId: p.model.id, modelName: p.model.name, kind: outputKind(p.op, p.model), op: p.op, prompt: c.job.prompt, count: p.outputs, costUsd: p.costUsd, demo: p.demo, ...(changes.length && { changes }) };
   }
   const m = getModel(c.job.model_id);
@@ -545,13 +577,18 @@ const generate = defineTool({
     const ids: string[] = [];
     const results: unknown[] = [];
     const batch = list.length > 1 ? { batchId: nanoid(10) } : {};
-    for (const j of list) {
+    // Each job as it was planned and priced on the card (on the model it moved to, when the GPUs here can't run its own).
+    for (const c of chainJobs(list, engineOf(ctx))) {
+      if (!c.preview) {
+        results.push({ model: c.job.model_id, error: c.error });
+        continue;
+      }
       try {
-        const gens = createGenerations({ ...toRequest(j, engineOf(ctx)), batchTitle }, batch);
+        const gens = createGenerations({ ...c.req, batchTitle }, batch);
         ids.push(...gens.map((g) => g.id));
-        results.push({ model: j.model_id, started: gens.map((g) => g.id), demo: gens.some((g) => g.provider === "mock") || undefined, costUsd: gens.reduce((s, g) => s + (g.costUsd ?? 0), 0) || undefined });
+        results.push({ model: c.job.model_id, started: gens.map((g) => g.id), demo: gens.some((g) => g.provider === "mock") || undefined, costUsd: gens.reduce((s, g) => s + (g.costUsd ?? 0), 0) || undefined });
       } catch (e) {
-        results.push({ model: j.model_id, error: (e as Error).message });
+        results.push({ model: c.job.model_id, error: (e as Error).message });
       }
     }
     const failed = results.length && ids.length === 0;

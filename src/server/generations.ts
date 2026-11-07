@@ -151,6 +151,7 @@ import { heldLine, placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, req
 import { hostedRunsOn } from "./hosted-switch";
 import { catalogVersion } from "./computer/catalog-version";
 import { gettingReady, poolLane, queueOfGeneration, type LinePlace } from "./computer/pool";
+import { ownerGpuMiss } from "./runs-here";
 import { noteCatalogProcess, processStart } from "./computer/ticket-refresh";
 import { hasJobFor, runPreviewAt, stopJobsOf } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
@@ -1253,6 +1254,10 @@ function prepare(original: GenerationRequest) {
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
   const prefer = isCloudProvider(worded.prefer) ? worded.prefer : undefined;
   const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo, prefer);
+  // The owner's run on their own GPUs (the workers): one that none of them can take is refused when it is planned and
+  // priced (runs-here.ts), as a visitor's is, never after an earlier step of its chain ran.
+  const notOnGpus = demo ? null : ownerGpuMiss(route, plan.model, plan.op);
+  if (notOnGpus) throw notOnGpus;
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
   if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {

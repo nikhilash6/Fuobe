@@ -1017,6 +1017,14 @@ export function workersCanRun(workflowId: string | null, o: { size?: Needs["size
 }
 
 /**
+ * Does a worker hold everything this workflow needs (its files and node packs, as its last list of files said), whether
+ * or not it is allowed the workflow's lane? Tells a model whose files no GPU here has from one whose lane is switched off.
+ */
+export function workersHold(workflowId: string): boolean {
+  return poolWorkers().some((w) => w.pool === "pool" && capableOf(w).workflows.includes(workflowId));
+}
+
+/**
  * The largest job of a workflow any worker that may and can run it makes (its PC's ceiling), each limit apart: undefined
  * where one of them has no limit, and for a workflow none of them runs. Said before Run with a size they don't make.
  */
