@@ -17,7 +17,10 @@ import type { ModelDef } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import type { ModelInfo } from "./model-info";
 import { useProducts } from "./hooks";
-import { firstPhoto } from "@/lib/clip-thumb";
+import { pictureSource, stillLine } from "@/lib/clip-thumb";
+import { ClipMark, ElementThumb } from "@/components/element-thumb";
+import { useElementPictures } from "@/components/element-picture";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
 
 /** The product a run uses: a saved product, or a one-off photo. */
 export interface ProductChoice {
@@ -123,15 +126,25 @@ export function ProductSlot({ value, onChange, required, brandId, pulse }: { val
 export function AvatarSlot({ value, onChange, pulse }: { value: SlotValue | null; onChange: (v: SlotValue | null) => void; pulse?: boolean }) {
   const [open, setOpen] = useState(false);
   const elements = useElements();
-  const people = (elements.data ?? []).flatMap((e) => {
-    const photo = e.kind === "character" ? firstPhoto(e.references) : undefined;
-    return photo ? [{ ...e, photo }] : [];
-  });
+  // Every character with a photo or a clip: one with only a clip gives a still of it (made when picked).
+  const people = (elements.data ?? []).filter((e) => e.kind === "character" && pictureSource(e.references));
+  const pics = useElementPictures(people);
+  const note = useUnavailableNote(people.map((e) => ({ value: e.id, unavailable: pics.unavailable(e) })));
+  // The character whose clip's still is the avatar (said under the characters and on the slot).
+  const [still, setStill] = useState<{ ref: string; id: string; name: string } | null>(null);
+  const usingStill = still && value?.ref === still.ref ? still : null;
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const choose = (v: SlotValue) => {
     onChange(v);
     setOpen(false);
+  };
+  const pickPerson = async (e: (typeof people)[number]) => {
+    const p = await pics.pick(e);
+    if (p === "unreadable") return note.press({ value: e.id, unavailable: pics.reasonFor(e) }, () => {});
+    if (!p) return;
+    setStill(p.still ? { ref: p.url, id: e.id, name: e.name } : null);
+    choose({ ref: p.url, preview: p.url, kind: "image", name: e.name });
   };
   return (
     <div className="relative shrink-0">
@@ -140,12 +153,15 @@ export function AvatarSlot({ value, onChange, pulse }: { value: SlotValue | null
         onOpenChange={setOpen}
         title="Choose avatar"
         description="Who presents or wears the product. Leave it empty and a model is made for you."
-        tooltip={value ? (value.name ?? "Avatar") : "Avatar · Optional"}
+        tooltip={value ? (usingStill ? stillLine(usingStill.name) : (value.name ?? "Avatar")) : "Avatar · Optional"}
         trigger={
-          <button type="button" data-slot-key="avatar" className={cn(tile, value ? "bg-muted" : "border border-dashed border-border-strong text-muted-foreground hover:border-primary hover:text-brand-text", pulse && "animate-pulse ring-2 ring-primary")} aria-label={value ? `Avatar: ${value.name ?? "photo"}. Replace avatar` : "Add avatar"}>
+          <button type="button" data-slot-key="avatar" className={cn(tile, value ? "bg-muted" : "border border-dashed border-border-strong text-muted-foreground hover:border-primary hover:text-brand-text", pulse && "animate-pulse ring-2 ring-primary")} aria-label={value ? `Avatar: ${usingStill ? stillLine(usingStill.name) : (value.name ?? "photo")}. Replace avatar` : "Add avatar"}>
             {value ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={value.preview} alt="" className="size-full object-cover" />
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={value.preview} alt="" className="size-full object-cover" />
+                {usingStill && <ClipMark size="xs" className="absolute right-1 bottom-1" />}
+              </>
             ) : (
               <span className="flex flex-col items-center gap-0.5 text-[10px] font-medium">
                 <UserRound className="size-4" />
@@ -177,15 +193,44 @@ export function AvatarSlot({ value, onChange, pulse }: { value: SlotValue | null
           <div className="space-y-1.5">
             <p className="text-[12px] font-medium text-muted-foreground">Your characters</p>
             {people.length ? (
-              <div className="grid grid-cols-4 gap-2">
-                {people.map((e) => (
-                  <button key={e.id} type="button" onClick={() => choose({ ref: e.photo, preview: e.photo, kind: "image", name: e.name })} className={cn("min-w-0 rounded-lg p-1 hover:bg-accent", value?.ref === e.photo && "bg-brand-faint")}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={e.photo} alt="" className="aspect-square w-full rounded-md object-cover" />
-                    <span className="mt-1 block truncate text-[11px]">{e.name}</span>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  {people.map((e) => {
+                    const src = pictureSource(e.references)!;
+                    const photo = "photo" in src ? src.photo : undefined;
+                    const opt = { value: e.id, unavailable: pics.unavailable(e) };
+                    const off = note.isUnavailable(opt);
+                    const on = !off && (photo ? value?.ref === photo : usingStill?.id === e.id);
+                    return (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => note.press(opt, () => void pickPerson(e))}
+                        {...note.optionProps(opt)}
+                        aria-busy={pics.busy === e.id || undefined}
+                        className={cn("min-w-0 rounded-lg p-1", !off && "hover:bg-accent", on && "bg-brand-faint", off && UNAVAILABLE_OPTION)}
+                      >
+                        {photo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={photo} alt="" className="aspect-square w-full rounded-md object-cover" />
+                        ) : (
+                          <span className="relative block">
+                            <ElementThumb src={"clip" in src ? src.clip : ""} mark="small" className="aspect-square w-full rounded-md object-cover" />
+                            {pics.busy === e.id && (
+                              <span className="absolute inset-0 grid place-items-center rounded-md bg-background/60">
+                                <Loader2 className="size-4 animate-spin" />
+                              </span>
+                            )}
+                          </span>
+                        )}
+                        <span className="mt-1 block truncate text-[11px]">{e.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <UnavailableNote {...note.noteProps} />
+                {usingStill && <p className="text-[12px] text-muted-foreground">{stillLine(usingStill.name)}</p>}
+              </>
             ) : (
               <p className="text-[12px] text-muted-foreground">Save people you reuse as characters in Elements.</p>
             )}
@@ -196,6 +241,7 @@ export function AvatarSlot({ value, onChange, pulse }: { value: SlotValue | null
           </div>
         </div>
       </ResponsivePanel>
+      {pics.dialog}
       {value && (
         <button type="button" onClick={() => onChange(null)} aria-label="Remove avatar" className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border bg-background text-muted-foreground shadow-soft hover:text-foreground">
           <X className="size-3" />

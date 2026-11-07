@@ -23,7 +23,10 @@ import { cn } from "@/lib/utils";
 import type { BuiltBlockout } from "./blockout-builder";
 import { useCinemaGenerate } from "./hooks";
 import { mediaDuration } from "./media";
-import { firstPhoto } from "@/lib/clip-thumb";
+import { pictureSource, stillLine } from "@/lib/clip-thumb";
+import { ElementThumb } from "@/components/element-thumb";
+import { useElementPictures } from "@/components/element-picture";
+import { UNAVAILABLE_OPTION, UnavailableNote, useUnavailableNote } from "@/components/ui/unavailable";
 
 /**
  * Blockout to film in Cinema's take composer (package blockout-film): the blockout (an uploaded grey-box render from any
@@ -243,6 +246,20 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
     }
   };
 
+  // Elements with a photo or a clip: one with only a clip gives a still of it (made when picked).
+  const pictureElements = (elements.data ?? []).filter((e) => e.kind !== "voice" && pictureSource(e.references)).slice(0, 30);
+  const pics = useElementPictures(pictureElements);
+  const elementNote = useUnavailableNote(pictureElements.map((e) => ({ value: e.id, unavailable: pics.unavailable(e) })));
+  // References that are a still from an element's clip, by address: said under the reference.
+  const [stillsOf, setStillsOf] = useState<Record<string, string>>({});
+  const addElement = async (e: (typeof pictureElements)[number]) => {
+    const p = await pics.pick(e);
+    if (p === "unreadable") return elementNote.press({ value: e.id, unavailable: pics.reasonFor(e) }, () => {});
+    if (!p) return;
+    if (p.still) setStillsOf((m) => ({ ...m, [p.url]: e.name }));
+    addRef({ url: p.url, role: roleFor({ category: e.kind }), name: e.name });
+  };
+
   const addRef = (r: Omit<BlockoutRefItem, "id">) => {
     if (draft.refs.length >= BLOCKOUT.maxRefs) return toast.error(`Up to ${BLOCKOUT.maxRefs} references`);
     setDraft((d) => ({ ...d, refs: [...d.refs, { ...r, id: nanoid(6) }], prompt: null }));
@@ -454,6 +471,7 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
                       </option>
                     ))}
                   </select>
+                  {stillsOf[r.url] && <p className="text-[11px] leading-snug text-muted-foreground">{stillLine(stillsOf[r.url])}</p>}
                   <Input value={r.name ?? ""} placeholder="Name (optional)" onChange={(e) => setDraft((d) => ({ ...d, refs: d.refs.map((x) => (x.id === r.id ? { ...x, name: e.target.value.slice(0, 60) } : x)), prompt: null }))} className="h-7 px-1.5 text-[12.5px]" aria-label={`Reference ${i + 1} name`} />
                 </div>
               ))}
@@ -467,20 +485,38 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
                   <button type="button" onClick={() => refInput.current?.click()} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[13px] font-medium hover:bg-accent">
                     <Upload className="size-4" /> Upload a picture
                   </button>
-                  {!!elements.data?.some((e) => firstPhoto(e.references) && e.kind !== "voice") && <p className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Elements · Soul Cast · Soul Location</p>}
+                  {pictureElements.length > 0 && <p className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Elements · Soul Cast · Soul Location</p>}
                   <div className="max-h-40 space-y-0.5 overflow-y-auto">
-                    {(elements.data ?? [])
-                      .filter((e) => firstPhoto(e.references) && e.kind !== "voice")
-                      .slice(0, 30)
-                      .map((e) => (
-                        <button key={e.id} type="button" onClick={() => addRef({ url: firstPhoto(e.references)!, role: roleFor({ category: e.kind }), name: e.name })} className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] hover:bg-accent">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={firstPhoto(e.references)} alt="" className="size-7 rounded object-cover" />
+                    {pictureElements.map((e) => {
+                      const src = pictureSource(e.references)!;
+                      const opt = { value: e.id, unavailable: pics.unavailable(e) };
+                      const off = elementNote.isUnavailable(opt);
+                      return (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => elementNote.press(opt, () => void addElement(e))}
+                          {...elementNote.optionProps(opt)}
+                          aria-busy={pics.busy === e.id || undefined}
+                          className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px]", !off && "hover:bg-accent", off && UNAVAILABLE_OPTION)}
+                        >
+                          {"photo" in src ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={src.photo} alt="" className="size-7 rounded object-cover" />
+                          ) : (
+                            <ElementThumb src={src.clip} mark="none" className="size-7 shrink-0 rounded object-cover" />
+                          )}
                           <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                          <span className="text-[11.5px] text-muted-foreground capitalize">{e.kind}</span>
+                          {pics.busy === e.id ? (
+                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label={`Making a still from ${e.name}'s clip`} />
+                          ) : (
+                            <span className="text-[11.5px] text-muted-foreground capitalize">{"clip" in src ? `${e.kind} · clip` : e.kind}</span>
+                          )}
                         </button>
-                      ))}
+                      );
+                    })}
                   </div>
+                  <UnavailableNote {...elementNote.noteProps} />
                   <p className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">From your library</p>
                   <div className="grid max-h-44 grid-cols-4 gap-1 overflow-y-auto">
                     {(images.data ?? []).slice(0, 40).map((a) => (
@@ -493,6 +529,7 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
                   </div>
                 </PopoverContent>
               </Popover>
+              {pics.dialog}
               <input ref={refInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => (e.target.files?.[0] && uploadRef(e.target.files[0]), (e.target.value = ""))} />
             </div>
             <p className="text-[12px] text-muted-foreground">Each still’s role is written into the prompt for you: the interior, who the mannequin becomes, the exterior, a prop.</p>

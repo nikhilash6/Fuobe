@@ -79,3 +79,21 @@ export function referenceWords(references: readonly string[]): string {
   const words = [photos && `${photos} photo${photos > 1 ? "s" : ""}`, clips && `${clips} clip${clips > 1 ? "s" : ""}`].filter(Boolean);
   return words.join(" · ");
 }
+
+/**
+ * Where an element's picture comes from where a picture is needed (an avatar, an image reference): its first photo, else
+ * a still from its clip (made in the browser and uploaded), else nothing.
+ */
+export function pictureSource(references: readonly string[]): { photo: string } | { clip: string } | null {
+  const photo = firstPhoto(references);
+  if (photo) return { photo };
+  const clip = references.find(isClipRef);
+  return clip ? { clip } : null;
+}
+
+/** The line under a picture made from an element's clip. */
+export const stillLine = (name: string) => `Using a still from ${name}'s clip`;
+
+/** Why a clip-only element has no picture to give, and the way to give it one. */
+export const noStillWhy = (name: string) => `${name}'s clip can't be read here, so there is no still to use`;
+export const addPhotoLabel = (name: string) => `Add a photo to ${name}`;

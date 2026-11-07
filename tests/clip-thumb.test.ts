@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstPhoto, frameSize, referenceWords, stillCache, thumbSource } from "@/lib/clip-thumb";
+import { addPhotoLabel, firstPhoto, frameSize, noStillWhy, pictureSource, referenceWords, stillCache, stillLine, thumbSource } from "@/lib/clip-thumb";
 
 describe("thumbSource", () => {
   it("draws a photo as itself", () => {
@@ -74,5 +74,20 @@ describe("referenceWords", () => {
     expect(referenceWords(["/a.mp4"])).toBe("1 clip");
     expect(referenceWords(["/a.mp4", "/b.jpg", "/c.webm", "/d.jpg", "/e.jpg"])).toBe("3 photos · 2 clips");
     expect(referenceWords([])).toBe("");
+  });
+});
+
+describe("pictureSource", () => {
+  it("gives a photo first, else the clip to take a still from, else nothing", () => {
+    expect(pictureSource(["/a.mp4", "/b.jpg"])).toEqual({ photo: "/b.jpg" });
+    expect(pictureSource(["/b.jpg"])).toEqual({ photo: "/b.jpg" });
+    expect(pictureSource(["/a.mp4", "/c.webm"])).toEqual({ clip: "/a.mp4" });
+    expect(pictureSource([])).toBeNull();
+  });
+
+  it("says where the picture came from, and how to give one when the clip can't be read", () => {
+    expect(stillLine("Maya")).toBe("Using a still from Maya's clip");
+    expect(noStillWhy("Maya")).toBe("Maya's clip can't be read here, so there is no still to use");
+    expect(addPhotoLabel("Maya")).toBe("Add a photo to Maya");
   });
 });

@@ -1070,10 +1070,17 @@ export function useStatus() {
 /**
  * The name this viewer reads for this install's GPUs (src/lib/place-name.ts): `label` as set ("Our GPUs"), `text` inside
  * a sentence ("our GPUs"). Null while hosted runs are off for this viewer (the owner; any viewer of an install with them
- * off): its pages keep their own words.
+ * off): its pages keep their own words. Null until the page has hydrated too, as the server rendered it: a status that
+ * answers before part of the page hydrates would otherwise change its words mid-hydration.
  */
 export function usePlaceName(): Place | null {
   const v = useStatus().data?.viewer;
+  const hydrated = useHydrated();
+  return hydrated ? placeNameFor(v) : null;
+}
+
+/** The place name a viewer reads (usePlaceName once hydrated): none unless hosted runs are on for them. */
+export function placeNameFor(v: { hosted?: boolean; placeName?: string } | undefined): Place | null {
   return v?.hosted ? placeOf(v.placeName) : null;
 }
 

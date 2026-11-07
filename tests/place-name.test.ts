@@ -23,7 +23,7 @@ const billing = await import("@/server/billing");
 const auth = await import("@/server/auth");
 const { visitorStatus } = await import("@/server/account-gpu");
 const { ownGpuQuiet } = await import("@/server/hosted-run");
-const { usePlaceName } = await import("@/lib/api");
+const { placeNameFor, usePlaceName } = await import("@/lib/api");
 
 let fake: FakeBilling;
 let accountId = "";
@@ -139,9 +139,14 @@ describe("the page's place name", () => {
     return seen;
   };
   it("none for the owner and while hosted runs are off; the name (or Our GPUs) while they are on", () => {
+    expect(placeNameFor(undefined)).toBeNull();
+    expect(placeNameFor({ placeName: "Ignored" })).toBeNull();
+    expect(placeNameFor({ hosted: true })).toEqual({ label: "Our GPUs", text: "our GPUs" });
+    expect(placeNameFor({ hosted: true, placeName: "Ana's render box" })).toEqual({ label: "Ana's render box", text: "Ana's render box" });
+  });
+
+  it("none while the page renders on the server and hydrates, as the server rendered it, even with the status known", () => {
     expect(read(undefined)).toBeNull();
-    expect(read({ kind: "account", gpu: { connected: false }, placeName: "Ignored" })).toBeNull();
-    expect(read({ kind: "account", gpu: { connected: false }, hosted: true })).toEqual({ label: "Our GPUs", text: "our GPUs" });
-    expect(read({ kind: "guest", gpu: { connected: false }, hosted: true, placeName: "Ana's render box" })).toEqual({ label: "Ana's render box", text: "Ana's render box" });
+    expect(read({ kind: "guest", gpu: { connected: false }, hosted: true, placeName: "Ana's render box" })).toBeNull();
   });
 });

@@ -2,12 +2,15 @@
 
 import { Video } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { CLIP_FRAME_AT, frameSize, stillCache, thumbSource } from "@/lib/clip-thumb";
+import { CLIP_FRAME_AT, CLIP_FRAME_SIDE, frameSize, stillCache, thumbSource } from "@/lib/clip-thumb";
 import { isClipRef } from "@/lib/catalog/elements";
 import { cn } from "@/lib/utils";
 
-/** One frame of a clip, scaled down and kept as a JPEG object URL; null when this browser can't read the clip. */
-async function grabStill(clip: string): Promise<string | null> {
+/**
+ * One frame of a clip (at CLIP_FRAME_AT) as a JPEG, its longest side at most `maxSide`; null when this browser can't read
+ * the clip.
+ */
+export async function grabClipFrame(clip: string, maxSide = CLIP_FRAME_SIDE, quality = 0.85): Promise<Blob | null> {
   if (typeof document === "undefined") return null;
   const v = document.createElement("video");
   v.muted = true;
@@ -29,7 +32,7 @@ async function grabStill(clip: string): Promise<string | null> {
       v.currentTime = at;
       await seeked;
     }
-    const size = frameSize(v.videoWidth, v.videoHeight);
+    const size = frameSize(v.videoWidth, v.videoHeight, maxSide);
     if (!size.width) return null;
     const c = document.createElement("canvas");
     c.width = size.width;
@@ -37,8 +40,7 @@ async function grabStill(clip: string): Promise<string | null> {
     const ctx = c.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(v, 0, 0, size.width, size.height);
-    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.85));
-    return blob ? URL.createObjectURL(blob) : null;
+    return await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", quality));
   } catch {
     return null;
   } finally {
@@ -47,7 +49,32 @@ async function grabStill(clip: string): Promise<string | null> {
   }
 }
 
+/** A thumbnail still of a clip, kept as an object URL. */
+async function grabStill(clip: string): Promise<string | null> {
+  const blob = await grabClipFrame(clip);
+  return blob ? URL.createObjectURL(blob) : null;
+}
+
 const stills = stillCache(grabStill);
+
+/**
+ * The thumbnail stills of several clips, grabbed (once each) while the caller shows them: a string when ready, null for
+ * a clip this browser can't read, undefined while it isn't known yet.
+ */
+export function useClipStills(clips: readonly string[]): (string | null | undefined)[] {
+  const [, setTick] = useState(0);
+  const key = clips.join("\n");
+  useEffect(() => {
+    let gone = false;
+    for (const c of key ? key.split("\n") : []) {
+      if (stills.peek(c) === undefined) void stills.get(c).then(() => !gone && setTick((t) => t + 1));
+    }
+    return () => {
+      gone = true;
+    };
+  }, [key]);
+  return clips.map((c) => stills.peek(c));
+}
 
 /** The mark that says a thumbnail is a clip: a small camera on a dark disc. */
 export function ClipMark({ className, size = "sm" }: { className?: string; size?: "xs" | "sm" }) {
