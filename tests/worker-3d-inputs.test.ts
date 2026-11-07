@@ -4,6 +4,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as workerModel from "../bin/lib/worker/model-file.mjs";
+import type { TaskRow } from "@/server/computer/tasks";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
@@ -242,10 +243,10 @@ describe("the place gate and the files each step reads", () => {
     const r = await press(req);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const id = r.body.items![0].id;
-    let t: tasks.TaskRow | undefined;
+    let t: TaskRow | undefined;
     for (let i = 0; i < 200 && !t; i++) {
       await globalThis.__fuobeRunner?.tick();
-      t = db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ?").get(id) as tasks.TaskRow | undefined;
+      t = db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ?").get(id) as TaskRow | undefined;
       if (!t) await new Promise((res) => setTimeout(res, 20));
     }
     const row = db().prepare("SELECT status, error FROM generations WHERE id = ?").get(id) as { status: string; error: string | null };
