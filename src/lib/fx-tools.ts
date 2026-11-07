@@ -33,8 +33,29 @@ export const FX_COVERS: Readonly<Record<string, string>> = {
   "video-tools-green-screen": "app-remove-background",
   "video-tools-colors": "app-match-colors",
   "video-tools-restore": "app-restore-photo",
+  "video-tools-remove-person": "effect-vanish",
+  "video-tools-depth": "effect-lidar-transition",
+  "video-tools-relight": "app-relight",
+  "video-tools-evolution": "effect-world-morphing",
+  [gj("restyle")]: "effect-layer-mixed-media",
+  [gj("finish")]: "effect-film-colors",
   "upscale-fps": "motion-slow-motion",
 };
+
+/**
+ * The cover a mode of a shared tool shows here (a pill on the page, a row with its picture in the menu): it stays a pill,
+ * as its tool does.
+ */
+export const FX_PILL_COVERS: Readonly<Record<string, string>> = {
+  "upscale-video": "app-macro-scene",
+  "upscale-hdr": "effect-hyper-neon",
+  "upscale-export": "app-behind-the-scenes",
+  "image-to-3d-splat": "effect-point-cloud",
+  "cinema-blockout": "effect-wireframe",
+};
+
+/** An item's own cover here, a card's or a pill's (undefined: its studio's, areaCover). */
+export const fxCover = (id: string): string | undefined => FX_COVERS[id] ?? FX_PILL_COVERS[id];
 
 export interface FxSection {
   /** The section's anchor (#replace), its tab and its menu column. */

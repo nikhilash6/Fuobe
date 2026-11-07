@@ -6,7 +6,7 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
-import { FX_COVERS, FX_SECTIONS, fxCardable, isFxApp } from "@/lib/fx-tools";
+import { FX_SECTIONS, fxCardable, fxCover, isFxApp } from "@/lib/fx-tools";
 import { HOME_EFFECTS, HOME_MOTIONS, HOME_STUDIOS, homeCard, homeShowcase, presetHref, type HomeFacts } from "@/lib/home-showcase";
 import { areaCount, areaSections, cardsToShow, PILL_ONLY, rankCards, type AreaId } from "@/lib/nav-areas";
 import { entry, NAV_ENTRIES, subLabel, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
@@ -165,7 +165,7 @@ export function fxItem(id: string, facts?: HomeFacts): FxItem | undefined {
   }
   const e = entry(id);
   if (!e) return undefined;
-  const cover = FX_COVERS[id] ?? areaCover(id);
+  const cover = fxCover(id) ?? areaCover(id);
   const line = facts ? lineOf(e, facts) : (e.line ?? e.what);
   return {
     id,

@@ -24,7 +24,7 @@ import { templateCover } from "@/lib/template-covers";
 import { templateStillSources } from "@/lib/template-hd";
 import { MENU_LINES } from "@/lib/menu-lines";
 import { fxSections } from "@/lib/area-showcase";
-import { FX_COVERS, FX_SECTIONS, isFxApp } from "@/lib/fx-tools";
+import { FX_SECTIONS, fxCover, isFxApp } from "@/lib/fx-tools";
 import { entry } from "@/lib/nav-model";
 
 /** A column of a preset menu: its name, its phone chip, and the catalog categories it holds. */
@@ -256,8 +256,9 @@ function fxMenuItem(id: string): MegaItem | undefined {
   const e = entry(id);
   if (!e) return undefined;
   // A mode shows the preset whose picture shows its job (inline: the nav's own covers don't carry it); else the entry's.
-  const own = FX_COVERS[id] ? presetMegaCover(FX_COVERS[id]) : undefined;
-  const nav = own ? undefined : (FX_COVERS[id] ?? e.cover);
+  const mine = fxCover(id);
+  const own = mine ? presetMegaCover(mine) : undefined;
+  const nav = own ? undefined : (mine ?? e.cover);
   return {
     id,
     href: e.href,
