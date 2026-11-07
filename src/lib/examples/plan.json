@@ -4955,5 +4955,43 @@
    "at": 4.717,
    "from": 0
   }
+ },
+ {
+  "id": "upscale-fps.1",
+  "surface": "hub:upscale/fps",
+  "rank": 1,
+  "caption": "A carousel spin, four times slower",
+  "modelId": "oss-rife",
+  "params": {
+   "slowdown": 4
+  },
+  "inputs": {
+   "video": "/examples/upscale-fps/1/in-video.mp4"
+  },
+  "output": "/examples/upscale-fps/1/show.mp4",
+  "rest": {
+   "src": "/examples/upscale-fps/1/show.peak.webp",
+   "at": 5,
+   "from": 0
+  }
+ },
+ {
+  "id": "upscale-fps.2",
+  "surface": "hub:upscale/fps",
+  "rank": 2,
+  "caption": "Silk in the wind, twice as slow",
+  "modelId": "oss-rife",
+  "params": {
+   "slowdown": 2
+  },
+  "inputs": {
+   "video": "/examples/upscale-fps/2/in-video.mp4"
+  },
+  "output": "/examples/upscale-fps/2/show.mp4",
+  "rest": {
+   "src": "/examples/upscale-fps/2/show.peak.webp",
+   "at": 5,
+   "from": 0
+  }
  }
 ]

@@ -73,6 +73,11 @@ export const FX_PAIRS: Record<string, FxPair> = {
    0.25
   ]
  },
+ "upscale-fps": {
+  "v": "23829358",
+  "kind": "strip",
+  "frames": 6
+ },
  "upscale-video": {
   "v": "ff95b494",
   "kind": "loupe",
