@@ -40,8 +40,16 @@ export function useChatThread(id: string, enabled = true, poll = false) {
     staleTime: 0,
     enabled,
     retry: false,
-    refetchInterval: poll ? 6_000 : false,
+    // A kept message waits for its reply; a plan's runs come in while they're made.
+    refetchInterval: (q) => (making(q.state.data) ? 2_000 : poll ? 6_000 : false),
   });
+}
+
+/** Are any of a chat's plans still making their results? */
+function making(t: ChatThreadView | undefined): boolean {
+  if (!t) return false;
+  const status = new Map(t.generations.map((g) => [g.id, g.status]));
+  return t.messages.some((m) => m.plan?.status === "running" && m.plan.ids.some((id) => !status.has(id) || status.get(id) === "queued" || status.get(id) === "running"));
 }
 
 export interface StartChat {

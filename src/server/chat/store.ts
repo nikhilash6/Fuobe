@@ -2,8 +2,10 @@ import "server-only";
 import crypto from "node:crypto";
 import { BUILT_IN_CHARACTERS, builtInCharacter, CHAT_LIMITS, isChatKind, playFormat, writeTool, type CharacterCard, type ChatKind } from "@/lib/chat/catalog";
 import { titleFrom } from "@/lib/chat/prompt";
-import type { ChatEngine, ChatMessage, ChatShareSnapshot, ChatThreadSummary, ChatThreadView } from "@/lib/chat/types";
+import type { ChatEngine, ChatMessage, ChatPlan, ChatShareSnapshot, ChatThreadSummary, ChatThreadView } from "@/lib/chat/types";
+import { generationAccount } from "../account-library";
 import { db } from "../db";
+import { getGeneration } from "../generations";
 import { open as openSealed, seal } from "../secret-box";
 
 /**
@@ -168,10 +170,35 @@ interface MessageRow {
   role: "user" | "assistant";
   content: string;
   image_url: string | null;
+  data_json?: string | null;
   created_at: number;
 }
 
-const fromMessageRow = (r: MessageRow): ChatMessage => ({ id: r.id, role: r.role, content: r.content, image: r.image_url, createdAt: r.created_at });
+function planOf(raw: string | null | undefined): ChatPlan | undefined {
+  if (!raw) return undefined;
+  try {
+    const d = JSON.parse(raw) as { plan?: ChatPlan };
+    return d.plan && Array.isArray(d.plan.jobs) ? d.plan : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const fromMessageRow = (r: MessageRow): ChatMessage => {
+  const plan = planOf(r.data_json);
+  return { id: r.id, role: r.role, content: r.content, image: r.image_url, ...(plan && { plan }), createdAt: r.created_at };
+};
+
+/** Save a message's plan (its status and the runs it started). */
+export function setMessagePlan(who: string, threadId: string, messageId: string, plan: ChatPlan): void {
+  db().prepare("UPDATE account_chat_messages SET data_json = ? WHERE id = ? AND thread_id = ? AND account_id = ?").run(JSON.stringify({ plan }), messageId, threadId, who);
+}
+
+/** One message of a chat, or null. */
+export function getMessage(who: string, threadId: string, messageId: string): ChatMessage | null {
+  const r = db().prepare("SELECT * FROM account_chat_messages WHERE id = ? AND thread_id = ? AND account_id = ?").get(messageId, threadId, who) as MessageRow | undefined;
+  return r ? fromMessageRow(r) : null;
+}
 
 function summaryOf(who: string, r: ThreadRow, last?: string): ChatThreadSummary {
   const c = getCharacter(who, r.character_id);
@@ -216,7 +243,15 @@ export function getThread(who: string, id: string): ChatThreadView | null {
   const r = threadRow(who, id);
   if (!r) return null;
   const messages = (db().prepare("SELECT * FROM account_chat_messages WHERE thread_id = ? AND account_id = ? ORDER BY seq").all(id, who) as MessageRow[]).map(fromMessageRow);
-  return { ...summaryOf(who, r, messages.at(-1)?.content), messages, characterCard: getCharacter(who, r.character_id), shareToken: r.share_token };
+  const ids = [...new Set(messages.flatMap((m) => m.plan?.ids ?? []))];
+  // Only the person's own runs: an account's carry its id, the owner's none.
+  const generations = ids.flatMap((g) => {
+    const owner = generationAccount(g);
+    const mine = who === "owner" ? owner === null : owner === who;
+    const gen = mine ? getGeneration(g) : null;
+    return gen ? [gen] : [];
+  });
+  return { ...summaryOf(who, r, messages.at(-1)?.content), messages, characterCard: getCharacter(who, r.character_id), shareToken: r.share_token, generations };
 }
 
 /** What a reply needs that the browser doesn't: the summary and how far it reaches. */
@@ -265,7 +300,7 @@ export function createThread(who: string, t: NewThread): ChatThreadView {
   return getThread(who, id)!;
 }
 
-export function addMessage(who: string, threadId: string, role: "user" | "assistant", content: string, image: string | null = null): ChatMessage {
+export function addMessage(who: string, threadId: string, role: "user" | "assistant", content: string, image: string | null = null, plan?: ChatPlan): ChatMessage {
   const d = db();
   return d.transaction(() => {
     const r = threadRow(who, threadId);
@@ -273,8 +308,9 @@ export function addMessage(who: string, threadId: string, role: "user" | "assist
     const last = d.prepare("SELECT MAX(seq) AS s, COUNT(*) AS n FROM account_chat_messages WHERE thread_id = ?").get(threadId) as { s: number | null; n: number };
     if (last.n >= CHAT_LIMITS.messagesPerThread) throw new ChatError("This chat is as long as a chat can be. Start a new one to keep going.", 409, "too-long");
     const now = Date.now();
-    const row: MessageRow = { id: newId("cm"), thread_id: threadId, account_id: who, seq: (last.s ?? 0) + 1, role, content, image_url: image, created_at: now };
-    d.prepare("INSERT INTO account_chat_messages (id, thread_id, account_id, seq, role, content, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+    const data = plan ? JSON.stringify({ plan }) : null;
+    const row: MessageRow = { id: newId("cm"), thread_id: threadId, account_id: who, seq: (last.s ?? 0) + 1, role, content, image_url: image, data_json: data, created_at: now };
+    d.prepare("INSERT INTO account_chat_messages (id, thread_id, account_id, seq, role, content, image_url, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       row.id,
       row.thread_id,
       who,
@@ -282,6 +318,7 @@ export function addMessage(who: string, threadId: string, role: "user" | "assist
       role,
       content,
       image,
+      data,
       now,
     );
     // The first thing the person says names an open chat.

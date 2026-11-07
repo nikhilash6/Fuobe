@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, MoreHorizontal, Pencil, RotateCcw, Share2, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CHAT_KINDS, playFormat, writeTool, type CharacterCard } from "@/lib/chat/catalog";
+import type { Generation } from "@/lib/catalog/types";
 import type { ChatMessage, ChatThreadView } from "@/lib/chat/types";
 import { toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ import { CharacterFace } from "./character-face";
 import { ChatComposer, type ComposerHandle } from "./composer";
 import { ChatSettingsDialog, ChilliDot, MangoChilliDialog, ShareDialog } from "./dialogs";
 import { chatSend, useChatMe, useChatThread, useReply } from "./hooks";
+import { PlanCard } from "./plan-card";
 import { Markdown, ReplyBody } from "./prose";
 
 /** One chat: its messages, the reply as it's written, and the box to carry on. */
@@ -38,6 +40,7 @@ export function ThreadView({ id }: { id: string }) {
   const view = useChatThread(id, true, state.phase === "pending");
   const me = useChatMe();
   const t = view.data;
+  const generations = useMemo(() => new Map((t?.generations ?? []).map((g) => [g.id, g])), [t?.generations]);
   const waitingForLater = state.phase === "pending" && t?.messages.at(-1)?.role === "user";
   const [sharing, setSharing] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -223,6 +226,13 @@ export function ThreadView({ id }: { id: string }) {
                     ) : (
                       <AssistantTurn
                         m={m}
+                        threadId={id}
+                        generations={generations}
+                        onAnimate={(url) => void ask({ text: "Animate this", image: url })}
+                        onAgain={(() => {
+                          const said = t.messages.slice(0, i).findLast((x) => x.role === "user");
+                          return said?.content ? () => void ask({ text: said.content, image: said.image }) : undefined;
+                        })()}
                         character={c}
                         first={first}
                         tail={tail}
@@ -441,6 +451,10 @@ function UserTurn({ m, tail, fresh, editable, onEdit }: { m: ChatMessage; tail: 
 
 function AssistantTurn({
   m,
+  threadId,
+  generations,
+  onAnimate,
+  onAgain,
   character,
   first,
   tail,
@@ -451,6 +465,10 @@ function AssistantTurn({
   onRetry,
 }: {
   m: ChatMessage;
+  threadId: string;
+  generations: Map<string, Generation>;
+  onAnimate: (url: string) => void;
+  onAgain?: () => void;
   character: CharacterCard | null;
   first: boolean;
   tail: boolean;
@@ -487,6 +505,11 @@ function AssistantTurn({
         {/* Earlier replies keep the run tight: their Copy sits beside the bubble and shows on hover. */}
         {!last && <span className="self-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:hidden">{copy}</span>}
       </Row>
+      {m.plan && (
+        <div className={cn(character && "ml-9")}>
+          <PlanCard threadId={threadId} message={m as ChatMessage & { plan: NonNullable<ChatMessage["plan"]> }} generations={generations} onAnimate={onAnimate} onAgain={onAgain} />
+        </div>
+      )}
       {last && (
         <div className={cn("mt-1 flex gap-0.5 text-muted-foreground", character && "ml-9")}>
           {copy}

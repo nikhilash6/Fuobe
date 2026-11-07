@@ -867,7 +867,7 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "account_canvases", cols: ["pages_json"], what: "account canvas", key: "id", name: "name", account: "account_id" },
   { table: "account_projects", cols: ["data_json", "summary_json"], what: "account project", key: "id", name: "name", account: "account_id" },
   // Fuobe Chat: a picture sent in a chat, a character's portrait, and a shared chat's portrait.
-  { table: "account_chat_messages", cols: ["image_url"], what: "chat", key: "thread_id", name: "(SELECT title FROM account_chat_threads WHERE id = thread_id)", account: "account_id" },
+  { table: "account_chat_messages", cols: ["image_url", "data_json"], what: "chat", key: "thread_id", name: "(SELECT title FROM account_chat_threads WHERE id = thread_id)", account: "account_id" },
   { table: "account_chat_characters", cols: ["portrait_url"], what: "chat character", key: "id", name: "name", account: "account_id" },
   { table: "account_chat_shares", cols: ["portrait_url"], what: "shared chat", key: "token", name: "json_extract(snapshot_json, '$.title')", account: "account_id" },
 ];

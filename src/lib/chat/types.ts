@@ -1,6 +1,38 @@
+import type { Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
 import type { CharacterCard, ChatKind } from "./catalog";
 
 /** What the chat's API sends the browser. */
+
+/** One step of a plan: what it makes, on which model, and what Run costs (the studio's own price check). */
+export interface ChatPlanJob {
+  modelId: string;
+  modelName: string;
+  kind: MediaKind;
+  prompt: string | null;
+  /** How many results. */
+  count: number;
+  /** What Run shows for it ("Free", "$0.12", the GPUs' own words), or null when it can't run. */
+  price: string | null;
+  /** Why it can't run, in plain words (it then doesn't). */
+  error?: string;
+  /** Something the person should know (another model runs it, a setting fitted). */
+  note?: string;
+}
+
+/** A plan in a chat: made when the person asks to make something, run when they say so. */
+export interface ChatPlan {
+  summary: string;
+  jobs: ChatPlanJob[];
+  /** The exact runs Run starts, through the studios' own route. */
+  requests: GenerationRequest[];
+  status: "ready" | "running" | "declined";
+  /** The runs it started. */
+  ids: string[];
+  /** Runs that were refused when started, in plain words. */
+  errors: string[];
+  /** The plan made a still to animate after: the results offer Animate. */
+  then?: "animate";
+}
 
 export interface ChatMessage {
   id: string;
@@ -8,6 +40,8 @@ export interface ChatMessage {
   content: string;
   /** A picture the person sent with it (their own file). */
   image: string | null;
+  /** A plan to make something (an assistant message). */
+  plan?: ChatPlan;
   createdAt: number;
 }
 
@@ -31,6 +65,8 @@ export interface ChatThreadView extends ChatThreadSummary {
   characterCard: CharacterCard | null;
   /** The share link's token, while one is live. */
   shareToken: string | null;
+  /** The runs the chat's plans started (the person's own), for their results. */
+  generations: Generation[];
 }
 
 /** Where a reply comes from. */

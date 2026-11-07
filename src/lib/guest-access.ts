@@ -402,7 +402,7 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   /^\/api\/starters\/faceless\.[^/]+$/,
   // Fuobe Chat: its own chats, characters and chat settings (src/server/chat/store.ts). Replies run on the install's free
   // text helper (which counts each account's use) or on the account's own OpenRouter key, never the studio's keys.
-  /^\/api\/chat\/(me|key|threads(\/[^/]+(\/(reply|share))?)?|characters(\/[^/]+)?)$/,
+  /^\/api\/chat\/(me|key|threads(\/[^/]+(\/(reply|share|plans\/[^/]+))?)?|characters(\/[^/]+)?)$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

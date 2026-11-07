@@ -24,6 +24,7 @@ delete process.env.FUOBE_MODERATION_URL;
 const prompt = await import("@/lib/chat/prompt");
 const catalog = await import("@/lib/chat/catalog");
 const { chatShareRoute } = await import("@/lib/chat/share");
+const { wantsToMake } = await import("@/lib/chat/make-intent");
 const auth = await import("@/server/auth");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
@@ -344,6 +345,69 @@ describe("a reply", () => {
         ["user", "Hello?"],
         ["assistant", "Hello! I'm here."],
       ]);
+    } finally {
+      await slot.stop();
+    }
+  });
+});
+
+describe("making things in a chat", () => {
+  it("tells a request to make something from talk about it", () => {
+    for (const s of [
+      "Make a 3-shot ad for a gold watch",
+      "can you make four portraits of a model in a velvet suit",
+      "Please create a music track for a rainy café",
+      "generate a vertical video of a red gown in the snow",
+      "let's make a poster for my launch",
+    ])
+      expect(wantsToMake(s), s).toBe(true);
+    for (const s of ["How do I make a reel go viral?", "What should I wear to a gallery opening?", "Write a caption for my linen post", "make sense?", "I made a video yesterday", "Ideas for a perfume ad"])
+      expect(wantsToMake(s), s).toBe(false);
+    // An edit or animation of a picture sent with the message.
+    expect(wantsToMake("Animate this", true)).toBe(true);
+    expect(wantsToMake("remove the background", true)).toBe(true);
+    expect(wantsToMake("Animate this", false)).toBe(false);
+  });
+
+  it("answers a request to make with a plan priced by the studio's own check, and a plan can be put aside", async () => {
+    const t = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "chat" }))).json()) as { id: string };
+    const ev = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", { text: "Make four portraits of a model in a black velvet suit" }), ctx({ id: t.id })));
+    expect(ev.map((e) => e.type)).toEqual(["user", "done"]);
+    const reply = ev[1].message as { id: string; plan?: { jobs: { modelName: string; count: number }[]; status: string; requests: { feature: string; params?: { numOutputs?: number } }[] } };
+    expect(reply.plan?.status).toBe("ready");
+    expect(reply.plan?.jobs).toHaveLength(1);
+    expect(reply.plan?.jobs[0].modelName).toBeTruthy();
+    expect(reply.plan?.requests[0]).toMatchObject({ feature: "chat", params: { numOutputs: 4 } });
+    // Not now: kept as an idea, never run, and it can't be answered twice.
+    const plansRoute = await import("@/app/api/chat/threads/[id]/plans/[mid]/route");
+    const no = await plansRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/plans/${reply.id}`, "POST", { ok: false }), ctx({ id: t.id, mid: reply.id }));
+    expect(no.status).toBe(200);
+    expect(store.getThread(a, t.id)!.messages.at(-1)?.plan?.status).toBe("declined");
+    const again = await plansRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/plans/${reply.id}`, "POST", { ok: true }), ctx({ id: t.id, mid: reply.id }));
+    expect(again.status).toBe(409);
+    // Another account can't answer it.
+    const other = await plansRoute.POST(req(cookies.b, `/api/chat/threads/${t.id}/plans/${reply.id}`, "POST", { ok: true }), ctx({ id: t.id, mid: reply.id }));
+    expect(other.status).toBe(404);
+    // Make it: the steps go through the studios' route as this account, and either start or say why not.
+    const ev2 = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", { text: "Make a poster for a perfume called Midnight Fig" }), ctx({ id: t.id })));
+    const second = ev2[1].message as { id: string };
+    const run = await plansRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/plans/${second.id}`, "POST", { ok: true }), ctx({ id: t.id, mid: second.id }));
+    expect(run.status).toBe(200);
+    const ran = store.getThread(a, t.id)!.messages.find((m) => m.id === second.id)!.plan!;
+    expect(ran.status).toBe("running");
+    expect(ran.ids.length + ran.errors.length + ran.jobs.filter((j) => j.error).length).toBeGreaterThan(0);
+    for (const g of ran.ids) expect(db().prepare("SELECT json_extract(request_json, '$.account') AS a FROM generations WHERE id = ?").get(g)).toEqual({ a });
+  });
+
+  it("keeps talk as talk, and characters stay in their story", async () => {
+    const slot = standIn(() => "Pick a dark wool coat.");
+    try {
+      const t = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "chat" }))).json()) as { id: string };
+      const ev = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "POST", { text: "How do I make my outfit look expensive?" }), ctx({ id: t.id })));
+      expect((ev.at(-1)?.message as { plan?: unknown } | undefined)?.plan).toBeUndefined();
+      const c = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "character", characterId: "kai" }))).json()) as { id: string };
+      const ev2 = await events(await replyRoute.POST(req(cookies.a, `/api/chat/threads/${c.id}/reply`, "POST", { text: "Make a song for me, Kai" }), ctx({ id: c.id })));
+      expect((ev2.at(-1)?.message as { plan?: unknown } | undefined)?.plan).toBeUndefined();
     } finally {
       await slot.stop();
     }

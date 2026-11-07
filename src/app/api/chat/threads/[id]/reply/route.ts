@@ -5,6 +5,8 @@ import { answerThread } from "@/server/chat/answer";
 import { CHAT_WORDS } from "@/server/chat/backend";
 import { ownPicture } from "@/server/chat/files";
 import { body, chatViewer, gone, refused, signUp } from "@/server/chat/http";
+import { wantsToMake } from "@/lib/chat/make-intent";
+import { planMake } from "@/server/chat/make";
 import { answerLater, cancelPending, isPending } from "@/server/chat/pending";
 import { addMessage, dropLastReply, getPrefs, getThread, rewindTo, threadTurns } from "@/server/chat/store";
 import { enter, hit } from "@/server/rate";
@@ -62,6 +64,21 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
   if (threadTurns(v.who, id).at(-1)?.role !== "user") {
     leave();
     return Response.json({ error: "There's nothing to answer yet.", code: "nothing" }, { status: 409 });
+  }
+  // Asked to make something (a picture, a clip, a song): a plan to approve, priced as the studio would, not a reply.
+  if (userMessage && thread.kind !== "character" && wantsToMake(userMessage.content, !!userMessage.image)) {
+    const made = await planMake(request, v.who, userMessage.content, userMessage.image).catch(() => null);
+    if (made) {
+      const saved = addMessage(v.who, id, "assistant", made.say, null, made.plan);
+      leave();
+      const lines: ChatEvent[] = [
+        { type: "user", message: userMessage },
+        { type: "done", message: saved, title: getThread(v.who, id)?.title ?? thread.title },
+      ];
+      return new Response(lines.map((l) => JSON.stringify(l)).join("\n") + "\n", {
+        headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
   }
   // Their own key answers now: it doesn't wait with the free model.
   if (prefs.engine === "key") cancelPending(v.who, id);

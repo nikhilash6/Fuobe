@@ -1218,6 +1218,10 @@ function open(): Database.Database {
   db.exec(ACCOUNT_CANVAS_TABLES);
   // Fuobe Chat (src/server/chat/store.ts): not a numbered migration either.
   db.exec(CHAT_TABLES);
+  // A chat message's plan to make something (its runs and their inputs), for tables made before it.
+  if (!(db.prepare("PRAGMA table_info(account_chat_messages)").all() as { name: string }[]).some((c) => c.name === "data_json")) {
+    addColumn(db, "ALTER TABLE account_chat_messages ADD COLUMN data_json TEXT");
+  }
   // Where an account's runs go, as it picked (run-on.ts): read only while hosted runs are on, empty otherwise.
   db.exec(RUN_ON_TABLES);
   // Runs on this install's GPUs waiting to enter the line (pool-holds.ts): empty unless hosted runs are on.
