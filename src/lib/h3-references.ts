@@ -62,7 +62,7 @@ export function h3ReferenceProblem(r: H3References): string | null {
       if (s > L.maxSec + 0.05) return `${g.one} ${i + 1} is ${fmt(s)}: trim it to ${L.maxSec} s or less`;
     }
     const sum = g.list.reduce<number>((a, s) => a + (s ?? 0), 0);
-    if (sum > L.groupSec + 0.05) return `${g.all} add up to ${fmt(sum)}: keep them to ${L.groupSec} s together`;
+    if (sum > L.groupSec + 0.05) return `${g.all} add up to ${fmt(sum)}, and H3 takes ${L.groupSec} s of them together: cut ${fmt(Math.ceil((sum - L.groupSec) * 10) / 10)}`;
   }
   return null;
 }

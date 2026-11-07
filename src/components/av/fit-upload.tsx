@@ -60,7 +60,12 @@ export function useFitUpload({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ line: string; at: string | null } | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
-  const [made, setMade] = useState<Set<string>>(() => new Set());
+  // Files this step made, with the longest the rule took then (a stricter rule since may fit one again).
+  const [made, setMade] = useState<Map<string, number>>(() => new Map());
+  const madeFor = (m: Map<string, number>, ref: string, max = Infinity) => new Map(m).set(ref, max);
+  // A stored file whose offer was cancelled (again() offers it once more).
+  const [declined, setDeclined] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
   const failed = useRef(new Set<string>());
   const latest = useRef(value);
   const cb = useRef({ setValue, upload, rule });
@@ -75,7 +80,7 @@ export function useFitUpload({
   const landed = value && !value.uploading ? (value.held ?? value.ref) || undefined : undefined;
   useEffect(() => {
     if (!expect.current || value?.uploading) return;
-    if (value?.name === expect.current && landed) setMade((m) => new Set(m).add(landed));
+    if (value?.name === expect.current && landed) setMade((m) => madeFor(m, landed, cb.current.rule?.maxSeconds));
     expect.current = null;
   }, [value, landed]);
 
@@ -151,7 +156,7 @@ export function useFitUpload({
           const asset = await postFile(mp3);
           if (latest.current?.id !== token) return;
           cb.current.setValue({ ref: asset.url, preview: asset.url, kind: asset.kind ?? "audio", name: mp3.name, source: "upload" });
-          setMade((m) => new Set(m).add(asset.url));
+          setMade((m) => madeFor(m, asset.url, cb.current.rule?.maxSeconds));
         },
         (why) => {
           failed.current.add(v.ref);
@@ -176,7 +181,7 @@ export function useFitUpload({
       if (plan.kind === "trim") {
         if (stored) offered.current.add(stored.ref);
         else cb.current.setValue(null);
-        return setOffer({ source, name, seconds: plan.seconds, max: plan.max, min: r.minSeconds, line: plan.line, stored });
+        return setOffer({ source, name, seconds: plan.seconds, max: plan.max, min: r.minSeconds, line: r.line ?? plan.line, stored });
       }
       if (stored) convertStored(stored, { kbps: plan.kbps });
       else convertFile(source as Blob, name, { kbps: plan.kbps });
@@ -215,7 +220,7 @@ export function useFitUpload({
   // A file already stored that the tool can't take as it is (a library pick, a Reuse): fitted once, at once.
   const ref = rule && value && !value.uploading && !value.held && value.ref.startsWith("/api/files/") ? value.ref : undefined;
   useEffect(() => {
-    if (!rule || !ref || skip || guest || failed.current.has(ref) || offered.current.has(ref) || made.has(ref)) return;
+    if (!rule || !ref || skip || guest || failed.current.has(ref) || offered.current.has(ref) || (made.has(ref) && (!rule.maxSeconds || rule.maxSeconds + 0.05 >= made.get(ref)!))) return;
     const v = latest.current;
     if (!v) return;
     let gone = false;
@@ -237,7 +242,7 @@ export function useFitUpload({
     return () => {
       gone = true;
     };
-  }, [rule, ref, skip, guest, made, seconds, follow]);
+  }, [rule, ref, skip, guest, made, seconds, follow, tick]);
 
   // An offer belongs to the file it was made for: another file in the slot (or a stored one taken out) ends it.
   const offerGone = !!offer && (offer.stored ? value?.ref !== offer.stored.ref : !!value && !value.uploading);
@@ -262,6 +267,7 @@ export function useFitUpload({
 
   const cancelOffer = useCallback((o: Offer) => {
     if (o.source instanceof Blob) forgetDecoded(o.source);
+    if (o.stored) setDeclined(o.stored.ref);
     setOffer(null);
   }, []);
 
@@ -278,6 +284,15 @@ export function useFitUpload({
     busy,
     line,
     failedNow: !!shownError && !busy,
+    /** The stored file in the slot had its part offered and the offer was cancelled. */
+    declined: !!ref && declined === ref && !offer,
+    /** Offer the stored file's part again (after a Cancel). */
+    again: () => {
+      offered.current.clear();
+      failed.current.clear();
+      setDeclined(null);
+      setTick((t) => t + 1);
+    },
     offer: offer && !offerGone ? { ...offer, use: usePart, cancel: () => cancelOffer(offer) } : null,
   };
 }

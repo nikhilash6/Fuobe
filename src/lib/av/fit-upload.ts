@@ -38,6 +38,8 @@ export interface AudioFitRule {
   trim?: boolean;
   /** False: a video file is not this slot's (its sound isn't taken from it). */
   fromVideo?: boolean;
+  /** The picker's line, when the page says it its own way (a part to cut so sounds fit together). */
+  line?: string;
 }
 
 /** The largest file read in the browser to fit it: the app's own upload limit (MAX_MB in media-slot.tsx, /api/uploads). */

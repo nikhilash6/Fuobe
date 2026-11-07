@@ -25,6 +25,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
+import { useMediaSeconds } from "@/components/studio/reference-tray";
+import { ListFit } from "@/components/av/fit-list";
+import { ELEMENT_CLIP_MODEL, elementClipWindow, trimTarget } from "@/lib/av/reference-fit";
 import { ELEMENT_ICONS } from "@/components/studio/prompt-input";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { useMaybeClean } from "@/components/audio-tools/clean-voice-switch";
@@ -77,44 +80,69 @@ function PhotoGrid({ photos, setPhotos }: { photos: SlotValue[]; setPhotos: Reac
       );
     }
   };
+  // A clip attached as the element (Kling 4.0 takes one of 3–8 s): a part of a longer one is offered here, before any run.
+  const clips = photos.filter((p) => p.kind === "video");
+  const clipSeconds = useMediaSeconds(clips);
+  const w = elementClipWindow();
+  const t = w ? trimTarget(clipSeconds, w) : null;
+  const fit = t ? { item: clips[t.index], seconds: clipSeconds[t.index]! } : null;
   return (
-    <div
-      className="flex flex-wrap gap-2"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        addFiles(e.dataTransfer.files);
-      }}
-    >
-      {photos.map((p) => (
-        <div key={p.id} className="relative size-20 overflow-hidden rounded-xl border bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={p.preview} alt="" className="size-full object-cover" />
-          {p.uploading && (
-            <div className="absolute inset-0 grid place-items-center bg-background/60">
-              <Loader2 className="size-4 animate-spin" />
-            </div>
-          )}
-          <button
-            onClick={() => setPhotos((ps) => ps.filter((x) => x.id !== p.id))}
-            className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-foreground/80 text-background"
-            aria-label="Remove photo"
-          >
-            <X className="size-3" />
-          </button>
-        </div>
-      ))}
-      {photos.length < MAX_PHOTOS && (
-        <MediaSlot
-          label="Add photos"
-          kind="image"
-          value={null}
-          onChange={(v) => v && setPhotos((ps) => [...ps, { ...v, id: nanoid(6) }])}
-          onFile={(f) => addFiles([f])}
-          size="lg"
+    <>
+      <div
+        className="flex flex-wrap gap-2"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          addFiles(e.dataTransfer.files);
+        }}
+      >
+        {photos.map((p) => (
+          <div key={p.id} className="relative size-20 overflow-hidden rounded-xl border bg-muted">
+            {p.kind === "video" ? (
+              <video src={`${p.preview}#t=0.1`} muted playsInline preload="metadata" className="size-full object-cover" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.preview} alt="" className="size-full object-cover" />
+            )}
+            {p.uploading && (
+              <div className="absolute inset-0 grid place-items-center bg-background/60">
+                <Loader2 className="size-4 animate-spin" />
+              </div>
+            )}
+            <button
+              onClick={() => setPhotos((ps) => ps.filter((x) => x.id !== p.id))}
+              className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-foreground/80 text-background"
+              aria-label="Remove photo"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        ))}
+        {photos.length < MAX_PHOTOS && (
+          <MediaSlot
+            label="Add photos"
+            kind="image"
+            value={null}
+            onChange={(v) => v && setPhotos((ps) => [...ps, { ...v, id: nanoid(6) }])}
+            onFile={(f) => addFiles([f])}
+            size="lg"
+          />
+        )}
+      </div>
+      {w && (
+        <ListFit
+          item={fit?.item ?? null}
+          seconds={fit?.seconds}
+          kind="video"
+          max={w.max}
+          min={w.min}
+          tool={ELEMENT_CLIP_MODEL.name}
+          line={fit ? `This clip is ${Math.round(fit.seconds * 10) / 10} s. ${ELEMENT_CLIP_MODEL.name} takes ${w.min}–${w.max} s clips as elements: pick the part to use` : undefined}
+          label="the clip"
+          replace={(from, to) => setPhotos((ps) => ps.map((p) => ((from.id ? p.id === from.id : p.ref === from.ref) ? { ...to, id: to.id ?? p.id } : p)))}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -140,7 +168,7 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
   const [kind, setKind] = useState<ElementKind>(element?.kind ?? defaultKind);
   const [name, setName] = useState(element?.name ?? "");
   const [description, setDescription] = useState(element?.description ?? "");
-  const [photos, setPhotos] = useState<SlotValue[]>(() => (element?.references ?? []).map((r) => ({ id: nanoid(6), ref: r, preview: r, kind: "image" })));
+  const [photos, setPhotos] = useState<SlotValue[]>(() => (element?.references ?? []).map((r) => ({ id: nanoid(6), ref: r, preview: r, kind: /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(r) ? "video" : "image" })));
 
   const uploading = photos.some((p) => p.uploading);
   const refs = photos.filter((p) => p.ref).map((p) => p.ref);

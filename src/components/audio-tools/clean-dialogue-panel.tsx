@@ -20,6 +20,7 @@ import {
   OPEN_NOTE,
   RELATION_NOTE,
   soundAloneHelps,
+  VEED_MAX_SECONDS,
   type BedLevel,
   type Cleaner,
 } from "@/lib/av/clean-dialogue";
@@ -55,6 +56,7 @@ export function CleanDialoguePanel({
   blocker,
   onMixer,
   onSoundAlone,
+  trim,
 }: {
   /** The soundtrack, once it's uploaded. */
   source: CleanSource | null;
@@ -66,6 +68,8 @@ export function CleanDialoguePanel({
   onMixer: () => void;
   /** Clean the video's sound alone instead (an MP3 made in the browser), when the video is too big for the cloud. */
   onSoundAlone?: (file: { url: string; name: string }) => void;
+  /** The part of a longer source to clean, offered with the picker: the longest the cleaner takes (none: nothing to fit). */
+  trim?: (maxSeconds: number | undefined) => React.ReactNode;
 }) {
   const [bed, setBed] = useState<BedLevel>(DEFAULT_BED);
   const [quality, setQuality] = useState<SplitQuality | null>(null);
@@ -175,6 +179,8 @@ export function CleanDialoguePanel({
         </div>
       </Panel>
 
+      {/* VEED cleans up to 30 minutes: a longer source gets the part to clean offered (kept while the part uploads). */}
+      {engine === "cloud" && trim?.(cleaner === "veed" ? VEED_MAX_SECONDS : undefined)}
       <div className="space-y-2">
         {!blocker && !error && p && (
           <div className="space-y-1 text-[13px] text-muted-foreground" aria-live="polite">

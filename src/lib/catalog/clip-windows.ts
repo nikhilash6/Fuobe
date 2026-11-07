@@ -111,6 +111,9 @@ const REFERENCE_VOICE_SECONDS: Record<string, { min: number; max: number }> = { 
 /** Whether the model holds each reference voice to a length (REFERENCE_VOICE_SECONDS): its headers are read before the run. */
 export const hasReferenceVoiceWindow = (model: { id: string }): boolean => model.id in REFERENCE_VOICE_SECONDS;
 
+/** The length each reference voice may be on the model (REFERENCE_VOICE_SECONDS), or undefined. */
+export const referenceVoiceSeconds = (modelId: string): { min: number; max: number } | undefined => REFERENCE_VOICE_SECONDS[modelId];
+
 /** Why reference voice `n` (1-based), `seconds` long, is outside what the model takes, in Generate's words, or null. */
 export function referenceVoiceProblem(model: { id: string; name: string }, seconds: number, n = 1): string | null {
   const w = REFERENCE_VOICE_SECONDS[model.id];
@@ -259,6 +262,9 @@ export function referenceClipsProblem(model: { id: string; name: string }, kind:
 /** How long a clip given as one of the model's elements may be (Kling 4.0's video elements: 3–8 s). */
 const ELEMENT_CLIP_SECONDS: Record<string, { min: number; max: number }> = { "kling-4": { min: 3, max: 8 } };
 
+/** The length a clip element may be on the model (ELEMENT_CLIP_SECONDS), or undefined. */
+export const elementClipSeconds = (modelId: string): { min: number; max: number } | undefined => ELEMENT_CLIP_SECONDS[modelId];
+
 /** Why a clip element `seconds` long is outside what the model takes ("Kling 4.0 takes 3–8 s clips as elements…"), or null. */
 export function elementClipProblem(model: { id: string; name: string }, seconds: number, name?: string): string | null {
   const w = ELEMENT_CLIP_SECONDS[model.id];
@@ -281,6 +287,9 @@ export function editClipsProblem(model: { id: string; name: string }, count: num
  * videos must total at most 30s").
  */
 const CLIP_TOTAL_SECONDS: Record<string, number> = { "kling-4": 30 };
+
+/** The most seconds of clips a run takes in all on the model (CLIP_TOTAL_SECONDS), or undefined. */
+export const clipTotalSeconds = (modelId: string): number | undefined => CLIP_TOTAL_SECONDS[modelId];
 
 /** Why clips `seconds` long in all are too long for the model ("Kling 4.0 takes 30 s of clips in all…"), or null. */
 export function clipTotalProblem(model: { id: string; name: string }, seconds: number): string | null {

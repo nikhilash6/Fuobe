@@ -29,6 +29,7 @@ import {
   IMAGE_ASPECTS,
   IMAGE_RESOLUTIONS,
   ORIGINAL_LINES,
+  REFERENCE_LIMITS,
   VIDEO_ASPECTS,
   checkReferences,
   videoResolutionsFor,
@@ -36,7 +37,12 @@ import {
   planCinema,
   type DirectorSettings,
 } from "@/lib/catalog/cinema";
-import { findMentions, type StudioElement } from "@/lib/catalog/elements";
+import { applyMentions, findMentions, type StudioElement } from "@/lib/catalog/elements";
+import { referenceWindow, trimLine, trimTarget, windowProblem, type ClipWindow } from "@/lib/av/reference-fit";
+import { ListFit } from "@/components/av/fit-list";
+import { ElementClipFix, useElementClipCheck } from "@/components/av/element-clip-fit";
+import { useMediaSeconds } from "@/components/studio/reference-tray";
+import type { SlotValue } from "@/components/studio/media-slot";
 import type { Engine, MediaKind } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { modKey } from "@/lib/keys";
@@ -344,12 +350,47 @@ export function PromptBar(props: PromptBarProps) {
   const model = plan.model;
   const mentions = useMemo(() => findMentions(draft.prompt, elements), [draft.prompt, elements]);
   const characters = mentions.filter((e) => e.kind === "character");
-  const refCheck = checkReferences({
+  // How many references (the studio's limits). Their lengths are checked below, against the model the take runs on.
+  const refCount = checkReferences({
     images: draft.refs.filter((r) => r.kind === "image").length,
-    videos: draft.refs.filter((r) => r.kind === "video").map((r) => r.duration ?? NaN),
-    audios: draft.refs.filter((r) => r.kind === "audio").map((r) => r.duration ?? NaN),
+    videos: draft.refs.filter((r) => r.kind === "video").map(() => NaN),
+    audios: draft.refs.filter((r) => r.kind === "audio").map(() => NaN),
     elements: mentions.length,
   });
+  // Reference clips and sound held to the window of the model the take runs on (MiniMax H3 and H3 Max Turbo: 2–15 s each,
+  // 15 s together; Vidu Q4's voices: 3–12 s), else the studio's own (2–30 s, 30 s together): what is wrong is said
+  // before the run, and a part of the clip or sound to cut is offered with the picker.
+  const mainRequest = plan.steps.find((s) => s.key === "main")?.request;
+  const runModel = mainRequest ? getModel(mainRequest.modelId) : undefined;
+  const clipRefs = draft.refs.filter((r) => r.kind === "video" || r.kind === "audio");
+  const clipSeconds = useMediaSeconds(clipRefs as unknown as SlotValue[]);
+  const refLists = (["video", "audio"] as const).map((kind) => {
+    const key = kind === "video" ? "videos" : "audios";
+    const items = clipRefs.filter((r) => r.kind === kind);
+    const seconds = items.map((r) => {
+      const s = clipSeconds[clipRefs.indexOf(r)] ?? r.duration;
+      return s !== undefined && Number.isFinite(s) ? s : undefined;
+    });
+    const own: ClipWindow = { min: REFERENCE_LIMITS.clipMin, max: REFERENCE_LIMITS.clipMax, total: kind === "video" ? REFERENCE_LIMITS.totalVideo : REFERENCE_LIMITS.totalAudio };
+    const sent = !!mainRequest?.inputs?.[key]?.length;
+    const window = (sent ? referenceWindow(runModel, key, own) : own) ?? own;
+    const words = { model: sent && runModel ? runModel.name : "Cinema Studio", label: (i: number) => `${kind === "video" ? "Video" : "Audio"} ${i + 1}`, all: kind === "video" ? "The reference videos" : "The reference audio files" };
+    const target = trimTarget(seconds, window);
+    return { kind, items, seconds, window, words, problem: windowProblem(seconds, window, words), target };
+  });
+  const refCheck = refCount ?? refLists.find((l) => l.problem)?.problem ?? null;
+  const fitList = refLists.find((l) => l.target);
+  const fitItem = fitList?.target ? fitList.items[fitList.target.index] : null;
+  /** A reference swapped for its part (a stand-in while it is cut): its length is read again once it lands. */
+  const replaceRef = (from: { id?: string }, to: SlotValue) =>
+    setDraft((d) => ({
+      refs: d.refs.map((r) => (r.id === from.id ? { ...r, id: to.id ?? r.id, ref: to.ref, preview: to.preview, name: to.name ?? r.name, uploading: to.uploading, duration: to.uploading ? r.duration : undefined } : r)),
+    }));
+  const elementCheck = useElementClipCheck(
+    runModel,
+    runModel && mainRequest && mentions.length ? applyMentions(mainRequest, runModel, elements).request : undefined,
+    mentions,
+  );
   const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
   const overCap = costCapUsd != null && cost != null && cost > 0 && spentUsd + cost > costCapUsd + 1e-9;
@@ -364,6 +405,7 @@ export function PromptBar(props: PromptBarProps) {
   const blocker = uploading
     ? "Uploading…"
     : (refCheck ??
+      elementCheck.problem ??
       plan.blocker ??
       (overCap ? `Over the project's ${formatUsd(costCapUsd)} limit (≈ ${formatUsd(spentUsd)} spent) — raise it in project settings` : undefined) ??
       (poolRun.off ? pool?.text : undefined));
@@ -704,12 +746,25 @@ export function PromptBar(props: PromptBarProps) {
           const n: Record<string, number> = {};
           return draft.refs.map((r) => {
             const i = (n[r.kind] = (n[r.kind] ?? -1) + 1);
-            return <RefThumb key={r.id} r={r} index={i} startFrame={r.kind === "image" && i === 0 && video && action === "generate" && !refMode} onRemove={() => setDraft((d) => ({ refs: d.refs.filter((x) => x.id !== r.id) }))} />;
+            return <RefThumb key={r.id} r={r.duration === undefined && clipRefs.includes(r) ? { ...r, duration: clipSeconds[clipRefs.indexOf(r)] } : r} index={i} startFrame={r.kind === "image" && i === 0 && video && action === "generate" && !refMode} onRemove={() => setDraft((d) => ({ refs: d.refs.filter((x) => x.id !== r.id) }))} />;
           });
         })()}
         <AddRef onFiles={addRefs} onPick={(r) => setDraft((d) => ({ refs: [...d.refs, r] }))} />
         {!draft.refs.length && <span className="hidden text-[12px] text-muted-foreground sm:inline">Start frame, references, clips or audio — or @ a character</span>}
       </div>
+      {/* A reference clip or sound longer than the take's model takes: the part to use, picked here. */}
+      <ListFit
+        className="px-2"
+        item={fitItem}
+        seconds={fitList?.target ? fitList.seconds[fitList.target.index] : undefined}
+        kind={fitList?.kind ?? "video"}
+        max={fitList?.target?.max}
+        min={fitList?.window.min}
+        tool={fitList?.words.model ?? ""}
+        line={fitList?.target ? trimLine(fitList.seconds, fitList.target, fitList.window, fitList.words) : undefined}
+        label={fitList?.target ? fitList.words.label(fitList.target.index) : ""}
+        replace={replaceRef}
+      />
 
       {video && <MoveChips moves={draft.moves} onChange={(moves) => setDraft(withMoves(draft, moves))} />}
       {video && action === "generate" && takesExact(draft.moves[0]) && (
@@ -752,6 +807,7 @@ export function PromptBar(props: PromptBarProps) {
           })}
         </div>
       )}
+      <ElementClipFix check={elementCheck} className="px-2" />
 
       {/* Director's Panel */}
       {/* Narrow bars scroll this row (with faded edges where more chips hide); wide ones wrap it. Phones fold it into the Director chip below. */}
@@ -942,7 +998,7 @@ export function PromptBar(props: PromptBarProps) {
       )}
       {/* Why Generate can't run, in words (touch screens never see the tooltip). */}
       {blocker && (
-        <p id={blockerId} className={cn("px-2 pt-1 text-[11.5px] leading-snug", quietBlocker ? "sr-only" : refCheck || overCap ? "text-destructive" : "text-muted-foreground")}>
+        <p id={blockerId} className={cn("px-2 pt-1 text-[11.5px] leading-snug", quietBlocker ? "sr-only" : refCheck || elementCheck.problem || overCap ? "text-destructive" : "text-muted-foreground")}>
           {blocker}
         </p>
       )}

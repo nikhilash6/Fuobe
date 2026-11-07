@@ -34,7 +34,8 @@ export function SourceFit<S extends Source>({
   className?: string;
 }) {
   const value = source as unknown as SlotValue | null;
-  const set = (v: SlotValue | null) => setSource(v ? ({ ...(source ?? {}), ...v, kind, duration: undefined } as unknown as S) : null);
+  // The stand-in while a part is cut, then the part: a field the stand-in had (uploading) never outlives it.
+  const set = (v: SlotValue | null) => setSource(v ? ({ ...(source ?? {}), uploading: undefined, held: undefined, ...v, kind, duration: undefined } as unknown as S) : null);
   const clipRule = useMemo(() => (kind === "video" && maxSeconds ? { for: tool, tool, maxSeconds, minSeconds } : null), [kind, tool, maxSeconds, minSeconds]);
   const soundRule = useMemo(
     () => (kind === "audio" && maxSeconds ? { for: tool, tool, formats: ["*"], maxSeconds, minSeconds, outMaxBytes: SOUND_CAP, fromVideo: false } : null),

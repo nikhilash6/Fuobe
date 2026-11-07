@@ -62,6 +62,7 @@ import { usePoolRun } from "@/components/studio/pool-price";
 import { toolPoolPrice } from "@/lib/run-place";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 import { CleanDialoguePanel } from "./clean-dialogue-panel";
+import { SourceFit } from "@/components/av/fit-source";
 import { CLEAN_DIALOGUE_PRESET, mixPresetFor } from "@/lib/av/clean-dialogue";
 
 /**
@@ -821,6 +822,7 @@ export function SplitSoundtrackTool() {
               setMixPreset(mixPresetFor("split", true));
             }}
             onSoundAlone={(f) => setSource({ ref: f.url, preview: f.url, kind: "audio", id: nanoid(8), name: f.name })}
+            trim={(max) => <SourceFit source={source} kind={source?.kind ?? "audio"} tool="VEED" maxSeconds={max} setSource={(s) => setSource(s && { ...s, channels: undefined })} className="px-1" />}
           />
         )}
         {goal === "split" && source && engine === "cloud" && (

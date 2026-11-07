@@ -30,6 +30,8 @@ export interface ClipFitRule {
   tool: string;
   minSeconds?: number;
   maxSeconds: number;
+  /** The picker's line, when the page says it its own way (a part to cut so clips fit together). */
+  line?: string;
 }
 
 type Offer = { source: Blob | string; name?: string; seconds: number; index: Mp4Index; stored?: SlotValue };
@@ -89,7 +91,11 @@ export function useClipFit({
   const [offer, setOffer] = useState<Offer | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [made, setMade] = useState<{ ref: string; line: string } | null>(null);
+  const [made, setMade] = useState<{ ref: string; line: string; max: number } | null>(null);
+  // A stored clip whose offer was cancelled (Again offers it once more), and one this can't cut (not an MP4 or MOV).
+  const [declined, setDeclined] = useState<string | null>(null);
+  const [uncut, setUncut] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
   const latest = useRef(value);
   const cb = useRef({ rule, setValue, upload });
   useEffect(() => {
@@ -99,11 +105,11 @@ export function useClipFit({
   // Stored clips offered a part already: not offered again (a Cancel stands).
   const offered = useRef(new Set<string>());
   // A part handed to the slot's upload, by name: its stored address is marked once it lands.
-  const expect = useRef<{ name: string; line: string } | null>(null);
+  const expect = useRef<{ name: string; line: string; max: number } | null>(null);
   const landed = value && !value.uploading ? value.held ?? value.ref : undefined;
   useEffect(() => {
     if (!expect.current || value?.uploading) return;
-    if (value?.name === expect.current.name && landed) setMade({ ref: landed, line: expect.current.line });
+    if (value?.name === expect.current.name && landed) setMade({ ref: landed, line: expect.current.line, max: expect.current.max });
     expect.current = null;
   }, [value, landed]);
 
@@ -135,19 +141,20 @@ export function useClipFit({
   const ref = on && value && !value.uploading && !value.held && value.ref.startsWith("/api/files/") ? value.ref : undefined;
   useEffect(() => {
     const r = cb.current.rule;
-    if (!r || !ref || guest || offered.current.has(ref) || made?.ref === ref || !seconds || seconds <= r.maxSeconds + SLACK) return;
+    if (!r || !ref || guest || offered.current.has(ref) || (made?.ref === ref && made.max <= r.maxSeconds + SLACK) || !seconds || seconds <= r.maxSeconds + SLACK) return;
     let gone = false;
     void (async () => {
       const size = await storedSize(ref);
       const index = size ? await readMp4Index(rangeReader(ref), size).catch(() => null) : null;
-      if (gone || !index || latest.current?.ref !== ref) return;
+      if (gone || latest.current?.ref !== ref) return;
+      if (!index) return setUncut(ref);
       offered.current.add(ref);
       setOffer({ source: ref, name: latest.current.name, seconds: index.seconds || seconds, index, stored: latest.current });
     })();
     return () => {
       gone = true;
     };
-  }, [ref, seconds, guest, made]);
+  }, [ref, seconds, guest, made, tick]);
 
   // An offer belongs to the clip it was made for.
   const offerGone = !!offer && (offer.stored ? value?.ref !== offer.stored.ref : !!value && !value.uploading);
@@ -169,7 +176,7 @@ export function useClipFit({
       const line = `Using ${clock(cut.from)}–${clock(cut.from + cut.seconds)} for ${r.for}`;
       if (!o.stored) {
         const file = partFile(o.source as Blob, cut.parts, o.name);
-        expect.current = { name: file.name, line };
+        expect.current = { name: file.name, line, max: r.maxSeconds };
         return cb.current.upload(file);
       }
       const token = nanoid(8);
@@ -184,7 +191,7 @@ export function useClipFit({
         const asset = await postFile(file);
         if (latest.current?.id !== token) return;
         cb.current.setValue({ ref: asset.url, preview: asset.url, kind: asset.kind ?? "video", name: file.name, source: "upload" });
-        setMade({ ref: asset.url, line });
+        setMade({ ref: asset.url, line, max: r.maxSeconds });
       } catch (e) {
         if (latest.current?.id !== token) return;
         cb.current.setValue({ ...stored, uploading: false });
@@ -197,26 +204,37 @@ export function useClipFit({
   );
 
   const shownOffer = offer && !offerGone && rule ? offer : null;
-  const line = busy ? "Cutting the part…" : (error ?? (made && landed === made.ref ? made.line : null));
+  const line = busy
+    ? "Cutting the part…"
+    : (error ?? (made && landed === made.ref ? made.line : uncut && uncut === ref ? "This clip can't be cut here (MP4 and MOV only): trim it in another app and add it again" : null));
   return {
     on,
     wants,
     take,
     busy,
     line,
-    failedNow: !!error && !busy,
+    failedNow: (!!error || (!!uncut && uncut === ref)) && !busy,
+    /** The stored clip in the slot had its part offered and the offer was cancelled. */
+    declined: !!ref && declined === ref && !offer,
+    /** Offer the stored clip's part again (after a Cancel). */
+    again: () => {
+      offered.current.clear();
+      setDeclined(null);
+      setTick((t) => t + 1);
+    },
     offer: shownOffer
       ? {
           ...shownOffer,
           max: rule!.maxSeconds,
           min: rule!.minSeconds,
-          line: lineFor(shownOffer.seconds, rule!.maxSeconds, rule!),
+          line: rule!.line ?? lineFor(shownOffer.seconds, rule!.maxSeconds, rule!),
           use: (a: number, b: number) => void use(a, b),
           cancel: () => {
             const o = shownOffer;
             setOffer(null);
+            if (o.stored) setDeclined(o.stored.ref);
             // A clip picked here and not cut goes in as it is: the tool's own check says why it can't take it.
-            if (!o.stored) cb.current.upload(o.source as File);
+            else cb.current.upload(o.source as File);
           },
         }
       : null,

@@ -18,6 +18,9 @@ import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } 
 import { murekaSongRule, SONG_FIT_OPS } from "@/lib/av/song-fit";
 import { FitUploadNote, useFitUpload } from "@/components/av/fit-upload";
 import { FitClipNote, useClipFit } from "@/components/av/fit-clip";
+import { ListFit, useAddFit, type ListItem } from "@/components/av/fit-list";
+import { ElementClipFix, useElementClipCheck } from "@/components/av/element-clip-fit";
+import { trimLine, trimTarget } from "@/lib/av/reference-fit";
 import { FitCropNote, useCropFit } from "@/components/av/fit-crop";
 import { fitStill, stillEndpoint } from "@/components/av/fit-still";
 import { portraitRatio } from "@/lib/catalog/clip-windows";
@@ -45,7 +48,7 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { placeOf } from "@/lib/place-name";
-import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useNewestRun, useStatus } from "@/lib/api";
+import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsGuest, useIsOwner, useLikelyVisitor, useNewestRun, useStatus } from "@/lib/api";
 import { keyTurnedDown, keyTurnedDownWords, siteRunOf, siteRunRequest } from "@/lib/site-run";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
@@ -121,7 +124,7 @@ import { openModelPicker } from "@/lib/open-model-picker";
 import { GpuReadinessLine } from "@/components/gpu/file-steps";
 import { TroubleActions, TroubleDetails } from "@/components/gpu/trouble";
 import { cn } from "@/lib/utils";
-import { h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
+import { H3_REFERENCE_LIMITS, h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
 import { badgeFor, badgeText, dropGpuRetry, openGpuSetup, setGpuRetry, useGpuBadges } from "@/hooks/use-gpu";
 import { AttachMenu } from "./attach-menu";
 import { useAttach, useComposerBridge, useUploadReaper } from "./attachments";
@@ -875,6 +878,35 @@ export function Composer({ docked }: { docked: boolean }) {
       ? h3ReferenceProblem({ images: refImages, videos: refSeconds.slice(0, refClips.length), audios: refSeconds.slice(refClips.length) })
       : null;
   if (refProblem && !planError) planError = refProblem;
+  // A reference clip or voice longer than H3 takes (15 s each, 15 s of each kind together): the part to use is offered.
+  const refWindow = { min: H3_REFERENCE_LIMITS.minSec, max: H3_REFERENCE_LIMITS.maxSec, total: H3_REFERENCE_LIMITS.groupSec };
+  const refFit = (() => {
+    if (!refMode || framesOn) return null;
+    const lists = [
+      { kind: "video" as const, items: refClips, seconds: refSeconds.slice(0, refClips.length), one: "Clip", all: "The clips" },
+      { kind: "audio" as const, items: refAudios, seconds: refSeconds.slice(refClips.length), one: "Voice", all: "The voice and music clips" },
+    ];
+    for (const l of lists) {
+      const t = trimTarget(l.seconds, refWindow);
+      if (!t) continue;
+      const words = { model: "H3", label: (i: number) => `${l.one} ${i + 1}`, all: l.all };
+      return { ...l, target: t, item: l.items[t.index], line: trimLine(l.seconds, t, refWindow, words), label: words.label(t.index) };
+    }
+    return null;
+  })();
+  // A clip or voice swapped for its part (a stand-in while it is cut), in whichever list holds it.
+  const replaceRef = (from: ListItem, to: SlotValue) =>
+    setDraft((d) => {
+      const swap = (l?: SlotValue[]) => l?.map((r) => ((from.id ? r.id === from.id : r.ref === from.ref) ? { ...to, id: to.id ?? r.id } : r));
+      return { refClips: swap(d.refClips), refAudios: swap(d.refAudios) };
+    });
+  // A guest's clips and voices are kept in this browser: a long one gets its part offered before it is added.
+  const guest = useIsGuest();
+  const clipAdd = useAddFit({ kind: "video", max: refMode && guest ? H3_REFERENCE_LIMITS.maxSec : undefined, min: H3_REFERENCE_LIMITS.minSec, tool: "H3", add: (f) => attach.addListFile("refClips", f, refMode?.videos ?? 0) });
+  const voiceAdd = useAddFit({ kind: "audio", max: refMode && guest ? H3_REFERENCE_LIMITS.maxSec : undefined, min: H3_REFERENCE_LIMITS.minSec, tool: "H3", add: (f) => attach.addListFile("refAudios", f, refMode?.audios ?? 0) });
+  // Clip elements mentioned by name (Kling 4.0: 3–8 s each, 30 s of clips in all): said before the run, with the fix.
+  const elementCheck = useElementClipCheck(catalog.getModel(mentions.request.modelId) ?? model, mentions.request, mentions.mentioned);
+  if (elementCheck.problem && !planError) planError = elementCheck.problem;
   // An end frame runs first and last frames only: References mode's extra images, clips and sound would be left out.
   // It goes before "Write a prompt first": words won't fix it.
   if (refMode && !framesOn && draft.slots.endImage?.ref && (draft.refs.length || refClips.length || refAudios.length) && (!planError || planError === WRITE_PROMPT)) {
@@ -1793,7 +1825,7 @@ export function Composer({ docked }: { docked: boolean }) {
               audios={refAudios}
               images={refImages}
               limits={refMode}
-              onFile={attach.addListFile}
+              onFile={(list, f, max) => (!guest ? attach.addListFile(list, f, max) : list === "refClips" ? clipAdd.take(f) : voiceAdd.take(f))}
               onPick={attach.addToList}
               onRemove={attach.removeFromList}
             />
@@ -1802,6 +1834,23 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {showAttachments && !collapsed && !framesOn && refMode && (refsOpen || refClips.length > 0 || refAudios.length > 0) && (
         <ReferenceOrder images={refImages} clips={refClips.length} audios={refAudios.length} problem={refProblem} />
+      )}
+      {showAttachments && !collapsed && !framesOn && refMode && (
+        <div className="px-3">
+          {clipAdd.note}
+          {voiceAdd.note}
+          <ListFit
+            item={refFit?.item ?? null}
+            seconds={refFit ? refFit.seconds[refFit.target.index] : undefined}
+            kind={refFit?.kind ?? "video"}
+            max={refFit?.target.max}
+            min={H3_REFERENCE_LIMITS.minSec}
+            tool="H3"
+            line={refFit?.line}
+            label={refFit?.label ?? ""}
+            replace={replaceRef}
+          />
+        </div>
       )}
       {showAttachments && !collapsed && !framesOn && <FitUploadNote fit={songFit} className="px-3" />}
       {showAttachments && !collapsed && !framesOn && <FitClipNote fit={clipFit} className="px-3" />}
@@ -1863,7 +1912,9 @@ export function Composer({ docked }: { docked: boolean }) {
                 <TooltipTrigger asChild>
                   <span className={cn("inline-flex h-7 items-center gap-1.5 rounded-full border bg-background pr-2.5 pl-0.5 text-[12px] font-medium", words && "border-dashed text-muted-foreground")}>
                     <span className="grid size-6 place-items-center overflow-hidden rounded-full bg-muted">
-                      {el.references[0] ? (
+                      {el.references[0] && /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(el.references[0]) ? (
+                        <video src={`${el.references[0]}#t=0.1`} muted playsInline preload="metadata" className="size-full object-cover" />
+                      ) : el.references[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={el.references[0]} alt="" className="size-full object-cover" />
                       ) : (
@@ -1881,6 +1932,7 @@ export function Composer({ docked }: { docked: boolean }) {
           })}
         </div>
       )}
+      <ElementClipFix check={elementCheck} className="px-2" />
 
       {/* Upscale → Video: Restore · faithful, Quick · RTX and (while it is offered) Regenerate · creative side by side (on your GPU). */}
       {config.finishChoices && !preset && (
