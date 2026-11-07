@@ -169,7 +169,7 @@ export function ChatHome() {
                 disabled={starting}
                 busy={starting}
                 onSend={(text, image) => go({ kind, text, image })}
-                footer={signedIn ? <EngineLine me={me.data} /> : guest ? <span className="px-1 text-[12.5px] text-muted-foreground">Free with an account</span> : null}
+                footer={signedIn ? <EngineLine me={me.data} /> : known && guest ? <span className="px-1 text-[12.5px] text-muted-foreground">Free with an account</span> : null}
               />
             </div>
           )}
