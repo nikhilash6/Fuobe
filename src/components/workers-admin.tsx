@@ -40,6 +40,8 @@ interface WorkerView {
   lanes: string[];
   /** The lanes it can run only some workflows of (a server from before sends none). */
   partLanes?: Record<string, { runnable: number; of: number }>;
+  /** Node packs it has whose nodes its ComfyUI didn't load (a server or worker from before sends none). */
+  unloaded?: { pack: string; classes: string[]; workflows: string[] }[];
   warmLane: string | null;
   facts: { device?: string; vramBytes?: number; version?: string };
   seenAt: number | null;
@@ -243,6 +245,15 @@ export function LanesEditor({ w, lanes, onSave }: { w: WorkerView; lanes: Lane[]
   );
 }
 
+/** A pack whose nodes didn't load on the worker's PC, in words: what is missing and which workflows it isn't sent. */
+export function unloadedLine(u: { pack: string; classes: string[]; workflows: string[] }): string {
+  const n = u.workflows.length;
+  return (
+    `${u.pack} didn't load in this PC's ComfyUI (missing ${u.classes.join(", ")}; its comfyui.log says why). ` +
+    (n ? `${n === 1 ? "The workflow that needs it isn't" : `The ${n} workflows that need it aren't`} sent here: ${u.workflows.join(", ")}.` : "No workflow here needs those nodes.")
+  );
+}
+
 function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onToken: (t: string) => void }) {
   const qc = useQueryClient();
   const now = useNow(10_000);
@@ -287,6 +298,11 @@ function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onTok
         </div>
       </div>
       <p className="text-[12px] text-muted-foreground">{hoursWords(w.hours)}</p>
+      {w.unloaded?.map((u) => (
+        <p key={u.pack} className="text-[12px] text-destructive">
+          {unloadedLine(u)}
+        </p>
+      ))}
       <label className="flex items-start gap-2 text-[13px]">
         <input
           type="checkbox"

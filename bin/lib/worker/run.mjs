@@ -30,7 +30,7 @@ import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, protocolOf, readControl, saveConfig, savedConfig, writeControl, writeStatus } from "./config.mjs";
 import { BRIEF_COOL_DOWN_MS, BRIEF_EVERY_MS, BRIEF_PAUSE_MS, GpuWatch, MID_JOB_GRACE_MS, othersOf, readGpu, readGpuGen, readGpuTotal } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
-import { inventoryHash, missingModelDirs, modelFiles, packFolders, runtimeFileList } from "./inventory.mjs";
+import { inventoryHash, loadedPacks, missingModelDirs, modelFiles, packFolders, packsAsSeen, readLoaded, runtimeFileList, writeLoaded } from "./inventory.mjs";
 import { freeLocal, localIdle, readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
 import { finishers } from "./finish.mjs";
@@ -396,9 +396,40 @@ async function work(saved, deps, owner) {
 
   // The run-time files it verifies beside the catalog's own (a look's or a motion's LoRAs), as its build lists them.
   const runtime = deps.runtime ?? runtimeFileList();
+  // What its ComfyUI loaded of each pack (GET /object_info after each start), kept across restarts: a pack whose import
+  // failed there doesn't count for the workflows that need its nodes, whatever its folder says.
+  const loadedFile = path.join(cfg.workDir, "loaded-packs.json");
+  let loaded = readLoaded(loadedFile);
   async function scan() {
     packs = packFolders(cfg.comfyDir, index);
-    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir, fileCheck: cfg.fileCheck, runtime }), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
+    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir, fileCheck: cfg.fileCheck, runtime }), nodePacks: packsAsSeen(packs, loaded), media: inv.media };
+    invHash = inventoryHash(inv);
+  }
+  /**
+   * After its ComfyUI started: which of the catalog's node classes it lists, pack by pack. A change goes in the next
+   * beat's hash, and the studio asks for the list again. Not read (an older ComfyUI, no answer): the last reading stays.
+   */
+  async function readLoadedNodes() {
+    let info;
+    try {
+      const r = await comfy.fetch(`${comfy.base}/object_info`, {}, 120_000);
+      if (!r.ok) return;
+      info = await r.json();
+    } catch {
+      return;
+    }
+    if (!info || typeof info !== "object" || !Object.keys(info).length) return;
+    const fresh = loadedPacks(packs, index, info);
+    for (const [name, l] of Object.entries(fresh)) {
+      if (!l.missing.length || JSON.stringify(loaded[name]) === JSON.stringify(l)) continue;
+      const all = (index.packs?.[name]?.classes ?? []).length === l.missing.length;
+      log(`${all ? `The node pack ${name} didn't load in its ComfyUI` : `Some nodes of ${name} didn't load in its ComfyUI`} (${l.missing.join(", ")}; see comfyui.log): the studio sends it no workflow that needs ${all ? "them" : "those"}.`);
+    }
+    for (const [name, l] of Object.entries(fresh)) if (!l.missing.length && loaded[name]?.missing?.length) log(`The node pack ${name} loads in its ComfyUI now.`);
+    if (JSON.stringify(fresh) === JSON.stringify(loaded)) return;
+    loaded = fresh;
+    writeLoaded(loadedFile, loaded);
+    inv = { ...inv, nodePacks: packsAsSeen(packs, loaded) };
     invHash = inventoryHash(inv);
   }
   // One look at a time; the next beat carries a changed hash, and the studio then asks for the list.
@@ -1003,6 +1034,7 @@ async function work(saved, deps, owner) {
                 packs.map((p) => p.folder),
                 { signal: stopStarts.signal },
               )
+              .then(() => readLoadedNodes())
               .catch((e) => {
                 if (stopStarts.signal.aborted) return;
                 if (e instanceof PortBusy) {

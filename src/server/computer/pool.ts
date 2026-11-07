@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { FINISH_KINDS, type FinishTicket } from "@/lib/finish-ticket";
 import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling } from "@/lib/job-ticket";
-import { allLanes, hasFiles, laneLabel, lanesFor, MEDIA_KINDS, needsOf, partLanes, type FileNeed, type Inventory, type Needs } from "@/lib/lanes";
+import { allLanes, hasFiles, laneLabel, lanesFor, MEDIA_KINDS, needsOf, packKey, partLanes, unloadedNodes, type FileNeed, type Inventory, type NodePack, type Needs } from "@/lib/lanes";
 import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
 import { runtimeFileKeys } from "@/lib/runtime-files";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
@@ -418,10 +418,13 @@ export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; wo
   });
   const known = knownFiles();
   const files = sent.filter((f) => !/[\\/]|\.\./.test(f.folder) && fileNameOk(f.name) && known.has(`${f.folder}/${f.name}`));
-  const nodePacks = (Array.isArray(o.nodePacks) ? o.nodePacks : []).slice(0, 500).flatMap((p) => {
+  const nodePacks = (Array.isArray(o.nodePacks) ? o.nodePacks : []).slice(0, 500).flatMap((p): NodePack[] => {
     const x = p as Record<string, unknown>;
     const name = text(x?.name, 128);
-    return name ? [{ name, commit: text(x?.commit, 64) }] : [];
+    if (!name) return [];
+    // The pack's catalog classes its ComfyUI didn't load (a worker that read them; none said: its folder counts).
+    const missing = Array.isArray(x.missingClasses) ? x.missingClasses.slice(0, 500).filter((c): c is string => typeof c === "string" && c.length > 0 && c.length <= 128) : undefined;
+    return [{ name, commit: text(x?.commit, 64), ...(missing && { missingClasses: missing }) }];
   });
   // The kinds of input it takes. None said: an older worker, which doesn't make clips and sound again, so lanesFor gives
   // it pictures only (the list is kept as sent, so its hash stays the one the worker computes).
@@ -438,7 +441,7 @@ export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; wo
 /** The hash a worker sends with each beat, so the studio asks for the whole list only when it changed. */
 export function inventoryHash(inv: Inventory): string {
   const files = [...inv.files].map((f) => `${f.folder}/${f.name}:${f.size}:${f.sha256 ?? ""}`).sort();
-  const packs = [...inv.nodePacks].map((p) => `${p.name}@${p.commit ?? ""}`).sort();
+  const packs = [...inv.nodePacks].map(packKey).sort();
   return sha(JSON.stringify({ files, packs, ...(inv.media && { media: [...inv.media].sort() }) }));
 }
 
@@ -1255,6 +1258,11 @@ export interface WorkerView {
    * worker that can run its own workflow), so Settings offers them with the count.
    */
   partLanes: Record<string, { runnable: number; of: number }>;
+  /**
+   * Node packs whose folder it has but whose nodes its ComfyUI didn't load (it said so after its last start): the classes
+   * missing, and the workflows that need them, which are never sent to it.
+   */
+  unloaded: { pack: string; classes: string[]; workflows: string[] }[];
   /** What its PC may ever run (null: no ceiling of its own), and the allowed lanes inside it. */
   ceiling: Ceiling | null;
   lanesInside: string[];
@@ -1270,6 +1278,22 @@ export interface WorkerView {
   lastCountry: string | null;
   createdAt: number;
   current: { taskId: string; generationId: string; lane: string | null; startedAt: number | null } | null;
+}
+
+/** The packs a worker said its ComfyUI didn't load, each with the workflows that need one of those classes. */
+export function unloadedPacks(inv: Inventory): WorkerView["unloaded"] {
+  const index = loadIndex();
+  const packs = new Map(inv.nodePacks.map((p) => [p.name, p]));
+  return inv.nodePacks
+    .filter((p) => p.missingClasses?.length)
+    .map((p) => ({
+      pack: p.name,
+      classes: p.missingClasses!,
+      workflows: Object.keys(index.workflows)
+        .filter((id) => !index.workflows[id].isolated && unloadedNodes(index.workflows[id], packs).some((c) => c.startsWith(`${p.name}/`)))
+        .sort(),
+    }))
+    .sort((a, b) => a.pack.localeCompare(b.pack));
 }
 
 export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
@@ -1295,6 +1319,7 @@ export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
     warmLane: w.warm_lane,
     lanes: capableOf(w).lanes,
     partLanes: partLanes(loadIndex(), capableOf(w).workflows, sha),
+    unloaded: unloadedPacks(inventoryOf(w)),
     ceiling: ceilingOf(w),
     lanesInside: lanesInside(Object.keys(allowOf(w)), ceilingOf(w)),
     cpuSlot: cpuSlotOf(w),

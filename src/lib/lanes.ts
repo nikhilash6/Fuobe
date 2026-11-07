@@ -114,12 +114,34 @@ export function mediaOf(wf: Pick<IndexWorkflow, "core" | "packs">): ("video" | "
 /**
  * A worker's verified files and node packs (PUT /api/gpu/computer/inventory), and the kinds of input it takes (`media`:
  * a worker without a way to make clips and sound again takes pictures only). No `media` (a worker from before workers
- * made clips and sound again): pictures only.
+ * made clips and sound again): pictures only. A pack's `missingClasses`: the catalog's node classes of that pack its
+ * ComfyUI didn't list after it started (a pack whose import failed lists none); a workflow that needs one of them isn't
+ * the worker's to run. No `missingClasses` (a worker that doesn't say, or hasn't read them yet): its folder counts.
  */
 export interface Inventory {
   files: FileNeed[];
-  nodePacks: { name: string; commit: string | null }[];
+  nodePacks: NodePack[];
   media?: MediaKind[];
+}
+
+export interface NodePack {
+  name: string;
+  commit: string | null;
+  missingClasses?: string[];
+}
+
+/** A pack in an inventory's hash: name@commit, then the classes its ComfyUI didn't load after a "!" (none: as before). */
+export const packKey = (p: NodePack) => `${p.name}@${p.commit ?? ""}${p.missingClasses?.length ? `!${[...p.missingClasses].sort().join(",")}` : ""}`;
+
+/**
+ * The node classes a workflow needs that its worker's ComfyUI didn't load, by pack ("pack/Class"): its packs are there
+ * (by folder), but a class the worker said is missing would stop the run.
+ */
+export function unloadedNodes(wf: Pick<IndexWorkflow, "packs">, packs: ReadonlyMap<string, NodePack>): string[] {
+  return Object.entries(wf.packs).flatMap(([name, classes]) => {
+    const missing = new Set(packs.get(name)?.missingClasses ?? []);
+    return classes.filter((c) => missing.has(c)).map((c) => `${name}/${c}`);
+  });
 }
 
 const fileKey = (f: Pick<FileNeed, "folder" | "name">) => `${f.folder}/${f.name}`;
@@ -133,15 +155,15 @@ export function hasFile(inv: Inventory, need: FileNeed): boolean {
 export const hasFiles = (inv: Inventory, needs: readonly FileNeed[] | undefined): boolean => !needs?.length || needs.every((n) => hasFile(inv, n));
 
 /**
- * What a worker can run with what it has: the workflows whose files and packs are all there, the lanes whose every
- * workflow runs, and, for the other lanes, what it lacks. A task goes only to a worker that can run its workflow.
+ * What a worker can run with what it has: the workflows whose files and packs are all there (and whose packs' node
+ * classes its ComfyUI loaded, where it said), the lanes whose every workflow runs, and, for the other lanes, what it lacks. A task goes only to a worker that can run its workflow.
  */
 export function lanesFor(
   index: RequirementIndex,
   inv: Inventory,
   sha: Sha,
 ): { lanes: string[]; workflows: string[]; missing: { lane: string; label: string; files: string[]; bytes: number }[] } {
-  const packs = new Set(inv.nodePacks.map((p) => p.name));
+  const packs = new Map(inv.nodePacks.map((p) => [p.name, p]));
   const takes = new Set<string>(inv.media ?? ["image"]);
   const ok = new Map<string, boolean>();
   const workflows: string[] = [];
@@ -153,7 +175,8 @@ export function lanesFor(
     const missingFiles = n.files.filter((f) => !hasFile(inv, f));
     const missingPacks = n.packs.filter((p) => !packs.has(p));
     const missingMedia = mediaOf(index.workflows[id]).filter((k) => !takes.has(k));
-    const fine = !missingFiles.length && !missingPacks.length && !missingMedia.length;
+    const notLoaded = unloadedNodes(index.workflows[id], packs);
+    const fine = !missingFiles.length && !missingPacks.length && !missingMedia.length && !notLoaded.length;
     if (fine) workflows.push(id);
     ok.set(lane, (ok.get(lane) ?? true) && fine);
     if (!fine) {
@@ -161,6 +184,7 @@ export function lanesFor(
       for (const f of missingFiles) m.set(fileKey(f), f.size);
       for (const p of missingPacks) m.set(`pack:${p}`, 0);
       for (const k of missingMedia) m.set(`input:${k}`, 0);
+      for (const c of notLoaded) m.set(`node:${c}`, 0);
       lacking.set(lane, m);
     }
   }

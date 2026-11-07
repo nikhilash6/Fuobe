@@ -19,6 +19,8 @@
  * - A model folder that isn't there yet (a drive still locked after a restart): the worker waits for it, says so, and
  *   sends no list of files meanwhile; once the folder is there, the waiting job is taken within one look.
  * - New worker code installed mid-job: it takes no new job, finishes the one it has, and ends to start again on it.
+ * - A node pack whose folder is there but whose nodes its ComfyUI didn't load is said in its list, with the missing
+ *   classes, and kept for its next start.
  */
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -881,5 +883,41 @@ describe("its model folders", () => {
     } finally {
       delete process.env.FUOBE_WORKER_TOKEN_DAYS;
     }
+  });
+});
+
+describe("what its ComfyUI loaded", () => {
+  it("a pack whose folder is there but whose nodes didn't load is said, with its classes, and kept for the next start", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    for (const f of ["PackGood", "PackBroken"]) fs.mkdirSync(path.join(p.comfyDir, "custom_nodes", f), { recursive: true });
+    const requirements = {
+      folders: [],
+      files: {},
+      packs: { PackGood: { repo: "https://github.com/example/PackGood", classes: ["GoodNode"] }, PackBroken: { repo: "https://github.com/example/PackBroken", classes: ["BrokenA", "BrokenB"] } },
+      workflows: {},
+    };
+    // Its ComfyUI lists the good pack's node and the core ones, none of the broken pack's (its import failed).
+    const has = path.join(p.home, "has.json");
+    fs.writeFileSync(has, JSON.stringify({ folders: [], files: {}, workflows: { x: { core: ["KSampler", "SaveImage"], packs: { PackGood: ["GoodNode"] } } } }));
+    const command = [process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", FAKE, "--port", "{port}", "--cors", "off", "--worker-guard", "1", "--has", has];
+    const packsOf = (i: Record<string, unknown>) => i.nodePacks as { name: string; commit: string | null; missingClasses?: string[] }[];
+    const first = start(w, s, p, { requirements, command });
+    const sent = await until(() => s.inventories.find((i) => packsOf(i).some((n) => n.missingClasses)));
+    expect(packsOf(sent).sort((a, b) => a.name.localeCompare(b.name))).toEqual([
+      { name: "PackBroken", commit: null, missingClasses: ["BrokenA", "BrokenB"] },
+      { name: "PackGood", commit: null, missingClasses: [] },
+    ]);
+    expect(p.logs.some((l) => /The node pack PackBroken didn't load in its ComfyUI \(BrokenA, BrokenB; see comfyui\.log\)/.test(l))).toBe(true);
+    expect(p.logs.some((l) => /PackGood/.test(l))).toBe(false);
+    expect(JSON.parse(fs.readFileSync(path.join(p.workDir, "loaded-packs.json"), "utf8"))).toEqual({ PackGood: { commit: null, missing: [] }, PackBroken: { commit: null, missing: ["BrokenA", "BrokenB"] } });
+    first.ctrl.abort();
+    await first.done;
+    // The next start says it from its first list, before its ComfyUI answers again.
+    const before = s.inventories.length;
+    start(w, s, p, { requirements, command });
+    const again = await until(() => s.inventories[before]);
+    expect(packsOf(again).find((n) => n.name === "PackBroken")?.missingClasses).toEqual(["BrokenA", "BrokenB"]);
   });
 });
