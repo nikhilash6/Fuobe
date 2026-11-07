@@ -1,15 +1,29 @@
 // New worker code on disk (docs/gpu-workers.md, "Install and update"). The worker notes the code it started with: its
 // checkout's commit, the build stamp of its shared parts, and the update-ready file in its home folder (an updater
 // writes it once a new build is in place). When any of them changes and the new code is whole (its parts' stamp matches
-// its checkout), the worker takes no new job, finishes the one it has, and ends with UPDATE_EXIT so that whatever
-// started it starts it again at once, on the new code. A half-done update (a checkout whose build isn't there yet)
-// never ends it: it keeps working until the parts match.
+// its checkout), the worker ends with UPDATE_EXIT so that whatever started it starts it again at once, on the new code:
+// once no person's job waits for it (restartDue; at most UPDATE_DEFER_MAX_MS after it found the new code), it takes no
+// new job, finishes the one it has, and ends. A half-done update (a checkout whose build isn't there yet) never ends it:
+// it keeps working until the parts match.
 import fs from "node:fs";
 import path from "node:path";
 import { distProblem, STAMP_FILE } from "./stamp.mjs";
 
 /** The exit code of `fuobe worker run` after it ended to start again on new code. */
 export const UPDATE_EXIT = 75;
+
+/**
+ * The longest a worker puts off its restart on new code while people's jobs wait for it (ms). Past it, it restarts after
+ * the job in hand even with people's jobs waiting.
+ */
+export const UPDATE_DEFER_MAX_MS = 30 * 60_000;
+
+/**
+ * May a worker that found new code at `foundAt` begin its restart now: when no person's job waits that it may take now
+ * (`peopleWaiting`, the beat's claimableNow; null or 0 when the studio doesn't say or none waits), or once `maxMs` has
+ * gone by since it found the code. The owner's own jobs never hold a restart back.
+ */
+export const restartDue = (t, foundAt, peopleWaiting, maxMs = UPDATE_DEFER_MAX_MS) => !(Number(peopleWaiting) > 0) || t - foundAt >= maxMs;
 
 /** The file in the worker's home folder that an updater writes once new code is installed and checked. */
 export const UPDATE_READY_FILE = "update-ready.json";

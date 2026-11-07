@@ -66,6 +66,8 @@ export const runLimitMs = (p90?: number | null, lane?: string | null, loadMs?: n
  * the owner's own jobs (2). A task from before classes had none: the owner's (no account) is the owner's class.
  */
 const CLASS_RANK = "(CASE WHEN class = 'paid' THEN 0 WHEN class = 'owner' OR (class IS NULL AND account IS NULL) THEN 2 ELSE 1 END)";
+/** The owner's own jobs' class (classRank): after every person's run. */
+const OWNER_CLASS = 2;
 export const classRank = (t: Pick<TaskRow, "class" | "account">): number => (t.class === "paid" ? 0 : t.class === "owner" || (!t.class && !t.account) ? 2 : 1);
 /**
  * The order workers serve waiting tasks in: by class, then by rank (a requeued task keeps its own, so it keeps its
@@ -508,8 +510,9 @@ const slotWhere = (w: Pick<WorkerRow, "cpu_slot_json">, slot: WorkerSlot) => (sl
  * that slot had and lost track of; then, if the slot holds none and the worker may take work, the best waiting task that
  * slot can run (its pool, its allowed lanes and their delays, the files and VRAM it needs, the retry rule, and the end of
  * its hours). One task at a time in each slot: a slot that holds a task gets nothing new until that one ends or goes back
- * in line, so one worker's token never holds more than one person's GPU job and one CPU task. Sticky lanes: its warm
- * lane goes first until another lane's best task has waited longer than switch_after_ms (and is older).
+ * in line, so one worker's token never holds more than one person's GPU job and one CPU task. Sticky lanes (pick), among
+ * the owner's own jobs only: its warm lane goes first until another lane's best task has waited longer than
+ * switch_after_ms (and is older). A person's run never waits for a warm lane.
  */
 export function workerClaim(w: WorkerRow, running: string[], now = Date.now(), slot: WorkerSlot = "gpu"): ClaimedTask | null {
   const d = db();
@@ -656,9 +659,10 @@ function beforeWindowEnds(t: TaskRow, w: WorkerRow, now: number): boolean {
 }
 
 /**
- * The best task this worker may run, in the line's order (lineOrder). A task in the lane it has loaded may go ahead of
- * the best one, in the same class, while the best one has waited less than the pick allowance (the install's setting,
- * capped by this worker's switch_after_ms; 0: strict order).
+ * The best task this worker may run, in the line's order (lineOrder). People's runs always come first, and a warm lane
+ * never makes a person wait: while any person's run waits that this worker can take, it takes the best of them. Only
+ * among the owner's own jobs may one in the lane it has loaded go ahead of the best one, while the best one has waited
+ * less than the pick allowance (the install's setting, capped by this worker's switch_after_ms; 0: strict order).
  */
 function pick(w: WorkerRow, now: number, slot: WorkerSlot = "gpu"): { task: TaskRow | null; looked: number } {
   const settings = queueSettings(now);
@@ -671,8 +675,8 @@ function pick(w: WorkerRow, now: number, slot: WorkerSlot = "gpu"): { task: Task
   if (!ok.length) return { task: null, looked };
   const best = ok[0];
   const allowance = Math.min(w.switch_after_ms, settings.pickAllowanceMs);
-  if (slot === "cpu" || allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane) return { task: best, looked };
-  const warm = ok.find((t) => t.lane === w.warm_lane && classRank(t) === classRank(best));
+  if (slot === "cpu" || allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane || classRank(best) !== OWNER_CLASS) return { task: best, looked };
+  const warm = ok.find((t) => t.lane === w.warm_lane && classRank(t) === OWNER_CLASS);
   return { task: warm && (best.rank_at ?? best.created_at) >= now - allowance ? warm : best, looked };
 }
 
@@ -1232,14 +1236,16 @@ export function poolFields(
   const extra = { ...(o.size && { size: o.size }), ...(o.catalogVersion && { catalogVersion: o.catalogVersion }), ...(o.runtime?.length && { runtime: o.runtime }) };
   const needs = found && { ...found, ...extra };
   const lane = poolLane(workflowId);
+  const cls = o.class ?? (o.account ? ("free" as const) : ("owner" as const));
   return {
     pools: ["pool"],
     // Light CPU work (the requirements index marks the workflow cpu) goes to a worker's CPU slot when it has one.
     ...(cpuWorkflow(workflowId) && { slot: "cpu" as const }),
     account: o.account,
-    class: o.class ?? (o.account ? ("free" as const) : ("owner" as const)),
-    // A head start is only inside a class, and never more than a day. A later step of a run keeps the run's place (rankAt).
-    rankAt: o.rankAt ?? now - Math.max(0, Math.min(o.boostMs ?? 0, 24 * 60 * 60_000)),
+    class: cls,
+    // A head start is only for people's runs, only inside their class, and never more than a day: the owner's own jobs
+    // stand in line in the order they came. A later step of a run keeps the run's place (rankAt).
+    rankAt: o.rankAt ?? now - (cls === "owner" ? 0 : Math.max(0, Math.min(o.boostMs ?? 0, 24 * 60 * 60_000))),
     lane,
     needs: needs ?? { workflowId, files: [], packs: [], minVramBytes: 0, ...extra },
     notAfter: o.waitMs ? now + o.waitMs : undefined,

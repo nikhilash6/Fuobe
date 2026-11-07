@@ -401,6 +401,55 @@ describe("order (checks 8, 9)", () => {
     expect(state(long).state).toBe("waiting");
   });
 
+  it("people first: every person's run goes before the owner's own jobs, even one a day older; each in the order they came", () => {
+    const w = worker("people-first");
+    const owner1 = task({ rankAgoMs: 24 * 60 * MIN });
+    const owner2 = task({ rankAgoMs: 23 * 60 * MIN });
+    const guest = task({ account: "guest", rankAgoMs: 2 * MIN });
+    const person = task({ account: "acct-a", rankAgoMs: 1 * MIN });
+    const order: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = claim(w);
+      order.push(c!.id);
+      db().prepare("UPDATE relay_tasks SET state = 'done' WHERE id = ?").run(c!.id);
+    }
+    expect(order).toEqual([guest, person, owner1, owner2]);
+  });
+
+  it("the owner's own jobs get no head start: a boost moves only a person's run up in its class", () => {
+    expect(pool.poolFields("wf-a", { boostMs: 60 * MIN }, clock).rankAt).toBe(clock);
+    expect(pool.poolFields("wf-a", { class: "owner", boostMs: 60 * MIN }, clock).rankAt).toBe(clock);
+    expect(pool.poolFields("wf-a", { account: "acct-a", boostMs: 60 * MIN }, clock).rankAt).toBe(clock - 60 * MIN);
+    expect(pool.poolFields("wf-a", { account: "acct-a", boostMs: 48 * 60 * MIN }, clock).rankAt).toBe(clock - 24 * 60 * MIN);
+  });
+
+  it("a warm lane never makes a person wait: with a pick allowance, a person's run in another lane goes before the warm lane", () => {
+    const w = worker("warm-people", { lanes: [LANE_A, LANE_B] });
+    db().prepare("UPDATE relay_workers SET warm_lane = ?, switch_after_ms = ? WHERE id = ?").run(LANE_A, 30 * MIN, w.id);
+    saveQueueSettings({ ...queueSettings(), pickAllowanceMs: 60 * MIN });
+    try {
+      // The owner's job in the warm lane, older than the person's run that just came in another lane.
+      const ownerWarm = task({ lane: LANE_A, rankAgoMs: 10 * MIN });
+      const person = task({ lane: LANE_B, account: "acct-a", rankAgoMs: 0 });
+      expect(claim(w)?.id).toBe(person);
+      db().prepare("UPDATE relay_tasks SET state = 'done' WHERE id = ?").run(person);
+      // Two people's runs: the older one goes first, whatever lane is warm.
+      const older = task({ lane: LANE_B, account: "acct-b", rankAgoMs: 1 * MIN });
+      const warmPerson = task({ lane: LANE_A, account: "acct-c", rankAgoMs: 0 });
+      expect(claim(w)?.id).toBe(older);
+      db().prepare("UPDATE relay_tasks SET state = 'done' WHERE id = ?").run(older);
+      expect(claim(w)?.id).toBe(warmPerson);
+      db().prepare("UPDATE relay_tasks SET state = 'done' WHERE id = ?").run(warmPerson);
+      // Among the owner's own jobs only, the warm lane still goes first while the best one is inside the allowance.
+      db().prepare("UPDATE relay_workers SET warm_lane = ? WHERE id = ?").run(LANE_B, w.id);
+      const ownerB = task({ lane: LANE_B, rankAgoMs: 0 });
+      expect(claim(w)?.id).toBe(ownerB);
+      expect(state(ownerWarm).state).toBe("waiting");
+    } finally {
+      saveQueueSettings(QUEUE_DEFAULTS);
+    }
+  });
+
   it("tasks in one class go by rank_at, not by arrival", () => {
     const w = worker("rank");
     const later = task({ rankAgoMs: 0 });

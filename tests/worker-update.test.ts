@@ -9,7 +9,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { worker } from "../bin/lib/worker/index.mjs";
 import { buildStamp, STAMP_FILE } from "../bin/lib/worker/stamp.mjs";
-import { CodeWatch, codeOnDisk, headOf, UPDATE_EXIT, UPDATE_READY_FILE } from "../bin/lib/worker/update.mjs";
+import { CodeWatch, codeOnDisk, headOf, restartDue, UPDATE_DEFER_MAX_MS, UPDATE_EXIT, UPDATE_READY_FILE } from "../bin/lib/worker/update.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 // `fuobe worker run` with a loop that ends for new code at once (the loop itself is tested elsewhere).
@@ -56,6 +56,17 @@ describe("the commit a checkout is at", () => {
 });
 
 describe("new code on disk", () => {
+  it("restartDue: at once when no person's job waits (or the studio doesn't say); while one waits, only after the cap", () => {
+    expect(restartDue(1000, 1000, 0)).toBe(true);
+    expect(restartDue(1000, 1000, null)).toBe(true);
+    expect(restartDue(1000, 1000, undefined)).toBe(true);
+    expect(restartDue(1000, 1000, 2)).toBe(false);
+    expect(restartDue(1000 + UPDATE_DEFER_MAX_MS - 1, 1000, 2)).toBe(false);
+    expect(restartDue(1000 + UPDATE_DEFER_MAX_MS, 1000, 2)).toBe(true);
+    expect(restartDue(5000, 1000, 1, 4000)).toBe(true);
+    expect(UPDATE_DEFER_MAX_MS).toBe(30 * 60_000);
+  });
+
   it("nothing changed: no restart", () => {
     const home = tempDir("fuobe-worker-update-home-");
     const w = new CodeWatch({ root: repo(A), dist: parts("s1"), home, everyMs: 0, problem: () => null });

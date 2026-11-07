@@ -172,9 +172,12 @@ install the worker from a zip file, from a copy that someone sends you, or from 
 
 **New code while the worker runs.** At its start, the worker notes three things: the commit of its checkout, the build
 stamp of its parts (`dist/build-stamp.json`), and the file `update-ready.json` in its home folder. It looks at them
-again every 15 seconds. When one of them changes and the parts match the checkout, the worker takes no new job. It
-finishes the job that it has, writes "New worker code is installed: restarting after this job." in its log, and ends
-with exit code 75. Kept results that are not sent yet stay for its next start. Whatever starts the worker can start it
+again every 15 seconds. When one of them changes and the parts match the checkout, the worker restarts once no person's
+job waits for it: while the beat's `claimableNow` says that people's jobs wait that it may take, it goes on taking
+them on the code it runs, and its log says "New worker code is installed: restarting once no person's job waits for it
+(at most 30 min)." The owner's own jobs never hold the restart back. After 30 minutes it restarts anyway. Then it takes
+no new job, finishes the job that it has, writes "New worker code is installed: restarting after this job." in its log,
+and ends with exit code 75. Kept results that are not sent yet stay for its next start. Whatever starts the worker can start it
 again at once on exit code 75. An update that is only half done (a new checkout whose build has not run yet) does not
 end the worker: it works on until the parts match, and checks the stamp once a minute meanwhile. A program that
 installs updates writes `update-ready.json` last, after it has checked the new build.
@@ -383,8 +386,9 @@ default). It also keeps:
 - its class: `paid` or `free` for an account's run (the billing service says which; `free` without one), `owner` for
   the owner's own jobs. People's runs always go first: the owner's jobs wait until no person's run waits that the
   same worker could take.
-- `rank_at`: `created_at`, minus the head start the billing service gave the run inside its class (at most a day). A
-  job that goes back in line keeps its `rank_at`, so it keeps its place.
+- `rank_at`: `created_at`, minus the head start the billing service gave the run inside its class (at most a day). Only
+  people's runs get a head start: the owner's own jobs keep `created_at`, so they go in the order they came. A job that
+  goes back in line keeps its `rank_at`, so it keeps its place.
 - a wait limit: for an account's run, `FUOBE_POOL_WAIT_MIN` (none when it isn't set) or what the billing service set; for the
   owner's own jobs, the owner's wait limit (none by default; see the queue's settings below). It applies only until a
   worker first takes the job: past it, a job that no worker took fails with "The GPUs were busy".
@@ -407,9 +411,10 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
   it lost track of it, and nothing new.
 
 Jobs go by class (`paid`, then `free`, then `owner`), then by the lowest `rank_at` (then the oldest). With the
-pick allowance at 0 (the default), that is the whole rule. Above 0, a worker may take a job in its warm lane (the
-models it has loaded) ahead of the best job, in the same class, while the best job has waited less than the pick
-allowance (or the worker's own `switch_after_ms`, if that is lower). With fair share on, each class goes round its
+pick allowance at 0 (the default), that is the whole rule. Above 0, a worker may take one of the owner's own jobs in its
+warm lane (the models it has loaded) ahead of the owner's best job, while that job has waited less than the pick
+allowance (or the worker's own `switch_after_ms`, if that is lower). A warm lane never makes a person wait: while a
+person's run waits that the worker can take, its next claim takes the best of them, whatever lane it has loaded. With fair share on, each class goes round its
 accounts: an account's next run goes after every other account's run that is an earlier turn of its own. An account's
 turns count the runs a worker holds for it now and those a worker finished for it since the oldest run still waiting
 in that class came.

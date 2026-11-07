@@ -460,7 +460,7 @@ describe("fair share", () => {
 });
 
 describe("the pick allowance", () => {
-  it("0 (the default): strict order whatever the worker has loaded; set, a loaded lane goes first while the best one is young", () => {
+  it("0 (the default): strict order whatever the worker has loaded; set, a loaded lane goes first among the owner's own jobs only", () => {
     const lanes = allLanes(loadIndex(), sha).map((l) => l.lane);
     const w = standInWorker();
     db().prepare("UPDATE relay_workers SET warm_lane = ?, switch_after_ms = ? WHERE id = ?").run(lanes[1], 60 * MIN, w.id);
@@ -473,12 +473,20 @@ describe("the pick allowance", () => {
     const old2 = lineTask({ account: accountId, agoMs: 5 * MIN, lane: lanes[0] });
     qs.saveQueueSettings({ ...qs.queueSettings(), pickAllowanceMs: 10 * MIN });
     db().prepare("UPDATE relay_workers SET warm_lane = ? WHERE id = ?").run(lanes[1], w.id);
+    // A warm lane never makes a person wait: people's runs keep their order, whatever lane is loaded.
+    expect(pool.workerClaim(workerRow(w), [])?.id).toBe(old2);
+    done(old2);
+    // Never across classes: the owner's job in the loaded lane waits behind a person's run in another.
+    const ownerWarm = lineTask({ agoMs: 1 * MIN, lane: lanes[1] });
+    db().prepare("UPDATE relay_workers SET warm_lane = ? WHERE id = ?").run(lanes[0], w.id);
     expect(pool.workerClaim(workerRow(w), [])?.id).toBe(warm);
     done(warm);
-    // Never across classes: the owner's job in the loaded lane waits behind a person's run in another.
-    lineTask({ agoMs: 1 * MIN, lane: lanes[1] });
+    // Among the owner's own jobs, the loaded lane goes first while the best one is young.
+    const ownerOld = lineTask({ agoMs: 5 * MIN, lane: lanes[0] });
     db().prepare("UPDATE relay_workers SET warm_lane = ? WHERE id = ?").run(lanes[1], w.id);
-    expect(pool.workerClaim(workerRow(w), [])?.id).toBe(old2);
+    expect(pool.workerClaim(workerRow(w), [])?.id).toBe(ownerWarm);
+    done(ownerWarm);
+    expect(pool.workerClaim(workerRow(w), [])?.id).toBe(ownerOld);
   });
 });
 

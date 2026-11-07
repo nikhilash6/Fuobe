@@ -174,7 +174,7 @@ function start(
   w: W,
   s: Studio,
   p: Pc,
-  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; env?: Record<string, string | undefined>; codeWatch?: unknown } = {},
+  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; env?: Record<string, string | undefined>; codeWatch?: unknown; updateDeferMs?: number } = {},
 ) {
   const ctrl = new AbortController();
   const cfg = {
@@ -217,6 +217,7 @@ function start(
     ...(o.modelsCheckMs && { modelsCheckMs: o.modelsCheckMs }),
     ...(o.env && { env: o.env }),
     ...(o.codeWatch ? { codeWatch: o.codeWatch } : {}),
+    ...(o.updateDeferMs !== undefined && { updateDeferMs: o.updateDeferMs }),
   });
   const r = { ctrl, done };
   running.push(r);
@@ -678,6 +679,68 @@ describe("new worker code", () => {
     expect(p.logs.filter((l) => l === LINE)).toHaveLength(1);
     expect(p.logs.indexOf(LINE)).toBeLessThan(p.logs.indexOf(`Job ${id} done.`));
     expect(JSON.parse(fs.readFileSync(path.join(p.home, "status.json"), "utf8")).state).toBe("Finishing its job, then restarting on new code");
+  });
+
+  /**
+   * The beat's word on people's jobs (claimableNow), as `people()` says: the harness runs graph jobs, which only the
+   * owner's own jobs are, so the job that stands for a person's here is the owner's, and the beat says it is a person's.
+   */
+  function peopleSay(s: Studio, people: () => number) {
+    const api = apiAs(routes, null);
+    s.intercept = async (path, init) => {
+      if (path !== "/api/gpu/computer/beat") return undefined;
+      const res = await api(path, init);
+      if (!res.ok) return res;
+      const body = (await res.json()) as Record<string, unknown> & { worker?: { token?: { value: string } } };
+      if (body.worker?.token?.value) s.tokens.push(body.worker.token.value);
+      return Response.json({ ...body, claimableNow: people() });
+    };
+  }
+
+  it("installed while a person's job waits: it runs that job first, then restarts; the owner's own job stays for the next start", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const first = addTask();
+    const person = addTask();
+    peopleSay(s, () => (state(person.id).state === "waiting" ? 1 : 0));
+    // Each job runs longer than a beat apart (5 s while busy), so a beat while the person's job runs says none waits.
+    const r = start(w, s, p, { steps: 20, stepMs: 400, codeWatch: watch(p) });
+    await until(async () => {
+      const c = comfyOf(p);
+      return state(first.id).state !== "waiting" && c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 2;
+    });
+    installed(p);
+    await until(() => p.logs.some((l) => l.startsWith("New worker code is installed: restarting once no person's job waits for it")));
+    const owners = addTask();
+    expect(await r.done).toBe("update");
+    expect(state(first.id).state).toBe("done");
+    expect(state(person.id).state).toBe("done");
+    expect(prompts(p)).toBe(2);
+    expect(state(owners.id).state).toBe("waiting");
+    expect(p.logs.filter((l) => l === LINE)).toHaveLength(1);
+    // The restart began only once the person's job no longer waited.
+    expect(p.logs.indexOf(LINE)).toBeGreaterThan(p.logs.indexOf(`Job ${first.id} done.`));
+  }, 120_000);
+
+  it("a person's job keeps the restart back for at most the cap: past it, the worker restarts after the job in hand", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const first = addTask();
+    const waiting = addTask();
+    peopleSay(s, () => 1);
+    const r = start(w, s, p, { steps: 20, stepMs: 150, codeWatch: watch(p), updateDeferMs: 0 });
+    await until(async () => {
+      const c = comfyOf(p);
+      return state(first.id).state !== "waiting" && c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 2;
+    });
+    installed(p);
+    expect(await r.done).toBe("update");
+    expect(state(first.id).state).toBe("done");
+    expect(state(waiting.id).state).toBe("waiting");
+    expect(prompts(p)).toBe(1);
+    expect(p.logs.filter((l) => l === LINE)).toHaveLength(1);
   });
 
   it("installed while it waits for work: it ends at once, with its ComfyUI stopped", async () => {

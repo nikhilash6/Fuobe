@@ -44,7 +44,7 @@ import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { TEXT_DRAIN_MS, TextSlot, textSlotOf, textTurn } from "./text.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
-import { CodeWatch } from "./update.mjs";
+import { CodeWatch, restartDue, UPDATE_DEFER_MAX_MS } from "./update.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "../../..");
@@ -199,8 +199,9 @@ export function siteOf(answer) {
  * runtimeFileList), allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own options), readCounters,
  * readListeners, gpuEveryMs, gpuGraceMs (MID_JOB_GRACE_MS), gpuBriefMs (BRIEF_PAUSE_MS), readGpuGen, idleClaimMs
  * (IDLE_CLAIM_MS), canCleanPictures, and for job tickets: composer
- * (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes, and codeWatch (update.mjs's CodeWatch: new
- * code on disk ends it with "update" once its jobs are done) }.
+ * (src/lib/ticket-compose.ts as built), catalogVersion, catalogDir, allLanes, codeWatch (update.mjs's CodeWatch: new
+ * code on disk ends it with "update" once no person's job waits for it and its jobs are done) and updateDeferMs
+ * (UPDATE_DEFER_MAX_MS) }.
  */
 export async function runWorker(saved, deps) {
   // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
@@ -323,9 +324,13 @@ async function work(saved, deps, owner) {
   let sleptSent = 0;
   // Why it doesn't start the line's work now although it may (the beat's `holding`: { why, since }), or null.
   let holding = null;
-  // New code on disk (update.mjs): it takes no new job, finishes the one it has, and ends to start again on the new code.
+  // New code on disk (update.mjs): once no person's job waits for it (at most updateDeferMs after it found the code), it
+  // takes no new job, finishes the one it has, and ends to start again on the new code.
   const codeWatch = deps.codeWatch ?? new CodeWatch({ root: ROOT, dist: path.join(here, "dist"), home: deps.home });
+  const updateDeferMs = deps.updateDeferMs ?? UPDATE_DEFER_MAX_MS;
   let updating = false;
+  // When it found new code on disk (null: none yet).
+  let updateFoundAt = null;
   // When its last GPU or CPU job ended while it waits to restart on new code (a text job in hand may still end).
   let textDrainAt = null;
   // Its ComfyUI's start, while it goes on (beats go on meanwhile), and the signal that ends a start when the worker stops.
@@ -880,9 +885,15 @@ async function work(saved, deps, owner) {
   try {
     while (!deps.signal?.aborted) {
       const t = now();
-      // New code installed: once no job is in hand (the GPU's and the CPU slot's), it ends, and starts again on it. The
-      // text slot takes jobs until then; a text job in hand then gets up to TEXT_DRAIN_MS to end.
-      if (!updating && codeWatch.check(t)) {
+      // New code installed: a restart never makes a person wait. While people's jobs wait that it may take (the last
+      // beat's claimableNow), it goes on taking them, for at most updateDeferMs. Then it takes no new job, and once no job
+      // is in hand (the GPU's and the CPU slot's), it ends, and starts again on it. The text slot takes jobs until then; a
+      // text job in hand then gets up to TEXT_DRAIN_MS to end.
+      if (updateFoundAt === null && codeWatch.check(t)) {
+        updateFoundAt = t;
+        if (!restartDue(t, updateFoundAt, siteOf(answer).claimable, updateDeferMs)) log(`New worker code is installed: restarting once no person's job waits for it (at most ${Math.round(updateDeferMs / 60_000)} min).`);
+      }
+      if (!updating && updateFoundAt !== null && restartDue(t, updateFoundAt, siteOf(answer).claimable, updateDeferMs)) {
         updating = true;
         log("New worker code is installed: restarting after this job.");
       }
