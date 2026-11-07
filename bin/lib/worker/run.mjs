@@ -35,6 +35,7 @@ import { freeLocal, localIdle, readCounters, readListeners, readLock, splitMemor
 import { takeLock, workerLives } from "./lock.mjs";
 import { finishers } from "./finish.mjs";
 import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
+import { modelAgain, modelFormat } from "./model-file.mjs";
 import { canCleanPictures, cleanPicture, isPicture } from "./picture.mjs";
 import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
@@ -441,6 +442,14 @@ async function work(saved, deps, owner) {
       if (typeof got === "string") return got;
       data = Buffer.from(got);
       fs.writeFileSync(kept, data, { mode: 0o600 });
+    }
+    // A 3D file (a finishing job's GLB is checked by its own script): real by its bytes, and a splat made again.
+    const model = t.finish ? null : modelFormat(input);
+    if (model) {
+      const again = modelAgain(model, data, !!t.ticket);
+      if (again) return arrayBuffer(again);
+      log(`Job ${t.id}: one of its 3D files isn't one it takes.`);
+      return "input-unreadable";
     }
     const kind = mediaKind(input, t.graph);
     if (!kind) {

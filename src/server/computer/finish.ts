@@ -7,6 +7,7 @@ import type { HistoryEntryLike, WantedFile } from "@/lib/relay";
 import { accountTotalBytes, accountUsage, diskFloorBytes, diskFreeBytes, diskHasRoom } from "../account-files";
 import { db } from "../db";
 import { pictureWithoutMetadata } from "../media-clean";
+import { glbSelfContained } from "../model-input";
 import { ACCOUNT_TURNTABLE, accountFinishProblem, FINISHED_3D_OPS, MODEL_FINISH_VERSION, modelToFinish, OWN_ORBIT, withTurntable } from "../model3d-finish";
 import { getSetting } from "../settings";
 import { absolutePath, deleteAsset, getAsset, readRef, saveFile, type Asset } from "../storage";
@@ -276,29 +277,7 @@ export function stopWorkerFinish(generationId: string): void {
   for (const t of live) endTask(t.id, "canceled", { error: "Stopped" });
 }
 
-/**
- * Is this a binary glTF 2 whose every buffer and picture is inside the file (no URI, or a data: URI)? This server
- * checks the worker's web GLB again before it keeps it: it reads only the header and the JSON chunk.
- */
-export function glbSelfContained(b: Buffer): boolean {
-  if (b.length < 20 || b.readUInt32LE(0) !== 0x46546c67 || b.readUInt32LE(4) !== 2 || b.readUInt32LE(16) !== 0x4e4f534a) return false;
-  const len = b.readUInt32LE(12);
-  if (20 + len > b.length) return false;
-  let j: { buffers?: unknown; images?: unknown };
-  try {
-    j = JSON.parse(b.subarray(20, 20 + len).toString("utf8"));
-  } catch {
-    return false;
-  }
-  if (!j || typeof j !== "object") return false;
-  const list = (v: unknown) => (v === undefined ? [] : Array.isArray(v) ? v : null);
-  const parts = [list(j.buffers), list(j.images)];
-  if (parts.some((x) => x === null)) return false;
-  return parts.flat().every((x) => {
-    const uri = (x as { uri?: unknown } | null)?.uri;
-    return uri === undefined || (typeof uri === "string" && uri.startsWith("data:"));
-  });
-}
+export { glbSelfContained };
 
 /** glbSelfContained for a file, reading only its header and its JSON chunk (at most 64 MB of it). */
 export function glbFileSelfContained(file: string): boolean {

@@ -32,6 +32,7 @@ import { ocrText, parseOcrFrame, parseOcrLines, type OcrFrame } from "@/lib/ocr"
 import { getSetting, isCandidate, savedSetting } from "../settings";
 import { decodePng } from "../png";
 import { pictureWithoutMetadata } from "../media-clean";
+import { MODEL_INPUT_MAX_BYTES, modelForWorkers, modelFormat } from "../model-input";
 import { probeAvi } from "../avi-probe";
 import { probeWebm } from "../webm-probe";
 import { adoptFile, contentTypeFor, readRef, saveFile, scratchDir } from "../storage";
@@ -227,7 +228,15 @@ export const workersTake = (kind: "image" | "video" | "audio"): boolean => poolM
  * motion photo's clip): none of that ever leaves for a worker. A JPEG keeps its orientation. A kind of picture whose
  * such parts this server can't blank that way (a GIF, an SVG, an animated WebP, say) is made again from its pixels here.
  */
-export async function forWorkers(data: Buffer, contentType: string, name: string, o: { onWorker?: boolean } = {}): Promise<{ data: Buffer; contentType: string; name: string }> {
+export async function forWorkers(data: Buffer, contentType: string, name: string, o: { onWorker?: boolean; account?: boolean } = {}): Promise<{ data: Buffer; contentType: string; name: string }> {
+  // A 3D file (a splat for Any Angle's angles, a GLB to refine): checked by its bytes as a worker's results are.
+  const format = modelFormat(contentType, name);
+  if (format) {
+    if (data.length > MODEL_INPUT_MAX_BYTES) throw new ProviderError("This 3D file is too big for the shared GPUs.");
+    const sent = modelForWorkers(format, data, o.account ?? !!o.onWorker);
+    if (!sent) throw new ProviderError("The shared GPUs don't take this kind of file.");
+    return { data: sent, contentType: format === "spz" ? "model/x-spz" : format === "glb" ? "model/gltf-binary" : "model/ply", name: name.replace(/\.[^.]*$/, "") + `.${format}` };
+  }
   const kind = contentType.split("/")[0];
   if (!poolMedia().has(kind)) throw new ProviderError(kind === "video" ? "The shared GPUs don't take clips yet." : kind === "audio" ? "The shared GPUs don't take sound yet." : "The shared GPUs don't take this kind of file.");
   if (kind !== "image") return { data, contentType, name };
@@ -1591,7 +1600,7 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   const account = server ? tenantAccount() : undefined;
   if (account) {
     if (!installComfyLocal(worker)) throw new ProviderError(POOL_NOT_LOCAL);
-    if (contentType.startsWith("image/")) ({ data, contentType, name } = await forWorkers(data, contentType, name));
+    if (contentType.startsWith("image/") || modelFormat(contentType, name)) ({ data, contentType, name } = await forWorkers(data, contentType, name, { account: true }));
   }
   const form = new FormData();
   const ext = name.includes(".") ? name.split(".").pop() : contentType.split("/")[1];

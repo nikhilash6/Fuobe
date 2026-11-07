@@ -44,7 +44,7 @@ import { loadIndex } from "./gpu/index-file";
 import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
 import { poolFinishes3d } from "./computer/finish";
 import { holdTiming } from "./queue-settings";
-import { hostedDetails, hostedGuestWords, hostedWords, inputCounts, isOutputsWords, outputsWords, poolAllows, poolAllowsRun, poolAway, poolFitsSize, poolHasFiles, poolMostWords, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTicketsReady, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks, type JobSize } from "./hosted";
+import { hostedDetails, hostedGuestWords, hostedWords, isOutputsWords, outputsWords, poolAllows, poolAllowsRun, poolAway, poolFitsSize, poolHasFiles, poolMostWords, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesKind, poolTicketsReady, POOL_LANE, queueFacts, requestFileKinds, runFacts, runOnPool, workflowPicks, type JobSize } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -399,7 +399,8 @@ export function gateDetail(gate: GateRefusal, place: Place): string | undefined 
  * model, app and kind lists (for the run's own model and every other model it makes a step with, such as a 2K take's
  * finish), a worker allowed its lane, a card that can run it, LoRAs, the files it adds at run time (a look's, a motion's
  * or a recipe's LoRAs: a worker allowed its lane must have verified each one), the kinds of file it sends, and every
- * later step of a chain (planned only once the cheaper checks pass), its run-time files too. `p` null: the billing service didn't answer, so only what needs
+ * later step of a chain (planned only once the cheaper checks pass), its run-time files and the files it reads too (and
+ * Any Angle's angles for its 3D view). `p` null: the billing service didn't answer, so only what needs
  * no policy is checked. Passed, it gives the planned steps for the run's one price.
  *
  * First of all, every step's own setup (own-setup.ts): a model, mode or option that runs on a visitor's own GPU or key
@@ -428,11 +429,7 @@ export function poolGate(
   // The files it adds at run time (a look's, a motion's or a recipe's LoRAs): a run whose worker would refuse it for a
   // file it hasn't verified runs on the visitor's own GPU instead, said before Run (never dropped without a word).
   if (!poolHasFiles(planned.route.endpoint, runLoraFiles(planned, req.params?.extra))) return { ok: false, reason: "files", setup: gpu };
-  if (p) {
-    const inputs = inputCounts(req);
-    const takes = poolUploads(p);
-    if ((inputs.image && !takes.image) || (inputs.video && !takes.video) || (inputs.audio && !takes.audio)) return { ok: false, reason: "inputs", setup: gpu };
-  }
+  if (!requestFileKinds(req).every((k) => poolTakesKind(k, p))) return { ok: false, reason: "inputs", setup: gpu };
   // A size bigger than every GPU here that runs it makes (their PCs' ceilings): said before Run as a label, never a run
   // that fails once pressed (the run's own check stays the last guard: comfyui.ts POOL_TOO_BIG).
   const size = sizeOf ? safeSize(sizeOf) : null;
@@ -451,6 +448,14 @@ export function poolGate(
     if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return { ok: false, reason: "ownSetup", setup: needsGpu(stepEndpoint(s)) };
     // A step that adds files at run time (a relit start frame's LoRA, a Mixed Media still's look) that no worker verified.
     if (s.provider === "comfyui" && s.loras?.length && !poolHasFiles(stepEndpoint(s), s.loras)) return { ok: false, reason: "files", setup: needsGpu(stepEndpoint(s)) };
+    // A file it reads that these GPUs don't take: its own, or one an earlier step makes for it (a splat, a clip).
+    if (s.provider === "comfyui" && !((s.files ?? []).every((k) => poolTakesKind(k, p)) && (s.made ?? []).every((k) => poolTakesKind(k)))) return { ok: false, reason: "inputs", setup: needsGpu(stepEndpoint(s)) };
+  }
+  // Any Angle's 3D view is built here only where its angles (the runs that read it) run here too.
+  if (planned.model.id === ANY_ANGLE.buildModel) {
+    const shot = ownSetupHere(ANY_ANGLE.shotModel, "open");
+    if (shot) return { ok: false, reason: "ownSetup", setup: shot };
+    if ((p && !poolAllows(p, ANY_ANGLE.shotModel)) || !poolTakes(ANY_ANGLE.shotGraph)) return { ok: false, reason: "ownSetup", setup: needsGpu(ANY_ANGLE.shotGraph) };
   }
   const problem = steps && p ? stepsProblem(p, steps) : null;
   if (problem) return { ok: false, reason: problem === hostedWords(placeFor(p)).rtxCard ? "rtxCard" : "notOffered", setup: gpu };

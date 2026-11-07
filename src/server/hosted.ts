@@ -15,7 +15,8 @@ import { holdOf, NOT_HELD, type HoldReason } from "./pool-holds";
 import { poolRunCounts } from "./pool-limits";
 import { getWorkflow, installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
-import { localHead, storedMedia } from "./storage";
+import { modelFormat, modelTaken } from "./model-input";
+import { contentTypeFor, localHead, storedMedia } from "./storage";
 import { runAsTenant } from "./tenant";
 
 /**
@@ -273,6 +274,42 @@ export function inputCounts(req: GenerationRequest): { image: number; video: num
   const video = (i.video ? 1 : 0) + (i.videos?.length ?? 0);
   const audio = [i.audio, i.audio2, i.voiceAudio, i.voiceAudio2].filter(Boolean).length + (i.audios?.length ?? 0);
   return { image, video, audio };
+}
+
+/** A kind of file a run sends to this install's GPUs. */
+export type FileKind = "image" | "video" | "audio" | "model3d" | "file";
+
+/** The kind of a stored file, data: URI or example a run names: a 3D file an account may send them, or another file. */
+export function refKind(ref: string): FileKind {
+  const type = ref.startsWith("data:") ? (/^data:([^;,]*)/.exec(ref)?.[1] ?? "") : contentTypeFor(ref.split(/[?#]/)[0], "");
+  const t = type.toLowerCase();
+  const model = modelFormat(t, ref.split(/[?#]/)[0]);
+  if (model) return modelTaken(model, true) ? "model3d" : "file";
+  if (t === "image/x-exr" || t === "image/aces") return "file";
+  return t.startsWith("image/") ? "image" : t.startsWith("video/") ? "video" : t.startsWith("audio/") ? "audio" : "file";
+}
+
+/** Every kind of file a request reads: its inputs and the files its params.extra names. */
+export function requestFileKinds(req: Pick<GenerationRequest, "inputs" | "params">): FileKind[] {
+  const out = new Set<FileKind>();
+  const c = inputCounts(req as GenerationRequest);
+  for (const k of ["image", "video", "audio"] as const) if (c[k]) out.add(k);
+  if (typeof req.inputs?.model3d === "string" && req.inputs.model3d) out.add(refKind(req.inputs.model3d));
+  for (const v of Object.values(req.params?.extra ?? {})) {
+    for (const x of typeof v === "string" ? [v] : Array.isArray(v) ? v : []) if (typeof x === "string" && /^(data:|\/api\/files\/)/.test(x)) out.add(refKind(x));
+  }
+  return [...out];
+}
+
+/**
+ * Do this install's GPUs take a kind of file: a picture, clip or sound as the policy's uploads and the workers allow (a
+ * file an earlier step made: as the workers allow, `p` left out), a 3D file always (checked by its bytes), and no other
+ * kind on the workers.
+ */
+export function poolTakesKind(kind: FileKind, p?: Pick<Policy, "uploads"> | null): boolean {
+  if (kind === "model3d") return true;
+  if (kind === "file") return !poolOnWorkers();
+  return p ? poolUploads(p)[kind] : poolTakesFiles(kind);
 }
 
 /** The pool's one lane while this install's GPUs are its own ComfyUI server. */

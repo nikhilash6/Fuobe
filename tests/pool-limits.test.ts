@@ -764,8 +764,22 @@ describe("a run's price facts", () => {
     expect(run.megapixels).toBeGreaterThan(0.9);
     expect(run.megapixels).toBeLessThan(1.2);
     expect(run.steps).toEqual([expect.objectContaining({ model: "oss-z-image-turbo", jobs: 1 })]);
-    // A film of two shots: its two clips priced together with one hold; the join costs nothing.
-    const film = await post({ feature: "video", modelId: "oss-wan22-14b-fast", prompt: "x", params: { aspectRatio: "16:9", shots: [{ prompt: "wide shot", duration: 3 }, { prompt: "close-up", duration: 3 }] }, ...SHOWN }, a.cookie);
+    // A film of two shots: its two clips priced together with one hold; the join costs nothing. (The join reads the
+    // clips, so the workers must take clips: until they do, the film is said before Run as the visitor's own GPU.)
+    const filmReq = { feature: "video", modelId: "oss-wan22-14b-fast", prompt: "x", params: { aspectRatio: "16:9", shots: [{ prompt: "wide shot", duration: 3 }, { prompt: "close-up", duration: 3 }] }, ...SHOWN };
+    const prior = process.env.FUOBE_POOL_MEDIA_INPUTS;
+    let film: Awaited<ReturnType<typeof post>>;
+    try {
+      process.env.FUOBE_POOL_MEDIA_INPUTS = "image";
+      const off = await post(filmReq, a.cookie);
+      expect(off.status, JSON.stringify(off.body)).toBe(403);
+      expect(off.body).toMatchObject({ error: "This file runs on your own GPU" });
+      process.env.FUOBE_POOL_MEDIA_INPUTS = "image,video";
+      film = await post(filmReq, a.cookie);
+    } finally {
+      if (prior === undefined) delete process.env.FUOBE_POOL_MEDIA_INPUTS;
+      else process.env.FUOBE_POOL_MEDIA_INPUTS = prior;
+    }
     expect(film.status, JSON.stringify(film.body)).toBe(201);
     const reserves = fake.calls_of("/v1/reserve");
     const filmRun = (reserves.at(-1)!.body as { run: { steps?: { model: string; jobs: number }[] } }).run;

@@ -145,7 +145,7 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp, type RunStamp } from "./run-stamp";
 import { anyHeld, dropGone, dropHold, HELD, NOT_HELD } from "./pool-holds";
 import { FILE_TROUBLE_WORDS, POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
-import { heldLine, placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
+import { heldLine, placeInLine, poolOnWorkers, poolRunsProvider, poolWaitMs, requestFileKinds, runOnPool, type FileKind } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { catalogVersion } from "./computer/catalog-version";
 import { gettingReady, poolLane, queueOfGeneration, type LinePlace } from "./computer/pool";
@@ -1729,6 +1729,9 @@ export interface PlannedStep {
   presetId: string | null;
   waits: boolean;
   loras?: string[];
+  /** The kinds of file a ComfyUI row reads: its own (`files`), and those its earlier steps hand it (`made`). */
+  files?: FileKind[];
+  made?: FileKind[];
 }
 
 const ROLLED_BACK = Symbol("rolled back");
@@ -1754,7 +1757,10 @@ export function plannedSteps(fn: () => unknown): PlannedStep[] {
   return steps;
 }
 
-/** A ComfyUI row with the LoRA files it loads, planned from its request as createGenerations planned it (else as it was). */
+/**
+ * A ComfyUI row with the LoRA files it loads, planned from its request as createGenerations planned it (else as it was),
+ * and the kinds of file it reads.
+ */
 function withRowLoras(s: PlannedStep): PlannedStep {
   if (s.provider !== "comfyui") return s;
   const r = db().prepare("SELECT request_json, depends_on FROM generations WHERE id = ?").get(s.id) as { request_json: string; depends_on: string | null } | undefined;
@@ -1762,11 +1768,23 @@ function withRowLoras(s: PlannedStep): PlannedStep {
   try {
     const req = JSON.parse(r.request_json) as GenerationRequest;
     const deps = !r.depends_on ? 0 : r.depends_on.startsWith("[") ? (JSON.parse(r.depends_on) as unknown[]).length : 1;
+    const made = chainFileKinds(req, deps);
+    const facts = { ...s, files: requestFileKinds(req), ...(made.length && { made }) };
     const loras = runLoraFiles(previewChained(req, deps), req.params?.extra);
-    return loras.length ? { ...s, loras } : s;
+    return loras.length ? { ...facts, loras } : facts;
   } catch {
     return s;
   }
+}
+
+/** The kinds of file a step's earlier steps hand it, by the slots they go to (words for its prompt are no file). */
+export function chainFileKinds(req: GenerationRequest, deps: number): FileKind[] {
+  const kinds = new Set<FileKind>();
+  for (const c of slotsFor(req, deps)) {
+    const k = SLOT_KIND[c.slot];
+    if (k !== "text") kinds.add(k);
+  }
+  return [...kinds];
 }
 
 /** The rows of a run (by id) as steps. */
