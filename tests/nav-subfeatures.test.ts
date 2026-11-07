@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MODEL3D_MODES, readModel3dLink } from "@/lib/av/model3d";
 import { GENJUTSU_MODES, modeOpen } from "@/lib/catalog/genjutsu";
+import { FX_SECTIONS } from "@/lib/fx-tools";
 import { HUB_MODES, type HubKind } from "@/lib/hubs";
 import { megaSubs, studiosMenu } from "@/lib/mega-menus";
 import { megaCurrent } from "@/components/nav/mega-launcher";
@@ -158,9 +159,9 @@ describe("who sees a studio's features", () => {
     for (const kind of VISITORS) {
       expect(visibleTo(finish, kind), kind).toBe(open);
       expect(studioSubs("genjutsu", kind, "sheet").some((e) => e.id === finish.id), kind).toBe(open);
-      const menu = studiosMenu(kind).columns.flatMap((c) => [c.lead!, ...c.rows]).flatMap((e) => e.subs ?? []);
-      expect(menu.some((s) => s.id === finish.id), kind).toBe(open);
     }
+    // Genjutsu lives in Fuobe FX: its Finish is listed there, for whoever may see it.
+    expect(FX_SECTIONS.some((s) => s.items.includes(finish.id))).toBe(true);
   });
 
   it("links Genjutsu's From picture for everyone: it runs on a visitor's own GPU until it opens here", () => {
@@ -274,8 +275,10 @@ describe("the open feature", () => {
     expect(subActive("/upscale")).toBeUndefined(); // Upscale's Image tab is Upscale's own page
     expect(megaCurrent("studios", "/upscale")).toBe("upscale");
     expect(megaCurrent("studios", "/marketing/click-to-ad")).toBe("marketing-click-to-ad");
-    expect(megaCurrent("studios", "/genjutsu", "mode=insert")).toBe("genjutsu-insert");
-    expect(megaCurrent("studios", "/genjutsu")).toBe("genjutsu");
+    // Genjutsu is Fuobe FX's: its menu marks the mode, or the studio itself.
+    expect(megaCurrent("fx", "/genjutsu", "mode=insert")).toBe("genjutsu-insert");
+    expect(megaCurrent("fx", "/genjutsu")).toBe("genjutsu");
+    expect(megaCurrent("studios", "/genjutsu")).toBeUndefined();
   });
 
   it("names every feature once in the whole model", () => {

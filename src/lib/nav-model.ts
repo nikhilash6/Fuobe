@@ -157,14 +157,18 @@ const PAGES: NavEntry[] = [
   },
 ];
 
-/** The launcher's studios (and Apps), column by column; each column's lead first. */
+/**
+ * The launcher's studios (and Apps), column by column; each column's lead first. The studios with no group (Motion
+ * control, Extend video, Reframe, Video tools, Character Swap, Genjutsu) live in Fuobe FX instead (FX_HOME,
+ * src/lib/fx-tools.ts): its menu, page and sidebar group list them.
+ */
 const STUDIOS: NavEntry[] = [
   // Film & video
   { id: "cinema", href: "/cinema", label: "Cinema Studio", short: "Cinema", what: "Direct shots like a film set", kind: "studio", group: "film", lead: true, goals: ["film"], keywords: "film director shots movie cinematic scene", cover: "motion-arc-left", icon: "Clapperboard", popular: true },
   { id: "storyboard", href: "/storyboard", label: "Storyboard", short: "Storyboard", what: "Plan a film frame by frame", kind: "studio", group: "film", goals: ["film"], keywords: "frames story plan shots", cover: "app-shots", icon: "GalleryHorizontal" },
-  { id: "motion-control", href: "/motion-control", label: "Motion control", short: "Motion", what: "Copy any dance or pose", kind: "studio", group: "film", goals: ["film", "people"], keywords: "pose dance transfer choreography", cover: "motion-static", icon: "PersonStanding" },
-  { id: "extend", href: "/extend", label: "Extend video", short: "Extend", what: "Make a clip longer", kind: "studio", group: "film", goals: ["film", "edit"], keywords: "longer continue lengthen", cover: "motion-aerial-pullback", icon: "FastForward" },
-  { id: "reframe", href: "/reframe", label: "Reframe", short: "Reframe", what: "Any shape, vertical first", kind: "studio", group: "film", goals: ["film", "social", "edit"], keywords: "aspect ratio outpaint vertical crop resize", cover: "app-expand-image", icon: "Crop" },
+  { id: "motion-control", href: "/motion-control", label: "Motion control", short: "Motion", what: "Copy any dance or pose", kind: "studio", goals: ["film", "people"], keywords: "pose dance transfer choreography", cover: "motion-static", icon: "PersonStanding" },
+  { id: "extend", href: "/extend", label: "Extend video", short: "Extend", what: "Make a clip longer", kind: "studio", goals: ["film", "edit"], keywords: "longer continue lengthen", cover: "motion-aerial-pullback", icon: "FastForward" },
+  { id: "reframe", href: "/reframe", label: "Reframe", short: "Reframe", what: "Any shape, vertical first", kind: "studio", goals: ["film", "social", "edit"], keywords: "aspect ratio outpaint vertical crop resize", cover: "app-expand-image", icon: "Crop" },
   { id: "video-edit", href: "/video-edit", label: "Edit video", short: "Edit video", what: "Restyle a clip with words", kind: "studio", group: "film", goals: ["film", "edit"], keywords: "video edit restyle change clip", cover: "effect-outfit-switch", icon: "Scissors" },
   { id: "katana", href: "/katana", label: "Katana", short: "Katana", what: "Cut clips into a story", kind: "studio", group: "film", goals: ["film"], keywords: "cut edit clips timeline montage", cover: "app-clipcut", icon: "Swords" },
   {
@@ -174,7 +178,6 @@ const STUDIOS: NavEntry[] = [
     short: "Video tools",
     what: "Trim, matte, depth, captions",
     kind: "studio",
-    group: "film",
     goals: ["film", "edit"],
     keywords: "join trim matte depth captions evolution remove object restore colourise colorize archive old footage black and white",
     cover: "app-video-background-remover",
@@ -205,14 +208,13 @@ const STUDIOS: NavEntry[] = [
     short: "Character swap",
     what: "Swap the star of a clip",
     kind: "studio",
-    group: "people",
     goals: ["people", "edit", "film"],
     keywords: "h3 akatz swap character whole clip shots segments takes",
     cover: "app-character-swap",
     icon: "Drama",
     newUntil: newFor30Days("2026-10-27"),
   },
-  { id: "genjutsu", href: "/genjutsu", label: "Genjutsu", short: "Genjutsu", what: "Insert or swap anyone", kind: "studio", group: "people", goals: ["people", "edit"], keywords: "swap insert character motion transfer", cover: "genjutsu-group-swap", icon: "WandSparkles", newUntil: newFor30Days("2026-10-23") },
+  { id: "genjutsu", href: "/genjutsu", label: "Genjutsu", short: "Genjutsu", what: "Insert or swap anyone", kind: "studio", goals: ["people", "edit"], keywords: "swap insert character motion transfer", cover: "genjutsu-group-swap", icon: "WandSparkles", newUntil: newFor30Days("2026-10-23") },
   { id: "elements", href: "/elements", label: "Elements", short: "Elements", what: "Your people, places, props", kind: "studio", group: "people", goals: ["people", "film"], keywords: "characters places props", cover: "app-figurine", icon: "AtSign" },
   // Sound (the Audio studio leads; its main modes follow it, from HUB_TOOLS)
   {
@@ -381,6 +383,17 @@ const AREA_PAGES: NavEntry[] = [
   { id: "area-create", href: "/create", label: "All of Create", what: "Every way to make or edit", kind: "area", goals: [], keywords: "create make edit tools all overview", icon: "Sparkles" },
   { id: "area-studios", href: "/studios", label: "All studios", what: "Every studio, with previews", kind: "area", goals: [], keywords: "studios all overview every studio", icon: "LayoutGrid" },
   { id: "area-motions", href: "/motions-and-effects", label: "Motions & effects", what: "Camera moves and effects", kind: "area", goals: [], keywords: "motions effects camera moves vfx presets overview", icon: "Film" },
+  {
+    id: "area-fx",
+    href: "/fx",
+    label: "Fuobe FX",
+    what: "Tools for FX artists and teams",
+    kind: "area",
+    goals: [],
+    keywords:
+      "fx vfx visual effects compositing comp compositor roto rotoscope rotoscoping matte mattes alpha key keying green screen clean plate plate cleanup paint out removal depth pass passes exr hdr relight retime frame interpolation upscale recast replace pipeline post production artist team",
+    icon: "Aperture",
+  },
 ];
 
 /**
@@ -421,6 +434,7 @@ const CARD_LINES: Record<string, string> = {
   "audio-sfx": "Any sound effect from a few words.",
   "audio-translate": "Your video, dubbed into another language.",
   "audio-clean": "Remove noise and echo from any voice.",
+  "audio-video": "Sound effects and room tone made to fit your clip.",
 };
 
 /**

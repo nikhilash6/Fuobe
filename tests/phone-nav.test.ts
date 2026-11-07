@@ -194,14 +194,14 @@ describe("the Studios sheet", () => {
       .filter((h) => h !== "/" && h !== "/library" && h !== "/studios");
   const pills = (html: string) => [...html.matchAll(/<a data-sub=""[^>]*>([^<]*)</g)].map((m) => m[1]);
 
-  it("shows every studio, Apps and the Sound modes (34 tiles, 29 studios), in launcher order, each with a real cover", () => {
+  it("shows every studio, Apps and the Sound modes (28 tiles, 23 studios; the FX studios are Fuobe FX's), in launcher order, each with a real cover", () => {
     const html = at("/", () => sheet());
     const all = launcherEntries(undefined);
     // Ads Studio keeps its tile here (the desktop menu lists it under Marketing Studio).
-    expect(all).toHaveLength(34);
+    expect(all).toHaveLength(28);
     // All is one screen of tiles: a studio's features show under one group only.
     expect(pills(html)).toEqual([]);
-    expect(studioCount()).toBe(29);
+    expect(studioCount()).toBe(23);
     expect(tiles(html)).toEqual(all.map((e) => e.href));
     for (const e of all) {
       expect(e.cover, e.id).toBeTruthy();
@@ -235,7 +235,7 @@ describe("the Studios sheet", () => {
   });
 
   it("starts on the group it was opened for", () => {
-    const sizes = { film: 8, social: 6, sell: 6, people: 6, sound: 5, finish: 3 } as const;
+    const sizes = { film: 4, social: 6, sell: 6, people: 4, sound: 5, finish: 3 } as const;
     for (const g of LAUNCHER_GROUPS) {
       const html = at("/", () => sheet({ group: g.id }));
       expect(tiles(html), g.id).toEqual(launcherEntries(undefined, g.id).map((e) => e.href));
@@ -250,9 +250,10 @@ describe("the Studios sheet", () => {
     expect(pills(sell)).toEqual(["Click to Ad", "Ad Multiplier", "From a selfie"]);
     expect(words(sell)).toContain("Marketing Studio");
     const people = at("/", () => sheet({ group: "people" }));
-    expect(pills(people)).toEqual(["From Reference", "Build from scratch", "From a description", "Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
-    // Split soundtrack and Remove dialogue run for visitors with an account (on their own GPU or key): linked too.
-    for (const w of ["Split soundtrack", "Remove dialogue"]) expect(LAUNCHER_GROUPS.some((g) => pills(at("/", () => sheet({ group: g.id }))).includes(w)), w).toBe(true);
+    // Genjutsu's modes are Fuobe FX's (its family of this sheet).
+    expect(pills(people)).toEqual(["From Reference", "Build from scratch", "From a description"]);
+    // Split soundtrack runs for visitors with an account (on their own GPU or key): linked too.
+    for (const w of ["Split soundtrack"]) expect(LAUNCHER_GROUPS.some((g) => pills(at("/", () => sheet({ group: g.id }))).includes(w)), w).toBe(true);
     // Cinema Studio's Blockout is linked for everyone (a guest is offered a free account on a run).
     const film = at("/", () => sheet({ group: "film" }));
     expect(pills(film)).toContain("Blockout");
@@ -262,7 +263,8 @@ describe("the Studios sheet", () => {
     expect(pills(finish)).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export", "From an image", "From several images", "From text", "Pick an object", "Splat"]);
     // Each pill links its feature (a route, or its studio with ?mode= / ?tab=).
     expect(hrefs(sell)).toEqual(expect.arrayContaining(["/marketing/click-to-ad", "/ads", "/ads/multiplier"]));
-    expect(hrefs(people)).toEqual(expect.arrayContaining(["/genjutsu?mode=motion", "/genjutsu?mode=insert"]));
+    expect(hrefs(people)).toEqual(expect.arrayContaining(["/character-sheet?mode=reference"]));
+    expect(hrefs(people)).not.toContain("/genjutsu?mode=motion");
   });
 
   it("marks a studio's feature you are on, and its studio's tile", () => {

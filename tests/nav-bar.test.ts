@@ -144,13 +144,14 @@ describe("which bar item holds the page", () => {
 describe("the launcher's columns", () => {
   const html = render(createElement(LauncherColumns, { kind: undefined, now: Date.parse("2026-11-02") }));
 
-  it("shows every studio, Apps and the Sound column, 8/6/5/6/5/3 (Ads Studio under Marketing Studio), each column's lead first", () => {
+  it("shows every studio, Apps and the Sound column, 4/6/5/4/5/3 (Ads Studio under Marketing Studio; the FX studios are Fuobe FX's), each column's lead first", () => {
     const main = anchors(html).filter((a) => !a.tag.includes("data-sub"));
-    expect(main).toHaveLength(33);
-    expect(new Set(main.map((a) => a.href)).size).toBe(33);
-    expect(launcherColumns(undefined).map((c) => 1 + c.rest.length)).toEqual([8, 6, 6, 6, 5, 3]);
+    expect(main).toHaveLength(27);
+    expect(new Set(main.map((a) => a.href)).size).toBe(27);
+    for (const h of ["/genjutsu", "/character-swap", "/motion-control", "/video-tools", "/extend", "/reframe"]) expect(main.map((a) => a.href), h).not.toContain(h);
+    expect(launcherColumns(undefined).map((c) => 1 + c.rest.length)).toEqual([4, 6, 6, 4, 5, 3]);
     // Ads Studio stays in the model (the phone's sheet keeps its tile); the desktop menu lists it under Marketing Studio.
-    expect(studiosMenu(undefined).columns.map((c) => 1 + c.rows.filter((e) => !e.under).length)).toEqual([8, 6, 5, 6, 5, 3]);
+    expect(studiosMenu(undefined).columns.map((c) => 1 + c.rows.filter((e) => !e.under).length)).toEqual([4, 6, 5, 4, 5, 3]);
     expect(studiosMenu(undefined).columns.flatMap((c) => c.rows.filter((e) => e.under).map((e) => [e.id, e.under]))).toEqual([["ads", "marketing"]]);
     expect(launcherColumns(undefined).map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     expect(html).toContain("grid-cols-6");
@@ -163,7 +164,7 @@ describe("the launcher's columns", () => {
         for (const s of e.subs ?? []) expect(at(s.href, true), s.id).toContain(`data-col="${i}" data-row="${r++}"`);
       }
     }
-    expect(studioCount()).toBe(29);
+    expect(studioCount()).toBe(23);
   });
 
   it("lists what a studio holds inside under it, by the names of its own tabs", () => {
@@ -173,11 +174,12 @@ describe("the launcher's columns", () => {
         .find((e) => e.id === id)
         ?.subs?.map((s) => s.label);
     expect(subs("marketing")).toEqual(["Click to Ad", "Ads Studio", "Ad Multiplier"]);
-    expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
+    // Genjutsu and Video tools are Fuobe FX's (its own menu lists their modes).
+    expect(subs("genjutsu")).toBeUndefined();
+    expect(subs("video-tools")).toBeUndefined();
     expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
     expect(subs("audio")).toEqual(["Speech", "Dialogue", "Voice change", "See all 15"]);
-    expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 13"]);
-    for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
+    for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "FPS Boost"]) expect(words(html)).toContain(w);
     // Under a hairline, quieter than a row, with no picture and no line of their own (nav-subs.css: 24 px
     // names with a mouse, 44 px pills to tap on a touch screen).
     const sub = anchors(html).find((a) => a.tag.includes("data-sub"))!.tag;
@@ -201,7 +203,7 @@ describe("the launcher's columns", () => {
     }
     // The six lead cards load as the panel warms; a row's picture when the row shows (lazy). A studio's features have none.
     expect(count(html, 'loading="eager"')).toBe(6);
-    expect(count(html, 'alt=""')).toBe(33);
+    expect(count(html, 'alt=""')).toBe(27);
   });
 
   it("marks the open page's studio, and nothing else", () => {
@@ -213,11 +215,11 @@ describe("the launcher's columns", () => {
 
   it("on a studio's feature, marks the feature and shows its studio as holding the page (no second aria-current)", () => {
     const studio = (html: string, href: string) => anchors(html).find((a) => a.href === href && !a.tag.includes("data-sub"))?.tag ?? "";
-    const restyle = render(createElement(LauncherColumns, { kind: undefined, current: "genjutsu-restyle", now: 0 }));
-    expect(count(restyle, 'aria-current="page"')).toBe(1);
-    expect(anchors(restyle).find((a) => a.href === "/genjutsu?mode=restyle")?.tag).toContain('aria-current="page"');
-    expect(studio(restyle, "/genjutsu")).toContain('data-active=""');
-    expect(studio(restyle, "/genjutsu")).not.toContain("aria-current");
+    const multi = render(createElement(LauncherColumns, { kind: undefined, current: "image-to-3d-multi", now: 0 }));
+    expect(count(multi, 'aria-current="page"')).toBe(1);
+    expect(anchors(multi).find((a) => a.href === "/image-to-3d?mode=multi")?.tag).toContain('aria-current="page"');
+    expect(studio(multi, "/image-to-3d")).toContain('data-active=""');
+    expect(studio(multi, "/image-to-3d")).not.toContain("aria-current");
     // A lead card too (Marketing Studio on Click to Ad), and a feature the menu doesn't link for a visitor (Character
     // Sheet's modes): its studio is still marked.
     expect(studio(render(createElement(LauncherColumns, { kind: undefined, current: "marketing-click-to-ad", now: 0 })), "/marketing")).toContain('data-active=""');
@@ -225,21 +227,19 @@ describe("the launcher's columns", () => {
     expect(count(cast, 'aria-current="page"')).toBe(0);
     expect(studio(cast, "/character-sheet")).toContain('data-active=""');
     // Nothing is marked as holding a page on a studio's own page.
-    expect(render(createElement(LauncherColumns, { kind: undefined, current: "genjutsu", now: 0 }))).not.toContain("data-active");
+    expect(render(createElement(LauncherColumns, { kind: undefined, current: "image-to-3d", now: 0 }))).not.toContain("data-active");
   });
 
-  it("gives Genjutsu's modes wrapped lines on a short window, and hangs a row's features on its name's column", () => {
+  it("hides a row's features on a short window, and hangs them on its name's column", () => {
     const ul = (id: string) => html.match(new RegExp(`<ul[^>]*data-subs="${id}"[^>]*>`))?.[0] ?? "";
-    expect(ul("genjutsu")).toContain("data-subs-line");
-    // With a mouse it never hides (the line takes over); on a touch screen it needs 1024 px.
-    expect(ul("genjutsu")).not.toContain("[@media(max-height:799.98px)]:hidden");
-    expect(ul("genjutsu")).toContain("[@media(pointer:coarse)_and_(max-height:1023.98px)]:hidden");
-    expect(ul("video-tools")).toContain("[@media(max-height:879.98px)]:hidden");
-    expect(ul("video-tools")).not.toContain("data-subs-line");
+    // Genjutsu (whose modes wrapped into a line) is Fuobe FX's now.
+    expect(ul("genjutsu")).toBe("");
+    expect(ul("image-to-3d")).toContain("[@media(max-height:799.98px)]:hidden");
+    expect(ul("image-to-3d")).not.toContain("data-subs-line");
     // No pad after an odd list (the next row follows 4 px below, as rows do); features under a row are marked to
     // start on its name (nav-subs.css), under a lead card on the card's words.
     expect(html).not.toContain("data-odd");
-    expect(ul("genjutsu")).toContain("data-under");
+    expect(ul("image-to-3d")).toContain("data-under");
     expect(ul("marketing")).not.toContain("data-under");
   });
 
@@ -452,11 +452,12 @@ describe("menu items: one button each, the area's page inside its menu", () => {
   /** The opening tag of a menu item's button. */
   const item = (html: string, id: string) => new RegExp(`<button[^>]*data-bar-menu="${id}"[^>]*>`).exec(html)?.[0] ?? "";
 
-  it("gives Create, Studios, Apps, Motions & effects, Canvas and More one button each, named by its words", () => {
+  it("gives Create, Studios, Fuobe FX, Apps, Motions & effects, Canvas and More one button each, named by its words", () => {
     const html = render(createElement(TopBar));
     const hubs = [
       ["create", "/create"],
       ["studios", "/studios"],
+      ["fx", "/fx"],
       ["apps", "/apps"],
       ["motions", "/motions-and-effects"],
       ["canvas", "/canvas"],
@@ -475,10 +476,10 @@ describe("menu items: one button each, the area's page inside its menu", () => {
     expect(item(html, "studios")).not.toContain("sr-only");
     // The Studios item is still the launcher's disclosure button (search hands focus back to it).
     expect(item(html, "studios")).toContain("data-studios-trigger");
-    for (const name of ["Create menu", "Studios menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).not.toContain(`aria-label="${name}"`);
+    for (const name of ["Create menu", "Studios menu", "Fuobe FX menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).not.toContain(`aria-label="${name}"`);
     expect(html).not.toContain("data-bar-split");
     expect(html).not.toMatch(/role="menu"|role="menuitem"|aria-haspopup="menu"/);
-    expect(count(html, "data-bar-menu=")).toBe(6);
+    expect(count(html, "data-bar-menu=")).toBe(7);
   });
 
   it("marks the item anywhere in its area, its own page included, and only that item", () => {
@@ -494,6 +495,13 @@ describe("menu items: one button each, the area's page inside its menu", () => {
     html = render(createElement(TopBar));
     expect(item(html, "create")).not.toContain("data-active");
     expect(item(html, "canvas")).toContain('data-active="true"');
+    // Fuobe FX: its page and its studios mark its item, not Studios.
+    for (const path of ["/fx", "/genjutsu", "/video-tools/depth"]) {
+      state.path = path;
+      html = render(createElement(TopBar));
+      expect(item(html, "fx"), path).toContain('data-active="true"');
+      expect(item(html, "studios"), path).not.toContain("data-active");
+    }
   });
 
   it("links the launcher's header to every studio with previews", async () => {

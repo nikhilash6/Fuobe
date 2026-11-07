@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { NAV } from "@/components/nav-items";
 import { APPS, EFFECTS, getPreset, MOTIONS } from "@/lib/catalog";
+import { FX_HOME } from "@/lib/fx-tools";
 import { HUB_MODES } from "@/lib/hubs";
 import { navCovers } from "@/lib/nav-covers";
 import { NAV_ICONS } from "@/lib/nav-icons";
@@ -141,9 +142,15 @@ describe("nav model: entries", () => {
     for (const [, rows] of OLD_NAV) for (const [href, label] of rows) expect(NAV_ENTRIES.find((e) => e.href === href)?.label, href).toBe(label);
   });
 
-  it("derives the four groups (Create, Library, Studios, More) exactly as they were, with Kinetic Motion: 45 rows", () => {
-    expect(NAV.map((g) => [g.label, g.items.map((i) => [i.href, i.label])])).toEqual(OLD_NAV);
-    expect(NAV.flatMap((g) => g.items)).toHaveLength(45);
+  it("derives the groups as they were, with Kinetic Motion, and the FX studios moved from Studios to Fuobe FX: 46 rows", () => {
+    const FX_HREFS = ["/genjutsu", "/character-swap", "/motion-control", "/video-tools", "/extend", "/reframe"];
+    const old = OLD_NAV.map(([label, rows]) => [label, label === "Studios" ? rows.filter(([href]) => !FX_HREFS.includes(href)) : rows] as (typeof OLD_NAV)[number]);
+    const moved = OLD_NAV.find(([l]) => l === "Studios")![1].filter(([href]) => FX_HREFS.includes(href));
+    expect(moved).toHaveLength(6);
+    const fx: (typeof OLD_NAV)[number] = ["Fuobe FX", [["/fx", "Fuobe FX"], ...FX_HREFS.map((h) => moved.find(([href]) => href === h)!)]];
+    expect(NAV.map((g) => [g.label, g.items.map((i) => [i.href, i.label])])).toEqual([...old.slice(0, 3), fx, ...old.slice(3)]);
+    expect(NAV.flatMap((g) => g.items)).toHaveLength(46);
+    expect(NAV.find((g) => g.label === "Fuobe FX")?.collapsible).toBe(true);
     expect(NAV.find((g) => g.label === "Studios")?.collapsible).toBe(true);
     // The same rows prefetch eagerly, with an icon each and search words.
     expect(
@@ -163,9 +170,9 @@ describe("nav model: entries", () => {
     for (const g of GOALS) expect(Object.hasOwn(NAV_ICONS, g.icon), g.id).toBe(true);
   });
 
-  it("gives every studio a group, a goal, a short line, a phone label and a real cover", () => {
+  it("gives every studio a group (or Fuobe FX as its home), a goal, a short line, a phone label and a real cover", () => {
     for (const e of NAV_ENTRIES.filter((x) => x.kind === "studio")) {
-      expect(e.group, e.id).toBeTruthy();
+      expect(!!e.group !== FX_HOME.includes(e.id), e.id).toBe(true);
       expect(e.goals.length, e.id).toBeGreaterThan(0);
       // A phone tile shows it on up to two lines of 12.
       expect(e.short, e.id).toBeTruthy();
@@ -208,14 +215,15 @@ describe("nav model: entries", () => {
 });
 
 describe("nav model: launcher", () => {
-  it("has 29 studios, Apps and four Audio modes in six columns of 8, 6, 6, 6, 5 and 3, one lead each", () => {
-    expect(studioCount()).toBe(29);
+  it("has 23 studios, Apps and four Audio modes in six columns of 4, 6, 6, 4, 5 and 3, one lead each (the FX studios are Fuobe FX's)", () => {
+    expect(studioCount()).toBe(23);
     const cols = launcherColumns("owner");
     expect(cols.map((c) => c.group.id)).toEqual(["film", "social", "sell", "people", "sound", "finish"]);
-    expect(cols.map((c) => 1 + c.rest.length)).toEqual([8, 6, 6, 6, 5, 3]);
+    expect(cols.map((c) => 1 + c.rest.length)).toEqual([4, 6, 6, 4, 5, 3]);
+    for (const id of FX_HOME) expect(launcherEntries("owner").map((e) => e.id), id).not.toContain(id);
     expect(cols.map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     for (const g of LAUNCHER_GROUPS) expect(NAV_ENTRIES.filter((e) => e.group === g.id && e.lead)).toHaveLength(1);
-    expect(launcherEntries("guest")).toHaveLength(34);
+    expect(launcherEntries("guest")).toHaveLength(28);
     expect(launcherEntries("guest", "sell").map((e) => e.id)).toEqual(["marketing", "ads", "kinetic", "mixed-media", "moodboards", "photodump"]);
     expect(launcherEntries(undefined, "finish").map((e) => e.id)).toEqual(["upscale", "image-to-3d", "apps"]);
     // Sound: the Audio studio, then Clean up voice (its first mode), music, sound effects, translate & dub; Lipsync stays in Social.
@@ -228,7 +236,7 @@ describe("nav model: launcher", () => {
     expect(entry("storyboard")?.group).toBe("film");
   });
 
-  it("shows the same 34 to everyone", () => {
+  it("shows the same 28 to everyone", () => {
     for (const k of KINDS) expect(launcherEntries(k).map((e) => e.id)).toEqual(launcherEntries("owner").map((e) => e.id));
   });
 });

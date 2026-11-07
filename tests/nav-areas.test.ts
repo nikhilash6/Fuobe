@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 /*
@@ -14,7 +15,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { AREAS, areaCount, areaOfPath, areaPageOf, areaSections, cardsToShow, PILL_ONLY, rankCards } = await import("@/lib/nav-areas");
-const { appsAreaShowcase, areaCover, areaShowcase, MOTIONS_AREA_LINE_MAX, MOTIONS_AREA_WALL, motionsAreaShowcase, premiumFirst } = await import("@/lib/area-showcase");
+const { appsAreaShowcase, areaCover, areaShowcase, fxItem, fxSections, fxShowcase, MOTIONS_AREA_LINE_MAX, MOTIONS_AREA_WALL, motionsAreaShowcase, premiumFirst } = await import("@/lib/area-showcase");
+const { FX_HOME, FX_SECTIONS, fxNavIds, inFx } = await import("@/lib/fx-tools");
 const { CREATE_COLUMNS, activeEntry, entry, launcherEntries, LAUNCHER_GROUPS, NAV_ENTRIES, studioCount, visibleTo } = await import("@/lib/nav-model");
 const createMenu = await import("@/components/nav/create-menu");
 const { barActive, prefetchHrefs } = await import("@/components/nav/top-bar");
@@ -49,9 +51,12 @@ describe("what each area lists", () => {
     for (const id of ["create", "studios"] as const)
       for (const kind of [undefined, "guest", "account"] as const)
         for (const i of ids(id, kind)) expect(entry(i)!.visibility ?? [], `${id}: ${i}`).not.toEqual(["owner"]);
-    // Restore & colourise is everyone's: it runs on a visitor's own GPU or key, and says so.
-    expect(ids("studios", "owner")).toContain("video-tools-restore");
-    expect(ids("studios", "guest")).toContain("video-tools-restore");
+    // Restore & colourise is everyone's: it runs on a visitor's own GPU or key, and says so (its home is Fuobe FX).
+    const fx = (kind: (typeof KINDS)[number]) => fxSections(kind).flatMap((s) => [...s.cards, ...s.pills]);
+    expect(fx("owner")).toContain("video-tools-restore");
+    expect(fx("guest")).toContain("video-tools-restore");
+    for (const kind of [undefined, "guest", "account"] as const)
+      for (const i of fx(kind)) if (entry(i)) expect(entry(i)!.visibility ?? [], `fx: ${i}`).not.toEqual(["owner"]);
   });
 
   it("gives every card a cover from the catalog, or a picture drawn for it, and a line that fits two lines", async () => {
@@ -109,11 +114,12 @@ describe("/studios", () => {
     const create = new Set(areaSections("create", "guest").flatMap((s) => s.cards));
     const studios = areaSections("studios", "guest");
     for (const id of studios.flatMap((s) => s.cards)) expect(create.has(id), id).toBe(false);
-    for (const id of ["video-edit", "extend", "reframe", "upscale", "image-to-3d"]) {
+    for (const id of ["upscale", "lipsync", "audio-translate", "image-to-3d"]) {
       expect(create.has(id), id).toBe(true);
       expect(studios.flatMap((s) => s.chips), id).toContain(id);
     }
-    for (const id of ["katana", "motion-control", "character-swap", "genjutsu", "video-tools", "audio"]) expect(create.has(id), id).toBe(false);
+    for (const id of ["katana", "video-edit", "cinema", "audio"]) expect(create.has(id), id).toBe(false);
+    for (const id of ["katana", "video-edit"]) expect(studios.flatMap((s) => s.cards), id).toContain(id);
   });
 
   it("counts its studios as the bar does", () => {
@@ -123,11 +129,11 @@ describe("/studios", () => {
   it("lists what each studio holds inside in a row of its own, never a pill that repeats a card or a pill", () => {
     const sections = areaSections("studios", "guest");
     const subsOf = (section: string, parent: string) => sections.find((s) => s.id === section)!.subs!.find((x) => x.parent === parent)?.ids ?? [];
-    expect(subsOf("film", "video-tools")).toContain("video-tools-captions");
-    expect(subsOf("film", "video-tools")).not.toContain("video-tools-matte"); // Video tools' first mode is the studio's own page
     // Ads Studio is a studio with a card or pill of its own here: Marketing Studio's row has the other two.
     expect(subsOf("sell", "marketing")).toEqual(["marketing-click-to-ad", "ads-multiplier"]);
-    expect(subsOf("people", "genjutsu")).toEqual(["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-picture", "genjutsu-finish"]);
+    // Genjutsu and Video tools live in Fuobe FX: no row of theirs here.
+    expect(subsOf("people", "genjutsu")).toEqual([]);
+    expect(subsOf("film", "video-tools")).toEqual([]);
     expect(subsOf("people", "character-sheet")).toEqual(["character-sheet-reference", "character-sheet-cast", "character-sheet-describe"]);
     expect(subsOf("sound", "audio")).not.toContain("audio-music"); // a card of its own
     for (const s of sections) {
@@ -137,9 +143,8 @@ describe("/studios", () => {
       for (const c of s.chips) expect(s.cards.map((x) => entry(x)!.href), `${s.id}: ${c}`).not.toContain(entry(c)!.href);
       for (const x of s.subs ?? []) for (const c of x.ids) expect(hrefs.has(entry(c)!.href), `${s.id}: ${c}`).toBe(false);
     }
-    // Genjutsu's From picture (it runs on a visitor's own GPU) and Cinema Studio's Blockout are linked for everyone.
+    // Cinema Studio's Blockout is linked for everyone.
     const owner = areaSections("studios", "owner");
-    expect(owner.find((s) => s.id === "people")!.subs!.find((x) => x.parent === "genjutsu")!.ids).toContain("genjutsu-picture");
     expect(owner.find((s) => s.id === "film")!.subs!.find((x) => x.parent === "cinema")!.ids).toEqual(["cinema-blockout"]);
     expect(subsOf("film", "cinema")).toEqual(["cinema-blockout"]);
   });
@@ -256,7 +261,11 @@ describe("which bar item and tab a page marks", () => {
       ["/assist", undefined],
       ["/assist/skills", undefined],
       ["/studios", "studios"],
-      ["/extend", "studios"],
+      ["/extend", "fx"],
+      ["/genjutsu", "fx"],
+      ["/video-tools/depth", "fx"],
+      ["/fx", "fx"],
+      ["/katana", "studios"],
       ["/audio/music", "studios"],
       ["/apps", "apps"],
       ["/apps/app-any-angle", "apps"],
@@ -300,5 +309,100 @@ describe("which bar item and tab a page marks", () => {
 
   it("lets search find the area pages", () => {
     for (const a of AREAS) expect(entry(a.entryId)?.href, a.id).toBe(a.href);
+  });
+});
+
+describe("Fuobe FX (/fx)", () => {
+  /** The route folder a link's path lives in (src/app/(studio)/<first segment>), so every link opens a real page. */
+  const routeExists = (href: string) => existsSync(`src/app/(studio)/${href.split(/[?#]/)[0].split("/")[1]}`);
+
+  it("is a main area with its own entry, page and search words", () => {
+    const a = AREAS.find((x) => x.id === "fx")!;
+    expect(a).toMatchObject({ href: "/fx", label: "Fuobe FX", title: "Fuobe FX" });
+    expect(entry(a.entryId)).toMatchObject({ href: "/fx", kind: "area" });
+    for (const w of ["vfx", "fx", "compositing", "roto", "matte", "clean plate", "exr"]) expect(entry("area-fx")!.keywords, w).toContain(w);
+    expect(existsSync("src/app/(studio)/fx/page.tsx")).toBe(true);
+  });
+
+  it("names only real entries and apps, each opening a page that exists", () => {
+    for (const s of FX_SECTIONS)
+      for (const id of s.items) {
+        const it = fxItem(id);
+        expect(it, `${s.id}: ${id}`).toBeDefined();
+        expect(it!.href.startsWith("/"), id).toBe(true);
+        expect(routeExists(it!.href), `${id}: ${it!.href}`).toBe(true);
+        if (id.startsWith("app-")) expect(APPS.some((p) => p.id === id), id).toBe(true);
+      }
+    for (const id of fxNavIds()) expect(entry(id), id).toBeDefined();
+  });
+
+  it("is the one home of the FX studios: a card here, and in no Studios column, /studios or /create section", () => {
+    for (const kind of KINDS) {
+      const cards = fxSections(kind).flatMap((s) => s.cards);
+      for (const id of FX_HOME) {
+        expect(cards, `${kind}: ${id}`).toContain(id);
+        expect(entry(id)!.group, id).toBeUndefined();
+        expect(launcherEntries(kind).map((e) => e.id), id).not.toContain(id);
+        for (const area of ["create", "studios"] as const) expect(ids(area, kind), `${area}: ${id}`).not.toContain(id);
+      }
+    }
+    // Their links, names and search words stay as they were.
+    expect(entry("genjutsu")).toMatchObject({ href: "/genjutsu", label: "Genjutsu" });
+    expect(entry("video-tools")).toMatchObject({ href: "/video-tools", label: "Video tools" });
+    expect(entry("extend")).toMatchObject({ href: "/extend", label: "Extend video" });
+  });
+
+  it("links every mode and tab of its studios a viewer may open, so none is left without a menu", () => {
+    for (const kind of KINDS) {
+      const hrefs = new Set(fxSections(kind).flatMap((s) => [...s.cards, ...s.pills]).map((id) => fxItem(id)!.href));
+      for (const e of NAV_ENTRIES.filter((x) => x.parent && FX_HOME.includes(x.parent) && visibleTo(x, kind))) expect(hrefs.has(e.href), `${kind}: ${e.id}`).toBe(true);
+    }
+  });
+
+  it("draws as cards only the FX studios and their own modes; shared tools and apps are pills", () => {
+    for (const kind of KINDS)
+      for (const s of fxSections(kind))
+        for (const id of s.cards) {
+          const e = entry(id);
+          expect(e && (inFx(e) || id === "upscale-fps"), `${s.id}: ${id}`).toBeTruthy();
+        }
+    const pills = fxSections("guest").flatMap((s) => s.pills);
+    for (const id of ["upscale", "color-grade", "layers", "inpaint", "image-to-3d", "app-recast", "app-face-swap"]) expect(pills, id).toContain(id);
+  });
+
+  it("shows full rows, each cover once, no link twice in a section, lines that read whole, and no status words", async () => {
+    const { count, sections } = await fxShowcase();
+    expect(count).toBeGreaterThan(40);
+    const covers = sections.flatMap((s) => s.cards.map((c) => c.card!.id));
+    expect(new Set(covers).size).toBe(covers.length);
+    for (const s of sections) {
+      expect([0, 4, 8], s.id).toContain(s.cards.length);
+      expect(`${s.title} ${s.line}`).not.toMatch(STATUS);
+      const hrefs = [...s.cards, ...s.pills].map((x) => x.href);
+      expect(new Set(hrefs).size, s.id).toBe(hrefs.length);
+      for (const c of s.cards) {
+        expect(PRESET_COVERS, c.id).toHaveProperty(c.card!.id);
+        expect(c.line, c.id).toMatch(/[.!?]$/);
+        expect(c.line.length, c.id).toBeLessThanOrEqual(64);
+        expect(`${c.label} ${c.line}`, c.id).not.toMatch(STATUS);
+      }
+      for (const p of [...s.pills, ...s.ownerPills]) expect(p.label, p.id).not.toMatch(STATUS);
+    }
+    // No two links on the page read the same ("Relight" the mode and "Relight" the app).
+    const names = sections.flatMap((s) => [...s.cards, ...s.pills].map((x) => x.label.toLowerCase()));
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([]);
+    // The first section leads with its full two rows.
+    expect(sections[0].cards).toHaveLength(8);
+  });
+
+  it("marks Fuobe FX in the bar for its page and its studios, and the Studios tab on a phone", () => {
+    expect(areaPageOf("/fx")).toBe("fx");
+    expect(barActive("/fx")).toMatchObject({ fx: true, page: "fx", studios: false });
+    expect(barActive("/genjutsu")).toMatchObject({ fx: true, studios: false, page: undefined });
+    expect(barActive("/cinema")).toMatchObject({ fx: false, studios: true });
+    const tab = (p: string) => activePhoneTab(p, null, activeEntry(p, new URLSearchParams()));
+    expect(tab("/fx")).toBe("studios");
+    expect(tab("/reframe")).toBe("studios");
+    expect(prefetchHrefs(undefined, "fx")).toEqual(expect.arrayContaining(["/fx", "/genjutsu", "/video-tools", "/extend"]));
   });
 });

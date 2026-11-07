@@ -1,6 +1,6 @@
 /**
  * The area pages: one page for each of the bar's menus that holds a family of things (Create, Studios, Apps, Motions &
- * effects), showing everything inside it as Home's "Studios and tools" section does. Pure data and helpers from the
+ * effects, Fuobe FX), showing everything inside it as Home's "Studios and tools" section does. Pure data and helpers from the
  * navigation model (no React, no catalog), so the server's pages and the bar share them. ("Hub" already names the
  * Audio, Upscale and Video tools modes in src/lib/hubs.ts, so these are "areas".)
  *
@@ -21,8 +21,9 @@ import {
   type NavIconName,
   type ViewerKind,
 } from "./nav-model";
+import { inFx } from "./fx-tools";
 
-export type AreaId = "create" | "studios" | "apps" | "motions";
+export type AreaId = "create" | "studios" | "apps" | "motions" | "fx";
 
 /** One section of an area page: its heading and line, the entries drawn as cover cards, then the rest as pills. */
 export interface AreaSection {
@@ -80,6 +81,14 @@ export const AREAS: readonly Area[] = [
     title: "Motions & effects",
     line: "Camera moves a film crew would make, and effects from one photo.",
     entryId: "area-motions",
+  },
+  {
+    id: "fx",
+    href: "/fx",
+    label: "Fuobe FX",
+    title: "Fuobe FX",
+    line: "Tools for FX artists and teams, grouped by the stage of the shot they help with.",
+    entryId: "area-fx",
   },
 ];
 
@@ -140,10 +149,11 @@ function createSections(): AreaSection[] {
     {
       id: "edit-clip",
       title: "Edit a clip",
-      line: "Restyle, lengthen, reshape or sharpen a clip you have.",
+      line: "Sharpen a clip, dub it, sync the lips or give it sound.",
       icon: "Scissors",
-      cards: ["video-edit", "extend", "reframe", "upscale"],
-      chips: ["katana", "motion-control", "character-swap", "genjutsu", "video-tools", ...toolsOf(["upscale"])],
+      cards: [...EDIT_CLIP_CARDS],
+      // The FX tools (Genjutsu, Extend video, Reframe, Video tools…) have their home on Fuobe FX: its page is the pill.
+      chips: ["video-edit", "katana", ...toolsOf(["upscale"]), "area-fx"],
     },
     {
       id: "sound",
@@ -151,10 +161,13 @@ function createSections(): AreaSection[] {
       line: "Voices, music and sound effects for anything you make.",
       icon: "AudioLines",
       cards: [],
-      chips: ["audio", ...toolsOf(["audio"])],
+      chips: ["audio", ...toolsOf(["audio"]).filter((id) => !EDIT_CLIP_CARDS.includes(id))],
     },
   ];
 }
+
+/** /create's "Edit a clip" cards: what changes a clip you have, but the FX tools (their home is Fuobe FX). */
+const EDIT_CLIP_CARDS: readonly string[] = ["upscale", "lipsync", "audio-translate", "audio-video"];
 
 /** The pages that are a card on /create: a pill on /studios. */
 const CREATE_CARDS: ReadonlySet<string> = new Set(createSections().flatMap((s) => s.cards));
@@ -243,8 +256,8 @@ const NO_SEARCH = new URLSearchParams();
 
 /**
  * The bar item that holds a page, one per page: Create for its tools (not Canvas or Assist, which have items of their
- * own), Studios for a studio and its tools, Apps for the apps, Motions & effects for both galleries; and each for its
- * own area page. None for Home, Canvas, Assist, Library and settings.
+ * own), Studios for a studio and its tools, Apps for the apps, Motions & effects for both galleries, Fuobe FX
+ * for its studios (FX_HOME); and each for its own area page. None for Home, Canvas, Assist, Library and settings.
  */
 export function areaOfPath(pathname: string): AreaId | undefined {
   const e = pathname ? activeEntry(pathname, NO_SEARCH) : undefined;
@@ -252,6 +265,7 @@ export function areaOfPath(pathname: string): AreaId | undefined {
   const own = AREAS.find((a) => a.entryId === e.id);
   if (own) return own.id;
   if (e.id === "motions" || e.id === "effects") return "motions";
+  if (inFx(e)) return "fx";
   if (e.kind === "create" && e.id !== "canvas" && e.id !== "assist") return "create";
   if (e.kind === "studio") return "studios";
   return undefined;

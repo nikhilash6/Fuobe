@@ -15,7 +15,7 @@ import { megaCurrent } from "./mega-launcher";
 import { useMegaMenu, warmMenu } from "./mega-data";
 
 /** The families the sheet shows, in the bar's order. */
-export const SHEET_FAMILIES: readonly MegaId[] = ["studios", "apps", "motions", "canvas"];
+export const SHEET_FAMILIES: readonly MegaId[] = ["studios", "fx", "apps", "motions", "canvas"];
 
 /** How many of each column a fetched menu's "All" shows (so the whole set fits a 390 x 844 phone). */
 const ALL_PER_COLUMN = 4;
@@ -142,7 +142,7 @@ function Shortcuts({ onSearch }: { onSearch: () => void }) {
   );
 }
 
-/** The sheet's family switch, in its title row: Studios · Apps · Motions & effects · Canvas. */
+/** The sheet's family switch, in its title row: Studios · Fuobe FX · Apps · Motions & effects · Canvas. */
 export function FamilySwitch({ family, onFamily }: { family: MegaId; onFamily: (f: MegaId) => void }) {
   return (
     <TabRow role="group" aria-label="What to show" follow className="min-w-0 flex-1 gap-0.5">

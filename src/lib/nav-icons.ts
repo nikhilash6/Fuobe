@@ -3,6 +3,7 @@
  * icons listed here are bundled; tests/nav-model.test.ts checks every name the model uses is here.
  */
 import {
+  Aperture,
   AtSign,
   AudioLines,
   Bell,
@@ -70,6 +71,7 @@ import {
 } from "lucide-react";
 
 export const NAV_ICONS = {
+  Aperture,
   AtSign,
   AudioLines,
   Bell,

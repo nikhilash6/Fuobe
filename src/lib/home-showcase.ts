@@ -266,10 +266,12 @@ export function homeCard(id: string): PresetCardData {
 export const presetHref = (id: string) => (id.startsWith("app-") ? `/apps/${id}` : `/video?preset=${id}`);
 
 const navItems = (label: string) => NAV.find((g) => g.label === label)?.items ?? [];
-export const navLabel = (href: string) => [...navItems("Create"), ...navItems("Studios")].find((i) => i.href === href)?.label ?? href;
+/** The places to create: Create's, the studios and Fuobe FX's (its studios moved there from Studios, its page first). */
+const placeItems = () => [...navItems("Create"), ...navItems("Studios"), ...navItems("Fuobe FX")];
+export const navLabel = (href: string) => placeItems().find((i) => i.href === href)?.label ?? href;
 
 /** The navigation's places to create, but Home. */
-export const homeDestinations = () => [...navItems("Create"), ...navItems("Studios")].filter((i) => i.href !== "/");
+export const homeDestinations = () => placeItems().filter((i) => i.href !== "/");
 
 /** The places to create that have no card or section of their own on Home, in the navigation's order. */
 export const homePills = () =>

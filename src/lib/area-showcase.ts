@@ -5,10 +5,11 @@
  */
 import "server-only";
 import { cacheLife } from "next/cache";
-import { EFFECTS, MOTIONS } from "@/lib/catalog";
+import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
+import { FX_COVERS, FX_SECTIONS, fxCardable, isFxApp } from "@/lib/fx-tools";
 import { HOME_EFFECTS, HOME_MOTIONS, HOME_STUDIOS, homeCard, homeShowcase, presetHref, type HomeFacts } from "@/lib/home-showcase";
-import { areaCount, areaSections, rankCards, type AreaId } from "@/lib/nav-areas";
-import { entry, NAV_ENTRIES, subLabel, visibleTo, type NavEntry } from "@/lib/nav-model";
+import { areaCount, areaSections, cardsToShow, PILL_ONLY, rankCards, type AreaId } from "@/lib/nav-areas";
+import { entry, NAV_ENTRIES, subLabel, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
 import type { PresetCardData } from "@/lib/preset-cards";
 import { featuredAll, featuredBand } from "@/lib/preset-featured";
 
@@ -134,6 +135,117 @@ export async function areaShowcase(id: AreaId) {
 }
 
 export type AreaShowcase = Awaited<ReturnType<typeof areaShowcase>>;
+
+/** One Fuobe FX item resolved: a navigation entry or a one-click app, with its cover (a preset id) when it has one. */
+interface FxItem {
+  id: string;
+  href: string;
+  label: string;
+  line: string;
+  icon: string;
+  cover?: string;
+  /** It may be a card here: an FX studio or one of its modes (the rest have their card elsewhere). */
+  cardable: boolean;
+  /** Who may see it (the navigation's rule; an app is everyone's). */
+  visible: (kind: ViewerKind | undefined) => boolean;
+}
+
+/** An app's line: its description's first sentence, with a full stop. */
+const appLine = (description: string) => {
+  const first = (description.split(/\.\s/)[0] ?? description).trim().replace(/[.…]+$/, "");
+  return `${first}.`;
+};
+
+/** A Fuobe FX item by its id (src/lib/fx-tools.ts): a navigation entry or an app; undefined when neither exists. */
+export function fxItem(id: string, facts?: HomeFacts): FxItem | undefined {
+  if (isFxApp(id)) {
+    const p = APPS.find((a) => a.id === id);
+    if (!p) return undefined;
+    return { id, href: presetHref(id), label: p.name, line: appLine(p.description), icon: "LayoutGrid", cardable: false, visible: () => true };
+  }
+  const e = entry(id);
+  if (!e) return undefined;
+  const cover = FX_COVERS[id] ?? areaCover(id);
+  const line = facts ? lineOf(e, facts) : (e.line ?? e.what);
+  return {
+    id,
+    href: e.href,
+    label: e.label,
+    // A mode's card says what it does in a sentence, as the studios' lines do.
+    line: /[.!?]$/.test(line) ? line : `${line}.`,
+    icon: e.icon,
+    ...(cover && { cover }),
+    cardable: fxCardable(id, e),
+    visible: (kind) => visibleTo(e, kind),
+  };
+}
+
+/**
+ * Fuobe FX's sections as a viewer sees them: in each, the items with a cover as cards (the lead first, then premium
+ * first by their cover's featured band, only full rows: cardsToShow), each cover once on the page, and the rest as
+ * pills; no link twice in a section. Ids only, so the page and the tests share it.
+ */
+export function fxSections(kind: ViewerKind | undefined, facts?: HomeFacts) {
+  const used = new Set<string>();
+  return FX_SECTIONS.map((s) => {
+    const items = s.items.map((id) => fxItem(id, facts)).filter((it): it is FxItem => !!it && it.visible(kind));
+    const covered = items.filter((it) => it.cardable && it.cover && !PILL_ONLY.includes(it.id) && !used.has(it.cover));
+    const ranked = rankCards(
+      covered.map((it) => it.id),
+      featuredBand,
+      (id) => covered.find((it) => it.id === id)?.cover,
+    );
+    const cards = ranked.slice(0, cardsToShow(ranked.length));
+    for (const id of cards) used.add(covered.find((it) => it.id === id)!.cover!);
+    const cardHrefs = new Set(cards.map((id) => items.find((it) => it.id === id)!.href));
+    const seen = new Set<string>();
+    const pills = items
+      .filter((it) => !cards.includes(it.id))
+      .filter((it) => {
+        if (cardHrefs.has(it.href) || seen.has(it.href)) return false;
+        seen.add(it.href);
+        return true;
+      })
+      .map((it) => it.id);
+    return { ...s, cards, pills };
+  }).filter((s) => s.cards.length || s.pills.length);
+}
+
+/**
+ * /fx: Fuobe FX's sections ready to draw (as areaShowcase's), with the owner's extra pills apart, and the count of the
+ * different pages it links.
+ */
+export async function fxShowcase() {
+  "use cache";
+  cacheLife("max");
+  const { facts } = await homeShowcase();
+  const owner = fxSections("owner", facts);
+  const pillOf = (id: string): AreaPill => {
+    const it = fxItem(id, facts)!;
+    return { id: it.id, href: it.href, label: it.label, icon: it.icon };
+  };
+  const sections: AreaShowcaseSection[] = fxSections(undefined, facts).map((s) => {
+    const ownerOnly = (owner.find((o) => o.id === s.id)?.pills ?? []).filter((p) => !s.pills.includes(p) && !s.cards.includes(p));
+    return {
+      id: s.id,
+      title: s.title,
+      line: s.line,
+      icon: s.icon,
+      cards: s.cards.map((id): AreaCard => {
+        const it = fxItem(id, facts)!;
+        // A mode is named with its studio ("Genjutsu · Insert"), so it reads apart from the studios beside it.
+        const parent = entry(id)?.parent;
+        const label = parent && entry(parent) ? `${entry(parent)!.label} · ${it.label}` : it.label;
+        return { id: it.id, href: it.href, label, line: it.line, card: homeCard(it.cover!) };
+      }),
+      pills: s.pills.map(pillOf),
+      ownerPills: ownerOnly.map(pillOf),
+      subs: [],
+    };
+  });
+  const count = new Set(sections.flatMap((s) => [...s.cards, ...s.pills].map((x) => x.href))).size;
+  return { count, sections };
+}
 
 /**
  * /motions-and-effects' wall: four camera motions and four effects from the top of the featured order, alternating,

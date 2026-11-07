@@ -266,3 +266,29 @@ describe("the arrow keys across columns", () => {
     expect(megaMove([1, 2, 2, 2, 2], { col: 4, row: 0 }, "End")).toEqual({ col: 4, row: 1 });
   });
 });
+
+describe("Fuobe FX as a menu", () => {
+  it("has a column per section, its studios leading, every link once, its page as See all", async () => {
+    const { fxMenu } = await import("@/lib/mega-menus.server");
+    const { FX_HOME, FX_SECTIONS } = await import("@/lib/fx-tools");
+    const m = fxMenu();
+    expect(m.id).toBe("fx");
+    expect(m.seeAll.href).toBe("/fx");
+    expect(m.columns.map((c) => c.id)).toEqual(FX_SECTIONS.map((s) => s.id));
+    for (const c of m.columns) {
+      expect(c.lead?.cover ?? c.lead?.navCover, c.id).toBeTruthy();
+      expect(c.rows.length, c.id).toBeLessThanOrEqual(ROW_CAPS.tall);
+    }
+    expect(m.columns[0].lead!.id).toBe("genjutsu");
+    const items = megaItems(m);
+    for (const id of FX_HOME) expect(items.map((e) => e.id), id).toContain(id);
+    for (const e of items) {
+      expect(e.href.startsWith("/"), e.id).toBe(true);
+      expect(e.line?.length ?? 0, e.id).toBeLessThanOrEqual(e.id.startsWith("app-") ? LINE_MAX : 34);
+      if (e.navCover) expect(PRESET_COVERS, e.id).toHaveProperty(e.navCover);
+    }
+    const labels = items.map((e) => e.label.toLowerCase());
+    expect(labels.filter((l, i) => labels.indexOf(l) !== i)).toEqual([]);
+    expect(m.countLine).not.toMatch(/beta|coming soon|demo|placeholder/i);
+  });
+});

@@ -27,14 +27,14 @@ import { ViewerSlot } from "./viewer-slot";
 export { prefetchHrefs } from "./nav-prefetch";
 
 /*
- * The top bar (md and up): the wordmark, Create, Studios (the launcher), Apps, Motions & effects, Canvas, Assist and
+ * The top bar (md and up): the wordmark, Create, Studios (the launcher), Fuobe FX, Apps, Motions & effects, Canvas, Assist and
  * Library; search; New creation; who is looking. 56 px on every page. What doesn't fit moves into More, by CSS alone
  * (nothing is measured, so nothing moves after the first paint):
  *   1600 and up   everything, search 280 px, a guest's Log in
  *   1440-1599     the same, search 220 px (Apps, Motions & effects and Canvas each carry a chevron)
  *   1280-1439     Canvas and Assist in More, search 200 px
  *   1024-1279     Apps and Motions & effects in More too
- *   768-1023      the same, search and New creation as icon buttons
+ *   768-1023      the same, Fuobe FX in More too, search and New creation as icon buttons
  * Measured with the site's fonts for a guest, an account and the owner, a classic scrollbar's width to spare at every
  * width. Below md the phone tabs take over (phone-tabs.tsx).
  */
@@ -57,6 +57,8 @@ export function barActive(pathname: string): {
   studios: boolean;
   apps: boolean;
   motions: boolean;
+  /** Fuobe FX: its studios and their modes (FX_HOME). */
+  fx: boolean;
   canvas: boolean;
   /** /canvas itself (the Canvas item's own page). */
   canvasHome: boolean;
@@ -71,6 +73,7 @@ export function barActive(pathname: string): {
     studios: area === "studios",
     apps: area === "apps",
     motions: area === "motions",
+    fx: area === "fx",
     canvas: e?.id === "canvas",
     canvasHome: pathname === "/canvas",
     assist: e?.id === "assist",
@@ -104,21 +107,42 @@ function useOn(): (e: NavEntry) => boolean {
 
 const MOTIONS_AREA_HREF = area("motions").href;
 
+/** Fuobe FX's own page, as More lists it where the bar has no room for its item. */
+const FX_ENTRY = entry(area("fx").entryId)!;
+
+/** Fuobe FX in More: its page, with an icon (it has no cover of its own) and its line. */
+function FxRow({ current, row }: { current: boolean; row: number }) {
+  return (
+    <IntentLink href={FX_ENTRY.href} aria-current={current ? "page" : undefined} data-col={0} data-row={row} className={cn(CARD_ROW, MENU_ROW_2)}>
+      <span className="grid h-[27px] w-9 shrink-0 place-items-center rounded-[6px] bg-muted">
+        <NavIcon name={FX_ENTRY.icon} className="nav-icon size-4 text-muted-foreground" />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className={rowName(current)}>{FX_ENTRY.label}</span>
+        <span className={ROW_LINE}>{FX_ENTRY.what}</span>
+      </span>
+    </IntentLink>
+  );
+}
+
 function MoreItems() {
   const on = useOn();
   return (
     <>
+      <div className="lg:hidden">
+        <FxRow current={on(FX_ENTRY)} row={0} />
+      </div>
       {pick(["apps", "motions", "effects"]).map((e, i) => (
         <div key={e.id} className="xl:hidden">
-          <RichItem e={e} current={on(e)} row={i} />
+          <RichItem e={e} current={on(e)} row={1 + i} />
         </div>
       ))}
       <div className="xl:hidden">
-        <SeeAllRow href={MOTIONS_AREA_HREF} name="See all motions & effects" data-col={0} data-row={3} className="mt-1" />
+        <SeeAllRow href={MOTIONS_AREA_HREF} name="See all motions & effects" data-col={0} data-row={4} className="mt-1" />
         <div role="separator" className="mx-2.5 my-1.5 h-px bg-border" />
       </div>
       {pick(["canvas", "assist"]).map((e, i) => (
-        <IntentLink key={e.id} href={e.href} eager={e.eager} aria-current={on(e) ? "page" : undefined} data-col={0} data-row={4 + i} className={cn(CARD_ROW, MENU_ROW_2)}>
+        <IntentLink key={e.id} href={e.href} eager={e.eager} aria-current={on(e) ? "page" : undefined} data-col={0} data-row={5 + i} className={cn(CARD_ROW, MENU_ROW_2)}>
           <span className="grid h-[27px] w-9 shrink-0 place-items-center rounded-[6px] bg-muted">
             <NavIcon name={e.icon} className="nav-icon size-4 text-muted-foreground" />
           </span>
@@ -148,6 +172,8 @@ function MoreMenu({ active }: { active: Active }) {
       // Marked when it holds the open page at this width: Canvas and Assist always; Apps, Motions and Effects below xl.
       active={active.canvas || active.assist}
       data-narrow={active.apps || active.motions || undefined}
+      // Fuobe FX is in it below lg only.
+      data-narrow-lg={active.fx || undefined}
     >
       <MoreItems />
     </BarCardMenu>
@@ -166,6 +192,7 @@ function BarLinks({ active, onTap }: { active: Active; onTap?: (href: string) =>
       {/* An item is marked anywhere in its area, its own page (/create, /studios …) included. */}
       <CreateMenu active={active.create || active.page === "create"} />
       <MegaLauncher id="studios" active={active.studios || active.page === "studios"} />
+      <MegaLauncher id="fx" active={active.fx || active.page === "fx"} className="hidden lg:inline-flex" />
       <MegaLauncher id="apps" active={active.apps || active.page === "apps"} className="hidden xl:inline-flex" />
       <MegaLauncher id="motions" active={active.motions || active.page === "motions"} className="hidden xl:inline-flex" />
       <MegaLauncher id="canvas" active={active.canvas || active.canvasHome} className="hidden min-[1440px]:inline-flex" />
@@ -257,6 +284,7 @@ function RightCluster() {
 export function warmBar(): void {
   if (!window.matchMedia("(min-width: 768px)").matches) return;
   const ids: FetchedMegaId[] = [];
+  if (window.matchMedia("(min-width: 1024px)").matches) ids.push("fx");
   if (window.matchMedia("(min-width: 1280px)").matches) ids.push("apps", "motions");
   if (window.matchMedia("(min-width: 1440px)").matches) ids.push("canvas");
   preloadMegaPanel();

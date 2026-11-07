@@ -178,14 +178,16 @@ describe("Home's showcase", () => {
   it("covers every place to create: the studio cards, the pills and the five with a section of their own", async () => {
     const home = await homeShowcase();
     const create = NAV.find((g) => g.label === "Create")!.items.filter((i) => i.href !== "/");
-    const studios = NAV.find((g) => g.label === "Studios")!.items;
+    // Fuobe FX's studios moved there from Studios: Home still has each of them, and Fuobe FX's page as a pill.
+    const studios = [...NAV.find((g) => g.label === "Studios")!.items, ...NAV.find((g) => g.label === "Fuobe FX")!.items];
     expect(home.facts.destinations).toBe(create.length + studios.length);
+    expect(home.pills.map((p) => p.href)).toContain("/fx");
     expect(home.studios.length + home.pills.length + HOME_OWN_SECTIONS.length).toBe(home.facts.destinations);
     const shown = [...home.studios.map((s) => s.href), ...home.pills.map((p) => p.href), ...HOME_OWN_SECTIONS];
     expect(new Set(shown).size).toBe(shown.length);
     expect(new Set(shown)).toEqual(new Set([...create, ...studios].map((i) => i.href)));
     // Every studio of the navigation model is one of them, so each has a card or a pill and is counted (Kinetic Motion).
-    for (const e of NAV_ENTRIES.filter((x) => x.kind === "studio" && x.group)) expect(shown, e.id).toContain(e.href);
+    for (const e of NAV_ENTRIES.filter((x) => x.kind === "studio")) expect(shown, e.id).toContain(e.href);
     // The pills keep the sidebar's order and labels.
     const order = [...create, ...studios].map((i) => i.href);
     expect(home.pills.map((p) => order.indexOf(p.href))).toEqual(home.pills.map((p) => order.indexOf(p.href)).sort((a, b) => a - b));

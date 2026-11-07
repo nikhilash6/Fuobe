@@ -245,3 +245,13 @@ describe("plain requests find the right place", () => {
     expect(owner.some((e) => e.kind === "model" && /ComfyUI/.test(e.hint ?? ""))).toBe(true);
   });
 });
+
+describe("Fuobe FX in search", () => {
+  it("finds its page from an FX artist's words, for every viewer", () => {
+    for (const entries of [OWNER, GUEST, ACCOUNT])
+      for (const q of ["vfx", "fx", "compositing", "roto", "matte", "clean plate", "exr", "fuobe fx"]) expect(all(q, entries).map((h) => h.href), q).toContain("/fx");
+    expect(labels("vfx")[0]).toBe("Fuobe FX");
+    expect(labels("roto")).toContain("Remove background");
+    expect(labels("clean plate")).toContain("Remove object");
+  });
+});

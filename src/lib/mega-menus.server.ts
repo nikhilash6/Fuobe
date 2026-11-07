@@ -23,6 +23,9 @@ import { featuredAll } from "@/lib/preset-featured";
 import { templateCover } from "@/lib/template-covers";
 import { templateStillSources } from "@/lib/template-hd";
 import { MENU_LINES } from "@/lib/menu-lines";
+import { fxSections } from "@/lib/area-showcase";
+import { FX_COVERS, FX_SECTIONS, isFxApp } from "@/lib/fx-tools";
+import { entry } from "@/lib/nav-model";
 
 /** A column of a preset menu: its name, its phone chip, and the catalog categories it holds. */
 export interface PresetGroup {
@@ -244,4 +247,61 @@ export function canvasMenu(): MegaModel {
   };
 }
 
-export const SERVER_MENUS = { apps: appsMenu, motions: motionsMenu, canvas: canvasMenu } as const;
+/** A Fuobe FX item as a menu row: a navigation entry with its nav cover, or an app with its own cover. */
+function fxMenuItem(id: string): MegaItem | undefined {
+  if (isFxApp(id)) {
+    const p = APPS.find((a) => a.id === id);
+    return p && presetItem(p);
+  }
+  const e = entry(id);
+  if (!e) return undefined;
+  // A mode shows the preset whose picture shows its job (inline: the nav's own covers don't carry it); else the entry's.
+  const own = FX_COVERS[id] ? presetMegaCover(FX_COVERS[id]) : undefined;
+  const nav = own ? undefined : (FX_COVERS[id] ?? e.cover);
+  return {
+    id,
+    href: e.href,
+    label: e.label,
+    // Its line as the Studios menu gives it (34 characters at most; CSS fits it to the row).
+    line: e.what,
+    icon: e.icon,
+    ...(own && { cover: own }),
+    ...(nav && { navCover: nav }),
+    ...(e.short && { short: e.short }),
+    ...(e.newUntil && { newUntil: e.newUntil }),
+  };
+}
+
+/**
+ * Fuobe FX as a menu: a column per section (src/lib/fx-tools.ts), its first card as the lead and then its other cards
+ * and its pills, up to ROW_CAPS.tall rows (the page has every one). What a visitor sees: the owner's own modes are left
+ * to the page.
+ */
+export function fxMenu(): MegaModel {
+  const sections = fxSections(undefined);
+  // A mode whose name another tool here has too ("Character swap", Genjutsu's and the studio) is named with its studio.
+  const names = sections.flatMap((s) => [...s.cards, ...s.pills]).map((id) => fxMenuItem(id)?.label.toLowerCase());
+  const named = (e: MegaItem): MegaItem => {
+    const parent = entry(e.id)?.parent;
+    return parent && names.filter((n) => n === e.label.toLowerCase()).length > 1 ? { ...e, label: `${entry(parent)!.label} · ${e.label}` } : e;
+  };
+  const n = new Set(sections.flatMap((s) => [...s.cards, ...s.pills].map((id) => fxMenuItem(id)?.href))).size;
+  return {
+    id: "fx",
+    count: n,
+    countLine: `${n} tools for FX artists and teams, by stage of the shot`,
+    seeAll: { href: "/fx", name: "See all of Fuobe FX" },
+    columns: sections.map((s): MegaColumn => {
+      const items = [...s.cards, ...s.pills]
+        .map(fxMenuItem)
+        .filter((x): x is MegaItem => !!x)
+        .map(named);
+      // The lead card is the first with a picture (a section of pills only leads with its first tool that has one).
+      const lead = items.find((x) => x.cover || x.navCover) ?? items[0];
+      const rest = items.filter((x) => x !== lead);
+      return { id: s.id, label: s.title, chip: FX_SECTIONS.find((x) => x.id === s.id)!.chip, ...(lead && { lead }), rows: rest.slice(0, ROW_CAPS.tall) };
+    }),
+  };
+}
+
+export const SERVER_MENUS = { apps: appsMenu, motions: motionsMenu, canvas: canvasMenu, fx: fxMenu } as const;

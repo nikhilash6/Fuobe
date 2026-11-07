@@ -10,7 +10,7 @@ import { NAV_INTENT } from "./ui-motion";
  */
 
 /** The bar's six menu items, left to right (the order a switch slides in). */
-export const BAR_MENUS = ["create", "studios", "apps", "motions", "canvas", "more"] as const;
+export const BAR_MENUS = ["create", "studios", "fx", "apps", "motions", "canvas", "more"] as const;
 export type BarMenuId = (typeof BAR_MENUS)[number];
 
 /** Opened by resting the pointer (closes when the pointer leaves) or pinned by a click, a tap or a key. */

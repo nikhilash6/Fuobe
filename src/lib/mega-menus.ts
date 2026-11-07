@@ -9,11 +9,11 @@ import { area } from "./nav-areas";
 import type { StillSources } from "./preset-hd";
 import { entriesFor, launcherColumns, studioCount, studioSubs, STUDIO_SUBS, subLabel, subParent, type NavEntry, type NavIconName, type ViewerKind } from "./nav-model";
 
-export type MegaId = "studios" | "apps" | "motions" | "canvas";
+export type MegaId = "studios" | "apps" | "motions" | "canvas" | "fx";
 
 /** The menus fetched from the server (Studios is in the bundle). */
 export type FetchedMegaId = Exclude<MegaId, "studios">;
-export const FETCHED_MENUS: readonly FetchedMegaId[] = ["apps", "motions", "canvas"];
+export const FETCHED_MENUS: readonly FetchedMegaId[] = ["apps", "motions", "canvas", "fx"];
 
 /** Where a fetched menu's data is: a static file, made at build time. */
 export const menuUrl = (id: FetchedMegaId) => `/nav-menus/${id}`;
@@ -126,6 +126,7 @@ export const MEGA_AREAS: Record<MegaId, { label: string; href: string; menu: str
   apps: { label: "Apps", href: area("apps").href, menu: "Apps menu", panel: "All apps" },
   motions: { label: "Motions & effects", href: area("motions").href, menu: "Motions & effects menu", panel: "All motions and effects" },
   canvas: { label: "Canvas", href: "/canvas", menu: "Canvas menu", panel: "Canvas ready boards" },
+  fx: { label: area("fx").label, href: area("fx").href, menu: "Fuobe FX menu", panel: "Fuobe FX tools" },
 };
 
 /** The panel's element id ("studios-launcher", "apps-launcher" …). */

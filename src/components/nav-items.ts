@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { navIcon } from "@/lib/nav-icons";
+import { FX_HOME } from "@/lib/fx-tools";
 import { entry, type NavEntry } from "@/lib/nav-model";
 
 export interface NavItem {
@@ -24,7 +25,7 @@ export interface NavGroupDef {
 }
 
 /**
- * The places to create, the library, the studios and settings as four groups, in a fixed order (Home's
+ * The places to create, the library, the studios, Fuobe FX and settings as five groups, in a fixed order (Home's
  * showcase reads Create and Studios). Labels, links and search words come from the navigation model
  * (src/lib/nav-model.ts); only the grouping and the order are kept here.
  */
@@ -52,13 +53,7 @@ const GROUPS: { label: string; ids: string[]; collapsible?: boolean }[] = [
       "content-factory",
       "explainer",
       "lipsync",
-      "genjutsu",
-      "character-swap",
-      "motion-control",
       "video-edit",
-      "extend",
-      "reframe",
-      "video-tools",
       "elements",
       "upscale",
       "audio",
@@ -68,6 +63,8 @@ const GROUPS: { label: string; ids: string[]; collapsible?: boolean }[] = [
     ],
     collapsible: true,
   },
+  // Fuobe FX: its page, then its studios (FX_HOME), which live here and no more under Studios.
+  { label: "Fuobe FX", ids: ["area-fx", ...FX_HOME], collapsible: true },
   { label: "More", ids: ["settings"], collapsible: true },
 ];
 

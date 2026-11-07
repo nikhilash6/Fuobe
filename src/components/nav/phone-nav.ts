@@ -2,6 +2,7 @@
  * Phone navigation helpers (pure, so they're testable): which tab looks selected, what a tab tap opens, whether the
  * on-screen keyboard is up, and the You tab's dot.
  */
+import { FX_HOME } from "@/lib/fx-tools";
 
 export type PhoneTab = "home" | "create" | "studios" | "library" | "you";
 /** The sheets the tabs open (NavSheet in nav-ui.tsx). */
@@ -13,7 +14,7 @@ function under(path: string, pathname: string): boolean {
 
 /**
  * The tab that looks selected. An open sheet's tab, while it is open; otherwise the page's: Home on /, Library in the
- * library, You in settings, Studios in a studio (an entry with a launcher group), Create in a create tool. Nothing on
+ * library, You in settings, Studios in a studio (an entry with a launcher group, or Fuobe FX's), Create in a create tool. Nothing on
  * other pages (a gallery of motions, say), so no tab claims a page it doesn't lead to.
  */
 export function activePhoneTab(
@@ -30,6 +31,8 @@ export function activePhoneTab(
   if (entry?.id === "area-studios") return "studios";
   if (entry?.id === "area-create") return "create";
   if (entry?.group) return "studios";
+  // Fuobe FX is a family of the Studios sheet: its page and its studios are that tab's.
+  if (entry?.id === "area-fx" || (entry?.id && FX_HOME.includes(entry.id))) return "studios";
   if (entry?.kind === "create") return "create";
   return null;
 }

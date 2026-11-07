@@ -150,7 +150,8 @@ describe("the palette's body", () => {
     expect(order.every((i) => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(html.indexOf("Every studio")).toBeGreaterThan(html.indexOf("Also try"));
-    expect(tiles(html)).toHaveLength(34);
+    // The FX studios are Fuobe FX's: search finds them, the studio grid leaves them to Fuobe FX.
+    expect(tiles(html)).toHaveLength(28);
   });
 
   it("starts filtered to a goal when opened for one", () => {

@@ -2,7 +2,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { MEGA_AREAS, megaMove, megaPanelId, TILE_COLS, type MegaId } from "@/lib/mega-menus";
-import { launcherActive, subActive } from "@/lib/nav-model";
+import { activeEntry, launcherActive, subActive } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { useBarMenu } from "./bar-menus";
 import { BarTrigger } from "./bar-split";
@@ -43,13 +43,14 @@ export function launcherCurrent(pathname: string): string | undefined {
 export const LAUNCHER_PANEL = "absolute inset-x-0 top-full max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain text-popover-foreground";
 
 /** The routes a menu's links lead to that load ahead when it opens (each row also loads on hover: IntentLink). */
-const WARM: Record<MegaId, NavPanel> = { studios: "studios", apps: "more", motions: "more", canvas: "more" };
+const WARM: Record<MegaId, NavPanel> = { studios: "studios", apps: "more", motions: "more", canvas: "more", fx: "fx" };
 
 /** The item of a menu the open page is (aria-current): a studio or one of its features, an app, a preset, a ready board. */
 export function megaCurrent(id: MegaId, pathname: string, search = ""): string | undefined {
   if (id === "studios") return subActive(pathname, search) ?? launcherActive(pathname);
   if (id === "apps") return /^\/apps\/([^/]+)$/.exec(pathname)?.[1];
   if (id === "motions") return pathname === "/video" ? (new URLSearchParams(search).get("preset") ?? undefined) : undefined;
+  if (id === "fx") return /^\/apps\/([^/]+)$/.exec(pathname)?.[1] ?? subActive(pathname, search) ?? activeEntry(pathname, new URLSearchParams(search))?.id;
   return /^\/canvas\/start\/([^/]+)$/.exec(pathname)?.[1];
 }
 
