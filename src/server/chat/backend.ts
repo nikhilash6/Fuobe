@@ -3,7 +3,7 @@ import { alternate, fitHistory, summaryAsk, tidyReply, transcript, type ChatTurn
 import type { ChatEngine, ChatErrorCode } from "@/lib/chat/types";
 import { readSse } from "../llm/sse";
 import { runAsTenant } from "../tenant";
-import { askHelper, freeHelperOn, helperKnown, HELPER_LIMITS, helperMessagesProblem, type HelperAnswer } from "../text-helper";
+import { askHelper, freeHelperOn, freeHelperState, helperKnown, HELPER_LIMITS, helperMessagesProblem, type HelperAnswer } from "../text-helper";
 
 /**
  * Where Fuobe Chat's replies come from:
@@ -55,7 +55,7 @@ const asTenant = <T,>(who: string, fn: () => T): T => (who === "owner" ? fn() : 
 
 /** Can the free model answer this person now (and is there one at all)? */
 export function siteStatus(who: string): { on: boolean; known: boolean } {
-  return asTenant(who, () => ({ on: freeHelperOn(Date.now(), {}), known: helperKnown() }));
+  return asTenant(who, () => ({ on: freeHelperState(Date.now(), { chat: true }) !== "absent" || freeHelperOn(Date.now(), {}), known: helperKnown() }));
 }
 
 /** History room for the free helper: its message limit, less the transcript's own words. */
@@ -90,7 +90,8 @@ const nap = (ms: number, signal?: AbortSignal) =>
 /** One try on the free model: chat turns on a worker that takes them, else the history as one transcript. */
 async function siteTry(ask: ReplyAsk, waitMs: number): Promise<ReplyAnswer | "busy"> {
   const vision = !!ask.image;
-  if (freeHelperOn(Date.now(), { chat: true, vision })) {
+  // A slot that takes chat turns is ready, in line or coming back: askHelper waits for it and says how it goes.
+  if (freeHelperState(Date.now(), { chat: true, vision }) !== "absent") {
     const fit = fitHistory(ask.turns, CHAT_BUDGET);
     const messages = alternate(fit.turns);
     if (helperMessagesProblem(messages)) return { error: "failed", message: CHAT_WORDS.failed };
@@ -107,6 +108,9 @@ async function siteTry(ask: ReplyAsk, waitMs: number): Promise<ReplyAnswer | "bu
         if (tidy) ask.onText?.(tidy);
       },
       onQueue: ask.onQueue,
+      onState: (s) => {
+        if (s === "starting") ask.onStatus?.("starting");
+      },
     });
     if ("error" in a) return a.error === "busy" ? "busy" : fromHelper(a);
     const text = tidyReply(a.text, ask.speaker);
@@ -133,7 +137,7 @@ async function siteReply(ask: ReplyAsk): Promise<ReplyAnswer> {
       if (ask.signal?.aborted) return { error: "failed", message: CHAT_WORDS.failed } as ReplyAnswer;
       const left = deadline - Date.now();
       if (left <= 0) return { pending: true } as ReplyAnswer;
-      const r = await siteTry(ask, Math.max(5_000, Math.min(45_000, left)));
+      const r = await siteTry(ask, Math.max(5_000, left));
       if (r !== "busy") return r;
       if (Date.now() >= deadline) return { pending: true } as ReplyAnswer;
       ask.onStatus?.("starting");
