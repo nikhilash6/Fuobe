@@ -4848,5 +4848,21 @@
    "at": 4.717,
    "from": 0
   }
+ },
+ {
+  "id": "video-tools-depth.2",
+  "surface": "hub:video-tools/depth",
+  "rank": 2,
+  "caption": "A rooftop and a fort, mapped in depth",
+  "modelId": "oss-video-depth-da3",
+  "inputs": {
+   "video": "/examples/video-tools-depth/2/in-video.mp4"
+  },
+  "output": "/examples/video-tools-depth/2/show.mp4",
+  "rest": {
+   "src": "/examples/video-tools-depth/2/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
  }
 ]
