@@ -60,6 +60,7 @@ const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { ComputerRunner } = await import("@/lib/computer-runner");
 const { FILE_TROUBLE_WORDS, POOL_WORDS } = await import("@/lib/relay");
+const { ENGINE_WORDS, isEngineWords } = await import("@/lib/engine-error");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 const { catalogVersion } = await import("@/server/computer/catalog-version");
 
@@ -689,7 +690,10 @@ describe("an account's run that a worker can't finish", () => {
       expect(rowOf(taskId).state).toBe("failed");
       const g = await ended(id);
       expect(g.status).toBe("failed");
-      expect(g.error).toBe(words ?? POOL_WORDS.failed);
+      // Its files' words when they are about the person's files, else the plain sentence for its kind of failure.
+      if (words) expect(g.error).toBe(words);
+      else expect(isEngineWords(g.error), g.error ?? "").toBe(true);
+      expect(g.error ?? "").not.toMatch(JARGON);
       expect(g.message ?? "").not.toMatch(JARGON);
       expect(g.fix).toBeUndefined();
       // The owner reads what happened (words about the person's files: the same words, nothing more behind them).
@@ -700,9 +704,44 @@ describe("an account's run that a worker can't finish", () => {
         return;
       }
       expect(owner?.detail).toBeTruthy();
-      expect(owner?.detail).not.toBe(POOL_WORDS.failed);
+      expect(owner?.detail).not.toBe(g.error);
     });
   }
+
+  it("a node that failed on the worker: the plain sentence for the account, the cleaned words for the owner only", async () => {
+    const raw = [
+      "VHS failed to extract audio from X:\\fuobe-worker\\work\\input\\fuobe_HFpqXpUDFs__.mp4:",
+      "ffmpeg version 7.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+      "  built with gcc 14.2.0 (Rev1, Built by MSYS2 project)",
+      "  configuration: --enable-gpl --enable-version3 --enable-static",
+      "  libavutil      59. 39.100 / 59. 39.100",
+      "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'X:\\fuobe-worker\\work\\input\\fuobe_HFpqXpUDFs__.mp4':",
+      "Stream map '0:a:0' matches no streams.",
+    ].join("\n");
+    const w = standInWorker();
+    beatAs(w);
+    const { id, taskId } = await accountRun();
+    const api = workerApi(w.token);
+    const t = (await api.claim())!;
+    await api.report(t, { event: "sent", promptId: t.promptId });
+    const entry = { prompt: [1, t.promptId], status: { status_str: "error", completed: false, messages: [["execution_error", { node_type: "VHS_LoadVideo", node_id: "5", exception_message: raw }]] }, outputs: {} };
+    expect((await api.report(t, { event: "finished", entry })).status).toBe(200);
+    expect(rowOf(taskId).state).toBe("failed");
+    const g = await ended(id);
+    expect(g.status).toBe("failed");
+    expect(g.error).toBe(ENGINE_WORDS["no-sound"]);
+    // What is stored as what the person saw is that sentence too; the engine's words are kept apart, cleaned.
+    const stored = db().prepare("SELECT error, detail FROM generations WHERE id = ?").get(id) as { error: string; detail: string };
+    expect(stored.error).toBe(ENGINE_WORDS["no-sound"]);
+    expect(stored.detail).toContain("VHS_LoadVideo: VHS failed to extract audio from fuobe_HFpqXpUDFs__.mp4");
+    expect(stored.detail).toContain("matches no streams");
+    expect(stored.detail).not.toMatch(/fuobe-worker|X:\\|ffmpeg version|Copyright|configuration:|libavutil|Input #0/);
+    const owner = listAccountRuns({ account: accountId }).items.find((x) => x.id === id);
+    expect(owner?.error).toBe(ENGINE_WORDS["no-sound"]);
+    expect(owner?.detail).toBe(stored.detail);
+    // Nothing of it in the run as the account reads it.
+    expect(JSON.stringify(getGeneration(id))).not.toMatch(/VHS|fuobe-worker|ffmpeg/);
+  });
 });
 
 describe("graphs and results for the workers", () => {

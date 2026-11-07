@@ -54,7 +54,9 @@ import { hfPage } from "@/lib/gpu/plan";
 import { fileTitle } from "@/lib/gpu/readiness";
 import { formatBytes } from "@/lib/gpu/requirements";
 import type { FileKey } from "@/lib/gpu/types";
+import { isEngineWords, plainEngineFailure } from "@/lib/engine-error";
 import {
+  FILE_TROUBLE_WORDS,
   makingWords,
   META_BATCH_HISTORY,
   POOL_WORDS,
@@ -1839,12 +1841,39 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   // line after an attempt (a worker paused, went quiet, gave it back), it shows its kept place as any waiting run does,
   // and once a worker has it again, the usual words: never a restart.
   const res: PollResult = t.state === "waiting" ? { state: "queued", message: poolWaitWords(t) } : await pollTask(principal, t, meta, manifest, made);
+  if (res.state === "failed") return poolFailure(res);
   if (res.state !== "queued" && res.state !== "running") return res;
   const deadline = attemptDeadline(t);
   const clocks = { ownClocks: true as const, ...(deadline && { deadline }) };
   // An account's run says only where it is: in line, or working on it (the owner's own runs keep the workers' words).
   if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ...clocks };
   return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ...clocks } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ...clocks };
+}
+
+/**
+ * Words a failed run on the workers keeps as they are: about the person's own files, their own stop or their files'
+ * room, or already one of the plain sentences (src/lib/engine-error.ts).
+ */
+function poolKeeps(error: string): boolean {
+  return (
+    error === RELAY_WORDS.stopped ||
+    (Object.values(FILE_TROUBLE_WORDS) as string[]).includes(error) ||
+    (Object.values(ACCOUNT_MESSAGES) as string[]).includes(error) ||
+    /^Your files have reached \d+ GB\b/.test(error) ||
+    isEngineWords(error)
+  );
+}
+
+/**
+ * A failed run on this install's GPUs (an account's, a guest's, or the owner's own on the workers): the person reads one
+ * plain sentence for its kind of failure, never the engine's words (a node's name, a worker's folder, ffmpeg's output).
+ * The engine's words, cleaned, go in `detail`: the owner's only (generations.detail, the log). What the GPU was missing
+ * stays as the owner's "Fix it".
+ */
+export function poolFailure(res: Extract<PollResult, { state: "failed" }>): PollResult {
+  if (poolKeeps(res.error)) return { state: "failed", error: res.error, ...(res.fix && { fix: res.fix }), ...(res.lost && { lost: true as const }) };
+  const plain = plainEngineFailure(res.error, res.fix?.code);
+  return { state: "failed", error: plain.words, ...(plain.detail && { detail: plain.detail }), ...(res.fix && { fix: res.fix }), ...(res.lost && { lost: true as const }) };
 }
 
 /** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */

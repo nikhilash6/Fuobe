@@ -214,11 +214,15 @@ function asAccountRun(g: Generation, emails: Map<string, string>, showEmails: bo
   return { ...g, outputs: withStates(g.outputs), account, ...poolDetail(g), ...declinedCardsIn(g.id) };
 }
 
-/** A failed run on this install's GPUs: the stored reason, when it isn't the plain sentence the account reads. */
+/**
+ * A failed run on this install's GPUs: its technical detail (the engine's words, cleaned), else the stored reason when it
+ * isn't the plain sentence the account reads.
+ */
 function poolDetail(g: Generation): { detail?: string } {
   if (g.place !== "pool" || !g.error) return {};
-  const e = (db().prepare("SELECT error FROM generations WHERE id = ?").get(g.id) as { error: string | null } | undefined)?.error;
-  return e && e !== g.error ? { detail: e } : {};
+  const row = db().prepare("SELECT error, detail FROM generations WHERE id = ?").get(g.id) as { error: string | null; detail: string | null } | undefined;
+  if (row?.detail) return { detail: row.detail };
+  return row?.error && row.error !== g.error ? { detail: row.error } : {};
 }
 
 /** One account's run as the list gives it (null: no such run, or it is the owner's own). */

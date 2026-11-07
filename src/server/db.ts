@@ -1014,6 +1014,8 @@ const HOOK_COLUMNS: [string, string, string][] = [
   ["run_requests", "tries", "INTEGER NOT NULL DEFAULT 0"],
   ["run_requests", "starting", "INTEGER NOT NULL DEFAULT 0"],
   ["run_requests", "answer_json", "TEXT"],
+  // A failed run's technical detail, for the owner only, when the person read a plain sentence (generations.ts Row.detail).
+  ["generations", "detail", "TEXT"],
 ];
 
 /**

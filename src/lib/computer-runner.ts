@@ -8,6 +8,7 @@
  * a socket and a clock, and the tests drive it from Node against a stand-in ComfyUI.
  */
 import { isGuard } from "./comfy-guard";
+import { withoutLocalPaths } from "./engine-error";
 import { FINISH_RUN_MS, finishProblem, type FinishResult, type FinishStats } from "./finish-ticket";
 import { fetchWithin } from "./fetch-within";
 import { parseComfyBinary, parseComfyText } from "./comfy-ws";
@@ -311,6 +312,27 @@ const retryAfter = (res: Response) => Math.min(30, Math.max(1, Number(res.header
 const hasPrefix = (prompt: unknown, prefix: string) =>
   !!prompt && typeof prompt === "object" && Object.values(prompt as Record<string, { inputs?: Record<string, unknown> }>).some((n) => n?.inputs?.filename_prefix === prefix);
 
+/** Every string inside a value with its absolute paths as base names (engine-error.ts). */
+function pathsOut<T>(v: T, depth = 0): T {
+  if (typeof v === "string") return withoutLocalPaths(v) as T;
+  if (!v || typeof v !== "object" || depth > 24) return v;
+  if (Array.isArray(v)) return v.map((x) => pathsOut(x, depth + 1)) as T;
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, pathsOut(x, depth + 1)])) as T;
+}
+
+/**
+ * A worker's report as it leaves the worker: ComfyUI's words (each entry's status messages, a refusal's answer) never
+ * name a folder of the worker's PC (its work folder, its ComfyUI, its models): each path goes as its file's name only.
+ * Results (outputs) and progress go as they are.
+ */
+export function withoutWorkerPaths(e: ReportEvent): ReportEvent {
+  const entry = (x: HistoryEntryLike): HistoryEntryLike => (x.status ? { ...x, status: pathsOut(x.status) } : x);
+  if (e.event === "finished") return { ...e, entry: entry(e.entry) };
+  if (e.event === "passes") return { ...e, entries: e.entries.map(entry) };
+  if (e.event === "refused") return { ...e, body: pathsOut(e.body) };
+  return e;
+}
+
 /** A history entry as the server needs it: status and outputs (not the whole graph again). */
 const slim = (e: HistoryEntryLike & { prompt?: unknown[] }): HistoryEntryLike => ({ prompt: e.prompt ? [e.prompt[0], e.prompt[1]] : undefined, status: e.status, outputs: e.outputs });
 
@@ -517,6 +539,8 @@ export class ComputerRunner {
 
   /** A report about a job (its token in a header, so the studio checks it before it reads the report). */
   private async report(t: ClaimedTask, e: ReportEvent): Promise<{ wanted?: WantedFile[]; follow?: string; stop?: boolean; state?: RelayState }> {
+    // A worker program never sends its own folders (a browser tab is the person's own computer: its words stay its own).
+    if (this.deps.worker) e = withoutWorkerPaths(e);
     // A busy studio (429) is waited out, for a while; other failures are tried a few times.
     const until = this.now() + 2 * 60_000;
     for (let i = 0; ; ) {

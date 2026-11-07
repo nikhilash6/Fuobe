@@ -339,8 +339,10 @@ export class TextSlot {
       this.lastJobAt = this.now();
       // The person went: the studio ended the job, so there is nothing to send.
       if (e instanceof Stopped) return true;
-      answer = { error: String(e.message ?? e).slice(0, 200) };
-      this.log(`Text job ${job.id} has no answer: ${answer.error}`);
+      const why = String(e.message ?? e);
+      this.log(`Text job ${job.id} has no answer: ${why}`);
+      // The studio hears why without this PC's folders (deps.redact: engine-error.ts withoutLocalPaths).
+      answer = { error: (this.d.redact ? this.d.redact(why) : why).slice(0, 200) };
     }
     this.lastJobAt = this.now();
     const sent = await this.d.call(`/api/gpu/computer/text/${encodeURIComponent(job.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lease: job.lease, ...answer }) });

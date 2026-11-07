@@ -41,6 +41,7 @@ const { OWN_GPU_TOOL_HOSTED } = await import("@/lib/guest-access");
 const { SITE_HIDDEN_WORDS } = await import("@/server/output-checks");
 const { SITE_FAILED_WORDS } = await import("@/lib/comfy-compose");
 const { FILE_TROUBLE_WORDS, POOL_WORDS } = await import("@/lib/relay");
+const { ENGINE_WORDS } = await import("@/lib/engine-error");
 const { notePlaceName, placeOf } = await import("@/lib/place-name");
 const { runPlace } = await import("@/lib/run-place");
 const { accountEngine } = await import("@/lib/your-keys");
@@ -131,6 +132,7 @@ function serverWords(place: ReturnType<typeof placeOf>): string[] {
     ownGpuQuiet(place),
     ...Object.values(POOL_WORDS),
     ...Object.values(FILE_TROUBLE_WORDS),
+    ...Object.values(ENGINE_WORDS),
     SITE_HIDDEN_WORDS,
     SITE_FAILED_WORDS,
   ];

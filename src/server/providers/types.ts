@@ -56,7 +56,7 @@ export type PollResult =
    * `trouble`: an account's own GPU, why in plain words with what helps (src/lib/diagnose.ts). `lost`: its ComfyUI
    * restarted and forgot the job, so the runner may send it once more.
    */
-  | { state: "failed"; error: string; fix?: GenerationFix; trouble?: Diagnosis; lost?: true };
+  | { state: "failed"; error: string; fix?: GenerationFix; trouble?: Diagnosis; lost?: true; detail?: string };
 
 export interface PollContext {
   externalId: string;

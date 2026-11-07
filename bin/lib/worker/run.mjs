@@ -228,6 +228,8 @@ async function work(saved, deps, owner) {
   }
   const index = deps.requirements ?? loadRequirements();
   const { ComputerRunner } = deps.ComputerRunner ? { ComputerRunner: deps.ComputerRunner } : await import("./dist/computer-runner.mjs");
+  // What takes this PC's folders out of the words it sends the studio (the job runner does it for every job report).
+  const redact = deps.redact ?? (await import("./dist/engine-error.mjs").then((m) => m.withoutLocalPaths).catch(() => undefined));
   const site = cfg.site.replace(/\/+$/, "");
   const f = folders(cfg.workDir);
   fs.mkdirSync(cfg.workDir, { recursive: true });
@@ -589,7 +591,7 @@ async function work(saved, deps, owner) {
   // The text slot: its own claims for the studio's text jobs, beside the GPU's job and the CPU slot's.
   const textCfg = textSlotOf(cfg.textSlot);
   if (textCfg?.problem) log(`${textCfg.problem}: its text slot is off.`);
-  const text = textCfg && !textCfg.problem ? (deps.textSlot ?? new TextSlot(textCfg, { call, log, workDir: cfg.workDir, home: deps.home, now, sleep, env: deps.env, ...deps.text })) : null;
+  const text = textCfg && !textCfg.problem ? (deps.textSlot ?? new TextSlot(textCfg, { call, log, workDir: cfg.workDir, home: deps.home, now, sleep, env: deps.env, redact, ...deps.text })) : null;
   const gpuTotalMb = text ? await (deps.readGpuTotal ?? (deps.readGpu ? async () => null : () => readGpuTotal(cfg.nvidiaSmi)))().catch(() => null) : null;
   let lastUsedMb = null;
   /** Where a new start of the text slot's server may run: the GPU while nothing else holds it and there is room, else the CPU. */

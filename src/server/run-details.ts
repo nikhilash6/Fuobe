@@ -102,8 +102,11 @@ export interface NearRun {
 export interface RunDetails {
   /** The run as the account's own feed has it (its words, trouble, buttons), with whose it is and each result's state. */
   run: AccountRun;
-  /** The stored status words and error (the account may have read a plainer sentence: a hosted run's), without addresses or credentials. */
-  stored: { message: string | null; error: string | null };
+  /**
+   * The stored status words and error (the account may have read a plainer sentence: a hosted run's), without addresses
+   * or credentials. `detail`: the engine's own words (cleaned) behind a plain sentence, for the owner only.
+   */
+  stored: { message: string | null; error: string | null; detail?: string };
   /** What a failed run's GPU was missing, and what its GPU or key ran into (stored even where the account wasn't shown it). */
   fix: { code?: string; workflowId?: string; items?: { folder?: string; file?: string; class?: string; pack?: string }[] } | null;
   trouble: RunTrouble | null;
@@ -252,6 +255,8 @@ interface RawRow {
   external_meta_json: string | null;
   provider_input_json: string | null;
   fix_json: string | null;
+  /** The owner-only technical detail of a failed run whose person read a plain sentence. */
+  detail: string | null;
 }
 
 const parse = (json: string | null | undefined): unknown => {
@@ -704,7 +709,7 @@ export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails
   const run = accountRunById(id, o.emails ?? true);
   if (!run) return null;
   const account = run.account.id;
-  const raw = db().prepare("SELECT request_json, message, error, external_id, external_meta_json, provider_input_json, fix_json FROM generations WHERE id = ?").get(id) as RawRow | undefined;
+  const raw = db().prepare("SELECT request_json, message, error, external_id, external_meta_json, provider_input_json, fix_json, detail FROM generations WHERE id = ?").get(id) as RawRow | undefined;
   if (!raw) return null;
   const gpu = gpuNow(account);
   const scrub = (t: string | null) => (t ? redactText(t, { url: gpu.url }) : t);
@@ -747,7 +752,7 @@ export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails
       ...(run.trouble && { trouble: safeTrouble(run.trouble, gpu.url) }),
       ...(run.waiting && { waiting: safeTrouble(run.waiting, gpu.url) }),
     },
-    stored: { message: scrub(raw.message), error: scrub(raw.error) },
+    stored: { message: scrub(raw.message), error: scrub(raw.error), ...(raw.detail && { detail: scrub(raw.detail) ?? undefined }) },
     fix: Object.keys(fixRest).length ? (redactValue(fixRest, { url: gpu.url }) as RunDetails["fix"]) : null,
     trouble,
     where: whereOf(run, raw, gpu),

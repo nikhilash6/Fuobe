@@ -176,6 +176,11 @@ export function RunDetailsView() {
                 </Fact>
               )}
               {g.error && g.error !== d.stored.error && <Fact label="Error (as the account read it)">{g.error}</Fact>}
+              {d.stored.detail && (
+                <Fact label="Technical detail">
+                  <span className="whitespace-pre-wrap">{d.stored.detail}</span>
+                </Fact>
+              )}
               {d.trouble && (
                 <>
                   <Fact label="Cause">

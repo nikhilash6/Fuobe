@@ -2,6 +2,7 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { getModel, getPreset } from "@/lib/catalog";
@@ -59,7 +60,7 @@ import {
   type Preset,
   type ProviderId,
 } from "@/lib/catalog/types";
-import { db } from "./db";
+import { DATA_DIR, db } from "./db";
 import { keepVoiceEmbedding, savedVoiceFor } from "./voices";
 import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
@@ -109,7 +110,8 @@ import {
   type TroubleCause,
 } from "@/lib/diagnose";
 import { draining } from "./shutdown";
-import { keptText, networkCode, recordOwnRun, type HostKind } from "./run-events";
+import { keptText, networkCode, recordOwnRun, recordRunEvent, type HostKind } from "./run-events";
+import { cleanEngineText, isEngineWords, storedErrorText, withoutFolders } from "@/lib/engine-error";
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { MODEL3D_SETUP, ownSetupLabel } from "@/lib/own-setup";
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
@@ -194,6 +196,11 @@ interface Row {
   fix_json?: string | null;
   /** NULL, or "checking": its outputs wait for the moderation service (output-checks.ts). */
   stage?: string | null;
+  /**
+   * A failed run's technical detail, for the owner only (the engine's own words, cleaned: src/lib/engine-error.ts), when
+   * the person read a plain sentence in `error` instead. Never part of a Generation.
+   */
+  detail?: string | null;
 }
 
 /** Trash and folder columns, joined onto every library read. */
@@ -361,7 +368,7 @@ function poolMessage(r: Pick<Row, "status" | "message">, ready = false): string 
  */
 function poolError(id: string, error: string | null, charged: boolean): string | null {
   if (!error) return error;
-  if (PLAIN_POOL_ERRORS().has(error) || /^Your files have reached \d+ GB\b/.test(error)) return error;
+  if (PLAIN_POOL_ERRORS().has(error) || isEngineWords(error) || /^Your files have reached \d+ GB\b/.test(error)) return error;
   const checked = db().prepare("SELECT 1 FROM output_checks WHERE generation_id = ? AND state IN ('hidden', 'unchecked') LIMIT 1").get(id);
   if (!checked) return POOL_WORDS.failed;
   return charged ? error : error.replace(/\s*Not charged\.$/, "");
@@ -629,7 +636,21 @@ function turnTaken(id: string): boolean {
 /** A row still waiting for its hand-over (queued or running, no job yet): only then is it changed. */
 const PENDING = "status IN ('queued', 'running') AND external_id IS NULL";
 
-function update(id: string, fields: Partial<Row>): void {
+/**
+ * Fields as they are written: a run's error never keeps a machine's path, a tool's banner or a stack trace, and its
+ * owner-only detail is cleaned the same way (src/lib/engine-error.ts).
+ */
+function storedFields(fields: Partial<Row>): Partial<Row> {
+  if (typeof fields.error !== "string" && typeof fields.detail !== "string") return fields;
+  return {
+    ...fields,
+    ...(typeof fields.error === "string" && { error: storedErrorText(fields.error) }),
+    ...(typeof fields.detail === "string" && { detail: cleanEngineText(fields.detail) || null }),
+  };
+}
+
+function update(id: string, given: Partial<Row>): void {
+  const fields = storedFields(given);
   const keys = Object.keys(fields);
   if (!keys.length) return;
   db()
@@ -2838,9 +2859,17 @@ function ownFailed(id: string, account: string | undefined, f: RunFacts, cause: 
   }
 }
 
-/** generations.fix_json: what the GPU was missing (GenerationFix) and, for an account, what its GPU or key ran into. */
+/** This server's own folders: never named in a run's details line (src/lib/engine-error.ts withoutFolders). */
+const serverFolders = () => [DATA_DIR, process.cwd(), os.tmpdir(), os.homedir()];
+
+/**
+ * generations.fix_json: what the GPU was missing (GenerationFix) and, for an account, what its GPU or key ran into. Its
+ * details line keeps the person's own GPU's words, without this server's folders.
+ */
 const keptFix = (fix: GenerationFix | undefined, trouble: Diagnosis | undefined): string | undefined =>
-  fix || trouble ? JSON.stringify({ ...(fix ?? {}), ...(trouble && { trouble: troubleOf(trouble) }) }) : undefined;
+  fix || trouble
+    ? JSON.stringify({ ...(fix ?? {}), ...(trouble && { trouble: troubleOf(trouble.details ? { ...trouble, details: withoutFolders(trouble.details, serverFolders()) } : trouble) }) })
+    : undefined;
 
 /** Where an account's GPU is, as the log says it: a RunPod pod, a tunnel, a web address, or the person's own computer. */
 function hostKindOf(gpu: AccountGpu | null | undefined): HostKind | undefined {
@@ -4388,7 +4417,9 @@ async function pollOne(r: Row): Promise<void> {
       return;
     }
     const kept = keptFix(res.fix, undefined);
-    updateLive(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }) });
+    // On this install's GPUs the person reads a plain sentence; the engine's own words are the owner's (the column and the log).
+    const saved = updateLive(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(kept && { fix_json: kept }), ...(res.detail && { detail: res.detail }) });
+    if (saved && res.detail) recordRunEvent("gpu-run-failed", { run: r.id, ...(account && { account }), provider: r.provider, model: r.model_id, op: r.op ?? undefined, words: res.error, detail: cleanEngineText(res.detail) }, "warn");
     // (A run on this install's GPUs says nothing about the account's own GPU.)
     if (res.fix && !onPool) markStale(account ? `acct:${account}` : "install");
     return;
@@ -4594,7 +4625,8 @@ async function pollOne(r: Row): Promise<void> {
  * person canceled) meanwhile back to an earlier state, and never fails a run another process is saving. `extra`: more of
  * the WHERE clause (it may read @__me, @__quiet and @__now, and its own `params`). Returns whether the change was made.
  */
-export function updateLive(id: string, fields: Partial<Row>, extra = "", params: Record<string, unknown> = {}): boolean {
+export function updateLive(id: string, given: Partial<Row>, extra = "", params: Record<string, unknown> = {}): boolean {
+  const fields = storedFields(given);
   const keys = Object.keys(fields);
   if (!keys.length) return false;
   const now = Date.now();
