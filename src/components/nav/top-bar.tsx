@@ -31,10 +31,10 @@ export { prefetchHrefs } from "./nav-prefetch";
  * Library; search; New creation; who is looking. 56 px on every page. What doesn't fit moves into More, by CSS alone
  * (nothing is measured, so nothing moves after the first paint):
  *   1600 and up   everything, search 280 px, a guest's Log in
- *   1440-1599     the same, search 220 px (Apps, Motions & effects and Canvas each carry a chevron)
+ *   1440-1599     the same, search 220 px, items 4 px narrower a side (Apps, Motions & effects and Canvas each carry a chevron)
  *   1280-1439     Canvas and Assist in More, search 200 px
- *   1024-1279     Apps and Motions & effects in More too
- *   768-1023      the same, Fuobe FX in More too, search and New creation as icon buttons
+ *   1024-1279     Fuobe FX, Apps and Motions & effects in More too
+ *   768-1023      the same, search and New creation as icon buttons
  * Measured with the site's fonts for a guest, an account and the owner, a classic scrollbar's width to spare at every
  * width. Below md the phone tabs take over (phone-tabs.tsx).
  */
@@ -45,7 +45,7 @@ export { prefetchHrefs } from "./nav-prefetch";
  * BAR_TRIGGER (bar-split.tsx).
  */
 export const BAR_ITEM =
-  "nav-row nav-mark-under group/bar-item inline-flex h-10 shrink-0 [@media(pointer:coarse)]:h-11 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] whitespace-nowrap text-foreground/80 nav-hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground data-[active]:font-semibold data-[active]:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground min-[1440px]:px-3.5";
+  "nav-row nav-mark-under group/bar-item inline-flex h-10 shrink-0 [@media(pointer:coarse)]:h-11 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] whitespace-nowrap text-foreground/80 nav-hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground data-[active]:font-semibold data-[active]:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground min-[1600px]:px-3.5";
 
 /**
  * Which bar item holds the open page, one item per page (areaOfPath): Create for the create tools, Studios for a studio
@@ -129,7 +129,7 @@ function MoreItems() {
   const on = useOn();
   return (
     <>
-      <div className="lg:hidden">
+      <div className="xl:hidden">
         <FxRow current={on(FX_ENTRY)} row={0} />
       </div>
       {pick(["apps", "motions", "effects"]).map((e, i) => (
@@ -169,11 +169,9 @@ function MoreMenu({ active }: { active: Active }) {
       onOpen={warmMore}
       cardClassName="w-80"
       className="min-[1440px]:hidden"
-      // Marked when it holds the open page at this width: Canvas and Assist always; Apps, Motions and Effects below xl.
+      // Marked when it holds the open page at this width: Canvas and Assist always; Fuobe FX, Apps, Motions and Effects below xl.
       active={active.canvas || active.assist}
-      data-narrow={active.apps || active.motions || undefined}
-      // Fuobe FX is in it below lg only.
-      data-narrow-lg={active.fx || undefined}
+      data-narrow={active.apps || active.motions || active.fx || undefined}
     >
       <MoreItems />
     </BarCardMenu>
@@ -192,7 +190,7 @@ function BarLinks({ active, onTap }: { active: Active; onTap?: (href: string) =>
       {/* An item is marked anywhere in its area, its own page (/create, /studios …) included. */}
       <CreateMenu active={active.create || active.page === "create"} />
       <MegaLauncher id="studios" active={active.studios || active.page === "studios"} />
-      <MegaLauncher id="fx" active={active.fx || active.page === "fx"} className="hidden lg:inline-flex" />
+      <MegaLauncher id="fx" active={active.fx || active.page === "fx"} className="hidden xl:inline-flex" />
       <MegaLauncher id="apps" active={active.apps || active.page === "apps"} className="hidden xl:inline-flex" />
       <MegaLauncher id="motions" active={active.motions || active.page === "motions"} className="hidden xl:inline-flex" />
       <MegaLauncher id="canvas" active={active.canvas || active.canvasHome} className="hidden min-[1440px]:inline-flex" />
@@ -284,8 +282,7 @@ function RightCluster() {
 export function warmBar(): void {
   if (!window.matchMedia("(min-width: 768px)").matches) return;
   const ids: FetchedMegaId[] = [];
-  if (window.matchMedia("(min-width: 1024px)").matches) ids.push("fx");
-  if (window.matchMedia("(min-width: 1280px)").matches) ids.push("apps", "motions");
+  if (window.matchMedia("(min-width: 1280px)").matches) ids.push("fx", "apps", "motions");
   if (window.matchMedia("(min-width: 1440px)").matches) ids.push("canvas");
   preloadMegaPanel();
   loadMenusNow(ids);

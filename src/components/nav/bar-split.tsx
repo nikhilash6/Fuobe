@@ -17,9 +17,9 @@ import { useBarMenu, type TriggerHandlers } from "./bar-menus";
  * chevron and the bar's one open highlight (BarIndicator) behind it.
  */
 
-/** The item: 40 px (44 to tap), 10 px left and 8 px right of the words (14 and 10 from 1440 px), then the chevron. */
+/** The item: 40 px (44 to tap), 10 px left and 8 px right of the words (14 and 10 from 1600 px), then the chevron. */
 export const BAR_TRIGGER =
-  "nav-row nav-mark-under group/bar-item inline-flex h-10 shrink-0 items-center gap-1 rounded-[10px] pr-2 pl-2.5 text-[14px] whitespace-nowrap text-foreground/80 nav-hover:text-foreground focus-visible:text-foreground data-[open]:text-foreground data-[active]:font-semibold data-[active]:text-foreground min-[1440px]:pr-2.5 min-[1440px]:pl-3.5 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:min-w-11";
+  "nav-row nav-mark-under group/bar-item inline-flex h-10 shrink-0 items-center gap-1 rounded-[10px] pr-2 pl-2.5 text-[14px] whitespace-nowrap text-foreground/80 nav-hover:text-foreground focus-visible:text-foreground data-[open]:text-foreground data-[active]:font-semibold data-[active]:text-foreground min-[1600px]:pr-2.5 min-[1600px]:pl-3.5 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:min-w-11";
 
 /** The chevron: a quiet mark inside the item (no box of its own); it turns while the menu is open. */
 export const BarChevron = () => (

@@ -120,23 +120,9 @@ html:not([data-input="pointer"]) .nav-focus-out:focus-visible {
 html [data-top-bar][data-menu-open] [data-bar-menu].nav-row:is(:hover, :focus-visible) {
   background-color: transparent;
 }
-/* More, below 1280 px, holds Apps and Motions & effects (and below 1024 px Fuobe FX): their page marks it there. */
+/* More, below 1280 px, holds Fuobe FX, Apps and Motions & effects: their page marks it there. */
 @media (max-width: 1279.98px) {
   .nav-row.nav-mark-under[data-narrow]::before {
-    content: "";
-    position: absolute;
-    bottom: 3px;
-    left: 50%;
-    width: 16px;
-    height: 3px;
-    margin-left: -8px;
-    border-radius: 9999px;
-    background-color: var(--nav-mark);
-    pointer-events: none;
-  }
-}
-@media (max-width: 1023.98px) {
-  .nav-row.nav-mark-under[data-narrow-lg]::before {
     content: "";
     position: absolute;
     bottom: 3px;
