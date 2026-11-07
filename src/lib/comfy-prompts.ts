@@ -51,4 +51,7 @@ export function neutralPrompt(graph: string): string | undefined {
 /** A graph that needs words to know what to do (no neutral line fits): refused without them. */
 export const WORDS_NEEDED: Record<string, string> = {
   "layers-qwen-image-layered-control": "Name the part to separate, e.g. “the headline text”",
+  // Fuobe Reshoot reads a prompt written for the part's length (Genjutsu writes it: src/lib/catalog/reshoot.ts).
+  "video-reshoot-swap-h3": "Run Fuobe Reshoot from Genjutsu: it writes the words for your part",
+  "video-reshoot-edit-h3": "Run Fuobe Reshoot from Genjutsu: it writes the words for your part",
 };

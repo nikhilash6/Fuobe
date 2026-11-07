@@ -24,7 +24,7 @@ export function workflowSource(file: string): { raw: string; page: string } {
  * in a folder of a bigger repo): the repo to clone, the commit, and the folder. Undefined for a plain repo address.
  */
 export function pinnedRepo(url: string): { repo: string; ref: string; dir?: string } | undefined {
-  const m = /^(https:\/\/github\.com\/[^/]+\/[^/]+?)(?:\.git)?\/tree\/([^/]+)(?:\/(.+?))?\/?$/.exec(url);
+  const m = /^(https:\/\/(?:github\.com|huggingface\.co)\/[^/]+\/[^/]+?)(?:\.git)?\/tree\/([^/]+)(?:\/(.+?))?\/?$/.exec(url);
   return m ? { repo: m[1], ref: m[2], ...(m[3] ? { dir: m[3] } : {}) } : undefined;
 }
 
@@ -55,9 +55,11 @@ export function nodeInstall(node: { name: string; repo: string }): string {
       `  && { git -C ${dest} fetch -q --depth 1 origin ${pin.ref} 2>/dev/null || true; } && git -C ${dest} checkout -q ${pin.ref}`,
     ].join("\n");
   }
+  // A folder of a Hugging Face model repo (ComfyUI-Viggle-Remake): the repo's weights are LFS files, never fetched.
+  const lfs = pin.repo.startsWith("https://huggingface.co/") ? "GIT_LFS_SKIP_SMUDGE=1 " : "";
   return [
-    `[ -d ${dest} ] || { tmp="$(mktemp -d)" && git clone -q --filter=blob:none --no-checkout ${pin.repo} "$tmp" \\`,
-    `  && git -C "$tmp" sparse-checkout set --no-cone /${pin.dir}/ && git -C "$tmp" checkout -q ${pin.ref} \\`,
+    `[ -d ${dest} ] || { tmp="$(mktemp -d)" && ${lfs}git clone -q --filter=blob:none --no-checkout ${pin.repo} "$tmp" \\`,
+    `  && git -C "$tmp" sparse-checkout set --no-cone /${pin.dir}/ && ${lfs}git -C "$tmp" checkout -q ${pin.ref} \\`,
     `  && cp -r "$tmp/${pin.dir}" ${dest}; rm -rf "$tmp"; }`,
   ].join("\n");
 }

@@ -234,8 +234,8 @@ describe("finding a studio's features", () => {
     const inside = (kind: ViewerKind | undefined, q: string) => find(kind, q).groups[0];
     expect(find("guest", "genjutsu").best[0]).toMatchObject({ id: "genjutsu" });
     expect(inside("guest", "genjutsu")).toMatchObject({ label: "In Genjutsu" });
-    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
-    expect(inside("owner", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
+    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish", "Fuobe Reshoot"]);
+    expect(inside("owner", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish", "Fuobe Reshoot"]);
     expect(inside("guest", "character sheet").hits.map((h) => h.label)).toEqual(["From Reference", "Build from scratch", "From a description"]);
     // Not a tab that is the studio's own page (Upscale's Image), nor one already among the best matches.
     const upscale = find("guest", "upscale");

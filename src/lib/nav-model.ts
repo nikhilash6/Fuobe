@@ -368,6 +368,7 @@ const STUDIO_FEATURES: NavEntry[] = [
   ).map(([id, label, what, kw]) => feature("genjutsu", "WandSparkles", id, `/genjutsu?mode=${id}`, label, what, kw)),
   feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion"),
   feature("genjutsu", "WandSparkles", "finish", "/genjutsu?mode=finish", "Finish", "Fix faces and colours", "finish fix faces colours colors", FINISH_OPEN ? undefined : OWNER),
+  feature("genjutsu", "WandSparkles", "reshoot", "/genjutsu?mode=reshoot", "Fuobe Reshoot", "Same shot, anything you change", "reshoot remake recast swap edit outfit weather same shot change"),
   ...(
     [
       ["reference", "From Reference", "A sheet from your photos", "reference photo upload face sheet"],
@@ -741,7 +742,7 @@ const hubTools = (hub: HubKind, skip: readonly string[] = []) => HUB_MODES[hub].
 export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
   marketing: { ids: ["marketing-click-to-ad", "ads", "ads-multiplier"] },
   // Its mode ids built here: one of them written out whole is also a retired model id (catalog/replaced.ts).
-  genjutsu: { ids: ["motion", "character", "swap", "restyle", "insert", "picture", "finish"].map((m) => `genjutsu-${m}`), tall: 800, short: "line", ownerTall: 880 },
+  genjutsu: { ids: ["motion", "character", "swap", "restyle", "insert", "picture", "finish", "reshoot"].map((m) => `genjutsu-${m}`), tall: 800, short: "line", ownerTall: 880 },
   // The modes that aren't rows of the Sound column already.
   audio: { ids: hubTools("audio", SOUND_COLUMN), menu: 3 },
   upscale: { ids: hubTools("upscale") },
