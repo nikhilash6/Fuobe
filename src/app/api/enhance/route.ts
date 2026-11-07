@@ -2,7 +2,7 @@ import { enhancePrompt, writeLyrics } from "@/server/enhance";
 import { getModel } from "@/lib/catalog";
 import { appliesOwnStyle } from "@/lib/catalog/applied-style";
 import type { MediaKind, Operation } from "@/lib/catalog/types";
-import { ownGpuToolMessage } from "@/lib/guest-access";
+import { GUEST_HEADER, GUEST_RUN_MESSAGE, ownGpuToolMessage, SIGN_IN_CODE } from "@/lib/guest-access";
 import { LoginGuard, requestViewer } from "@/server/auth";
 import { hostedRunsOn } from "@/server/hosted-switch";
 import { runAsTenant, type Tenant } from "@/server/tenant";
@@ -10,9 +10,13 @@ import type { HelperAnswer } from "@/server/text-helper";
 
 type HelperTrouble = Exclude<HelperAnswer, { text: string }>;
 
+/** A guest's call for the free helper: the page opens "Create a free account" (the 401 marked as a guest's). */
+const signIn = () => Response.json({ error: GUEST_RUN_MESSAGE, code: SIGN_IN_CODE }, { status: 401, headers: { [GUEST_HEADER]: "1", "Cache-Control": "no-store" } });
+
 /** Why no lyrics came, in words, with a code the page reads ("no-llm" offers Settings → AI helper to the owner). */
 function noLyrics(owner: boolean, why: HelperTrouble | null): Response {
   const headers = { "Cache-Control": "no-store" };
+  if (why?.error === "sign-in") return signIn();
   if (why?.error === "limit") {
     return Response.json({ error: "You've written a lot of lyrics just now. Try again in a minute, or type your own.", code: "helper-limit" }, { status: 429, headers: { ...headers, "Retry-After": String(why.retryAfterS ?? 60) } });
   }
@@ -39,6 +43,8 @@ export async function POST(request: Request) {
   // A visitor (only while hosted runs are on: the proxy lets nothing else through) gets the free helper, as itself.
   const viewer = requestViewer(request);
   const owner = viewer.kind === "owner";
+  // A guest's lyrics need the free helper: sign up first. A guest's rewrite stays the offline one (freeHelperOn).
+  if (viewer.kind === "guest" && target === "lyrics") return signIn();
   if (!owner && !hostedRunsOn()) return Response.json({ error: ownGpuToolMessage(false), code: "own-gpu-tool" }, { status: 403 });
   const as: Tenant | null = viewer.kind === "account" ? { kind: "account", id: viewer.account.id } : viewer.kind === "guest" ? { kind: "guest" } : null;
   const guestKey = viewer.kind === "guest" ? LoginGuard.clientKey(request.headers) : undefined;

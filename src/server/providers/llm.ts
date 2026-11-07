@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import { cueText, parseCues, toSrt, type Cue } from "@/lib/cues";
 import type { GenInput, ModelRoute, Operation } from "@/lib/catalog/types";
+import { GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import { HOSTED_PROVIDERS, testHosted } from "../llm/hosted";
 import { aiHelper, chatLocal, checkLocal, emptyReply, LOCAL_LABELS, localLabel, localProblem, localReady, localServers, localWhat, pinnedKind, probeLocal, type JsonSpec, type LocalKind, type Ready } from "../llm";
 import { placeName } from "../place-name";
@@ -206,6 +207,7 @@ async function viaComfy(system: string, user: string, signal: AbortSignal): Prom
 /** Words for a free helper's answer that came without text. */
 function helperTrouble(a: Exclude<HelperAnswer, { text: string }>): string {
   if (a.error === "blocked") return a.message || "This text can't be written here.";
+  if (a.error === "sign-in") return GUEST_RUN_MESSAGE;
   if (a.error === "busy") return "The writer is busy right now. Press Retry in a moment.";
   return "The writer couldn't finish this text. Press Retry.";
 }

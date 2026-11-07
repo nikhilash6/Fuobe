@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { NextRequest } from "next/server";
 import sharp from "sharp";
 import { tempDir } from "./helpers/temp-dir";
+import { startFakeModeration } from "./helpers/fake-billing";
 
 vi.setConfig({ testTimeout: 30_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -167,11 +168,32 @@ describe("the text slots' line", () => {
     expect(helper.textEligible(workerRow(w))).toBe(false);
   });
 
-  it("a visitor's calls have limits: a minute's and its waiting jobs; a run's own steps aren't counted", async () => {
+  it("a guest's call is refused for sign-in before any moderation call or job", async () => {
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
+    try {
+      const w = addWorker();
+      helper.claimHelperJob(workerRow(w));
+      for (const who of ["guest:203.0.113.9", "guest:shared"]) {
+        expect(await helper.askHelper({ task: "lyrics", system: "s", user: "u", who, waitMs: 30 })).toEqual({ error: "sign-in" });
+      }
+      expect(runAsTenant({ kind: "guest" }, () => helper.freeHelperOn())).toBe(false);
+      expect(jobs()).toEqual([]);
+      expect(mod.calls).toEqual([]);
+      // An account's call does reach moderation.
+      await helper.askHelper({ task: "lyrics", system: "s", user: "u", who: `acct:${account}`, waitMs: 30 });
+      expect(mod.calls_of("/v1/check-run")).toHaveLength(1);
+    } finally {
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
+    }
+  });
+
+  it("an account's calls have limits: a minute's and its waiting jobs; a run's own steps aren't counted", async () => {
     const w = addWorker();
     helper.claimHelperJob(workerRow(w));
-    const who = "guest:203.0.113.9";
-    for (let i = 0; i < helper.HELPER_LIMITS.guest.perMinute; i++) expect(await helper.askHelper({ task: "enhance", system: "s", user: "u", who, waitMs: 30 })).toEqual({ error: "busy" });
+    const who = `acct:${account}`;
+    for (let i = 0; i < helper.HELPER_LIMITS.account.perMinute; i++) expect(await helper.askHelper({ task: "enhance", system: "s", user: "u", who, waitMs: 30 })).toEqual({ error: "busy" });
     expect(await helper.askHelper({ task: "enhance", system: "s", user: "u", who, waitMs: 30 })).toMatchObject({ error: "limit" });
     expect(await helper.askHelper({ task: "write", system: "s", user: "u", who, waitMs: 30, counted: false })).toEqual({ error: "busy" });
     // Two of its own jobs waiting at once, at most.
@@ -284,21 +306,38 @@ describe("the AI helper's order and the lyrics route", () => {
     await slot.stop();
   });
 
-  it("lyrics: a guest and an account get them from the free helper while hosted runs are on", async () => {
+  it("lyrics: an account gets them from the free helper while hosted runs are on; a guest is asked to sign up", async () => {
     process.env.FUOBE_HOSTED_RUNS = "1";
+    const mod = await startFakeModeration();
+    process.env.FUOBE_MODERATION_URL = mod.url;
     const w = addWorker();
     const slot = standIn(w, (job) => (job.task === "lyrics" ? "[verse] Neon rain\n[chorus] Hold on" : "?"));
-    expect(passed(await viaProxy("/api/enhance"))).toBe(true);
-    expect(passed(await viaProxy("/api/enhance", "account"))).toBe(true);
-    for (const who of [undefined, "account"]) {
-      const r = await enhanceRoute.POST(post("/api/enhance", { prompt: "A synthwave song about rain", target: "lyrics", seconds: 30 }, who));
+    try {
+      expect(passed(await viaProxy("/api/enhance"))).toBe(true);
+      expect(passed(await viaProxy("/api/enhance", "account"))).toBe(true);
+      // A guest: 401 with the guest mark and the sign-in code (the page opens "Create a free account"), nothing checked or queued.
+      const guest = await enhanceRoute.POST(post("/api/enhance", { prompt: "A synthwave song about rain", target: "lyrics", seconds: 30 }));
+      expect(guest.status).toBe(401);
+      expect(guest.headers.get("x-fuobe-guest")).toBe("1");
+      expect(await guest.json()).toEqual({ error: "Create a free account to run this.", code: "sign-in" });
+      expect(mod.calls).toEqual([]);
+      // A guest's rewrite is the offline one: the helper isn't asked.
+      const rewrite = await enhanceRoute.POST(post("/api/enhance", { prompt: "a cat", kind: "image", op: "t2i" }));
+      expect(rewrite.status).toBe(200);
+      expect(((await rewrite.json()) as { prompt: string }).prompt).toMatch(/^a cat\. /);
+      expect(mod.calls).toEqual([]);
+      expect(slot.seen).toEqual([]);
+      const r = await enhanceRoute.POST(post("/api/enhance", { prompt: "A synthwave song about rain", target: "lyrics", seconds: 30 }, "account"));
       expect(r.status).toBe(200);
       expect(((await r.json()) as { lyrics: string }).lyrics).toBe("[Verse]\nNeon rain\n\n[Chorus]\nHold on");
+      const accountRewrite = await enhanceRoute.POST(post("/api/enhance", { prompt: "a cat", kind: "image", op: "t2i" }, "account"));
+      expect(((await accountRewrite.json()) as { prompt: string }).prompt).toBe("?");
+      expect(slot.seen).toEqual(["lyrics", "enhance"]);
+    } finally {
+      await slot.stop();
+      delete process.env.FUOBE_MODERATION_URL;
+      await mod.close();
     }
-    const rewrite = await enhanceRoute.POST(post("/api/enhance", { prompt: "a cat", kind: "image", op: "t2i" }));
-    expect(((await rewrite.json()) as { prompt: string }).prompt).toBe("?");
-    expect(slot.seen).toEqual(["lyrics", "lyrics", "enhance"]);
-    await slot.stop();
   });
 
   it("lyrics for a Gujarati or Hindi description are asked for in its language and script", async () => {
@@ -310,7 +349,7 @@ describe("the AI helper's order and the lyrics route", () => {
       return "[Verse]\nગરબા રમીએ";
     });
     for (const prompt of ["નવરાત્રિ ગરબા પર એક ઉત્સાહી ગીત", "मानसून की पहली बारिश पर एक गीत", "A synth-pop song about rain"]) {
-      expect((await enhanceRoute.POST(post("/api/enhance", { prompt, target: "lyrics", seconds: 30 }))).status).toBe(200);
+      expect((await enhanceRoute.POST(post("/api/enhance", { prompt, target: "lyrics", seconds: 30 }, "account"))).status).toBe(200);
     }
     await slot.stop();
     expect(asked[0].system).toContain("Write in the language and script of the description");
@@ -319,9 +358,9 @@ describe("the AI helper's order and the lyrics route", () => {
     expect(asked[2].user).not.toContain("Write the lyrics in");
   });
 
-  it("never a dead end: busy words for a visitor, the way to set one up for the owner, and the proxy without hosted runs", async () => {
+  it("never a dead end: busy words for an account, the way to set one up for the owner, and the proxy without hosted runs", async () => {
     process.env.FUOBE_HOSTED_RUNS = "1";
-    const busy = await enhanceRoute.POST(post("/api/enhance", { prompt: "a song", target: "lyrics" }));
+    const busy = await enhanceRoute.POST(post("/api/enhance", { prompt: "a song", target: "lyrics" }, "account"));
     expect(busy.status).toBe(503);
     expect(await busy.json()).toEqual({ error: "Writing lyrics is busy right now. Try again in a moment, or type your own.", code: "helper-busy" });
     // A rewrite always comes back: the offline one when the helper is busy.

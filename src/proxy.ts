@@ -217,7 +217,7 @@ function guest(request: NextRequest): NextResponse {
   if (isPriceCheck(method, pathname, search, hostedRunsOn())) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
   if (isAssistChange(method, pathname)) return assistOwner();
   if (anyoneMayReport(method, pathname)) return pass(request);
-  // The free text helper (lyrics, a prompt rewrite): while hosted runs are on, its route counts a guest's own limits.
+  // The free text helper's route, while hosted runs are on: a guest gets the offline rewrite, and sign-up for lyrics.
   if (helperRoute(method, pathname) && hostedRunsOn()) return pass(request);
   // What an account may send, the library, the owner's settings and the studios' runs: signing up is the next step.
   // A tool run made only on this install's GPUs counts as one of them with hosted runs on, and as a tool that isn't

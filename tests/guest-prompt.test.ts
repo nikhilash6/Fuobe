@@ -32,8 +32,8 @@ import { send as shortsSend } from "@/components/shorts/hooks";
 import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { useCreateSwapProject } from "@/components/swap-studio/hooks";
 import { runGpuCheck } from "@/hooks/use-gpu";
-import { askToSignUp, assetUsage, CONNECT_GPU_EVENT, enhance, GUEST_PROMPT_EVENT, refusalCard, signInHref, watchGuestRefusals } from "@/lib/api";
-import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_NEEDS_HEADER, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
+import { askToSignUp, assetUsage, CONNECT_GPU_EVENT, enhance, GUEST_PROMPT_EVENT, helperSignIn, refusalCard, signInHref, watchGuestRefusals, writeLyrics } from "@/lib/api";
+import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_NEEDS_HEADER, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE, SIGN_IN_CODE } from "@/lib/guest-access";
 import { refusalShown, toastError } from "@/lib/refusals";
 
 const answer = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}) =>
@@ -171,6 +171,40 @@ describe("a guest's refused run", () => {
     toastError(new Error("Couldn't start the film"));
     toastError(new Error(""), "Upload failed");
     expect(toasts.error).toEqual(["Couldn't start the film", "Upload failed"]);
+  });
+});
+
+describe("a guest's free-helper call (Write the lyrics)", () => {
+  const signIn = () => answer(401, { error: GUEST_RUN_MESSAGE, code: SIGN_IN_CODE }, { [GUEST_HEADER]: "1" });
+
+  it("opens Create a free account once, about a run, with no error toast", async () => {
+    page("/audio");
+    server = () => signIn();
+    const e = await writeLyrics("a song about rain").catch((err: unknown) => err);
+    expect((e as { code?: string }).code).toBe(SIGN_IN_CODE);
+    expect(helperSignIn(e)).toBe(true);
+    expect(events).toEqual([GUEST_PROMPT_EVENT]);
+    expect(details).toEqual([{ action: "run" }]);
+    expect(toasts.error).toEqual([]);
+  });
+
+  it("opens the card itself when the watcher didn't (the sign-in code without the guest mark)", async () => {
+    page("/audio");
+    server = () => answer(401, { error: GUEST_RUN_MESSAGE, code: SIGN_IN_CODE });
+    const e = await writeLyrics("a song about rain").catch((err: unknown) => err);
+    expect(events).toEqual([]);
+    expect(helperSignIn(e)).toBe(true);
+    expect(events).toEqual([GUEST_PROMPT_EVENT]);
+    expect(details).toEqual([{ action: "run" }]);
+  });
+
+  it("leaves every other failure to its own words", async () => {
+    page("/audio");
+    server = () => answer(503, { error: "Writing lyrics is busy right now.", code: "helper-busy" });
+    const e = await writeLyrics("a song about rain").catch((err: unknown) => err);
+    expect(helperSignIn(e)).toBe(false);
+    expect(helperSignIn(null)).toBe(false);
+    expect(events).toEqual([]);
   });
 });
 

@@ -130,8 +130,11 @@ export function helperLive(now = Date.now(), o: { vision?: boolean } = {}): bool
   return rows.some((w) => textEligible(w, now));
 }
 
-/** May this call use the free helper now: it is live, and a visitor's call only while hosted runs are on. */
-export const freeHelperOn = (now = Date.now(), o: { vision?: boolean } = {}): boolean => (!tenant() || hostedRunsOn()) && helperLive(now, o);
+/** May this call use the free helper now: it is live, and an account's call only while hosted runs are on (a guest's never: sign up first). */
+export function freeHelperOn(now = Date.now(), o: { vision?: boolean } = {}): boolean {
+  const t = tenant();
+  return (!t || (t.kind === "account" && hostedRunsOn())) && helperLive(now, o);
+}
 
 /**
  * Pictures as the helper takes them: at most four, each from a file the caller already read for the person, made again
@@ -219,7 +222,8 @@ export function finishHelperJob(w: WorkerRow, id: string, body: { lease?: unknow
   return r.changes === 1;
 }
 
-export type HelperAnswer = { text: string } | { error: "busy" | "limit" | "blocked" | "failed"; message?: string; retryAfterS?: number };
+/** "sign-in": a guest's call, refused before anything is checked or queued. */
+export type HelperAnswer = { text: string } | { error: "busy" | "limit" | "blocked" | "failed" | "sign-in"; message?: string; retryAfterS?: number };
 
 const rateOf = (who: HelperWho) => (who.startsWith("acct:") ? HELPER_LIMITS.account : who === "guest:shared" ? { perMinute: HELPER_LIMITS.guest.perMinute * 10, perHour: HELPER_LIMITS.guest.perHour * 10 } : HELPER_LIMITS.guest);
 
@@ -245,6 +249,8 @@ export async function askHelper(o: AskHelper): Promise<HelperAnswer> {
   const now = o.now ?? Date.now;
   const sleep = o.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const who = o.who ?? helperWho();
+  // A guest signs up first: no moderation call, no job.
+  if (who.startsWith("guest:")) return { error: "sign-in" };
   const d = db();
   sweepHelper(now());
   const vision = !!o.images?.length;

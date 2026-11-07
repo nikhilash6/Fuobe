@@ -48,7 +48,7 @@ import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { placeOf } from "@/lib/place-name";
-import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useNewestRun, useStatus, useViewer } from "@/lib/api";
+import { askToSignUp, CONNECT_GPU_EVENT, engineForNextPage, enhance, helperSignIn, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useNewestRun, useStatus, useViewer } from "@/lib/api";
 import { keyTurnedDown, keyTurnedDownWords, siteRunOf, siteRunRequest } from "@/lib/site-run";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
@@ -1169,7 +1169,7 @@ export function Composer({ docked }: { docked: boolean }) {
       const p = await enhance(draft.prompt, config.kind, op ?? (config.kind === "video" ? "t2v" : "t2i"), draft.modelId);
       setDraft({ prompt: p });
     } catch (e) {
-      toastError(e);
+      if (!helperSignIn(e)) toastError(e);
     } finally {
       setEnhancing(false);
     }

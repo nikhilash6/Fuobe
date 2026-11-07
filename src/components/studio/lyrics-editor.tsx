@@ -4,7 +4,7 @@ import { Loader2, Music2, PenLine, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useTextHelper, writeLyrics } from "@/lib/api";
+import { helperSignIn, useTextHelper, writeLyrics } from "@/lib/api";
 import type { ModelDef } from "@/lib/catalog/types";
 import { INSTRUMENTAL, insertTag, isInstrumental, normalizeLyrics, promptWithLyrics, SECTION_TAGS, songLength, structureOf } from "@/lib/lyrics";
 import { toastError } from "@/lib/refusals";
@@ -64,7 +64,8 @@ export function LyricsEditor({
     try {
       onChange(await writeLyrics(idea, { seconds, max: spec.max }));
     } catch (e) {
-      // Nothing set up to write them: one click to Settings → AI helper.
+      // A guest: "Create a free account". Nothing set up to write them: one click to Settings → AI helper.
+      if (helperSignIn(e)) return;
       if ((e as { code?: string }).code === "no-llm") toast.error((e as Error).message, { action: { label: "Set up", onClick: () => router.push("/settings#text-ai") } });
       else toastError(e);
     } finally {

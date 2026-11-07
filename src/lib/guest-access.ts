@@ -21,6 +21,8 @@ export const isGuest = (request: Request) => request.headers.get(GUEST_HEADER) =
 
 export const GUEST_LIBRARY_MESSAGE = "Sign up to see this.";
 export const GUEST_RUN_MESSAGE = "Create a free account to run this.";
+/** The code on a guest's refused free-helper call (401 with GUEST_HEADER): the client opens "Create a free account". */
+export const SIGN_IN_CODE = "sign-in";
 
 /** Catalog and status reads that hold nothing of the owner's library: a guest gets the real answer. */
 const GUEST_READS = new Set(["/api/status", "/api/site/uploads", "/api/examples", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
@@ -419,7 +421,7 @@ export function ownGpuRun(method: string, pathname: string): boolean {
  */
 const POOL_TOOL_RUNS: readonly RegExp[] = [/^\/api\/palettes\/lock$/];
 
-/** The free text helper's routes (src/server/text-helper.ts): a visitor may call them while hosted runs are on, within the route's own limits. */
+/** The free text helper's routes (src/server/text-helper.ts): a visitor may call them while hosted runs are on (a guest's helper call gets SIGN_IN_CODE). */
 const HELPER_ROUTES: readonly RegExp[] = [/^\/api\/enhance$/];
 
 export const helperRoute = (method: string, pathname: string): boolean => method === "POST" && HELPER_ROUTES.some((r) => r.test(pathname));

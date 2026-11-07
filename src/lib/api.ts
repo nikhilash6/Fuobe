@@ -28,7 +28,7 @@ import {
 import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
 import { markRefusalShown, refusalShown, responseError } from "./refusals";
-import { OWN_SETUP_HEADER, PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER, RUNS_CHANGED_EVENT, shownHeader } from "./guest-access";
+import { OWN_SETUP_HEADER, PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER, RUNS_CHANGED_EVENT, shownHeader, SIGN_IN_CODE } from "./guest-access";
 import type { PoolRules } from "./pool-rules";
 import { HoldFilesCtx } from "./held-files";
 import { postFile } from "./upload";
@@ -1621,6 +1621,16 @@ function requestPath(input: RequestInfo | URL): string {
  */
 export function askToSignUp(action: RefusalAction = "upload", more: Pick<RefusalDetail, "setup" | "kept"> = {}): void {
   window.dispatchEvent(new CustomEvent<RefusalDetail>(GUEST_PROMPT_EVENT, { detail: { action, ...more } }));
+}
+
+/**
+ * A guest's free-helper call refused with SIGN_IN_CODE ("Write the lyrics"): "Create a free account" opens (unless the
+ * fetch watcher opened it already), never an error. True when the error was that refusal.
+ */
+export function helperSignIn(e: unknown): boolean {
+  if ((e as { code?: unknown } | null)?.code !== SIGN_IN_CODE) return false;
+  if (!refusalShown(e)) askToSignUp("run");
+  return true;
 }
 
 /**
