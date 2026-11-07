@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MediaKind, Operation } from "@/lib/catalog/types";
 import { writeCaption } from "@/lib/ideogram-caption";
 import { normalizeLyrics } from "@/lib/lyrics";
+import { lyricsLanguageHint } from "@/lib/lyrics-language";
 import { activeLocal, aiHelper, chatLocal, type JsonSpec } from "./llm";
 import { engineMode, getSetting } from "./settings";
 import { tenant } from "./tenant";
@@ -251,7 +252,8 @@ Rules:
 - A common shape is Verse, Chorus, Verse, Chorus, Bridge, Chorus; repeat the chorus word for word.
 - Short, singable lines of 5 to 10 words that rhyme or half-rhyme. Concrete images over abstractions.
 - Only the words to be sung: no stage directions, no instruments, no chord names.
-- Keep the description's language, subject, mood and any words it quotes.`;
+- Write in the language and script of the description (Hindi in Devanagari, Gujarati in Gujarati script), unless it asks for another language. The section tags stay in English.
+- Keep the description's subject, mood and any words it quotes.`;
 
 /**
  * Lyrics for a song described in `idea`, about as long as `seconds` of music and at most `max` characters, from whichever
@@ -261,7 +263,9 @@ export async function writeLyrics(idea: string, o: { seconds?: number; max?: num
   const seconds = o.seconds && o.seconds > 0 ? Math.min(600, o.seconds) : 120;
   const sections = seconds <= 45 ? "one verse and one chorus" : seconds <= 100 ? "a verse, a chorus, a second verse and the chorus again" : "a full song (two or three verses, the chorus after each, a bridge)";
   const room = o.max ? ` Stay under ${Math.floor(o.max * 0.9)} characters.` : "";
-  const text = await llmText(LYRICS_SYSTEM, `Write lyrics for this song, about ${Math.round(seconds / 60 * 10) / 10} minutes long: ${sections}.${room}\n\n${idea.trim()}`, { task: "lyrics", waitMs: 75_000, ...o.helper });
+  // The script of the description says the language: a small model is told it again after the words.
+  const hint = lyricsLanguageHint(idea);
+  const text = await llmText(LYRICS_SYSTEM, `Write lyrics for this song, about ${Math.round(seconds / 60 * 10) / 10} minutes long: ${sections}.${room}\n\n${idea.trim()}${hint ? `\n\n${hint}` : ""}`, { task: "lyrics", waitMs: 75_000, ...o.helper });
   const words = normalizeLyrics(text?.replace(/^```\w*\n?|```$/g, ""));
   if (!words) return null;
   return o.max && words.length > o.max ? trimLyrics(words, o.max) : words;

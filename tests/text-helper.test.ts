@@ -301,6 +301,24 @@ describe("the AI helper's order and the lyrics route", () => {
     await slot.stop();
   });
 
+  it("lyrics for a Gujarati or Hindi description are asked for in its language and script", async () => {
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    const w = addWorker();
+    const asked: { system: string; user: string }[] = [];
+    const slot = standIn(w, (job) => {
+      asked.push({ system: job.system, user: job.user });
+      return "[Verse]\nગરબા રમીએ";
+    });
+    for (const prompt of ["નવરાત્રિ ગરબા પર એક ઉત્સાહી ગીત", "मानसून की पहली बारिश पर एक गीत", "A synth-pop song about rain"]) {
+      expect((await enhanceRoute.POST(post("/api/enhance", { prompt, target: "lyrics", seconds: 30 }))).status).toBe(200);
+    }
+    await slot.stop();
+    expect(asked[0].system).toContain("Write in the language and script of the description");
+    expect(asked[0].user).toMatch(/નવરાત્રિ[\s\S]*Write the lyrics in Gujarati, in Gujarati script, not in English/);
+    expect(asked[1].user).toContain("Write the lyrics in Hindi, in Devanagari script");
+    expect(asked[2].user).not.toContain("Write the lyrics in");
+  });
+
   it("never a dead end: busy words for a visitor, the way to set one up for the owner, and the proxy without hosted runs", async () => {
     process.env.FUOBE_HOSTED_RUNS = "1";
     const busy = await enhanceRoute.POST(post("/api/enhance", { prompt: "a song", target: "lyrics" }));
