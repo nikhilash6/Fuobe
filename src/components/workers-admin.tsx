@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Cpu, KeyRound, Pause, Play, Plus, RotateCw, Square, Trash2 } from "lucide-react";
+import { Copy, Cpu, Download, KeyRound, Pause, Play, Plus, RotateCw, Search, Square, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useHydrated, useViewer } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { deviceLabel } from "@/lib/gpu/readiness";
+import { laneMatches } from "@/lib/lane-names";
 import { PLACE_NAME_DEFAULT, PLACE_NAME_MAX } from "@/lib/place-name";
 import { cn } from "@/lib/utils";
 
@@ -47,11 +48,26 @@ interface WorkerView {
   seenAt: number | null;
   version: string | null;
   current: { taskId: string; lane: string | null; startedAt: number | null } | null;
+  /** Its program against the site's version (a server from before sends none). */
+  update?: WorkerUpdate;
+}
+interface WorkerUpdate {
+  state: "current" | "updating" | "behind";
+  words: string;
+  askedAt: number | null;
+  peopleHeld: number;
 }
 interface Lane {
   lane: string;
+  /** Who uses it and its model: "InfiniteTalk · Wan 2.1 I2V 480p fp8". */
   label: string;
   workflows: number;
+  /** A server from before sends none of these. */
+  apps?: string[];
+  model?: string | null;
+  /** Its largest model file. */
+  file?: string | null;
+  workflowIds?: string[];
 }
 
 /** Runs made but waiting to enter the line (hosted runs), by why they wait, and when the oldest was pressed. */
@@ -178,13 +194,20 @@ export function LanesEditor({ w, lanes, onSave }: { w: WorkerView; lanes: Lane[]
   // Every workflow first, then some of them, then none; by name within each.
   const sorted = [...lanes].sort((a, b) => FIT_RANK[laneFit(w, a.lane).kind] - FIT_RANK[laneFit(w, b.lane).kind] || a.label.localeCompare(b.label));
   const runnable = runnableLanes(w).length;
+  const [query, setQuery] = useState("");
+  const shown = sorted.filter((l) => laneMatches(l, query));
   return (
     <details className="text-[13px]">
       <summary className="cursor-pointer text-muted-foreground">
         Lanes it may run: {Object.keys(w.allow).length} of {lanes.length} ({runnable} it can run)
       </summary>
+      <label className="mt-2 flex items-center gap-2">
+        <Search className="size-4 shrink-0 text-muted-foreground" />
+        <Input aria-label="Search lanes" placeholder="Search by app, model or lane" value={query} onChange={(e) => setQuery(e.target.value)} className="h-8" />
+      </label>
       <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto">
-        {sorted.map((l) => {
+        {query && !shown.length && <li className="text-muted-foreground">No lane matches.</li>}
+        {shown.map((l) => {
           const fit = laneFit(w, l.lane);
           const note = laneNote(fit);
           return (
@@ -200,8 +223,13 @@ export function LanesEditor({ w, lanes, onSave }: { w: WorkerView; lanes: Lane[]
                     setAllow(next);
                   }}
                 />
-                <span className={cn("truncate", fit.kind === "none" && "text-muted-foreground")}>{l.label}</span>
-                {note && <span className="text-[11px] text-muted-foreground">{note}</span>}
+                <span className="min-w-0">
+                  <span className={cn("block truncate", fit.kind === "none" && "text-muted-foreground")}>
+                    {l.label}
+                    {note && <span className="ml-2 text-[11px] text-muted-foreground">{note}</span>}
+                  </span>
+                  {l.file && <span className="block truncate text-[11px] text-muted-foreground">{l.file}</span>}
+                </span>
               </label>
               {l.lane in allow && (
                 <label className="flex items-center gap-1 text-[12px] text-muted-foreground">
@@ -254,6 +282,34 @@ export function unloadedLine(u: { pack: string; classes: string[]; workflows: st
   );
 }
 
+/**
+ * Its program against the site's version: nothing while it is on it; while it updates by itself, the words only; behind
+ * for longer, a warning and Update now (it looks for new code at once and restarts after the job in hand).
+ */
+export function UpdateLine({ w, now }: { w: Pick<WorkerView, "id" | "words" | "update">; now: number }) {
+  const qc = useQueryClient();
+  const ask = useMutation({
+    mutationFn: () => call<{ worker: WorkerView }>("POST", `/api/admin/workers/${encodeURIComponent(w.id)}/update`, {}),
+    onSuccess: () => {
+      toast.success("Asked: it updates after the job in hand");
+      void qc.invalidateQueries({ queryKey: ["admin", "workers"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const u = w.update;
+  if (!u || u.state === "current") return null;
+  if (u.state === "updating") return u.words === w.words ? null : <p className="text-[12px] text-muted-foreground">{u.words}</p>;
+  const asked = u.askedAt !== null && now - u.askedAt < 15 * 60_000;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-2.5 py-2 text-[13px]">
+      <span>{asked ? `${u.words}. Update asked ${Math.max(0, Math.round((now - u.askedAt!) / 60_000))} min ago.` : u.words}</span>
+      <Button size="sm" className="h-8" disabled={ask.isPending} onClick={() => ask.mutate()}>
+        <Download /> Update now
+      </Button>
+    </div>
+  );
+}
+
 function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onToken: (t: string) => void }) {
   const qc = useQueryClient();
   const now = useNow(10_000);
@@ -297,6 +353,7 @@ function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onTok
           )}
         </div>
       </div>
+      <UpdateLine w={w} now={now} />
       <p className="text-[12px] text-muted-foreground">{hoursWords(w.hours)}</p>
       {w.unloaded?.map((u) => (
         <p key={u.pack} className="text-[12px] text-destructive">
