@@ -64,6 +64,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { LanguageChip, SliderControls } from "@/components/studio/audio-controls";
 import { downloadName } from "@/components/studio/feed";
+import { RunAura, RunRing } from "@/components/studio/run-visuals";
 import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ControlsChip } from "@/components/studio/model-controls";
 import { ModelPicker } from "@/components/studio/model-picker";
@@ -558,11 +559,14 @@ function Results({ id, r, compact }: { id: string; r: NodeResults; compact?: boo
   if (r.state === "queued" || r.state === "running") {
     const pct = r.progress != null ? Math.round(r.progress * 100) : null;
     return (
-      <div className="relative overflow-hidden rounded-lg bg-muted" style={{ height: compact ? 56 : 96 }}>
-        <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+      <div className="relative overflow-hidden rounded-lg bg-muted" style={{ height: compact ? 56 : 96 }} data-stage={r.state === "queued" ? "in-line" : pct ? "creating" : "warming"}>
+        <RunAura />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">
-          <p className="shimmer-text animate-shimmer-text truncate text-[12px] font-medium">{r.message ?? (r.state === "queued" ? "Queued" : "Generating…")}</p>
-          {pct != null && <span className="font-mono text-[11px] text-muted-foreground">{pct}%</span>}
+          <p className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium">
+            <RunRing fraction={r.state === "running" && pct ? pct / 100 : null} stage={r.state === "queued" ? "in-line" : "creating"} />
+            <span className="truncate">{r.message ?? (r.state === "queued" ? "Queued" : "Generating…")}</span>
+          </p>
+          {pct != null && <span className="text-[11px] text-muted-foreground tabular-nums">{pct}%</span>}
         </div>
         {pct != null && <div className="absolute inset-x-0 top-0 h-0.5 bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(pct) / 100})` }} />}
       </div>

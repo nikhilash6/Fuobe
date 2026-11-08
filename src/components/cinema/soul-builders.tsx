@@ -165,7 +165,7 @@ function Results({ items, picked, onPick }: { items: Generation[]; picked: strin
                   <span className="px-2 text-center text-[11.5px] text-destructive">{g.error ?? "Couldn't generate this one"}</span>
                 ) : (
                   <>
-                    <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+                    <div className="run-aura absolute inset-0" />
                     <span className="shimmer-text relative animate-shimmer-text text-[12px] font-medium">{g.message ?? "Generating…"}</span>
                   </>
                 )}

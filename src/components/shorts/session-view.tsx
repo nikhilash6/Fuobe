@@ -174,7 +174,7 @@ function Session({ s }: { s: View }) {
               </div>
             ) : (
               <div className="flex size-full flex-col items-center justify-center gap-2 p-5 text-center">
-                <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+                <div className="run-aura absolute inset-0" />
                 <p className="shimmer-text relative animate-shimmer-text text-[14px] font-medium">Preparing full video…</p>
                 <p className="relative font-mono text-[12px] text-muted-foreground tabular-nums">
                   {working ? `${working} of ${segStates.length} segment${segStates.length === 1 ? "" : "s"} rendering · ` : (finalState?.label ?? "") + " · "}
@@ -374,7 +374,7 @@ function SegmentCard({
               <MediaThumb output={video} />
             </button>
           ) : state.status === "working" ? (
-            <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+            <div className="run-aura absolute inset-0" />
           ) : (
             <div className="grid size-full place-items-center p-2 text-center text-[11px] text-muted-foreground">{state.status === "gone" ? "Deleted" : "No video"}</div>
           )}

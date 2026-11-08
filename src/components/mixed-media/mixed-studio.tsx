@@ -683,7 +683,7 @@ function Editor({
             ) : preview.status === "failed" || preview.status === "canceled" ? (
               <div className="grid size-full place-items-center p-3 text-center text-[12px] text-muted-foreground">{preview.error ?? "Canceled"}</div>
             ) : (
-              <div className="skeleton-sweep grid size-full animate-skeleton place-items-center">
+              <div className="run-aura relative grid size-full place-items-center">
                 <span className="shimmer-text animate-shimmer-text text-[12px] font-medium">Restyling one frame…</span>
               </div>
             )}
@@ -814,7 +814,7 @@ function LatestRender({ chain, frames }: { chain: (Generation | undefined)[]; fr
             {state.error && <p className="line-clamp-4 text-[12px] break-words text-muted-foreground">{state.error}</p>}
           </div>
         ) : (
-          <div className="skeleton-sweep grid size-full animate-skeleton place-items-center">
+          <div className="run-aura relative grid size-full place-items-center">
             <span className="shimmer-text animate-shimmer-text text-[12px] font-medium">
               {g ? `${state.label}… ${Math.round(state.progress * 100)}%` : "Rendering…"}
             </span>

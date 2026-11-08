@@ -44,7 +44,7 @@ function CreativeCard({ c, brand, ratio, product, n, onEdit }: { c: AdCreative; 
         {ready && own !== ratio && <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">{own} only</span>}
         {!ready && (
           <div className={cn("absolute inset-0 flex flex-col justify-end rounded-xl p-3", failed ? "bg-background/85" : "bg-gradient-to-t from-background/90 via-background/30 to-transparent")}>
-            {!failed && <div className="skeleton-sweep absolute inset-0 animate-skeleton rounded-xl" />}
+            {!failed && <div className="run-aura absolute inset-0 rounded-xl" />}
             <div className="relative">
               {failed ? (
                 <>

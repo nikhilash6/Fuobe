@@ -92,7 +92,7 @@ function Player({ view, onRetry, retrying }: { view: View; onRetry: () => void; 
         <video key={out.url} src={out.url} controls playsInline preload="metadata" className="size-full bg-black object-contain" aria-label={`${ep.title} — the episode`} />
       ) : (
         <div className="absolute inset-0 grid place-items-center bg-muted p-6">
-          <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+          <div className="run-aura absolute inset-0" />
           <div className="relative max-w-sm text-center">
             {ep.status === "failed" ? (
               <>
@@ -156,7 +156,7 @@ function SceneTile({ scene, selected, onSelect, aspect }: { scene: SceneRow; sel
       )}
     >
       <div className={cn("relative w-full", aspect === "9:16" ? "aspect-[3/4]" : "aspect-video")}>
-        {img ? <MediaThumb output={img} /> : <div className={cn("absolute inset-0", running && "skeleton-sweep animate-skeleton")} />}
+        {img ? <MediaThumb output={img} /> : <div className={cn("absolute inset-0", running && "run-aura")} />}
         {failed && <div className="absolute inset-0 grid place-items-center bg-destructive/15"><AlertTriangle className="size-5 text-destructive" /></div>}
         <span className="absolute top-1.5 left-1.5 grid size-5 place-items-center rounded-full bg-background/90 font-mono text-[10px] font-semibold shadow-soft">{scene.index + 1}</span>
         <span className="absolute right-1.5 bottom-1.5 rounded bg-black/55 px-1 font-mono text-[10px] text-white tabular-nums">{scene.seconds}s</span>

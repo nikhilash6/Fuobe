@@ -1,41 +1,45 @@
-<div class="relative size-full bg-muted">
-<div class="skeleton-sweep absolute inset-0 animate-skeleton">
+<div class="relative size-full bg-muted" data-stage="in-line">
+<div aria-hidden="true" class="run-aura absolute inset-0">
 </div>
-<div class="absolute inset-x-0 bottom-0 space-y-1 p-3">
-<p class="flex items-center gap-1.5 text-[13px] font-medium">
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-circle lucide-loader-2 size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden="true" data-run-spinner="true">
-<path d="M21 12a9 9 0 1 1-6.219-8.56">
-</path>
+<div class="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-background/85 via-background/45 to-transparent p-3 pt-10">
+<p class="flex items-center gap-2 text-[13px] font-medium">
+<svg viewBox="0 0 18 18" aria-hidden="true" data-run-spinner="true" class="mt-px size-4 shrink-0 animate-spin [animation-duration:1.4s] motion-reduce:animate-none text-muted-foreground">
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-opacity="0.2" stroke-width="2">
+</circle>
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="43.98" stroke-dashoffset="31.67" class="transition-[stroke-dashoffset] duration-(--motion-slow) ease-standard">
+</circle>
 </svg>
-<span class="shimmer-text animate-shimmer-text truncate">Queued</span>
+<span class="truncate">Queued</span>
 </p>
-<p class="font-mono text-[11px] text-muted-foreground">1m 30s</p>
+<p class="text-[11px] text-muted-foreground tabular-nums">1m 30s</p>
 </div>
 </div>
 
-<div class="relative size-full bg-muted">
-<div class="skeleton-sweep absolute inset-0 animate-skeleton">
+<div class="relative size-full bg-muted" data-stage="creating">
+<div aria-hidden="true" class="run-aura absolute inset-0">
 </div>
-<div class="absolute inset-x-0 bottom-0 space-y-1 p-3">
-<p class="flex items-center gap-1.5 text-[13px] font-medium">
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-circle lucide-loader-2 size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden="true" data-run-spinner="true">
-<path d="M21 12a9 9 0 1 1-6.219-8.56">
-</path>
+<div class="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-background/85 via-background/45 to-transparent p-3 pt-10">
+<p class="flex items-center gap-2 text-[13px] font-medium">
+<svg viewBox="0 0 18 18" aria-hidden="true" data-run-spinner="true" class="mt-px size-4 shrink-0 -rotate-90 text-primary">
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-opacity="0.2" stroke-width="2">
+</circle>
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="43.98" stroke-dashoffset="25.51" class="transition-[stroke-dashoffset] duration-(--motion-slow) ease-standard">
+</circle>
 </svg>
-<span class="shimmer-text animate-shimmer-text truncate">Generating</span>
+<span class="truncate">Generating</span>
 </p>
-<p class="font-mono text-[11px] text-muted-foreground">42% · 1m 30s</p>
+<p class="text-[11px] text-muted-foreground tabular-nums">42% · 1m 30s</p>
 </div>
 </div>
 
-<div class="flex size-full flex-col justify-between gap-2 border border-dashed bg-background p-3">
+<div class="flex size-full flex-col justify-between gap-2 border bg-muted/40 p-3" data-stage="failed">
 <div class="flex min-h-0 flex-col gap-1 overflow-hidden">
 <p class="shrink-0 text-[13px] font-medium">Couldn&#x27;t generate this one</p>
 <p class="line-clamp-3 text-[12px] leading-snug break-words text-muted-foreground @[16rem]:line-clamp-4">Your GPU ran out of memory. Try a smaller size or a shorter clip.</p>
 </div>
 </div>
 
-<div class="flex size-full flex-col justify-between gap-2 border border-dashed bg-background p-3">
+<div class="flex size-full flex-col justify-between gap-2 border bg-muted/40 p-3" data-stage="canceled">
 <div class="flex min-h-0 flex-col gap-1 overflow-hidden">
 <p class="shrink-0 text-[13px] font-medium">Canceled</p>
 </div>

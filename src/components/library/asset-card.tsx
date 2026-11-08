@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Heart, Layers, Loader2, MoreHorizontal, Pin, RotateCcw } from "lucide-react";
+import { Check, ChevronDown, Heart, Layers, MoreHorizontal, Pin, RotateCcw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { tileRatio } from "@/components/studio/feed";
 import { TileActions, useCanHover, type RunnerOptions } from "@/components/studio/result-actions";
@@ -10,6 +10,8 @@ import { elapsed, timeAgo } from "@/lib/format";
 import { cardStateWords, coverOf, trashDaysLeft, userTitle, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { pendingWords } from "@/lib/pending-words";
+import { runStage } from "@/lib/run-stage";
+import { RunAura, RunRing } from "@/components/studio/run-visuals";
 import { POOL_WORDS } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { PlaceholderChip } from "@/components/demo-mode";
@@ -66,17 +68,22 @@ export function StatusCover({ g, small, actionable }: { g: Generation; small?: b
     const pct = g.progress != null ? Math.round(g.progress * 100) : null;
     const { label, place } = pendingWords(g);
     const waiting = g.status === "queued" ? g.waiting : undefined;
+    const st = runStage(g) ?? { stage: "creating" as const, fraction: null };
     return (
-      <div className="relative size-full bg-muted">
-        <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+      <div className="relative size-full bg-muted" data-stage={st.stage}>
+        <RunAura />
+        {g.status === "running" && g.preview && (
+          // eslint-disable-next-line @next/next/no-img-element -- the run's own latest preview picture
+          <img src={g.preview} alt="" onLoad={(e) => (e.currentTarget.style.opacity = "1")} className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-(--motion-slow)" />
+        )}
         {!small && (
-          <div className="absolute inset-x-0 bottom-0 space-y-1 p-3">
-            <p className="flex items-center gap-1.5 text-[13px] font-medium">
-              <Loader2 aria-hidden data-run-spinner className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
-              <span className="shimmer-text animate-shimmer-text truncate">{label}</span>
+          <div className="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-background/85 via-background/45 to-transparent p-3 pt-10">
+            <p className="flex items-center gap-2 text-[13px] font-medium">
+              <RunRing fraction={st.stage === "creating" ? st.fraction : null} stage={st.stage} />
+              <span className="truncate">{label}</span>
             </p>
             {place && <p className="truncate text-[11px] text-muted-foreground">{place}</p>}
-            <p className="font-mono text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground tabular-nums">
               {pct != null ? `${pct}% · ` : ""}
               {elapsed(g.createdAt)}
             </p>
@@ -92,10 +99,10 @@ export function StatusCover({ g, small, actionable }: { g: Generation; small?: b
       </div>
     );
   }
-  if (small) return <div className="size-full border border-dashed bg-background" />;
+  if (small) return <div className="size-full border bg-muted/40" />;
   const trouble = g.status === "failed" ? g.trouble : undefined;
   return (
-    <div className="flex size-full flex-col justify-between gap-2 border border-dashed bg-background p-3">
+    <div className="flex size-full flex-col justify-between gap-2 border bg-muted/40 p-3" data-stage={g.status}>
       <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
         {pool && g.status === "failed" ? (
           // One plain sentence, as its tile says it.

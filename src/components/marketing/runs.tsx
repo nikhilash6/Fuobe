@@ -149,7 +149,7 @@ function RunCard({ run, brand, onOpen, onCompose }: { run: MarketingRun; brand?:
           </div>
         ) : (
           <div className="relative overflow-hidden rounded-xl bg-muted" style={{ aspectRatio: ratio }}>
-            <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
+            <div className="run-aura absolute inset-0" />
             <div className="absolute inset-x-0 bottom-0 p-3">
               <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{now ? (now.request.step?.label ?? "Generating…") : "In queue"}…</p>
               <p className="font-mono text-[11px] text-muted-foreground">
