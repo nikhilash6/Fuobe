@@ -28922,6 +28922,228 @@
       "license": "n/a (no model; Image Detail Contrast MIT, Orion4D_FXMax MIT, VideoHelperSuite GPL-3.0 code)",
       "validated": true,
       "notes": "params.extra.openjutsu: finish soft | filmic | rich | off (the tone mapper's settings travel in raw_settings, no preset files), strength 0-1 (Orion 0-0.5), soften 0-1 (detail contrast 0 to -0.6; 0 drops the step). Both steps work frame by frame, so the clip goes through in passes (VHS_BatchManager re-queues the prompt until the clip is done, as upscale-video-esrgan-chunked does) into one H.264 encode that stays open; the last pass writes the file with the source's sound. framesPerBatch: the provider sizes it from the clip's header so a pass holds about 1.5 GB of frames (three frame-sized copies: decoded, softened, toned), so memory stays flat whatever the length."
+    },
+    {
+      "id": "body-double-photo-instanthmr",
+      "title": "Body Double photo (InstantHMR: every person's 3D body, a pose render and a skinned GLB)",
+      "capability": "body-capture",
+      "file": "body-double-photo-instanthmr.json",
+      "source": "hand-built (scripts/comfy/hand-built/body-double-photo-instanthmr.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "renderStyle": [
+          {
+            "node": "6",
+            "input": "render_style"
+          }
+        ],
+        "shader": [
+          {
+            "node": "6",
+            "input": "render_style.shader"
+          }
+        ],
+        "opacity": [
+          {
+            "node": "6",
+            "input": "render_style.opacity"
+          }
+        ],
+        "maxPeople": [
+          {
+            "node": "3",
+            "input": "max_detections"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "7",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "12",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "7",
+          "kind": "image"
+        },
+        {
+          "node": "12",
+          "kind": "model3d",
+          "role": "body"
+        },
+        {
+          "node": "9",
+          "kind": "image",
+          "role": "pose"
+        }
+      ],
+      "defaults": {
+        "renderStyle": "mesh",
+        "shader": "normals",
+        "opacity": 0.92,
+        "maxPeople": 8
+      },
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096
+      },
+      "models": [
+        {
+          "file": "rt_detr_v4-x-hgnet_fp16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/RT-DETR/resolve/8d913979f84c84f155b70ee77d96571a4728430b/diffusion_models/rt_detr_v4-x-hgnet_fp16.safetensors",
+          "sizeGb": 0.12
+        },
+        {
+          "file": "instanthmr_medium.safetensors",
+          "folder": "detection",
+          "url": "https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/resolve/964effb58c3358ca8a0e35da386f49de1480ac9e/instanthmr_medium.safetensors",
+          "sizeGb": 0.18
+        },
+        {
+          "file": "sam_3d_body_dinov3_int8_convrot.safetensors",
+          "folder": "detection",
+          "url": "https://huggingface.co/Comfy-Org/sam-3d-body/resolve/7c974aea58e062252a6cb5b6f9b7f639d545b729/detection/sam_3d_body_dinov3_int8_convrot.safetensors",
+          "sizeGb": 1.99
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-InstantHMR",
+          "repo": "https://github.com/jtydhr88/ComfyUI-InstantHMR"
+        }
+      ],
+      "vramGb": 4,
+      "license": "InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3D Body (its rig, for the skinned GLB) SAM License, commercial use allowed under its terms; VideoHelperSuite GPL-3.0 code",
+      "validated": true,
+      "notes": "RT-DETR v4 x (fp16, class person, threshold 0.5, up to maxPeople boxes) -> InstantHMR medium (HGNetV2-B4, 288 px square crops 1.2x the box, focal 1.05x the image diagonal) -> one MHR body per person (pose, shape, hands, 70 keypoints, 18,439-vertex mesh). No person found: the whole frame is one person. The look is one SAM3DBody_Render: renderStyle mesh with shader normals (Holo, default), default (Clay), rainbow (Thermal), depth (X-ray), opacity over the photo; renderStyle scail draws the SCAIL skeleton over the photo instead. Every style's dotted keys stay in the graph (ComfyUI ignores the ones a style does not use). Role pose: the SCAIL render on black, the input SCAIL-style motion models read. Role body: BuildPoseFile body_mesh with the SAM 3D Body int8 rig: one skinned mesh per person (127 joints, 72 face morph targets), centred, about 17 MB. CPU only: about 3 s a photo once loaded; the network itself is about 1 ms a person on a desktop GPU."
+    },
+    {
+      "id": "body-double-clip-instanthmr",
+      "title": "Body Double clip (InstantHMR motion capture: the body over every frame, a pose video and an animated skinned GLB)",
+      "capability": "body-capture-video",
+      "file": "body-double-clip-instanthmr.json",
+      "source": "hand-built (scripts/comfy/hand-built/body-double-clip-instanthmr.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "1",
+            "input": "video"
+          }
+        ],
+        "frames": [
+          {
+            "node": "1",
+            "input": "frame_load_cap"
+          }
+        ],
+        "renderStyle": [
+          {
+            "node": "6",
+            "input": "render_style"
+          }
+        ],
+        "shader": [
+          {
+            "node": "6",
+            "input": "render_style.shader"
+          }
+        ],
+        "opacity": [
+          {
+            "node": "6",
+            "input": "render_style.opacity"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "7",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "12",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "7",
+          "kind": "video"
+        },
+        {
+          "node": "12",
+          "kind": "model3d",
+          "role": "body"
+        },
+        {
+          "node": "9",
+          "kind": "video",
+          "role": "pose"
+        }
+      ],
+      "defaults": {
+        "frames": 360,
+        "renderStyle": "mesh",
+        "shader": "normals",
+        "opacity": 0.92
+      },
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096
+      },
+      "models": [
+        {
+          "file": "rt_detr_v4-x-hgnet_fp16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/RT-DETR/resolve/8d913979f84c84f155b70ee77d96571a4728430b/diffusion_models/rt_detr_v4-x-hgnet_fp16.safetensors",
+          "sizeGb": 0.12
+        },
+        {
+          "file": "instanthmr_medium.safetensors",
+          "folder": "detection",
+          "url": "https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/resolve/964effb58c3358ca8a0e35da386f49de1480ac9e/instanthmr_medium.safetensors",
+          "sizeGb": 0.18
+        },
+        {
+          "file": "sam_3d_body_dinov3_int8_convrot.safetensors",
+          "folder": "detection",
+          "url": "https://huggingface.co/Comfy-Org/sam-3d-body/resolve/7c974aea58e062252a6cb5b6f9b7f639d545b729/detection/sam_3d_body_dinov3_int8_convrot.safetensors",
+          "sizeGb": 1.99
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-InstantHMR",
+          "repo": "https://github.com/jtydhr88/ComfyUI-InstantHMR"
+        },
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        }
+      ],
+      "vramGb": 6,
+      "license": "InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3D Body (its rig, for the skinned GLB) SAM License, commercial use allowed under its terms; VideoHelperSuite GPL-3.0 code",
+      "validated": true,
+      "notes": "VHS_LoadVideo at 24 fps, up to frames (360 = 15 s), scaled to 960 px on the long side -> RT-DETR v4 (the performer: the best person box per frame) -> InstantHMR medium -> SAM3DBody_Smooth (gaussian, window 7, flips over 30 degrees kept) -> the same look render as the photo graph over every frame (H.264, metadata off). Role pose: the SCAIL pose video on black, ready to drive a SCAIL-style motion transfer. Role body: BuildPoseFile body_mesh, an animated skinned GLB (127 joints, 72 face morphs, 24 fps, camera translation absolute) for Blender, Unreal or any glTF tool. The clip's sound is not carried. CPU only: about 95 s for 4 s of video including the first model loads."
     }
   ]
 }

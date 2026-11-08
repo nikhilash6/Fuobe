@@ -3310,6 +3310,540 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "BuildPoseFile": {
+    "input": {
+      "required": {
+        "pose_data": [
+          "MHR_POSE_DATA,KIMODO_POSE_DATA",
+          {
+            "tooltip": "3D pose data."
+          }
+        ],
+        "format": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "tooltip": "Output format, both fed to Save 3D Model to write to disk. 'glb' = animated GLB (mesh / bones / openpose / scail). 'bvh' = BVH mocap clip (one skeleton; needs the model).",
+            "options": [
+              {
+                "key": "glb",
+                "inputs": {
+                  "required": {
+                    "mesh_style": [
+                      "COMFY_DYNAMICCOMBO_V3",
+                      {
+                        "tooltip": "'body_mesh' = real Armature (127 bones, skinning, TRS keyframes, 72 face morphs; needs model). 'bones_only' = bone-shape primitives at each joint (preview armature). 'openpose' = OpenPose-18 3D skeleton from keypoints 'scail' = SCAIL 3D capsule rig (open cylinders capped flush by joint spheres).",
+                        "options": [
+                          {
+                            "key": "body_mesh",
+                            "inputs": {
+                              "required": {
+                                "bone_vis": [
+                                  "COMFY_DYNAMICCOMBO_V3",
+                                  {
+                                    "tooltip": "Bone vis shape, rigidly skinned to each joint. ",
+                                    "options": [
+                                      {
+                                        "key": "off",
+                                        "inputs": {
+                                          "required": {}
+                                        }
+                                      },
+                                      {
+                                        "key": "octahedrons",
+                                        "inputs": {
+                                          "required": {
+                                            "bone_vis_radius_m": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Radius in m (sphere radius / octahedron half-width).",
+                                                "advanced": true,
+                                                "default": 0.02,
+                                                "min": 0.005,
+                                                "max": 0.5,
+                                                "step": 0.005
+                                              }
+                                            ],
+                                            "bone_vis_color": [
+                                              "COMBO",
+                                              {
+                                                "tooltip": "Per-bone vertex colors (unlit material). 'white' = none, 'rainbow_y' = head→toe jet.",
+                                                "default": "rainbow_y",
+                                                "multiselect": false,
+                                                "options": [
+                                                  "white",
+                                                  "rainbow_y"
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ],
+                                "shader": [
+                                  "COMFY_DYNAMICCOMBO_V3",
+                                  {
+                                    "tooltip": "Bake per-vertex colors matching the Render node's shaders (COLOR_0 + KHR_materials_unlit). 'default' = no colors.",
+                                    "options": [
+                                      {
+                                        "key": "default",
+                                        "inputs": {
+                                          "required": {}
+                                        }
+                                      },
+                                      {
+                                        "key": "rainbow",
+                                        "inputs": {
+                                          "required": {
+                                            "rainbow_tilt_z": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Rotate rainbow jet axis around Z (forward). Differentiates left/right.",
+                                                "default": -35,
+                                                "min": -90,
+                                                "max": 90,
+                                                "step": 0.5
+                                              }
+                                            ],
+                                            "rainbow_tilt_x": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Rotate rainbow jet axis around X (right). Differentiates front/back.",
+                                                "default": 0,
+                                                "min": -90,
+                                                "max": 90,
+                                                "step": 0.5
+                                              }
+                                            ],
+                                            "person_palette_falloff": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Per-person desaturation: each track gets (1 - falloff^k) pastel mix.",
+                                                "default": 0.6,
+                                                "min": 0.1,
+                                                "max": 1,
+                                                "step": 0.05
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "key": "rainbow_face_normal",
+                                        "inputs": {
+                                          "required": {
+                                            "rainbow_tilt_z": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Rotate rainbow jet axis around Z (forward). Differentiates left/right.",
+                                                "default": -35,
+                                                "min": -90,
+                                                "max": 90,
+                                                "step": 0.5
+                                              }
+                                            ],
+                                            "rainbow_tilt_x": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Rotate rainbow jet axis around X (right). Differentiates front/back.",
+                                                "default": 0,
+                                                "min": -90,
+                                                "max": 90,
+                                                "step": 0.5
+                                              }
+                                            ],
+                                            "person_palette_falloff": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Per-person desaturation: each track gets (1 - falloff^k) pastel mix.",
+                                                "default": 0.6,
+                                                "min": 0.1,
+                                                "max": 1,
+                                                "step": 0.05
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "key": "rainbow_face_semantic",
+                                        "inputs": {
+                                          "required": {
+                                            "rainbow_tilt_z": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Rotate rainbow jet axis around Z (forward). Differentiates left/right.",
+                                                "default": -35,
+                                                "min": -90,
+                                                "max": 90,
+                                                "step": 0.5
+                                              }
+                                            ],
+                                            "rainbow_tilt_x": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Rotate rainbow jet axis around X (right). Differentiates front/back.",
+                                                "default": 0,
+                                                "min": -90,
+                                                "max": 90,
+                                                "step": 0.5
+                                              }
+                                            ],
+                                            "person_palette_falloff": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Per-person desaturation: each track gets (1 - falloff^k) pastel mix.",
+                                                "default": 0.6,
+                                                "min": 0.1,
+                                                "max": 1,
+                                                "step": 0.05
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "key": "bones_only",
+                            "inputs": {
+                              "required": {
+                                "bone_vis": [
+                                  "COMFY_DYNAMICCOMBO_V3",
+                                  {
+                                    "tooltip": "Bone vis shape, rigidly skinned to each joint. 'octahedrons' = Blender-style directional bones (joint → primary child).",
+                                    "options": [
+                                      {
+                                        "key": "octahedrons",
+                                        "inputs": {
+                                          "required": {
+                                            "bone_vis_radius_m": [
+                                              "FLOAT",
+                                              {
+                                                "tooltip": "Radius in m (sphere radius / octahedron half-width).",
+                                                "advanced": true,
+                                                "default": 0.02,
+                                                "min": 0.005,
+                                                "max": 0.5,
+                                                "step": 0.005
+                                              }
+                                            ],
+                                            "bone_vis_color": [
+                                              "COMBO",
+                                              {
+                                                "tooltip": "Per-bone vertex colors (unlit material). 'white' = none, 'rainbow_y' = head→toe jet.",
+                                                "default": "rainbow_y",
+                                                "multiselect": false,
+                                                "options": [
+                                                  "white",
+                                                  "rainbow_y"
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "key": "openpose",
+                            "inputs": {
+                              "required": {
+                                "marker_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Sphere radius in m.",
+                                    "advanced": true,
+                                    "default": 0.01,
+                                    "min": 0.005,
+                                    "max": 0.1,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "stick_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Limb half-width in m. Auto-clamped to bone_length x 0.1.",
+                                    "advanced": true,
+                                    "default": 0.008,
+                                    "min": 0.002,
+                                    "max": 0.05,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "include_hands": [
+                                  "BOOLEAN",
+                                  {
+                                    "tooltip": "Append 21+21 OpenPose hands (wrist + 5 fingers x 4 joints, base→tip) sourced from pred_keypoints_3d.",
+                                    "default": false
+                                  }
+                                ],
+                                "hand_marker_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Hand sphere radius in m.",
+                                    "advanced": true,
+                                    "default": 0.005,
+                                    "min": 0.001,
+                                    "max": 0.1,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "hand_stick_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Hand limb half-width in m.",
+                                    "advanced": true,
+                                    "default": 0.003,
+                                    "min": 0.001,
+                                    "max": 0.05,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "face_style": [
+                                  "COMBO",
+                                  {
+                                    "tooltip": "Face-contour landmarks sampled from pred_vertices at fixed head-mesh vertex IDs (needs canonical_colors on pose_data). 'full' = all ~30 points; 'eyes_mouth' = eyes + outer lips only.",
+                                    "default": "disabled",
+                                    "multiselect": false,
+                                    "options": [
+                                      "disabled",
+                                      "full",
+                                      "eyes_mouth"
+                                    ]
+                                  }
+                                ],
+                                "face_marker_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Face dot radius. 0 = auto = 0.3 x marker_radius_m.",
+                                    "advanced": true,
+                                    "default": 0,
+                                    "min": 0,
+                                    "max": 0.05,
+                                    "step": 0.0005
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "key": "scail",
+                            "inputs": {
+                              "required": {
+                                "stick_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Cylinder radius in m. Bones are open cylinders at constant radius; joint spheres (auto-sized to match) cap the open ends. SCAIL reference = 0.0215 m.",
+                                    "advanced": true,
+                                    "default": 0.022,
+                                    "min": 0.002,
+                                    "max": 0.1,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "marker_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Joint sphere radius. 0 = auto = stick_radius_m (flush cap).",
+                                    "advanced": true,
+                                    "default": 0,
+                                    "min": 0,
+                                    "max": 0.1,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "material_roughness": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "PBR roughness. SCAIL ref = 0.3. 1 = matte; 0 = chrome.",
+                                    "advanced": true,
+                                    "default": 0.3,
+                                    "min": 0,
+                                    "max": 1,
+                                    "step": 0.05
+                                  }
+                                ],
+                                "include_hands": [
+                                  "BOOLEAN",
+                                  {
+                                    "tooltip": "Append 21+21 hand keypoints + capsule sticks per track.",
+                                    "default": false
+                                  }
+                                ],
+                                "hand_marker_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Hand sphere radius in m.",
+                                    "advanced": true,
+                                    "default": 0.005,
+                                    "min": 0.001,
+                                    "max": 0.05,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "hand_stick_radius_m": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Hand cylinder radius in m.",
+                                    "advanced": true,
+                                    "default": 0.003,
+                                    "min": 0.001,
+                                    "max": 0.05,
+                                    "step": 0.001
+                                  }
+                                ],
+                                "face_style": [
+                                  "COMBO",
+                                  {
+                                    "tooltip": "Face-contour landmarks sampled from pred_vertices (needs canonical_colors on pose_data). 'full' = all ~30 points; 'eyes_mouth' = eyes + outer lips only.",
+                                    "default": "disabled",
+                                    "multiselect": false,
+                                    "options": [
+                                      "disabled",
+                                      "full",
+                                      "eyes_mouth"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "bone_smooth_window": [
+                      "INT",
+                      {
+                        "tooltip": "Gaussian smoothing window on per-bone rotation keyframes / keypoint tracks. 0 = off. 7-15 calms spins/jitter where upstream Smooth misses spikes.",
+                        "default": 0,
+                        "min": 0,
+                        "max": 51,
+                        "step": 2
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "bvh",
+                "inputs": {
+                  "required": {
+                    "units": [
+                      "COMBO",
+                      {
+                        "tooltip": "BVH OFFSET/position units. 'cm' is the mocap standard.",
+                        "default": "cm",
+                        "multiselect": false,
+                        "options": [
+                          "cm",
+                          "m"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "fps": [
+          "FLOAT",
+          {
+            "tooltip": "Animation frame rate.",
+            "default": 24,
+            "min": 1,
+            "max": 240,
+            "step": 1
+          }
+        ],
+        "camera_translation": [
+          "COMBO",
+          {
+            "tooltip": "Bake pred_cam_t into the root's translation 'off' = bind position 'centered' = delta from frame 0 'absolute' = raw (Z is camera depth — usually meters away).",
+            "default": "off",
+            "multiselect": false,
+            "options": [
+              "off",
+              "centered",
+              "absolute"
+            ]
+          }
+        ],
+        "track_index": [
+          "INT",
+          {
+            "tooltip": "-1 = all tracks; ≥0 = single track.",
+            "default": -1,
+            "min": -1,
+            "max": 15
+          }
+        ]
+      },
+      "optional": {
+        "sam3d_body_model": [
+          "SAM3D_BODY_MODEL",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "pose_data",
+        "format",
+        "fps",
+        "camera_translation",
+        "track_index"
+      ],
+      "optional": [
+        "sam3d_body_model"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "FILE_3D"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "model_3d"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "BuildPoseFile",
+    "display_name": "Create 3D Animation File",
+    "description": "Build an animated GLB from pose data, or save a BVH mocap file.",
+    "python_module": "comfy_extras.nodes_sam3d_body",
+    "category": "3d",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "pose animation",
+      "mocap",
+      "glb",
+      "bvh",
+      "build pose file",
+      "save pose file"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "CFGGuider": {
     "input": {
       "required": {
@@ -12517,6 +13051,153 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "InstantHMRLoader": {
+    "input": {
+      "required": {
+        "model_file": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": [
+              "instanthmr_medium.safetensors",
+              "instanthmr_medium_commercial.safetensors",
+              "sam_3d_body_dinov3_int8_convrot.safetensors"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_file"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "INSTANTHMR_MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "instanthmr_model"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "InstantHMRLoader",
+    "display_name": "Load InstantHMR Model",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-InstantHMR",
+    "category": "image/detection",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "InstantHMRPredict": {
+    "input": {
+      "required": {
+        "instanthmr_model": [
+          "INSTANTHMR_MODEL",
+          {}
+        ],
+        "image": [
+          "IMAGE",
+          {}
+        ],
+        "fov": [
+          "FLOAT",
+          {
+            "tooltip": "Vertical FoV in degrees. Sets the depth and absolute scale. 0 = focal of 1.05x the image diagonal.",
+            "advanced": true,
+            "default": 0,
+            "min": 0,
+            "max": 180,
+            "step": 0.1
+          }
+        ],
+        "batch_size": [
+          "INT",
+          {
+            "tooltip": "Person crops per forward pass",
+            "advanced": true,
+            "default": 64,
+            "min": 1,
+            "max": 1024
+          }
+        ]
+      },
+      "optional": {
+        "track_data": [
+          "SAM3_TRACK_DATA",
+          {
+            "tooltip": "Person tracks from SAM3 Video Track, for multi-person video"
+          }
+        ],
+        "bboxes": [
+          "BOUNDING_BOX",
+          {
+            "tooltip": "Per-frame person boxes, e.g. from RT-DETR Detect with class 'person'",
+            "default": {
+              "x": 0,
+              "y": 0,
+              "width": 512,
+              "height": 512
+            },
+            "socketless": true,
+            "forceInput": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "instanthmr_model",
+        "image",
+        "fov",
+        "batch_size"
+      ],
+      "optional": [
+        "track_data",
+        "bboxes"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MHR_POSE_DATA"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "mhr_pose_data"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "InstantHMRPredict",
+    "display_name": "Run InstantHMR Prediction",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-InstantHMR",
+    "category": "image/detection",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "InvertMask": {
     "input": {
       "required": {
@@ -20638,6 +21319,172 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "RTDETR_detect": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {
+            "display_name": "model"
+          }
+        ],
+        "image": [
+          "IMAGE",
+          {
+            "display_name": "image"
+          }
+        ],
+        "threshold": [
+          "FLOAT",
+          {
+            "display_name": "threshold",
+            "default": 0.5
+          }
+        ],
+        "class_name": [
+          "COMBO",
+          {
+            "tooltip": "Filter detections by class. Set to 'all' to disable filtering.",
+            "default": "all",
+            "multiselect": false,
+            "options": [
+              "all",
+              "person",
+              "bicycle",
+              "car",
+              "motorcycle",
+              "airplane",
+              "bus",
+              "train",
+              "truck",
+              "boat",
+              "traffic light",
+              "fire hydrant",
+              "stop sign",
+              "parking meter",
+              "bench",
+              "bird",
+              "cat",
+              "dog",
+              "horse",
+              "sheep",
+              "cow",
+              "elephant",
+              "bear",
+              "zebra",
+              "giraffe",
+              "backpack",
+              "umbrella",
+              "handbag",
+              "tie",
+              "suitcase",
+              "frisbee",
+              "skis",
+              "snowboard",
+              "sports ball",
+              "kite",
+              "baseball bat",
+              "baseball glove",
+              "skateboard",
+              "surfboard",
+              "tennis racket",
+              "bottle",
+              "wine glass",
+              "cup",
+              "fork",
+              "knife",
+              "spoon",
+              "bowl",
+              "banana",
+              "apple",
+              "sandwich",
+              "orange",
+              "broccoli",
+              "carrot",
+              "hot dog",
+              "pizza",
+              "donut",
+              "cake",
+              "chair",
+              "couch",
+              "potted plant",
+              "bed",
+              "dining table",
+              "toilet",
+              "tv",
+              "laptop",
+              "mouse",
+              "remote",
+              "keyboard",
+              "cell phone",
+              "microwave",
+              "oven",
+              "toaster",
+              "sink",
+              "refrigerator",
+              "book",
+              "clock",
+              "vase",
+              "scissors",
+              "teddy bear",
+              "hair drier",
+              "toothbrush"
+            ]
+          }
+        ],
+        "max_detections": [
+          "INT",
+          {
+            "display_name": "max_detections",
+            "tooltip": "Maximum number of detections to return per image. In order of descending confidence score.",
+            "default": 100
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "image",
+        "threshold",
+        "class_name",
+        "max_detections"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "BOUNDING_BOX"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "bboxes"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "RTDETR_detect",
+    "display_name": "Run Real-Time Detection (RT-DETR)",
+    "description": "",
+    "python_module": "comfy_extras.nodes_rtdetr",
+    "category": "image/detection",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "bbox",
+      "bounding box",
+      "object detection",
+      "coco"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "RTXTrueHDR": null,
   "RTXVideoFrameGeneration": null,
   "RTXVideoSuperResolution": null,
@@ -22550,6 +23397,557 @@
     "description": "Rotate a mesh. Euler XYZ applies X then Y then Z about the world axes (degrees). Quaternion is (w, x, y, z), auto-normalized.",
     "python_module": "comfy_extras.nodes_save_3d",
     "category": "3d/mesh",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "SAM3DBody_Loader": {
+    "input": {
+      "required": {
+        "model_file": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": [
+              "instanthmr_medium.safetensors",
+              "instanthmr_medium_commercial.safetensors",
+              "sam_3d_body_dinov3_int8_convrot.safetensors"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_file"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "SAM3D_BODY_MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "sam3d_body_model"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "SAM3DBody_Loader",
+    "display_name": "Load SAM3D Body Model",
+    "description": "",
+    "python_module": "comfy_extras.nodes_sam3d_body",
+    "category": "image/detection",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "SAM3DBody_Render": {
+    "input": {
+      "required": {
+        "pose_data": [
+          "MHR_POSE_DATA,KIMODO_POSE_DATA",
+          {
+            "tooltip": "MHR pose data, or external Y-up rig pose data (KimodoSample). All render styles work for external rigs that carry OpenPose joint maps in their _skeleton_override (KimodoSample does)."
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "tooltip": "Output width in pixels. 0 = use pose data's native image_size. If only one of width/height is set, the other is derived preserving the original aspect.",
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 8
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "tooltip": "Output height in pixels. 0 = use pose data's native image_size. If only one of width/height is set, the other is derived preserving the original aspect.",
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 8
+          }
+        ],
+        "render_style": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "tooltip": "'mesh' = 3D MHR mesh rasterized through the camera. 'silhouette' = binary mask of the mesh. 'openpose_2d' = flat 2D skeleton 'openpose_3d' = openpose skeleton as flat-shaded 3D model 'scail' = SCAIL 3D capsules ",
+            "options": [
+              {
+                "key": "mesh",
+                "inputs": {
+                  "required": {
+                    "shader": [
+                      "COMFY_DYNAMICCOMBO_V3",
+                      {
+                        "tooltip": "Preset shader. 'normals' = current surface normal in camera space (OpenGL Y+ normal-map convention: +X→R, +Y→G, +Z→B). 'rainbow' = RealisDance style body-Y jet; the 'rainbow_face_*' variants override face verts with normal/per-region colors; 'depth' = linear gray.",
+                        "options": [
+                          {
+                            "key": "default",
+                            "inputs": {
+                              "required": {}
+                            }
+                          },
+                          {
+                            "key": "normals",
+                            "inputs": {
+                              "required": {}
+                            }
+                          },
+                          {
+                            "key": "rainbow",
+                            "inputs": {
+                              "required": {
+                                "rainbow_tilt_z": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Rotate rainbow jet axis around Z (forward). Differentiates left/right.",
+                                    "default": -35,
+                                    "min": -90,
+                                    "max": 90,
+                                    "step": 0.5
+                                  }
+                                ],
+                                "rainbow_tilt_x": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Rotate rainbow jet axis around X (right). Differentiates front/back.",
+                                    "default": 0,
+                                    "min": -90,
+                                    "max": 90,
+                                    "step": 0.5
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "key": "rainbow_face_normal",
+                            "inputs": {
+                              "required": {
+                                "rainbow_tilt_z": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Rotate rainbow jet axis around Z (forward). Differentiates left/right.",
+                                    "default": -35,
+                                    "min": -90,
+                                    "max": 90,
+                                    "step": 0.5
+                                  }
+                                ],
+                                "rainbow_tilt_x": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Rotate rainbow jet axis around X (right). Differentiates front/back.",
+                                    "default": 0,
+                                    "min": -90,
+                                    "max": 90,
+                                    "step": 0.5
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "key": "rainbow_face_semantic",
+                            "inputs": {
+                              "required": {
+                                "rainbow_tilt_z": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Rotate rainbow jet axis around Z (forward). Differentiates left/right.",
+                                    "default": -35,
+                                    "min": -90,
+                                    "max": 90,
+                                    "step": 0.5
+                                  }
+                                ],
+                                "rainbow_tilt_x": [
+                                  "FLOAT",
+                                  {
+                                    "tooltip": "Rotate rainbow jet axis around X (right). Differentiates front/back.",
+                                    "default": 0,
+                                    "min": -90,
+                                    "max": 90,
+                                    "step": 0.5
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "key": "depth",
+                            "inputs": {
+                              "required": {}
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "opacity": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Mesh alpha over the background image, or over black when none is connected.",
+                        "default": 1,
+                        "min": 0,
+                        "max": 1,
+                        "step": 0.01
+                      }
+                    ],
+                    "person_palette_falloff": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Per-person desaturation toward white: track k gets a (1 - falloff^k) pastel mix (SCAIL 'softer second person'). 1.0 = off.",
+                        "default": 0.6,
+                        "min": 0.1,
+                        "max": 1,
+                        "step": 0.05
+                      }
+                    ],
+                    "region": [
+                      "COMBO",
+                      {
+                        "tooltip": "'hands_only' filters faces via the precomputed `hand_vert_mask` (LBS weights against canonical hand KPs) — isolates the hand mesh for debugging. Falls back to full mesh if the mask is missing.",
+                        "default": "full_body",
+                        "multiselect": false,
+                        "options": [
+                          "full_body",
+                          "hands_only"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "silhouette",
+                "inputs": {
+                  "required": {}
+                }
+              },
+              {
+                "key": "openpose_2d",
+                "inputs": {
+                  "required": {
+                    "marker_radius_px": [
+                      "INT",
+                      {
+                        "tooltip": "Body keypoint dot radius (px).",
+                        "default": 4,
+                        "min": 1,
+                        "max": 32,
+                        "step": 1
+                      }
+                    ],
+                    "stick_width_px": [
+                      "INT",
+                      {
+                        "tooltip": "Body limb ellipse half-width (px). DWPose default = 4.",
+                        "default": 4,
+                        "min": 1,
+                        "max": 32,
+                        "step": 1
+                      }
+                    ],
+                    "limb_alpha": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Per-limb alpha. DWPose default = 0.6.",
+                        "default": 0.6,
+                        "min": 0,
+                        "max": 1,
+                        "step": 0.05
+                      }
+                    ],
+                    "face_style": [
+                      "COMBO",
+                      {
+                        "tooltip": "'full' = all face landmarks (sapiens-238 if present, else rig-fallback ~30). 'eyes_mouth' = rig-fallback subset (~12 dots: eyes + outer lips only). 'disabled' = no face dots.",
+                        "default": "disabled",
+                        "multiselect": false,
+                        "options": [
+                          "disabled",
+                          "full",
+                          "eyes_mouth"
+                        ]
+                      }
+                    ],
+                    "hand_style": [
+                      "COMBO",
+                      {
+                        "tooltip": "Draw 21+21 hand keypoints + sticks. 'disabled' = no hands. 'dwpose' = solid-blue dots; 'openpose' = rainbow dots.",
+                        "default": "disabled",
+                        "multiselect": false,
+                        "options": [
+                          "disabled",
+                          "dwpose",
+                          "openpose"
+                        ]
+                      }
+                    ],
+                    "person_palette_falloff": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Per-person desaturation: track k blends toward white by 1 - falloff^k. Track 0 stays vivid; 1.0 disables falloff.",
+                        "default": 0.6,
+                        "min": 0.1,
+                        "max": 1,
+                        "step": 0.05
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "openpose_3d",
+                "inputs": {
+                  "required": {
+                    "radius_m": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Limb capsule radius in meters (thin = stick-like).",
+                        "default": 0.015,
+                        "min": 0.004,
+                        "max": 0.1,
+                        "step": 0.001
+                      }
+                    ],
+                    "include_hands": [
+                      "BOOLEAN",
+                      {
+                        "tooltip": "Draw 21+21 hand keypoints as 3D capsules.",
+                        "default": true
+                      }
+                    ],
+                    "person_palette_falloff": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Per-person desaturation: track k blends toward white by 1 - falloff^k. Track 0 stays vivid; 1.0 disables falloff.",
+                        "default": 0.6,
+                        "min": 0.1,
+                        "max": 1,
+                        "step": 0.05
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "scail",
+                "inputs": {
+                  "required": {
+                    "radius_m": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Capsule radius in meters (SCAIL reference: ~0.022 m).",
+                        "default": 0.022,
+                        "min": 0.005,
+                        "max": 0.2,
+                        "step": 0.001
+                      }
+                    ],
+                    "hand_style": [
+                      "COMBO",
+                      {
+                        "tooltip": "Composite 2D OpenPose hands on top of the 3D capsule body (matches SCAIL — no 3D hand capsules). 'disabled' = no hands. 'dwpose' = solid-blue hand dots; 'openpose' = rainbow dots. Sticks stay rainbow per-finger either way.",
+                        "default": "dwpose",
+                        "multiselect": false,
+                        "options": [
+                          "disabled",
+                          "dwpose",
+                          "openpose"
+                        ]
+                      }
+                    ],
+                    "face_style": [
+                      "COMBO",
+                      {
+                        "tooltip": "'full' = all face landmarks (sapiens-238 if present, else rig-fallback ~30). 'eyes_mouth' = rig-fallback subset (~12 dots: eyes + outer lips only). 'disabled' = no face dots.",
+                        "default": "disabled",
+                        "multiselect": false,
+                        "options": [
+                          "disabled",
+                          "full",
+                          "eyes_mouth"
+                        ]
+                      }
+                    ],
+                    "person_palette_falloff": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Per-person desaturation: track k blends toward white by 1 - falloff^k. Track 0 stays vivid; 1.0 disables falloff.",
+                        "default": 0.6,
+                        "min": 0.1,
+                        "max": 1,
+                        "step": 0.05
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "background": [
+          "IMAGE",
+          {
+            "tooltip": "Per-frame background. Omitted = black canvas."
+          }
+        ],
+        "camera_info": [
+          "LOAD3D_CAMERA",
+          {
+            "tooltip": "Free 6DOF camera override. When wired, the pose is re-projected through this camera (position/target/zoom/rotation/FoV) instead of the predicted one. "
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "pose_data",
+        "width",
+        "height",
+        "render_style"
+      ],
+      "optional": [
+        "background",
+        "camera_info"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "image"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "SAM3DBody_Render",
+    "display_name": "Render 3D Body Pose",
+    "description": "",
+    "python_module": "comfy_extras.nodes_sam3d_body",
+    "category": "image/detection",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "Render SAM3D Body",
+      "sam3d render",
+      "kimodo render"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "SAM3DBody_Smooth": {
+    "input": {
+      "required": {
+        "mhr_pose_data": [
+          "MHR_POSE_DATA",
+          {}
+        ],
+        "strength": [
+          "FLOAT",
+          {
+            "tooltip": "Smoothing strength. 0 = raw, 1 = smoothed.",
+            "default": 1,
+            "min": 0,
+            "max": 1,
+            "step": 0.05
+          }
+        ],
+        "method": [
+          "COMBO",
+          {
+            "tooltip": "gaussian: symmetric weighted average, best general-purpose smoother.\nsavgol: sliding polynomial fit, preserves sharp peaks.",
+            "default": "savgol",
+            "multiselect": false,
+            "options": [
+              "gaussian",
+              "savgol"
+            ]
+          }
+        ],
+        "window": [
+          "INT",
+          {
+            "tooltip": "Temporal window in frames (odd values).",
+            "advanced": true,
+            "default": 7,
+            "min": 1,
+            "max": 51,
+            "step": 2
+          }
+        ],
+        "rotation_threshold_degrees": [
+          "FLOAT",
+          {
+            "tooltip": "Disables smoothing for this root rotation rate (degree/frame) to preserve fast spins. 30° suits most content, low values might disable smoothing on ordinary jitter and silently impacts quality. 0 = disable.",
+            "advanced": true,
+            "default": 30,
+            "min": 0,
+            "max": 90,
+            "step": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "mhr_pose_data",
+        "strength",
+        "method",
+        "window",
+        "rotation_threshold_degrees"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MHR_POSE_DATA"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "mhr_pose_data"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "SAM3DBody_Smooth",
+    "display_name": "Smooth SAM3D Body Pose Data",
+    "description": "Reduce frame-to-frame jitter via temporal smoothing.",
+    "python_module": "comfy_extras.nodes_sam3d_body",
+    "category": "image/detection",
     "output_node": false,
     "deprecated": false,
     "experimental": false,

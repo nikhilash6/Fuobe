@@ -251,6 +251,8 @@ export const FREE_TEXT_INPUTS = [
   "RTXTrueHDR.output_colorspace",
   "RTXVideoFrameGeneration.mode",
   "RTXVideoSuperResolution.quality",
+  // Body Double: the mesh shader is one of SAM3DBody_Render's own choices (the look), never a path.
+  "SAM3DBody_Render.render_style.shader",
   "SAM3_Detect.negative_coords",
   "SAM3_Detect.positive_coords",
   "VHS_VideoCombine.profile",

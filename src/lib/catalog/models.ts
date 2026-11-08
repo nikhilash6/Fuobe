@@ -11,6 +11,7 @@ import { loraEntry, loraRef } from "./loras";
 import { AUTO_IMAGE, AUTO_NAME } from "@/lib/auto-image";
 import { ANGLES_LORA, ANY_ANGLE_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { ANY_ANGLE } from "./any-angle";
+import { BODY_DOUBLE } from "./body-double";
 import { RECOLOR_TAP_FIRST } from "./recolor";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
@@ -2773,6 +2774,30 @@ const open: ModelDef[] = [
     routes: [comfy("t2i", "soul-cast-sheet-zimage", "outputs: the sheet, then the four views")],
     options: { seed: true },
     defaults: {},
+    hidden: true,
+  }),
+  // Body Double's models (the app's own page runs them): InstantHMR finds every person's MHR body, ComfyUI's SAM 3D Body
+  // nodes draw it in the picked look, render the SCAIL pose and export a skinned GLB. Listed for their licence and switch.
+  o({
+    id: BODY_DOUBLE.photoModel,
+    name: "Body Double",
+    vendor: "Naturalpad InstantHMR + Meta MHR",
+    family: "instanthmr",
+    kind: "image",
+    tagline: "Every person's 3D body from a photo: drawn over it, a skinned GLB and the pose · 4 GB GPU",
+    routes: [{ ...comfy(BODY_DOUBLE.photoOp, BODY_DOUBLE.photoGraph, "RT-DETR finds the people, InstantHMR medium recovers each body"), maxImages: 1 }],
+    options: { promptless: true, maxImages: 1, requires: { images: 1, msg: "Add a photo with people in it" } },
+    hidden: true,
+  }),
+  o({
+    id: BODY_DOUBLE.clipModel,
+    name: "Body Double motion capture",
+    vendor: "Naturalpad InstantHMR + Meta MHR",
+    family: "instanthmr",
+    kind: "video",
+    tagline: "Motion capture from a clip: the body over every frame, an animated skinned GLB and the pose video · 6 GB GPU",
+    routes: [comfy(BODY_DOUBLE.clipOp, BODY_DOUBLE.clipGraph, "24 fps, up to 15 s, smoothed")],
+    options: { promptless: true },
     hidden: true,
   }),
 ];

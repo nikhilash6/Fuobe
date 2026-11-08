@@ -32,6 +32,9 @@ const COMFYUI_DIR = process.env.COMFYUI_DIR || '/home/user/ComfyUI';
 // Which input of which loader holds a model file, and the models/<folder> it is read from.
 export const LOADER_FOLDERS = {
   UNETLoader: { unet_name: 'diffusion_models' },
+  // Body Double: InstantHMR and the SAM 3D Body rig its skinned GLB is built on (models/detection).
+  InstantHMRLoader: { model_file: 'detection' },
+  SAM3DBody_Loader: { model_file: 'detection' },
   CheckpointLoaderSimple: { ckpt_name: 'checkpoints' },
   VAELoader: { vae_name: 'vae' },
   CLIPLoader: { clip_name: 'text_encoders' },
@@ -132,6 +135,8 @@ export const BINDING_KEYS = new Set([
   'image5', 'image6', 'image7', 'image8', 'image9', 'image10',
   'width', 'height', 'frames', 'fps', 'seed', 'steps', 'cfg', 'guidance', 'denoise', 'shift',
   'loraHigh', 'loraLow', 'lora', 'loraStrength', 'upscaleModel', 'scale', 'duration', 'lyrics', 'tags',
+  // Body Double: the look (render style, mesh shader, opacity over the picture) and how many people a photo may hold
+  'renderStyle', 'shader', 'opacity', 'maxPeople',
   // library extensions
   'padLeft', 'padTop', 'padRight', 'padBottom', 'cameraMotion', 'multiplier', 'bpm', 'filenamePrefix',
   // comfyui-oss-2 additions (see library.spec.mjs header)

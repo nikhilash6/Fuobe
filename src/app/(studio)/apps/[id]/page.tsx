@@ -6,6 +6,7 @@ import { CleanVoiceTool } from "@/components/audio-tools/clean-voice-tool";
 import { AnyAngleGate } from "@/components/any-angle/any-angle-tool";
 import { RelightGate } from "@/components/relight/relight-gate";
 import { RecolorTool } from "@/components/recolor/recolor-tool";
+import { BodyDoubleTool } from "@/components/body-double/body-double-tool";
 import { WatermarkTool } from "@/components/watermark/watermark-tool";
 import { APPS, getModel, getPreset } from "@/lib/catalog";
 import { withRecipe } from "@/lib/catalog/preset-recipes";
@@ -35,6 +36,8 @@ async function AppStudio({ params }: { params: PageProps<"/apps/[id]">["params"]
   // have passed their check on a GPU; the owner gets it before then.
   if (preset.tool === "any-angle") return <AnyAngleGate live={anyAngleToolLive()} app={{ name: preset.name }} />;
   if (preset.tool === "recolor") return <RecolorTool app={{ name: preset.name, description: preset.description }} />;
+  // Body Double: Live (in the browser, no GPU) is open to everyone; a photo or a clip runs on a GPU.
+  if (preset.tool === "body-double") return <BodyDoubleTool app={{ name: preset.name, description: preset.description }} />;
   // The Watermark Remover: scan, keep what you like, remove the rest (src/components/watermark).
   if (preset.tool === "watermark") return <WatermarkTool app={{ name: preset.name, description: preset.description }} cover={presetCover(preset.id)} />;
   // The app opens on the model its preview was made with, its own route one pick away.

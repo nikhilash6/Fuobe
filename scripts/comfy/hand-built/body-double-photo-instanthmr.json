@@ -1,0 +1,27 @@
+{
+  "1": {"class_type": "LoadImage", "inputs": {"image": "input.png"}, "_meta": {"title": "Photo"}},
+  "2": {"class_type": "UNETLoader", "inputs": {"unet_name": "rt_detr_v4-x-hgnet_fp16.safetensors", "weight_dtype": "default"}, "_meta": {"title": "RT-DETR v4 person detector"}},
+  "3": {"class_type": "RTDETR_detect", "inputs": {"model": ["2", 0], "image": ["1", 0], "threshold": 0.5, "class_name": "person", "max_detections": 8}, "_meta": {"title": "Find the people"}},
+  "4": {"class_type": "InstantHMRLoader", "inputs": {"model_file": "instanthmr_medium.safetensors"}, "_meta": {"title": "InstantHMR"}},
+  "5": {"class_type": "InstantHMRPredict", "inputs": {"instanthmr_model": ["4", 0], "image": ["1", 0], "bboxes": ["3", 0], "fov": 0.0, "batch_size": 16}, "_meta": {"title": "One MHR body per person"}},
+  "6": {"class_type": "SAM3DBody_Render", "inputs": {
+    "pose_data": ["5", 0], "width": 0, "height": 0, "background": ["1", 0],
+    "render_style": "mesh",
+    "render_style.shader": "normals", "render_style.shader.rainbow_tilt_z": -35.0, "render_style.shader.rainbow_tilt_x": 0.0,
+    "render_style.opacity": 0.92, "render_style.person_palette_falloff": 0.6, "render_style.region": "full_body",
+    "render_style.radius_m": 0.022, "render_style.hand_style": "dwpose", "render_style.face_style": "disabled"
+  }, "_meta": {"title": "Bodies over the photo (the look)"}},
+  "7": {"class_type": "SaveImage", "inputs": {"images": ["6", 0], "filename_prefix": "fuobe/body-double"}, "_meta": {"title": "Result"}},
+  "8": {"class_type": "SAM3DBody_Render", "inputs": {
+    "pose_data": ["5", 0], "width": 0, "height": 0,
+    "render_style": "scail", "render_style.radius_m": 0.022, "render_style.hand_style": "dwpose", "render_style.face_style": "disabled", "render_style.person_palette_falloff": 0.6
+  }, "_meta": {"title": "SCAIL pose on black"}},
+  "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "fuobe/body-double-pose"}, "_meta": {"title": "Pose"}},
+  "10": {"class_type": "SAM3DBody_Loader", "inputs": {"model_file": "sam_3d_body_dinov3_int8_convrot.safetensors"}, "_meta": {"title": "MHR rig for the skinned GLB"}},
+  "11": {"class_type": "BuildPoseFile", "inputs": {
+    "pose_data": ["5", 0], "sam3d_body_model": ["10", 0],
+    "format": "glb", "format.mesh_style": "body_mesh", "format.mesh_style.bone_vis": "off", "format.mesh_style.shader": "default",
+    "format.bone_smooth_window": 0, "fps": 24.0, "camera_translation": "centered", "track_index": -1
+  }, "_meta": {"title": "Skinned body GLB"}},
+  "12": {"class_type": "SaveGLB", "inputs": {"mesh": ["11", 0], "filename_prefix": "fuobe/body-double"}, "_meta": {"title": "3D bodies"}}
+}

@@ -55,6 +55,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Outfit Swap: its Outfit Swap LoRA keeps everything but the clothes in place, where a plain edit moves the picture.
  * - Photo to 3D: only its own graph makes the GLB, the splat and the orbit clip together.
  * - Watermark Remover: a tool of its own (scan, keep, remove) that changes nothing outside the marks.
+ * - Body Double: a tool of its own; its 3D bodies come from InstantHMR, never from an image or video model.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -76,6 +77,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-steam-it",
   "app-restore-photo",
   "app-head-swap",
+  "app-body-double",
   "app-outfit-swap",
   "app-photo-to-3d",
   "app-watermark-remover",

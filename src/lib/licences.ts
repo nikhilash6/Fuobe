@@ -671,6 +671,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Fuobe's own pack. The network code is adapted from NVIDIA's RE-USE repository (OpenMDW-1.1, notices kept), and the Mamba layer is a plain-PyTorch rewrite (no mamba-ssm). It matches the reference maths numerically, but it is not NVIDIA's code path",
   }),
+  // Body Double: InstantHMR for ComfyUI (loader and predictor; the SAM 3D Body nodes it feeds are ComfyUI's own).
+  pack("ComfyUI-InstantHMR", "https://github.com/jtydhr88/ComfyUI-InstantHMR/tree/36d85573438e5de5d2fe63ba2dbca927c6a16c9b", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "jtydhr88's InstantHMR nodes; Apache-2.0 code. The InstantHMR weights are under the SAM License: the nano to medium files are non-commercial (some training images are research-only), and instanthmr_medium_commercial allows commercial use under its terms. The MHR body model is Apache-2.0",
+  }),
   // NVIDIA RTX Video (Quick · RTX, RTX Frame Generation, RTX Video HDR): an NVIDIA RTX card only; installed on RTX hosts.
   pack("ComfyUI_Nvidia_VFX_Nodes", "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40", {
     name: "Apache-2.0",

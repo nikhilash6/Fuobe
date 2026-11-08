@@ -96,6 +96,7 @@ Real covers from the galleries. Every clip and still below was rendered locally 
 - **Kinetic Motion.** Motion graphics in your brand, set in your exact words and drawn live in the browser, with presets, timing and versions.
 - **Marketing templates.** Ten text templates drawn live in your brand, next to product shots, UGC, TikTok, ads and posters.
 - **New apps on your GPU:** Outfit Swap, Head Swap, Restore Photo, Steam It, Tap to Recolor, Photo to 3D and Any Angle, plus MiniMax H3 motion transfer.
+- **Body Double:** a 3D body for every person in a photo, motion capture from a clip as an animated, skinned GLB, and a live 3D mirror of your camera that runs in the browser with no GPU.
 
 <br>
 

@@ -1468,5 +1468,25 @@
   "revision": "21665fa7a1e038e0a5312fb15f37b18d0f06f117",
   "sizeBytes": 20970379616,
   "sha256": "7ba8cf79f8f09944f743f99b69d85300a70a4bc9493156cb1fff3a68a9716a47"
+ },
+ "https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/resolve/964effb58c3358ca8a0e35da386f49de1480ac9e/instanthmr_medium.safetensors": {
+  "revision": "964effb58c3358ca8a0e35da386f49de1480ac9e",
+  "sizeBytes": 180730516,
+  "sha256": "76bd71c76683b5c0ea156b8b9c527b8f392832701c3a0377f81b8ba14277ca5e"
+ },
+ "https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/resolve/964effb58c3358ca8a0e35da386f49de1480ac9e/instanthmr_medium_commercial.safetensors": {
+  "revision": "964effb58c3358ca8a0e35da386f49de1480ac9e",
+  "sizeBytes": 180730516,
+  "sha256": "6fb700552d994da13f8c35434dbcd5836ee01eeba1bba7026764cf06fb7c7d42"
+ },
+ "https://huggingface.co/Comfy-Org/RT-DETR/resolve/8d913979f84c84f155b70ee77d96571a4728430b/diffusion_models/rt_detr_v4-x-hgnet_fp16.safetensors": {
+  "revision": "8d913979f84c84f155b70ee77d96571a4728430b",
+  "sizeBytes": 123968978,
+  "sha256": "581f9af9bbabb664d1891cbccd823308b176ecd409146f954dfa39af3bec2476"
+ },
+ "https://huggingface.co/Comfy-Org/sam-3d-body/resolve/7c974aea58e062252a6cb5b6f9b7f639d545b729/detection/sam_3d_body_dinov3_int8_convrot.safetensors": {
+  "revision": "7c974aea58e062252a6cb5b6f9b7f639d545b729",
+  "sizeBytes": 1994073596,
+  "sha256": "ba8d4c34a81bc072b3f53db5241074d370b26e3b72ae793630be5344efd28934"
  }
 }

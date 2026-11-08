@@ -232,6 +232,7 @@ export const CUSTOM_NODE_REPOS = {
   // Clean up voice (NVIDIA RE-USE): Fuobe's own pack, in this repository (comfy-nodes/ComfyUI-RE-USE), pinned at the commit
   // that last changed it (tests/reuse-pack-pin.test.ts checks it). install-comfyui.sh copies it from the checkout.
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
+  'ComfyUI-InstantHMR': 'https://github.com/jtydhr88/ComfyUI-InstantHMR',
   // Hi3D 1.0 mesh refinement (hi3d-refine, docs/research/hi3d-refine.json): T8star's nodes (MIT code, vendored Hi3D code under
   // the Hi3D Open License 1.0), v0.5.1. Opt-in in install-comfyui.sh (HI3D=1): it needs an Ampere-or-newer NVIDIA GPU and
   // CUDA kernels (spconv, triton), so it is not on the validation server (mesh-refine-hi3d lists it with `packs`).
@@ -307,6 +308,8 @@ export const PACK_CLASSES = {
   'ComfyUI-Open-H3-Regenerate': /^OpenH3(Regen(Lora|Sigmas|PrepareDraft|Upscale|RefineLatent|FastVAEDecode|Finish)|SaveRefinedLatent|LoadRefinedLatent|VideoToPrompt)$/,
   Comfyui_Minimax_h3_latent_Upscaler: /^(MinimaxH3LatentUpscaler(3D|Node2D)|MMH3(TemporalSplitParamsV10|SpatialSplitParamsV10|SplitUpscale))$/,
   'ComfyUI-RE-USE': /^REUSE(Loader|Enhance)$/,
+  // Body Double: only the loader and the predictor are the pack's; the render, smoothing and GLB nodes are ComfyUI's own.
+  'ComfyUI-InstantHMR': /^InstantHMR(Loader|Predict)$/,
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
@@ -341,6 +344,12 @@ export const PACK_CLASSES = {
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // Body Double: InstantHMR medium (the pack's checkpoint: network + MHR rig), the RT-DETR v4 person detector and the SAM 3D
+  // Body int8 file whose rig the skinned GLB export reads, at the revisions read on 2026-11-08.
+  'instanthmr_medium.safetensors': { folder: 'detection', url: 'https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/resolve/964effb58c3358ca8a0e35da386f49de1480ac9e/instanthmr_medium.safetensors' },
+  'instanthmr_medium_commercial.safetensors': { folder: 'detection', url: 'https://huggingface.co/jtydhr88/ComfyUI-InstantHMR/resolve/964effb58c3358ca8a0e35da386f49de1480ac9e/instanthmr_medium_commercial.safetensors' },
+  'rt_detr_v4-x-hgnet_fp16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/RT-DETR/resolve/8d913979f84c84f155b70ee77d96571a4728430b/diffusion_models/rt_detr_v4-x-hgnet_fp16.safetensors' },
+  'sam_3d_body_dinov3_int8_convrot.safetensors': { folder: 'detection', url: 'https://huggingface.co/Comfy-Org/sam-3d-body/resolve/7c974aea58e062252a6cb5b6f9b7f639d545b729/detection/sam_3d_body_dinov3_int8_convrot.safetensors' },
   // World mode (nm10-hy-nomas-world): nynxz/Hy-Nomas, Tencent's Hy-Nomas converted for ComfyUI's core loaders, at the
   // revision read on 2026-11-03. The DiT is Apache-2.0; the PixelUMM decoder is NVIDIA One-Way Noncommercial (its card).
   'nomas_dit_distilled_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_int8_convrot.safetensors' },
@@ -6491,5 +6500,46 @@ export const SPEC = [
       'the two masks are joined (ImageCompositeMasked of the mask images, so old long hair goes too), grown by maskGrow and blurred by maskBlur (GrowMaskWithBlur), and only that area comes from the swap: ' +
       "every other pixel is the shot's, which removes Qwen 2.1's colour and detail drift over the whole picture. pasteBack false returns the whole swap (the switch is lazy, SAM does not run). " +
       "No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers. RTX 5090: about 130 s a photo warm, about 250 s when the models load, peak about 28 GB.",
+  },
+  // Body Double (app-body-double): InstantHMR (ComfyUI-InstantHMR) recovers every person's MHR body; ComfyUI's own SAM 3D
+  // Body nodes draw it over the picture, render the SCAIL pose and export a skinned GLB.
+  {
+    id: 'body-double-photo-instanthmr',
+    title: 'Body Double photo (InstantHMR: every person\'s 3D body, a pose render and a skinned GLB)',
+    capability: 'body-capture',
+    handBuilt: 'hand-built/body-double-photo-instanthmr.json',
+    packs: ['ComfyUI-InstantHMR'],
+    bindings: { image: [b('1', 'image')], renderStyle: [b('6', 'render_style')], shader: [b('6', 'render_style.shader')], opacity: [b('6', 'render_style.opacity')], maxPeople: [b('3', 'max_detections')] },
+    defaults: { renderStyle: 'mesh', shader: 'normals', opacity: 0.92, maxPeople: 8 },
+    outputs: [{ node: '7', kind: 'image' }, { node: '12', kind: 'model3d', role: 'body' }, { node: '9', kind: 'image', role: 'pose' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 4,
+    license: 'InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3D Body (its rig, for the skinned GLB) SAM License, commercial use allowed under its terms; VideoHelperSuite GPL-3.0 code',
+    notes:
+      'RT-DETR v4 x (fp16, class person, threshold 0.5, up to maxPeople boxes) -> InstantHMR medium (HGNetV2-B4, 288 px square crops 1.2x the box, ' +
+      'focal 1.05x the image diagonal) -> one MHR body per person (pose, shape, hands, 70 keypoints, 18,439-vertex mesh). No person found: the whole frame is one person. ' +
+      'The look is one SAM3DBody_Render: renderStyle mesh with shader normals (Holo, default), default (Clay), rainbow (Thermal), depth (X-ray), opacity over the photo; ' +
+      'renderStyle scail draws the SCAIL skeleton over the photo instead. Every style\'s dotted keys stay in the graph (ComfyUI ignores the ones a style does not use). ' +
+      'Role pose: the SCAIL render on black, the input SCAIL-style motion models read. Role body: BuildPoseFile body_mesh with the SAM 3D Body int8 rig: one skinned mesh per person ' +
+      '(127 joints, 72 face morph targets), centred, about 17 MB. CPU only: about 3 s a photo once loaded; the network itself is about 1 ms a person on a desktop GPU.',
+  },
+  {
+    id: 'body-double-clip-instanthmr',
+    title: 'Body Double clip (InstantHMR motion capture: the body over every frame, a pose video and an animated skinned GLB)',
+    capability: 'body-capture-video',
+    handBuilt: 'hand-built/body-double-clip-instanthmr.json',
+    packs: ['ComfyUI-InstantHMR', 'ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], frames: [b('1', 'frame_load_cap')], renderStyle: [b('6', 'render_style')], shader: [b('6', 'render_style.shader')], opacity: [b('6', 'render_style.opacity')] },
+    defaults: { frames: 360, renderStyle: 'mesh', shader: 'normals', opacity: 0.92 },
+    outputs: [{ node: '7', kind: 'video' }, { node: '12', kind: 'model3d', role: 'body' }, { node: '9', kind: 'video', role: 'pose' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 6,
+    license: 'InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3D Body (its rig, for the skinned GLB) SAM License, commercial use allowed under its terms; VideoHelperSuite GPL-3.0 code',
+    notes:
+      'VHS_LoadVideo at 24 fps, up to frames (360 = 15 s), scaled to 960 px on the long side -> RT-DETR v4 (the performer: the best person box per frame) -> InstantHMR medium -> ' +
+      'SAM3DBody_Smooth (gaussian, window 7, flips over 30 degrees kept) -> the same look render as the photo graph over every frame (H.264, metadata off). ' +
+      'Role pose: the SCAIL pose video on black, ready to drive a SCAIL-style motion transfer. Role body: BuildPoseFile body_mesh, an animated skinned GLB ' +
+      '(127 joints, 72 face morphs, 24 fps, camera translation absolute) for Blender, Unreal or any glTF tool. The clip\'s sound is not carried. ' +
+      'CPU only: about 95 s for 4 s of video including the first model loads.',
   },
 ];

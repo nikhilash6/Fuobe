@@ -207,6 +207,9 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   },
   // idol-7: Image to 3D's quick mesh (From an image, Idol 3D quick mesh): Idol's splat turned into a vertex-coloured mesh.
   { href: "/image-to-3d?model=oss-idol-mesh", label: "Image to 3D, quick mesh", group: "Images", steps: [{ modelId: "oss-idol-mesh", op: "image-to-3d" }] },
+  // Body Double: every person's 3D body from a photo, and motion capture from a clip (Live needs no GPU).
+  { href: "/apps/app-body-double", label: "Body Double · photo", group: "Images", steps: [{ modelId: "oss-body-double", op: "body-capture" }] },
+  { href: "/apps/app-body-double?mode=clip", label: "Body Double · motion capture", group: "Video", steps: [{ modelId: "oss-body-double-video", op: "body-capture-video" }] },
   // idol-8: From several images' "Make the other sides from the front": Idol 3D's four views, which need the ComfyUI-Idol pack.
   { href: "/image-to-3d?mode=multi", label: "Other sides from one picture", group: "Images", kind: "image", workflows: [IDOL_VIEWS_WORKFLOW] },
   // MiniMax H3's references (Pika H3 Flex Ref2VA) need the Ref2VA partition and Pika's adapter: a row of their own, so the

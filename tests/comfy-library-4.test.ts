@@ -70,6 +70,8 @@ const ROLES: NonNullable<ManifestOutput["role"]>[] = [
   "quality",
   // Watermark Remover: the four tiles' scan reports, merged into the whole photo's report.
   "scan-tile",
+  // Body Double: the SCAIL pose render and the skinned body GLB.
+  "pose", "body",
 ];
 
 describe("round-4 ComfyUI workflows", () => {

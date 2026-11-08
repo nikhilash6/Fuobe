@@ -100,7 +100,10 @@ export interface ManifestOutput {
     // Watermark Remover: the repair's verdict (QWMFinal), folded into the picture outputs' meta.
     | "quality"
     // Watermark Remover: a tile's scan report (QWMDetect on a quarter of the photo), merged into the "report" output.
-    | "scan-tile";
+    | "scan-tile"
+    // Body Double: the SCAIL pose render (on black) and the skinned body GLB (animated for a clip).
+    | "pose"
+    | "body";
 }
 
 export interface ManifestWorkflow {

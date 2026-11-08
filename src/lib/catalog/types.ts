@@ -108,6 +108,9 @@ export type Operation =
   | "scene-edit" // video part (+ a picture) + params.extra (change / remove / new background) → the scene edited, the rest kept
   | "picture-frame" // video part (+ a character picture) → its first frame with the character in that pose (or relit)
   | "picture-video" // video part + an approved first frame (+ what happens) → the frame animated with the part's motion
+  // Body Double (InstantHMR)
+  | "body-capture" // image → every person's 3D body drawn over it (params.extra look), a skinned GLB of the bodies and a pose picture
+  | "body-capture-video" // video → the body drawn over every frame, an animated skinned GLB (motion capture) and a pose video
   // Hosted tools: insert a moment, retexture
   | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
   | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
@@ -156,6 +159,8 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   dub: "Translate & dub",
   "bg-remove-video": "Video background removal",
   "depth-video": "Video depth map",
+  "body-capture": "Body capture",
+  "body-capture-video": "Video body capture",
   "relight-video": "Video relight",
   concat: "Join clips",
   frame: "Extract frame",
@@ -249,6 +254,8 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   dub: "video",
   "bg-remove-video": "video",
   "depth-video": "video",
+  "body-capture": "image",
+  "body-capture-video": "video",
   "relight-video": "video",
   concat: "video",
   frame: "image",
@@ -1762,7 +1769,7 @@ export interface Preset {
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
   /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle, Tap to Recolor, Watermark Remover). */
-  tool?: "clean-voice" | "relight" | "any-angle" | "recolor" | "watermark";
+  tool?: "clean-voice" | "relight" | "any-angle" | "recolor" | "body-double" | "watermark";
   /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
   recipe?: PresetRecipeBook;
 }

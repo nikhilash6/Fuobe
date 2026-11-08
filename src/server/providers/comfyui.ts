@@ -792,6 +792,8 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
         const meta: Record<string, unknown> = {};
         if (spec?.stem) meta.stem = spec.stem;
         if (spec?.role) meta.role = spec.role;
+        // Body Double's skinned body GLB carries its own animation (a clip's motion capture): viewers play it.
+        if (spec?.role === "body" && kind === "model3d") meta.rigged = true;
         // A splat says what it is (the viewer and the download name go by it): spz, ply or ksplat.
         if (spec?.role === "splat" && ext) meta.format = ext;
         if (spec?.role === "splat" && idolSplat) Object.assign(meta, idolSplat);

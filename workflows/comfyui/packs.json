@@ -597,5 +597,16 @@
     "isolated": false,
     "subdir": "comfyui/ComfyUI-Viggle-Remake",
     "folders": []
+  },
+  "ComfyUI-InstantHMR": {
+    "repo": "https://github.com/jtydhr88/ComfyUI-InstantHMR",
+    "commit": "36d85573438e5de5d2fe63ba2dbca927c6a16c9b",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": [
+      "detection"
+    ]
   }
 }

@@ -393,6 +393,8 @@ const PROMPTLESS = new Set<Operation>([
   "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "speech-edit", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
+  // Body Double: the body comes from the picture or the clip
+  "body-capture", "body-capture-video",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
   "sdr-to-hdr", "export-video", "ocr", "still-motion", "audio-loop", "audio-join", "scene-3d", "splat", "rig-3d", "refine-3d", "extract-frames", "images-to-video", "overlay", "composite",
   // round 5 (O11): the face mosaic names the faces itself ("face")
@@ -1048,6 +1050,8 @@ const NEEDS: Partial<
   captions: { video: true, msg: "Add the video to caption" },
   layers: { images: 1, msg: "Add the image to split into layers" },
   "image-to-3d": { images: 1, msg: "Add a product or object photo" },
+  "body-capture": { images: 1, msg: "Add a photo with people in it" },
+  "body-capture-video": { video: true, msg: "Add a clip of someone moving" },
   // round 3 (cloud catalog)
   "text-layers": { images: 1, msg: "Add the image to lift the text from" },
   vectorize: { images: 1, msg: "Add the image to turn into an SVG" },

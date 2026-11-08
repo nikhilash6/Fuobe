@@ -41,6 +41,18 @@
     "error": null,
     "at": "2026-10-16T20:57:20.767Z"
   },
+  "body-double-clip-instanthmr": {
+    "sha256": "74a8844f3f223146b983d3ab2e3f487e6e7c7237a03bb5a9a1da80499c587d3b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-08T02:22:01.036Z"
+  },
+  "body-double-photo-instanthmr": {
+    "sha256": "48d218bf70b61f843dbeb1e1065e64d96ca5e7770c9295e088abc8033bbef55c",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-08T02:22:00.839Z"
+  },
   "captions-burnin": {
     "sha256": "8bb4d7bca5145d94ee1d509e50e23ef40e4cd21cb7c152bbba32751eca4ea013",
     "validated": true,
