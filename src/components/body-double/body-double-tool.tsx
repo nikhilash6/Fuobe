@@ -25,8 +25,8 @@ import { LiveView } from "./live-view";
 type Mode = "live" | "photo" | "clip";
 const SUBTITLE = "A 3D body for every person: live from your camera, from a photo, or from a clip as motion capture you can animate with.";
 const EXAMPLES: Record<"photo" | "clip", { src: string; name: string; label: string }> = {
-  photo: { src: "/previews/body-double/photo-before.jpg", name: "body-double-example.jpg", label: "Try it on this photo" },
-  clip: { src: "/previews/body-double/sample-dance.mp4", name: "body-double-example.mp4", label: "Try it on this dance" },
+  photo: { src: "/samples/body-double/photo-before.jpg", name: "body-double-example.jpg", label: "Try it on this photo" },
+  clip: { src: "/samples/body-double/sample-dance.mp4", name: "body-double-example.mp4", label: "Try it on this dance" },
 };
 
 function AddMedia({ mode, onPick }: { mode: "photo" | "clip"; onPick: (v: SlotValue) => void }) {

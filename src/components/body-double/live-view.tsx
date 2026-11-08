@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 
 /** A clip anyone can try Live on before turning on their camera. */
 export const LIVE_SAMPLES = [
-  { src: "/previews/body-double/sample-dance.mp4", label: "Gallery dance" },
-  { src: "/previews/body-double/sample-runway.mp4", label: "Runway walk" },
+  { src: "/samples/body-double/sample-dance.mp4", label: "Gallery dance" },
+  { src: "/samples/body-double/sample-runway.mp4", label: "Runway walk" },
 ] as const;
 
 
