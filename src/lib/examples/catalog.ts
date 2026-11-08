@@ -291,7 +291,7 @@ function genjutsuLoad(row: PlanRow): GenjutsuExampleLoad {
   if (problem) fail(row, problem);
   const r = g.recipe;
   const maker = getMaker(r.model, r.engine)!;
-  const needs = requestFeatures({ mode: r.mode, maker, character: r.character, object: r.object, picture: r.picture ? { ...r.picture, stage: "frame" } : undefined, finish: r.finish });
+  const needs = requestFeatures({ mode: r.mode, maker, character: r.character, object: r.object, picture: r.picture ? { ...r.picture, stage: "frame" } : undefined, finish: r.finish, reshoot: r.reshoot });
   if (!row.output.endsWith(".mp4")) fail(row, "a Genjutsu example shows a clip (clip-show)");
   return { via: "genjutsu", layout: g.layout, went: g.went, recipe: r, needs };
 }

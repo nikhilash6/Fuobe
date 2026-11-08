@@ -26,10 +26,10 @@ const EXISTING = ["Motion transfer", "Character swap", "Object swap", "Restyle",
 const readJson = (p) => JSON.parse(fs.readFileSync(path.join(root, p), "utf8"));
 const validated = new Set(readJson("workflows/comfyui/manifest.json").workflows.filter((w) => w.validated === true).map((w) => w.id));
 const passed = readJson("workflows/comfyui/gpu-tested.json").features ?? {};
-const FEATURE_WORKFLOWS = { picture: ["image-from-picture-prepare", "video-scene-describe", "video-from-picture-solar"], "finish-faces": ["video-fix-faces-h3"], "finish-colours": ["video-fix-colours"] };
+const FEATURE_WORKFLOWS = { picture: ["image-from-picture-prepare", "video-scene-describe", "video-from-picture-solar"], "finish-faces": ["video-fix-faces-h3"], "finish-colours": ["video-fix-colours"], "reshoot-swap": ["video-reshoot-swap-h3"], "reshoot-edit": ["video-reshoot-edit-h3"] };
 const live = (k) => passed[k]?.passed === true && FEATURE_WORKFLOWS[k].every((id) => validated.has(id));
-const OPEN_MODES = { picture: live("picture"), finish: live("finish-faces") || live("finish-colours") };
-const GUEST_TABS = [...EXISTING, ...(OPEN_MODES.picture ? ["From picture"] : []), ...(OPEN_MODES.finish ? ["Finish"] : [])];
+const OPEN_MODES = { picture: live("picture"), finish: live("finish-faces") || live("finish-colours"), reshoot: live("reshoot-swap") || live("reshoot-edit") };
+const GUEST_TABS = [...EXISTING, ...(OPEN_MODES.picture ? ["From picture"] : []), ...(OPEN_MODES.finish ? ["Finish"] : []), ...(OPEN_MODES.reshoot ? ["Fuobe Reshoot"] : [])];
 
 async function upload(file, type, name) {
   const form = new FormData();
@@ -69,7 +69,7 @@ try {
       check(`${width}: no "Only you" for a guest`, !(await page.evaluate(() => document.body.innerText.includes("Only you"))));
       check(`${width}: /genjutsu fits the screen`, (await sideways()) <= 0);
       await shot("guest-genjutsu");
-      for (const [m, label] of [["picture", "From picture"], ["finish", "Finish"]]) {
+      for (const [m, label] of [["picture", "From picture"], ["finish", "Finish"], ["reshoot", "Fuobe Reshoot"]]) {
         await open(`/genjutsu?mode=${m}`);
         const want = OPEN_MODES[m] ? label : "Motion transfer";
         check(`${width}: ?mode=${m} lands on ${want} for a guest`, (await selected()) === want, String(await selected()));

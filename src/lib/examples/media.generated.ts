@@ -6470,6 +6470,115 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/genjutsu-reshoot/1/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 18012,
+  "sha256": "8604ec0a95d5e019e1f65835263ac0e92c27413f656ba05dd6bc2327d8aa8bd7",
+  "v": "8604ec0a",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-reshoot/1/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 132806,
+  "sha256": "d08ffaa23e3f76ad08682a427025cf914d535ce59699ebbee23118c7441a6686",
+  "v": "d08ffaa2",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/genjutsu-reshoot/1/in-clip.384.webp?v=8604ec0a"
+ },
+ "/examples/genjutsu-reshoot/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 960843,
+  "sha256": "a6f0b88569d633a16e385f82e53d0e0dfd830ffe5af790232736b742e57093cf",
+  "v": "a6f0b885",
+  "poster": "/examples/genjutsu-reshoot/1/show.poster.webp?v=cd082153"
+ },
+ "/examples/genjutsu-reshoot/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 23842,
+  "sha256": "b6fbffa0921286027bfac9854527467c7186568266e64329b4cad823087e9596",
+  "v": "b6fbffa0",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-reshoot/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 68638,
+  "sha256": "cd0821533f3b6b693ff8173ceef974cd210e4795563565f052f23ff00a844fe3",
+  "v": "cd082153",
+  "w": 1024,
+  "h": 768
+ },
+ "/examples/genjutsu-reshoot/2/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 18012,
+  "sha256": "8604ec0a95d5e019e1f65835263ac0e92c27413f656ba05dd6bc2327d8aa8bd7",
+  "v": "8604ec0a",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-reshoot/2/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 132806,
+  "sha256": "d08ffaa23e3f76ad08682a427025cf914d535ce59699ebbee23118c7441a6686",
+  "v": "d08ffaa2",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/genjutsu-reshoot/2/in-clip.384.webp?v=8604ec0a"
+ },
+ "/examples/genjutsu-reshoot/2/in-photo1.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 4630,
+  "sha256": "0e4e11354054a9fe0f2572ed1bccbad3138eb705691b8337d1e6506d5fffae00",
+  "v": "0e4e1135",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-reshoot/2/in-photo1.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 86652,
+  "sha256": "74978427a3e7df850988212762d80a25f76391f2728b1d0299f77964ebafc215",
+  "v": "74978427",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/genjutsu-reshoot/2/in-photo1.384.webp?v=0e4e1135"
+ },
+ "/examples/genjutsu-reshoot/2/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 729498,
+  "sha256": "7c55195180874b86dc17ff74da489297e276a45ba28375625d6465c35c4c81c7",
+  "v": "7c551951",
+  "poster": "/examples/genjutsu-reshoot/2/show.poster.webp?v=d094e4fe"
+ },
+ "/examples/genjutsu-reshoot/2/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 24296,
+  "sha256": "56582c0261b02474c57473421dbcd10d3e1959fde0cc996b1352284cefc159a3",
+  "v": "56582c02",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-reshoot/2/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 61356,
+  "sha256": "d094e4fe6b8d1bd67342a97e39e6e108c1982de778e118cd6d6f47939d2d37df",
+  "v": "d094e4fe",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/genjutsu-swap/1/in-clip.384.webp": {
   "role": "show",
   "type": "image/webp",

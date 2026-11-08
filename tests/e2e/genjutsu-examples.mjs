@@ -30,11 +30,11 @@ const check = (label, ok, extra = "") => {
   if (!ok) failures.push(label);
 };
 
-const MODES = { motion: "Motion transfer", character: "Character swap", swap: "Object swap", restyle: "Restyle", insert: "Insert", picture: "From picture", finish: "Finish" };
+const MODES = { motion: "Motion transfer", character: "Character swap", swap: "Object swap", restyle: "Restyle", insert: "Insert", picture: "From picture", finish: "Finish", reshoot: "Fuobe Reshoot" };
 // The examples in src/lib/examples/plan.json (load "genjutsu") and the features each needs open (requestFeatures).
 const readJson = (p) => JSON.parse(fs.readFileSync(path.join(root, p), "utf8"));
-const NEEDS = { "genjutsu-character.1": ["group-swap"], "genjutsu-finish.1": ["finish-colours"] };
-const FEATURE_WORKFLOWS = { "group-swap": ["video-group-swap-h3"], "finish-colours": ["video-fix-colours"] };
+const NEEDS = { "genjutsu-character.1": ["group-swap"], "genjutsu-finish.1": ["finish-colours"], "genjutsu-reshoot.1": ["reshoot-edit"], "genjutsu-reshoot.2": ["reshoot-swap"] };
+const FEATURE_WORKFLOWS = { "group-swap": ["video-group-swap-h3"], "finish-colours": ["video-fix-colours"], "reshoot-edit": ["video-reshoot-edit-h3"], "reshoot-swap": ["video-reshoot-swap-h3"] };
 const validated = new Set(readJson("workflows/comfyui/manifest.json").workflows.filter((w) => w.validated === true).map((w) => w.id));
 const passed = readJson("workflows/comfyui/gpu-tested.json").features ?? {};
 const live = (k) => passed[k]?.passed === true && FEATURE_WORKFLOWS[k].every((id) => validated.has(id));

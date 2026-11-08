@@ -4786,6 +4786,74 @@
   }
  },
  {
+  "id": "genjutsu-reshoot.1",
+  "surface": "tool:genjutsu/reshoot",
+  "rank": 1,
+  "caption": "The same walk in fresh snow",
+  "words": "A blue-hour walk through Paris, reshot in fresh snow. Her steps, the camera move and the sound stay as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "wipe",
+   "went": "A 5 s clip and a few words",
+   "recipe": {
+    "mode": "reshoot",
+    "engine": "open",
+    "model": "oss-h3-reshoot",
+    "quality": "720p",
+    "seed": 7,
+    "length": 5.166,
+    "originalSound": "everything",
+    "reshoot": {
+     "choice": "edit",
+     "words": "fresh snow is falling, and the street, the awnings and the cobblestones are dusted white with it"
+    }
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-reshoot/1/in-clip.jpg"
+  },
+  "output": "/examples/genjutsu-reshoot/1/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-reshoot/1/show.peak.webp",
+   "at": 4.008,
+   "from": 0
+  }
+ },
+ {
+  "id": "genjutsu-reshoot.2",
+  "surface": "tool:genjutsu/reshoot",
+  "rank": 2,
+  "caption": "A new lead for the same walk",
+  "words": "One photo, and someone new takes the blue-hour walk through Paris. Her steps, the camera move, the street and the sound stay as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "inset",
+   "went": "A 5 s clip and a photo",
+   "recipe": {
+    "mode": "reshoot",
+    "engine": "open",
+    "model": "oss-h3-reshoot",
+    "quality": "720p",
+    "seed": 7,
+    "length": 5.166,
+    "originalSound": "everything",
+    "reshoot": {
+     "choice": "swap"
+    }
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-reshoot/2/in-clip.jpg",
+   "photo1": "/examples/genjutsu-reshoot/2/in-photo1.jpg"
+  },
+  "output": "/examples/genjutsu-reshoot/2/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-reshoot/2/show.peak.webp",
+   "at": 4.008,
+   "from": 0
+  }
+ },
+ {
   "id": "genjutsu-motion.1",
   "surface": "tool:genjutsu/motion",
   "rank": 1,

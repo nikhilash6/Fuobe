@@ -7,6 +7,8 @@
     "original-sound": { "passed": true, "date": "2026-11-05" },
     "group-swap-one-by-one": { "passed": true, "date": "2026-11-05" },
     "body-double-photo": { "passed": true, "date": "2026-11-08" },
-    "body-double-clip": { "passed": true, "date": "2026-11-08" }
+    "body-double-clip": { "passed": true, "date": "2026-11-08" },
+    "reshoot-edit": { "passed": true, "date": "2026-11-08" },
+    "reshoot-swap": { "passed": true, "date": "2026-11-08" }
   }
 }

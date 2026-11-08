@@ -47,6 +47,7 @@ interface Body {
   character?: GenjutsuPlanInput["character"];
   object?: GenjutsuPlanInput["object"];
   finish?: GenjutsuPlanInput["finish"];
+  reshoot?: GenjutsuPlanInput["reshoot"];
   originalSound?: GenjutsuPlanInput["originalSound"];
 }
 
@@ -67,6 +68,7 @@ const planOf = (b: Body) =>
     ...(b.character && { character: b.character }),
     ...(b.object && { object: b.object }),
     ...(b.finish && { finish: b.finish }),
+    ...(b.reshoot && { reshoot: b.reshoot }),
     ...(b.originalSound && { originalSound: b.originalSound }),
   });
 
@@ -87,6 +89,7 @@ function remake(recipe: GenjutsuRecipe, own: { character?: Record<string, unknow
     ...((recipe.character || own?.character) && { character: { ...recipe.character, ...own?.character } }),
     ...(recipe.object && { object: recipe.object }),
     ...(recipe.finish && { finish: recipe.finish }),
+    ...(recipe.reshoot && { reshoot: recipe.reshoot }),
     ...(recipe.originalSound && recipe.originalSound !== "everything" && { originalSound: recipe.originalSound }),
   };
 }
