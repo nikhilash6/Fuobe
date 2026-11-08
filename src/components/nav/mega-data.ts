@@ -46,7 +46,7 @@ export function warmMenu(id: MegaId): void {
 }
 
 /** A browser asking to save data, or on a slow connection: menus load when asked for only. */
-function saveData(): boolean {
+export function saveData(): boolean {
   if (typeof navigator === "undefined") return true;
   const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
   return !!conn && (!!conn.saveData || /(^|-)2g$|^3g$/.test(conn.effectiveType ?? ""));
@@ -82,6 +82,12 @@ export function useMegaMenu(id: MegaId, kind: ViewerKind | undefined): MenuState
   }, [id]);
   if (id === "studios") return { model: studiosMenu(kind), failed: false, retry };
   return { model: entry?.state === "ready" ? entry.model : undefined, failed: entry?.state === "failed", retry };
+}
+
+/** Once every menu's data on its way now has come (or failed). */
+export function menusSettled(): Promise<void> {
+  const loading = [...entries.values()].flatMap((e) => (e.state === "loading" ? [e.promise] : []));
+  return Promise.allSettled(loading).then(() => {});
 }
 
 /** For tests: forget every loaded menu. */

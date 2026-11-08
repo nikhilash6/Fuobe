@@ -19,8 +19,8 @@ import { UpdateAvailable } from "@/components/update-available";
 import { BarPills } from "./status-chips";
 import { NavPrefetcher, warmNav } from "./nav-prefetch";
 import type { FetchedMegaId } from "@/lib/mega-menus";
-import { loadMenusNow } from "./mega-data";
-import { MegaLauncher, preloadMegaPanel } from "./mega-launcher";
+import { loadMenusNow, saveData } from "./mega-data";
+import { MegaLauncher, preloadMegaPanel, primeMegaPanels } from "./mega-launcher";
 import { BarCardMenu } from "./bar-split";
 import { BarIndicator, BarMenusProvider, BarScrim, BarStage, CloseMenusOnRoute, useBarController } from "./bar-menus";
 import { ViewerSlot } from "./viewer-slot";
@@ -277,17 +277,19 @@ function RightCluster() {
 }
 
 /**
- * Everything the bar's menus need before their first open: the panels' body (its own chunk) and the data (no
- * pictures) of the grouped menus whose item the bar shows at this width. A phone loads none (its sheet asks when it
- * shows one); a browser saving data loads only the code.
+ * Everything the bar's menus need before their first open: the panels' body (its own chunk), the data of the grouped
+ * menus whose item the bar shows at this width, then each of those panels' first screen of pictures, decoded, so the
+ * first open and every switch show whole (primeMegaPanels: nearest `x` first, the pointer's place when it came to the
+ * bar). A phone loads none (its sheet asks when it shows one); a browser saving data loads only the code.
  */
-export function warmBar(): void {
+export function warmBar(x?: number): void {
   if (!window.matchMedia("(min-width: 768px)").matches) return;
   const ids: FetchedMegaId[] = [];
   if (window.matchMedia("(min-width: 1280px)").matches) ids.push("fx", "apps", "motions");
   if (window.matchMedia("(min-width: 1440px)").matches) ids.push("canvas");
   preloadMegaPanel();
   loadMenusNow(ids);
+  if (!saveData()) primeMegaPanels(x);
 }
 
 /**
@@ -299,11 +301,11 @@ function MenuPrefetch() {
     let stop = () => {};
     const schedule = () => {
       if (typeof window.requestIdleCallback !== "function") {
-        const t = window.setTimeout(warmBar, 300);
+        const t = window.setTimeout(() => warmBar(), 300);
         stop = () => window.clearTimeout(t);
         return;
       }
-      const h = window.requestIdleCallback(warmBar, { timeout: 1500 });
+      const h = window.requestIdleCallback(() => warmBar(), { timeout: 1500 });
       stop = () => window.cancelIdleCallback(h);
     };
     if (document.readyState === "complete") schedule();
@@ -316,17 +318,20 @@ function MenuPrefetch() {
   return null;
 }
 
-/** The main nav: its keys (Left and Right along the items); the first pointer or focus near it warms the menus. */
+/**
+ * The main nav: its keys (Left and Right along the items); the first pointer or focus near it warms the menus (warmBar),
+ * if the page's idle time has not already.
+ */
 function MainNav({ children }: { children: React.ReactNode }) {
   const ctl = useBarController();
   const warmed = useRef(false);
-  const warm = () => {
+  const warm = (x?: number) => {
     if (warmed.current) return;
     warmed.current = true;
-    warmBar();
+    warmBar(x);
   };
   return (
-    <nav aria-label="Main" className="flex min-w-0 items-center gap-0.5" onKeyDown={(e) => ctl?.navKey(e)} onPointerEnter={warm} onFocus={warm}>
+    <nav aria-label="Main" className="flex min-w-0 items-center gap-0.5" onKeyDown={(e) => ctl?.navKey(e)} onPointerEnter={(e) => warm(e.clientX)} onFocus={() => warm()}>
       {children}
     </nav>
   );

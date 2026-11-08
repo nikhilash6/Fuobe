@@ -554,17 +554,24 @@ try {
     await p.goto(`${app}/image`, { waitUntil: "domcontentloaded" });
     const early = [...urls.values()].filter((u) => u.includes("/nav-menus/")).length;
     await p.waitForLoadState("load");
+    const loadedAt = Date.now();
     await p.waitForTimeout(4000);
     const idle = [...urls.values()].filter((u) => u.includes("/nav-menus/"));
-    const minis = [...urls.values()].filter((u) => /\/previews\/presets\/mini\//.test(u)).length;
+    // The menus' pictures (their covers, before and after stills, row pictures): only once the page has loaded.
+    const MENU_PICS = /\/previews\/(presets\/(mini|thumbs|hd)|fx|templates\/hd)\//;
+    const pics = [...urls].filter(([, u]) => MENU_PICS.test(u));
+    const picsEarly = pics.filter(([rid]) => at_.get(rid) < loadedAt - 50).length;
+    const picsKB = Math.round(pics.reduce((s, [rid]) => s + (bytes.get(rid) ?? 0), 0) / 1024);
     check(early === 0, "no menu data with the page itself");
     check(idle.length === 3, "idle: the three menus' data (apps, motions, canvas), once each", idle.map((u) => new URL(u).pathname).join(" "));
-    check(minis === 0, "idle: no menu pictures before a menu warms", String(minis));
+    check(picsEarly === 0, "the menus' pictures load only after the page itself", String(picsEarly));
+    check(pics.length > 0 && picsKB <= 900, "idle: every menu's first screen is ready, with at most 900 KB of pictures at 1440x900", `${pics.length} files, ${picsKB} KB`);
     // Gzipped as the site's front server sends it (next start here may send it plain).
     const sizes = [];
     for (const u of new Set(idle)) sizes.push([new URL(u).pathname, zlib.gzipSync(Buffer.from(await (await fetch(u)).arrayBuffer())).length]);
     check(sizes.length === 3 && sizes.every(([, b]) => b > 0 && b <= 4096), "each menu's data is at most 4 KB gzipped", sizes.map(([u, b]) => `${u} ${b}`).join(", "));
-    // Warm, then open: the panel shows within a frame of the click; pictures within budget; nothing moves.
+    // Warm, then open: the panel shows within a frame of the click, its first screen's pictures already there (the
+    // page's idle time readied every panel); pictures within budget; nothing moves.
     for (const id of ["apps", "motions", "canvas"]) {
       const since = Date.now();
       const item = trig(p, id);
@@ -577,12 +584,14 @@ try {
         b.click();
         await new Promise((r) => requestAnimationFrame(() => r()));
         const panel = document.getElementById(`${sel}-launcher`);
-        return panel && !panel.hidden && panel.querySelector("[data-col]") ? performance.now() - t0 : -1;
+        const empty = panel ? [...panel.querySelectorAll("img")].filter((i) => i.checkVisibility() && i.loading !== "lazy" && !(i.complete && i.naturalWidth)).length : -1;
+        return { ms: panel && !panel.hidden && panel.querySelector("[data-col]") ? performance.now() - t0 : -1, empty };
       }, id);
-      check(ms >= 0 && ms < 100, `${id}: shows within 100 ms of the click once warmed`, `${ms.toFixed?.(1)} ms`);
+      check(ms.ms >= 0 && ms.ms < 100, `${id}: shows within 100 ms of the click once warmed`, `${ms.ms.toFixed?.(1)} ms`);
+      check(ms.empty === 0, `${id}: opens with its first screen's pictures already there`, `${ms.empty} still loading`);
       await p.waitForTimeout(2500);
       const img = [...urls].filter(([rid, u]) => at_.get(rid) >= since && /\/previews\//.test(u)).reduce((s, [rid]) => s + (bytes.get(rid) ?? 0), 0);
-      check(img <= 250 * 1024, `${id}: first open loads at most 250 KB of pictures at 1440x900`, `${Math.round(img / 1024)} KB`);
+      check(img <= 250 * 1024, `${id}: its open loads at most 250 KB more pictures at 1440x900`, `${Math.round(img / 1024)} KB`);
       await p.keyboard.press("Escape");
       await p.waitForTimeout(300);
       const cls = await p.evaluate(() => window.__cls);

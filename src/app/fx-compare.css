@@ -2,7 +2,8 @@
  * Fuobe FX's before/after cards (components/fx/fx-compare.tsx). The divider's place is one variable, --fxc-pos, set by
  * the pointer (once a frame) or a key: the after is cut there with clip-path and the hairline moves by transform, so a
  * hover never lays anything out. States are data attributes on the card: data-show (rest, after, before: a tap),
- * data-hover (a mouse over it), data-follow (the divider is under the mouse: no easing), data-armed (its hover files
+ * data-hover (a mouse over it), data-fxc-follow (the divider is under the mouse: no easing; its own name, since
+ * motion.css animates any [data-follow]), data-armed (its hover files
  * are asked for), data-ready (they came). In @layer components, so a
  * card's own utilities (its size, its corners) win.
  */
@@ -42,8 +43,8 @@
     clip-path: inset(0 0 0 var(--fxc-pos));
     transition: clip-path 260ms var(--fxc-ease);
   }
-  .fxc[data-follow] .fxc-after,
-  .fxc[data-follow] .fxc-line {
+  .fxc[data-fxc-follow] .fxc-after,
+  .fxc[data-fxc-follow] .fxc-line {
     transition: none;
   }
   /* A cut-out sits on a transparency checkerboard. */

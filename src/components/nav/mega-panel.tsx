@@ -105,7 +105,7 @@ export function LeadCard({ e, col, row = 0, span = 1, current, inside, now, clas
  * the second line, before the line; a name too long for the column takes the second line instead and the line gives way
  * (it stays in the title). Below 1280 px the name alone, on up to two lines, with its badge beside it.
  */
-function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; col: number; row: number; current: boolean; inside?: boolean; now: number; className?: string }) {
+function Row({ e, col, row, current, inside, now, eager, className }: { e: MegaItem; col: number; row: number; current: boolean; inside?: boolean; now: number; eager?: boolean; className?: string }) {
   const fresh = isNew(e, now);
   return (
     <IntentLink
@@ -117,9 +117,10 @@ function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; co
       title={e.line ? `${e.label}: ${e.line}` : e.label}
       className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1 md:max-lg:min-h-10 md:max-lg:py-0.5 [@media(pointer:coarse)]:min-h-11", className)}
     >
-      {/* Six columns leave a row its name and line below 1440 px, and its name alone below 1280 px. Its picture loads
-          when the row shows (lazy): a row hidden by the window's height never fetches it. */}
-      <CoverThumb id={e.navCover} cover={e.cover} size="row" icon={e.icon} className="max-[1439.98px]:hidden" />
+      {/* Six columns leave a row its name and line below 1440 px, and its name alone below 1280 px. `eager`: a row this
+          window shows loads its picture with the panel, so it is there on the first frame; any other row's loads when it
+          shows (lazy): a row hidden by the window's height never fetches it. */}
+      <CoverThumb id={e.navCover} cover={e.cover} size="row" icon={e.icon} eager={eager} low className="max-[1439.98px]:hidden" />
       {/* Centred while it fits; a name on two lines starts at the top and pushes the line out of the 36 px box. */}
       <span data-row-text className="flex max-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-1 overflow-hidden [align-content:safe_center] max-xl:flex-nowrap">
         <span data-row-name className={cn("line-clamp-2 min-w-0 text-[13px] leading-[18px] font-medium", (current || inside) && "font-semibold")}>
@@ -219,6 +220,18 @@ function Tile({ e, col, row, current, eager }: { e: MegaItem; col: number; row: 
   );
 }
 
+/**
+ * How many of a list column's rows show their picture in this window (ROW_HIDE's caps; none below 1440 px, where rows
+ * show no picture): these load with the panel, before it opens. Read once, when the panel's body first renders (only
+ * ever in the browser).
+ */
+function rowsWithPictures(capped: boolean, families: boolean): number {
+  if (typeof window === "undefined" || window.innerWidth < 1440) return 0;
+  if (!capped) return Infinity;
+  const h = window.innerHeight;
+  return h < 800 ? ROW_CAPS.short - (families ? 1 : 0) : h < 960 ? ROW_CAPS.mid : ROW_CAPS.tall;
+}
+
 /** Tiles across a tiles column. */
 const across = (c: MegaColumn) => Math.min(c.span ?? 1, TILE_COLS);
 
@@ -270,6 +283,7 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
   const families = !!model.families?.length;
   const tileColumns = model.columns.filter((c) => c.variant === "tiles").length;
   const places = keyPlaces(model.columns);
+  const [pictured] = useState(() => rowsWithPictures(capped, families));
   // On a studio's feature (Genjutsu's Restyle, Upscale's Video), its studio is marked as holding the page too.
   const holder = current ? subParent(current) : undefined;
 
@@ -341,7 +355,7 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
           )}
           {rows.map((e, ri) => (
             <li key={e.id} className={capped ? ROW_HIDE(ri, families) : undefined}>
-              <Row e={e} col={col} row={at[ri]} current={current === e.id} inside={holder === e.id} now={now} />
+              <Row e={e} col={col} row={at[ri]} current={current === e.id} inside={holder === e.id} now={now} eager={ri < pictured} />
               <SubLinks e={e} col={col} row={at[ri] + 1} current={current} under />
             </li>
           ))}
@@ -378,8 +392,21 @@ export function LauncherColumns({ kind, current, now }: { kind: ViewerKind | und
   return <MegaColumns model={studiosMenu(kind)} current={current} now={now} kind={kind} />;
 }
 
-/** The panel's body once it is shown or warmed: it reads the path (client only: the panel never renders on the server). */
-export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () => void; onSearch: () => void }) {
+/**
+ * The pictures a closed panel holds ready for its first frame: those it loads with the panel first (lead covers, before
+ * and after stills, the first tiles), decoded, so it never opens on empty boxes that fill in after. Resolves once each
+ * one is decoded or failed, or after `cap` ms. The rows' small pictures load too, after these (low priority).
+ */
+function decodePictures(root: HTMLElement, cap = 4000): Promise<void> {
+  const imgs = [...root.querySelectorAll<HTMLImageElement>('img:not([loading="lazy"]):not([fetchpriority="low"])')];
+  return Promise.race([Promise.allSettled(imgs.map((i) => i.decode())).then(() => {}), new Promise<void>((r) => window.setTimeout(r, cap))]);
+}
+
+/**
+ * The panel's body once it is shown or warmed: it reads the path (client only: the panel never renders on the server).
+ * `onPrimed`: its menu is here and its first screen's pictures are decoded (a hover open waits a moment for it).
+ */
+export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onClose: () => void; onSearch: () => void; onPrimed?: () => void }) {
   const kind = useViewerKind();
   const pathname = usePathname();
   const { model, failed, retry } = useMegaMenu(id, kind);
@@ -394,8 +421,22 @@ export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () =
   const area = MEGA_AREAS[id];
   // The query too: moving from one preset to another (/video?preset=…) keeps the path.
   const search = useSearchParams()?.toString() ?? "";
+  const root = useRef<HTMLDivElement>(null);
+  const primed = useRef(onPrimed);
+  useEffect(() => {
+    primed.current = onPrimed;
+  });
+  useEffect(() => {
+    const el = root.current;
+    if (!model || !el) return;
+    let live = true;
+    void decodePictures(el).then(() => live && primed.current?.());
+    return () => {
+      live = false;
+    };
+  }, [model]);
   return (
-    <div className="max-w-[1680px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
+    <div ref={root} className="max-w-[1680px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
       <div className="flex min-h-10 items-center gap-3 pb-4">
         <p className="text-[13px] text-muted-foreground" data-count-line>
           {model ? model.countLine : failed ? "Couldn't load this menu" : " "}

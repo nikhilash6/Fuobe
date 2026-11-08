@@ -105,9 +105,14 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
   const arm = () => {
     if (extra) setArmed(true);
   };
-  const oneLoaded = () => {
-    loaded.current += 1;
-    if (loaded.current >= extra) setReady(true);
+  /** A hover file came (or failed): counted once it is decoded too, so the lens or flipbook never shows an empty frame. */
+  const oneLoaded = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const done = () => {
+      loaded.current += 1;
+      if (loaded.current >= extra) setReady(true);
+    };
+    if (e.type === "load") void e.currentTarget.decode().then(done, done);
+    else done();
   };
 
   // A tap's side: the divider goes all the way (or back to rest); the lens sits over the loupe's own place.
@@ -176,7 +181,7 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
     arm();
     if (showRef.current !== "rest") setShow("rest");
     el.dataset.hover = "";
-    if (kind !== "loupe" && divides) el.dataset.follow = "";
+    if (kind !== "loupe" && divides) el.dataset.fxcFollow = "";
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!followsPointer(e.pointerType, reducedMotion()) || !divides) return;
@@ -191,7 +196,7 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
     cancelAnimationFrame(raf.current);
     raf.current = 0;
     delete el.dataset.hover;
-    delete el.dataset.follow;
+    delete el.dataset.fxcFollow;
     if (divides) setPos(showPos(showRef.current, rest));
   };
 

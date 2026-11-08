@@ -629,11 +629,12 @@ export function useBarMenu(id: BarMenuId, { big = false, ready, warm }: { big?: 
   const other = open ? menu.prev : menu.id;
   const sideways = big && !!other && !!ctl?.part(other)?.big;
   const dir = open ? switchDirection(menu.prev, id) : switchDirection(id, menu.id);
-  // The old content is gone (two thirds of fast) before the new one starts (two staggers): never two panels' words at once.
+  // A cross-fade: the new content comes in from half there (motion.css) as the old one leaves (two thirds of fast), so
+  // the sheet is never seen empty, even while the pointer sweeps across several items.
   const motion =
     sideways && dir
       ? open
-        ? { "--enter-x": `calc(var(--motion-d2) * ${dir})`, "--enter-y": "0px", "--enter-delay": "calc(var(--motion-stagger) * 2)" }
+        ? { "--enter-x": `calc(var(--motion-d2) * ${dir})`, "--enter-y": "0px" }
         : { "--exit-x": `calc(var(--motion-d2) * ${-dir})`, "--exit-y": "0px", "--exit-fade": "calc(var(--motion-fast) * .67)" }
       : {};
   return {

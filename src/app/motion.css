@@ -151,9 +151,10 @@
 /* ----- The top bar's menus (bar-menus.tsx): quick utility motion, transitions only (never keyframes), so a change of
    mind half-way turns back from where it is and a fast glide never restarts anything.
    Big panels (Studios, Apps, Motions & effects, Canvas) sit on one shared sheet under the bar ([data-mega-stage]):
-   the sheet comes down from the bar (8 px, base, enter) and goes back up (4 px, fast, exit); between two panels its
-   bottom edge moves to the new height (transform only, base, standard) while the old content leaves sideways (fast,
-   exit) and the new one comes in from the side the pointer went, a stagger later: every switch ends by 240 ms. The
+   the sheet comes down from the bar (8 px, base, enter), solid from its first frame, with its content from half there
+   (never an empty sheet), and goes back up (4 px, fast, exit); between two panels its bottom edge moves to the new height (transform only, base, standard) while the
+   old content leaves sideways (fast, exit) and the new one comes in from the side the pointer went at the same time,
+   from half there: a cross-fade over the one sheet, never a frame of empty sheet; every switch ends by 200 ms. The
    columns follow 20 ms apart on a fresh open (3 steps at most: every column reads by 260 ms), never on a switch.
    Cards (Create, More) grow in from their item (scale 0.97, 4 px) and shrink out (0.98, fast, exit).
    data-phase: open | exit (inert, still painted) | gone (hidden). Under reduced motion every token is 0. ----- */
@@ -181,7 +182,8 @@
   /* The one in front during a switch is the new one; the old one fades under it. */
   &[data-phase="exit"] { z-index: 0; }
   &[data-phase="open"] { z-index: 1; }
-  &[data-phase="open"][data-mega-enter="fresh"] [data-col] { animation: motion-rise-near var(--motion-base) var(--ease-enter) backwards; }
+  /* The columns only move (no fade of their own): every card shows from the panel's first frame. */
+  &[data-phase="open"][data-mega-enter="fresh"] [data-col] { animation: motion-nudge-near var(--motion-base) var(--ease-enter) backwards; }
   &[data-phase="open"][data-mega-enter="fresh"] [data-col="1"] { animation-delay: var(--launcher-step); }
   &[data-phase="open"][data-mega-enter="fresh"] [data-col="2"] { animation-delay: calc(var(--launcher-step) * 2); }
   &[data-phase="open"][data-mega-enter="fresh"] :is([data-col="3"], [data-col="4"], [data-col="5"], [data-col="6"], [data-col="7"], [data-col="8"]) { animation-delay: calc(var(--launcher-step) * 3); }
@@ -190,7 +192,9 @@
 }
 @starting-style {
   [data-mega-panel][data-phase="open"] {
-    opacity: 0;
+    /* The content starts half there (on its solid sheet), so a panel is never seen empty, on an open or however fast
+       the pointer crosses the bar. */
+    opacity: 0.5;
     translate: var(--enter-x, 0px) var(--enter-y, calc(var(--motion-d2) * -1));
   }
 }
@@ -219,12 +223,11 @@
       translate var(--motion-fast) var(--ease-exit);
   }
   &[data-phase="gone"] [data-mega-sheet] { translate: 0 calc(var(--motion-d2) * -1); transition: none; }
+  /* Solid from its first frame (the page never shows through a panel coming in): it comes down, it never fades in. */
   &[data-open] [data-mega-sheet] {
     opacity: 1;
     translate: 0 0;
-    transition:
-      opacity var(--motion-base) var(--ease-enter),
-      translate var(--motion-base) var(--ease-enter);
+    transition: translate var(--motion-base) var(--ease-enter);
   }
 }
 [data-bar-card] {
@@ -444,6 +447,7 @@ img[data-fade="wait"] { opacity: 0; }
 @keyframes motion-fade-out { to { opacity: 0; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes motion-rise { from { opacity: 0; translate: 0 var(--motion-d1); } }
+@keyframes motion-nudge-near { from { translate: 0 calc(var(--motion-d1) * -1); } }
 @keyframes motion-rise-near { from { opacity: 0; translate: 0 calc(var(--motion-d1) * -1); } }
 @keyframes motion-rise-page { from { translate: 0 var(--motion-d2); } }
 @keyframes motion-settle { from { opacity: 0; scale: 1.02; } }

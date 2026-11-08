@@ -58,6 +58,7 @@ export function CoverThumb({
   size,
   icon,
   eager,
+  low,
   sizes: boxSizes,
   className,
 }: {
@@ -70,6 +71,8 @@ export function CoverThumb({
   icon?: NavIconName;
   /** Load at once (a panel about to open) instead of when it comes near the screen. */
   eager?: boolean;
+  /** Load after the pictures around it (a menu's small row pictures, after its lead covers). */
+  low?: boolean;
   /** A fluid box's width for the srcset, when it isn't its size's usual one (a lead card two tracks wide, a phone's tile). */
   sizes?: string;
   className?: string;
@@ -94,6 +97,7 @@ export function CoverThumb({
       height={s.h}
       alt=""
       loading={eager ? "eager" : "lazy"}
+      fetchPriority={low ? "low" : undefined}
       decoding="async"
       draggable={false}
       className="absolute inset-0 size-full object-cover"

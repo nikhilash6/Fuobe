@@ -1,12 +1,12 @@
 "use client";
 
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, memo, startTransition, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { MEGA_AREAS, megaMove, megaPanelId, TILE_COLS, type MegaId } from "@/lib/mega-menus";
 import { activeEntry, launcherActive, subActive } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { useBarMenu } from "./bar-menus";
+import { shows, useBarController, useBarMenu } from "./bar-menus";
 import { BarTrigger } from "./bar-split";
-import { menuReady, warmMenu } from "./mega-data";
+import { menuReady, menusSettled, warmMenu } from "./mega-data";
 import { useSearchPalette } from "./search-context";
 import { warmNav, type NavPanel } from "./nav-prefetch";
 
@@ -61,11 +61,61 @@ const loadPanel = () =>
     panelLoaded = true;
     return m;
   });
-const LazyPanel = lazy(() => loadPanel().then((m) => ({ default: m.MegaPanel })));
+/** Memoised: a ready panel stays as it is while the bar's menus open, close and switch (it re-renders on its own data). */
+const LazyPanel = lazy(() => loadPanel().then((m) => ({ default: memo(m.MegaPanel) })));
 
 /** Loads the panel's body ahead (the bar does when the page is idle; hover and focus on an item do too). */
 export function preloadMegaPanel(): void {
   void loadPanel().catch(() => {});
+}
+
+/** The big panels in the bar's order (the order they get ready in when the pointer's place is not known). */
+const BAR_ORDER: readonly MegaId[] = ["studios", "fx", "apps", "motions", "canvas"];
+/** Each mounted panel: what gets it ready, whether its item shows at this width, and whether its pictures are ready. */
+const primers = new Map<MegaId, { heat: () => void; shows: () => boolean; at: () => number | undefined; done: boolean }>();
+let primeQueue: MegaId[] | null = null;
+let priming: { id: MegaId; timer: number } | null = null;
+
+/** The next panel in the queue whose item shows gets ready; the one after it waits for its pictures (3 s at most). */
+function primeNext(): void {
+  while (primeQueue?.length) {
+    const id = primeQueue.shift()!;
+    const p = primers.get(id);
+    if (!p || p.done || !p.shows()) continue;
+    priming = { id, timer: window.setTimeout(() => primed(id), 3000) };
+    p.heat();
+    return;
+  }
+}
+
+/** `id`'s first screen is ready (or its time ran out): the next panel's turn. */
+function primed(id: MegaId): void {
+  const p = primers.get(id);
+  if (p) p.done = true;
+  if (priming?.id !== id) return;
+  window.clearTimeout(priming.timer);
+  priming = null;
+  primeNext();
+}
+
+/**
+ * The pointer or focus came to the bar: every big panel whose item shows renders its body, closed, so its first
+ * screen's pictures load and decode before it opens, and a switch from one to the next never shows empty boxes. One
+ * panel at a time, nearest the pointer first (`x`: where it came in; else the bar's order), so a slow connection gets
+ * the ones it is about to open whole first (the item the pointer is on gets its own ready at once, as ever).
+ */
+export function primeMegaPanels(x?: number): void {
+  if (primeQueue) return;
+  const far = (id: MegaId) => {
+    const c = x === undefined ? undefined : primers.get(id)?.at();
+    return c === undefined ? Infinity : Math.abs(c - x!);
+  };
+  primeQueue = [...BAR_ORDER].sort((a, b) => far(a) - far(b));
+  // The pictures wait for the panels' code and the menus' data, so on a slow connection they never hold up an open.
+  void loadPanel()
+    .catch(() => {})
+    .then(menusSettled)
+    .then(primeNext);
 }
 
 /** While a menu's data (or the panel's body) is on its way: its columns at their final sizes, so nothing moves when it comes. */
@@ -124,9 +174,49 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
     preloadMegaPanel();
     setWarm(true);
   }, [id]);
-  const ready = useCallback(() => panelLoaded && menuReady(id), [id]);
+  // Its first screen's pictures are decoded (MegaPanel's onPrimed): a hover open waits a moment for them too.
+  const pictures = useRef(false);
+  const onPrimed = useCallback(() => {
+    pictures.current = true;
+    primed(id);
+  }, [id]);
+  const ready = useCallback(() => panelLoaded && menuReady(id) && pictures.current, [id]);
   const { open, phase, close, entered, style, trigger, surface, triggerRef, surfaceRef } = useBarMenu(id, { big: true, ready, warm: heat });
   const shown = warm || open;
+  const ctl = useBarController();
+
+  // Its place in the bar's queue of panels getting ready (primeMegaPanels): only while its item shows at this width.
+  useEffect(() => {
+    const t = () => ctl?.part(id)?.trigger;
+    const at = () => {
+      const r = t()?.getBoundingClientRect();
+      return r?.width ? r.left + r.width / 2 : undefined;
+    };
+    // Rendered as a transition: the closed body's render yields to the pointer and keys (never one long task).
+    const prime = () => {
+      warmMenu(id);
+      preloadMegaPanel();
+      startTransition(() => setWarm(true));
+    };
+    primers.set(id, { heat: prime, shows: () => !!t() && shows(t()!), at, done: pictures.current });
+    return () => {
+      primers.delete(id);
+    };
+  }, [ctl, id]);
+
+  // The body's callbacks keep one identity, so the memoised body never re-renders when a menu opens or switches.
+  const closeRef = useRef(close);
+  const searchRef = useRef(search);
+  useEffect(() => {
+    closeRef.current = close;
+    searchRef.current = search;
+  });
+  const onClose = useCallback(() => closeRef.current(), []);
+  const onSearch = useCallback(() => {
+    // The item gets focus first, so it is where Esc in the search comes back to (the panel is gone by then).
+    closeRef.current(true);
+    searchRef.current.open();
+  }, []);
 
   // Opened: the routes one click here leads to start loading.
   useEffect(() => {
@@ -176,12 +266,9 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
           >
             <LazyPanel
               id={id}
-              onClose={close}
-              onSearch={() => {
-                // The item gets focus first, so it is where Esc in the search comes back to (the panel is gone by then).
-                close(true);
-                search.open();
-              }}
+              onPrimed={onPrimed}
+              onClose={onClose}
+              onSearch={onSearch}
             />
           </Suspense>
         )}

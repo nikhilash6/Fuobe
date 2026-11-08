@@ -820,13 +820,16 @@ try {
       const watch = p.evaluate(async () => {
         let worst = 0;
         let both = 0;
+        let empty = 0;
         const end = performance.now() + 500;
         while (performance.now() < end) {
           const sheet = document.querySelector("[data-mega-sheet]").getBoundingClientRect();
           let shown = 0;
+          let most = 0;
           for (const s of document.querySelectorAll("[data-mega-panel]:not([hidden])")) {
             const cs = getComputedStyle(s);
             const op = Number(cs.opacity);
+            most = Math.max(most, op);
             if (op < 0.05) continue;
             if (op > 0.3) shown++;
             const r = s.getBoundingClientRect();
@@ -838,15 +841,18 @@ try {
             worst = Math.max(worst, bottom - sheet.bottom);
           }
           if (shown > 1) both++;
+          if (most < 0.45) empty++;
           await new Promise(requestAnimationFrame);
         }
-        return { worst, both };
+        return { worst, both, empty };
       });
       await sleep(30);
       await glide(p, { x: rb.x, y: rb.y }, Infinity);
       const w = await watch;
       check(w.worst <= 2, `22: ${a} → ${b}: no panel shows past the sheet's edge during the switch`, `${w.worst.toFixed(0)} px`);
-      check(w.both <= 1, `22: ${a} → ${b}: never two panels' words clearly at once`, `${w.both} frames`);
+      // A cross-fade: the two panels' words together only briefly, and never a frame of empty sheet.
+      check(w.both <= 4, `22: ${a} → ${b}: two panels' words together only briefly (a cross-fade)`, `${w.both} frames`);
+      check(w.empty === 0, `22: ${a} → ${b}: never a frame of empty sheet`, `${w.empty} frames`);
     }
 
     // 23. Create's See all: top right of the card, out of the rows' flow.
