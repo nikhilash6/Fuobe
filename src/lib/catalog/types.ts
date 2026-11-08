@@ -1558,6 +1558,12 @@ export interface Generation {
    */
   trouble?: RunTrouble;
   /**
+   * A failed run's technical reason, cleaned (ComfyUI's own words, or the engine's: no folders, addresses, keys or
+   * prompt text), shown under the plain sentence in `error`. Only while the install shows failure details to people
+   * (Settings → Failed runs: "full"), and only in the run as its own person reads it.
+   */
+  errorDetail?: string;
+  /**
    * An account's run waiting for its own GPU or key to come back (it goes on by itself): why, the buttons that help
    * (Start your pod, Run with your key…), and when it stops waiting.
    */

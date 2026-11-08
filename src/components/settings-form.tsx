@@ -783,6 +783,23 @@ export function SettingsForm({ prices }: { prices?: string }) {
       </Section>
 
       <Section
+        id="failed-runs"
+        title="Failed runs"
+        description="What a person reads when a run of theirs on this studio's GPUs can't finish. The details are cleaned first: no folders, addresses, keys or prompt text, and nobody sees another person's."
+      >
+        <ChoiceField
+          id="setting-run-failure-detail"
+          label="Show people"
+          value={get("runFailureDetail")?.value ?? "full"}
+          onChange={set("runFailureDetail")}
+          options={[
+            { value: "full", label: "Full details", hint: "The plain sentence, and under it what went wrong: ComfyUI's own reason, such as a node that isn't installed or a model file it doesn't have." },
+            { value: "friendly", label: "Friendly only", hint: "The plain sentence only. You still read the full reason in each run's details." },
+          ]}
+        />
+      </Section>
+
+      <Section
         id="auto-image"
         title="Auto image model"
         description="Auto is the Image studio's first pick on the open engine: Ideogram 4 for most pictures and for lettering, Qwen-Image 2.1 for edits, and Krea 2 Realism for the prompts below, which Ideogram 4's safety filter often declines. When Ideogram 4 declines a run anyway, Krea 2 Realism, FIBO 2 Dev, then MOSS-Image make it."

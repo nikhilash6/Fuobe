@@ -50,8 +50,8 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings`, `GET /api/admin/queue/overrides` |
 | `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share, the pick allowance and the paused budget (`pausedBudgetS`: how long a run that has started may spend back in line) |
 | `queue:control` | `POST /api/admin/queue/mode`, `POST /api/admin/queue/overrides`, `DELETE /api/admin/queue/overrides/{id}`, `POST /api/admin/queue/cancel`: who the GPUs serve first, runs and people sent first or held, and cancelling a run ([gpu-workers.md](gpu-workers.md#who-goes-first)) |
-| `site:read` | `GET /api/admin/site/uploads` |
-| `site:write` | `PATCH /api/admin/site/uploads`: the upload switches |
+| `site:read` | `GET /api/admin/site/uploads`, `GET /api/admin/site/runs` |
+| `site:write` | `PATCH /api/admin/site/uploads`: the upload switches; `PATCH /api/admin/site/runs`: what people read when a run fails |
 | `audit:read` | `GET /api/admin/audit` |
 
 The read-only preset in Settings ticks `runs:read`, `reports:read`, `workers:read`, `queue:read` and `audit:read`:
@@ -125,6 +125,8 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000), `pausedBudgetS` (seconds, 0 to 604800) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
 | `GET /api/admin/site/uploads` | | `{ switches: { soundConvert, soundTrim, videoTrim, photoConvert, photoCrop } }`: what a browser may do to a file that doesn't fit a tool before it is uploaded (convert a sound to MP3, offer a part of a sound or clip, convert or shrink a photo, offer a crop). All `true` by default. Every visitor reads the same values at `GET /api/site/uploads` |
 | `PATCH /api/admin/site/uploads` | any of the five, each `true` or `false` | `{ switches }`; 400 with the reason for an unknown switch or a value that isn't a boolean. A switch that is off leaves that kind of file as it is: the tool says why it can't take it, and the server's checks apply. Browsers pick it up when they next load a page |
+| `GET /api/admin/site/runs` | | `{ failureDetail }`: what a person reads when a run of theirs on this install's GPUs fails. `full`: the plain sentence and, under it, the cleaned technical reason (ComfyUI's own: no folders, addresses, keys or prompt text); `friendly`: the plain sentence only. Settings → Failed runs is the same choice. A new install starts with `full`; an install that had runs or settings before this choice existed keeps `friendly` |
+| `PATCH /api/admin/site/runs` | `{ "failureDetail": "full" \| "friendly" }` | `{ failureDetail }`; 400 for any other body. Runs read it the next time they are shown. A person only ever sees the details of their own runs |
 | `GET /api/admin/workers` | | `{ workers, lanes }`. Each worker adds `asked: { at, words }` or null, `jobs` (each job it holds: `{ taskId, generationId, slot, lane, laneLabel, stage, state, claimedAt, startedAt, progress, progressAt, typicalMs, etaS, owners, feature?, modelName? }`) and `lastEvent: { at, kind, event, words }` or null |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
 | `POST /api/admin/workers/{id}/update` | none | `{ worker }`: its next beat answer asks it to update now. It looks for new code at once and restarts on it after the job in hand (a person's job is never cut off). Each worker in `GET /api/admin/workers` has `update`: `state` (`current`, `updating` while behind the site's version for under 3 minutes, `behind` after), `since`, `behindMs`, `site`, `worker`, `commit` (first 12 hex), `peopleHeld`, `peopleWaiting`, `askedAt`, `words` and `needsOwner` |
@@ -139,8 +141,8 @@ A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name }
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
 `worker.rotate`, `worker.revoke`, `worker.revoke_all` (Sign everyone out with every API token), `queue.settings` (with
 the values before and after), `queue.mode`, `queue.override`, `queue.override.end`, `queue.cancel`, `queue.mode.end`
-(actor `system` when a mode, a hold or a boost ended by itself), `site.uploads` (the upload switches, with the values before and after), `token.create`, `token.revoke`,
-`token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
+(actor `system` when a mode, a hold or a boost ended by itself), `site.uploads` (the upload switches, with the values before and after), `site.runs` (what people read when a run fails, with the values before and after), `token.create`, `token.revoke`,
+`token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after), `settings.run_failure_detail` (Settings → Failed runs, changed in the owner's browser, with the values before and after); a token's reads
 `accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
 every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account
 every 10 minutes, the account as its target, or `owner` for the owner's own runs) and `file.view` (one row per reader and file every hour); refusals

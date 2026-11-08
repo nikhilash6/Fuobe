@@ -145,7 +145,7 @@ import { finishTask, pathOnWorker, poolFinishes3d, startWorkerModelFinish, stopW
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
-import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
+import { engineMode, getSetting, runFailureDetail, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp, type RunStamp } from "./run-stamp";
@@ -203,7 +203,8 @@ interface Row {
   stage?: string | null;
   /**
    * A failed run's technical detail, for the owner only (the engine's own words, cleaned: src/lib/engine-error.ts), when
-   * the person read a plain sentence in `error` instead. Never part of a Generation.
+   * the person read a plain sentence in `error` instead. Part of a Generation only as `errorDetail`, while the install
+   * shows failure details to people (settings.ts runFailureDetail).
    */
   detail?: string | null;
 }
@@ -280,6 +281,8 @@ export function toGeneration(r: Row): Generation {
     pinnedAt: r.pinned_at ?? null,
     review: isReviewStatus(r.review) ? r.review : null,
     ...(made && { made }),
+    // On this install's GPUs, the cleaned technical reason under the plain sentence, while the install shows it.
+    ...(pool && (r.status === "failed" || r.status === "canceled") && failureDetailOf(r)),
     ...(r.status === "failed" && r.fix_json && !pool && { fix: parseFix(r.fix_json) }),
     ...(r.status === "failed" && r.fix_json && !pool && parseTrouble(r.fix_json)),
     // Waiting for its own GPU or key to come back: why, the buttons that help, and until when (never the owner's note).
@@ -304,6 +307,14 @@ export function toGeneration(r: Row): Generation {
     // The owner's own run: what Ideogram 4 returned in place of a picture (an account's run shows it in Accounts' runs).
     ...(!stored.account && declinedCardsOf(meta)),
   };
+}
+
+/**
+ * A failed run's technical reason for its own person (Generation.errorDetail): the stored detail, already cleaned
+ * (storedFields), while Settings → Failed runs is "full". Nothing when the install shows the plain sentence only.
+ */
+function failureDetailOf(r: Pick<Row, "detail">): { errorDetail: string } | Record<string, never> {
+  return r.detail && runFailureDetail() === "full" ? { errorDetail: r.detail } : {};
 }
 
 /** What Ideogram 4 returned in place of a picture, kept with the run for the owner (Generation.declinedCards). */

@@ -293,7 +293,11 @@ export function FailedTile({ g, ratio, onRetry, onReuse }: { g: Generation; rati
     <div className="flex h-full max-w-full flex-col justify-between overflow-hidden rounded-xl border bg-muted/40 p-3" style={{ aspectRatio: shape }} data-stage={g.status}>
       <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
         {poolFailed ? (
-          <p className={cn("shrink-0 text-[13px] leading-snug font-medium break-words", narrow ? "line-clamp-4" : "line-clamp-5")}>{g.error || POOL_WORDS.failed}</p>
+          <>
+            <p className={cn("shrink-0 text-[13px] leading-snug font-medium break-words", narrow ? "line-clamp-4" : "line-clamp-5")}>{g.error || POOL_WORDS.failed}</p>
+            {/* The cleaned technical reason, when this studio shows it (Settings → Failed runs). */}
+            <TroubleDetails details={g.errorDetail ? `Details: ${g.errorDetail}` : undefined} className="min-h-0" />
+          </>
         ) : (
           <>
             <p className="shrink-0 text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>

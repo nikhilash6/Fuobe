@@ -1173,6 +1173,24 @@ function forgetDroppedBranchMigrations(db: Database.Database): void {
   if (done(24) && !hasColumn("assets", "account_id") && has("trigger", "audit_log_no_delete")) forget(24);
 }
 
+/** The settings row that says the choice below was made for this data folder (once, whatever it was). */
+export const FAILURE_DETAIL_CHOSEN = "runs.failureDetail.chosen";
+
+/**
+ * What people read when a run fails (settings.ts runFailureDetail): a new install starts with "full", the default. An
+ * install whose data folder already had migrations when this build first opened it read the plain sentence only until
+ * now, and keeps it: "friendly" is saved for it, before any request is served. Done once per data folder (its marker
+ * row), so the owner's later choice, either way, stays across restarts and updates.
+ */
+function keepFriendlyFailures(db: Database.Database, fresh: boolean): void {
+  if (db.prepare("SELECT 1 FROM settings WHERE key = ?").get(FAILURE_DETAIL_CHOSEN)) return;
+  db.transaction(() => {
+    if (db.prepare("SELECT 1 FROM settings WHERE key = ?").get(FAILURE_DETAIL_CHOSEN)) return;
+    if (!fresh) db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('runs.failureDetail', 'friendly')").run();
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, '1')").run(FAILURE_DETAIL_CHOSEN);
+  }).immediate();
+}
+
 /** Add a column found missing: another server starting at the same moment may have just added it. */
 function addColumn(db: Database.Database, alter: string): void {
   try {
@@ -1213,6 +1231,7 @@ function open(): Database.Database {
       db.prepare("INSERT INTO _migrations (id) VALUES (?)").run(i);
     }).immediate();
   });
+  keepFriendlyFailures(db, done.size === 0);
   // Placeholder results are opt-in (settings.ts, demoMode): a saved "auto", which made a placeholder whenever the model
   // wasn't connected, is cleared, so the install runs with the default "off". A saved "on" stays. Safe on every start.
   db.exec("DELETE FROM settings WHERE key = 'demo.mode' AND value NOT IN ('on', 'off')");

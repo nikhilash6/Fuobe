@@ -111,6 +111,8 @@ beforeEach(() => {
   setSetting("comfyUrl", "");
   setSetting("engineMode", "open");
   setSetting("demoMode", "off");
+  // People read the plain sentence only, unless a test says otherwise (Settings → Failed runs).
+  setSetting("runFailureDetail", "friendly");
   db().prepare("DELETE FROM relay_workers").run();
   db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE state IN ('waiting','sending','queued','running','collecting')").run();
   db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
@@ -800,6 +802,39 @@ describe("an account's run that a worker can't finish", () => {
       expect(runDetails(id)!.comfyReason).toBe(detail);
       expect(JSON.stringify(getGeneration(id))).not.toMatch(/RuntimeError|KSampler/);
       expect(await visitorList()).not.toMatch(/RuntimeError|KSampler/);
+    });
+
+    it("with full details on, the person reads the cleaned reason under the plain sentence; nobody else does", async () => {
+      setSetting("runFailureDetail", "full");
+      const w = standInWorker();
+      beatAs(w);
+      const { id } = await accountRun();
+      const api = workerApi(w.token);
+      const t = (await api.claim())!;
+      const body = { error: { type: "missing_node_type", message: "x", details: "Node ID '#12'", extra_info: { node_id: "12", class_type: "InstantHMRPredict" } }, node_errors: {} };
+      await api.report(t, { event: "refused", status: 400, body, why: `${refusalReason(body)} from X:\\fuobe-worker\\ComfyUI with hf_abcdefghijklmnopqrstu` });
+      const g = await ended(id);
+      const why = "ComfyUI refused the job: node InstantHMRPredict (id 12) isn't installed from [folder] with [key]";
+      // The plain sentence stays; the cleaned reason comes with it, in the run and the person's own list.
+      expect(isEngineWords(g.error), g.error ?? "").toBe(true);
+      expect(g.errorDetail).toBe(why);
+      const mine = JSON.parse(await visitorList()) as { items: { id: string; errorDetail?: string }[] };
+      expect(mine.items.find((x) => x.id === id)?.errorDetail).toBe(why);
+      expect(JSON.stringify(mine)).not.toMatch(/fuobe-worker|hf_abc|X:\\\\/);
+      // Another account: not in its list, and its look at the run is refused.
+      const theirs = await generationsRoute.GET(request("/api/generations?limit=50", { cookie: computerCookie }));
+      expect(JSON.stringify(await theirs.json())).not.toMatch(/InstantHMR/);
+      const { proxy } = await import("@/proxy");
+      const { NextRequest } = await import("next/server");
+      const look = proxy(new NextRequest(`http://${HOST}/api/generations/${id}`, { headers: { ...SITE_HEADERS, cookie: computerCookie } }));
+      expect([403, 404]).toContain(look.status);
+      // A guest is asked to sign in.
+      const guest = proxy(new NextRequest(`http://${HOST}/api/generations/${id}`, { headers: SITE_HEADERS }));
+      expect(guest.headers.get("x-middleware-next")).not.toBe("1");
+      // Friendly only: the same run reads the plain sentence alone.
+      setSetting("runFailureDetail", "friendly");
+      expect(getGeneration(id)!.errorDetail).toBeUndefined();
+      expect(await visitorList()).not.toMatch(/InstantHMR|errorDetail/);
     });
 
     it("a job the studio stopped keeps the reason its worker gave before", async () => {
