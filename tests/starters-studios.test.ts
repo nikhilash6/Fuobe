@@ -77,8 +77,8 @@ describe("studio starters", () => {
       expect(all.filter((c) => starterShown(c, false))).toHaveLength(of(surface).length);
       expect(all.filter((c) => starterShown(c, true)).map((c) => c.id)).toEqual(page.map((c) => c.id));
     }
-    // The elements made from Fuobe's published photos show at once; the voice waits for a cover of its own.
-    expect(starterCards("elements").filter((c) => starterShown(c, true)).map((c) => c.id)).toEqual(["elements.amara", "elements.highland-castle", "elements.solitaire-ring", "elements.gilded-salon"]);
+    // The elements made from Fuobe's published photos show at once, and the voice with its own cover.
+    expect(starterCards("elements").filter((c) => starterShown(c, true)).map((c) => c.id)).toEqual(["elements.amara", "elements.highland-castle", "elements.solitaire-ring", "elements.gilded-salon", "elements.studio-voice"]);
   });
 });
 

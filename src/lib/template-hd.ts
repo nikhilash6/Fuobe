@@ -7,7 +7,7 @@
 import { PUBLISHED_PX, SMALL_PX, type StillSources } from "@/lib/preset-hd";
 import { TEMPLATE_HD } from "@/lib/template-hd.generated";
 
-const POSTER = /^\/previews\/templates\/([a-z0-9-]+\/[a-z0-9-]+)\.jpg(?:\?|$)/;
+const POSTER = /^\/previews\/templates\/([a-z0-9-]+\/[a-z0-9][a-z0-9.-]*)\.jpg(?:\?|$)/;
 
 /** The srcsets of a tile's own poster with larger copies, or undefined. `thumb` is its 320 px JPEG (thumbOf). */
 export function templateStillSources(poster: string, thumb?: string): StillSources | undefined {
