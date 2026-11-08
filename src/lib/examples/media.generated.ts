@@ -7238,6 +7238,68 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/motion-control/2/in-image.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 25046,
+  "sha256": "a9f6a0e01eb383a29b585f7ab5bf0895eb14f9f34420e24d108a383a1aa3f16f",
+  "v": "a9f6a0e0",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/motion-control/2/in-image.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 271480,
+  "sha256": "98f878301d1cd618a131fd4da037b7581d1d721b600f40887144098ed87dc0e3",
+  "v": "98f87830",
+  "w": 1280,
+  "h": 960,
+  "thumb": "/examples/motion-control/2/in-image.384.webp?v=a9f6a0e0"
+ },
+ "/examples/motion-control/2/in-video.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 28194,
+  "sha256": "b999520c60d82f182684a88e0f6a48c187f89979296e13ee91f8a0cd7d17e5bd",
+  "v": "b999520c",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/motion-control/2/in-video.mp4": {
+  "role": "in",
+  "type": "video/mp4",
+  "bytes": 2874999,
+  "sha256": "9367dfe5c2789c6f156cfcf36c9d13cffb0182ca189774a920d14dc6aa037984",
+  "v": "9367dfe5",
+  "thumb": "/examples/motion-control/2/in-video.384.webp?v=b999520c"
+ },
+ "/examples/motion-control/2/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 992697,
+  "sha256": "1a676928283a97e2c88d1e9f4cc1c3d9c21bdfe9662891e348dbde0cf013075d",
+  "v": "1a676928",
+  "poster": "/examples/motion-control/2/show.poster.webp?v=cad92933"
+ },
+ "/examples/motion-control/2/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 28300,
+  "sha256": "cc18b86edfcaab587d73621441bf6376d27791db6d38c59f7d506b02d1b16c7d",
+  "v": "cc18b86e",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/motion-control/2/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 63662,
+  "sha256": "cad92933f38b4297a2928659d6146995eaa4f750b5c322b9c72e4645426ca45d",
+  "v": "cad92933",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/motion-crane-down/1/in-image.384.webp": {
   "role": "show",
   "type": "image/webp",

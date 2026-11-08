@@ -5152,5 +5152,25 @@
    "at": 3.6,
    "from": 0
   }
+ },
+ {
+  "id": "motion-control.2",
+  "surface": "studio:motion-control",
+  "rank": 2,
+  "caption": "A runway walk, worn in a ruffled gown",
+  "modelId": "oss-wan22-animate",
+  "params": {
+   "seed": 7
+  },
+  "inputs": {
+   "image": "/examples/motion-control/2/in-image.jpg",
+   "video": "/examples/motion-control/2/in-video.mp4"
+  },
+  "output": "/examples/motion-control/2/show.mp4",
+  "rest": {
+   "src": "/examples/motion-control/2/show.peak.webp",
+   "at": 2,
+   "from": 0
+  }
  }
 ]
