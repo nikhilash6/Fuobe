@@ -40,6 +40,8 @@ export const FX_COVERS: Readonly<Record<string, string>> = {
   [gj("restyle")]: "effect-layer-mixed-media",
   [gj("finish")]: "effect-film-colors",
   "upscale-fps": "motion-slow-motion",
+  // Body Double (an app with a navigation entry): its own cover, a card here.
+  "body-double": "app-body-double",
 };
 
 /**
@@ -167,9 +169,9 @@ export const FX_SECTIONS: readonly FxSection[] = [
     id: "camera",
     title: "Camera & 3D",
     chip: "Camera & 3D",
-    line: "New angles, camera moves, 3D from a photo and effects for any shot.",
+    line: "A 3D body for every person, new angles, camera moves, 3D from a photo and effects for any shot.",
     icon: "Rotate3d",
-    items: ["any-angle", "image-to-3d", "image-to-3d-splat", "cinema", "cinema-blockout", "motions", "effects", "video-tools-evolution", "app-fuobe-angles", "app-zoom-out", "app-shots"],
+    items: ["body-double", "any-angle", "image-to-3d", "image-to-3d-splat", "cinema", "cinema-blockout", "motions", "effects", "video-tools-evolution", "app-fuobe-angles", "app-zoom-out", "app-shots"],
   },
 ];
 

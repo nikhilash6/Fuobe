@@ -1,6 +1,7 @@
 import {
   AppsSection,
   AssistSection,
+  BodyDoubleSection,
   EffectsSection,
   HomeFooter,
   LiveEditSection,
@@ -49,6 +50,8 @@ export default async function Page() {
     >
       {/* Live edit is the highlight: its own section comes first, right under the first screen and the composer. */}
       <LiveEditSection />
+      {/* Body Double: everyone in a shot as their double, and Live from the camera. */}
+      <BodyDoubleSection />
       {/* Camera motions, then Effects. */}
       <MotionsSection facts={home.facts} motions={home.motions} />
       <EffectsSection facts={home.facts} effects={home.effects} />

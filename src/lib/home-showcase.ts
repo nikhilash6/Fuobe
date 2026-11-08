@@ -179,6 +179,12 @@ export const HOME_LIVE = {
   line: "Type a change and watch the picture follow, then keep adding to the words. Nothing blurs, however many changes you make.",
 };
 
+export const HOME_BODY_DOUBLE = {
+  href: "/apps/app-body-double?from=home",
+  title: "A 3D body double for everyone in the shot",
+  line: "Every person in a photo or a clip becomes their double, clothes and hair included, with a full 3D body you can animate. Or go live with your camera, right in the browser.",
+};
+
 /** Assist's starter skills, as its empty chat lists them first (assist-view.tsx). */
 export const HOME_SKILLS = ["product-photoshoot", "ugc-video", "thumbnail-generation", "faceless-video", "short-film", "localization"];
 

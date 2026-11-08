@@ -22,6 +22,11 @@ export interface FxPair {
 export const fxPairSrc = (id: string, file: string): string | undefined => (FX_PAIRS[id] ? `/previews/fx/${id}/${file}?v=${FX_PAIRS[id].v}` : undefined);
 
 export const FX_PAIRS: Record<string, FxPair> = {
+ "body-double": {
+  "v": "ff6b1f8f",
+  "kind": "pair",
+  "hd": true
+ },
  "character-swap": {
   "v": "c02eceb8",
   "kind": "pair",
