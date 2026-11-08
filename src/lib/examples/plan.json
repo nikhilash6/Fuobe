@@ -5103,5 +5103,37 @@
    "at": 2,
    "from": 0
   }
+ },
+ {
+  "id": "image-to-3d.3",
+  "surface": "tool:image-to-3d",
+  "rank": 3,
+  "caption": "One photo, a model you can walk around",
+  "words": "A full-length studio photo becomes a 3D splat of the model, ready to turn and view from any side.",
+  "load": "look",
+  "href": "/image-to-3d?model=oss-idol&quality=best&photo=1&image=/examples/image-to-3d/3/in-image.jpg",
+  "inputs": {},
+  "output": "/examples/image-to-3d/3/show.mp4",
+  "rest": {
+   "src": "/examples/image-to-3d/3/show.peak.webp",
+   "at": 0.6,
+   "from": 0
+  }
+ },
+ {
+  "id": "image-to-3d.4",
+  "surface": "tool:image-to-3d",
+  "rank": 4,
+  "caption": "Studio headphones, as a 3D splat",
+  "words": "A product photo of studio headphones becomes a 3D splat you can turn and view from every side.",
+  "load": "look",
+  "href": "/image-to-3d?model=oss-triposplat&image=/examples/image-to-3d/4/in-image.jpg",
+  "inputs": {},
+  "output": "/examples/image-to-3d/4/show.mp4",
+  "rest": {
+   "src": "/examples/image-to-3d/4/show.peak.webp",
+   "at": 0.3,
+   "from": 0
+  }
  }
 ]
