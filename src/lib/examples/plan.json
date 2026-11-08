@@ -5070,5 +5070,38 @@
    "at": 0.85,
    "from": 0
   }
+ },
+ {
+  "id": "genjutsu-swap.1",
+  "surface": "tool:genjutsu/swap",
+  "rank": 1,
+  "caption": "The runway dress, now gold satin",
+  "words": "The fuchsia dress on the runway becomes a gold satin dress of the same knee-length cut. The walk, the light and the crowd stay as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "wipe",
+   "went": "A 5 s clip and a photo",
+   "recipe": {
+    "mode": "swap",
+    "engine": "open",
+    "model": "fuobe-genjutsu-swap",
+    "quality": "720p",
+    "target": "type",
+    "subject": "the dress",
+    "seed": 7,
+    "length": 5.166,
+    "originalSound": "everything"
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-swap/1/in-clip.jpg",
+   "photo1": "/examples/genjutsu-swap/1/in-photo1.jpg"
+  },
+  "output": "/examples/genjutsu-swap/1/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-swap/1/show.peak.webp",
+   "at": 2,
+   "from": 0
+  }
  }
 ]

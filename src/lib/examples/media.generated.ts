@@ -6406,6 +6406,70 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/genjutsu-swap/1/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 28334,
+  "sha256": "e3502de86cbd014c8e4dab7d6927d7895dbd354d566127ac3624347f4f401503",
+  "v": "e3502de8",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-swap/1/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 166631,
+  "sha256": "bffdd9674febf76bab1d11dc5fc0baf79e4abe51de3113eea76502b03858da0d",
+  "v": "bffdd967",
+  "w": 1024,
+  "h": 768,
+  "thumb": "/examples/genjutsu-swap/1/in-clip.384.webp?v=e3502de8"
+ },
+ "/examples/genjutsu-swap/1/in-photo1.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 5994,
+  "sha256": "384b548d7a7364b50d826c48a46bd9c45c02fd6c3c70de208d45ff106b6baf59",
+  "v": "384b548d",
+  "w": 288,
+  "h": 384
+ },
+ "/examples/genjutsu-swap/1/in-photo1.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 68136,
+  "sha256": "9f7263135299c0e54ff17af0daf7404ceb08adc30672bd7b6a116936784bc5e7",
+  "v": "9f726313",
+  "w": 836,
+  "h": 1114,
+  "thumb": "/examples/genjutsu-swap/1/in-photo1.384.webp?v=384b548d"
+ },
+ "/examples/genjutsu-swap/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 946055,
+  "sha256": "8536f985728fbf92535541a714992ddb53a21ec940f2630a95a0ab02105daead",
+  "v": "8536f985",
+  "poster": "/examples/genjutsu-swap/1/show.poster.webp?v=672a8a33"
+ },
+ "/examples/genjutsu-swap/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 35188,
+  "sha256": "d511b61be744199904a1cc15488e6d97be816b4ae8f071ecd87276d2ad083b6e",
+  "v": "d511b61b",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-swap/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 89360,
+  "sha256": "672a8a33de7dfda0e5f1505bfba2fcf74f8c27222cabfd7ed12a5efec9f941f7",
+  "v": "672a8a33",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/image/1/out.512.webp": {
   "role": "show",
   "type": "image/webp",

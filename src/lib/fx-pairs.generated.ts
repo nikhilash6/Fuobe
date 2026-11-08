@@ -57,7 +57,7 @@ export const FX_PAIRS: Record<string, FxPair> = {
   "kind": "pair"
  },
  "genjutsu-swap": {
-  "v": "e601d762",
+  "v": "912009fd",
   "kind": "pair"
  },
  "image-to-3d": {
