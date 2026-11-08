@@ -232,7 +232,8 @@ export const CUSTOM_NODE_REPOS = {
   // Clean up voice (NVIDIA RE-USE): Fuobe's own pack, in this repository (comfy-nodes/ComfyUI-RE-USE), pinned at the commit
   // that last changed it (tests/reuse-pack-pin.test.ts checks it). install-comfyui.sh copies it from the checkout.
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
-  'ComfyUI-InstantHMR': 'https://github.com/jtydhr88/ComfyUI-InstantHMR',
+  // Fuobe's pinned form of jtydhr88's pack (only the loader and the predictor; NOTICE says what differs).
+  'ComfyUI-InstantHMR': 'https://github.com/workingprototype/Fuobe/tree/e4b74735062298af07bb931aed280a440d1b2958/comfy-nodes/ComfyUI-InstantHMR',
   'ComfyUI-BodyDouble': 'https://github.com/workingprototype/Fuobe/tree/26d386bdacb371d06aa2325ac1b90373a11ff6b7/comfy-nodes/ComfyUI-BodyDouble',
   // HyperFlow H3 Flash (minimax-h3-flash-*): Video Rebirth's GGUF loader and step schedule (GPL-3.0, v1.0.0), which reads the
   // GGUF through city96's ComfyUI-GGUF (Apache-2.0) and needs it installed beside it.

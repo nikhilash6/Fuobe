@@ -29398,7 +29398,7 @@
         },
         {
           "name": "ComfyUI-InstantHMR",
-          "repo": "https://github.com/jtydhr88/ComfyUI-InstantHMR"
+          "repo": "https://github.com/workingprototype/Fuobe/tree/e4b74735062298af07bb931aed280a440d1b2958/comfy-nodes/ComfyUI-InstantHMR"
         }
       ],
       "vramGb": 8,
@@ -29509,7 +29509,7 @@
         },
         {
           "name": "ComfyUI-InstantHMR",
-          "repo": "https://github.com/jtydhr88/ComfyUI-InstantHMR"
+          "repo": "https://github.com/workingprototype/Fuobe/tree/e4b74735062298af07bb931aed280a440d1b2958/comfy-nodes/ComfyUI-InstantHMR"
         },
         {
           "name": "ComfyUI-VideoHelperSuite",

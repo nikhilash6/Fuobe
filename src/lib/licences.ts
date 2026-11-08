@@ -672,11 +672,11 @@ export const NODE_PACKS: NodePack[] = [
     note: "Fuobe's own pack. The network code is adapted from NVIDIA's RE-USE repository (OpenMDW-1.1, notices kept), and the Mamba layer is a plain-PyTorch rewrite (no mamba-ssm). It matches the reference maths numerically, but it is not NVIDIA's code path",
   }),
   // Body Double: InstantHMR for ComfyUI (loader and predictor; the SAM 3D Body nodes it feeds are ComfyUI's own).
-  pack("ComfyUI-InstantHMR", "https://github.com/jtydhr88/ComfyUI-InstantHMR/tree/36d85573438e5de5d2fe63ba2dbca927c6a16c9b", {
+  pack("ComfyUI-InstantHMR", "https://github.com/workingprototype/Fuobe/tree/e4b74735062298af07bb931aed280a440d1b2958/comfy-nodes/ComfyUI-InstantHMR", {
     name: "Apache-2.0",
     class: "commercial",
     url: SPDX("Apache-2.0"),
-    note: "jtydhr88's InstantHMR nodes; Apache-2.0 code. The InstantHMR weights are under the SAM License: the nano to medium files are non-commercial (some training images are research-only), and instanthmr_medium_commercial allows commercial use under its terms. The MHR body model is Apache-2.0",
+    note: "Fuobe's pinned form of jtydhr88's InstantHMR nodes (only the loader and the predictor); Apache-2.0 code. The InstantHMR weights are under the SAM License: the nano to medium files are non-commercial (some training images are research-only), and instanthmr_medium_commercial allows commercial use under its terms. The MHR body model is Apache-2.0",
   }),
   // Body Double's own pack, in this repository at its pinned commit (comfy-nodes/ComfyUI-BodyDouble).
   pack("ComfyUI-BodyDouble", "https://github.com/workingprototype/Fuobe/tree/26d386bdacb371d06aa2325ac1b90373a11ff6b7/comfy-nodes/ComfyUI-BodyDouble", {

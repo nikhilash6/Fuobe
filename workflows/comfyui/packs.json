@@ -599,12 +599,12 @@
     "folders": []
   },
   "ComfyUI-InstantHMR": {
-    "repo": "https://github.com/jtydhr88/ComfyUI-InstantHMR",
-    "commit": "36d85573438e5de5d2fe63ba2dbca927c6a16c9b",
+    "repo": "https://github.com/workingprototype/Fuobe",
+    "commit": "e4b74735062298af07bb931aed280a440d1b2958",
     "registry": null,
     "requirementsTxt": false,
     "isolated": false,
-    "subdir": null,
+    "subdir": "comfy-nodes/ComfyUI-InstantHMR",
     "folders": [
       "detection"
     ]
