@@ -76,14 +76,19 @@ const primers = new Map<MegaId, { heat: () => void; shows: () => boolean; at: ()
 let primeQueue: MegaId[] | null = null;
 let priming: { id: MegaId; timer: number } | null = null;
 
-/** The next panel in the queue whose item shows gets ready; the one after it waits for its pictures (3 s at most). */
+/**
+ * The next panel in the queue whose item shows gets ready, in idle time; the one after it waits for its pictures (3 s
+ * at most).
+ */
 function primeNext(): void {
   while (primeQueue?.length) {
     const id = primeQueue.shift()!;
     const p = primers.get(id);
     if (!p || p.done || !p.shows()) continue;
     priming = { id, timer: window.setTimeout(() => primed(id), 3000) };
-    p.heat();
+    // When the page is idle (a pointer or key being handled goes first), within half a second at most.
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(() => p.heat(), { timeout: 500 });
+    else p.heat();
     return;
   }
 }
