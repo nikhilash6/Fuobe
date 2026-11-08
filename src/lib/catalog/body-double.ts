@@ -24,18 +24,18 @@ export type BodyLook = {
   value: BodyLookId;
   label: string;
   hint: string;
-  /** The graph's look: SAM3DBody_Render's style, mesh shader and opacity over the picture (params.extra). */
-  extra: { renderStyle: "mesh" | "scail"; shader: "normals" | "default" | "rainbow" | "depth"; opacity: number };
+  /** The graph's look (params.extra.look): how the double is drawn over each person's whole outline. */
+  extra: { look: BodyLookId };
 };
 
-/** The looks, the default first. Holo is the surface normals, so the body reads as a sculpted, iridescent shell. */
+/** The looks, the default first. Each covers the whole person, clothes and hair included, from the picture's own geometry. */
 export const BODY_LOOKS: readonly BodyLook[] = [
-  { value: "holo", label: "Holo", hint: "An iridescent body shell", extra: { renderStyle: "mesh", shader: "normals", opacity: 0.92 } },
-  { value: "clay", label: "Clay", hint: "A matte sculpt, like a fitting mannequin", extra: { renderStyle: "mesh", shader: "default", opacity: 1 } },
-  { value: "thermal", label: "Thermal", hint: "A heat-map gradient from head to toe", extra: { renderStyle: "mesh", shader: "rainbow", opacity: 0.9 } },
-  { value: "ghost", label: "Ghost", hint: "A see-through body over the picture", extra: { renderStyle: "mesh", shader: "default", opacity: 0.5 } },
-  { value: "xray", label: "X-ray", hint: "Depth shading, near is bright", extra: { renderStyle: "mesh", shader: "depth", opacity: 0.95 } },
-  { value: "skeleton", label: "Skeleton", hint: "The SCAIL skeleton over the picture", extra: { renderStyle: "scail", shader: "normals", opacity: 1 } },
+  { value: "holo", label: "Holo", hint: "An iridescent sculpt of each person", extra: { look: "holo" } },
+  { value: "clay", label: "Clay", hint: "A matte sculpture, clothes and hair included", extra: { look: "clay" } },
+  { value: "thermal", label: "Thermal", hint: "A heat camera: warmest where they face you", extra: { look: "thermal" } },
+  { value: "ghost", label: "Ghost", hint: "A see-through double over the picture", extra: { look: "ghost" } },
+  { value: "xray", label: "X-ray", hint: "Cyan glass with glowing outlines", extra: { look: "xray" } },
+  { value: "skeleton", label: "Skeleton", hint: "The 3D skeleton over the picture", extra: { look: "skeleton" } },
 ];
 
 export const bodyLook = (value: unknown): BodyLook => BODY_LOOKS.find((l) => l.value === value) ?? BODY_LOOKS[0];

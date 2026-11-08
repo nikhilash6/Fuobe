@@ -67,7 +67,7 @@ describe("Body Double in the catalog", () => {
     const c = plan(B.bodyDoubleRequest({ kind: "video", ref: "/api/files/a.mp4", look: "skeleton" }));
     expect(c.model.id).toBe("oss-body-double-video");
     expect(c.op).toBe("body-capture-video");
-    expect(B.bodyDoubleRequest({ kind: "video", ref: "x", look: "skeleton" }).params?.extra).toEqual({ renderStyle: "scail", shader: "normals", opacity: 1 });
+    expect(B.bodyDoubleRequest({ kind: "video", ref: "x", look: "skeleton" }).params?.extra).toEqual({ look: "skeleton" });
     // An unknown look is the default one.
     expect(B.bodyLook("sparkly").value).toBe("holo");
   });
@@ -86,15 +86,24 @@ describe("Body Double's graphs", () => {
     for (const id of [PHOTO, CLIP]) {
       const e = entry(id);
       expect(e.validated, id).toBe(true);
-      expect(e.models.map((m) => m.file).sort()).toEqual(["instanthmr_medium.safetensors", "rt_detr_v4-x-hgnet_fp16.safetensors", "sam_3d_body_dinov3_int8_convrot.safetensors"]);
-      for (const m of e.models) expect(m.url, m.file).toMatch(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//);
-      expect(e.customNodes.map((c) => c.name)).toContain("ComfyUI-InstantHMR");
+      expect(e.models.map((m) => m.file).sort()).toEqual([
+        "instanthmr_medium.safetensors",
+        "moge_2_vitl_normal_fp16.safetensors",
+        "rt_detr_v4-x-hgnet_fp16.safetensors",
+        "sam3.1_multiplex_fp16.safetensors",
+        "sam_3d_body_dinov3_int8_convrot.safetensors",
+      ]);
+      expect(e.customNodes.map((c) => c.name)).toEqual(expect.arrayContaining(["ComfyUI-InstantHMR", "ComfyUI-BodyDouble"]));
       expect(e.outputs.map((o) => [o.kind, o.role ?? null])).toEqual([[id === PHOTO ? "image" : "video", null], ["model3d", "body"], [id === PHOTO ? "image" : "video", "pose"]]);
     }
-    const pins = read("model-pins.json") as Record<string, { sha256: string }>;
-    for (const m of entry(PHOTO).models) expect(pins[m.url!]?.sha256, m.file).toMatch(/^[0-9a-f]{64}$/);
-    const packs = read("packs.json") as Record<string, { commit: string }>;
+    const req = read("requirements.json") as { workflows: Record<string, { files: string[]; packs: Record<string, string[]> }> };
+    for (const id of [PHOTO, CLIP]) {
+      expect(req.workflows[id].files).toEqual(expect.arrayContaining(["detection/instanthmr_medium.safetensors", "geometry_estimation/moge_2_vitl_normal_fp16.safetensors"]));
+      expect(Object.keys(req.workflows[id].packs)).toEqual(expect.arrayContaining(["ComfyUI-InstantHMR", "ComfyUI-BodyDouble"]));
+    }
+    const packs = read("packs.json") as Record<string, { commit: string; subdir: string | null }>;
     expect(packs["ComfyUI-InstantHMR"].commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(packs["ComfyUI-BodyDouble"]).toMatchObject({ subdir: "comfy-nodes/ComfyUI-BodyDouble" });
   });
 
   it("keep metadata out of saved clips", () => {
@@ -103,15 +112,36 @@ describe("Body Double's graphs", () => {
   });
 
   it("bind the input, the look and the run's prefix", async () => {
-    const { workflow } = await prepare(PHOTO, "body-capture", { images: ["photo.png"], extra: { renderStyle: "mesh", shader: "rainbow", opacity: 0.9 } } as GenInput);
+    const { workflow } = await prepare(PHOTO, "body-capture", { images: ["photo.png"], extra: { look: "thermal" } } as GenInput);
     expect(at(PHOTO, workflow, "image")).toEqual(["photo.png"]);
-    expect(at(PHOTO, workflow, "shader")).toEqual(["rainbow"]);
-    expect(at(PHOTO, workflow, "opacity")).toEqual([0.9]);
-    expect(at(PHOTO, workflow, "renderStyle")).toEqual(["mesh"]);
-    const { workflow: clip } = await prepare(CLIP, "body-capture-video", { video: "clip.mp4", extra: { renderStyle: "scail", shader: "normals", opacity: 1 } } as GenInput);
+    expect(at(PHOTO, workflow, "look")).toEqual(["thermal"]);
+    const { workflow: clip } = await prepare(CLIP, "body-capture-video", { video: "clip.mp4", extra: { look: "skeleton" } } as GenInput);
     expect(at(CLIP, clip, "video")).toEqual(["clip.mp4"]);
-    expect(at(CLIP, clip, "renderStyle")).toEqual(["scail"]);
+    expect(at(CLIP, clip, "look")).toEqual(["skeleton"]);
     for (const p of at(CLIP, clip, "filenamePrefix")) expect(p).toBe("fuobe/g");
+  });
+
+  it("draw the double over each person's whole outline: SAM 3.1 in every person box, MoGe normals and depth", () => {
+    for (const id of [PHOTO, CLIP]) {
+      const wf = read(`${id}.json`) as ComfyWorkflow;
+      const look = Object.values(wf).find((n) => n.class_type === "BodyDoubleLook")!;
+      const from = (input: string) => wf[String((look.inputs[input] as [string, number])[0])];
+      expect(from("mask").class_type).toBe("GrowMask");
+      const sam = wf[String((from("mask").inputs.mask as [string, number])[0])];
+      expect(sam.class_type).toBe("SAM3_Detect");
+      expect(wf[String((sam.inputs.bboxes as [string, number])[0])].class_type).toBe("RTDETR_detect");
+      expect(from("normals").inputs.output).toBe("normal_opengl");
+      expect(from("depth").inputs.output).toBe("depth");
+      expect(from("skeleton").class_type).toBe("SAM3DBody_Render");
+    }
+  });
+
+  it("line the bodies up with their people before the pose, the skeleton and the 3D file", () => {
+    for (const id of [PHOTO, CLIP]) {
+      const wf = read(`${id}.json`) as ComfyWorkflow;
+      const fit = Object.entries(wf).find(([, n]) => n.class_type === "BodyDoubleFit")![0];
+      for (const n of Object.values(wf)) if (n.class_type === "SAM3DBody_Render" || n.class_type === "BuildPoseFile") expect((n.inputs.pose_data as [string, number])[0]).toBe(fit);
+    }
   });
 
   it("export a skinned body (body_mesh with the SAM 3D Body rig), never the simple stick figure", () => {

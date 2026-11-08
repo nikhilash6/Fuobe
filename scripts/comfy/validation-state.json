@@ -42,16 +42,16 @@
     "at": "2026-10-16T20:57:20.767Z"
   },
   "body-double-clip-instanthmr": {
-    "sha256": "74a8844f3f223146b983d3ab2e3f487e6e7c7237a03bb5a9a1da80499c587d3b",
+    "sha256": "c667d941f6f16fa36ef6852e0efaeab1cc800d92e3d626b864de09d5d4177577",
     "validated": true,
     "error": null,
-    "at": "2026-11-08T02:22:01.036Z"
+    "at": "2026-11-08T05:09:17.670Z"
   },
   "body-double-photo-instanthmr": {
-    "sha256": "48d218bf70b61f843dbeb1e1065e64d96ca5e7770c9295e088abc8033bbef55c",
+    "sha256": "6599cdef44aab4cccd932bb01b6443143e1f1c8baea7208c4670a8de3563d6c2",
     "validated": true,
     "error": null,
-    "at": "2026-11-08T02:22:00.839Z"
+    "at": "2026-11-08T05:09:17.485Z"
   },
   "captions-burnin": {
     "sha256": "8bb4d7bca5145d94ee1d509e50e23ef40e4cd21cb7c152bbba32751eca4ea013",

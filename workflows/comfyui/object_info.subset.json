@@ -3310,6 +3310,152 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "BodyDoubleFit": {
+    "input": {
+      "required": {
+        "mhr_pose_data": [
+          "MHR_POSE_DATA",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "mhr_pose_data"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MHR_POSE_DATA"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "mhr_pose_data"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "BodyDoubleFit",
+    "display_name": "Body Double Fit",
+    "description": "Line each body up with its person: its 3D keypoints are moved onto its 2D keypoints.",
+    "python_module": "custom_nodes.ComfyUI-BodyDouble",
+    "category": "image/detection",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "BodyDoubleLook": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {}
+        ],
+        "mask": [
+          "MASK",
+          {
+            "tooltip": "The people: SAM 3 masks, one per frame"
+          }
+        ],
+        "look": [
+          "COMBO",
+          {
+            "default": "holo",
+            "multiselect": false,
+            "options": [
+              "holo",
+              "clay",
+              "thermal",
+              "ghost",
+              "xray",
+              "skeleton"
+            ]
+          }
+        ],
+        "feather": [
+          "FLOAT",
+          {
+            "tooltip": "Soft edge of the outline, px",
+            "advanced": true,
+            "default": 1.5,
+            "min": 0,
+            "max": 16,
+            "step": 0.5
+          }
+        ]
+      },
+      "optional": {
+        "normals": [
+          "IMAGE",
+          {
+            "tooltip": "MoGe normal map (OpenGL) of the same frames"
+          }
+        ],
+        "depth": [
+          "IMAGE",
+          {
+            "tooltip": "MoGe depth render of the same frames (near is bright)"
+          }
+        ],
+        "skeleton": [
+          "IMAGE",
+          {
+            "tooltip": "The SCAIL skeleton drawn over the frames"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mask",
+        "look",
+        "feather"
+      ],
+      "optional": [
+        "normals",
+        "depth",
+        "skeleton"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "image"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "BodyDoubleLook",
+    "display_name": "Body Double Look",
+    "description": "Every person's double over their whole outline, clothes and hair included, in one look.",
+    "python_module": "custom_nodes.ComfyUI-BodyDouble",
+    "category": "image",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "BuildPoseFile": {
     "input": {
       "required": {

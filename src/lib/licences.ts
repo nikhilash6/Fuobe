@@ -678,6 +678,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "jtydhr88's InstantHMR nodes; Apache-2.0 code. The InstantHMR weights are under the SAM License: the nano to medium files are non-commercial (some training images are research-only), and instanthmr_medium_commercial allows commercial use under its terms. The MHR body model is Apache-2.0",
   }),
+  // Body Double's own pack, in this repository at its pinned commit (comfy-nodes/ComfyUI-BodyDouble).
+  pack("ComfyUI-BodyDouble", "https://github.com/workingprototype/Fuobe/tree/26d386bdacb371d06aa2325ac1b90373a11ff6b7/comfy-nodes/ComfyUI-BodyDouble", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Fuobe's own pack: lines each 3D body up with its person and draws the double over the whole outline from the picture's own geometry",
+  }),
   // NVIDIA RTX Video (Quick · RTX, RTX Frame Generation, RTX Video HDR): an NVIDIA RTX card only; installed on RTX hosts.
   pack("ComfyUI_Nvidia_VFX_Nodes", "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40", {
     name: "Apache-2.0",

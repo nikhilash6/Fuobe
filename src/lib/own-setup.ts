@@ -108,8 +108,8 @@ const ITEMS: Record<string, Entry> = {
   "cinema:world": { setup: gpu(24, { files: true }) },
   // Body Double's photo and clip runs (InstantHMR and its pack), on this studio's GPU once a real render passes there.
   // Live needs no setup: it runs in the visitor's own browser.
-  "oss-body-double": { setup: gpu(4, { files: true }), passes: "body-double-photo" },
-  "oss-body-double-video": { setup: gpu(6, { files: true }), passes: "body-double-clip" },
+  "oss-body-double": { setup: gpu(8, { files: true }), passes: "body-double-photo" },
+  "oss-body-double-video": { setup: gpu(10, { files: true }), passes: "body-double-clip" },
   "oss-hy-nomas-world": { setup: gpu(24, { files: true }) },
 };
 

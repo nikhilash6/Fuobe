@@ -233,6 +233,7 @@ export const CUSTOM_NODE_REPOS = {
   // that last changed it (tests/reuse-pack-pin.test.ts checks it). install-comfyui.sh copies it from the checkout.
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
   'ComfyUI-InstantHMR': 'https://github.com/jtydhr88/ComfyUI-InstantHMR',
+  'ComfyUI-BodyDouble': 'https://github.com/workingprototype/Fuobe/tree/26d386bdacb371d06aa2325ac1b90373a11ff6b7/comfy-nodes/ComfyUI-BodyDouble',
   // Hi3D 1.0 mesh refinement (hi3d-refine, docs/research/hi3d-refine.json): T8star's nodes (MIT code, vendored Hi3D code under
   // the Hi3D Open License 1.0), v0.5.1. Opt-in in install-comfyui.sh (HI3D=1): it needs an Ampere-or-newer NVIDIA GPU and
   // CUDA kernels (spconv, triton), so it is not on the validation server (mesh-refine-hi3d lists it with `packs`).
@@ -310,6 +311,8 @@ export const PACK_CLASSES = {
   'ComfyUI-RE-USE': /^REUSE(Loader|Enhance)$/,
   // Body Double: only the loader and the predictor are the pack's; the render, smoothing and GLB nodes are ComfyUI's own.
   'ComfyUI-InstantHMR': /^InstantHMR(Loader|Predict)$/,
+  // Body Double's own pack (this repository at its pinned commit): the body fit and the look over the whole outline.
+  'ComfyUI-BodyDouble': /^BodyDouble(Fit|Look)$/,
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
@@ -6501,45 +6504,45 @@ export const SPEC = [
       "every other pixel is the shot's, which removes Qwen 2.1's colour and detail drift over the whole picture. pasteBack false returns the whole swap (the switch is lazy, SAM does not run). " +
       "No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers. RTX 5090: about 130 s a photo warm, about 250 s when the models load, peak about 28 GB.",
   },
-  // Body Double (app-body-double): InstantHMR (ComfyUI-InstantHMR) recovers every person's MHR body; ComfyUI's own SAM 3D
-  // Body nodes draw it over the picture, render the SCAIL pose and export a skinned GLB.
+  // Body Double (app-body-double): InstantHMR (ComfyUI-InstantHMR) recovers every person's MHR body and ComfyUI-BodyDouble lines it up
+  // with them; SAM 3.1 and MoGe-2 draw the double over each person's whole outline; ComfyUI's SAM 3D Body nodes render the pose and export a skinned GLB.
   {
     id: 'body-double-photo-instanthmr',
-    title: 'Body Double photo (InstantHMR: every person\'s 3D body, a pose render and a skinned GLB)',
+    title: 'Body Double photo (every person\'s double over their whole outline, a pose render and a skinned GLB)',
     capability: 'body-capture',
     handBuilt: 'hand-built/body-double-photo-instanthmr.json',
-    packs: ['ComfyUI-InstantHMR'],
-    bindings: { image: [b('1', 'image')], renderStyle: [b('6', 'render_style')], shader: [b('6', 'render_style.shader')], opacity: [b('6', 'render_style.opacity')], maxPeople: [b('3', 'max_detections')] },
-    defaults: { renderStyle: 'mesh', shader: 'normals', opacity: 0.92, maxPeople: 8 },
+    packs: ['ComfyUI-InstantHMR', 'ComfyUI-BodyDouble'],
+    bindings: { image: [b('1', 'image')], look: [b('40', 'look')], maxPeople: [b('3', 'max_detections')] },
+    defaults: { look: 'holo', maxPeople: 8 },
     outputs: [{ node: '7', kind: 'image' }, { node: '12', kind: 'model3d', role: 'body' }, { node: '9', kind: 'image', role: 'pose' }],
     limits: { maxWidth: 4096, maxHeight: 4096 },
-    vramGb: 4,
-    license: 'InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3D Body (its rig, for the skinned GLB) SAM License, commercial use allowed under its terms; VideoHelperSuite GPL-3.0 code',
+    vramGb: 8,
+    license: "InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; ComfyUI-BodyDouble MIT; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3.1 and SAM 3D Body (its rig, for the skinned GLB) under Meta's SAM License, commercial use allowed under its terms; MoGe-2 MIT; VideoHelperSuite GPL-3.0 code",
     notes:
-      'RT-DETR v4 x (fp16, class person, threshold 0.5, up to maxPeople boxes) -> InstantHMR medium (HGNetV2-B4, 288 px square crops 1.2x the box, ' +
-      'focal 1.05x the image diagonal) -> one MHR body per person (pose, shape, hands, 70 keypoints, 18,439-vertex mesh). No person found: the whole frame is one person. ' +
-      'The look is one SAM3DBody_Render: renderStyle mesh with shader normals (Holo, default), default (Clay), rainbow (Thermal), depth (X-ray), opacity over the photo; ' +
-      'renderStyle scail draws the SCAIL skeleton over the photo instead. Every style\'s dotted keys stay in the graph (ComfyUI ignores the ones a style does not use). ' +
-      'Role pose: the SCAIL render on black, the input SCAIL-style motion models read. Role body: BuildPoseFile body_mesh with the SAM 3D Body int8 rig: one skinned mesh per person ' +
-      '(127 joints, 72 face morph targets), centred, about 17 MB. CPU only: about 3 s a photo once loaded; the network itself is about 1 ms a person on a desktop GPU.',
+      'RT-DETR v4 x (fp16, class person, threshold 0.5, up to maxPeople boxes) -> InstantHMR medium (HGNetV2-B4, 288 px square crops 1.2x the box, focal 1.05x the image diagonal) -> ' +
+      'one MHR body per person -> BodyDoubleFit (each body moved so its 3D keypoints land on its 2D keypoints; the network\'s translation is kept when the fit runs away). ' +
+      "The double covers each person's whole outline, clothes and hair included: SAM 3.1 segments every RT-DETR person box (one mask per frame), MoGe-2 (resolution 9) gives the picture's normals and depth, and BodyDoubleLook fills the mask in the look: holo (normals), clay (normals lit from above left), thermal (nearness and facing on a Turbo colour map), ghost (holo at half strength), xray (cyan glass with bright rims) or skeleton (the SCAIL skeleton over the picture). " +
+      'Role pose: the SCAIL render on black. Role body: BuildPoseFile body_mesh with the SAM 3D Body int8 rig: one skinned mesh per person (127 joints, 72 face morph targets), centred. ' +
+      'On a CPU alone: about 2.5 min a 2048 px photo, most of it MoGe; seconds on a GPU.',
   },
   {
     id: 'body-double-clip-instanthmr',
-    title: 'Body Double clip (InstantHMR motion capture: the body over every frame, a pose video and an animated skinned GLB)',
+    title: 'Body Double clip (the double over every frame, a pose video and an animated skinned GLB)',
     capability: 'body-capture-video',
     handBuilt: 'hand-built/body-double-clip-instanthmr.json',
-    packs: ['ComfyUI-InstantHMR', 'ComfyUI-VideoHelperSuite'],
-    bindings: { video: [b('1', 'video')], frames: [b('1', 'frame_load_cap')], renderStyle: [b('6', 'render_style')], shader: [b('6', 'render_style.shader')], opacity: [b('6', 'render_style.opacity')] },
-    defaults: { frames: 360, renderStyle: 'mesh', shader: 'normals', opacity: 0.92 },
+    packs: ['ComfyUI-InstantHMR', 'ComfyUI-BodyDouble', 'ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], frames: [b('1', 'frame_load_cap')], look: [b('40', 'look')] },
+    defaults: { frames: 360, look: 'holo' },
     outputs: [{ node: '7', kind: 'video' }, { node: '12', kind: 'model3d', role: 'body' }, { node: '9', kind: 'video', role: 'pose' }],
     limits: { maxWidth: 4096, maxHeight: 4096 },
-    vramGb: 6,
-    license: 'InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3D Body (its rig, for the skinned GLB) SAM License, commercial use allowed under its terms; VideoHelperSuite GPL-3.0 code',
+    vramGb: 10,
+    license: "InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; ComfyUI-BodyDouble MIT; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3.1 and SAM 3D Body (its rig, for the skinned GLB) under Meta's SAM License, commercial use allowed under its terms; MoGe-2 MIT; VideoHelperSuite GPL-3.0 code",
     notes:
       'VHS_LoadVideo at 24 fps, up to frames (360 = 15 s), scaled to 960 px on the long side -> RT-DETR v4 (the performer: the best person box per frame) -> InstantHMR medium -> ' +
-      'SAM3DBody_Smooth (gaussian, window 7, flips over 30 degrees kept) -> the same look render as the photo graph over every frame (H.264, metadata off). ' +
-      'Role pose: the SCAIL pose video on black, ready to drive a SCAIL-style motion transfer. Role body: BuildPoseFile body_mesh, an animated skinned GLB ' +
-      '(127 joints, 72 face morphs, 24 fps, camera translation absolute) for Blender, Unreal or any glTF tool. The clip\'s sound is not carried. ' +
-      'CPU only: about 95 s for 4 s of video including the first model loads.',
+      'SAM3DBody_Smooth (gaussian, window 7, flips over 30 degrees kept) -> BodyDoubleFit. ' +
+      "The double covers each person's whole outline, clothes and hair included: SAM 3.1 segments every RT-DETR person box (one mask per frame), MoGe-2 (resolution 9) gives the picture's normals and depth, and BodyDoubleLook fills the mask in the look: holo (normals), clay (normals lit from above left), thermal (nearness and facing on a Turbo colour map), ghost (holo at half strength), xray (cyan glass with bright rims) or skeleton (the SCAIL skeleton over the picture). " +
+      'Thermal and xray use one depth range for the whole clip, so their colours hold still. H.264, metadata off. Role pose: the SCAIL pose video on black. ' +
+      'Role body: BuildPoseFile body_mesh, an animated skinned GLB (127 joints, 72 face morphs, 24 fps, camera translation absolute). The clip\'s sound is not carried. ' +
+      'RTX 5090: SAM 3.1 and MoGe-2 take about 2 min for 124 frames (5 s).',
   },
 ];

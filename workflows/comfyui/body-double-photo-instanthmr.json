@@ -69,38 +69,22 @@
     }
   },
   "6": {
-    "class_type": "SAM3DBody_Render",
+    "class_type": "BodyDoubleFit",
     "inputs": {
-      "pose_data": [
+      "mhr_pose_data": [
         "5",
         0
-      ],
-      "width": 0,
-      "height": 0,
-      "background": [
-        "1",
-        0
-      ],
-      "render_style": "mesh",
-      "render_style.shader": "normals",
-      "render_style.shader.rainbow_tilt_z": -35,
-      "render_style.shader.rainbow_tilt_x": 0,
-      "render_style.opacity": 0.92,
-      "render_style.person_palette_falloff": 0.6,
-      "render_style.region": "full_body",
-      "render_style.radius_m": 0.022,
-      "render_style.hand_style": "dwpose",
-      "render_style.face_style": "disabled"
+      ]
     },
     "_meta": {
-      "title": "Bodies over the photo (the look)"
+      "title": "Line each body up with its person"
     }
   },
   "7": {
     "class_type": "SaveImage",
     "inputs": {
       "images": [
-        "6",
+        "40",
         0
       ],
       "filename_prefix": "fuobe/body-double-photo-instanthmr"
@@ -113,7 +97,7 @@
     "class_type": "SAM3DBody_Render",
     "inputs": {
       "pose_data": [
-        "5",
+        "6",
         0
       ],
       "width": 0,
@@ -154,7 +138,7 @@
     "class_type": "BuildPoseFile",
     "inputs": {
       "pose_data": [
-        "5",
+        "6",
         0
       ],
       "sam3d_body_model": [
@@ -185,6 +169,162 @@
     },
     "_meta": {
       "title": "3D bodies"
+    }
+  },
+  "13": {
+    "class_type": "SAM3DBody_Render",
+    "inputs": {
+      "pose_data": [
+        "6",
+        0
+      ],
+      "width": 0,
+      "height": 0,
+      "background": [
+        "1",
+        0
+      ],
+      "render_style": "scail",
+      "render_style.radius_m": 0.022,
+      "render_style.hand_style": "dwpose",
+      "render_style.face_style": "disabled",
+      "render_style.person_palette_falloff": 0.6
+    },
+    "_meta": {
+      "title": "SCAIL skeleton over the picture (Skeleton look)"
+    }
+  },
+  "20": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "SAM 3.1"
+    }
+  },
+  "21": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "20",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "threshold": 0.4,
+      "refine_iterations": 2,
+      "individual_masks": false,
+      "bboxes": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Each person's whole outline (inside their box)"
+    }
+  },
+  "22": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "21",
+        0
+      ],
+      "expand": 2,
+      "tapered_corners": true
+    },
+    "_meta": {
+      "title": "Outline, 2 px out"
+    }
+  },
+  "30": {
+    "class_type": "LoadMoGeModel",
+    "inputs": {
+      "model_name": "moge_2_vitl_normal_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "MoGe-2"
+    }
+  },
+  "31": {
+    "class_type": "MoGeInference",
+    "inputs": {
+      "moge_model": [
+        "30",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "resolution_level": 9,
+      "fov_x_degrees": 0,
+      "batch_size": 4,
+      "force_projection": true,
+      "apply_mask": false,
+      "refine_steps": 0
+    },
+    "_meta": {
+      "title": "The picture's geometry"
+    }
+  },
+  "32": {
+    "class_type": "MoGeRender",
+    "inputs": {
+      "moge_geometry": [
+        "31",
+        0
+      ],
+      "output": "normal_opengl"
+    },
+    "_meta": {
+      "title": "Normals"
+    }
+  },
+  "33": {
+    "class_type": "MoGeRender",
+    "inputs": {
+      "moge_geometry": [
+        "31",
+        0
+      ],
+      "output": "depth"
+    },
+    "_meta": {
+      "title": "Depth (near is bright)"
+    }
+  },
+  "40": {
+    "class_type": "BodyDoubleLook",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "mask": [
+        "22",
+        0
+      ],
+      "look": "holo",
+      "normals": [
+        "32",
+        0
+      ],
+      "depth": [
+        "33",
+        0
+      ],
+      "skeleton": [
+        "13",
+        0
+      ],
+      "feather": 1.5
+    },
+    "_meta": {
+      "title": "Every person's double in the look"
     }
   }
 }

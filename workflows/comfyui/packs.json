@@ -608,5 +608,14 @@
     "folders": [
       "detection"
     ]
+  },
+  "ComfyUI-BodyDouble": {
+    "repo": "https://github.com/workingprototype/Fuobe",
+    "commit": "26d386bdacb371d06aa2325ac1b90373a11ff6b7",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": "comfy-nodes/ComfyUI-BodyDouble",
+    "folders": []
   }
 }

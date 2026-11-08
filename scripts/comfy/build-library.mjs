@@ -135,8 +135,8 @@ export const BINDING_KEYS = new Set([
   'image5', 'image6', 'image7', 'image8', 'image9', 'image10',
   'width', 'height', 'frames', 'fps', 'seed', 'steps', 'cfg', 'guidance', 'denoise', 'shift',
   'loraHigh', 'loraLow', 'lora', 'loraStrength', 'upscaleModel', 'scale', 'duration', 'lyrics', 'tags',
-  // Body Double: the look (render style, mesh shader, opacity over the picture) and how many people a photo may hold
-  'renderStyle', 'shader', 'opacity', 'maxPeople',
+  // Body Double: the look the double is drawn in, and how many people a photo may hold
+  'look', 'maxPeople',
   // library extensions
   'padLeft', 'padTop', 'padRight', 'padBottom', 'cameraMotion', 'multiplier', 'bpm', 'filenamePrefix',
   // comfyui-oss-2 additions (see library.spec.mjs header)
