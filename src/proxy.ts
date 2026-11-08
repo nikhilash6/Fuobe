@@ -43,7 +43,7 @@ import { authStoreFailed } from "@/server/auth-store";
  * Paths that work signed out: the login page and its API (and share links: openShare). Sign-up and
  * "who am I" answer for themselves whether public sign-up is on.
  */
-const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/gpu/pair/start", "/api/gpu/pair/poll"]);
+const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/gpu/pair/start", "/api/gpu/pair/poll", "/api/version"]);
 
 /**
  * A worker's token (src/server/computer/workers.ts) works only on the routes a computer runs jobs through; the route

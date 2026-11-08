@@ -5,6 +5,9 @@ const COVER_VERSION = { type: "query" as const, key: "v", value: "[0-9a-f]{8}" }
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Which build this is (the deploy's commit; a local build gets its time): a page loaded from an older build sees the
+  // server's newer one at /api/version and offers Update (src/components/update-available.tsx).
+  env: { NEXT_PUBLIC_FUOBE_BUILD: process.env.GITHUB_SHA?.slice(0, 12) || `local-${Date.now().toString(36)}` },
   cacheComponents: true,
   poweredByHeader: false,
   partialPrefetching: true,
