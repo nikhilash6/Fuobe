@@ -61,6 +61,11 @@ export function ChatHome() {
   const [making, setMaking] = useState(() => sp.get("make") === "1");
   const mature = !!me.data?.mature;
 
+  // On a phone the tabs scroll sideways: the chosen one always shows (also when a link opens on a later tab).
+  useEffect(() => {
+    document.querySelector('[aria-label="Kind of chat"] [aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [kind, making]);
+
   const gate = () => {
     if (guest) {
       askToSignUp("run");
