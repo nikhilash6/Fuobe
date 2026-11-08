@@ -18,11 +18,11 @@ export const BODY_DOUBLE = {
   maxClipSeconds: 15,
 } as const;
 
-/** Finished examples shown on the app's page: a group photo before and after, and a motion capture (also Live's opening). */
+/** Finished examples shown on the app's page, each made the way a run makes it: a group photo before and after, a motion capture, and a Live session recorded in the browser. */
 export const BODY_DOUBLE_DEMOS = {
   photo: { before: "/samples/body-double/photo-before.jpg", after: "/samples/body-double/photo-after.jpg" },
   clip: { video: "/samples/body-double/clip-demo.mp4", poster: "/samples/body-double/clip-demo.jpg" },
-  live: { video: "/samples/body-double/clip-demo.mp4", poster: "/samples/body-double/clip-demo.jpg" },
+  live: { video: "/samples/body-double/live-demo.mp4", poster: "/samples/body-double/live-demo.jpg" },
 } as const;
 
 export type BodyLookId = "holo" | "clay" | "thermal" | "ghost" | "xray" | "skeleton";
