@@ -69,6 +69,7 @@ import { ModelTile } from "@/components/model3d/model-tile";
 import { preview3dOf } from "@/lib/preview3d";
 import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ControlsChip } from "@/components/studio/model-controls";
+import { FILM_LOOK_PARAM, takesFilmLooks } from "@/lib/film-looks";
 import { ModelPicker } from "@/components/studio/model-picker";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
@@ -720,6 +721,11 @@ function ModelOptions({ id, model, data, runOp, readOnly }: { id: string; model:
     );
   if (o.sliders?.length) items.push(<div key="sliders" className={NO_DRAG}><SlidersChip model={model} values={extra} onChange={setExtra} /></div>);
   if (o.controls?.length) items.push(<div key="controls" className={NO_DRAG}><ControlsChip controls={o.controls} values={extra} onChange={setExtra} op={op} /></div>);
+  // MOSS-Image's Film look, as in the Image studio (the server adds the look around the node's words).
+  if (takesFilmLooks(model) && (op ?? "t2i") === "t2i") {
+    const look = extra[FILM_LOOK_PARAM];
+    items.push(<div key="film" className={NO_DRAG}><FilmLookChip value={typeof look === "string" ? look : undefined} onChange={(v) => setExtra(FILM_LOOK_PARAM, v)} /></div>);
+  }
   // A value the node holds that its run makes differently (a model switch kept 2K; a template set 4K): said before the
   // run, with the value it is made at one tap away.
   const changes = op ? fittedSettings(model, op, { ...d, ...p }).changes : [];
@@ -1946,6 +1952,8 @@ const TableNode = memo(function TableNode({ id, data, selected }: NodeProps<Flow
 // Layout: boxes for a headline, a product, a price; the image model it feeds draws each in its place
 
 const LayoutEditor = dynamic(() => import("@/components/studio/layout-editor").then((m) => m.LayoutEditor));
+/** MOSS-Image's Film look picker: its own chunk, as in the Image studio. */
+const FilmLookChip = dynamic(() => import("@/components/studio/film-look-chip"));
 
 const LAYOUT_ASPECTS = ["1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "3:2", "4:3"];
 const EMPTY_LAYOUT: LayoutDraft = { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" };

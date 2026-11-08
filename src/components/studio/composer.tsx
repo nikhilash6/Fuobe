@@ -159,6 +159,7 @@ import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/compo
 import { VOICE_FIRST_PARAM, voiceFirstDefault } from "@/lib/av/voice-first";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
+import { FILM_LOOK_PARAM, takesFilmLooks } from "@/lib/film-looks";
 
 const EMPTY: StudioElement[] = [];
 
@@ -175,6 +176,11 @@ const BOX_MODELS: Record<Engine, string> = { open: "oss-moss-image", cloud: "mos
 
 /** Fuobe Soul's Look picker (the look cards): its own chunk. */
 const LookChip = dynamic(() => import("./look-chip"), {
+  loading: () => <span aria-hidden className="h-8 w-28 shrink-0 animate-pulse rounded-full bg-secondary" />,
+});
+
+/** MOSS-Image's Film look picker (the look thumbnails): its own chunk. */
+const FilmLookChip = dynamic(() => import("./film-look-chip"), {
   loading: () => <span aria-hidden className="h-8 w-28 shrink-0 animate-pulse rounded-full bg-secondary" />,
 });
 
@@ -1178,7 +1184,8 @@ export function Composer({ docked }: { docked: boolean }) {
     if (!draft.prompt.trim()) return toast("Write a short idea first, then enhance it");
     setEnhancing(true);
     try {
-      const p = await enhance(draft.prompt, config.kind, op ?? (config.kind === "video" ? "t2v" : "t2i"), draft.modelId);
+      const look = draft.params.extra?.[FILM_LOOK_PARAM];
+      const p = await enhance(draft.prompt, config.kind, op ?? (config.kind === "video" ? "t2v" : "t2i"), draft.modelId, typeof look === "string" ? look : undefined);
       setDraft({ prompt: p });
     } catch (e) {
       if (!helperSignIn(e)) toastError(e);
@@ -1706,6 +1713,13 @@ export function Composer({ docked }: { docked: boolean }) {
             setDraft({ presetId: id, ...(hd && fits && { modelId: hd.id }) });
           }}
           onStrength={(v) => setDraft({ presetStrength: v })}
+        />
+      )}
+      {takesFilmLooks(model) && (effectiveOp ?? "t2i") === "t2i" && (
+        <FilmLookChip
+          value={typeof p.extra?.[FILM_LOOK_PARAM] === "string" ? (p.extra[FILM_LOOK_PARAM] as string) : undefined}
+          onChange={(id) => setExtra(FILM_LOOK_PARAM, id)}
+          disabled={layoutOn ? "Film looks work on words: turn Layout off to see the look in this picture." : undefined}
         />
       )}
       {shownControls.length > 0 && <ControlsChip controls={shownControls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} setupOf={setupViewer ? (param, v) => controlSetup(model?.id, param, v) : undefined} />}

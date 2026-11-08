@@ -1,6 +1,7 @@
 import { enhancePrompt, writeLyrics } from "@/server/enhance";
 import { getModel } from "@/lib/catalog";
 import { appliesOwnStyle } from "@/lib/catalog/applied-style";
+import { filmLook as lookOf, takesFilmLooks } from "@/lib/film-looks";
 import type { MediaKind, Operation } from "@/lib/catalog/types";
 import { GUEST_HEADER, GUEST_RUN_MESSAGE, ownGpuToolMessage, SIGN_IN_CODE } from "@/lib/guest-access";
 import { LoginGuard, requestViewer } from "@/server/auth";
@@ -31,7 +32,7 @@ function noLyrics(owner: boolean, why: HelperTrouble | null): Response {
 }
 
 export async function POST(request: Request) {
-  const { prompt, kind, op, target, seconds, max, modelId } = (await request.json().catch(() => ({}))) as {
+  const { prompt, kind, op, target, seconds, max, modelId, filmLook } = (await request.json().catch(() => ({}))) as {
     prompt?: string;
     kind?: MediaKind;
     op?: Operation;
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
     max?: number;
     /** The composer's model: one that puts its own look on the clip (an H3 Max look) gets no look of Fuobe's. */
     modelId?: string;
+    /** MOSS-Image's picked film look (src/lib/film-looks.ts): added after the rewrite, so the rewrite names no look. */
+    filmLook?: string;
   };
   if (!prompt?.trim()) return Response.json({ error: "Empty prompt" }, { status: 400 });
   // A visitor (only while hosted runs are on: the proxy lets nothing else through) gets the free helper, as itself.
@@ -62,8 +65,12 @@ export async function POST(request: Request) {
       if (!lyrics) return noLyrics(owner, why);
       return Response.json({ lyrics });
     }
-    const ownStyle = !!modelId && !!getModel(modelId)?.routes.some(appliesOwnStyle);
-    return Response.json({ prompt: await run(() => enhancePrompt(words, kind ?? "image", op ?? "t2i", { ownStyle }, { guestKey: key, waitMs: 45_000 })) });
+    const model = modelId ? getModel(modelId) : undefined;
+    const ownStyle = !!model?.routes.some(appliesOwnStyle);
+    // MOSS-Image gets its own prompt rules, and none of the rewrite's own look when a film look is picked.
+    const look = lookOf(filmLook);
+    const moss = takesFilmLooks(model) ? { filmLook: !!look, mono: !!look?.mono } : undefined;
+    return Response.json({ prompt: await run(() => enhancePrompt(words, kind ?? "image", op ?? "t2i", { ownStyle, ...(moss && { moss }) }, { guestKey: key, waitMs: 45_000 })) });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });
   }

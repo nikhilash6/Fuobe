@@ -78,6 +78,8 @@ import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenHeld, regenSw
 import { H3_2K_STEPS_NOTE, h3TwoKRequests, REGEN_COPY, REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
+import { filmLookRun } from "./film-look";
+import { takesFilmLooks } from "@/lib/film-looks";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
@@ -3592,7 +3594,11 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
         // Soul: only the user's words are expanded (60–120 words of subject, wardrobe, place, light); the look stays as it is.
         const longer = await enhanceSoulWords(words).catch(() => words);
         prompt = prompt.slice(0, at) + longer + prompt.slice(at + words.length);
-      } else prompt = await enhancePrompt(prompt, plan.model.kind, plan.op, { ownStyle: appliesOwnStyle(route) }).catch(() => prompt);
+      } else {
+        // MOSS-Image's own prompt rules; a picked film look goes around the words after, so the rewrite names none.
+        const moss = takesFilmLooks(plan.model) ? { filmLook: !!plan.film, mono: !!plan.film?.mono } : undefined;
+        prompt = await enhancePrompt(prompt, plan.model.kind, plan.op, { ownStyle: appliesOwnStyle(route), ...(moss && { moss }) }).catch(() => prompt);
+      }
       update(id, { prompt });
     }
     // Ideogram 4 reads a JSON caption (src/lib/ideogram-caption.ts): one given as the prompt (a reused run) is kept, plain
@@ -3635,13 +3641,25 @@ async function handOver(id: string, route: ModelRoute, providerId: ProviderId, p
     // Kandinsky 6.0 (both engines) reads spoken lines and the sound in tags of its own (src/lib/kandinsky-prompt.ts): quoted
     // words and a "Sound:" line become them for this run; the run keeps the words as typed, so Reuse shows them.
     if (plan.model.options.promptFormat === "kandinsky6" && prompt) prompt = kandinskyPrompt(prompt);
+    // A MOSS-Image film look (src/server/film-look.ts): the look, the words (after any Enhance), the look again, and the
+    // look's negative beside the run's. A monochrome look takes the colour words out of the scene first. Only this send
+    // reads it: the run keeps the person's words as typed, and Reuse applies the look again.
+    let negativePrompt = req.negativePrompt;
+    if (plan.film && prompt) {
+      if (plan.film.mono) update(id, { message: "Getting the words ready for the film look" });
+      const look = await filmLookRun(plan.film.look, prompt, negativePrompt);
+      if (look) {
+        prompt = look.prompt;
+        negativePrompt = look.negative;
+      }
+    }
     const input: GenInput = {
       ...plan.params,
       // The clip's size is only ever its header's (below): a size the request states (params.sourceSize) prices the run
       // before it starts, never what an upscaler's factor is made from.
       sourceSize: undefined,
       prompt,
-      negativePrompt: req.negativePrompt,
+      negativePrompt,
       images: (await Promise.all((req.inputs?.images ?? []).map((ref, i) => (i === 0 ? prepCropped(ref) : prep(ref))))).filter(Boolean) as string[],
       endImage: await prep(req.inputs?.endImage),
       mask: await prepMask(req.inputs?.mask),

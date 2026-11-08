@@ -24,7 +24,8 @@ import { qmaRunPrompt } from "@/lib/qma";
 import { askedSize, clipWords, fitLength, fitValue, numFramesValue, sizeValue } from "./payload";
 import { oneEachCall } from "./route-takes";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
-import { computeDimensions, fitCanvas } from "@/lib/comfy";
+import { computeDimensions, fitCanvas, PROMPT_HELPER_PARAM } from "@/lib/comfy";
+import { FILM_LOOK_PARAM, filmLook, takesFilmLooks } from "@/lib/film-looks";
 import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
 import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProblem } from "@/lib/lyrics";
@@ -381,6 +382,12 @@ export interface Plan {
   layout?: { format: LayoutFormat | "words"; boxes: number; width?: number; height?: number };
   /** MiniMax H3's sound lines from the preset's route (its preview's), which its layout's sound fields take. */
   sound?: { soundscape: string; music: string };
+  /**
+   * A MOSS-Image film look (params.extra.filmLook, src/lib/film-looks.ts): the server wraps the run's words in it just
+   * before the run (the look, the scene, the look again; its negative beside the run's), so the person's prompt stays as
+   * typed. `mono`: a monochrome look, whose scene loses its colour words first.
+   */
+  film?: { look: string; mono: boolean };
   /** An end-frame step: an image edit of the start frame that becomes the clip's end frame (H3 flf2v). */
   end?: PresetEndStep;
 }
@@ -691,6 +698,22 @@ export function planGeneration(
     params = compiled.params;
     layoutPlan = compiled.layout;
   }
+  // A film look (MOSS-Image's Film look chip): never sent as a setting of its own. It applies to a picture made from words;
+  // a layout keeps its compiled boxes, and another model or operation runs without it, saying so.
+  let film: Plan["film"];
+  if (params.extra && FILM_LOOK_PARAM in params.extra) {
+    const look = filmLook(params.extra[FILM_LOOK_PARAM]);
+    const rest = { ...params.extra };
+    delete rest[FILM_LOOK_PARAM];
+    if (look && takesFilmLooks(model) && op === "t2i" && !layoutPlan) {
+      film = { look: look.id, mono: !!look.mono };
+      // The API's own prompt expansion would rewrite the look's words: off for this run (fal's MOSS-Image).
+      if (routesFor(model, op).some((r) => r.map?.promptExpansion)) rest[PROMPT_HELPER_PARAM] = "off";
+    } else if (look) {
+      notes.push(layoutPlan ? `${look.name} is made for words: the layout runs without the film look` : `${look.name} is a MOSS-Image film look: this run is made without it`);
+    }
+    params = { ...params, extra: Object.keys(rest).length ? rest : undefined };
+  }
   // MiniMax H3's orbit of a still (its Orbit LoRA graph, src/lib/comfy-variants.ts) runs at the LoRA's own length, 3 s
   // (73 frames), unless the run names a length.
   if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
@@ -840,6 +863,7 @@ export function planGeneration(
     ...(notes.length && { notes }),
     ...(soulPlan && { soul: soulPlan }),
     ...(layoutPlan && { layout: layoutPlan }),
+    ...(film && { film }),
     ...(sound && { sound }),
     ...(end && { end }),
   };

@@ -30,6 +30,31 @@ Rules:
  */
 export interface EnhanceHints {
   ownStyle?: boolean;
+  /**
+   * The words are for MOSS-Image (MOSS_RULES). `filmLook`: a film look is picked, which Fuobe adds around the words after
+   * the rewrite, so the rewrite names no look of its own; `mono` when that look is black and white (no colour words).
+   */
+  moss?: { filmLook?: boolean; mono?: boolean };
+}
+
+/**
+ * How MOSS-Image reads a prompt (Fuobe's own tests of its film looks): plain prose; looks named by what shows, never by
+ * a film or camera brand; the pose pinned down; an overlay said with what and where. MOSS runs at a low CFG, so the
+ * negative field carries the opposite look, and the words name only what should be there.
+ */
+export const MOSS_RULES = [
+  "MOSS-Image reads plain prose: whole sentences, no JSON, no tag lists.",
+  "Describe a look by what it does to the picture (cool blue-teal shadows, warm orange highlights, fine grain, a soft red glow around lights, a dark vignette, a white border), never by a film stock or camera brand name: MOSS-Image ignores the names.",
+  "Pin the subject down: where they stand or sit, where the hands and weight are, where they look.",
+  "Say an overlay exactly: what it is and where in the frame (a faint city skyline across the left half, an orange light leak from the right edge).",
+  "Name only what should be in the picture. What should not be there goes in the negative prompt.",
+];
+
+function mossRules(m: NonNullable<EnhanceHints["moss"]>): string {
+  const rules = [...MOSS_RULES];
+  if (m.filmLook) rules.push("A film look is added around these words afterwards: describe the scene, the people, the place and the light only. Name no film stock, camera, colour grade, grain or lens look.");
+  if (m.mono) rules.push("The picture will be black and white: name no colours at all (hair and eyes as fair, dark or light), so none survive.");
+  return `\n\nThe model is MOSS-Image:\n- ${rules.join("\n- ")}`;
 }
 
 function instruction(prompt: string, kind: MediaKind, op: Operation, hints: EnhanceHints = {}): string {
@@ -44,7 +69,7 @@ function instruction(prompt: string, kind: MediaKind, op: Operation, hints: Enha
   const own = hints.ownStyle
     ? "\n\nThe model applies its own visual style. Describe only the scene, the action, the camera and the sounds. Name no art style, lighting, lens or film look."
     : "";
-  return `Rewrite this as ${what}:\n\n${prompt}${own}`;
+  return `Rewrite this as ${what}:\n\n${prompt}${own}${hints.moss ? mossRules(hints.moss) : ""}`;
 }
 
 /** A picture for a model that can see (Content Factory's reference frames): JPEG, PNG, GIF or WebP. */
@@ -225,6 +250,8 @@ export function heuristicEnhance(prompt: string, kind: MediaKind, op: Operation,
       ? `${p}. Cinematic shot, natural motion, smooth camera movement, realistic physics, soft volumetric light, shallow depth of field, rich detail, 24fps film look.`
       : `${p}. Natural, fluid motion that stays consistent with the first frame, smooth cinematic camera movement, stable identity and details.`;
   }
+  // A film look goes around the words afterwards: the light and lens it brings would fight the look's own.
+  if (hints.moss?.filmLook) return `${p}. Highly detailed, natural skin and material texture, thoughtful composition.`;
   return `${p}. Highly detailed, natural skin and material texture, cinematic lighting, thoughtful composition, shot on a full-frame camera with a 50mm lens, shallow depth of field.`;
 }
 

@@ -1173,13 +1173,14 @@ export function useClipFacts(url: string | undefined) {
   });
 }
 
-export async function enhance(prompt: string, kind: MediaKind, op: string, modelId?: string): Promise<string> {
+/** `filmLook`: MOSS-Image's picked film look, which Fuobe adds after the rewrite (so the rewrite names no look of its own). */
+export async function enhance(prompt: string, kind: MediaKind, op: string, modelId?: string, filmLook?: string): Promise<string> {
   return (
     await json<{ prompt: string }>(
       await fetch("/api/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, kind, op, modelId }),
+        body: JSON.stringify({ prompt, kind, op, modelId, ...(filmLook && { filmLook }) }),
       }),
     )
   ).prompt;

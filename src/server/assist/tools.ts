@@ -12,6 +12,8 @@ import { currentModelId } from "@/lib/catalog/replaced";
 import { fittedSettings } from "@/lib/catalog/fitted";
 import { opTakes } from "@/lib/catalog/route-takes";
 import { LAYOUT_PARAM, parseLayout } from "@/lib/layout-prompt";
+import { FILM_LOOK_PARAM, FILM_LOOKS, filmLook, takesFilmLooks } from "@/lib/film-looks";
+import { MOSS_RULES } from "../enhance";
 import { OPERATION_LABELS, type ChainSlot, type GenerationRequest, type MediaKind, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { type PlannedJob, totalCost } from "@/lib/assist";
 import { STORYBOARD_MODELS } from "@/lib/catalog/storyboard";
@@ -108,6 +110,11 @@ function summarize(m: ModelDef) {
     ...(o.looks && { looks: "139 Soul looks: pass a look id as presetId (v1-general, v2-y2k-studio…), presetStrength 0–1 scales its LoRAs" }),
     // A model that places a layout's boxes (FLUX 3 Klein, MOSS-Image, Ideogram 4.x), and the weights' licence as information.
     ...(o.layout && { readsLayoutBoxes: o.layout }),
+    // MOSS-Image: how it reads words, and its film looks (film_look), which Fuobe adds around the prompt at run time.
+    ...(takesFilmLooks(m) && {
+      promptRules: MOSS_RULES.join(" "),
+      filmLooks: `film_look: one of ${FILM_LOOKS.map((l) => `${l.id} (${l.name})`).join(", ")}. Fuobe wraps the prompt in the look and adds its negative; write the scene only, with no film or camera look of your own (and no colours for a black-and-white one).`,
+    }),
     ...(m.licence && { licence: `${m.licence.licence}${m.licence.commercial === false ? " (non-commercial weights)" : m.licence.commercial === null ? " (revenue tiers decide commercial use)" : ""}` }),
   };
 }
@@ -338,6 +345,10 @@ const Job = z.object({
     ),
   negative_prompt: z.string().optional(),
   look: z.string().optional().describe("Fuobe Soul / Soul HD: the look's id from search_models (v1-general, v1-y2k, v2-y2k-studio…). Leave it out for Soul's default look."),
+  film_look: z
+    .string()
+    .optional()
+    .describe("MOSS-Image (oss-moss-image, moss-image), a picture from words: a film look id from search_models' filmLooks (night-halation, bw-grain, instant-classic…). Write the prompt as the scene only; Fuobe adds the look."),
   engine: z.enum(["open", "cloud"]).optional().describe("Fuobe Originals run on both engines: open = the user's GPU (free), cloud = hosted open weights (paid). Leave it out to follow the user's engine."),
 });
 type JobInput = z.infer<typeof Job>;
@@ -392,6 +403,7 @@ export function asRequest(j: JobInput): GenerationRequest {
   const extra = {
     ...(j.system && { system: j.system }),
     ...(layout && { [LAYOUT_PARAM]: layout }),
+    ...(filmLook(j.film_look) && { [FILM_LOOK_PARAM]: j.film_look }),
     // Hi3D: the refine's own resolution, or on an image-to-3D model the refine step after it.
     ...(j.mesh_resolution && { [j.model_id === HI3D_MODEL || j.op === HI3D_OP ? HI3D_PARAM : HI3D_CHAIN_PARAM]: j.mesh_resolution }),
   };
