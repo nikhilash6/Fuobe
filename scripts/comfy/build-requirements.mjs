@@ -267,7 +267,10 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
     v: 1,
     hash: '',
     comfyui: { min: manifest.comfyuiVersion, testedCommit: String(manifest.comfyuiCommit ?? '').slice(0, 8) },
-    folders: uniq(Object.values(files).map((f) => f.listFolder ?? f.folder)),
+    // The files' folders, and the folders a used pack picks its models from by name without registering them
+    // (packs.json `modelFolders`: H3-FaceRefine's detectors under models/ultralytics), so a worker's
+    // extra_model_paths.yaml registers them and ComfyUI lists their files.
+    folders: uniq([...Object.values(files).map((f) => f.listFolder ?? f.folder), ...usedPacks.flatMap((name) => packs[name]?.modelFolders ?? [])]),
     sentinels,
     packs: indexPacks,
     files,

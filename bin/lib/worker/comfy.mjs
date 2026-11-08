@@ -170,8 +170,16 @@ const PASS = new Set([
 /** The graphics card's and its libraries' settings. */
 const PASS_PREFIX = /^(CUDA_|CUDNN_|NVIDIA_|PYTORCH_CUDA_)/;
 
-/** Set for every start: models load only from what is on this PC, and nothing installs or downloads at run time. */
-export const OFFLINE_ENV = { HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1", HF_DATASETS_OFFLINE: "1", PIP_NO_INDEX: "1" };
+/**
+ * Set for every start: models load only from what is on this PC, and nothing installs or downloads at run time.
+ * Ultralytics (H3-FaceRefine's face detectors): YOLO_OFFLINE turns off its network check, so it sends no usage events
+ * and never installs a missing package (YOLO_AUTOINSTALL says so too), and ULTRALYTICS_SAFE_LOAD loads its .pt
+ * checkpoints with torch's weights-only loader, so a checkpoint can't run code.
+ */
+export const OFFLINE_ENV = {
+  HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1", HF_DATASETS_OFFLINE: "1", PIP_NO_INDEX: "1",
+  YOLO_OFFLINE: "1", YOLO_AUTOINSTALL: "0", ULTRALYTICS_SAFE_LOAD: "1",
+};
 
 /**
  * ComfyUI's environment: the variables it needs from this PC's (`env`), then the PC owner's own `comfyEnv` from

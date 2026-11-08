@@ -549,7 +549,10 @@
     "requirementsTxt": true,
     "isolated": false,
     "subdir": null,
-    "folders": []
+    "folders": [],
+    "modelFolders": [
+      "ultralytics"
+    ]
   },
   "ComfyUI-Impact-Pack": {
     "repo": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",

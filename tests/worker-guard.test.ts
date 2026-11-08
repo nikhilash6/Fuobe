@@ -104,6 +104,9 @@ if __name__ == "__main__":
         app.router.add_get(base + "/instanthmr/ws", ws)
         app.router.add_get(base + "/instanthmr", files)
         app.router.add_get(base + "/instanthmr_other", files)
+        for route in ("/h3_facerefine/preview", "/sam/prepare", "/impact/wildcards/list", "/view/validate"):
+            app.router.add_get(base + route, files)
+        app.router.add_get(base + "/view", files)
     app.add_subapp("/internal", internal)
     web.run_app(app, host=args.listen, port=args.port, print=None)
 `;
@@ -202,6 +205,12 @@ describe.skipIf(!python)("the guard in front of a stand-in ComfyUI (Python)", ()
     expect(await wsOpens(`ws://${host}/api/instanthmr/ws`, key)).toBe(false);
     // Only that route and what is under it: a route that merely starts with the same letters, and the rest, answer.
     expect((await c.fetch(`${c.base}/instanthmr_other`)).status).toBe(200);
+    // H3-FaceRefine's face picker and Impact Pack's routes are refused too; ComfyUI's own /view still answers.
+    for (const p of ["/h3_facerefine/preview?path=C:/x.mp4", "/api/h3_facerefine/preview", "/H3_FaceRefine/preview", "/sam/prepare", "/api/sam/prepare", "/impact/wildcards/list", "/api/Impact/wildcards/list", "/view/validate", "/api/view/validate"]) {
+      expect((await raw(port, p, { Host: host, ...key })).status, p).toBe(403);
+    }
+    expect((await c.fetch(`${c.base}/view`)).status).toBe(200);
+    expect((await c.fetch(`${c.base}/api/view`)).status).toBe(200);
     expect((await c.fetch(`${c.base}/system_stats`)).status).toBe(200);
     expect(await wsOpens(`ws://${host}/ws`, key)).toBe(true);
   });

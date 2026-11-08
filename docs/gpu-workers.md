@@ -216,6 +216,9 @@ The worker always starts and stops its own ComfyUI process. It never uses a Comf
   variable, put it in `comfyEnv` in `worker.json` (for example `{ "comfyEnv": { "MY_SETTING": "1" } }`);
 - loads models only from this PC: `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_DATASETS_OFFLINE=1` and
   `PIP_NO_INDEX=1` are always set. A node that downloads its model on its first run needs that model on the PC first.
+  For Ultralytics (the face detectors of Fix faces), `YOLO_OFFLINE=1` and `YOLO_AUTOINSTALL=0` stop its usage events
+  and its package installs, and `ULTRALYTICS_SAFE_LOAD=1` loads its `.pt` files with torch's weights-only loader, so
+  a detector file can't run code.
 
 **The port guard.** Before each start, the worker binds the port itself and releases it at once. If the bind fails,
 another program is using the port. The worker then does not start ComfyUI, pauses itself (its state says "port-busy")
@@ -241,8 +244,10 @@ ComfyUI:
 - The request must carry the key in `X-Fuobe-Worker-Key`. The worker sends it with every request and with the live
   socket. Without it, the answer is 403.
 - Some routes are refused with 403 even with the key (`BLOCKED_ROUTES`), under ComfyUI's `/api` prefix too and in
-  any spelling: `/instanthmr/*`, the live capture routes of the full ComfyUI-InstantHMR. The pack that workers install
-  leaves them out; the guard refuses them again.
+  any spelling: `/instanthmr/*`, the live capture routes of the full ComfyUI-InstantHMR; `/h3_facerefine/*`, the face
+  picker of ComfyUI-H3-FaceRefine, which reads a video from any path; and `/sam/*`, `/impact/*` and `/view/validate`,
+  the routes of the full ComfyUI-Impact-Pack. The copies that workers install leave them out; the guard refuses them
+  again.
 
 Before the worker sends the key, the process on the port must prove two things. It signs a random challenge with the
 key (`GET /fuobe-worker/hello`, HMAC-SHA-256), and it names its process id and its parent's. One of them must be the
@@ -623,7 +628,9 @@ a workflow or a node pack that workers run, follow [Adding a model, a workflow o
    by `scripts/build-worker.mjs` from the catalog's workflows and the graph builders). For your own workflows, pass
    a file with `allowNodesFile` in `worker.json`. The studio can never send a file like that.
    Some node types are never allowed, whatever the allowlist or that file says (`DENIED_NODES` in
-   `bin/lib/worker/checks.mjs`): `InstantHMRLiveCapture`.
+   `bin/lib/worker/checks.mjs`): `InstantHMRLiveCapture`; `H3FaceSelect`, which opens a video from any path; and
+   the ComfyUI-Impact-Pack nodes that install or download, drive a browser, read or write paths, or only wait. Fix
+   faces uses only Impact's `SAMLoader`.
 2. Every file that the graph reads was sent with the job, under the name the studio gave it.
 3. Every input keeps to its rule (`bin/lib/worker/dist/input-rules.json`). The build gives a rule to each input that
    could name a file, a folder, a download or code, from the values in the catalog's own workflows:

@@ -252,6 +252,8 @@ describe("the worker's model files", () => {
     expect(names).toContainEqual(["kandinsky6_audio_vae", "audio_vae"]);
     expect(names).toContain("loras");
     expect(names.length).toBe(index.folders.length);
+    // H3-FaceRefine picks its detectors from models/ultralytics, which no pack registers: the yaml does.
+    expect(names).toContain("ultralytics");
     const yaml = modelPathsYaml(["X:/models"], names, { first: true });
     expect(yaml).toContain("\n  kandinsky6_audio_vae: audio_vae\n");
     expect(yaml).not.toContain("kandinsky6_audio_vae: kandinsky6_audio_vae");
@@ -284,7 +286,10 @@ describe("its own ComfyUI's environment", () => {
   it("holds only what ComfyUI needs, with downloads and installs off", () => {
     const env = comfyEnv(pc);
     expect(env).toEqual({ SystemRoot: "C:\\Windows", Path: "C:\\Windows\\system32;C:\\ffmpeg\\bin", TEMP: "C:\\Temp", USERPROFILE: "C:\\Users\\me", CUDA_VISIBLE_DEVICES: "0", HF_HOME: "D:\\hf", ...OFFLINE_ENV });
-    expect(OFFLINE_ENV).toEqual({ HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1", HF_DATASETS_OFFLINE: "1", PIP_NO_INDEX: "1" });
+    expect(OFFLINE_ENV).toEqual({
+      HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1", HF_DATASETS_OFFLINE: "1", PIP_NO_INDEX: "1",
+      YOLO_OFFLINE: "1", YOLO_AUTOINSTALL: "0", ULTRALYTICS_SAFE_LOAD: "1",
+    });
   });
 
   it("adds the PC owner's own variables from worker.json, but never a worker setting, and never turns downloads on", () => {

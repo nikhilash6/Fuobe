@@ -474,4 +474,14 @@ describe("nodes the worker denies", () => {
     expect(graphCheck({ "1": live }, withLive, verified, { rules, staged: SENT })).toMatchObject({ reason: "unknown-node", node: "1", cls: "InstantHMRLiveCapture" });
     expect(vetGraph({ "1": live }, allowed, verified, { rules, staged: SENT })).toBe("unknown-node");
   });
+
+  it("hold H3-FaceRefine's any-path video loader and Impact Pack's risky nodes, while Fix faces' own nodes stay allowed", () => {
+    for (const cls of ["H3FaceSelect", "ONNXDetectorProvider", "ImpactHFTransformersClassifierProvider", "ImpactWildcardEncode", "ImpactQueueTrigger", "PreviewBridge", "ImageReceiver", "LatentReceiver", "PreviewDetailerHookProvider", "ImpactSleep"]) {
+      expect(DENIED_NODES.has(cls), cls).toBe(true);
+      expect(allowed.has(cls), cls).toBe(false);
+    }
+    for (const cls of ["SAMLoader", "H3FaceTrackCrop", "H3FaceMaskSAM", "H3FaceStitch"]) expect(allowed.has(cls), cls).toBe(true);
+    const select = { class_type: "H3FaceSelect", inputs: { video: "C:/Users/me/clip.mp4", detector: "bbox\face_yolov8m.pt", confidence: 0.35, select: "largest_face", select_index: 0, confirmed_pick: "" } };
+    expect(graphCheck({ "1": select }, new Set([...allowed, "H3FaceSelect"]), verified, { rules, staged: SENT })).toMatchObject({ reason: "unknown-node", cls: "H3FaceSelect" });
+  });
 });

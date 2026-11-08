@@ -41,7 +41,11 @@ HELLO_PATH = "/fuobe-worker/hello"
 CHALLENGE = re.compile(r"^[0-9a-f]{16,128}$")
 # Routes no request reaches. ComfyUI-InstantHMR's live capture (/instanthmr/*: a websocket with no login that writes
 # recordings and can send UDP) is left out of the pack the worker installs; this refuses it again if a full copy loads.
-BLOCKED_ROUTES = ("/instanthmr",)
+# The same for ComfyUI-H3-FaceRefine's face picker (/h3_facerefine/*: it reads and serves a video from any path) and
+# ComfyUI-Impact-Pack's routes (/sam/*: SAM on an image read by a path the request gives; /impact/*: wildcards,
+# preview-bridge images by path, earlier jobs' crops; /view/validate: whether a file exists). ComfyUI's own /view
+# stays open.
+BLOCKED_ROUTES = ("/instanthmr", "/h3_facerefine", "/sam", "/impact", "/view/validate")
 
 
 def blocked(path: str) -> bool:

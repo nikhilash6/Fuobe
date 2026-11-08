@@ -18,8 +18,26 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  * scripts/lib/worker-catalog.mjs). InstantHMRLiveCapture: ComfyUI-InstantHMR's live capture, which reads recordings and
  * 3D files from the input folder and goes with a websocket that writes files and can send UDP. The pack the worker
  * installs doesn't register it; this refuses it again if a full copy loads (comfy_guard.py blocks its routes).
+ *
+ * H3FaceSelect: ComfyUI-H3-FaceRefine's video loader, which opens any path written into its `video` input. Fix faces
+ * loads its clip with VideoHelperSuite instead.
+ *
+ * ComfyUI-Impact-Pack: Fix faces uses only SAMLoader, and the copy the worker installs registers nothing else. If a full
+ * copy loads, these are refused again: nodes that install packages or download models (ONNX, CLIPSeg, the Hugging Face
+ * classifier, the wildcard nodes), that drive a browser (queue triggers, widget values, mute state, remote values,
+ * senders and receivers, the control bridge, the logger, the SEGS picker), that read or write paths outside ComfyUI's
+ * folders (the preview bridges, the receivers, the preview hook), that only wait (ImpactSleep), and the SAM 2 video
+ * detector, whose library the worker doesn't have.
  */
-export const DENIED_NODES = new Set(["InstantHMRLiveCapture"]);
+export const DENIED_NODES = new Set([
+  "InstantHMRLiveCapture",
+  "H3FaceSelect",
+  "ONNXDetectorProvider", "CLIPSegDetectorProvider", "ImpactHFTransformersClassifierProvider", "ImpactWildcardProcessor", "ImpactWildcardEncode",
+  "ImpactQueueTrigger", "ImpactQueueTriggerCountdown", "ImpactSetWidgetValue", "ImpactNodeSetMuteState", "ImpactRemoteBoolean", "ImpactRemoteInt",
+  "ImpactControlBridge", "ImpactConditionalStopIteration", "ImpactValueSender", "ImpactValueReceiver", "ImpactLogger", "ImpactSEGSPicker",
+  "ImageSender", "ImageReceiver", "LatentSender", "LatentReceiver", "PreviewBridge", "PreviewBridgeLatent", "PreviewDetailerHookProvider",
+  "ImpactSleep", "ImpactSAM2VideoDetectorSEGS",
+]);
 
 export function allowedNodes(extraFile, builtFile = path.join(here, "dist", "allowed-nodes.json")) {
   const built = JSON.parse(fs.readFileSync(builtFile, "utf8")).nodes;
