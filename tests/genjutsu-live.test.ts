@@ -46,8 +46,8 @@ describe("Genjutsu's live gate", () => {
 
   it("the committed record opens only the features that passed, and the page passes the gate to the studio", () => {
     const record = JSON.parse(fs.readFileSync(path.join(ROOT, "workflows/comfyui/gpu-tested.json"), "utf8")) as { features: Record<string, { passed: boolean }> };
-    expect(Object.keys(record.features).sort()).toEqual(["body-double-clip", "body-double-photo", "clean-voice-first", "finish-colours", "group-swap", "group-swap-one-by-one", "original-sound", "picture-h3-renderer", "reshoot-edit", "reshoot-swap"]);
-    expect(Object.entries(genjutsuLive()).filter(([, on]) => on).map(([k]) => k).sort()).toEqual(["finish-colours", "group-swap", "group-swap-one-by-one", "picture-h3-renderer", "reshoot-edit", "reshoot-swap"]);
+    expect(Object.keys(record.features).sort()).toEqual(["body-double-clip", "body-double-photo", "clean-voice-first", "finish-colours", "finish-faces", "group-swap", "group-swap-one-by-one", "original-sound", "picture-h3-renderer", "reshoot-edit", "reshoot-swap"]);
+    expect(Object.entries(genjutsuLive()).filter(([, on]) => on).map(([k]) => k).sort()).toEqual(["finish-colours", "finish-faces", "group-swap", "group-swap-one-by-one", "picture-h3-renderer", "reshoot-edit", "reshoot-swap"]);
     const page = fs.readFileSync(path.join(ROOT, "src/app/(studio)/genjutsu/page.tsx"), "utf8");
     expect(page).toContain("const live = genjutsuLive();");
     // The page's mode examples are only the ones open to everyone (the owner's come from an owner-only route).
