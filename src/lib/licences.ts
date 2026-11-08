@@ -731,6 +731,19 @@ export interface Attribution {
 
 export const ATTRIBUTIONS: Attribution[] = [
   {
+    for: "Body Double Live",
+    text: "InstantHMR nano, by Mohamed Adjel, Kahina Chalabi and Vincent Bonnet (Naturalpad), run in the browser with ONNX Runtime Web",
+    licence: "SAM License",
+    url: "https://huggingface.co/momolesang/InstantHMR",
+    note: "The nano weights are for non-commercial use (some training images are research-only); the medium_commercial weights allow commercial use. The MHR body model is Apache-2.0.",
+  },
+  {
+    for: "Body Double Live",
+    text: "MediaPipe Tasks and the selfie multiclass segmentation model, copyright Google LLC: each frame's full outline, clothes and hair included",
+    licence: "Apache-2.0",
+    url: "https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter",
+  },
+  {
     for: "Dialogue, music and effects separation",
     text: "Trained on the Divide and Remaster (DnR) v2 dataset by Darius Petermann, Gordon Wichern, Zhong-Qiu Wang and Jonathan Le Roux",
     licence: "CC BY 4.0",

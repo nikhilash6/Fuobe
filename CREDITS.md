@@ -19,6 +19,8 @@ Some licences ask the app that runs their model to say so.
 
 ## Attributions
 
+- [InstantHMR nano, by Mohamed Adjel, Kahina Chalabi and Vincent Bonnet (Naturalpad), run in the browser with ONNX Runtime Web](https://huggingface.co/momolesang/InstantHMR). SAM License. For body Double Live. The nano weights are for non-commercial use (some training images are research-only); the medium_commercial weights allow commercial use. The MHR body model is Apache-2.0.
+- [MediaPipe Tasks and the selfie multiclass segmentation model, copyright Google LLC: each frame's full outline, clothes and hair included](https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter). Apache-2.0. For body Double Live.
 - [Trained on the Divide and Remaster (DnR) v2 dataset by Darius Petermann, Gordon Wichern, Zhong-Qiu Wang and Jonathan Le Roux](https://zenodo.org/records/6949108). CC BY 4.0. For dialogue, music and effects separation. Some of its clips carry their own licences.
 - [BS-RoFormer, copyright (c) 2023 Phil Wang](https://github.com/lucidrains/BS-RoFormer). MIT. For dialogue, music and effects separation.
 - [Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)](https://github.com/ZFTurbo/Music-Source-Separation-Training). MIT. For dialogue, music and effects separation.
