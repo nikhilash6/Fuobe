@@ -74,6 +74,7 @@ import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
+import { FIX_FACES, FIX_FACES_AFTER_PARAM, fixFacesAfterStep, wantsFixFacesAfter } from "@/lib/catalog/fix-faces";
 import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenHeld, regenSwitchedOff } from "./regenerate";
 import { H3_2K_STEPS_NOTE, h3TwoKRequests, REGEN_COPY, REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
@@ -1502,8 +1503,15 @@ export function previewGeneration(asked: GenerationRequest) {
     if (twoK.costUsd !== null) post += twoK.costUsd;
     notes.push(...twoK.notes);
   }
+  // Fix faces after the take (the switch beside Run): one more step per take, planned and priced beside it.
+  const faces = twoK ? null : fixFacesExtra(moved.request, plan.jobs);
+  if (faces) {
+    if (faces.costUsd !== null) post += faces.costUsd;
+    notes.push(faces.note);
+  }
+  const extraSteps: { model: string; op: string }[] = [...(twoK?.steps ?? []), ...(faces?.steps ?? [])];
   // A finish whose price isn't known leaves the run's price unknown too, never the main step's alone.
-  const priceUnknown = cost === null || twoK?.costUsd === null;
+  const priceUnknown = cost === null || twoK?.costUsd === null || faces?.costUsd === null;
   return {
     model: plan.model,
     op: plan.op,
@@ -1513,7 +1521,7 @@ export function previewGeneration(asked: GenerationRequest) {
     providerId,
     costUsd: priceUnknown || cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
     // The other steps the run makes beside its own model (a 2K take's finish), so a policy and a price see them all.
-    ...(twoK?.steps.length && { steps: twoK.steps }),
+    ...(extraSteps.length && { steps: extraSteps }),
     // The engine it runs on (a Fuobe Original picks one per request).
     engine: plan.model.engine,
     // What the route runs (the evaluation harness records it): the provider endpoint, the final prompt and the LoRAs it loads.
@@ -1544,6 +1552,17 @@ function h3TwoKExtra(req: GenerationRequest, model: ModelDef, op: Operation): { 
     costUsd: p.costUsd === null ? null : Math.round(p.costUsd * takes * 10000) / 10000,
     notes: [H3_2K_STEPS_NOTE],
     steps: Array.from({ length: takes }, () => ({ model: p.model.id, op: p.op })),
+  };
+}
+
+/** Fix faces after an H3 take from a start picture (the switch beside Run): one Fix faces step per take, checked and priced. */
+function fixFacesExtra(req: GenerationRequest, takes: number): { costUsd: number | null; note: string; steps: { model: string; op: string }[] } | null {
+  if (!wantsFixFacesAfter(req)) return null;
+  const p = previewChained(fixFacesAfterStep(req), 1);
+  return {
+    costUsd: p.costUsd === null ? null : Math.round(p.costUsd * takes * 10000) / 10000,
+    note: "Then its faces are fixed from the start picture: a few more minutes",
+    steps: Array.from({ length: takes }, () => ({ model: FIX_FACES.model, op: "face-fix-video" })),
   };
 }
 
@@ -1664,6 +1683,22 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   if (shotModel?.id === REGEN_MODEL) {
     const run = createRegenerateRun(original, shotModel, opts, createGenerations, joinClips, (id) => void cancelGeneration(id));
     if (run) return run;
+  }
+  // Fix faces after a MiniMax H3 video from a start picture (the switch beside Run): each take, then its faces fixed from that
+  // picture. Both are kept: the take as it came, and the fixed one. 2K keeps its own two steps instead.
+  if (!opts.dependsOn && shotModel && wantsFixFacesAfter(original) && !wantsH3TwoK(shotModel.id, original.params?.resolution)) {
+    const batchId = opts.batchId ?? nanoid(10);
+    const extra = { ...original.params?.extra };
+    delete extra[FIX_FACES_AFTER_PARAM];
+    const takes = createGenerations({ ...original, params: { ...original.params, extra } }, { batchId });
+    const fixed: Generation[] = [];
+    try {
+      for (const t of takes) fixed.push(...createGenerations(fixFacesAfterStep(original), { batchId, dependsOn: t.id }));
+    } catch (e) {
+      for (const g of [...fixed, ...takes]) void cancelGeneration(g.id);
+      throw e;
+    }
+    return [...fixed, ...takes];
   }
   // MiniMax H3 at 2K on your GPU (n7-10): a 768p draft, then Open-H3 Regenerate at 2K from it (from its latent for text to video).
   if (shotModel && wantsH3TwoK(shotModel.id, original.params?.resolution)) {

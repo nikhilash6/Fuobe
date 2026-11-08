@@ -157,6 +157,8 @@ import { useEdgeFade } from "./use-edge-fade";
 import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
 import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
 import { VOICE_FIRST_PARAM, voiceFirstDefault } from "@/lib/av/voice-first";
+import { FixFacesAfterSwitch } from "@/components/fix-faces/fix-faces-switch";
+import { FIX_FACES_AFTER_PARAM, fixFacesAfterOffered } from "@/lib/catalog/fix-faces";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { FILM_LOOK_PARAM, takesFilmLooks } from "@/lib/film-looks";
@@ -355,6 +357,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const voiceFirstShown = useVoiceFirstShown(true);
   const voiceFirstLive = useVoiceFirstLive();
   const [voiceFirstAsked, setVoiceFirstAsked] = useState<boolean | null>(null);
+  // "Fix faces" after an H3 video from a start picture: off until turned on.
+  const [fixFacesAsked, setFixFacesAsked] = useState(false);
   const voiceFirstKind: "audio" | "video" | null = !config.voiceFirst ? null : typed.slots.audio?.ref ? "audio" : typed.slots.video?.ref && config.ops.includes("transcribe") ? "video" : null;
   const draft = useMemo(
     () =>
@@ -1027,7 +1031,8 @@ export function Composer({ docked }: { docked: boolean }) {
       buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
     );
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
-    return runOnceOnKey(withVoiceFirst, a, (r) => create.mutateAsync(r)).then(
+    const withFixFaces = fixFacesOn ? { ...withVoiceFirst, params: { ...withVoiceFirst.params, extra: { ...withVoiceFirst.params?.extra, [FIX_FACES_AFTER_PARAM]: true } } } : withVoiceFirst;
+    return runOnceOnKey(withFixFaces, a, (r) => create.mutateAsync(r)).then(
       (words) => void toast.success(words),
       (e) => toastError(e),
     );
@@ -1164,7 +1169,8 @@ export function Composer({ docked }: { docked: boolean }) {
         model?.kind,
       );
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
-    const onKey = withKey ? onCloudKey(withVoiceFirst, withKey) : withVoiceFirst;
+    const withFixFaces = fixFacesOn ? { ...withVoiceFirst, params: { ...withVoiceFirst.params, extra: { ...withVoiceFirst.params?.extra, [FIX_FACES_AFTER_PARAM]: true } } } : withVoiceFirst;
+    const onKey = withKey ? onCloudKey(withFixFaces, withKey) : withFixFaces;
     const body = { ...withRoute(onKey), ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time). Back from sign-up, the
@@ -1251,6 +1257,9 @@ export function Composer({ docked }: { docked: boolean }) {
     preset?.userPrompt,
   );
   const effectiveOp = studioOp ?? op;
+  // Fix faces after the take: an H3 video from a start picture, no longer than one Fix faces run, and not at 2K.
+  const fixFacesShown = fixFacesAfterOffered(draft.modelId, effectiveOp ?? (typed.slots.image?.ref ? "i2v" : undefined), p.duration, !!typed.slots.image?.ref) && p.resolution !== "2K";
+  const fixFacesOn = fixFacesShown && fixFacesAsked;
   // Qwen-Image 2.1's Options → GPU on Small: what the small encoder can't do (or that a speed with its own graph wins).
   // MiniMax H3's GPU tier: what FastH3 V2 or Trim changes, picked or as Auto runs it on the card the GPU check read.
   const h3Note = opts.controls?.some((c) => c.param === H3_TIER_PARAM) ? h3TierNote(p.extra, effectiveOp, gpuBadges?.h3Tier) : undefined;
@@ -1930,6 +1939,7 @@ export function Composer({ docked }: { docked: boolean }) {
       {showAttachments && !collapsed && !framesOn && <FitCropNote fit={cropFit} className="px-3" />}
       {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
       {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
+      {showAttachments && !collapsed && !framesOn && fixFacesShown && <FixFacesAfterSwitch className="px-3 pb-2" on={fixFacesOn} onChange={setFixFacesAsked} />}
       {showAttachments && !collapsed && !framesOn && voiceFirstShown && voiceFirstKind && (
         <VoiceFirstSwitch className="px-3 pb-2" engine={voiceFirstEngine} on={cleanFirst} onChange={setVoiceFirstAsked} seconds={voice?.duration} lip={!config.ops.includes("transcribe")} />
       )}

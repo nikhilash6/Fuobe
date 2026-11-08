@@ -1,3 +1,5 @@
+import type { GenerationRequest } from "./types";
+
 /**
  * Fix Faces: a video's soft or smeared faces redrawn sharp, matched to a photo of the person (or the clip's own clearest
  * face, picked in the browser: src/lib/fix-faces/face-frame.ts). It runs Genjutsu's Finish with its Fix faces tool,
@@ -64,4 +66,44 @@ export function fixFacesBody(o: { clip: FixFacesClip; photo: string; style: FixF
     app: FIX_FACES.appId,
     ...(o.requestId && { requestId: o.requestId }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Fix faces after a MiniMax H3 video (an opt-in switch beside Run): the clip, then its faces fixed from its start picture.
+
+/** The switch's flag on the H3 request (params.extra). */
+export const FIX_FACES_AFTER_PARAM = "fixFacesAfter";
+/** The H3 models it follows: the full model and its fast and flash versions, on your GPU or the site's. */
+const H3_MODELS = new Set(["oss-minimax-h3", "oss-minimax-h3-fast", "oss-minimax-h3-flash"]);
+
+/** Whether the switch is offered: an H3 video from a start picture, no longer than one Fix faces run. */
+export function fixFacesAfterOffered(modelId: string | undefined, op: string | undefined, seconds: number | undefined, hasStart: boolean): boolean {
+  return !!modelId && H3_MODELS.has(modelId) && op === "i2v" && hasStart && !(seconds && seconds > FIX_FACES.maxSeconds);
+}
+
+/** Whether a request asks for it, and may have it. */
+export function wantsFixFacesAfter(req: Pick<GenerationRequest, "modelId" | "op" | "params" | "inputs">): boolean {
+  return req.params?.extra?.[FIX_FACES_AFTER_PARAM] === true && fixFacesAfterOffered(req.modelId, req.op ?? "i2v", req.params?.duration, !!req.inputs?.images?.[0]);
+}
+
+/**
+ * The step after the clip: Fix faces on it, its start picture as the face, in Genjutsu's default style (Follow the mouth),
+ * labelled as the run's second step. `chain` puts the clip in once it is made.
+ */
+export function fixFacesAfterStep(req: GenerationRequest): GenerationRequest {
+  const seed = req.params?.seed;
+  return {
+    feature: req.feature,
+    ...(req.title && { title: req.title }),
+    ...(req.batchTitle && { batchTitle: req.batchTitle }),
+    ...(req.demo && { demo: true }),
+    engine: "open",
+    modelId: FIX_FACES.model,
+    op: "face-fix-video",
+    prompt: "",
+    inputs: { images: [req.inputs!.images![0]] },
+    params: { extra: { openjutsu: { faceStyle: "mouth", chunkSeconds: 6.5, ...(seed !== undefined && { seed }) } } },
+    chain: [{ slot: "video" }],
+    step: { label: "Fix faces", index: 1, of: 2 },
+  } as GenerationRequest;
 }

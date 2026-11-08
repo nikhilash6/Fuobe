@@ -90,3 +90,34 @@ describe("the Fix faces action on a finished video", () => {
     expect(outputActions(g({ feature: "app:app-fix-faces" }), 0).some((a) => a.id === "fix-faces")).toBe(false);
   });
 });
+
+describe("Fix faces after an H3 video", () => {
+  const h3 = { modelId: "oss-minimax-h3", op: "i2v", feature: "studio", prompt: "She walks", inputs: { images: ["/api/files/start.png"] }, params: { duration: 5, seed: 7, extra: { fixFacesAfter: true } } } as never;
+
+  it("is offered for an H3 video from a start picture up to 10 s", async () => {
+    const { fixFacesAfterOffered, wantsFixFacesAfter } = await import("@/lib/catalog/fix-faces");
+    expect(fixFacesAfterOffered("oss-minimax-h3", "i2v", 5, true)).toBe(true);
+    expect(fixFacesAfterOffered("oss-minimax-h3-fast", "i2v", 10, true)).toBe(true);
+    expect(fixFacesAfterOffered("oss-minimax-h3", "t2v", 5, false)).toBe(false);
+    expect(fixFacesAfterOffered("oss-minimax-h3", "i2v", 12, true)).toBe(false);
+    expect(fixFacesAfterOffered("wan-2-2", "i2v", 5, true)).toBe(false);
+    expect(wantsFixFacesAfter(h3)).toBe(true);
+    expect(wantsFixFacesAfter({ ...(h3 as object), params: { duration: 5 } } as never)).toBe(false);
+  });
+
+  it("follows the take with Fix faces from its start picture, in Follow the mouth, waiting for the clip", async () => {
+    const { fixFacesAfterStep } = await import("@/lib/catalog/fix-faces");
+    const step = fixFacesAfterStep(h3);
+    expect(step).toMatchObject({
+      modelId: "oss-h3-fix-faces",
+      op: "face-fix-video",
+      inputs: { images: ["/api/files/start.png"] },
+      params: { extra: { openjutsu: { faceStyle: "mouth", chunkSeconds: 6.5, seed: 7 } } },
+      chain: [{ slot: "video" }],
+      step: { index: 1, of: 2 },
+    });
+    // Its own setup is asked along with the take's.
+    const { requestSetupIds } = await import("@/server/pool-own-setup");
+    expect(requestSetupIds(h3)).toContain("oss-h3-fix-faces");
+  });
+});

@@ -7,6 +7,7 @@ import { directRunFeatures } from "@/lib/catalog/genjutsu";
 import { ENHANCE_FEATURES, REGEN_MODEL, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { RESTORE } from "@/lib/catalog/restore";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
+import { FIX_FACES, wantsFixFacesAfter } from "@/lib/catalog/fix-faces";
 import { ownSetupGraphs, ownSetupOnly, type OwnSetup } from "@/lib/own-setup";
 import { controlSetup } from "@/lib/own-setup-controls";
 import { RTX_CLASSES, rtxCardOf } from "@/lib/catalog/rtx-video";
@@ -28,7 +29,7 @@ import { ownSetupOnlyNow } from "./own-setup-live";
  */
 
 /** The ids a request's own setup is asked by: its model, then the modes and options of it that have their own. */
-export function requestSetupIds(req: Pick<GenerationRequest, "modelId" | "op" | "feature" | "params">): string[] {
+export function requestSetupIds(req: Pick<GenerationRequest, "modelId" | "op" | "feature" | "params" | "inputs">): string[] {
   const ids = [req.modelId];
   const extra = req.params?.extra ?? {};
   if (wantsH3TwoK(req.modelId, req.params?.resolution)) ids.push("regenerate:h3-2k");
@@ -41,6 +42,8 @@ export function requestSetupIds(req: Pick<GenerationRequest, "modelId" | "op" | 
     if (id) ids.push(id);
   }
   if (wantsVoiceFirst(req)) ids.push("sound:clean-voice-first");
+  // Fix faces after an H3 take: Fix faces' own setup too.
+  if (wantsFixFacesAfter(req)) ids.push(FIX_FACES.model);
   const genjutsu = extra.openjutsu;
   const features = directRunFeatures(req.modelId, genjutsu && typeof genjutsu === "object" ? (genjutsu as Record<string, unknown>) : {});
   for (const f of features ?? []) ids.push(`genjutsu:${f}`);
