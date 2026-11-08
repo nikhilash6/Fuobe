@@ -326,6 +326,22 @@ describe("studio jobs first", () => {
     expect(p.logs.some((l) => /Another program is using the GPU/.test(l))).toBe(false);
   });
 
+  it("the port table can't be read for a while: the last one stands, no busy pause", async () => {
+    const w = addWorker();
+    const p = pc();
+    addTask();
+    const gpu = fakeGpu(p, { workMb: 9000 });
+    let listOk = true;
+    const readListeners = gpu.readListeners;
+    start(w, p, { ...gpu, readListeners: async () => (listOk ? readListeners() : null) });
+    await until(() => workerRow(w).local_why === "waiting-for-yield");
+    listOk = false;
+    for (let i = 0; i < 30; i++) {
+      expect(workerRow(w).local_why?.startsWith("gpu-busy") ?? false).toBe(false);
+      await sleep(50);
+    }
+  });
+
   it("a game holds the GPU: the busy pause, and no turn is asked for", async () => {
     const w = addWorker();
     const p = pc();

@@ -926,8 +926,12 @@ async function work(saved, deps, owner) {
       goodCountersAt = t;
     } else if (goodCounters && t - goodCountersAt <= COUNTERS_REUSE_MS) counters = goodCounters;
     if (counters && (t - listedAt >= 30_000 || (listing && unknownHolder(counters, listing, own.pid, busyMb)))) {
-      listing = await (deps.readListeners ?? readListeners)(cfg.powershell);
-      listedAt = t;
+      // A read that fails keeps the last port table (and is tried again on the next reading).
+      const read = await (deps.readListeners ?? readListeners)(cfg.powershell);
+      if (read) {
+        listing = read;
+        listedAt = t;
+      }
     }
     return splitMemory({
       usedMb: reading.usedMb,
