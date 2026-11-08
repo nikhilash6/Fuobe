@@ -38,9 +38,11 @@ export function launcherCurrent(pathname: string): string | undefined {
 
 /**
  * The panel: under the bar, as wide as it, on the bar's shared sheet (it has no background of its own, so a switch
- * cross-fades two panels over one surface); scrolling inside only when the window is too short for it.
+ * cross-fades two panels over one surface); scrolling inside when its tiles don't fit. It always stops 72 px short of
+ * the window's bottom, so some of the page shows under it: the way out for a pointer (resting there closes a menu the
+ * pointer opened) and for a click (anywhere there closes any menu).
  */
-export const LAUNCHER_PANEL = "absolute inset-x-0 top-full max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain text-popover-foreground";
+export const LAUNCHER_PANEL = "absolute inset-x-0 top-full max-h-[calc(100dvh-3.5rem-72px)] overflow-y-auto overscroll-contain text-popover-foreground";
 
 /** The routes a menu's links lead to that load ahead when it opens (each row also loads on hover: IntentLink). */
 const WARM: Record<MegaId, NavPanel> = { create: "create", studios: "studios", apps: "more", motions: "more", canvas: "more", fx: "fx" };
@@ -203,6 +205,8 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
     searchRef.current = search;
   });
   const onClose = useCallback(() => closeRef.current(), []);
+  // The panel's own close button: closes it and gives focus back to its item.
+  const onDismiss = useCallback(() => closeRef.current(true), []);
   const onSearch = useCallback(() => {
     // The item gets focus first, so it is where Esc in the search comes back to (the panel is gone by then).
     closeRef.current(true);
@@ -259,6 +263,7 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
               id={id}
               onPrimed={onPrimed}
               onClose={onClose}
+              onDismiss={onDismiss}
               onSearch={onSearch}
             />
           </Suspense>

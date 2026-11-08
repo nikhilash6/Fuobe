@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronRight, Plus, RotateCw, Search } from "lucide-react";
+import { ArrowRight, ChevronRight, Plus, RotateCw, Search, X } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Fragment, lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
@@ -343,8 +343,9 @@ function decodePictures(root: HTMLElement, cap = 4000): Promise<void> {
 /**
  * The panel's body once it is shown or warmed: it reads the path (client only: the panel never renders on the server).
  * `onPrimed`: its menu is here and its first screen's pictures are decoded (a hover open waits a moment for it).
+ * `onDismiss`: its close button (focus goes back to its bar item).
  */
-export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onClose: () => void; onSearch: () => void; onPrimed?: () => void }) {
+export function MegaPanel({ id, onClose, onDismiss, onSearch, onPrimed }: { id: MegaId; onClose: () => void; onDismiss?: () => void; onSearch: () => void; onPrimed?: () => void }) {
   const kind = useViewerKind();
   const pathname = usePathname();
   const { model, failed, retry } = useMegaMenu(id, kind);
@@ -428,6 +429,16 @@ export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onC
           <Kbd aria-hidden className="[@media(hover:none)]:hidden">
             /
           </Kbd>
+        </button>
+        {/* The plain way out, always in view (Esc, a click on the page under the panel and moving off it work too). */}
+        <button
+          type="button"
+          onClick={onDismiss ?? onClose}
+          aria-label="Close menu"
+          title="Close (Esc)"
+          className="nav-row -mr-2 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:size-11"
+        >
+          <X aria-hidden className="size-5" />
         </button>
       </div>
       {model ? <MegaGrid model={model} kind={kind} current={megaCurrent(id, pathname, search)} now={now} /> : failed ? null : <MegaSkeleton id={id} />}
