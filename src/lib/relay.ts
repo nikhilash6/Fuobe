@@ -41,9 +41,11 @@ export type TabFailure = (typeof TAB_FAILURES)[number];
  * Why a worker gives a task back to the line (another worker, or this one later, runs it): it made no progress for too
  * long ("stalled"), it ran past its run limit ("run-limit"), or it takes clips or sound and this worker can't make them
  * again ("media"). Two more cost the task nothing (it never ran there): its job ticket was made for another catalog
- * than the worker's ("update-worker"), or the job is more than its PC allows ("outside-ceiling").
+ * than the worker's ("update-worker"), or the job is more than its PC allows ("outside-ceiling"). One more costs it
+ * nothing too: the worker's own check before the run failed ("self-check": its face detector read the fixed photo wrong,
+ * bin/lib/worker/self-check.mjs), and the worker pauses itself.
  */
-export const GIVE_BACK = ["stalled", "run-limit", "media", "update-worker", "outside-ceiling"] as const;
+export const GIVE_BACK = ["stalled", "run-limit", "media", "update-worker", "outside-ceiling", "self-check"] as const;
 export type GiveBackWhy = (typeof GIVE_BACK)[number];
 
 /** What the tab reports about one task. */
@@ -269,8 +271,9 @@ export interface WorkerBeat {
   why: string | null;
   /**
    * Its own pause switch: by hand ("here", "here-until:<ms>", "here-now"), by itself ("gpu-busy:<process>",
-   * "comfy-crashes", "port-busy", "models-not-ready": a model folder isn't there yet). Not paused, `why` may say that it
-   * waits for local ComfyUI work to make room ("waiting-for-yield", "waiting-for-yield:no-answer").
+   * "comfy-crashes", "port-busy", "models-not-ready": a model folder isn't there yet, "self-check": its face detector's
+   * check failed twice). Not paused, `why` may say that it waits for local ComfyUI work to make room
+   * ("waiting-for-yield", "waiting-for-yield:no-answer").
    */
   local: { paused: boolean; why: string | null; until: number | null };
   gpu: { otherApps: { pid: number; name: string; vramBytes: number }[]; tempC: number | null };

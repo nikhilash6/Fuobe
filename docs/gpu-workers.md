@@ -695,6 +695,21 @@ The worker checks the copy that its ComfyUI loads:
   count for `diffusion_models` and `text_encoders`), or in a folder that ComfyUI's own `extra_model_paths.yaml` adds,
   must be the same file too. If it is not, the file is not reported.
 
+#### The face self-check
+
+Fix faces and the other face jobs find faces with H3-FaceRefine's face detector (`H3FaceTrackCrop`). If that detector
+gives wrong boxes in a running ComfyUI, these jobs finish and change nothing. So the worker checks the detector itself
+(`bin/lib/worker/self-check.mjs`). It runs the detector on one fixed photo (`bin/lib/worker/self-check-face.jpg`, a
+face about 168 px tall) and reads the face height from the node's report. A height from 150 to 190 px passes. One check
+takes about a second.
+
+- The worker checks after each start of its ComfyUI, and before each job that has `H3FaceTrackCrop` or
+  `H3FaceSelect`. It checks only when its ComfyUI lists `H3FaceTrackCrop` and `PreviewAny`.
+- When a check fails, the worker starts its ComfyUI again and checks once more.
+- When the second check fails too, the job goes back in line with its place kept, and the try does not count against
+  it (give-back `self-check`). The worker pauses itself (`local.why: "self-check"`), and Settings → Workers shows that
+  its face check didn't pass. After an hour, the worker starts its ComfyUI again, and the check runs again first.
+
 After each job, however it ended, nothing of it stays in its ComfyUI: the worker empties the queue, stops a prompt that
 still runs, and clears the whole history (a meta-batch's passes too). It also deletes the job's inputs and results from
 its folders, and its copies of the inputs. At start, and whenever it stops, it empties these folders too. Before it
@@ -1019,6 +1034,8 @@ its target), at most once an hour each.
     and waits as a job no worker took (its wait limit holds, unless a worker ran it before). Refused later on (a worker
     that started again after an update and took its own job back), it counts as an attempt, and the job keeps its
     claim's time.
+    With `self-check` (the worker's face self-check failed twice, and it paused itself), the job goes back in line with
+    its place kept, and the try costs no attempt.
   - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,
     `input-crashed` (its ComfyUI stopped twice on the job), `input-unreadable` (ffmpeg could not read a clip or a
     sound), `bad-ticket` (a ticket it can't use, or a graph where a ticket belongs), `unsafe-model` (a 3D model that

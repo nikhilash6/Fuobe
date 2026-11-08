@@ -67,9 +67,10 @@ export interface RunnerDeps {
   sleep?: (ms: number) => Promise<void>;
   /**
    * A worker program's own checks (docs/gpu-workers.md) before a graph goes to its ComfyUI: its node allowlist, path
-   * strings, verified models. The failure, or null. (A browser tab has none: graphProblem is its check.)
+   * strings, verified models, and its own self-checks. The failure, a give-back (the job goes back in line: the worker
+   * can't run it now), or null. (A browser tab has none: graphProblem is its check.)
    */
-  vet?: (t: ClaimedTask) => TabFailure | null | Promise<TabFailure | null>;
+  vet?: (t: ClaimedTask) => VetAnswer | Promise<VetAnswer>;
   /**
    * A job ended here, done or not: a worker deletes its files. `why`: a failed job's reason in one short line (ComfyUI's
    * own, src/lib/comfy-reason.ts, or why it stopped here), for the worker's log.
@@ -125,6 +126,9 @@ export async function previewForReport(preview: Blob | undefined, lastSentAt: nu
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 }
+
+/** A worker's own checks of a job: why it fails it, why it gives it back, or null when it may run. */
+export type VetAnswer = TabFailure | { giveBack: GiveBackWhy } | null;
 
 /** Why a worker refuses a job ticket: another catalog, more than its PC allows, or a ticket it can't use (or a graph where a ticket belongs). */
 export type TicketRefused = "update-worker" | "outside-ceiling" | "bad-ticket";
@@ -794,6 +798,10 @@ export class ComputerRunner {
           return this.job(t, { phase: "failed" });
         }
         const refused = await this.deps.vet?.(t);
+        if (refused && typeof refused === "object") {
+          await this.giveBack(t, refused.giveBack);
+          return this.job(t, { phase: "failed" });
+        }
         if (refused) {
           await this.report(t, { event: "failed", reason: refused });
           return this.job(t, { phase: "failed" });

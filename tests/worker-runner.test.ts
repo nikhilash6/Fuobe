@@ -356,6 +356,24 @@ describe("a worker's runner", () => {
     expect(state(id)).toMatchObject({ state: "waiting", requeues: 1 });
     expect(s.reports.at(-1)).toEqual({ event: "give-back", why: "media" });
   });
+
+  it("a failed self-check gives the job back at no cost, nothing goes to its ComfyUI, and the paused worker says why", async () => {
+    const w = worker();
+    const id = task();
+    const s = studio(w);
+    const before = fake.posts();
+    const r = new ComputerRunner(
+      { api: s.call, local: (url, init) => realFetch(url, init), sha256, origin: SITE, sleep: (ms) => sleep(Math.min(ms, 30)), worker: hooks(), vet: async () => ({ giveBack: "self-check" }) },
+      { device: "worker", port: fake.port, clientId: "client-worker-01" },
+    );
+    await r.claimAndRun();
+    expect(fake.posts()).toBe(before);
+    expect(s.reports.at(-1)).toEqual({ event: "give-back", why: "self-check" });
+    // Back in line with its place kept: the try costs no attempt.
+    expect(state(id)).toMatchObject({ state: "waiting", requeues: 0 });
+    pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: true, why: "self-check", until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
+    expect(pool.workerState(row(w))).toEqual({ state: "comfy-down", words: expect.stringMatching(/face check/) });
+  });
 });
 
 describe("results kept until the studio has them", () => {

@@ -39,6 +39,7 @@ import { modelAgain, modelFormat } from "./model-file.mjs";
 import { canCleanPictures, cleanPicture, isPicture } from "./picture.mjs";
 import { previewShrinker } from "./preview.mjs";
 import { withPlainResults } from "./results.mjs";
+import { detectsFaces, runSelfCheck } from "./self-check.mjs";
 import { LogRing } from "./log-ring.mjs";
 import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
@@ -316,6 +317,9 @@ async function work(saved, deps, owner) {
   );
   let comfyTrouble = null;
   let troubleAt = 0;
+  // Its ComfyUI lists the nodes of its face detector's self-check (self-check.mjs), and how many checks it ran.
+  let faceNodes = false;
+  let faceChecks = 0;
   let answer = null;
   let inv = { files: [], nodePacks: [], media: ffmpeg ? ["image", "video", "audio"] : ["image"] };
   let packs = [];
@@ -473,6 +477,7 @@ async function work(saved, deps, owner) {
       return;
     }
     if (!info || typeof info !== "object" || !Object.keys(info).length) return;
+    faceNodes = !!info.H3FaceTrackCrop && !!info.PreviewAny;
     const fresh = loadedPacks(packs, index, info);
     for (const [name, l] of Object.entries(fresh)) {
       if (!l.missing.length || JSON.stringify(loaded[name]) === JSON.stringify(l)) continue;
@@ -485,6 +490,44 @@ async function work(saved, deps, owner) {
     writeLoaded(loadedFile, loaded);
     inv = { ...inv, nodePacks: packsAsSeen(packs, loaded) };
     invHash = inventoryHash(inv);
+  }
+  /**
+   * Its face detector's self-check (self-check.mjs) on its GPU ComfyUI, while that ComfyUI has the face nodes. A failure
+   * starts its ComfyUI again and checks once more; a second failure pauses the worker ("self-check") for an hour. True
+   * when it passed, or when there is nothing to check.
+   */
+  async function checkFaces(when) {
+    if (!faceNodes || !comfy.ready) return true;
+    const once = () => runSelfCheck((url, init) => comfy.fetch(url, init), comfy.base, { n: ++faceChecks, now, sleep });
+    const first = await once();
+    if (first.ok) return true;
+    log(`Its face check ${when} read ${first.height === null ? "no face" : `${Math.round(first.height)} px`} (${first.why}): starting its ComfyUI again.`);
+    // While it starts again, the loop starts no ComfyUI of its own (a start under way already holds `starting`).
+    const mine = !starting;
+    const again = (async () => {
+      await comfy.stop();
+      try {
+        await comfy.start(
+          packs.map((p) => p.folder),
+          { signal: stopStarts.signal },
+        );
+        await readLoadedNodes();
+      } catch (e) {
+        log(`ComfyUI didn't start: ${e.message}`);
+      }
+    })();
+    if (mine) starting = again;
+    await again;
+    if (mine && starting === again) starting = null;
+    const second = comfy.ready ? await once() : { ok: false, height: null, why: "no-comfy" };
+    if (second.ok) {
+      log(`Its face check passed after the restart (${Math.round(second.height)} px).`);
+      return true;
+    }
+    comfyTrouble = "self-check";
+    troubleAt = now();
+    log(`Its face check failed again after the restart (${second.why}): face jobs go back in line, and it pauses for an hour.`);
+    return false;
   }
   // One look at a time; the next beat carries a changed hash, and the studio then asks for the list.
   let scanning = null;
@@ -596,8 +639,11 @@ async function work(saved, deps, owner) {
     return { refused: r.reason };
   }
 
-  /** The worker's own checks of a job's graph before its ComfyUI sees it (checks.mjs): the reason it refuses it, or null. */
-  async function vetJob(t) {
+  /**
+   * The worker's own checks of a job's graph before its ComfyUI sees it (checks.mjs): the reason it refuses it, or null.
+   * With `o.faces` (its GPU runner), a job that detects faces first passes the face self-check, or goes back in line.
+   */
+  async function vetJob(t, o = {}) {
     const check = () => graphCheck(t.graph, allowed, inv.files, { rules, staged: (t.inputs ?? []).map((i) => i.name) });
     let problem = check();
     // A model file it doesn't have yet (a drive that came back after a restart): look again once before refusing.
@@ -607,8 +653,12 @@ async function work(saved, deps, owner) {
       problem = check();
     }
     // Which node and input, for the PC's owner (never a value: those are someone's prompt or file).
-    if (problem) log(`Refused job ${t.id}: ${problem.reason} at node ${problem.node}${problem.cls ? ` (${problem.cls}${problem.input ? `.${problem.input}` : ""})` : ""}.`);
-    return problem?.reason ?? null;
+    if (problem) {
+      log(`Refused job ${t.id}: ${problem.reason} at node ${problem.node}${problem.cls ? ` (${problem.cls}${problem.input ? `.${problem.input}` : ""})` : ""}.`);
+      return problem.reason;
+    }
+    if (o.faces && detectsFaces(t.graph) && !(await checkFaces("before a face job"))) return { giveBack: "self-check" };
+    return null;
   }
 
   // The CPU slot (worker.json `cpuSlot: true`): its own ComfyUI on the CPU only (its own folders, port, key and kept
@@ -678,7 +728,7 @@ async function work(saved, deps, owner) {
       socket: typeof WebSocket === "function" ? (url) => (comfy.ready ? new WebSocket(comfy.rebase(url), { headers: comfy.headers() }) : null) : undefined,
       now,
       sleep,
-      vet: vetJob,
+      vet: (t) => vetJob(t, { faces: true }),
       ended: async (t, phase, why) => {
         log(endedLine("Job", t, phase, why));
         // Done: the studio has every result. Otherwise its kept results wait for the next claim to say whose job it is,
@@ -1149,6 +1199,7 @@ async function work(saved, deps, owner) {
                 { signal: stopStarts.signal },
               )
               .then(() => readLoadedNodes())
+              .then(() => checkFaces("after its start"))
               .catch((e) => {
                 if (stopStarts.signal.aborted) return;
                 if (e instanceof PortBusy) {
@@ -1225,6 +1276,8 @@ async function work(saved, deps, owner) {
       awake.set(!!answer?.worker && (busyJob || busyCpu || hold.ids().length > 0 || !!mayWork()));
       // A taken port is tried again (a bind test, never a connection) once a minute.
       if (comfyTrouble === "port-busy" && t - troubleAt >= 60_000) comfyTrouble = null;
+      // A failed face self-check: an hour later its ComfyUI starts again, and checks again first.
+      if (comfyTrouble === "self-check" && t - troubleAt >= HOUR) comfyTrouble = null;
       const s = state();
       if (s !== lastState) {
         lastState = s;

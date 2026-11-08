@@ -215,6 +215,7 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
     if (why.startsWith("gpu-busy")) return { state: "gpu-busy", words: `Your GPU is busy${why.includes(":") ? ` (${why.split(":").slice(1).join(":")})` : ""}` };
     if (why === "comfy-crashes") return { state: "comfy-down", words: "ComfyUI keeps stopping" };
     if (why === "port-busy") return { state: "comfy-down", words: "Its ComfyUI port is taken by another program" };
+    if (why === "self-check") return { state: "comfy-down", words: "Its face check didn't pass after a restart: it starts its ComfyUI again within the hour" };
     // A model folder isn't there yet (a drive still locked after a restart): it waits for it, with its lanes as they were.
     if (why === MODELS_NOT_READY) return { state: "models-not-ready", words: "Waiting for its model folders" };
     return { state: "paused", words: w.local_until ? `Paused here until ${clock(w.local_until, tz)}` : "Paused here" };
@@ -1129,6 +1130,8 @@ setPoolGiveBack((t, why) => {
     return;
   }
   const sentBack = GIVE_BACK_WORDS[why] ?? "the worker gave it back";
+  // The worker's own check failed before the run (it pauses itself): back in line with its place kept, at no cost.
+  if (why === "self-check") return void backInLine(t, { blame: false, sentBack });
   if (why === "run-limit") {
     if (runLimitedOf(t)) return backInLine(t, { blame: true, why: GAVE_BACK_WORDS, last: true, sentBack });
     setTask(t.id, { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), runLimited: true }) });
@@ -1147,6 +1150,7 @@ const GIVE_BACK_WORDS: Record<string, string> = {
   stalled: "it stalled",
   "run-limit": "it ran past its run limit",
   media: "the worker can't make its clips or sound again",
+  "self-check": "the worker's check before the run didn't pass",
 };
 
 // ---------------------------------------------------------------------------
