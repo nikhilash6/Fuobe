@@ -7,11 +7,11 @@ import { runDetails } from "@/server/run-details";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * One account's run in full, for the owner's Run details (owner only, or an admin token with runs:read and
- * outputs:view): what it asked for (each setting beside its default), its files, where it ran, what came back and what
- * the account was shown, and its batch and the account's runs around it. Keys, tokens and a GPU's address never are
- * part of it (src/server/run-details.ts). The account's email needs accounts:read. The owner's own runs aren't here
- * (404): they are in the Library. Each read is in the admin log with the account as its target.
+ * One run in full, an account's, a guest's or the owner's own, for the owner's Run details and the admin panel (owner
+ * only, or an admin token with runs:read and outputs:view): what it asked for (each setting beside its default), its
+ * files, where it ran, what came back and what the account was shown, its batch, its chain's earlier and later steps,
+ * and the runs around it. Keys, tokens and a GPU's address never are part of it (src/server/run-details.ts). The
+ * account's email needs accounts:read. Each read is in the admin log with the account (or "owner") as its target.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/admin/generations/[id]">) {
   await connection();
@@ -22,7 +22,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/admin/genera
   const { id } = await ctx.params;
   const details = runDetails(id, { emails: actorHas(access.actor, "accounts:read") });
   if (!details) return Response.json({ error: "No such run" }, { status: 404, headers: NO_STORE });
-  auditContentRead(access.actor, "runs.content", [details.run.account.id], { run: id });
+  auditContentRead(access.actor, "runs.content", [details.run.account?.id ?? "owner"], { run: id });
   return Response.json(details, { headers: NO_STORE });
 }
 

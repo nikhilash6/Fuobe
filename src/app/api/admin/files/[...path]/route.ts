@@ -6,9 +6,10 @@ import { fileResponse } from "@/server/file-response";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * An account's stored file, for an admin token with outputs:view (or the owner): the path as in an output's url after
- * /api/files/. Accounts' files only, held ones too (waiting for their check, or hidden: what moderation has to see);
- * the owner's own files, held or not, and unknown paths are a 404. Every view by a token is logged. Byte ranges work.
+ * A stored file, for an admin token with outputs:view (or the owner): the path as in an output's url after /api/files/.
+ * Accounts' files, held ones too (waiting for their check, or hidden: what moderation has to see), and the owner's own
+ * (the admin list's Ours: its runs' inputs and results). Unknown paths are a 404. Every view by a token is logged, with
+ * the account (or "owner"). Byte ranges work.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/admin/files/[...path]">) {
   await connection();
@@ -18,7 +19,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/admin/files/
   // Next has decoded each segment once already: decoding again would turn %252e into "." (stored names never need it).
   const rel = parts.join("/");
   const file = fileRecord(rel);
-  if (!file?.account) return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
-  auditFileView(access.actor, rel, file.account, file.held);
+  if (!file) return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
+  auditFileView(access.actor, rel, file.account ?? "owner", file.held);
   return fileResponse(request, rel, { cache: "no-store" });
 }

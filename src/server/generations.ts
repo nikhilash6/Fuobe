@@ -727,6 +727,17 @@ export interface ListOptions {
   account?: string;
   /** Every account's runs, never the owner's: the owner's view of what accounts make (src/server/account-admin.ts). */
   accounts?: boolean;
+  /** Everyone's runs, the owner's and every account's (the owner's admin view); `account` and `accounts` win over it. */
+  everyone?: boolean;
+  /**
+   * Where it ran: "pool" (this install's GPUs: hosted runs, and the owner's runs on the install's ComfyUI), "provider" (a
+   * cloud provider: fal, Replicate…), "own" (an account's own GPU).
+   */
+  where?: "pool" | "provider" | "own";
+  /** A model id that holds these letters. */
+  modelLike?: string;
+  /** The owner's runs only, by `request.source`: "hands-on" (none set, or "hands-on") or "batch" (any other source). */
+  source?: "hands-on" | "batch";
   /** Date range on createdAt: since ≤ t < until. */
   since?: number;
   until?: number;
@@ -746,7 +757,16 @@ export function listGenerations(o: ListOptions = {}): Generation[] {
   if (o.account) add("json_extract(g.request_json, '$.account') = ?", o.account);
   // A range rather than IS NOT NULL: SQLite can search the generations_account index for a range (it scans it whole for IS NOT NULL).
   else if (o.accounts) add("json_extract(g.request_json, '$.account') > ''");
-  else add("json_extract(g.request_json, '$.account') IS NULL");
+  else if (!o.everyone) add("json_extract(g.request_json, '$.account') IS NULL");
+  if (o.source) {
+    add("json_extract(g.request_json, '$.account') IS NULL");
+    add(`COALESCE(json_extract(g.request_json, '$.source'), 'hands-on') ${o.source === "hands-on" ? "=" : "<>"} 'hands-on'`);
+  }
+  const place = "COALESCE(json_extract(g.request_json, '$.place'), '')";
+  if (o.where === "pool") add(`(${place} = 'pool' OR (json_extract(g.request_json, '$.account') IS NULL AND g.provider = 'comfyui'))`);
+  else if (o.where === "provider") add(`${place} <> 'pool' AND g.provider NOT IN ('comfyui', 'mock')`);
+  else if (o.where === "own") add(`${place} <> 'pool' AND g.provider = 'comfyui' AND json_extract(g.request_json, '$.account') > ''`);
+  if (o.modelLike) add("g.model_id LIKE ? ESCAPE '!'", `%${o.modelLike.replace(/[!%_]/g, (c) => `!${c}`)}%`);
   if (o.batchId) add("g.batch_id = ?", o.batchId);
   if (o.feature) add("g.feature = ?", o.feature);
   if (o.features?.length) add(`(${o.features.map(() => "g.feature LIKE ?").join(" OR ")})`, ...o.features.map(featureLike));
@@ -778,7 +798,8 @@ export function listGenerations(o: ListOptions = {}): Generation[] {
   if (o.until) add("g.created_at < ?", o.until);
   const q = o.q?.trim();
   // The user's own words (request.prompt) and what the model got (prompt, with suffixes and templates).
-  if (q) add("(g.prompt LIKE ? OR json_extract(g.request_json, '$.prompt') LIKE ?)", `%${q}%`, `%${q}%`);
+  // A run's own id finds it too.
+  if (q) add("(g.id = ? OR g.prompt LIKE ? OR json_extract(g.request_json, '$.prompt') LIKE ?)", q, `%${q}%`, `%${q}%`);
   // Every account's runs: from the accounts' entries in generations_account, then sorted (they go after 30 days, so they
   // stay few). Left to its own plan, SQLite walks every run newest first (or every run of a status), the owner's too,
   // until the page is full: the whole table when accounts' runs are few or none match. Without the index (db.ts goes

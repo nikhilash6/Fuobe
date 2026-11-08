@@ -438,7 +438,7 @@ describe("admin tokens: accounts and files", () => {
     expect((await routes.account.PATCH(req("/api/admin/accounts/nope", { token, method: "PATCH", body: { signOut: true } }), ctx({ id: "nope" }))).status).toBe(404);
   });
 
-  it("serves accounts' and held files to outputs:view, never the owner's, and logs each view", async () => {
+  it("serves accounts', held and the owner's own files to outputs:view, and logs each view", async () => {
     const { token, info } = make(["outputs:view"]);
     const a = auth.createAccount(`files-${++n}@example.com`, "long enough");
     const mine = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload" });
@@ -455,14 +455,15 @@ describe("admin tokens: accounts and files", () => {
     expect(ok.headers.get("cache-control")).toBe("no-store");
     expect(Buffer.from(await ok.arrayBuffer()).equals(TINY_PNG)).toBe(true);
     expect((await get(held.url)).status).toBe(200);
-    expect((await get(mine.url)).status).toBe(404);
-    expect((await get(mineHeld.url)).status).toBe(404);
+    // The owner's own (the panel's Ours), logged as the owner's.
+    expect((await get(mine.url)).status).toBe(200);
+    expect((await get(mineHeld.url)).status).toBe(200);
     expect((await get("/api/files/outputs/none.png")).status).toBe(404);
     const views = auditRows().filter((r) => r.action === "file.view" && r.token_id === info.id);
-    expect(views.map((v) => JSON.parse(v.detail_json!))).toEqual([{ account: a.id }, { account: a.id, held: true }]);
+    expect(views.map((v) => JSON.parse(v.detail_json!))).toEqual([{ account: a.id }, { account: a.id, held: true }, { account: "owner" }, { account: "owner", held: true }]);
     // One row per file an hour.
     await get(theirs.url);
-    expect(auditRows().filter((r) => r.action === "file.view" && r.token_id === info.id)).toHaveLength(2);
+    expect(auditRows().filter((r) => r.action === "file.view" && r.token_id === info.id)).toHaveLength(4);
   });
 
   it("Sign everyone out with every API token revokes admin tokens too", async () => {

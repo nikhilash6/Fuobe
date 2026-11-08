@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import type { AccountListing, AccountRun, AccountTotals } from "@/server/account-admin";
+import type { AccountListing, AdminRun, AccountTotals } from "@/server/account-admin";
 import type { ListOptions } from "@/server/generations";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
@@ -95,7 +95,7 @@ const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 const direct = (url: string, method = "GET", headers: Record<string, string> = {}) => new Request(`http://localhost:3000${url}`, { method, headers });
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) }) as never;
 
-type Listed = { items: AccountRun[]; next: string | null };
+type Listed = { items: AdminRun[]; next: string | null };
 async function listed(qs = "", cookie = cookies.owner): Promise<Listed> {
   const res = await runsRoute.GET(direct(`/api/admin/generations${qs ? `?${qs}` : ""}`, "GET", { cookie }));
   expect(res.status).toBe(200);
@@ -245,9 +245,9 @@ describe("Settings → Accounts: what accounts make", () => {
     const waiting = run(B, { status: "queued" });
     const ofA = await listed(`account=${A}`);
     expect(ofA.items.length).toBe(5);
-    expect(ofA.items.every((g) => g.account.id === A && g.account.email === "ann@example.com")).toBe(true);
+    expect(ofA.items.every((g) => g.account?.id === A && g.account.email === "ann@example.com")).toBe(true);
     const ofB = await listed(`account=${B}`);
-    expect(ofB.items.every((g) => g.account.id === B)).toBe(true);
+    expect(ofB.items.every((g) => g.account?.id === B)).toBe(true);
     expect(ids(ofB)).toEqual(expect.arrayContaining([clip, waiting]));
 
     const statuses = async (qs: string) => new Set((await listed(qs)).items.map((g) => g.status));
@@ -265,7 +265,50 @@ describe("Settings → Accounts: what accounts make", () => {
     expect(((await bad.json()) as { error: string }).error).toBe("Pick an account");
   });
 
-  it("never lists the owner's runs, and never deletes them", async () => {
+  it("lists the owner's own runs only when asked (Ours, Everyone), with their source, and filters on the server", async () => {
+    const mineHands = run(undefined, { status: "succeeded" });
+    const mineDrill = run(undefined, { status: "failed" });
+    db().prepare("UPDATE generations SET request_json = json_set(request_json, '$.source', 'drill') WHERE id = ?").run(mineDrill);
+    const guest = run("guest-abc123", { status: "canceled" });
+    const ofB = run(B, { status: "queued" });
+    db().prepare("UPDATE generations SET request_json = json_set(request_json, '$.place', 'pool'), provider = 'comfyui', prompt = 'a red velvet chair', model_id = 'oss-wan-22' WHERE id = ?").run(ofB);
+
+    const ours = await listed("whose=ours&limit=100");
+    expect(ids(ours)).toEqual(expect.arrayContaining([mineHands, mineDrill]));
+    expect(ours.items.every((g) => g.account === null && g.whose === "owner")).toBe(true);
+    const bySource = new Map(ours.items.map((g) => [g.id, (g as unknown as { source: string }).source]));
+    expect(bySource.get(mineHands)).toBe("hands-on");
+    expect(bySource.get(mineDrill)).toBe("drill");
+    expect(ids(await listed("source=hands-on&limit=100"))).toContain(mineHands);
+    expect(ids(await listed("source=hands-on&limit=100"))).not.toContain(mineDrill);
+    expect(ids(await listed("source=batch&limit=100"))).toEqual([mineDrill]);
+
+    const people = await listed("limit=100");
+    expect(ids(people)).toEqual(expect.arrayContaining([guest, ofB]));
+    expect(people.items.find((g) => g.id === guest)?.whose).toBe("guest");
+    expect(people.items.some((g) => g.whose === "owner")).toBe(false);
+    const everyone = ids(await listed("whose=everyone&limit=100"));
+    expect(everyone).toEqual(expect.arrayContaining([mineHands, mineDrill, guest, ofB]));
+
+    const canceled = await listed("status=canceled&limit=100");
+    expect(ids(canceled)).toContain(guest);
+    expect(canceled.items.every((g) => g.status === "canceled")).toBe(true);
+    expect(ids(await listed("status=waiting&limit=100"))).toContain(ofB);
+    expect(ids(await listed("status=done&whose=ours&limit=100"))).toContain(mineHands);
+    expect(ids(await listed("where=pool&limit=100"))).toContain(ofB);
+    expect(ids(await listed("where=pool&limit=100"))).not.toContain(guest);
+    expect(ids(await listed("where=own&limit=100"))).not.toContain(ofB);
+    // The owner's run on ComfyUI ran on this install's GPUs.
+    expect(ids(await listed("where=pool&whose=ours&limit=100"))).toContain(mineHands);
+    expect(ids(await listed("model=wan-2&limit=100"))).toEqual([ofB]);
+    expect(ids(await listed("q=velvet&limit=100"))).toEqual([ofB]);
+    expect(ids(await listed(`q=${mineDrill}&whose=everyone&limit=100`))).toEqual([mineDrill]);
+    const day = new Date().toISOString().slice(0, 10);
+    expect(ids(await listed(`from=${day}&to=${day}&limit=100`))).toContain(ofB);
+    expect(ids(await listed("from=2001-01-01&to=2001-01-02&limit=100"))).toEqual([]);
+  });
+
+  it("never lists the owner's runs unless asked, and never deletes them", async () => {
     const mine = run(undefined, { status: "failed" });
     const owners = new Set((db().prepare("SELECT id FROM generations WHERE json_extract(request_json, '$.account') IS NULL").all() as { id: string }[]).map((r) => r.id));
     expect(owners.size).toBeGreaterThan(1);
@@ -273,7 +316,7 @@ describe("Settings → Accounts: what accounts make", () => {
       const page = await listed(qs);
       expect(page.items.length, qs).toBeGreaterThan(0);
       expect(page.items.some((g) => owners.has(g.id)), qs).toBe(false);
-      expect(page.items.every((g) => g.account.id && g.request.account === g.account.id), qs).toBe(true);
+      expect(page.items.every((g) => g.account?.id && g.request.account === g.account.id), qs).toBe(true);
     }
     const res = await remove(mine);
     expect(res.status).toBe(404);

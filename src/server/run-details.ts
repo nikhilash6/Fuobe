@@ -10,12 +10,12 @@ import type { RunTrouble } from "@/lib/diagnose";
 import { compareSettings, LINK_WORDS, SECRET_KEY, linkKind, redactText, redactValue, runMatch, type LinkKind, type RunMatch, type SettingRow } from "@/lib/run-settings";
 import * as STUDIOS from "@/lib/studios";
 import { viewerDefaults } from "@/lib/composer";
-import { accountRunById, type AccountRun } from "./account-admin";
+import { adminRunById, type AdminRun } from "./account-admin";
 import { fileAccount } from "./account-library";
 import { accountGpu } from "./auth";
 import { db } from "./db";
 import { exampleRel } from "./example-files";
-import { listGenerations } from "./generations";
+import { getGeneration, listGenerations } from "./generations";
 import type { OwnRunNote } from "./run-events";
 import { absolutePath, contentTypeFor, filesRel } from "./storage";
 
@@ -101,7 +101,7 @@ export interface NearRun {
 
 export interface RunDetails {
   /** The run as the account's own feed has it (its words, trouble, buttons), with whose it is and each result's state. */
-  run: AccountRun;
+  run: AdminRun;
   /**
    * The stored status words and error (the account may have read a plainer sentence: a hosted run's), without addresses
    * or credentials. `detail`: the engine's own words (cleaned) behind a plain sentence, for the owner only.
@@ -125,6 +125,8 @@ export interface RunDetails {
   batch: NearRun[];
   /** The account's other runs from 2 hours before to 6 hours after it, oldest first (helper steps left out). */
   near: NearRun[];
+  /** Its chain: the earlier steps it waits for or took inputs from (`before`), and the later steps that wait for it (`after`), oldest first. */
+  chain: { before: NearRun[]; after: NearRun[] };
   /** What was sent to the GPU or provider (the graph or the request), redacted; null when nothing was sent. */
   sent: unknown;
   /** When it was pressed, sent, started and ended, and how long it waited and ran. */
@@ -281,15 +283,17 @@ function gpuNow(account: string): { kind: GpuHostKind | "none"; url?: string } {
   return { kind: linkKind(gpu.url), url: gpu.url };
 }
 
-function whereOf(run: AccountRun, raw: RawRow, gpu: ReturnType<typeof gpuNow>): RunWhere {
+function whereOf(run: AdminRun, raw: RawRow, gpu: ReturnType<typeof gpuNow>): RunWhere {
   const meta = obj(parse(raw.external_meta_json));
   const note = obj(meta.ownRun) as Partial<OwnRunNote>;
   const heal = obj(meta.heal);
-  const pool = run.place === "pool";
+  // The owner's own run on ComfyUI ran on this install's GPUs.
+  const pool = run.place === "pool" || (run.whose === "owner" && run.provider === "comfyui");
   const own = !pool && run.provider === "comfyui";
   const key = !pool && (run.provider === "fal" || run.provider === "replicate");
   const kind: RunPlaceKind = pool ? "site-gpus" : own ? "own-gpu" : key ? "own-key" : "unknown";
-  const label = pool ? "This site's GPUs" : own ? "Its own GPU" : key ? `Its own ${run.provider === "fal" ? "fal.ai key" : "Replicate token"}` : run.provider;
+  const ownerKey = run.whose === "owner" ? (run.provider === "fal" ? "fal.ai" : run.provider === "replicate" ? "Replicate" : run.provider) : null;
+  const label = pool ? "This site's GPUs" : ownerKey ? ownerKey : own ? "Its own GPU" : key ? `Its own ${run.provider === "fal" ? "fal.ai key" : "Replicate token"}` : run.provider;
   const hostKind = typeof note.hostKind === "string" && HOST_KINDS.has(note.hostKind as GpuHostKind) ? (note.hostKind as GpuHostKind) : undefined;
   const said = str(note.said);
   return {
@@ -389,12 +393,12 @@ function studioOf(feature: string): { title: string; feature: string; defaultMod
  * The model the composer would have opened on for this run: an app's or a camera motion's first route on its engine,
  * else its studio's default (or the stand-in it names where the server writes no caption). Unknown otherwise.
  */
-function modelChoice(run: AccountRun, chosen: string = run.modelId): RunDetails["model"] {
+function modelChoice(run: AdminRun, chosen: string = run.modelId): RunDetails["model"] {
   const picked = modelPicked(run, chosen);
   return { ...picked, ...(chosen !== run.modelId && { ranOn: { id: run.modelId, name: run.modelName ?? run.modelId } }) };
 }
 
-function modelPicked(run: AccountRun, chosen: string): RunDetails["model"] {
+function modelPicked(run: AdminRun, chosen: string): RunDetails["model"] {
   const name = chosen === run.modelId ? (run.modelName ?? run.modelId) : (getModel(chosen)?.name ?? chosen);
   const preset = run.presetId ? getPreset(run.presetId) : undefined;
   const has = (id: string) => !!getModel(id);
@@ -503,7 +507,7 @@ const DECLINED_STAGE_WORDS: Record<string, string> = {
 };
 
 /** How a run was made: Auto's pick, Ideogram 4's declines and the model after them, and the notices it carries. */
-export function madeByOf(run: AccountRun, meta: Record<string, unknown>): RunMadeBy {
+export function madeByOf(run: AdminRun, meta: Record<string, unknown>): RunMadeBy {
   const req = run.request;
   const pick = req.modelId === AUTO_IMAGE && req.auto ? req.auto : undefined;
   const d = obj(meta.declined);
@@ -633,10 +637,29 @@ function jobsOf(id: string, url?: string): { jobs: RunJob[]; log: WorkerEvent[];
   };
 }
 
+/** A run's chain: the steps its depends_on names, and the runs whose depends_on names it (made after it). */
+export function chainOf(id: string, req: GenerationRequest): RunDetails["chain"] {
+  const row = db().prepare("SELECT depends_on, created_at FROM generations WHERE id = ?").get(id) as { depends_on: string | null; created_at: number } | undefined;
+  if (!row) return { before: [], after: [] };
+  const deps = !row.depends_on ? [] : row.depends_on.startsWith("[") ? (() => { const v = parse(row.depends_on); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; })() : [row.depends_on];
+  const near = (ids: string[]) =>
+    ids
+      .map((g) => getGeneration(g, { includeDeleted: true }))
+      .filter((g): g is NonNullable<typeof g> => !!g)
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      .map((g) => nearOf(g, req));
+  // Later steps are made with or after it: the range keeps the search on the created_at index.
+  const later = db()
+    .prepare("SELECT id FROM generations WHERE created_at >= ? AND (depends_on = ? OR (depends_on LIKE '[%' AND depends_on LIKE ?)) ORDER BY created_at, id LIMIT 50")
+    .pluck()
+    .all(row.created_at - 60_000, id, `%"${id}"%`) as string[];
+  return { before: near(deps.slice(0, 50)), after: near(later) };
+}
+
 const earliest = (xs: (number | null | undefined)[]) => xs.filter((x): x is number => typeof x === "number").sort((a, b) => a - b)[0];
 
 /** When the run was pressed, sent, started and ended, and the waits between. */
-function timingOf(run: AccountRun, tasks: TaskFacts[], log: WorkerEvent[]): RunTiming {
+function timingOf(run: AdminRun, tasks: TaskFacts[], log: WorkerEvent[]): RunTiming {
   const times = columnsOf("generation_runs").size
     ? (db().prepare("SELECT submitted_at, started_at FROM generation_runs WHERE id = ?").get(run.id) as { submitted_at: number | null; started_at: number | null } | undefined)
     : undefined;
@@ -659,7 +682,7 @@ function timingOf(run: AccountRun, tasks: TaskFacts[], log: WorkerEvent[]): RunT
 }
 
 /** What a run cost, whether an amount was set aside and charged, and where its report stands. */
-function moneyOf(run: AccountRun, stamp: GenerationRequest): RunMoney {
+function moneyOf(run: AdminRun, stamp: GenerationRequest): RunMoney {
   const report = columnsOf("billing_outbox").size
     ? (db().prepare("SELECT kind, done_at, gave_up, tries FROM billing_outbox WHERE key = ?").get(run.id) as { kind: string; done_at: number | null; gave_up: number; tries: number } | undefined)
     : undefined;
@@ -690,7 +713,7 @@ function checksOf(id: string): RunDetails["checks"] {
 }
 
 /** A run still going: the share done, and the step its GPU last said. */
-function progressOf(run: AccountRun, tasks: TaskFacts[]): RunDetails["progress"] {
+function progressOf(run: AdminRun, tasks: TaskFacts[]): RunDetails["progress"] {
   if (run.status !== "queued" && run.status !== "running") return null;
   const live = [...tasks].reverse().find((t) => t.progress_json);
   const p = obj(parse(live?.progress_json));
@@ -704,14 +727,15 @@ function progressOf(run: AccountRun, tasks: TaskFacts[]): RunDetails["progress"]
   return { share: run.progress, ...(Object.keys(step).length > 0 && { step }) };
 }
 
-/** The owner's view of one account's run, or null: no such run, or it is the owner's own (the Library has those). */
+/** The owner's view of one run, an account's, a guest's or the owner's own, or null: no such run. */
 export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails | null {
-  const run = accountRunById(id, o.emails ?? true);
+  const run = adminRunById(id, o.emails ?? true);
   if (!run) return null;
-  const account = run.account.id;
+  // undefined: the owner's own run (the lists below then read the owner's runs).
+  const account = run.account?.id;
   const raw = db().prepare("SELECT request_json, message, error, external_id, external_meta_json, provider_input_json, fix_json, detail FROM generations WHERE id = ?").get(id) as RawRow | undefined;
   if (!raw) return null;
-  const gpu = gpuNow(account);
+  const gpu: ReturnType<typeof gpuNow> = account ? gpuNow(account) : { kind: "none" };
   const scrub = (t: string | null) => (t ? redactText(t, { url: gpu.url }) : t);
   const req = run.request;
   const asked = req.asked ?? req;
@@ -741,6 +765,7 @@ export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails
     .filter((g) => g.id !== run.id && !inBatch.has(g.id))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((g) => nearOf(g, req));
+  const chain = chainOf(id, req);
 
   return {
     run: {
@@ -772,6 +797,7 @@ export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails
     inputs: inputsOf(asked),
     batch,
     near,
+    chain,
     sent: redactValue(parse(raw.provider_input_json), { url: gpu.url }),
     timing: timingOf(run, tasks, log),
     jobs,

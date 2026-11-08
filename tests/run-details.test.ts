@@ -103,9 +103,32 @@ describe("Run details: the owner's view of one account's run", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("answers 404 for a run that doesn't exist and for the owner's own run", async () => {
+  it("answers 404 for a run that doesn't exist, and gives the owner's own run with no account", async () => {
     expect((await get("nope")).status).toBe(404);
-    expect((await get(run(undefined))).status).toBe(404);
+    const res = await get(run(undefined, { request: { source: "drill" } }));
+    expect(res.status).toBe(200);
+    const d = (await res.json()) as RunDetails;
+    expect(d.run.account).toBeNull();
+    expect(d.run.whose).toBe("owner");
+    expect(d.run.source).toBe("drill");
+    // The owner's run on the install's ComfyUI ran on this site's GPUs.
+    expect(d.where.kind).toBe("site-gpus");
+  });
+
+  it("names its chain: the earlier steps it waits for and the later steps that wait for it", async () => {
+    const first = run(A, { status: "succeeded", at: 1_000_000 });
+    const second = run(A, { status: "succeeded", at: 1_000_100 });
+    const last = run(A, { status: "queued", at: 1_000_200 });
+    db().prepare("UPDATE generations SET depends_on = ? WHERE id = ?").run(first, second);
+    db().prepare("UPDATE generations SET depends_on = ? WHERE id = ?").run(JSON.stringify([first, second]), last);
+    const d = (await (await get(second)).json()) as RunDetails;
+    expect(d.chain.before.map((r) => r.id)).toEqual([first]);
+    expect(d.chain.after.map((r) => r.id)).toEqual([last]);
+    const end = (await (await get(last)).json()) as RunDetails;
+    expect(end.chain.before.map((r) => r.id)).toEqual([first, second]);
+    expect(end.chain.after).toEqual([]);
+    const start = (await (await get(first)).json()) as RunDetails;
+    expect(start.chain.after.map((r) => r.id)).toEqual([second, last]);
   });
 
   it("needs outputs:view as well as runs:read for an admin token, and accounts:read for the email", async () => {
@@ -118,7 +141,7 @@ describe("Run details: the owner's view of one account's run", () => {
     const d = (await res.json()) as RunDetails;
     expect(d.run.account).toEqual({ id: A, emailHidden: true });
     const owner = (await (await get(id)).json()) as RunDetails;
-    expect(owner.run.account.email).toBe("ann@example.com");
+    expect(owner.run.account?.email).toBe("ann@example.com");
   });
 
   it("never carries a key, a token or a GPU's address", async () => {

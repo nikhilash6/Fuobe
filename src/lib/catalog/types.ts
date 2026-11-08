@@ -1354,6 +1354,11 @@ export interface GenerationRequest {
   /** Server-set: the name of the batch it belongs to (an Assist plan's summary): the Library stack's title. */
   batchTitle?: string;
   /**
+   * Where an owner's run came from, as the script or runner that made it said (POST /api/generations): "hands-on" (none
+   * said), or a batch, drill, example or test run. The admin runs list tells them apart. An account's run never has one.
+   */
+  source?: RunSource;
+  /**
    * Server-set: made by a run of a skill's recipe (src/lib/recipe.ts): the skill's name and the run's id (its batch), so
    * a run's history can be read back. Stripped from API input, like chainFilled.
    */
@@ -1786,3 +1791,7 @@ export interface PrestepRoute {
 
 /** Route endpoint for models without an extend API: last frame → image-to-video → join (src/server/chains.ts). */
 export const LAST_FRAME_CHAIN = "chain:last-frame";
+
+/** Where an owner's run came from (GenerationRequest.source). */
+export const RUN_SOURCES = ["hands-on", "batch", "drill", "example", "test"] as const;
+export type RunSource = (typeof RUN_SOURCES)[number];

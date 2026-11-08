@@ -37,9 +37,9 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `accounts:read` | `GET /api/admin/accounts` (JSON or CSV), `GET /api/admin/accounts/{id}` |
 | `accounts:write` | `PATCH /api/admin/accounts/{id}` with `{ "disabled": true \| false }` or `{ "signOut": true }` (its paired ComfyUIs stop too) |
 | `accounts:delete` | `DELETE /api/admin/accounts/{id}`: its runs, files and record go. It can't be undone |
-| `runs:read` | `GET /api/admin/generations`: accounts' runs, each one's facts only (when, which model and app, how it ended, how many results). Never the owner's own runs |
+| `runs:read` | `GET /api/admin/generations`: runs, each one's facts only (when, which model and app, how it ended, how many results). Accounts' and guests' runs by default; the owner's own with `whose=ours` or `whose=everyone`. With `outputs:view`, `GET /api/admin/generations/{id}` too |
 | `runs:delete` | `DELETE /api/admin/generations/{id}`: a run still going is canceled first |
-| `outputs:view` | `GET /api/admin/files/{path}`: an account's stored file, held ones too (never the owner's own). Each view is logged. With `runs:read`, the runs' prompts, inputs and results too |
+| `outputs:view` | `GET /api/admin/files/{path}`: a stored file, an account's or the owner's own, held ones too. Each view is logged. With `runs:read`, the runs' prompts, inputs and results too, and one run in full |
 | `outputs:hide` | `POST /api/admin/outputs/hide` |
 | `outputs:moderate` | `POST /api/admin/outputs/hide`, `/unhide` and `/remove` |
 | `reports:read` | `GET /api/admin/reports` (reporters' emails only with `accounts:read`) |
@@ -106,12 +106,13 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/accounts/{id}` | | one account with its numbers; 404 `No such account` |
 | `PATCH /api/admin/accounts/{id}` | exactly one of `{ disabled: boolean }` or `{ signOut: true }` | the account (no numbers) |
 | `DELETE /api/admin/accounts/{id}` | | 204 |
-| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone). A failed run on this install's GPUs also has `detail`: the technical reason, which the account never sees. `account` is `{ id, email }` (`email` null: a deleted account), or `{ id, emailHidden: true }` without `accounts:read` |
+| `GET /api/admin/generations` | `account` (one account), else `whose` (`people`: accounts' and guests' runs, the default; `ours`: the owner's own; `everyone`); `source` (the owner's runs only: `hands-on`, or `batch` for any run a script said it made: `batch`, `drill`, `example`, `test`); `where` (`pool`: this install's GPUs, the owner's runs on its ComfyUI too; `provider`: a cloud provider; `own`: an account's own GPU); `status` (`finished` or `done`, `failed`, `canceled`, `waiting`, `started`, and `running` for waiting and started); `kind` (`image`, `video`, `audio`, `model3d`, `text`); `model` (letters of the model id); `from` and `to` (`yyyy-mm-dd` in UTC, both days included); `q` (words of the prompt, or a run id); `before` (the last page's `next`); `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each run has `whose`: `account`, `guest` or `owner`. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone). A failed run on this install's GPUs (and the owner's own failed run) also has `detail`: the technical reason, which the account never sees. `account` is `{ id, email }` (`email` null: a deleted account), `{ id, emailHidden: true }` without `accounts:read`, or `null` for the owner's own run, which has `source` too |
+| `GET /api/admin/generations/{id}` | needs `runs:read` and `outputs:view` | One run in full, an account's, a guest's or the owner's own: `{ run, stored, fix, trouble, where, model, preset, studio, prompt, negativePrompt, asked, settings, inputs, batch, near, chain, sent, timing, jobs, workerLog, money, madeBy, surface, providerId, progress, checks }`. `stored.detail` is the technical reason for the owner. `inputs` lists each input file by slot, with its `state` (`kept` with its `url`, `removed`, `example`, `inline`, `link`). `chain` is `{ before, after }`: the steps it waits for and the steps that wait for it. Keys, tokens and GPU addresses are never part of it. 404 for an unknown run |
 | `DELETE /api/admin/generations/{id}` | | 204; 404 for an unknown run or the owner's own |
 | `POST /api/admin/outputs/hide` | `{ assetIds?, generationIds? }` (up to 500 each) | `{ hidden }` |
 | `POST /api/admin/outputs/unhide` | the same | `{ shown }` |
 | `POST /api/admin/outputs/remove` | the same, and `evidence?: true` to keep the files in a locked folder | `{ removed }` |
-| `GET /api/admin/files/{path}` | `Range` works | the file; 404 for the owner's own files (held or not) and unknown paths |
+| `GET /api/admin/files/{path}` | `Range` works | the file, an account's or the owner's own (held ones too); 404 for unknown paths |
 | `GET /api/admin/reports` | `limit` (1 to 500, default 100) | `{ items }`, newest first |
 | `GET /api/admin/queue` | | `{ held, lanes, running, holding, queued, next, nextTotal, text, controls, now }`. `queued` is in the order the workers serve it, each with `rank` (null while no worker takes it), `why`, `code` (`class`, `next`, `boost`, `held`, `pinned`, `paused`), `override` and `person` (a key, never an account id). `controls`: `{ pools, workers, overrides, ended, modes }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
 | `POST /api/admin/queue/mode` | `{ pool?, worker?, mode, forMin? }`: `mode` is `people-first`, `people-only`, `ours-first`, `balanced`, or `null` (back to normal); `forMin` is 1 to 10080, or `null` (until switched back) | `{ mode, before }`; 400 for a value out of bounds, 404 for no such worker |
@@ -140,7 +141,7 @@ the values before and after), `queue.mode`, `queue.override`, `queue.override.en
 `token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
 `accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
 every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account
-every 10 minutes, the account as its target) and `file.view` (one row per reader and file every hour); refusals
+every 10 minutes, the account as its target, or `owner` for the owner's own runs) and `file.view` (one row per reader and file every hour); refusals
 `scope.denied` and `rate.limited`; and the studio's own alerts `worker.alert` (actor `system`: a worker's token used
 from a new country, a new network, or two networks at once; [gpu-workers.md](gpu-workers.md#the-protocol)) and
 `runs.waiting` (actor `system`, at most once every 5 minutes: runs on this install's GPUs that have waited longer than

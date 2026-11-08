@@ -18,7 +18,7 @@ import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
 import { elapsed, formatCost, timeAgo } from "@/lib/format";
 import type { SettingRow, SettingState } from "@/lib/run-settings";
 import { cn } from "@/lib/utils";
-import type { AccountRun } from "@/server/account-admin";
+import type { AccountRun, AdminRun } from "@/server/account-admin";
 import type { NearRun, RunDetails, RunInput, RunJob, RunMadeBy, RunMoney, RunTiming, WorkerEvent } from "@/server/run-details";
 
 /** The address of a run's details page. */
@@ -112,15 +112,17 @@ export function RunDetailsView() {
 
   const d = q.data;
   const g = d.run;
-  const email = g.account.email;
+  const email = g.account ? g.account.email : undefined;
   return (
     <>
       <PageHeader
         title={d.preset?.name ?? g.presetName ?? d.studio?.title ?? featureName(g.feature)}
         description={
           <>
-            {email ? (
-              <Link href={runsHref({ account: g.account.id })} className="underline-offset-2 hover:underline">
+            {g.whose === "owner" ? (
+              "Your own run"
+            ) : email ? (
+              <Link href={runsHref({ account: g.account!.id })} className="underline-offset-2 hover:underline">
                 {email}
               </Link>
             ) : email === null ? (
@@ -460,7 +462,7 @@ function Inputs({ inputs }: { inputs: RunInput[] }) {
  * What the account was shown for this run: its studio feed's tile and its Library card, made by the same components
  * its own pages use (inert: nothing here runs anything). A finished run shows its results.
  */
-function Seen({ g }: { g: AccountRun }) {
+function Seen({ g }: { g: AdminRun }) {
   const run = g as unknown as Generation;
   if (g.status === "succeeded") {
     const outs = g.outputs.filter((o) => o.state === "shown");

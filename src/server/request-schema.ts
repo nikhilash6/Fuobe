@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { FORMAT_INFO } from "@/lib/av/formats";
-import type { VideoFormat } from "@/lib/catalog/types";
+import { RUN_SOURCES, type VideoFormat } from "@/lib/catalog/types";
 import { LATENT_EXTRA } from "@/lib/catalog/regenerate";
 import { SignatureSchema } from "./palettes";
 
@@ -162,4 +162,6 @@ export const GenerationRequestSchema = z.object({
   // What a tool calls its result (Trim · 0:01.0–0:02.5, Captions · Karaoke), shown instead of the prompt.
   title: z.string().max(200).optional(),
   batchTitle: z.string().max(200).optional(),
+  // An owner's script or runner says what made the run (a batch, a drill…); an account's run drops it.
+  source: z.enum(RUN_SOURCES).optional(),
 });
