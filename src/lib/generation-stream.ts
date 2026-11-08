@@ -188,11 +188,12 @@ export function sharePagesById(prev: unknown, next: unknown): unknown {
  * site, a sleeping laptop, a proxy holding a stream open after its server went away) show within seconds anyway.
  * A run just sent is asked about most often; one that has been going a long while, less.
  */
-export function pollDelay(items: readonly Pick<Generation, "status" | "createdAt">[] | undefined, live: boolean, now = Date.now()): number | null {
+export function pollDelay(items: readonly Pick<Generation, "status" | "createdAt">[] | undefined, live: boolean, now?: number): number | null {
   let youngest = -Infinity;
   for (const g of items ?? []) if ((g.status === "queued" || g.status === "running") && g.createdAt > youngest) youngest = g.createdAt;
   if (youngest === -Infinity) return null;
-  const age = Math.max(0, now - youngest);
+  // The clock is read only for a run on its way: a list read while a page is prerendered never reads it.
+  const age = Math.max(0, (now ?? Date.now()) - youngest);
   if (live) return age < 3 * 60_000 ? 4000 : 10_000;
   return age < 60_000 ? 1500 : age < 10 * 60_000 ? 3000 : 6000;
 }
