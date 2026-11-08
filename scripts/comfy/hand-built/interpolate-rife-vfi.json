@@ -1,5 +1,5 @@
 {
-  "1": {"class_type": "VHS_LoadVideo", "inputs": {"video": "input.mp4", "force_rate": 0, "custom_width": 0, "custom_height": 0, "frame_load_cap": 0, "skip_first_frames": 0, "select_every_nth": 1, "format": "None"}, "_meta": {"title": "Load Video (VHS)"}},
+  "1": {"class_type": "VHS_LoadVideoFFmpeg", "inputs": {"video": "input.mp4", "force_rate": 0, "custom_width": 0, "custom_height": 0, "frame_load_cap": 0, "start_time": 0, "format": "None"}, "_meta": {"title": "Load Video (VHS)"}},
   "2": {"class_type": "PrimitiveInt", "inputs": {"value": 2}, "_meta": {"title": "Multiplier"}},
   "3": {"class_type": "RIFE VFI", "inputs": {"ckpt_name": "rife49.pth", "frames": ["1", 0], "clear_cache_after_n_frames": 10, "multiplier": ["2", 0], "fast_mode": true, "ensemble": true, "scale_factor": 1.0, "dtype": "float32", "torch_compile": false, "batch_size": 1}, "_meta": {"title": "RIFE VFI"}},
   "4": {"class_type": "VHS_VideoInfo", "inputs": {"video_info": ["1", 3]}, "_meta": {"title": "Video Info"}},

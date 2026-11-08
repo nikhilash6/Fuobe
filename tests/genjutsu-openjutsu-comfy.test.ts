@@ -70,7 +70,7 @@ describe("Genjutsu's Openjutsu graphs through the provider", () => {
     expect(titled(faces, "Picture 1")!.inputs.image).toBe("face.png");
     expect(titled(faces, "Face Fix Chunks")!.inputs.chunk_seconds).toBe(10);
     const colours = (await prepare(W.colours, { extra: { openjutsu: { finish: "off", soften: 0 } } }, "tone-video")).workflow as Wf;
-    expect(Object.values(colours).map((n) => n.class_type).sort()).toEqual(["VHS_BatchManager", "VHS_LoadVideo", "VHS_VideoCombine"]);
+    expect(Object.values(colours).map((n) => n.class_type).sort()).toEqual(["VHS_BatchManager", "VHS_LoadVideoFFmpeg", "VHS_VideoCombine"]);
   });
 
   it("Fix colours goes through in passes; Fix faces refuses a clip bigger than the server can hold", async () => {

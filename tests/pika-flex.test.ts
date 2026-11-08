@@ -137,7 +137,7 @@ describe("References: Pika's limits and the order the prompt cites", () => {
     expect(out["150"].inputs.image).toBe("a.png");
     expect(out[(ref.inputs["ref_images.ref_image_1"] as [string, number])[0]].inputs.image).toBe("b.png");
     const v0 = out[(ref.inputs["ref_videos.ref_video_0"] as [string, number])[0]];
-    expect(v0).toMatchObject({ class_type: "VHS_LoadVideo", inputs: { video: "c.mp4", force_rate: 24, frame_load_cap: 360 } });
+    expect(v0).toMatchObject({ class_type: "VHS_LoadVideoFFmpeg", inputs: { video: "c.mp4", force_rate: 24, frame_load_cap: 360 } });
     expect(ref.inputs["ref_video_audios.ref_video_audio_0"]).toEqual(["ref_video_0", 2]);
     expect(ref.inputs["ref_video_audios.ref_video_audio_1"]).toBeUndefined();
     expect(out[(ref.inputs["ref_audios.ref_audio_0"] as [string, number])[0]]).toMatchObject({ class_type: "LoadAudio", inputs: { audio: "v.wav" } });
@@ -310,6 +310,6 @@ describe("What a References run can't carry is said, not dropped", () => {
 
   it("the references graph asks the GPU pre-flight for the clip loader's pack", () => {
     const req = JSON.parse(fs.readFileSync(path.join(DIR, "requirements.json"), "utf8")) as { workflows: Record<string, { packs: Record<string, string[]> }> };
-    expect(req.workflows["minimax-h3-flex-ref2va"].packs).toEqual({ "ComfyUI-VideoHelperSuite": ["VHS_LoadVideo"] });
+    expect(req.workflows["minimax-h3-flex-ref2va"].packs).toEqual({ "ComfyUI-VideoHelperSuite": ["VHS_LoadVideoFFmpeg"] });
   });
 });

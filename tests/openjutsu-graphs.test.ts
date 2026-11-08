@@ -228,7 +228,7 @@ describe("Finish's graphs", () => {
 
   it("Fix colours: a step turned off goes; the tone travels in raw_settings", () => {
     const off = pruneColor(graph(W.colours), { detail: null, tone: null });
-    expect(Object.values(off).map((n) => n.class_type).sort()).toEqual(["VHS_BatchManager", "VHS_LoadVideo", "VHS_VideoCombine"]);
+    expect(Object.values(off).map((n) => n.class_type).sort()).toEqual(["VHS_BatchManager", "VHS_LoadVideoFFmpeg", "VHS_VideoCombine"]);
     expect(danglingLinks(off)).toEqual([]);
     const soft = pruneColor(graph(W.colours), { detail: detailFor(0.33), tone: toneFor("soft", 0.4) });
     expect(byTitle(soft, "Detail contrast").inputs.detail_contrast).toBeCloseTo(-0.198, 3);

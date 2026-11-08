@@ -245,7 +245,7 @@
     }
   },
   "228": {
-    "class_type": "VHS_LoadVideo",
+    "class_type": "VHS_LoadVideoFFmpeg",
     "inputs": {
       "video": "input.mp4",
       "force_rate": 25,
@@ -255,8 +255,7 @@
       ],
       "custom_height": 0,
       "frame_load_cap": 1000,
-      "skip_first_frames": 0,
-      "select_every_nth": 1,
+      "start_time": 0,
       "format": "Wan"
     },
     "_meta": {

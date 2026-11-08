@@ -67,9 +67,9 @@ describe("the open graphs a clip with sound goes through", () => {
       const [createId] = Object.entries(second).find(([, v]) => v.class_type === "CreateVideo")!;
       // Silence as long as clip 1 (the hook), then clip 2's sound (the presenter).
       const sources = upstream(second, createId, "audio");
-      expect([...sources].sort()).toEqual(["AudioConcat", "EmptyAudio", "VHS_LoadVideo", "VHS_VideoInfoLoaded"]);
+      expect([...sources].sort()).toEqual(["AudioConcat", "EmptyAudio", "VHS_LoadVideoFFmpeg", "VHS_VideoInfoLoaded"]);
       const concat = Object.values(second).find((v) => v.class_type === "AudioConcat")!;
-      expect(second[(concat.inputs.audio2 as [string, number])[0]]).toMatchObject({ class_type: "VHS_LoadVideo", inputs: { video: "clip_2.mp4" } });
+      expect(second[(concat.inputs.audio2 as [string, number])[0]]).toMatchObject({ class_type: "VHS_LoadVideoFFmpeg", inputs: { video: "clip_2.mp4" } });
     }
   });
 });

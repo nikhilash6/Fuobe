@@ -512,7 +512,7 @@ describe("chunked open upscaling (R4-38)", () => {
     expect(one(wf, "ResizeImageMaskNode").inputs["resize_type.shorter_size"]).toBe(2160);
     expect(one(wf, "VHS_BatchManager").inputs).toEqual({ frames_per_batch: 10, job: "gen1" });
     expect(one(wf, "VHS_VideoCombine").inputs).not.toHaveProperty("audio");
-    expect(one(wf, "VHS_LoadVideo").inputs.meta_batch).toEqual(["2", 0]);
+    expect(one(wf, "VHS_LoadVideoFFmpeg").inputs.meta_batch).toEqual(["2", 0]);
   });
 
   it("ESRGAN on a big source goes down to one frame a pass (about 0.85 GB a frame from 1440p to 2160p)", async () => {

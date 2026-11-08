@@ -2154,7 +2154,7 @@ export const SPEC = [
     defaults: { width: 1344, height: 768, frames: 124, fps: 24 },
     limits: { maxFrames: 362, dimensionMultiple: 32, maxImages: 9, maxVideos: 3, maxAudios: 3, maxReferences: 12, maxReferenceGroupSec: 15 },
     // The clips' loader is added per run (expandH3References), so the graph itself doesn't hold it.
-    runtimeNodes: ['VHS_LoadVideo'],
+    runtimeNodes: ['VHS_LoadVideoFFmpeg'],
     vramGb: 32,
     license: H3_FLEX_LICENSE,
     notes:
@@ -3030,7 +3030,7 @@ export const SPEC = [
       vramGb: 0,
       license: 'no model (ComfyUI core nodes + VideoHelperSuite loader)',
       notes:
-        `Hard-cut join of ${n} clips in order, each resampled to fps (VHS_LoadVideo force_rate, default 25 = InfiniteTalk's rate) so clips made at 16 fps (Wan) and 25 fps play at their real speed, ` +
+        `Hard-cut join of ${n} clips in order, each resampled to fps (VHS_LoadVideoFFmpeg force_rate, default 25 = InfiniteTalk's rate) so clips made at 16 fps (Wan) and 25 fps play at their real speed, ` +
         'scaled and centre-cropped to width x height -> BatchImagesNode -> CreateVideo(fps) with a soundtrack: ' +
         (sound === 1
           ? 'clip 1\'s own sound from the start (a voiced presenter followed by silent b-roll, or a reference ad followed by a new CTA). '
@@ -3162,7 +3162,7 @@ export const SPEC = [
       'CorridorKey2 downloads about 5.1 GB into models/corridorkey2/ on first run: corridorkey_v2.safetensors (2.66 GB) and foundation_stats.safetensors from nikopueringer/CorridorKey2.0 (its main revision, cf44a8db when checked), NVIDIA C-RADIOv4-SO400M @ c0457f5d (1.72 GB), Microsoft MoGe-2 ViT-B @ ca5f0e07 (0.42 GB) and Google DeepMind RVM small (0.27 GB, md5-checked)',
     ],
     notes:
-      'VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager, 48 by default) and the three VHS_VideoCombine encodes stay open across passes, so memory stays flat on a long clip. ' +
+      'VHS_LoadVideoFFmpeg decodes framesPerBatch frames per pass (VHS_BatchManager, 48 by default) and the three VHS_VideoCombine encodes stay open across passes, so memory stays flat on a long clip. ' +
       'CorridorKey2 (hashu786/ComfyUI-CorridorKey2, which vendors Corridor\'s CorridorKey 2.0 code unmodified at 485f5e9) keys each pass as one clip at native resolution, with overlapping temporal Hann windows ' +
       '(window auto: the largest that fits the free VRAM) and no hint, so the model picks the subject; despill 0.5 (Corridor\'s default), input sRGB. Each pass starts its temporal context afresh. ' +
       'Only the outputs a node reads are computed. Roles: node 7 cutout (output 4, the despilled straight RGBA, as a transparent WebM, VP9 yuva420p, with the clip\'s sound; params.format prores_4444 switches it to ' +
@@ -4683,7 +4683,7 @@ export const SPEC = [
     notes:
       'All-ComfyUI alternative that transcribes and burns in one job (word-by-word captions from words_alignment). One style per run (font, size, colour, border, centred). ' +
       'The default open route is captions-qwen3-asr + captions-burnin (chosen because of this NC code licence, which is now information: Settings → Models & licences); install-comfyui.sh installs ComfyUI-Whisper unless NC_PACKS=0. Save SRT (not an output node) is dropped; the transcript text is kept. ' +
-      'VHS_LoadVideo decodes the whole clip and Add Subtitles To Frames copies it (about 2.5 copies of the frames in RAM): the provider refuses clips that would need more than half of the ComfyUI server\'s RAM and points to the chunked route. ' +
+      'VHS_LoadVideoFFmpeg decodes the whole clip and Add Subtitles To Frames copies it (about 2.5 copies of the frames in RAM): the provider refuses clips that would need more than half of the ComfyUI server\'s RAM and points to the chunked route. ' +
       'sourceLanguage takes Whisper\'s own names (the provider maps ISO codes: tl/fil -> Tagalog, he -> Hebrew).',
   },
   {
@@ -4737,7 +4737,7 @@ export const SPEC = [
     autoDownloads: ['DownloadAndLoadWav2VecModel fetches TencentGameMate/chinese-wav2vec2-base (0.38 GB) on first run'],
     notes:
       'Same model files as infinitetalk-wanwrapper (no new download). The source frames are VAE-encoded and only the last steps are re-denoised (steps 4, startStep 2), so camera, background and body stay; ' +
-      'mouth, head and upper body follow the new audio. 81-frame windows until the audio ends. Changed from the original graph: VHS_LoadVideo gets only custom_width (height 0 keeps the source\'s proportions, no squashing) ' +
+      'mouth, head and upper body follow the new audio. 81-frame windows until the audio ends. Changed from the original graph: VHS_LoadVideoFFmpeg gets only custom_width (height 0 keeps the source\'s proportions, no squashing) ' +
       'and ImageResizeKJv2 crops to width x height, which the provider takes from the source\'s own shape (aspect ratio "auto", read from the MP4 header) at the chosen resolution; ' +
       'frames (num_frames and VHS frame_load_cap) = the voice\'s length at 25 fps, at most 1000 (40 s): the provider refuses a longer voice instead of cutting it. Pass the clean dubbed voice, then mux the background with video-mux-audio.',
   },
@@ -4981,7 +4981,7 @@ export const SPEC = [
     license: 'Tencent Hunyuan Community License (territory EXCLUDES the EU, UK and South Korea)',
     autoDownloads: ['HunyuanDependenciesLoader fetches the SigLIP2 and CLAP text encoders into the Hugging Face cache on first run'],
     notes:
-      'Same model files as sfx-hunyuan-foley (no new download). VHS_LoadVideo samples the clip at 8 fps, 512 px wide (frames = duration x fps, so a 60 s clip holds 481 small frames), ' +
+      'Same model files as sfx-hunyuan-foley (no new download). VHS_LoadVideoFFmpeg samples the clip at 8 fps, 512 px wide (frames = duration x fps, so a 60 s clip holds 481 small frames), ' +
       'HunyuanFoleySampler gets them as its image input and makes duration seconds of 48 kHz sound in sync. Concatenate Video lays it under the untouched picture (stream copy); ' +
       'a sound longer than the clip is cut at its end. Outputs: the video with the new sound, then the sound alone (MP3).',
   },
@@ -5994,7 +5994,7 @@ export const SPEC = [
     vramGb: 0,
     license: 'n/a (no model; VideoHelperSuite GPL-3.0 code and the system ffmpeg\'s prores_ks / libx265 / ffv1 / libx264 encoders)',
     notes:
-      'video-export-pro with VHS_LoadVideo decoding framesPerBatch frames per pass (64 by default) into one VHS_VideoCombine encode that stays open across passes, at the source frame rate, with the source\'s sound: ' +
+      'video-export-pro with VHS_LoadVideoFFmpeg decoding framesPerBatch frames per pass (64 by default) into one VHS_VideoCombine encode that stays open across passes, at the source frame rate, with the source\'s sound: ' +
       'the export Fuobe\'s Export mode runs (video-export-pro decodes the whole clip). Same params.format mapping (prores_422_hq -> video/ProRes + hq, prores_4444 -> + 4444, h265_10bit -> video/h265-mp4 (yuv420p10le), ' +
       'ffv1 -> video/ffv1-mkv, h264 -> video/h264-mp4; exr -> video-export-exr). VHS lists only <prefix>_00001-audio.<ext> when the clip has sound, <prefix>_00001.<ext> otherwise, on the last pass. ' +
       'Caveat: VHS\'s ProRes "hq" profile leaves the pixel format to prores_ks, which picks yuv444p10le for the RGB frames, so "ProRes 422 HQ" is the HQ profile (apch) carrying 4:4:4 10-bit samples ' +
@@ -6156,7 +6156,7 @@ export const SPEC = [
       'bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA\'s permission); ' +
       'the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0 · VideoHelperSuite GPL-3.0 code',
     notes:
-      'Built like upscale-video-esrgan-chunked: VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager re-queues the prompt until the clip is done) and one H.264 encode stays open across ' +
+      'Built like upscale-video-esrgan-chunked: VHS_LoadVideoFFmpeg decodes framesPerBatch frames per pass (VHS_BatchManager re-queues the prompt until the clip is done) and one H.264 encode stays open across ' +
       'passes; the last pass writes the file with the source\'s sound at the source frame rate. RTX Video Super Resolution (node 6) scales by min(4, max(1, shortSide / the clip\'s shorter edge)) ' +
       '(ComfyMathExpression 5 from VHS_VideoInfo\'s loaded size), rounds the size to 8 and splits its own work into chunks of at most 16 MP of output; ResizeImageMaskNode 7 then lands exactly on shortSide ' +
       '(the shape kept). rtxQuality: ULTRA (compressed sources, the default) or HIGHBITRATE_ULTRA (clean, high-bitrate sources); LOW-HIGH are faster. Needs an NVIDIA RTX card, ComfyUI on a CUDA ' +
@@ -6587,7 +6587,7 @@ export const SPEC = [
     vramGb: 10,
     license: "InstantHMR weights SAM License: the medium file is NON-COMMERCIAL (some training images are research-only); instanthmr_medium_commercial is the commercial-use variant. ComfyUI-InstantHMR code Apache-2.0; ComfyUI-BodyDouble MIT; MHR body model Apache-2.0; RT-DETR v4 Apache-2.0; SAM 3.1 and SAM 3D Body (its rig, for the skinned GLB) under Meta's SAM License, commercial use allowed under its terms; MoGe-2 MIT; VideoHelperSuite GPL-3.0 code",
     notes:
-      'VHS_LoadVideo at 24 fps, up to frames (360 = 15 s), scaled to 960 px on the long side -> RT-DETR v4 (the performer: the best person box per frame) -> InstantHMR medium -> ' +
+      'VHS_LoadVideoFFmpeg at 24 fps, up to frames (360 = 15 s), scaled to 960 px on the long side -> RT-DETR v4 (the performer: the best person box per frame) -> InstantHMR medium -> ' +
       'SAM3DBody_Smooth (gaussian, window 7, flips over 30 degrees kept) -> BodyDoubleFit. ' +
       "The double covers each person's whole outline, clothes and hair included: SAM 3.1 segments every RT-DETR person box (one mask per frame), MoGe-2 (resolution 9) gives the picture's normals and depth, and BodyDoubleLook fills the mask in the look: holo (normals), clay (normals lit from above left), thermal (nearness and facing on a Turbo colour map), ghost (holo at half strength), xray (cyan glass with bright rims) or skeleton (the SCAIL skeleton over the picture). " +
       'Thermal and xray use one depth range for the whole clip, so their colours hold still. H.264, metadata off. Role pose: the SCAIL pose video on black. ' +
