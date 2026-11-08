@@ -46,6 +46,7 @@ export const PRESET_HD: Record<string, { w: number[]; v: string; still?: number;
   "app-expression-edit": { "w":[640,1024], "v":"07c09836" },
   "app-face-swap": { "w":[640,1024], "v":"6c0bdacd" },
   "app-figurine": { "w":[640,1024], "v":"04738bec" },
+  "app-fix-faces": { "w":[640,1024], "v":"b90f8527" },
   "app-fridge-ad": { "w":[1024], "v":"f89ad850", "still":768 },
   "app-fuobe-angles": { "w":[640,1024], "v":"1a878bf1" },
   "app-game-dump": { "w":[640,1024], "v":"25d2872e" },

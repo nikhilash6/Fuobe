@@ -50,6 +50,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-expression-edit": ["4666152b","24e4fb1b"],
   "app-face-swap": ["feda2683","7be531da"],
   "app-figurine": ["58289aab","6f35b67d"],
+  "app-fix-faces": ["b06f4d33","263883e5"],
   "app-fridge-ad": "2ac8c16a",
   "app-fuobe-angles": ["a8c29228","b345ec66"],
   "app-game-dump": ["ac39c93c","547049b4"],

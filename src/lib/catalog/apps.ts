@@ -1,6 +1,7 @@
 import { QMA_MODEL } from "@/lib/qma";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { BODY_DOUBLE, BODY_LOOKS } from "./body-double";
+import { FIX_FACES } from "./fix-faces";
 import { CUSTOM_COLOUR, ITEMS, RECOLOR, RECOLOR_TEMPLATE, SWATCHES } from "./recolor";
 import { CAST_LOOK } from "./soul-cards";
 import type { InputSlot, Preset, PresetOption, PresetRoute } from "./types";
@@ -205,6 +206,26 @@ export const APPS: Preset[] = [
     open: { modelId: BODY_DOUBLE.photoModel, op: BODY_DOUBLE.photoOp },
     openAlso: [{ modelId: BODY_DOUBLE.clipModel, op: BODY_DOUBLE.clipOp }],
     parity: "Every person's 3D body, pose and hands. Photos and clips run on a GPU; Live runs in your browser.",
+  }),
+  // Fix Faces: a tool of its own (src/components/fix-faces/fix-faces-tool.tsx) that runs Genjutsu's Finish with its Fix faces
+  // tool. With no photo, the clip's clearest face is found in the browser (src/lib/fix-faces/face-frame.ts).
+  app({
+    id: FIX_FACES.appId,
+    name: "Fix Faces",
+    category: "Identity",
+    description: "Soft or smeared faces in a video, redrawn sharp and true",
+    icon: "ScanFace",
+    hue: 330,
+    badges: ["new"],
+    tool: "fix-faces",
+    inputs: [
+      { key: "video", label: "Video", accept: "video", required: true, hint: `Up to ${FIX_FACES.maxSeconds} seconds, one main person` },
+      { key: "image", label: "Face photo", accept: "image", hint: "Optional: the clip's clearest face is used otherwise" },
+    ],
+    prompt: "Fix the faces",
+    cloud: null,
+    open: { modelId: FIX_FACES.model, op: "face-fix-video" },
+    parity: "Faces redrawn frame by frame with MiniMax H3 and pasted back at full size, the sound kept. Runs on a GPU.",
   }),
   app({
     name: "Character Swap",

@@ -118,7 +118,8 @@ describe("a model none of this install's GPUs holds", () => {
   const own = poolOwnSetups((e) => !zEndpoints.includes(e), () => false);
   const preset = PRESETS.find((p) => p.open?.modelId === Z.id);
   // A preset on a model these GPUs still run.
-  const other = PRESETS.find((p) => p.open && getModel(p.open.modelId)?.kind === Z.kind && !own[p.open.modelId] && p.open.modelId !== Z.id);
+  // (Not one whose model waits for its own GPU test: that one shows its own label.)
+  const other = PRESETS.find((p) => p.open && getModel(p.open.modelId)?.kind === Z.kind && !own[p.open.modelId] && p.open.modelId !== Z.id && !ownSetupOnly(p.open.modelId));
   const rules = poolRulesOf({}, PRESETS.map((p) => ({ id: p.id, ...(p.open && getModel(p.open.modelId) && { model: { id: p.open.modelId, kind: getModel(p.open.modelId)!.kind } }) })), own);
 
   it("shows a label from the pool rules in the model picker", () => {

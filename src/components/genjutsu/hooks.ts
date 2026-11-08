@@ -50,6 +50,8 @@ export interface GenjutsuBody {
   originalSound?: OriginalSound;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
+  /** The app the run was sent from: its result is listed with that app's runs. */
+  app?: "app-fix-faces";
 }
 
 export interface GenjutsuEstimate {

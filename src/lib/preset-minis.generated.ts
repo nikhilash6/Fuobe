@@ -46,6 +46,7 @@ export const PRESET_MINIS: Record<string, string> = {
   "app-expression-edit": "ac9558b1",
   "app-face-swap": "400bffeb",
   "app-figurine": "9f35a4e5",
+  "app-fix-faces": "65834df5",
   "app-fridge-ad": "77b24cd2",
   "app-fuobe-angles": "5e78337c",
   "app-game-dump": "888a9784",

@@ -345,6 +345,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "lean-json"
   },
+  "app-fix-faces": {
+    "poster": "/previews/presets/app-fix-faces.jpg?v=b06f4d33",
+    "video": "/previews/presets/app-fix-faces.mp4?v=263883e5",
+    "run": "fix-faces-covers",
+    "engine": "comfyui",
+    "model": "oss-h3-fix-faces",
+    "variant": ""
+  },
   "app-fridge-ad": {
     "poster": "/previews/presets/app-fridge-ad.jpg?v=2ac8c16a",
     "run": "comfyui-previews-2026-10",

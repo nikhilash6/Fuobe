@@ -78,6 +78,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-restore-photo",
   "app-head-swap",
   "app-body-double",
+  "app-fix-faces",
   "app-outfit-swap",
   "app-photo-to-3d",
   "app-watermark-remover",

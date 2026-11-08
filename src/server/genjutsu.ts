@@ -124,6 +124,8 @@ export interface GenjutsuBody {
   finish?: FinishOptions;
   /** Fuobe Reshoot: who's in it or what's in it. */
   reshoot?: ReshootOptions;
+  /** The app the run was sent from: its result is listed with that app's runs. */
+  app?: "app-fix-faces";
 }
 
 /**
@@ -247,6 +249,8 @@ export const GenjutsuBodySchema = z.object({
   originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
+  /** The app the run was sent from (Fix Faces sends Finish's faces): its result is listed with that app's runs. */
+  app: z.enum(["app-fix-faces"]).optional(),
 });
 
 /** The estimate is asked for before uploads finish: any URL stands in. */
@@ -739,13 +743,19 @@ export async function planGenjutsuRun(body: GenjutsuBody, viewer: GenjutsuViewer
     const plan = planGenjutsu(input);
     // The same check as the estimate: nothing starts when only some of the steps have a provider.
     price(plan.steps, input);
-    return { steps: plan.steps, final: plan.final };
+    return { steps: fromApp(plan.steps, plan.final, body), final: plan.final };
   } catch (e) {
     if (e instanceof ShortsError) throw e;
     if (e instanceof ConnectComfyError) throw e;
     if (e instanceof AccountRunError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
+}
+
+/** A run sent from an app (body.app): its finished video carries the app's feature and preset, so the app lists it. */
+function fromApp(steps: GenjutsuRun["steps"], final: string, body: GenjutsuBody): GenjutsuRun["steps"] {
+  if (body.app !== "app-fix-faces" || body.mode !== "finish" || body.finish?.tool !== "faces") return steps;
+  return steps.map((s) => (s.key === final ? { ...s, request: { ...s.request, feature: `app:${body.app}`, presetId: body.app } } : s));
 }
 
 /** A planned run's steps as the requests they make, with how many earlier steps each waits for. */

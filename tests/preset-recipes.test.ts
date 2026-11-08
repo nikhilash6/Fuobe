@@ -67,7 +67,7 @@ describe("which presets get a recipe", () => {
     // Graded presets whose clip was graded afterwards and that have no recipe in the book.
     const gradesWithoutRecipe = [...MOTIONS, ...EFFECTS].filter((x) => x.grade && !recipeKind(x));
     expect(new Set(none.map((x) => x.id))).toEqual(new Set([...gradesWithoutRecipe.map((x) => x.id), ...OWN_ROUTE_APPS]));
-    expect(none).toHaveLength(36);
+    expect(none).toHaveLength(37);
     for (const x of none) for (const engine of ["open", "cloud"] as const) expect(presetRecipe(x, engine, inCatalog), x.id).toBeUndefined();
   });
 

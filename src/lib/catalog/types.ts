@@ -1778,7 +1778,7 @@ export interface Preset {
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
   /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle, Tap to Recolor, Watermark Remover). */
-  tool?: "clean-voice" | "relight" | "any-angle" | "recolor" | "body-double" | "watermark";
+  tool?: "clean-voice" | "relight" | "any-angle" | "recolor" | "body-double" | "fix-faces" | "watermark";
   /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
   recipe?: PresetRecipeBook;
 }
