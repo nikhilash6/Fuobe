@@ -45,7 +45,7 @@ export const FX_PAIRS: Record<string, FxPair> = {
   "kind": "pair"
  },
  "genjutsu-insert": {
-  "v": "c7f487bc",
+  "v": "2b9d874b",
   "kind": "pair"
  },
  "genjutsu-motion": {

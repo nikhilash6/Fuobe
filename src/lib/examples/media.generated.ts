@@ -6342,6 +6342,70 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/genjutsu-insert/1/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 16140,
+  "sha256": "589ccf17a1ffbe2bdef0e114c44f8a4f2832ddb7cf7c5d861c68f3a31d1214f7",
+  "v": "589ccf17",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-insert/1/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 106064,
+  "sha256": "fa6025159b92454e9b5d3a21abc88e282d57a05cc3f4b18f284c94ad2f83f87e",
+  "v": "fa602515",
+  "w": 1024,
+  "h": 768,
+  "thumb": "/examples/genjutsu-insert/1/in-clip.384.webp?v=589ccf17"
+ },
+ "/examples/genjutsu-insert/1/in-product1.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 4350,
+  "sha256": "73a90b1b4bd64229352117bfe2d4391abea2a9f1ca523cc5f831bc5ea64b1756",
+  "v": "73a90b1b",
+  "w": 288,
+  "h": 384
+ },
+ "/examples/genjutsu-insert/1/in-product1.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 56139,
+  "sha256": "809e3d622d34a17b0908e8667590a2b02d5c1a2321397299b8f30650a8371ff9",
+  "v": "809e3d62",
+  "w": 960,
+  "h": 1280,
+  "thumb": "/examples/genjutsu-insert/1/in-product1.384.webp?v=73a90b1b"
+ },
+ "/examples/genjutsu-insert/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 598547,
+  "sha256": "1bd678f9c59c311d20c211cb55d539c92c9cfe16d18519caee80d6bb53e3154e",
+  "v": "1bd678f9",
+  "poster": "/examples/genjutsu-insert/1/show.poster.webp?v=c0662bf4"
+ },
+ "/examples/genjutsu-insert/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 24298,
+  "sha256": "62aedfd41bc97a45cf18eb8a45b9e5369e1cce478dbf7462feef28ba4948c11b",
+  "v": "62aedfd4",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-insert/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 51784,
+  "sha256": "c0662bf4b17c4b6eb2f371a0efccd554e7b0d416da15d2e1425f7f00a47f34f9",
+  "v": "c0662bf4",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/genjutsu-motion/1/in-clip.384.webp": {
   "role": "show",
   "type": "image/webp",

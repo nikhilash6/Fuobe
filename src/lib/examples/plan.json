@@ -5119,5 +5119,38 @@
    "at": 0.3,
    "from": 0
   }
+ },
+ {
+  "id": "genjutsu-insert.1",
+  "surface": "tool:genjutsu/insert",
+  "rank": 1,
+  "caption": "A parfum flacon on the terrace table",
+  "words": "A crystal parfum flacon with an emerald cap, placed on the marble table of a Riviera terrace. Her smile and the light stay as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "wipe",
+   "went": "A 5 s clip and a product photo",
+   "recipe": {
+    "mode": "insert",
+    "engine": "open",
+    "model": "oss-vace-insert",
+    "quality": "720p",
+    "target": "paint",
+    "prompt": "a faceted crystal parfum flacon with a forest-green lacquer cap standing on the marble table",
+    "seed": 7,
+    "length": 5.166,
+    "originalSound": "everything"
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-insert/1/in-clip.jpg",
+   "product1": "/examples/genjutsu-insert/1/in-product1.jpg"
+  },
+  "output": "/examples/genjutsu-insert/1/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-insert/1/show.peak.webp",
+   "at": 3.6,
+   "from": 0
+  }
  }
 ]

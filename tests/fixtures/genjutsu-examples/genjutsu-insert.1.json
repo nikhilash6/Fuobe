@@ -1,0 +1,31 @@
+{
+  "id": "genjutsu-insert.1",
+  "note": "The request body of the run that made this example (file addresses replaced by neutral ones).",
+  "body": {
+    "engine": "open",
+    "mode": "insert",
+    "modelId": "oss-vace-insert",
+    "quality": "720p",
+    "target": "paint",
+    "prompt": "a faceted crystal parfum flacon with a forest-green lacquer cap standing on the marble table",
+    "mask": "/api/files/example-mask.png",
+    "references": [
+      "/api/files/example-product1.png"
+    ],
+    "source": {
+      "url": "/api/files/example-clip.mp4",
+      "name": "clip.mp4",
+      "duration": 5.166,
+      "fps": 24,
+      "width": 1024,
+      "height": 768,
+      "hasAudio": true
+    },
+    "range": {
+      "start": 0,
+      "end": 5.166
+    },
+    "seed": 7,
+    "originalSound": "everything"
+  }
+}
