@@ -249,9 +249,15 @@ export function MegaGrid({ model, current, now, kind }: { model: MegaModel; curr
   const firstScreen = new Set<string>();
   if (group) groupItems(group).slice(0, cols * 2).forEach((e) => firstScreen.add(e.id));
   else for (let c = 0; c < cols; c++) all.slice(Math.floor((c * all.length) / cols), Math.floor((c * all.length) / cols) + 3).forEach((e) => firstScreen.add(e.id));
+  // A group's tab keeps the panel at the height it has now (a group is fewer tiles), so switching tabs changes the tiles
+  // only: the panel and the sheet under it never shrink and grow back. Back on "All", it takes its own height again.
   const pick = (i: number) => {
+    const section = root.current?.closest("section");
+    if (section) {
+      section.style.minHeight = i >= 0 ? `${Math.max(section.offsetHeight, parseFloat(section.style.minHeight) || 0)}px` : "";
+      section.scrollTo({ top: 0 });
+    }
     setTab(i);
-    root.current?.closest("section")?.scrollTo({ top: 0 });
   };
   const tile = (e: MegaItem) => (
     <MegaTile key={e.id} e={e} current={current === e.id} inside={holder === e.id} now={now} playing={playing.has(e.id)} eager={firstScreen.has(e.id)} subCurrent={current} />
