@@ -264,13 +264,13 @@ export function MegaGrid({ model, current, now, kind }: { model: MegaModel; curr
   }
   return (
     <div ref={root}>
-      {/* One row of names: All, then each group (its count beside it). Pinned under the panel's header as it scrolls. */}
+      {/* One row of names: All, then each group (the header line above says how many). Pinned under the panel's header as it scrolls. */}
       <div role="group" aria-label={`Show in ${MEGA_AREAS[model.id].label}`} className="sticky top-[var(--mega-head,0px)] z-10 -mx-6 mb-4 flex gap-1 overflow-x-auto border-b bg-popover px-6 [scrollbar-width:none]">
-        {[{ label: "All", n: all.length }, ...model.columns.map((c) => ({ label: c.label, n: groupItems(c).length }))].map((t, i) => {
+        {["All", ...model.columns.map((c) => c.label)].map((label, i) => {
           const on = tab === i - 1;
           return (
             <button
-              key={t.label}
+              key={label}
               type="button"
               aria-pressed={on}
               onClick={() => pick(i - 1)}
@@ -279,8 +279,7 @@ export function MegaGrid({ model, current, now, kind }: { model: MegaModel; curr
                 on ? "border-brand-text text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
-              {t.label}
-              <span className="text-[12px] font-normal text-muted-foreground tabular-nums">{t.n}</span>
+              {label}
             </button>
           );
         })}
@@ -297,13 +296,12 @@ export function MegaGrid({ model, current, now, kind }: { model: MegaModel; curr
               <Fragment key={c.id}>
                 {famHead && (
                   <p data-family={famHead.id} className="break-after-avoid pt-1 pb-2 font-heading text-[22px] leading-7 text-brand-text">
-                    {famHead.label} <span className="font-sans text-[12px] text-muted-foreground tabular-nums">{famHead.count}</span>
+                    {famHead.label}
                   </p>
                 )}
                 <p id={`${ids}-${c.id}`} data-group={c.id} className="break-inside-avoid break-after-avoid pb-2">
                   <button type="button" onClick={() => pick(ci)} aria-label={`Show only ${c.label}`} className="nav-row -mx-1.5 flex w-[calc(100%+12px)] min-w-0 items-baseline gap-1.5 rounded-[8px] px-1.5 py-1 text-left">
                     <span className="truncate text-[13.5px] font-semibold">{c.label}</span>
-                    <span className="text-[12px] text-muted-foreground tabular-nums">{items.length}</span>
                     <ChevronRight aria-hidden className="ml-auto size-3.5 shrink-0 self-center text-muted-foreground" />
                   </button>
                 </p>

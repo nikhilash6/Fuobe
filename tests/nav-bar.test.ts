@@ -159,10 +159,11 @@ describe("the Studios menu's tiles", () => {
     expect(launcherColumns(undefined).map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     // "All": every tile flows down balanced columns (three, four from lg, five from xl), each group starting with its name.
     expect(html).toContain("columns-3 lg:columns-4 xl:columns-5");
-    // One row of names above them: All, then each group with its count (each a button that shows that group alone).
-    expect(html).toMatch(/aria-pressed="true"[^>]*>All<span[^>]*>27</);
-    for (const [label, n] of [["Film &amp; video", 4], ["Social &amp; shorts", 6], ["Sell &amp; advertise", 5], ["People &amp; fashion", 4], ["Sound", 5], ["Finish &amp; convert", 3]] as const)
-      expect(html, label).toMatch(new RegExp(`aria-pressed="false"[^>]*>${label}<span[^>]*>${n}<`));
+    // One row of names above them: All, then each group (each a button that shows that group alone). No counts in
+    // it: the header line says how many.
+    expect(html).toMatch(/aria-pressed="true"[^>]*>All<\/button>/);
+    for (const label of ["Film &amp; video", "Social &amp; shorts", "Sell &amp; advertise", "People &amp; fashion", "Sound", "Finish &amp; convert"])
+      expect(html, label).toMatch(new RegExp(`aria-pressed="false"[^>]*>${label}</button>`));
     // Every link is in the arrow keys' set (their places are set from where the tiles land, in the browser).
     for (const a of anchors(html)) expect(a.tag, a.href).toContain("data-key");
     expect(studioCount()).toBe(23);
