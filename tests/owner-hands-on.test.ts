@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,8 @@ import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 60_000 });
+// Next's request scope, as its server sets it up (its stores read this global when they load).
+(globalThis as { AsyncLocalStorage?: typeof AsyncLocalStorage }).AsyncLocalStorage ??= AsyncLocalStorage;
 
 const dir = tempDir("fuobe-owner-hands-on-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -24,7 +27,7 @@ globalThis.__fuobeTestDiskFree = 1e13;
 const auth = await import("@/server/auth");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
-const { setSetting } = await import("@/server/settings");
+const { getSetting, setSetting } = await import("@/server/settings");
 const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
 const qc = await import("@/server/computer/queue-controls");
@@ -280,5 +283,58 @@ describe("the Queue page", () => {
     expect(q[1]).not.toHaveProperty("handsOn");
     expect(q[2]).toMatchObject({ principal: "owner", why: "Our work: after people's runs" });
     expect(q[2]).not.toHaveProperty("handsOn");
+  });
+});
+
+describe("an owner's run asked for with an API token", () => {
+  const gens = () => import("@/server/generations");
+  const api = () => import("@/server/api-caller");
+  const tenantMod = () => import("@/server/tenant");
+  const ask = { feature: "image", modelId: "nano-banana-pro", prompt: "a fox" };
+
+  it("is an api run on every route that makes one (one rule where runs are made); the browser's stays hands-on", async () => {
+    const { createGenerations, getGeneration } = await gens();
+    const { apiCaller, asOwnRequest } = await api();
+    const { runAsTenant } = await tenantMod();
+    const demo = getSetting("demoMode");
+    setSetting("demoMode", "auto");
+    const { token } = auth.createToken("script");
+    // A request with the owner's token: what it makes, through any route, says so.
+    const viaToken = asOwnRequest(() => {
+      expect(auth.validToken(`Bearer ${token}`)).toBe(true);
+      return createGenerations(ask)[0].id;
+    });
+    expect(getGeneration(viaToken)?.request.source).toBe("api");
+    // The request Next is handling carries the token, whatever checked it where (an async helper after an await of its
+    // own marks only its own work): the run says so too.
+    const { workUnitAsyncStorage } = await import("next/dist/server/app-render/work-unit-async-storage.external");
+    const checkLater = async () => {
+      await null;
+      auth.validToken(`Bearer ${token}`);
+    };
+    const viaRequest = await asOwnRequest(() =>
+      workUnitAsyncStorage.run({ type: "request", headers: new Headers({ authorization: `Bearer ${token}` }) } as never, async () => {
+        await checkLater();
+        return createGenerations(ask)[0].id;
+      }),
+    );
+    expect(getGeneration(viaRequest)?.request.source).toBe("api");
+    // A script that names itself keeps its own source.
+    const named = asOwnRequest(() => (auth.validToken(`Bearer ${token}`), createGenerations({ ...ask, source: "example" })[0].id));
+    expect(getGeneration(named)?.request.source).toBe("example");
+    // A token the studio doesn't know marks nothing.
+    const unknown = asOwnRequest(() => (auth.validToken("Bearer fuobe_not-a-token"), createGenerations(ask)[0].id));
+    expect(getGeneration(unknown)?.request.source).toBeUndefined();
+    // The signed-in browser's run (no token) is hands-on, and the token's request never reaches this one.
+    expect(apiCaller()).toBe(false);
+    const byHand = createGenerations(ask)[0].id;
+    expect(getGeneration(byHand)?.request.source).toBeUndefined();
+    expect(pool.ownerRunClass(byHand)).toBe("free");
+    expect(pool.ownerRunClass(viaToken)).toBe("owner");
+    // An account's run never has a source.
+    const acct = asOwnRequest(() => (auth.validToken(`Bearer ${token}`), runAsTenant({ kind: "account", id: alice }, () => createGenerations({ ...ask, engine: "open", modelId: "oss-z-image-turbo", op: "t2i" }).map((g) => g.id)[0])));
+    expect(getGeneration(acct)?.request.account).toBe(alice);
+    expect(getGeneration(acct)?.request.source).toBeUndefined();
+    setSetting("demoMode", demo);
   });
 });

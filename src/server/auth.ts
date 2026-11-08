@@ -18,6 +18,7 @@ import crypto from "node:crypto";
 import net from "node:net";
 import os from "node:os";
 import { LOCAL_SUFFIXES } from "@/lib/page-place";
+import { markApiCaller } from "./api-caller";
 import { accountFrom, authStoreClosed, authStoreVersion, authWrite, sql, type AccountRow, type GpuRow, type KeyRow } from "./auth-store";
 
 export const SESSION_COOKIE = "fuobe_session";
@@ -866,5 +867,7 @@ export function validToken(header: string | null): boolean {
       console.warn(`[fuobe] Couldn't note an API token's use: ${(e as Error).message}`);
     }
   }
+  // The rest of this request's work was asked for with a token: an owner's run it makes says so (api-caller.ts).
+  markApiCaller();
   return true;
 }

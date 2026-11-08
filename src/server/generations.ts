@@ -82,7 +82,7 @@ import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
 import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, onPoolWorkers, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, ownLink, probeComfy, relayFile, troubleError, type OwnGpu } from "./providers/comfyui";
-import { accountById, accountGpu, gpuLink, type AccountGpu } from "./auth";
+import { accountById, accountGpu, gpuLink, validToken, type AccountGpu } from "./auth";
 import { accountEngineMode, accountKey, markKeyGood, paidAllowed, usableProviders } from "./account-keys";
 import { addKeyMessage, CLOUD_KEY, CLOUD_PROVIDERS, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
 import { cachedGpuState, GpuError, noteGpuState, testGpu } from "./account-gpu";
@@ -115,6 +115,7 @@ import { cleanEngineText, ENGINE_WORDS, isEngineWords, storedErrorText, withoutF
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { MODEL3D_SETUP, ownSetupLabel } from "@/lib/own-setup";
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
+import { apiCaller, requestAuthorization } from "./api-caller";
 import { generationAccount } from "./account-library";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "./account-files";
 import { prunePoolAdmissions } from "./pool-limits";
@@ -1555,6 +1556,13 @@ export interface CreateOptions {
 
 const depIds = (v: string | null): string[] => (!v ? [] : v.startsWith("[") ? (JSON.parse(v) as string[]) : [v]);
 
+/** Is the work in hand part of a request sent with the owner's API token (api-caller.ts)? */
+function viaApiToken(): boolean {
+  if (apiCaller()) return true;
+  const header = requestAuthorization();
+  return !!header && validToken(header);
+}
+
 /**
  * Public sign-up: inside an account's run (accountRun) every request it makes, and every step its chains queue, is
  * stamped as the account's own: on the open engine, or the engine it asked for while it may use paid models on its own
@@ -1566,8 +1574,11 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
   const who = tenantAccount();
   if (!who) {
     if (ownGpu()) throw new Error("We can't find that run.");
-    // The owner's runs carry no place, hold or check of an account's run (run-stamp.ts).
-    return withRunStamp({}, () => stamped(asked));
+    // The owner's runs carry no place, hold or check of an account's run (run-stamp.ts). One asked for with an API token
+    // (any route: the studios, apps, Canvas, Chat's tools…) that says no source of its own is an "api" run: only a run
+    // from the signed-in browser is hands-on (api-caller.ts).
+    const sourced = !asked.source && viaApiToken() ? { ...asked, source: "api" as const } : asked;
+    return withRunStamp({}, () => stamped(sourced));
   }
   if (asked.account && asked.account !== who) throw new Error("We can't find that run.");
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
@@ -5306,6 +5317,9 @@ export function finishOutput(id: string, index: number, png: Buffer): Generation
 // ---------------------------------------------------------------------------
 // Results made in the browser (colour grading): stored as finished generations.
 
+/** An owner's result recorded through an API token: an "api" run (createGenerations does the same for runs). */
+const ownerApiSource = (): Pick<GenerationRequest, "source"> => (!tenantAccount() && viaApiToken() ? { source: "api" } : {});
+
 /**
  * A live edit saved to the Library (the owner's): the kept master as the result, the steps that made it in
  * params.liveSteps, the joined step texts as the prompt. It ran on the owner's GPU already, so nothing is queued.
@@ -5317,6 +5331,7 @@ export function recordLiveEdit(input: { master: string; original?: string; steps
   const prompt = input.steps.map((s) => s.text).filter(Boolean).join(" · ").slice(0, 2000) || "Live edit";
   const op: Generation["op"] = input.original ? "edit" : "t2i";
   const req: GenerationRequest = {
+    ...ownerApiSource(),
     feature: "live-edit",
     modelId: model.id,
     op,
@@ -5374,7 +5389,7 @@ export function recordLocalGeneration(input: {
   const now = Date.now();
   // Inside an account's work (the route's runAsTenant) the result is the account's own, as its runs are (stampTenant).
   const account = tenantAccount();
-  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, ...(input.title && { title: input.title }), inputs: input.inputs, params: input.params, ...(account && { account }) };
+  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, ...(input.title && { title: input.title }), inputs: input.inputs, params: input.params, ...(account ? { account } : ownerApiSource()) };
   const row: Row = {
     id: nanoid(12),
     batch_id: null,

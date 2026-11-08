@@ -353,7 +353,8 @@ For script writers who'd rather call the API directly: `GET /api/models` (`kind`
 `connected` and `runs`), `POST /api/generations` (with `?preview=1` to price; a model id Fuobe has
 retired runs on the model that replaced it, and the answer gives that `modelId` with `notes` saying so;
 a script can say what made the run with `source` (`batch`, `drill`, `example` or `test`) and `sourceName` (its own
-name, up to 80 characters); a run sent with an API token and no `source` reads as `api`, and the admin runs list tells
+name, up to 80 characters); a run sent with an API token and no `source` reads as `api`, through any route that makes one (the studios'
+and apps' routes too), and the admin runs list tells
 all of them apart from `hands-on` runs made on the site),
 `GET /api/generations[/<id>]`,
 `POST /api/generations/<id>/cancel`, `POST /api/uploads` (multipart `file`), `GET /api/files/…`,
