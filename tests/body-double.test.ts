@@ -154,3 +154,18 @@ describe("Body Double's graphs", () => {
     }
   });
 });
+
+describe("Body Double samples", () => {
+  it("carry the version of the file they point at, so a replaced sample reaches every browser", async () => {
+    const { createHash } = await import("node:crypto");
+    const { BODY_DOUBLE_SAMPLE_VERSIONS, bodyDoubleSample } = await import("@/lib/catalog/body-double");
+    const dir = path.join(process.cwd(), "public/samples/body-double");
+    const files = [...fs.readdirSync(dir).filter((f) => /\.(mp4|jpg)$/.test(f)), ...fs.readdirSync(path.join(dir, "looks")).map((f) => `looks/${f}`)];
+    expect(Object.keys(BODY_DOUBLE_SAMPLE_VERSIONS).sort()).toEqual(files.sort());
+    for (const f of files) {
+      const v = createHash("sha256").update(fs.readFileSync(path.join(dir, f))).digest("hex").slice(0, 8);
+      expect(BODY_DOUBLE_SAMPLE_VERSIONS[f], f).toBe(v);
+      expect(bodyDoubleSample(f)).toBe(`/samples/body-double/${f}?v=${v}`);
+    }
+  });
+});

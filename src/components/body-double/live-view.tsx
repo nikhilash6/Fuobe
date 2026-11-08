@@ -9,15 +9,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { type DrawBody, N_VERTS } from "@/lib/body-double/hmr";
 import type { Outline } from "@/lib/body-double/outline";
-import { BODY_DOUBLE_DEMOS } from "@/lib/catalog/body-double";
+import { BODY_DOUBLE_DEMOS, bodyDoubleSample } from "@/lib/catalog/body-double";
 import { usePlayInView } from "./use-play-in-view";
 import { cn } from "@/lib/utils";
 import type { LiveReply, LiveRequest } from "./hmr.worker";
 
 /** A clip anyone can try Live on before turning on their camera. */
 export const LIVE_SAMPLES = [
-  { src: "/samples/body-double/sample-dance.mp4", label: "Gallery dance" },
-  { src: "/samples/body-double/sample-runway.mp4", label: "Runway walk" },
+  { src: bodyDoubleSample("sample-dance.mp4"), label: "Gallery dance" },
+  { src: bodyDoubleSample("sample-runway.mp4"), label: "Runway walk" },
 ] as const;
 
 

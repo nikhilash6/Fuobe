@@ -18,11 +18,38 @@ export const BODY_DOUBLE = {
   maxClipSeconds: 15,
 } as const;
 
+/**
+ * Each sample file's content version (the first 8 hex digits of its SHA-256), sent as ?v= so a replaced file reaches every
+ * browser and cache at once. tests/body-double.test.ts checks them against the files.
+ */
+export const BODY_DOUBLE_SAMPLE_VERSIONS: Readonly<Record<string, string>> = {
+  "photo-before.jpg": "56ca09c2",
+  "photo-after.jpg": "294e3e56",
+  "clip-demo.mp4": "43a09a50",
+  "clip-demo.jpg": "7e65670a",
+  "live-demo.mp4": "cf4d5064",
+  "live-demo.jpg": "659e563b",
+  "sample-dance.mp4": "227afd20",
+  "sample-runway.mp4": "037d4010",
+  "looks/clay.jpg": "888d7861",
+  "looks/ghost.jpg": "384abfcf",
+  "looks/holo.jpg": "0b529b89",
+  "looks/skeleton.jpg": "acad3f42",
+  "looks/thermal.jpg": "77c5d4cb",
+  "looks/xray.jpg": "46012531",
+};
+
+/** A Body Double sample's URL, with its version. */
+export const bodyDoubleSample = (file: string): string => {
+  const v = BODY_DOUBLE_SAMPLE_VERSIONS[file];
+  return v ? `/samples/body-double/${file}?v=${v}` : `/samples/body-double/${file}`;
+};
+
 /** Finished examples shown on the app's page, each made the way a run makes it: a group photo before and after, a motion capture, and a Live session recorded in the browser. */
 export const BODY_DOUBLE_DEMOS = {
-  photo: { before: "/samples/body-double/photo-before.jpg", after: "/samples/body-double/photo-after.jpg" },
-  clip: { video: "/samples/body-double/clip-demo.mp4", poster: "/samples/body-double/clip-demo.jpg" },
-  live: { video: "/samples/body-double/live-demo.mp4", poster: "/samples/body-double/live-demo.jpg" },
+  photo: { before: bodyDoubleSample("photo-before.jpg"), after: bodyDoubleSample("photo-after.jpg") },
+  clip: { video: bodyDoubleSample("clip-demo.mp4"), poster: bodyDoubleSample("clip-demo.jpg") },
+  live: { video: bodyDoubleSample("live-demo.mp4"), poster: bodyDoubleSample("live-demo.jpg") },
 } as const;
 
 export type BodyLookId = "holo" | "clay" | "thermal" | "ghost" | "xray" | "skeleton";

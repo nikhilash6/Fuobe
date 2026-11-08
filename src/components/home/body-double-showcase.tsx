@@ -2,12 +2,12 @@
 
 import { useRef, useState } from "react";
 import { usePlayInView } from "@/components/body-double/use-play-in-view";
-import { BODY_DOUBLE_DEMOS, BODY_LOOKS, type BodyLookId } from "@/lib/catalog/body-double";
+import { BODY_DOUBLE_DEMOS, BODY_LOOKS, type BodyLookId, bodyDoubleSample } from "@/lib/catalog/body-double";
 import { cn } from "@/lib/utils";
 
 type Shown = "motion" | BodyLookId;
 
-const lookSrc = (look: BodyLookId) => `/samples/body-double/looks/${look}.jpg`;
+const lookSrc = (look: BodyLookId) => bodyDoubleSample(`looks/${look}.jpg`);
 /** Each look's picture fetched once, the first time its chip is pointed at, so it shows at once when picked. */
 const warmed = new Set<string>();
 const warm = (look: BodyLookId) => {

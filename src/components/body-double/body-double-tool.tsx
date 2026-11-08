@@ -14,7 +14,7 @@ import { ModelViewer } from "@/components/studio/result-media";
 import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
 import { askToSignUp, useAskBeforeUpload, useCreateGeneration, useGenerations, useIsGuest } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
-import { BODY_DOUBLE, BODY_DOUBLE_DEMOS, BODY_LOOKS, type BodyLookId, bodyDoubleRequest, bodyLook } from "@/lib/catalog/body-double";
+import { BODY_DOUBLE, BODY_DOUBLE_DEMOS, BODY_LOOKS, type BodyLookId, bodyDoubleRequest, bodyDoubleSample, bodyLook } from "@/lib/catalog/body-double";
 import type { Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
 import { downloadHref } from "@/lib/library";
 import { toastError } from "@/lib/refusals";
@@ -26,8 +26,8 @@ import { usePlayInView } from "./use-play-in-view";
 type Mode = "live" | "photo" | "clip";
 const SUBTITLE = "A 3D body for every person: live from your camera, from a photo, or from a clip as motion capture you can animate with.";
 const EXAMPLES: Record<"photo" | "clip", { src: string; name: string; label: string }> = {
-  photo: { src: "/samples/body-double/photo-before.jpg", name: "body-double-example.jpg", label: "Try it on this photo" },
-  clip: { src: "/samples/body-double/sample-dance.mp4", name: "body-double-example.mp4", label: "Try it on this dance" },
+  photo: { src: bodyDoubleSample("photo-before.jpg"), name: "body-double-example.jpg", label: "Try it on this photo" },
+  clip: { src: bodyDoubleSample("sample-dance.mp4"), name: "body-double-example.mp4", label: "Try it on this dance" },
 };
 
 function AddMedia({ mode, onPick }: { mode: "photo" | "clip"; onPick: (v: SlotValue) => void }) {
