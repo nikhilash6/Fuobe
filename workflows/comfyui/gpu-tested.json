@@ -5,6 +5,8 @@
     "picture-h3-renderer": { "passed": true, "date": "2026-11-05" },
     "clean-voice-first": { "passed": true, "date": "2026-11-05" },
     "original-sound": { "passed": true, "date": "2026-11-05" },
-    "group-swap-one-by-one": { "passed": true, "date": "2026-11-05" }
+    "group-swap-one-by-one": { "passed": true, "date": "2026-11-05" },
+    "body-double-photo": { "passed": true, "date": "2026-11-08" },
+    "body-double-clip": { "passed": true, "date": "2026-11-08" }
   }
 }
