@@ -126,6 +126,12 @@ export const hasOwnCover = (id: string) => !!presetCover(id)?.poster.startsWith(
 
 const presetItem = (p: Preset): MegaItem => ({ id: p.id, href: presetHref(p.id), label: p.name, line: presetLine(p), cover: presetMegaCover(p.id) });
 
+/** A lead card's item with its cover's clip, which plays over the still while the card is pointed at (rows show none). */
+function withClip(e: MegaItem): MegaItem {
+  const clip = e.cover && presetCover(e.id)?.video;
+  return clip ? { ...e, cover: { ...e.cover!, clip } } : e;
+}
+
 /**
  * One column per group: its presets premium first (featuredAll), one of each idea (sameIdea), the first with its own
  * cover as the lead, then up to ROW_CAPS.tall rows (each with its cover). Columns in the order of their strongest preset.
@@ -151,7 +157,7 @@ export function presetColumns(items: readonly Preset[], groups: readonly PresetG
         label: g.label,
         chip: g.chip,
         ...(family && { family }),
-        ...(lead && { lead: presetItem(lead) }),
+        ...(lead && { lead: withClip(presetItem(lead)) }),
         rows: rest.slice(0, ROW_CAPS.tall).map(presetItem),
       };
     });
@@ -185,15 +191,16 @@ export function motionsMenu(): MegaModel {
 const VISITOR: Viewing = { visitor: true, hasCover: (id) => !!templateCover("canvas", id) };
 
 /**
- * A template cover as a menu tile shows it: its peak frame (the finished scene), never a clip, with its larger copies
- * (the preset's peak frame's, or the tile's own poster's), so a 2x or 3x screen gets one at least as wide as the box.
+ * A template cover as a menu tile shows it: its peak frame (the finished scene), with its larger copies (the preset's
+ * peak frame's, or the tile's own poster's), so a 2x or 3x screen gets one at least as wide as the box, and its clip
+ * from that frame on (clipAt), which plays while the tile is pointed at.
  */
 function templateMegaCover(id: string): MegaCover | undefined {
   const c = templateCover("canvas", id);
   if (!c) return undefined;
   const framing = coverFraming(c.poster);
   const hd = presetStillSources(c.poster, c.thumb) ?? templateStillSources(c.poster, c.thumb);
-  return { poster: c.poster, thumb: c.thumb, ...(hd && { hd }), ...(framing && { framing }) };
+  return { poster: c.poster, thumb: c.thumb, ...(hd && { hd }), ...(framing && { framing }), ...(c.video && { clip: c.video, ...(c.at !== undefined && { clipAt: c.at }) }) };
 }
 
 /**

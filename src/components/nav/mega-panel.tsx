@@ -9,7 +9,7 @@ import { MEGA_AREAS, ROW_CAPS, studiosMenu, TILE_COLS, type MegaColumn, type Meg
 import { isNew, subParent, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { FxCompare } from "@/components/fx/fx-compare";
-import { COVER_SIZES, CoverThumb } from "./cover-thumb";
+import { COVER_SIZES, CoverThumb, useAliveCard } from "./cover-thumb";
 import { useMegaMenu } from "./mega-data";
 import { megaCurrent, MegaSkeleton } from "./mega-launcher";
 import { useViewerKind } from "./nav-ui";
@@ -63,8 +63,11 @@ const LEAD_MAX_BELOW = "max-h-[round(down,max(64px,calc(100dvh_-_640px)),4px)]";
  * the tracks its column takes, when more than one (Canvas' Start here), for its picture's srcset.
  */
 export function LeadCard({ e, col, row = 0, span = 1, current, inside, now, className }: { e: MegaItem; col: number; row?: number; span?: number; current: boolean; inside?: boolean; now: number; className?: string }) {
+  // Pointed at or focused, its cover comes alive (its clip, or a lean in); a Fuobe FX card shows its before and after.
+  const { alive, handlers } = useAliveCard();
   return (
     <IntentLink
+      {...(e.fx ? {} : handlers)}
       href={e.href}
       data-col={col}
       data-row={row}
@@ -82,6 +85,7 @@ export function LeadCard({ e, col, row = 0, span = 1, current, inside, now, clas
           size="lead"
           icon={e.icon}
           eager
+          alive={alive}
           sizes={span > 1 ? trackSizes(span, 2) : undefined}
           className={cn(LEAD_BOX, row ? LEAD_MAX_BELOW : LEAD_MAX)}
         />
@@ -201,8 +205,10 @@ function SubLinks({ e, col, row, current, under }: { e: MegaItem; col: number; r
  * load with the panel; a later row's when it shows (lazy: a row hidden by the window's height never fetches its own).
  */
 function Tile({ e, col, row, current, eager }: { e: MegaItem; col: number; row: number; current: boolean; eager: boolean }) {
+  const { alive, handlers } = useAliveCard();
   return (
     <IntentLink
+      {...handlers}
       href={e.href}
       data-col={col}
       data-row={row}
@@ -211,7 +217,7 @@ function Tile({ e, col, row, current, eager }: { e: MegaItem; col: number; row: 
       className="nav-row nav-mark-under -m-1.5 flex min-w-0 flex-col gap-1.5 rounded-[12px] p-1.5 [container-type:inline-size]"
     >
       {/* 16:9, its height rounded down to the 4 px grid, so a second row of tiles sits on a whole pixel. */}
-      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} sizes={trackSizes(1)} className="aspect-auto h-[round(down,56.25cqw,4px)]" />
+      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} alive={alive} sizes={trackSizes(1)} className="aspect-auto h-[round(down,56.25cqw,4px)]" />
       <span className="flex min-w-0 flex-col">
         <span className={cn("truncate text-[13px] leading-[18px] font-medium", current && "font-semibold")}>{e.label}</span>
         <span className="truncate text-[12px] leading-4 text-muted-foreground">{e.line}</span>

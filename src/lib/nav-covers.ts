@@ -4,7 +4,7 @@
  */
 import "server-only";
 import { coverFraming, type CoverFraming } from "./cover-framing";
-import { coverIds } from "./nav-model";
+import { coverIds, launcherColumns } from "./nav-model";
 import { hasMini, miniOf } from "./preset-cards";
 import { presetCover } from "./preset-covers";
 
@@ -17,6 +17,11 @@ export interface NavCover {
   mini?: string;
   /** How it sits in a square tile or pill (cover-framing.ts), when it isn't centred there. */
   framing?: CoverFraming;
+  /**
+   * Its short muted clip's version, for the Studios menu's lead cards only (a row's picture is too small for a clip):
+   * the clip is /previews/presets/<id>.mp4?v=<clipV>, played over the still while the card is pointed at.
+   */
+  clipV?: string;
 }
 
 /** Keyed by preset id. */
@@ -28,12 +33,17 @@ let cached: NavCovers | undefined;
 export function navCovers(): NavCovers {
   if (cached) return cached;
   const out: NavCovers = {};
+  // The Studios menu's lead cards, for any viewer: only they play a clip.
+  const leads = new Set((["guest", "account", "owner", undefined] as const).flatMap((k) => launcherColumns(k).map((c) => c.lead.cover)));
   for (const id of coverIds()) {
     const c = presetCover(id);
     if (!c) throw new Error(`The navigation names ${id}, which has no cover`);
     const framing = coverFraming(c.poster);
     const mini = hasMini(c.poster) ? miniOf(c.poster) : undefined;
-    out[id] = { thumb: c.thumb, poster: c.poster, ...(mini && { mini }), ...(framing && { framing }) };
+    // Only a clip of its own, at the usual place (a stand-in's clip is another preset's).
+    const own = `/previews/presets/${id}.mp4?v=`;
+    const clipV = leads.has(id) && c.video?.startsWith(own) ? c.video.slice(own.length) : undefined;
+    out[id] = { thumb: c.thumb, poster: c.poster, ...(mini && { mini }), ...(framing && { framing }), ...(clipV && { clipV }) };
   }
   cached = out;
   return out;

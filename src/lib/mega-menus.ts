@@ -35,6 +35,10 @@ export interface MegaCover {
   hd?: StillSources;
   /** How it sits in a box of another shape (cover-framing.ts). */
   framing?: CoverFraming;
+  /** Its short muted clip, played over the still while a lead card or tile is pointed at or focused. */
+  clip?: string;
+  /** Where the clip starts and loops back to (s), when the still is a frame from inside it (a template's peak). */
+  clipAt?: number;
 }
 
 export interface MegaItem {
@@ -255,16 +259,18 @@ function packItem(e: MegaItem): WireItem {
   const { href, cover, ...rest } = e;
   const v = cover && /^\/previews\/presets\/([^/]+)\.jpg\?v=([0-9a-f]{8})$/.exec(cover.poster);
   const usual = v && v[1] === e.id && JSON.stringify({ ...presetUrls(e.id, v[2]) }) === JSON.stringify({ poster: cover!.poster, thumb: cover!.thumb, mini: cover!.mini });
+  // The usual cover goes by its version, with what its URLs don't say (its framing, its clip) beside it.
+  const extra = usual && { ...(cover!.framing && { framing: cover!.framing }), ...(cover!.clip && { clip: cover!.clip }), ...(cover!.clipAt !== undefined && { clipAt: cover!.clipAt }) };
   return {
     ...rest,
     ...(href !== presetPage(e.id) && { href }),
-    ...(usual ? { cv: v![2], ...(cover!.framing && { cover: { framing: cover!.framing } as MegaCover }) } : cover && { cover }),
+    ...(usual ? { cv: v![2], ...(extra && Object.keys(extra).length && { cover: extra as MegaCover }) } : cover && { cover }),
   };
 }
 
 function unpackItem(w: WireItem): MegaItem {
   const { cv, href, cover, ...rest } = w;
-  return { ...rest, href: href ?? presetPage(w.id), ...(cv ? { cover: { ...presetUrls(w.id, cv), ...(cover?.framing && { framing: cover.framing }) } } : cover && { cover }) };
+  return { ...rest, href: href ?? presetPage(w.id), ...(cv ? { cover: { ...presetUrls(w.id, cv), ...cover } } : cover && { cover }) };
 }
 
 /** A menu as its file carries it (smaller: presets' covers by version): packMenu on the server, unpackMenu in the browser. */

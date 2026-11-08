@@ -1,11 +1,132 @@
 "use client";
 
-import { createElement } from "react";
+import { createElement, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { releaseVideo } from "@/lib/media-release";
 import { navIcon } from "@/lib/nav-icons";
 import type { MegaCover } from "@/lib/mega-menus";
 import type { NavIconName } from "@/lib/nav-model";
+import { reducedMotion } from "@/lib/ui-motion";
 import { cn } from "@/lib/utils";
 import { useNavCover } from "./nav-ui";
+
+/** The end of a cover clip a loop from inside it never shows (s): where an effect fades back to its photo. */
+const CLIP_TAIL = 0.4;
+/** How long a clip takes to fade over its still, and back (ms; the class below says the same). */
+const CLIP_FADE = 200;
+
+/** How long a mouse stays on a card before it comes alive (ms). */
+const ALIVE_AFTER = 120;
+
+/** The one cover clip playing (a menu plays only the card under the pointer: one decoder at a time). */
+let playingClip: HTMLVideoElement | null = null;
+
+/** Clips play on hover unless the viewer asks for less motion or to save data. */
+function clipsAllowed(): boolean {
+  if (reducedMotion()) return false;
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  return !conn?.saveData;
+}
+
+/**
+ * A menu card that comes alive while a mouse is over it or the keys focus it (never on a tap: a touch screen keeps its
+ * stills): `alive` goes to its CoverThumb, `handlers` on the card's link.
+ */
+export function useAliveCard() {
+  const [alive, setAlive] = useState(false);
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  // A pointer that stays a moment (ALIVE_AFTER): one passing over on its way elsewhere starts nothing.
+  const on = (delay: number) => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setAlive(true), delay);
+  };
+  const off = () => {
+    window.clearTimeout(timer.current);
+    setAlive(false);
+  };
+  return {
+    alive,
+    handlers: {
+      onPointerEnter: (e: React.PointerEvent) => e.pointerType === "mouse" && on(ALIVE_AFTER),
+      onPointerLeave: (e: React.PointerEvent) => e.pointerType === "mouse" && off(),
+      onFocus: (e: React.FocusEvent<HTMLElement>) => e.currentTarget.matches(":focus-visible") && on(0),
+      onBlur: off,
+    },
+  };
+}
+
+/**
+ * A cover's clip over its still: it shows once its first frame is drawn (so the still stays until then: never a blank
+ * frame) and fades in; `leaving`, it fades back out to the still. `at`: a still from inside the clip (a template's
+ * peak frame), where it starts and loops back to, short of the clip's last stretch.
+ */
+function CoverClip({ src, at, leaving, focus }: { src: string; at?: number; leaving: boolean; focus?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [drawn, setDrawn] = useState(false);
+  useLayoutEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (playingClip && playingClip !== v) playingClip.pause();
+    playingClip = v;
+    let live = true;
+    let from = 0;
+    const seek = () => {
+      if (at !== undefined && v.duration && at < v.duration - CLIP_TAIL - 0.3) {
+        from = at;
+        v.currentTime = at;
+      }
+    };
+    // Shown once a frame is on screen; a loop from inside the clip comes back before its tail.
+    const frame = () => {
+      if (!live) return;
+      setDrawn(true);
+      if (from && v.duration && v.currentTime >= v.duration - CLIP_TAIL) v.currentTime = from;
+      if ("requestVideoFrameCallback" in v) v.requestVideoFrameCallback(frame);
+    };
+    const playing = () => ("requestVideoFrameCallback" in v ? v.requestVideoFrameCallback(frame) : frame());
+    const tail = () => {
+      if (from && v.duration && v.currentTime >= v.duration - CLIP_TAIL) v.currentTime = from;
+    };
+    v.addEventListener("loadedmetadata", seek, { once: true });
+    v.addEventListener("playing", playing, { once: true });
+    v.addEventListener("timeupdate", tail);
+    v.src = src;
+    void v.play().catch(() => {});
+    return () => {
+      live = false;
+      v.removeEventListener("timeupdate", tail);
+      if (playingClip === v) playingClip = null;
+      releaseVideo(v);
+    };
+  }, [src, at]);
+  return (
+    <video
+      ref={ref}
+      muted
+      playsInline
+      loop={at === undefined}
+      preload="auto"
+      aria-hidden
+      tabIndex={-1}
+      data-cover-clip=""
+      data-on={drawn && !leaving ? "" : undefined}
+      className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-200 ease-out data-[on]:opacity-100"
+      style={{ objectPosition: focus ?? "50% 25%" }}
+    />
+  );
+}
+
+/** Mounted while `on`, and for the fade after it (`leaving`): a clip fades back to its still, then lets go of its decoder. */
+function useClipPresence(on: boolean): { mounted: boolean; leaving: boolean } {
+  const [mounted, setMounted] = useState(on);
+  if (on && !mounted) setMounted(true);
+  useEffect(() => {
+    if (on || !mounted) return;
+    const t = window.setTimeout(() => setMounted(false), CLIP_FADE + 40);
+    return () => window.clearTimeout(t);
+  }, [on, mounted]);
+  return { mounted, leaving: mounted && !on };
+}
 
 /*
  * A nav cover: a real preset still in a box of fixed size, so nothing moves when the picture arrives. The box shows
@@ -59,6 +180,7 @@ export function CoverThumb({
   icon,
   eager,
   low,
+  alive,
   sizes: boxSizes,
   className,
 }: {
@@ -73,6 +195,11 @@ export function CoverThumb({
   eager?: boolean;
   /** Load after the pictures around it (a menu's small row pictures, after its lead covers). */
   low?: boolean;
+  /**
+   * Its card is pointed at or focused (useAliveCard): its clip plays over the still, where it has one; else the still
+   * leans in a little. Neither under reduced motion; no clip when saving data.
+   */
+  alive?: boolean;
   /** A fluid box's width for the srcset, when it isn't its size's usual one (a lead card two tracks wide, a phone's tile). */
   sizes?: string;
   className?: string;
@@ -87,6 +214,11 @@ export function CoverThumb({
   const hd = sizes ? cover?.hd : undefined;
   // How the cover sits in a box of another shape (cover-framing.ts): a square keeps its top part by default, where faces are.
   const whole = cover?.framing?.fit === "whole";
+  const [allowed] = useState(() => typeof window !== "undefined" && clipsAllowed());
+  // A fetched menu's cover names its clip; a Studios lead's nav cover gives its version (nav-covers.ts).
+  const clip = !allowed ? undefined : (cover?.clip ?? (id && nav?.clipV ? `/previews/presets/${id}.mp4?v=${nav.clipV}` : undefined));
+  const { mounted, leaving } = useClipPresence(!!alive && !!clip);
+  const clipEl = clip && mounted && <CoverClip src={clip} at={cover?.clipAt} leaving={leaving} focus={cover?.framing?.focus} />;
   const still = cover && (
     // eslint-disable-next-line @next/next/no-img-element -- versioned static covers, sized by the box (no optimizer round trip)
     <img
@@ -100,7 +232,7 @@ export function CoverThumb({
       fetchPriority={low ? "low" : undefined}
       decoding="async"
       draggable={false}
-      className="absolute inset-0 size-full object-cover"
+      className="absolute inset-0 size-full object-cover motion-safe:transition-[scale] motion-safe:duration-700 motion-safe:ease-out motion-safe:group-data-[alive=lean]/cover:scale-[1.045]"
       style={{ objectPosition: cover.framing?.focus ?? "50% 25%" }}
     />
   );
@@ -113,17 +245,28 @@ export function CoverThumb({
     still
   );
   return (
-    <span aria-hidden data-cover={cover ? (id ?? "") : undefined} className={cn("relative block shrink-0 overflow-hidden bg-muted", s.box, className)}>
+    <span
+      aria-hidden
+      data-cover={cover ? (id ?? "") : undefined}
+      data-alive={alive && cover ? (clip ? "clip" : "lean") : undefined}
+      className={cn("group/cover relative block shrink-0 overflow-hidden bg-muted", s.box, className)}
+    >
       {cover && whole ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element -- the same small copy, blurred behind the whole picture */}
           <img src={small} alt="" loading={eager ? "eager" : "lazy"} decoding="async" draggable={false} className="absolute inset-0 size-full scale-125 object-cover blur-md brightness-[0.7] saturate-[1.3]" />
           <span className="absolute inset-0 grid place-items-center [container-type:size]">
-            <span className="relative aspect-[4/3] w-[min(100cqw,133.334cqh)] overflow-hidden">{img}</span>
+            <span className="relative aspect-[4/3] w-[min(100cqw,133.334cqh)] overflow-hidden">
+              {img}
+              {clipEl}
+            </span>
           </span>
         </>
       ) : cover ? (
-        img
+        <>
+          {img}
+          {clipEl}
+        </>
       ) : icon ? (
         <NavIcon name={icon} className="absolute inset-0 m-auto size-[42%] max-h-6 max-w-6 text-muted-foreground" />
       ) : null}
