@@ -115,8 +115,22 @@ export function matchedPattern(prompt: string, patterns: readonly { line: string
   return patterns.find((p) => p.re.test(prompt))?.line;
 }
 
-/** Is this prompt about lettering (posters, logos, signs, typography, words in quotes)? */
-export const asksForText = (prompt: string): boolean => TEXT_WORDS.test(prompt) || QUOTED.test(prompt);
+/** The words TEXT_WORDS knows, plus watermarks, for the "no …" lists below. */
+const TEXT_NOUN = String.raw`(?:text|texts|typography|typeface|fonts?|lettering|letters|logos?|logotypes?|wordmarks?|monograms?|signage|signs?|banners?|headlines?|captions?|calligraphy|graffiti|labels?|watermarks?|words|writing)`;
+/**
+ * A prompt that only rules lettering out ("no text, no watermark", "without any logos or captions", "text-free"): these
+ * words don't ask for it, so they are left out before TEXT_WORDS reads the prompt.
+ */
+const NO_TEXT = new RegExp(
+  String.raw`\b(?:no|not any|without(?: any)?|free of|zero|avoid(?:ing)?|minus)\s+(?:(?:any|visible|readable|legible|added|extra|stray|on-?screen|overlaid|overlay)\s+)*${TEXT_NOUN}(?:\s*(?:,|\/|or|and|nor)\s*(?:(?:no|any)\s+)?${TEXT_NOUN})*\b|\b${TEXT_NOUN}-?(?:free|less)\b`,
+  "gi",
+);
+
+/** Is this prompt about lettering (posters, logos, signs, typography, words in quotes)? Lettering it rules out doesn't count. */
+export const asksForText = (prompt: string): boolean => {
+  const asked = prompt.replace(NO_TEXT, " ");
+  return TEXT_WORDS.test(asked) || QUOTED.test(asked);
+};
 
 export interface AutoAsk {
   prompt?: string;

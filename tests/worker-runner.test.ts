@@ -156,6 +156,9 @@ describe("a worker's runner", () => {
     expect(finished.device).toMatch(/\S/);
     expect(String(finished.device)).not.toMatch(/^cuda:|cudaMallocAsync/);
     expect(tasks.execOf(state(id))).toEqual({ ms: finished.execMs, device: finished.device });
+    // Its slowest nodes, as the socket timed them: the sampler with its steps, kept for the owner's run details.
+    expect(finished.nodes).toEqual([expect.objectContaining({ node: expect.any(String), steps: 4 })]);
+    expect(JSON.parse(String(state(id).exec_nodes))).toEqual(finished.nodes);
   });
 
   it("a browser tab's runner (no worker hooks) reports as it always did", async () => {

@@ -105,6 +105,22 @@ describe("what Auto picks", () => {
       expect(pick(words), words).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "plain" });
   });
 
+  it("lettering a prompt only rules out doesn't count as asking for it", () => {
+    for (const words of [
+      "editorial portrait of a model in a camel coat, sharp focus, no text, no watermark.",
+      "a beach at dawn without any text or logos",
+      "studio photo, no visible text, no captions, no watermarks",
+      "a clean product shot, text-free, logo-free",
+      "a misty forest, avoid text and labels",
+    ])
+      expect(pick(words), words).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "plain" });
+    const acct = autoCandidates({ prompt: "full-body photograph of a model on a bed, soft daylight, no text, no watermark.", account: true }, defaults);
+    expect(acct).toMatchObject({ models: [...AUTO_FALLBACKS, "oss-ideogram-4"], why: "plain" });
+    // A prompt that rules some lettering out and asks for other lettering still asks for it.
+    for (const words of ['a poster that says "OPEN", no watermark', "a neon sign above a bar, no logos", "no text on the shirt, a logo on the cap"])
+      expect(pick(words), words).toMatchObject({ why: "text" });
+  });
+
   it("an account's plain prompt starts on Krea 2 Realism; its lettering and edits route as the owner's", () => {
     const acct = (prompt: string, more: { op?: "t2i" | "edit"; images?: number } = {}) => autoCandidates({ prompt, ...more, account: true }, defaults);
     for (const words of ["a koi pond at night, neon rain", "a woman in a red evening gown on a staircase"])

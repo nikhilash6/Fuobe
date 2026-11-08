@@ -13,6 +13,7 @@ import { withoutLocalPaths } from "./engine-error";
 import { FINISH_RUN_MS, finishProblem, type FinishResult, type FinishStats } from "./finish-ticket";
 import { fetchWithin } from "./fetch-within";
 import { parseComfyBinary, parseComfyText } from "./comfy-ws";
+import { NodeClock } from "./node-times";
 import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, writePath, type SystemStats } from "./local-comfy";
 import {
   DONE_SHOWN_MS,
@@ -348,6 +349,8 @@ export class ComputerRunner {
   private ws: SocketLike | null = null;
   private wsOpen = false;
   private events = new Map<string, { value?: number; max?: number; node?: string; nodesDone: number; done?: boolean }>();
+  /** Each prompt's node times from the socket (a worker sends them with its "finished" report); the latest few. */
+  private clocks = new Map<string, NodeClock>();
   private factsSentAt = 0;
   private factsWithLoras = 0;
   private foundAt = 0;
@@ -497,6 +500,7 @@ export class ComputerRunner {
         else if (e.type === "executing" && e.node) Object.assign(cur, { node: e.node, nodesDone: cur.nodesDone + 1, value: undefined, max: undefined });
         else if (e.type === "success" || e.type === "error" || e.type === "interrupted" || (e.type === "executing" && !e.node)) cur.done = true;
         this.events.set(e.promptId, cur);
+        this.clockEvent(e);
         return;
       }
       const p = parseComfyBinary(m.data as ArrayBuffer);
@@ -506,6 +510,30 @@ export class ComputerRunner {
       if (!job) return;
       this.job({ id: job.taskId, generationId: job.generationId }, { preview: new Blob([p.data as BlobPart], { type: p.type }) });
     };
+  }
+
+  /** A socket event on its prompt's node clock (the newest 32 prompts keep theirs). */
+  private clockEvent(e: ReturnType<typeof parseComfyText>) {
+    if (!e || !("promptId" in e) || !e.promptId) return;
+    const now = this.now();
+    let clock = this.clocks.get(e.promptId);
+    if (!clock) {
+      if (e.type !== "execution_start" && e.type !== "executing") return;
+      clock = new NodeClock();
+      this.clocks.set(e.promptId, clock);
+      while (this.clocks.size > 32) this.clocks.delete(this.clocks.keys().next().value!);
+    }
+    if (e.type === "executing") clock.executing(e.node, now);
+    else if (e.type === "progress") clock.progress(e.node, e.max, now);
+    else if (e.type === "success" || e.type === "error" || e.type === "interrupted") clock.end(now);
+  }
+
+  /** The slowest nodes of a prompt as its socket timed them (a worker's "finished" report carries them), then forgotten. */
+  private nodeTimes(promptId: string, entry: HistoryEntryLike) {
+    const clock = this.clocks.get(promptId);
+    this.clocks.delete(promptId);
+    const nodes = clock?.times(entry.prompt?.[2]);
+    return nodes?.length ? { nodes } : {};
   }
 
   /** Where a prompt is on ComfyUI here. */
@@ -1258,7 +1286,7 @@ export class ComputerRunner {
         // A worker keeps the results first: a stop from here on uploads them again instead of running the job again.
         if (worker && !t.metaBatch && w.entry.status?.status_str !== "error") await this.keep(t, { kind: "finished", entries: [w.entry], execMs: ms });
         const why = w.entry.status?.status_str === "error" ? entryReason(w.entry, { graph: t.graph }) : null;
-        const a = await this.report(t, { event: "finished", entry: slim(w.entry), ...exec(ms), ...(why && { why }) });
+        const a = await this.report(t, { event: "finished", entry: slim(w.entry), ...exec(ms), ...(worker && this.nodeTimes(t.promptId, w.entry)), ...(why && { why }) });
         if (a.stop) throw new Stopped();
         if (a.follow) {
           following = a.follow;

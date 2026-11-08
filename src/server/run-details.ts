@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { getModel, getPreset } from "@/lib/catalog";
 import { presetRoutes } from "@/lib/catalog/preset-recipe-routes";
 import { AUTO_IMAGE } from "@/lib/auto-image";
+import { cleanNodeTimes, type NodeTime } from "@/lib/node-times";
 import type { AutoWhy, Engine, GenerationRequest, MediaKind } from "@/lib/catalog/types";
 import { madeOfRun } from "@/lib/catalog/fitted";
 import type { SettingChange } from "@/lib/catalog/made";
@@ -197,6 +198,8 @@ export interface RunJob {
   note?: string;
   /** ComfyUI's own reason this job failed, in one short line, as its worker or tab reported it. */
   comfyWhy?: string;
+  /** Its slowest nodes as its worker timed them (src/lib/node-times.ts), slowest first. */
+  nodes?: NodeTime[];
   /** Its computer's ComfyUI didn't answer, since when (and why, when it said). */
   down?: { at: number; why?: string };
 }
@@ -558,6 +561,7 @@ interface TaskFacts {
   down_why: string | null;
   progress_json: string | null;
   comfy_why: string | null;
+  exec_nodes: string | null;
   created_at: number;
   claimed_at: number | null;
   sent_at: number | null;
@@ -587,7 +591,7 @@ const col = (have: Set<string>, name: string) => (have.has(name) ? name : `NULL 
 function jobsOf(id: string, url?: string): { jobs: RunJob[]; log: WorkerEvent[]; tasks: TaskFacts[] } {
   const have = columnsOf("relay_tasks");
   if (!have.size) return { jobs: [], log: [], tasks: [] };
-  const cols = ["slot", "lane", "class", "requeues", "tried_json", "est_ms", "progress_json", "comfy_why"].map((c) => col(have, c)).join(", ");
+  const cols = ["slot", "lane", "class", "requeues", "tried_json", "est_ms", "progress_json", "comfy_why", "exec_nodes"].map((c) => col(have, c)).join(", ");
   const tasks = db()
     .prepare(
       `SELECT id, state, workflow_id, attempts, error, note, down_at, down_why, created_at, claimed_at, sent_at, started_at, finished_at, ${cols}
@@ -605,6 +609,7 @@ function jobsOf(id: string, url?: string): { jobs: RunJob[]; log: WorkerEvent[];
     const worker = finished?.worker_name ?? taker?.worker_name;
     const device = finished?.device ?? taker?.device;
     const tried = parse(t.tried_json);
+    const nodes = t.exec_nodes ? cleanNodeTimes(parse(t.exec_nodes)) : undefined;
     return {
       state: t.state,
       slot: t.slot === "cpu" ? "cpu" : "gpu",
@@ -626,6 +631,7 @@ function jobsOf(id: string, url?: string): { jobs: RunJob[]; log: WorkerEvent[];
       ...(t.error && { error: scrub(t.error) }),
       ...(t.note && { note: scrub(t.note) }),
       ...(t.comfy_why && { comfyWhy: scrub(t.comfy_why) }),
+      ...(nodes && { nodes }),
       ...(t.down_at != null && { down: { at: t.down_at, ...(t.down_why && { why: t.down_why }) } }),
     };
   });

@@ -760,6 +760,19 @@ function Jobs({ jobs }: { jobs: RunJob[] }) {
                   {j.estMs !== undefined && <span className="text-muted-foreground"> (expected {dur(j.estMs)})</span>}
                 </JobFact>
               )}
+              {j.nodes?.length ? (
+                <JobFact label="Slowest steps">
+                  <ul className="space-y-0.5 tabular-nums">
+                    {j.nodes.slice(0, 6).map((n) => (
+                      <li key={n.node}>
+                        {n.type ?? "Node"} <span className="text-muted-foreground">#{n.node}</span> · {dur(n.ms)}
+                        {n.steps !== undefined && <span className="text-muted-foreground"> · {n.steps} steps</span>}
+                        {n.beforeStepsMs !== undefined && n.beforeStepsMs >= 1000 && <span className="text-muted-foreground"> · {dur(n.beforeStepsMs)} before its first step</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </JobFact>
+              ) : null}
               <JobFact label="Times">
                 <span className="tabular-nums">
                   {[

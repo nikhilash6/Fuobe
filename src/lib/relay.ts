@@ -9,6 +9,7 @@
 
 import type { FinishTicket } from "./finish-ticket";
 import type { Ceiling, JobTicket } from "./job-ticket";
+import type { NodeTime } from "./node-times";
 
 /** Where a task is. */
 export type RelayState = "waiting" | "sending" | "queued" | "running" | "collecting" | "done" | "failed" | "canceled";
@@ -67,9 +68,10 @@ export type ReportEvent =
   /**
    * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), how long its ComfyUI spent
    * executing the job (`execMs`: execution only, no waits, no uploads), its GPU's name (`device`), and `kept` when the
-   * results are ones it kept from an earlier try (their time doesn't count toward the lane's times).
+   * results are ones it kept from an earlier try (their time doesn't count toward the lane's times). `nodes`: its slowest
+   * nodes as its ComfyUI's socket timed them (src/lib/node-times.ts), for the owner's run details.
    */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string; kept?: boolean; why?: string }
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string; kept?: boolean; why?: string; nodes?: NodeTime[] }
   /**
    * A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. The
    * last one (not running) is the job's end: a worker adds `execMs`, `device` and `kept` as for "finished".

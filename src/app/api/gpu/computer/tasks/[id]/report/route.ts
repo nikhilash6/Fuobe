@@ -1,3 +1,4 @@
+import { cleanNodeTimes } from "@/lib/node-times";
 import { GIVE_BACK, PREVIEW_LIMITS, previewOf, RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
 import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
 import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
@@ -44,8 +45,11 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
       const preview = previewOf(b.preview);
       return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }), ...(preview && { preview }) };
     }
-    case "finished":
-      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...exec, ...why } : null;
+    case "finished": {
+      // A worker's slowest nodes, as its ComfyUI's socket timed them (cleaned: ids, classes, times and step counts only).
+      const nodes = cleanNodeTimes(b.nodes);
+      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...exec, ...why, ...(nodes && { nodes }) } : null;
+    }
     case "passes":
       return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never, ...(b.running !== true && { ...exec, ...why }) } : null;
     case "give-back":

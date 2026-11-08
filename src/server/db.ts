@@ -1108,6 +1108,8 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "preview_at", "INTEGER"],
   // ComfyUI's own reason a job failed, in one short line (src/lib/comfy-reason.ts): the owner's only.
   ["relay_tasks", "comfy_why", "TEXT"],
+  // A worker's slowest nodes for the job, as JSON (src/lib/node-times.ts): the owner's only.
+  ["relay_tasks", "exec_nodes", "TEXT"],
   // A pool worker's next token (workers.ts offerNextToken) and where its token was used from (hashed networks).
   ["relay_workers", "next_token_hash", "TEXT"],
   ["relay_workers", "next_expires_at", "INTEGER"],

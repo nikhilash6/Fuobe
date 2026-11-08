@@ -994,6 +994,11 @@ its target), at most once an hour each.
     than once counts once: the attempt whose result was kept. The studio keeps at most the run ceiling of the job's lane,
     and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
     before the studio hears that it was sent).
+  - `finished` can carry `nodes`: the job's slowest nodes (at most 12), as the worker timed them from its ComfyUI's live
+    socket (`src/lib/node-times.ts`). Each has the node's id, its class, its time, and for a node with steps its step
+    count and the time before its first step (its models loading). Only ids, classes, times and counts: never a prompt
+    or a file name. The studio keeps them with the job (a job sent again keeps the last ones) and shows them only to the
+    owner, in the run's details ("Slowest steps"), so a slow run shows where its time went.
   - `running` can carry `preview`: the latest preview picture of the job, a JPEG of at most 64 KB as base64, at most
     one every 2 seconds (see "Live previews"). A progress report with a preview may weigh up to about 91 KB (the
     preview as base64 and a few KB more); any other stays under the small limit. A claim says `reportPreview: true` when the run shows one: only with hosted runs on

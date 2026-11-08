@@ -26,6 +26,7 @@ import {
   previewOf,
 } from "@/lib/relay";
 import { reasonText } from "@/lib/comfy-reason";
+import { cleanNodeTimes } from "@/lib/node-times";
 import type { FinishTicket } from "@/lib/finish-ticket";
 import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
@@ -117,6 +118,8 @@ export interface TaskRow {
    * cleaned again here): for the owner only, never part of what the run's person reads.
    */
   comfy_why?: string | null;
+  /** A worker's slowest nodes for the job, as JSON (src/lib/node-times.ts): for the owner only, like comfy_why. */
+  exec_nodes?: string | null;
   stop: number;
   attempts: number;
   down_at: number | null;
@@ -1016,6 +1019,9 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       // device are never kept as the run's GPU time.
       const cpuWork = t.slot === "cpu" || !!t.finish_json;
       if (t.pools && t.worker_id && (!("follow" in p) || !t.meta_batch)) logWorkerJob("finished", t, t.worker_id, now, cpuWork ? {} : (execFields(e, t, now) ?? {}));
+      // Its slowest nodes, as its worker timed them (the owner's run details show where a slow run's time went).
+      const nodes = t.pools && t.worker_id && e.event === "finished" && !e.kept ? cleanNodeTimes(e.nodes, runCeilingMs(t.lane)) : undefined;
+      if (nodes) setTask(t.id, { exec_nodes: JSON.stringify(nodes) });
       if ("follow" in p) {
         if (!t.meta_batch) {
           endTask(t.id, "failed", { error: "This run finished without a result. Press Retry." });
