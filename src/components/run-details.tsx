@@ -674,7 +674,7 @@ function Timeline({ t, status, progress, log }: { t: RunTiming; status: string; 
   );
 }
 
-/** How it was made: Auto's pick and why, Ideogram 4's declines (with what it returned), notices, and values made differently. */
+/** How it was made: Auto's pick and why, Ideogram 4's declines (with what it returned) or Auto's next model, notices, and values made differently. */
 function MadeBy({ m, model, cards, prompt }: { m: RunMadeBy; model: RunDetails["model"]; cards?: AccountRun["declinedCards"]; prompt: string | null }) {
   if (!m.auto && !m.declined && !m.notices.length && !m.changes.length && !cards?.length) return null;
   return (
@@ -687,7 +687,7 @@ function MadeBy({ m, model, cards, prompt }: { m: RunMadeBy; model: RunDetails["
           </Fact>
         )}
         {m.declined && (
-          <Fact label="Ideogram 4 declined">
+          <Fact label={m.declined.cause === "failed" ? "Auto's next model" : "Ideogram 4 declined"}>
             {m.declined.words}
             {m.declined.askedModelName && m.declined.modelName && (
               <span className="block text-muted-foreground">

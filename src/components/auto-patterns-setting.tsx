@@ -7,9 +7,9 @@ import type { PublicSetting } from "@/components/connect-field";
 import { autoPatternsProblems, DEFAULT_AUTO_PATTERNS } from "@/lib/auto-image";
 
 /**
- * Settings → Auto image model: the prompts Auto sends to Krea 2 Realism straight away (Ideogram 4's safety filter often
- * declines them), one per line. The owner's only, as every setting is. Saving checks each line; Reset puts the built-in
- * list back.
+ * Settings → Auto image model: the prompts Auto starts on Krea 2 Realism (as it does every plain prompt), whose run
+ * details name the line they matched, one per line. The owner's only, as every setting is. Saving checks each line;
+ * Reset puts the built-in list back.
  */
 export function AutoPatternsSetting({ setting, onSave, saving }: { setting: PublicSetting | undefined; onSave: (value: string) => void; saving: boolean }) {
   const saved = setting?.value ?? DEFAULT_AUTO_PATTERNS.join("\n");
@@ -37,7 +37,7 @@ export function AutoPatternsSetting({ setting, onSave, saving }: { setting: Publ
       />
       <p className="text-[12px] leading-relaxed text-muted-foreground">
         One per line. A word or phrase matches as a whole word (a space or a hyphen matches either); any other line is a regular expression. Case
-        doesn&rsquo;t matter, and a line that starts with # is a note. Prompts about lettering, posters or logos still go to Ideogram 4.
+        doesn&rsquo;t matter, and a line that starts with # is a note. Prompts about lettering, posters or logos still go to MOSS-Image first.
       </p>
       {problems.length > 0 && (
         <ul className="space-y-0.5 text-[12px] text-destructive">

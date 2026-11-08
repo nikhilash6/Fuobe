@@ -27,7 +27,7 @@ const openIds = MODELS.filter((m) => m.engine === "open").map((m) => m.id);
 const before = (a: string, b: string) => expect(openIds.indexOf(a), `${a} before ${b}`).toBeLessThan(openIds.indexOf(b));
 
 describe("studio defaults on your GPU", () => {
-  it("Image opens on Auto (Ideogram 4 for most), Edit and Inpaint on Qwen-Image 2.1", () => {
+  it("Image opens on Auto (Krea 2 Realism for most), Edit and Inpaint on Qwen-Image 2.1", () => {
     expect(IMAGE_STUDIO.defaultModels.open).toBe("oss-auto-image");
     expect(EDIT_STUDIO.defaultModels.open).toBe("oss-qwen-image-21");
     expect(INPAINT_STUDIO.defaultModels.open).toBe("oss-qwen-image-21");

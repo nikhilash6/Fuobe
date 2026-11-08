@@ -11,16 +11,24 @@ import type { AutoPick, AutoWhy, Operation } from "./catalog/types";
 export const AUTO_IMAGE = "oss-auto-image";
 export const AUTO_NAME = "Auto";
 
-/** Words, posters, logos and everything without a reason to go elsewhere. */
-export const AUTO_TEXT_MODEL = "oss-ideogram-4";
+/** Every plain prompt, an account's, a guest's or the owner's: natural skin, light and faces. */
+export const AUTO_PHOTO_MODEL = "oss-krea2-realism";
+/** Lettering (posters, logos, signs, words in quotes): MOSS-Image follows the words and draws them in place. */
+export const AUTO_TEXT_MODEL = "oss-moss-image";
 /**
- * When Ideogram 4 declines a run (its grey "blocked" card for every picture), the same run is made by these, in order,
- * each only if the one before fails. A prompt that matches a pattern of the setting starts with the first of them.
+ * Auto's text-to-image models, in order for a plain prompt; lettering takes them the other way round. When the first
+ * is switched off or can't run here, the run is planned on the other; when it fails, the other makes the same run
+ * (src/server/generations.ts autoFails), each model at most once.
  */
-export const AUTO_FALLBACKS = ["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"] as const;
+export const AUTO_T2I_MODELS = [AUTO_PHOTO_MODEL, AUTO_TEXT_MODEL] as const;
+/**
+ * Ideogram 4 picked by name (Auto never plans it): when it declines a run (its grey "blocked" card for every picture),
+ * the same run is made by these, in order, each only if the one before fails.
+ */
+export const DECLINED_FALLBACKS = ["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"] as const;
 /**
  * A run with a picture to work from goes to the studio's own default for its operation (the Edit and Inpaint studios'
- * Qwen-Image 2.1), never to Ideogram 4. FIBO 2 Dev, which also edits, is next where Qwen-Image 2.1 is switched off.
+ * Qwen-Image 2.1). FIBO 2 Dev, which also edits, is next where Qwen-Image 2.1 is switched off.
  */
 export const AUTO_EDIT_MODELS: Readonly<Partial<Record<Operation, readonly string[]>>> = {
   edit: ["oss-qwen-image-21", "oss-fibo2-dev"],
@@ -28,21 +36,24 @@ export const AUTO_EDIT_MODELS: Readonly<Partial<Record<Operation, readonly strin
   outpaint: ["oss-qwen-image-21"],
 };
 
-/** Every model Auto may plan a run on (a stored pick names one of these, or it is planned again). */
-export const AUTO_MODELS: ReadonlySet<string> = new Set([AUTO_TEXT_MODEL, ...AUTO_FALLBACKS, ...Object.values(AUTO_EDIT_MODELS).flat()]);
+/** The models Auto may plan an operation on: text to image on AUTO_T2I_MODELS, the others on AUTO_EDIT_MODELS. */
+export const autoModelsFor = (op: Operation): readonly string[] => (op === "t2i" ? AUTO_T2I_MODELS : (AUTO_EDIT_MODELS[op] ?? []));
+
+/** Every model Auto may plan a run on. */
+export const AUTO_MODELS: ReadonlySet<string> = new Set([...AUTO_T2I_MODELS, ...Object.values(AUTO_EDIT_MODELS).flat()]);
 
 /**
- * Prompts about lettering: what Ideogram 4 is made for. Words in quotes count too ("a sign that says “OPEN”").
+ * Prompts about lettering, which go to MOSS-Image first. Words in quotes count too ("a sign that says “OPEN”").
  */
 const TEXT_WORDS =
   /\b(text|texts|typography|typographic|typeface|font|fonts|lettering|letters|logo|logos|logotype|wordmark|monogram|poster|posters|signage|signs?|billboard|banner|headline|caption|calligraphy|graffiti|label|labels|menu|book cover|album cover|magazine cover|infographic|says|that reads)\b/i;
 const QUOTED = /["“”«»][^"“”«»\n]{2,80}["“”«»]/;
 
 /**
- * The setting's first list (Settings → Auto image model): prompts that Ideogram 4's own safety filter often answers with
- * its grey card. Auto sends them to Krea 2 Realism straight away. One per line: a word or phrase matches as a whole word
- * (a space or a hyphen matches either), any other line is a regular expression, and a line that starts with "#" is a
- * note; case never matters.
+ * The setting's list (Settings → Auto image model): prompts Auto starts on Krea 2 Realism, the model every plain prompt
+ * starts on too, and whose run details name the line they matched. Lettering still goes to MOSS-Image first. One per
+ * line: a word or phrase matches as a whole word (a space or a hyphen matches either), any other line is a regular
+ * expression, and a line that starts with "#" is a note; case never matters.
  */
 export const DEFAULT_AUTO_PATTERNS: readonly string[] = [
   "# Animals or creatures dressed as people",
@@ -79,7 +90,7 @@ function lineRegExp(line: string): RegExp | null {
 
 /**
  * Why the setting's text can't be saved, one line per problem (empty: it can). Each line must be a pattern that can be
- * read, can't match empty words (it would send every prompt to Krea 2 Realism), and stays within the limits.
+ * read, can't match empty words (it would match every prompt), and stays within the limits.
  */
 export function autoPatternsProblems(text: string): string[] {
   const lines = text.split(/\r?\n/);
@@ -137,46 +148,46 @@ export interface AutoAsk {
   op?: Operation;
   /** Pictures the run works from (its references). */
   images?: number;
-  /**
-   * A signed-up account's run (not the owner's): a plain prompt starts on Krea 2 Realism, because Ideogram 4 can take
-   * minutes to decline and the account would wait for the fallback. Lettering still goes to Ideogram 4.
-   */
-  account?: boolean;
 }
 
 /**
  * The models Auto would plan a run on, best first, and why: a picture to work from → the studio's edit model for its
- * operation; lettering → Ideogram 4; a prompt the setting's patterns match → Krea 2 Realism (then FIBO 2 Dev and
- * MOSS-Image, then Ideogram 4); an account's plain prompt → Krea 2 Realism first too; anything else → Ideogram 4 (then the others). The server plans the first one that is
- * switched on and runs the operation (src/server/generations.ts autoRouted).
+ * operation; lettering → MOSS-Image, then Krea 2 Realism; a prompt the setting's patterns match, and anything else →
+ * Krea 2 Realism, then MOSS-Image. The same for the owner, an account and a guest. The server plans the first one that
+ * is switched on and runs the operation (src/server/generations.ts autoRouted), and the next one makes the run when it
+ * fails (autoNext).
  */
 export function autoCandidates(ask: AutoAsk, patterns: readonly { line: string; re: RegExp }[]): { models: string[]; why: AutoWhy; pattern?: string } {
   const op = ask.op && ask.op !== "t2i" ? ask.op : (ask.images ?? 0) > 0 ? "edit" : "t2i";
   if (op !== "t2i") return { models: [...(AUTO_EDIT_MODELS[op] ?? [])], why: "edit" };
   const words = ask.prompt ?? "";
-  if (asksForText(words)) return { models: [AUTO_TEXT_MODEL, ...AUTO_FALLBACKS], why: "text" };
+  if (asksForText(words)) return { models: [AUTO_TEXT_MODEL, AUTO_PHOTO_MODEL], why: "text" };
   const pattern = matchedPattern(words, patterns);
-  if (pattern) return { models: [...AUTO_FALLBACKS, AUTO_TEXT_MODEL], why: "trigger", pattern };
-  if (ask.account) return { models: [...AUTO_FALLBACKS, AUTO_TEXT_MODEL], why: "plain" };
-  return { models: [AUTO_TEXT_MODEL, ...AUTO_FALLBACKS], why: "plain" };
+  if (pattern) return { models: [...AUTO_T2I_MODELS], why: "trigger", pattern };
+  return { models: [...AUTO_T2I_MODELS], why: "plain" };
 }
 
-/** The model that makes an Auto run after `after` failed on one Ideogram 4 declined (undefined: none left). */
-export function nextAutoFallback(after: string | undefined): string | undefined {
-  const i = after ? (AUTO_FALLBACKS as readonly string[]).indexOf(after) : -1;
-  return AUTO_FALLBACKS[i + 1];
+/** Auto's models left for a run, in its order, after the ones that tried it (each model makes a run at most once). */
+export const autoNext = (models: readonly string[], tried: readonly string[]): string[] => models.filter((m) => !tried.includes(m));
+
+/** The model that makes a run Ideogram 4 (picked by name) declined after `after` failed too (undefined: none left). */
+export function nextDeclinedFallback(after: string | undefined): string | undefined {
+  const i = after ? (DECLINED_FALLBACKS as readonly string[]).indexOf(after) : -1;
+  return DECLINED_FALLBACKS[i + 1];
 }
 
-/** "Ideogram 4 declined this one", after the model that made a run in its place. */
-export const AUTO_DECLINED = "Ideogram 4 declined this one";
+/** Said after the model that made an Auto run when the model before it couldn't make it. */
+export const AUTO_NEXT = "Auto's next model";
 
 /**
- * The line under an Auto run (the feed card, the run details, the Library, Accounts' runs): "Auto · made with Ideogram 4",
- * and "· Ideogram 4 declined this one" when another model made it in its place. Null for any other run.
+ * The line under an Auto run (the feed card, the run details, the Library, Accounts' runs): "Auto · made with Krea 2
+ * Realism", and "· Auto's next model" when the model before it couldn't make it (or, on an older run, Ideogram 4
+ * declined it). Null for any other run.
  */
 export function autoLine(g: { status: string; modelName?: string; modelId: string; request: { modelId: string; auto?: AutoPick } }): string | null {
   if (g.request.modelId !== AUTO_IMAGE || !g.request.auto) return null;
   const name = g.modelName ?? g.modelId;
   const made = g.status === "succeeded" ? `made with ${name}` : g.status === "failed" || g.status === "canceled" ? `tried ${name}` : `making it with ${name}`;
-  return [AUTO_NAME, made, g.request.auto.why === "declined" ? AUTO_DECLINED : null].filter(Boolean).join(" · ");
+  const next = g.request.auto.why === "fallback" || g.request.auto.why === "declined";
+  return [AUTO_NAME, made, next ? AUTO_NEXT : null].filter(Boolean).join(" · ");
 }

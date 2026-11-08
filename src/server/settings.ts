@@ -137,8 +137,8 @@ export const SETTINGS = {
   /** Tokens of context the local model gets (Ollama's num_ctx; LM Studio loads models with it). 0 = the server's own setting. */
   llmContext: { key: "llm.context", env: "FUOBE_LLM_CONTEXT", default: "16384" },
   /**
-   * Settings → Auto image model: prompts Ideogram 4's safety filter often declines, one pattern per line, which Auto sends
-   * to Krea 2 Realism straight away (src/lib/auto-image.ts). Empty: the built-in list.
+   * Settings → Auto image model: prompts Auto starts on Krea 2 Realism (as it does every plain prompt), one pattern per
+   * line, whose run details name the line they matched (src/lib/auto-image.ts). Empty: the built-in list.
    */
   autoImagePatterns: { key: "auto.imagePatterns", default: DEFAULT_AUTO_PATTERNS.join("\n") },
   /**

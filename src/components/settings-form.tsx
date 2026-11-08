@@ -802,7 +802,7 @@ export function SettingsForm({ prices }: { prices?: string }) {
       <Section
         id="auto-image"
         title="Auto image model"
-        description="Auto is the Image studio's first pick on the open engine: Ideogram 4 for most pictures and for lettering, Qwen-Image 2.1 for edits, and Krea 2 Realism for the prompts below, which Ideogram 4's safety filter often declines. When Ideogram 4 declines a run anyway, Krea 2 Realism, FIBO 2 Dev, then MOSS-Image make it."
+        description="Auto is the Image studio's first pick on the open engine: Krea 2 Realism for every picture, MOSS-Image first for lettering, posters and logos, and Qwen-Image 2.1 for edits. When the first model is switched off, can't run or fails, the other one makes the same run, at no extra charge. Prompts that match the lines below start on Krea 2 Realism too, and their run details name the line."
         inactive={mode === "cloud" ? "Not used in Paid APIs only mode" : undefined}
       >
         <AutoPatternsSetting setting={get("autoImagePatterns")} saving={save.isPending} onSave={set("autoImagePatterns")} />

@@ -20,8 +20,8 @@ export function withAutoPattern(saved: string, line: string): string | null {
 
 /**
  * The owner's "Add a pattern" on a run Ideogram 4 declined: a word, phrase or pattern (the words selected on the page, to
- * start with) goes on Auto's list in Settings, so Auto sends such prompts to Krea 2 Realism next time. Owner only: the
- * settings it changes are the owner's (an account gets a 403).
+ * start with) goes on Auto's list in Settings, so Auto starts such prompts on Krea 2 Realism and their run details name
+ * the line. Owner only: the settings it changes are the owner's (an account gets a 403).
  */
 export function AddAutoPattern({ className }: { className?: string }) {
   const [line, setLine] = useState<string | null>(null);

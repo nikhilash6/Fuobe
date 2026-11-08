@@ -9,8 +9,8 @@ type NoteRun = Pick<Generation, "declinedCards" | "status" | "modelId" | "modelN
 
 /**
  * Under a run (the feed card, the run details): what made a run of Auto ("Auto · made
- * with Krea 2 Realism · Ideogram 4 declined this one"), what changed while it ran (its notice: "Made with Krea 2 Realism ·
- * Ideogram 4 declined this one"), and, for the owner's eyes only, what Ideogram 4 returned in place of a picture, for
+ * with MOSS-Image · Auto's next model"), what changed while it ran (its notice: "Made with Krea 2 Realism ·
+ * Ideogram 4 declined this one" on Ideogram 4 picked by name), and, for the owner's eyes only, what Ideogram 4 returned in place of a picture, for
  * which words. A setting a model makes differently is said before the run, where it can still be changed; after the run
  * the views show only the value it was made at (shownSettings), never a value the studio didn't offer.
  */

@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { GenInput, Generation } from "@/lib/catalog/types";
 import { tempDir } from "./helpers/temp-dir";
 
-// Auto's runs: each is planned on the model Auto picks (Ideogram 4, Krea 2 Realism for the owner's patterns, Qwen-Image 2.1
-// for an edit) and keeps Auto with its pick. When Ideogram 4 answers a run of Auto with its grey card, Krea 2 Realism, then
-// FIBO 2 Dev, then MOSS-Image make the same run (never Ideogram 4 again), and only then does it fail. Ideogram 4 picked
-// by name goes the same way (tests/ideogram-declined.test.ts). Its rules alone: tests/auto-image.test.ts.
+// Auto's runs: each is planned on the model Auto picks (Krea 2 Realism, MOSS-Image for lettering, Qwen-Image 2.1 for an
+// edit; never Ideogram 4 or FIBO 2 Dev for a picture from words) and keeps Auto with its pick. When its text-to-image
+// model fails, the other one makes the same run, each at most once, and only then does it fail. Ideogram 4 picked by name
+// still takes its own fallbacks when it declines (tests/ideogram-declined.test.ts). Its rules alone: tests/auto-image.test.ts.
 vi.setConfig({ testTimeout: 60_000 });
 const dir = tempDir("fuobe-auto-image-runs-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -91,25 +91,28 @@ const rowsSince = (id: string) => db().prepare("SELECT COUNT(*) FROM generations
 const line = (g: Generation) => renderToStaticMarkup(MadeNote({ g })!);
 
 describe("what Auto runs on", () => {
-  it("plain words: Ideogram 4, and the run keeps Auto with its pick", async () => {
+  it("plain words: Krea 2 Realism, and the run keeps Auto with its pick", async () => {
     const g = await run("a red fox in deep snow", { params: { aspectRatio: "16:9" } });
     expect(g.status, g.error ?? "").toBe("succeeded");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4"]);
-    expect(g.modelId).toBe("oss-ideogram-4");
+    expect(handed.map((h) => h.model)).toEqual(["oss-krea2-realism"]);
+    expect(g.modelId).toBe("oss-krea2-realism");
     expect(g.request.modelId).toBe(AUTO_IMAGE);
-    expect(g.request.auto).toEqual({ model: "oss-ideogram-4", why: "plain" });
+    expect(g.request.auto).toEqual({ model: "oss-krea2-realism", why: "plain" });
     expect(handed[0].input.aspectRatio).toBe("16:9");
-    expect(line(g)).toContain("Auto · made with Ideogram 4");
+    expect(line(g)).toContain("Auto · made with Krea 2 Realism");
+    expect(line(g)).not.toContain("next model");
     expect(g.request.notice).toBeUndefined();
   });
 
-  it("lettering: Ideogram 4", async () => {
-    const g = await run("a poster that says GRAND OPENING in gold letters");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4"]);
-    expect(g.request.auto).toEqual({ model: "oss-ideogram-4", why: "text" });
+  it("lettering: MOSS-Image", async () => {
+    const g = await run('a poster that says "GRAND OPENING" in gold letters');
+    expect(g.status, g.error ?? "").toBe("succeeded");
+    expect(handed.map((h) => h.model)).toEqual(["oss-moss-image"]);
+    expect(g.request.auto).toEqual({ model: "oss-moss-image", why: "text" });
+    expect(line(g)).toContain("Auto · made with MOSS-Image");
   });
 
-  it("a prompt the patterns match: Krea 2 Realism straight away, with no Ideogram 4 job", async () => {
+  it("a prompt the patterns match: Krea 2 Realism, naming the pattern", async () => {
     const g = await run(CAT);
     expect(g.status, g.error ?? "").toBe("succeeded");
     expect(handed.map((h) => h.model)).toEqual(["oss-krea2-realism"]);
@@ -117,10 +120,9 @@ describe("what Auto runs on", () => {
     expect(g.request.auto).toEqual({ model: "oss-krea2-realism", why: "trigger" });
     expect(handed[0].input.prompt).toBe(CAT);
     expect(line(g)).toContain("Auto · made with Krea 2 Realism");
-    expect(line(g)).not.toContain("declined");
   });
 
-  it("a picture to work from: Qwen-Image 2.1's edit, never Ideogram 4", async () => {
+  it("a picture to work from: Qwen-Image 2.1's edit, as before", async () => {
     const g = await run("make it golden hour", { inputs: { images: [dataUri(gradient)] } });
     expect(g.status, g.error ?? "").toBe("succeeded");
     expect(handed.map((h) => h.model)).toEqual(["oss-qwen-image-21"]);
@@ -128,26 +130,43 @@ describe("what Auto runs on", () => {
     expect(g.request.auto).toEqual({ model: "oss-qwen-image-21", why: "edit" });
   });
 
-  it("the owner's own patterns decide, and a model switched off is passed over", async () => {
-    setSetting("autoImagePatterns", "koi");
-    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: "a koi pond at night" }).model.id).toBe("oss-krea2-realism");
-    // The built-in list is gone with it: the cat goes to Ideogram 4 now.
-    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: CAT }).model.id).toBe("oss-ideogram-4");
-    setSetting("autoImagePatterns", "");
-    expect(getSetting("autoImagePatterns")).toBe(DEFAULT_AUTO_PATTERNS.join("\n"));
-    changeAccess([{ kind: "model", id: "oss-ideogram-4", on: false }]);
-    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: "a koi pond at night" }).model.id).toBe("oss-krea2-realism");
+  it("an edit that fails is not handed to another model", async () => {
+    failing = new Set(["oss-qwen-image-21"]);
+    const g = await run("make it golden hour", { inputs: { images: [dataUri(gradient)] } });
+    expect(g.status).toBe("failed");
+    expect(handed.map((h) => h.model)).toEqual(["oss-qwen-image-21"]);
   });
 
-  it("is priced before Run as the model it would pick (free on a GPU), and a pick it carries stays", () => {
-    const p = previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: "a koi pond at night" });
-    expect(p.model.id).toBe("oss-ideogram-4");
-    expect(p.costUsd).toBe(0);
+  it("Ideogram 4 and FIBO 2 Dev are never planned for a picture from words, whatever the words or the switches", () => {
+    const words = ["a koi pond at night", 'a poster that says "OPEN"', CAT, "a neon sign above a bar", "a woman in a red evening gown"];
+    for (const prompt of words) expect(["oss-krea2-realism", "oss-moss-image"], prompt).toContain(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt }).model.id);
+    changeAccess([{ kind: "model", id: "oss-krea2-realism", on: false }]);
+    for (const prompt of words) expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt }).model.id, prompt).toBe("oss-moss-image");
+    changeAccess([{ kind: "model", id: "oss-moss-image", on: false }]);
+    // Neither is on: Auto asks for a model rather than reaching for Ideogram 4 or FIBO 2 Dev.
+    expect(() => previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: "a koi pond at night" })).toThrow(/Auto has no image model switched on here/);
+  });
+
+  it("the owner's own patterns still route, and a model switched off is passed over", async () => {
+    setSetting("autoImagePatterns", "koi");
+    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: "a koi pond at night" }).model.id).toBe("oss-krea2-realism");
     expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: CAT }).model.id).toBe("oss-krea2-realism");
+    setSetting("autoImagePatterns", "");
+    expect(getSetting("autoImagePatterns")).toBe(DEFAULT_AUTO_PATTERNS.join("\n"));
+    changeAccess([{ kind: "model", id: "oss-moss-image", on: false }]);
+    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: 'a poster that says "OPEN"' }).model.id).toBe("oss-krea2-realism");
+  });
+
+  it("is priced before Run as the model it would pick (free on a GPU), and a pick it carries stays while it is one of Auto's", () => {
+    const p = previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: "a koi pond at night" });
+    expect(p.model.id).toBe("oss-krea2-realism");
+    expect(p.costUsd).toBe(0);
+    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: 'a sign that says "OPEN"' }).model.id).toBe("oss-moss-image");
     // A run planned again (a resend, a run that waited to enter the line) keeps the model it was made with.
-    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: CAT, auto: { model: "oss-fibo2-dev", why: "declined" } }).model.id).toBe("oss-fibo2-dev");
-    // A pick that isn't one of Auto's is planned again.
-    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: CAT, auto: { model: "nano-banana-pro", why: "plain" } }).model.id).toBe("oss-krea2-realism");
+    expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: CAT, auto: { model: "oss-moss-image", why: "fallback" } }).model.id).toBe("oss-moss-image");
+    // An older run's Ideogram 4 or FIBO 2 Dev pick, or a pick that isn't one of Auto's, is planned again.
+    for (const model of ["oss-ideogram-4", "oss-fibo2-dev", "nano-banana-pro"])
+      expect(previewGeneration({ feature: "image", modelId: AUTO_IMAGE, prompt: CAT, auto: { model, why: "plain" } }).model.id, model).toBe("oss-krea2-realism");
   });
 
   it("a model picked by name always runs on that model", async () => {
@@ -161,82 +180,83 @@ describe("what Auto runs on", () => {
   });
 });
 
-describe("Auto after Ideogram 4 declines", () => {
-  it("Krea 2 Realism makes the same run at once (no second Ideogram 4 try), and the run says so", async () => {
-    ideogram = [[card]];
-    const g = await run("a red fox in deep snow", { params: { aspectRatio: "4:5", resolution: "1.5K" } });
+describe("Auto's next model when one fails", () => {
+  it("Krea 2 Realism fails: MOSS-Image makes the same run at once, and the run says so", async () => {
+    failing = new Set(["oss-krea2-realism"]);
+    const g = await run("a red fox in deep snow", { params: { aspectRatio: "4:5", resolution: "1K" } });
     expect(g.status, g.error ?? "").toBe("succeeded");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism"]);
-    expect(g.modelId).toBe("oss-krea2-realism");
+    expect(handed.map((h) => h.model)).toEqual(["oss-krea2-realism", "oss-moss-image"]);
+    expect(g.modelId).toBe("oss-moss-image");
     expect(g.request.modelId).toBe(AUTO_IMAGE);
-    expect(g.request.auto).toEqual({ model: "oss-krea2-realism", why: "declined" });
+    expect(g.request.auto).toEqual({ model: "oss-moss-image", why: "fallback" });
     expect(g.request.notice).toBeUndefined();
     expect(g.outputs).toHaveLength(1);
-    // The same words in plain text, the shape and size asked; Working, saying which model makes it.
+    // The same words, the shape and size asked; Working, saying which model makes it.
     expect(handed[1].input.prompt).toBe("a red fox in deep snow");
     expect(handed[1].input.aspectRatio).toBe("4:5");
     expect(handed[1].run.status).toBe("running");
-    expect(handed[1].run.message).toBe("Making it with Krea 2 Realism");
+    expect(handed[1].run.message).toBe("Making it with MOSS-Image");
     expect(rowsSince(g.id)).toBe(1);
-    expect(line(g)).toContain("Auto · made with Krea 2 Realism · Ideogram 4 declined this one");
-    expect(line(g)).not.toContain(declinedNotice("Krea 2 Realism"));
-    // The owner's own run: the card, the words, and Add a pattern.
-    expect(g.declinedCards).toHaveLength(1);
-    expect(line(g)).toContain("Words: “a red fox in deep snow”");
-    expect(line(g)).toContain("Add a pattern");
+    expect(line(g)).toContain("Auto · made with MOSS-Image · Auto&#x27;s next model");
+    expect(line(g)).not.toContain("declined");
+    expect(g.declinedCards).toBeUndefined();
   });
 
-  it("each next model only when the one before fails: FIBO 2 Dev, then MOSS-Image", async () => {
-    ideogram = [[card]];
-    failing = new Set(["oss-krea2-realism"]);
-    const fibo = await run("a red fox in deep snow");
-    expect(fibo.status, fibo.error ?? "").toBe("succeeded");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism", "oss-fibo2-dev"]);
-    expect(fibo.modelId).toBe("oss-fibo2-dev");
-    expect(handed[2].run.message).toBe("Making it with FIBO 2 Dev");
-    expect(line(fibo)).toContain("Auto · made with FIBO 2 Dev · Ideogram 4 declined this one");
-
-    handed = [];
-    ideogram = [[card]];
-    failing = new Set(["oss-krea2-realism", "oss-fibo2-dev"]);
-    const moss = await run("a lighthouse at dusk");
-    expect(moss.status, moss.error ?? "").toBe("succeeded");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
-    expect(moss.modelId).toBe("oss-moss-image");
-    expect(rowsSince(moss.id)).toBe(1);
+  it("lettering: MOSS-Image fails, Krea 2 Realism makes it", async () => {
+    failing = new Set(["oss-moss-image"]);
+    const g = await run('a storefront with "OPEN LATE" painted on the glass');
+    expect(g.status, g.error ?? "").toBe("succeeded");
+    expect(handed.map((h) => h.model)).toEqual(["oss-moss-image", "oss-krea2-realism"]);
+    expect(g.request.auto).toEqual({ model: "oss-krea2-realism", why: "fallback" });
+    expect(rowsSince(g.id)).toBe(1);
   });
 
-  it("when all three fail too, the run fails as Ideogram 4's, in the words it always had, and Retry runs Auto again", async () => {
-    ideogram = [[card]];
-    failing = new Set(["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
+  it("when both fail, each was tried once, never Ideogram 4 or FIBO 2 Dev, and the run fails once as one run", async () => {
+    failing = new Set(["oss-krea2-realism", "oss-moss-image", "oss-fibo2-dev", "oss-ideogram-4"]);
     const g = await run("a red fox in deep snow");
     expect(g.status).toBe("failed");
-    expect(g.error).toBe(BLOCKED_CARD_MESSAGE);
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
-    expect(g.modelId).toBe("oss-ideogram-4");
+    expect(g.error).toMatch(/Out of memory/);
+    expect(handed.map((h) => h.model)).toEqual(["oss-krea2-realism", "oss-moss-image"]);
     expect(g.request.modelId).toBe(AUTO_IMAGE);
-    expect(g.request.auto).toEqual({ model: "oss-ideogram-4", why: "plain" });
-    expect(g.outputs).toEqual([]);
-    expect(g.declinedCards).toHaveLength(1);
     expect(rowsSince(g.id)).toBe(1);
-    expect(line(g)).toContain("Auto · tried Ideogram 4");
   });
 
-  it("a fallback switched off is passed over", async () => {
-    changeAccess([{ kind: "model", id: "oss-krea2-realism", on: false }]);
-    ideogram = [[card]];
+  it("the next model switched off: the run fails as its first model did", async () => {
+    changeAccess([{ kind: "model", id: "oss-moss-image", on: false }]);
+    failing = new Set(["oss-krea2-realism"]);
     const g = await run("a red fox in deep snow");
-    expect(g.status, g.error ?? "").toBe("succeeded");
-    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-fibo2-dev"]);
+    expect(g.status).toBe("failed");
+    expect(handed.map((h) => h.model)).toEqual(["oss-krea2-realism"]);
   });
+});
 
-  it("Ideogram 4 picked by name takes the same fallbacks, and stays a run of that model with a notice", async () => {
+describe("Ideogram 4 picked by name, when it declines", () => {
+  it("takes its own fallbacks (Krea 2 Realism first), and stays a run of that model with a notice", async () => {
     ideogram = [[card]];
     const g = await run("a red fox in deep snow", {}, "oss-ideogram-4");
     expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism"]);
     expect(g.request.modelId).toBe("oss-krea2-realism");
     expect(g.request.notice).toBe(declinedNotice("Krea 2 Realism"));
     expect(g.request.auto).toBeUndefined();
+  });
+
+  it("each next one only when the one before fails: FIBO 2 Dev, then MOSS-Image, then it fails as Ideogram 4's", async () => {
+    ideogram = [[card]];
+    failing = new Set(["oss-krea2-realism", "oss-fibo2-dev"]);
+    const moss = await run("a lighthouse at dusk", {}, "oss-ideogram-4");
+    expect(moss.status, moss.error ?? "").toBe("succeeded");
+    expect(handed.map((h) => h.model)).toEqual(["oss-ideogram-4", "oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
+    expect(moss.modelId).toBe("oss-moss-image");
+
+    handed = [];
+    ideogram = [[card]];
+    failing = new Set(["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
+    const g = await run("a red fox in deep snow", {}, "oss-ideogram-4");
+    expect(g.status).toBe("failed");
+    expect(g.error).toBe(BLOCKED_CARD_MESSAGE);
+    expect(g.modelId).toBe("oss-ideogram-4");
+    expect(g.declinedCards).toHaveLength(1);
+    expect(rowsSince(g.id)).toBe(1);
   });
 });
 

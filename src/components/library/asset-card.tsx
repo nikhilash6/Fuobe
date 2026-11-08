@@ -305,7 +305,7 @@ export const AssetCard = memo(function AssetCard({
             {/* "Rendering", as the Status filter calls it: "In progress" is a review status. */}
             {!stack && g.status !== "succeeded" && ` · ${listStatus(g)}`}
           </p>
-          {/* What made a run of Auto ("Auto · made with Ideogram 4"), and what changed while it ran ("Made with Krea 2 Realism · Ideogram 4 declined this one"). */}
+          {/* What made a run of Auto ("Auto · made with Krea 2 Realism"), and what changed while it ran ("Made with Krea 2 Realism · Ideogram 4 declined this one" on Ideogram 4 picked by name). */}
           {!stack && autoLine(g) && <p className="truncate text-[12px] text-muted-foreground">{autoLine(g)}</p>}
           {!stack && g.request.notice && <p className="truncate text-[12px] text-muted-foreground">{g.request.notice}</p>}
           {/* An account's own GPU or key: the way out, in the row (its thumbnail is too small for it). */}

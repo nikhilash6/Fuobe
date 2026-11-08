@@ -132,7 +132,7 @@ const open: ModelDef[] = [
   // (Ideogram 4, Qwen-Image 2.1, Krea 2, MOSS-Image, FIBO 2), then the edit models (Qwen-Image 2.1, FIBO 2, Krea 2).
   // A studio's "Best" list is its default, then the `top` models in this order (bestForStudio in src/lib/composer.ts).
   // Auto: the Image studio's default on the open engine. Not a model of its own: the server plans each run on the model it
-  // picks (src/lib/auto-image.ts), and the run names that model. Its routes are its picks' own (Ideogram 4 for words,
+  // picks (src/lib/auto-image.ts), and the run names that model. Its routes are its picks' own (Krea 2 Realism for words,
   // Qwen-Image 2.1 for edits), so the picker, the price and the GPU pre-flight read them; it never runs as itself.
   o({
     id: AUTO_IMAGE,
@@ -140,8 +140,8 @@ const open: ModelDef[] = [
     vendor: "Fuobe",
     family: "auto",
     kind: "image",
-    tagline: "Picks the model for you: Ideogram 4 for most pictures and lettering, Krea 2 Realism where Ideogram 4 often declines, Qwen-Image 2.1 for edits",
-    routes: [comfy("t2i", "ideogram4-t2i", "Auto picks the model before the run"), { ...comfy("edit", "qwen-image-21-edit", "Auto: Qwen-Image 2.1, up to 4 references"), unsized: true }],
+    tagline: "Picks the model for you: Krea 2 Realism for most pictures, MOSS-Image for lettering, Qwen-Image 2.1 for edits",
+    routes: [comfy("t2i", "krea2-realism-t2i", "Auto picks the model before the run"), { ...comfy("edit", "qwen-image-21-edit", "Auto: Qwen-Image 2.1, up to 4 references"), unsized: true }],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 4, seed: true },
     defaults: { aspectRatio: "1:1", resolution: "1.5K" },
   }),

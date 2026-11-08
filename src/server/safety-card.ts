@@ -47,8 +47,9 @@ export function looksBlocked(png: Buffer): boolean {
 }
 
 /**
- * An Ideogram 4 run whose every picture was the card is made by Auto's fallbacks in order (src/server/generations.ts
- * declinedAgain). The notice a run picked by name carries once one of them made it.
+ * An Ideogram 4 run whose every picture was the card is made by its fallbacks in order (src/lib/auto-image.ts
+ * DECLINED_FALLBACKS; src/server/generations.ts declinedAgain). The notice a run picked by name carries once one of them
+ * made it.
  */
 export const declinedNotice = (modelName: string): string => `Made with ${modelName} · Ideogram 4 declined this one`;
 /** Runs declined before that: stage "retry" (Ideogram 4 with a new seed), then a fallback with no model (Qwen-Image 2.1). */

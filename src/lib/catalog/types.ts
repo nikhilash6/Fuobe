@@ -1619,9 +1619,10 @@ export interface Generation {
 
 /**
  * Why Auto picked its model: a picture to work from ("edit"), lettering ("text"), a prompt the owner's patterns match
- * ("trigger"), anything else ("plain"), or Ideogram 4 declined the run and this model made it in its place ("declined").
+ * ("trigger"), anything else ("plain"), or the model before it couldn't make the run and this one, Auto's next, made it
+ * ("fallback"; "declined" on older runs, where Ideogram 4 declined it).
  */
-export type AutoWhy = "edit" | "text" | "trigger" | "plain" | "declined";
+export type AutoWhy = "edit" | "text" | "trigger" | "plain" | "fallback" | "declined";
 
 /** The model Auto picked for a run (GenerationRequest.auto). */
 export interface AutoPick {

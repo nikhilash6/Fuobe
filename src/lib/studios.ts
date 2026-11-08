@@ -21,8 +21,8 @@ export const IMAGE_STUDIO: StudioConfig = {
   slots: [],
   // Up to 10 references where the model takes them (FLUX 3 Klein); each model's own limit caps it (composer refMax).
   multiRef: { label: "Add ref", max: 10 },
-  // Auto picks the open model for each run (src/lib/auto-image.ts): Ideogram 4 for most, Krea 2 Realism for prompts its
-  // safety filter often declines, Qwen-Image 2.1 for edits. The default for everyone: the owner, an account and a guest.
+  // Auto picks the open model for each run (src/lib/auto-image.ts): Krea 2 Realism for most, MOSS-Image for lettering
+  // (each the other's fallback), Qwen-Image 2.1 for edits. The default for everyone: the owner, an account and a guest.
   defaultModels: { cloud: "nano-banana-pro", open: AUTO_IMAGE },
   // A model's own settings (MOSS-Image's Quality, Ideogram's speed) sit under "Options".
   controlsTitle: "Options",

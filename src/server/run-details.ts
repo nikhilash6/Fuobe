@@ -237,8 +237,11 @@ export interface RunMoney {
 export interface RunMadeBy {
   /** A run of Auto: the model it picked, and why. */
   auto?: { model: string; name: string; why: AutoWhy; words: string };
-  /** Ideogram 4 declined it: its stage, and the model that made it in its place. */
-  declined?: { stage?: string; words: string; model?: string; modelName?: string; askedModel?: string; askedModelName?: string };
+  /**
+   * Ideogram 4 declined it, or (cause "failed") the Auto model before couldn't make it: its stage, and the model that made
+   * it in its place.
+   */
+  declined?: { stage?: string; cause?: "failed"; words: string; model?: string; modelName?: string; askedModel?: string; askedModelName?: string };
   /** What changed while it ran (an optional input left out, another model made it), said on the result. */
   notices: string[];
   /** Settings the model makes differently from what was asked (the account sees the made value only). */
@@ -502,9 +505,10 @@ export function surfaceOf(feature: string, stamp: GenerationRequest): RunSurface
 /** Why Auto picked its model, in words. */
 export const AUTO_WHY_WORDS: Record<AutoWhy, string> = {
   edit: "It had a picture to work from, so it went to the edit model",
-  text: "Its words ask for lettering, so it went to Ideogram 4",
-  trigger: "Its words match a pattern in Settings → Auto image model",
-  plain: "A plain prompt: the usual first model",
+  text: "Its words ask for lettering, so it went to MOSS-Image first",
+  trigger: "Its words match a pattern in Settings → Auto image model, so it went to Krea 2 Realism first",
+  plain: "A plain prompt, so it went to Krea 2 Realism first",
+  fallback: "The model before it couldn't make it, so Auto's next model made it",
   declined: "Ideogram 4 declined it, so this model made it instead",
 };
 
@@ -513,20 +517,23 @@ const DECLINED_STAGE_WORDS: Record<string, string> = {
   fallback: "Ideogram 4 declined it, so another model made it",
 };
 
-/** How a run was made: Auto's pick, Ideogram 4's declines and the model after them, and the notices it carries. */
+/** How a run was made: Auto's pick, Ideogram 4's declines (or Auto's model that failed) and the model after them, and the notices it carries. */
 export function madeByOf(run: AdminRun, meta: Record<string, unknown>): RunMadeBy {
   const req = run.request;
   const pick = req.modelId === AUTO_IMAGE && req.auto ? req.auto : undefined;
   const d = obj(meta.declined);
   const was = obj(d.was);
   const stage = str(d.stage);
+  // An Auto run its next model made after the model before it failed.
+  const failed = str(d.cause) === "failed";
   const askedModel = str(was.model_id);
   const fallback = str(d.model);
   const declined =
     stage || run.declinedCards?.length
       ? {
           ...(stage && { stage }),
-          words: (stage && DECLINED_STAGE_WORDS[stage]) || "Ideogram 4 returned its grey card for a picture",
+          ...(failed && { cause: "failed" as const }),
+          words: (failed && AUTO_WHY_WORDS.fallback) || (stage && DECLINED_STAGE_WORDS[stage]) || "Ideogram 4 returned its grey card for a picture",
           ...(fallback && { model: fallback, modelName: getModel(fallback)?.name ?? fallback }),
           ...(askedModel && { askedModel, askedModelName: getModel(askedModel)?.name ?? askedModel }),
         }

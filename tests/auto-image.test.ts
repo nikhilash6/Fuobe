@@ -4,16 +4,19 @@ import { getModel, MODELS } from "@/lib/catalog";
 import { planGeneration, estimateCost } from "@/lib/catalog/plan";
 import { getPreset } from "@/lib/catalog";
 import {
-  AUTO_FALLBACKS,
   AUTO_IMAGE,
   AUTO_MODELS,
+  AUTO_T2I_MODELS,
   autoCandidates,
   autoLine,
+  autoModelsFor,
+  autoNext,
   autoPatterns,
   autoPatternsProblems,
+  DECLINED_FALLBACKS,
   DEFAULT_AUTO_PATTERNS,
   matchedPattern,
-  nextAutoFallback,
+  nextDeclinedFallback,
 } from "@/lib/auto-image";
 import { EDIT_STUDIO, IMAGE_STUDIO, INPAINT_STUDIO } from "@/lib/studios";
 import { withAutoPattern } from "@/components/add-auto-pattern";
@@ -26,6 +29,8 @@ import type { Generation } from "@/lib/catalog/types";
 
 const defaults = autoPatterns(DEFAULT_AUTO_PATTERNS.join("\n"));
 const pick = (prompt: string, more: { op?: "t2i" | "edit" | "inpaint" | "outpaint"; images?: number } = {}) => autoCandidates({ prompt, ...more }, defaults);
+const KREA_FIRST = ["oss-krea2-realism", "oss-moss-image"];
+const MOSS_FIRST = ["oss-moss-image", "oss-krea2-realism"];
 
 describe("Auto in the catalog", () => {
   it("is an open image choice named Auto, next to the models it picks, which keep their names", () => {
@@ -43,6 +48,21 @@ describe("Auto in the catalog", () => {
     // Every model it may pick is in the catalog, as an open image model.
     for (const id of AUTO_MODELS) expect(getModel(id), id).toMatchObject({ engine: "open", kind: "image" });
     expect(MODELS.filter((x) => x.name === "Auto")).toHaveLength(1);
+    // Its text-to-image route is Krea 2 Realism's (the GPU pre-flight reads it), and it says what it picks.
+    expect(m.routes.find((r) => r.op === "t2i")?.endpoint).toBe(getModel("oss-krea2-realism")!.routes[0].endpoint);
+    expect(m.tagline).toMatch(/Krea 2 Realism/);
+    expect(m.tagline).toMatch(/MOSS-Image/);
+    expect(m.tagline).not.toMatch(/Ideogram|FIBO/);
+  });
+
+  it("never plans a picture from words on Ideogram 4 or FIBO 2 Dev; both stay in the catalog to pick by hand", () => {
+    expect(AUTO_T2I_MODELS).toEqual(KREA_FIRST);
+    expect(autoModelsFor("t2i")).toEqual(KREA_FIRST);
+    for (const id of ["oss-ideogram-4", "oss-fibo2-dev"]) {
+      expect(autoModelsFor("t2i")).not.toContain(id);
+      expect(getModel(id)).toMatchObject({ engine: "open", kind: "image" });
+    }
+    expect(AUTO_MODELS.has("oss-ideogram-4")).toBe(false);
   });
 
   it("is the Image studio's default on the open engine for everyone; Edit and Inpaint keep Qwen-Image 2.1", () => {
@@ -70,7 +90,7 @@ describe("what Auto picks", () => {
     for (const words of ["put the logo on the poster", "a cat in a gown"]) expect(pick(words, { images: 1 }).models).not.toContain("oss-ideogram-4");
   });
 
-  it("lettering, posters, logos, signs and words in quotes: Ideogram 4", () => {
+  it("lettering, posters, logos, signs and words in quotes: MOSS-Image, then Krea 2 Realism", () => {
     for (const words of [
       "a film poster for a heist movie",
       "a minimal logo for a coffee roaster",
@@ -81,10 +101,10 @@ describe("what Auto picks", () => {
       // Lettering wins over a pattern.
       "a poster of a model in a bikini",
     ])
-      expect(pick(words), words).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "text" });
+      expect(pick(words), words).toEqual({ models: MOSS_FIRST, why: "text" });
   });
 
-  it("prompts Ideogram 4's filter often declines: Krea 2 Realism, then FIBO 2 Dev and MOSS-Image, Ideogram 4 last", () => {
+  it("a prompt the setting's patterns match: Krea 2 Realism, then MOSS-Image, naming the line", () => {
     for (const words of [
       "a cat in an antique-gold paillette gown, studio light, her hair lifting in the wind",
       "a fox wearing a tailored velvet suit at a gala",
@@ -96,13 +116,13 @@ describe("what Auto picks", () => {
       "a nude-tone slip dress",
       "a nude tone slip dress",
     ])
-      expect(pick(words), words).toMatchObject({ models: [...AUTO_FALLBACKS, "oss-ideogram-4"], why: "trigger" });
+      expect(pick(words), words).toMatchObject({ models: KREA_FIRST, why: "trigger" });
     expect(pick("a cat in an antique-gold paillette gown").pattern).toMatch(/gowns/);
   });
 
-  it("everything else: Ideogram 4 first", () => {
+  it("everything else: Krea 2 Realism, then MOSS-Image", () => {
     for (const words of ["a koi pond at night, neon rain", "a cat asleep on a windowsill", "a dog running on a beach", "a woman in a red evening gown on a staircase", "sheerness of the cliffs", "a swimmer at dawn"])
-      expect(pick(words), words).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "plain" });
+      expect(pick(words), words).toEqual({ models: KREA_FIRST, why: "plain" });
   });
 
   it("lettering a prompt only rules out doesn't count as asking for it", () => {
@@ -113,28 +133,35 @@ describe("what Auto picks", () => {
       "a clean product shot, text-free, logo-free",
       "a misty forest, avoid text and labels",
     ])
-      expect(pick(words), words).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "plain" });
-    const acct = autoCandidates({ prompt: "full-body photograph of a model on a bed, soft daylight, no text, no watermark.", account: true }, defaults);
-    expect(acct).toMatchObject({ models: [...AUTO_FALLBACKS, "oss-ideogram-4"], why: "plain" });
+      expect(pick(words), words).toEqual({ models: KREA_FIRST, why: "plain" });
     // A prompt that rules some lettering out and asks for other lettering still asks for it.
     for (const words of ['a poster that says "OPEN", no watermark', "a neon sign above a bar, no logos", "no text on the shirt, a logo on the cap"])
       expect(pick(words), words).toMatchObject({ why: "text" });
   });
 
-  it("an account's plain prompt starts on Krea 2 Realism; its lettering and edits route as the owner's", () => {
-    const acct = (prompt: string, more: { op?: "t2i" | "edit"; images?: number } = {}) => autoCandidates({ prompt, ...more, account: true }, defaults);
-    for (const words of ["a koi pond at night, neon rain", "a woman in a red evening gown on a staircase"])
-      expect(acct(words), words).toMatchObject({ models: [...AUTO_FALLBACKS, "oss-ideogram-4"], why: "plain" });
-    expect(acct('a poster that says "OPEN LATE"')).toMatchObject({ models: ["oss-ideogram-4", ...AUTO_FALLBACKS], why: "text" });
-    expect(acct("make the dress red", { images: 1 }).why).toBe("edit");
+  it("whatever the words, Ideogram 4 and FIBO 2 Dev are never among the picks for a picture from words", () => {
+    for (const words of ["a koi pond at night", 'a poster that says "OPEN"', "a cat in an antique-gold paillette gown", "a neon sign above a bar", ""]) {
+      const c = pick(words);
+      expect(c.models, words).not.toContain("oss-ideogram-4");
+      expect(c.models, words).not.toContain("oss-fibo2-dev");
+      expect([...c.models].sort(), words).toEqual([...KREA_FIRST].sort());
+    }
   });
 
-  it("after Ideogram 4 declines: Krea 2 Realism, FIBO 2 Dev, MOSS-Image, then none", () => {
-    expect(AUTO_FALLBACKS).toEqual(["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
-    expect(nextAutoFallback(undefined)).toBe("oss-krea2-realism");
-    expect(nextAutoFallback("oss-krea2-realism")).toBe("oss-fibo2-dev");
-    expect(nextAutoFallback("oss-fibo2-dev")).toBe("oss-moss-image");
-    expect(nextAutoFallback("oss-moss-image")).toBeUndefined();
+  it("the next model after one fails: the other of the two, each at most once, then none", () => {
+    expect(autoNext(KREA_FIRST, ["oss-krea2-realism"])).toEqual(["oss-moss-image"]);
+    expect(autoNext(MOSS_FIRST, ["oss-moss-image"])).toEqual(["oss-krea2-realism"]);
+    expect(autoNext(KREA_FIRST, ["oss-krea2-realism", "oss-moss-image"])).toEqual([]);
+    // An older run that started on Ideogram 4: both are left, in order.
+    expect(autoNext(KREA_FIRST, ["oss-ideogram-4"])).toEqual(KREA_FIRST);
+  });
+
+  it("Ideogram 4 picked by name, after it declines: Krea 2 Realism, FIBO 2 Dev, MOSS-Image, then none", () => {
+    expect(DECLINED_FALLBACKS).toEqual(["oss-krea2-realism", "oss-fibo2-dev", "oss-moss-image"]);
+    expect(nextDeclinedFallback(undefined)).toBe("oss-krea2-realism");
+    expect(nextDeclinedFallback("oss-krea2-realism")).toBe("oss-fibo2-dev");
+    expect(nextDeclinedFallback("oss-fibo2-dev")).toBe("oss-moss-image");
+    expect(nextDeclinedFallback("oss-moss-image")).toBeUndefined();
   });
 });
 
@@ -178,20 +205,23 @@ describe("the line under a run of Auto", () => {
     ({
       id: "g",
       status: "succeeded",
-      modelId: "oss-ideogram-4",
-      modelName: "Ideogram 4",
+      modelId: "oss-krea2-realism",
+      modelName: "Krea 2 Realism",
       made: undefined,
       ...o,
       request: { feature: "image", modelId: o.requestModel ?? AUTO_IMAGE, prompt: "a cat in a gown", ...(o.auto && { auto: o.auto }) },
     }) as unknown as Generation;
 
-  it("says what made it, and that Ideogram 4 declined when another model made it", () => {
-    expect(autoLine(run({ auto: { model: "oss-ideogram-4", why: "plain" } }))).toBe("Auto · made with Ideogram 4");
-    expect(autoLine(run({ modelId: "oss-krea2-realism", modelName: "Krea 2 Realism", auto: { model: "oss-krea2-realism", why: "declined" } }))).toBe(
-      "Auto · made with Krea 2 Realism · Ideogram 4 declined this one",
+  it("says what made it, and that it was Auto's next model when the one before couldn't make it", () => {
+    expect(autoLine(run({ auto: { model: "oss-krea2-realism", why: "plain" } }))).toBe("Auto · made with Krea 2 Realism");
+    expect(autoLine(run({ modelId: "oss-moss-image", modelName: "MOSS-Image", auto: { model: "oss-moss-image", why: "fallback" } }))).toBe(
+      "Auto · made with MOSS-Image · Auto's next model",
     );
-    expect(autoLine(run({ status: "running", auto: { model: "oss-ideogram-4", why: "plain" } }))).toBe("Auto · making it with Ideogram 4");
-    expect(autoLine(run({ status: "failed", auto: { model: "oss-ideogram-4", why: "plain" } }))).toBe("Auto · tried Ideogram 4");
+    // An older run Ideogram 4 declined reads the same, naming no model that declined.
+    expect(autoLine(run({ auto: { model: "oss-krea2-realism", why: "declined" } }))).toBe("Auto · made with Krea 2 Realism · Auto's next model");
+    expect(autoLine(run({ status: "running", auto: { model: "oss-krea2-realism", why: "plain" } }))).toBe("Auto · making it with Krea 2 Realism");
+    expect(autoLine(run({ status: "failed", auto: { model: "oss-krea2-realism", why: "plain" } }))).toBe("Auto · tried Krea 2 Realism");
+    for (const why of ["plain", "text", "trigger", "fallback", "declined"] as const) expect(autoLine(run({ auto: { model: "oss-krea2-realism", why } }))).not.toMatch(/declined|Ideogram/);
     // A model picked by name says nothing of Auto.
     expect(autoLine(run({ requestModel: "oss-ideogram-4" }))).toBeNull();
   });
@@ -199,7 +229,7 @@ describe("the line under a run of Auto", () => {
   it("shows on the feed card and the run details; the owner's review line only with the cards", () => {
     const g = run({ modelId: "oss-krea2-realism", modelName: "Krea 2 Realism", auto: { model: "oss-krea2-realism", why: "declined" } });
     const theirs = renderToStaticMarkup(MadeNote({ g })!);
-    expect(theirs).toContain("Auto · made with Krea 2 Realism · Ideogram 4 declined this one");
+    expect(theirs).toContain("Auto · made with Krea 2 Realism · Auto&#x27;s next model");
     expect(theirs).not.toContain("Add a pattern");
     expect(theirs).not.toContain("Words:");
     const owners = renderToStaticMarkup(MadeNote({ g: { ...g, declinedCards: [{ url: "/api/files/card.png", spread: 9, grey: 0.9 }] } })!);
