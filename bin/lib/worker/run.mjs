@@ -63,6 +63,10 @@ export function loadRequirements(file = path.join(ROOT, "workflows/comfyui/requi
 }
 
 const HOUR = 3_600_000;
+/** How long the last counters read that worked stands in for one that failed. */
+export const COUNTERS_REUSE_MS = 90_000;
+/** Busy readings in a row (5 s apart) that only the GPU's total decided, before they pause the worker. */
+export const TOTAL_BUSY_READINGS = 6;
 
 /** The worker looks at its model folders again this often (a folder that comes back after a restart counts). */
 export const RESCAN_MS = 10 * 60_000;
@@ -360,6 +364,11 @@ async function work(saved, deps, owner) {
   // Studio jobs first: the last port table, the last split of the GPU's memory, and the last turn step.
   let listing = null;
   let listedAt = -Infinity;
+  // The last counters read that worked, and when: a read that fails now and then (typeperf under load) uses it for a while.
+  let goodCounters = null;
+  let goodCountersAt = -Infinity;
+  // Busy readings in a row that only the total decided (no counters, no lock): one alone never pauses.
+  let totalBusyInARow = 0;
   let split = null;
   let turn = { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null, waitForYield: false, late: false, startsAt: null, ended: null };
   // The owner's own job and local ComfyUI work that keeps memory: when its /queue was last looked at, when it was last
@@ -911,7 +920,11 @@ async function work(saved, deps, owner) {
 
   /** The GPU's memory split three ways, from the counters and the port table (looked at again every 30 s, or sooner when a new process holds memory). */
   async function splitNow(t, reading, own) {
-    const counters = await (deps.readCounters ?? readCounters)(cfg.gpuCounters);
+    let counters = await (deps.readCounters ?? readCounters)(cfg.gpuCounters);
+    if (counters) {
+      goodCounters = counters;
+      goodCountersAt = t;
+    } else if (goodCounters && t - goodCountersAt <= COUNTERS_REUSE_MS) counters = goodCounters;
     if (counters && (t - listedAt >= 30_000 || (listing && unknownHolder(counters, listing, own.pid, busyMb)))) {
       listing = await (deps.readListeners ?? readListeners)(cfg.powershell);
       listedAt = t;
@@ -983,7 +996,10 @@ async function work(saved, deps, owner) {
             const othersBusy = split.othersMb > busyMb;
             const workBusy = !turnsReady(t) && split.workMb > busyMb;
             const busy = othersBusy || workBusy;
-            verdict = { busy, who: othersBusy ? split.who : `ComfyUI${split.work.port ? ` on port ${split.work.port}` : ""}`, othersMb: split.othersMb, cause: othersBusy ? null : "work", unsure: busy && own.job && !split.ownSure, job: own.job, source: split.source };
+            // Only the total decided (the counters failed and no lock said whose): a few such readings in a row first.
+            totalBusyInARow = busy && split.source === "total" ? totalBusyInARow + 1 : 0;
+            const totalUnsure = totalBusyInARow > 0 && totalBusyInARow < TOTAL_BUSY_READINGS;
+            verdict = { busy, who: othersBusy ? split.who : `ComfyUI${split.work.port ? ` on port ${split.work.port}` : ""}`, othersMb: split.othersMb, cause: othersBusy ? null : "work", unsure: busy && ((own.job && !split.ownSure) || totalUnsure), job: own.job, source: split.source };
             // A pause that only local ComfyUI work caused ends once turns work again (the next day, the folder back).
             if (!verdict.busy && gpu.paused && gpu.cause === "work") {
               gpu.clear();

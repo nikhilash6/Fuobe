@@ -311,6 +311,21 @@ describe("studio jobs first", () => {
     expect(holdingWhy(w)).toBeNull();
   });
 
+  it("the counters fail for a moment while no lock names anyone: the last good read stands in, no busy pause", async () => {
+    const w = addWorker();
+    const p = pc();
+    addTask();
+    let countersOk = true;
+    start(w, p, fakeGpu(p, { workMb: 9000, counters: () => countersOk }));
+    await until(() => workerRow(w).local_why === "waiting-for-yield");
+    countersOk = false;
+    for (let i = 0; i < 30; i++) {
+      expect(workerRow(w).local_why?.startsWith("gpu-busy") ?? false).toBe(false);
+      await sleep(50);
+    }
+    expect(p.logs.some((l) => /Another program is using the GPU/.test(l))).toBe(false);
+  });
+
   it("a game holds the GPU: the busy pause, and no turn is asked for", async () => {
     const w = addWorker();
     const p = pc();
