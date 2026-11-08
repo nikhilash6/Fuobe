@@ -5240,5 +5240,21 @@
    "at": 2,
    "from": 0
   }
+ },
+ {
+  "id": "image-to-3d.1",
+  "surface": "tool:image-to-3d",
+  "rank": 1,
+  "caption": "A red stiletto, as a 3D model",
+  "words": "A product photo of a red patent stiletto becomes a textured 3D model, ready to spin, download or rig.",
+  "load": "look",
+  "href": "/image-to-3d?model=oss-pixal3d&image=/examples/image-to-3d/2/in-image.jpg",
+  "inputs": {},
+  "output": "/examples/image-to-3d/1/show.mp4",
+  "rest": {
+   "src": "/examples/image-to-3d/1/show.peak.webp",
+   "at": 1.9,
+   "from": 0
+  }
  }
 ]

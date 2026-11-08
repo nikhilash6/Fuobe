@@ -6643,6 +6643,51 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 1024,
   "h": 768
  },
+ "/examples/image-to-3d/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 251153,
+  "sha256": "b5b5a4ba83a62fcb0e4fd6f5eebcab132b4caf8dfd21bc91d998718511c73e13",
+  "v": "b5b5a4ba",
+  "poster": "/examples/image-to-3d/1/show.poster.webp?v=24db27ec"
+ },
+ "/examples/image-to-3d/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 5538,
+  "sha256": "48b3cfaa62cce24afff1b109b0bff04aee9c78acab48e8a406b6844c4709b3c1",
+  "v": "48b3cfaa",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/image-to-3d/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 14902,
+  "sha256": "24db27ecd9627280d2ba3037a0a347e8fceb57ec9442e9f013ec4a5b6f2037c0",
+  "v": "24db27ec",
+  "w": 1024,
+  "h": 768
+ },
+ "/examples/image-to-3d/2/in-image.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 5882,
+  "sha256": "8dd234980c6c1902a817ca9fabcfbe7c8eb767f855bc807175ecd80e9bb8de71",
+  "v": "8dd23498",
+  "w": 384,
+  "h": 384
+ },
+ "/examples/image-to-3d/2/in-image.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 61473,
+  "sha256": "e4e2ff4a6da49ef6d2b142685727f0755038aab6515d28036f3709affc49c571",
+  "v": "e4e2ff4a",
+  "w": 1280,
+  "h": 1280,
+  "thumb": "/examples/image-to-3d/2/in-image.384.webp?v=8dd23498"
+ },
  "/examples/image-to-3d/3/in-image.384.webp": {
   "role": "show",
   "type": "image/webp",
