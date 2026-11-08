@@ -14,7 +14,7 @@ import { ModelViewer } from "@/components/studio/result-media";
 import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
 import { askToSignUp, useAskBeforeUpload, useCreateGeneration, useGenerations, useIsGuest } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
-import { BODY_DOUBLE, BODY_LOOKS, type BodyLookId, bodyDoubleRequest, bodyLook } from "@/lib/catalog/body-double";
+import { BODY_DOUBLE, BODY_DOUBLE_DEMOS, BODY_LOOKS, type BodyLookId, bodyDoubleRequest, bodyLook } from "@/lib/catalog/body-double";
 import type { Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
 import { downloadHref } from "@/lib/library";
 import { toastError } from "@/lib/refusals";
@@ -25,8 +25,8 @@ import { LiveView } from "./live-view";
 type Mode = "live" | "photo" | "clip";
 const SUBTITLE = "A 3D body for every person: live from your camera, from a photo, or from a clip as motion capture you can animate with.";
 const EXAMPLES: Record<"photo" | "clip", { src: string; name: string; label: string }> = {
-  photo: { src: "/previews/presets/ba/1280/app-outfit-shot-after.jpg", name: "body-double-example.jpg", label: "Try it on this photo" },
-  clip: { src: "/previews/presets/app-dance.mp4", name: "body-double-example.mp4", label: "Try it on this dance" },
+  photo: { src: "/previews/body-double/photo-before.jpg", name: "body-double-example.jpg", label: "Try it on this photo" },
+  clip: { src: "/previews/body-double/sample-dance.mp4", name: "body-double-example.mp4", label: "Try it on this dance" },
 };
 
 function AddMedia({ mode, onPick }: { mode: "photo" | "clip"; onPick: (v: SlotValue) => void }) {
@@ -230,8 +230,9 @@ export function BodyDoubleTool({ app }: { app: { name: string; description: stri
         {mode === "live" ? (
           <LiveView />
         ) : !media ? (
-          <div className="mx-auto max-w-[640px]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
             <AddMedia key={mode} mode={mode} onPick={take} />
+            <Demo mode={mode} />
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
@@ -285,6 +286,33 @@ export function BodyDoubleTool({ app }: { app: { name: string; description: stri
       </div>
       <Results />
     </ToolShell>
+  );
+}
+
+/** A finished example of the mode: what a run gives back. */
+function Demo({ mode }: { mode: "photo" | "clip" }) {
+  const [after, setAfter] = useState(true);
+  if (mode === "clip") {
+    const d = BODY_DOUBLE_DEMOS.clip;
+    return (
+      <figure className="space-y-2 rounded-2xl border bg-background p-2.5 shadow-soft">
+        <video src={d.video} poster={d.poster} autoPlay muted loop playsInline className="block w-full rounded-xl bg-media" />
+        <figcaption className="px-0.5 text-[12px] text-muted-foreground">A dance in, its motion capture out: the body over every frame, the pose, and an animated 3D body.</figcaption>
+      </figure>
+    );
+  }
+  const d = BODY_DOUBLE_DEMOS.photo;
+  return (
+    <figure className="space-y-2 rounded-2xl border bg-background p-2.5 shadow-soft">
+      <button type="button" aria-pressed={after} onClick={() => setAfter((a) => !a)} className="relative block w-full overflow-hidden rounded-xl bg-media outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={d.before} alt="Four models on a rooftop runway" className="block w-full" draggable={false} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={d.after} alt="Each of the four with their 3D body" className={cn("absolute inset-0 size-full transition-opacity duration-300", after ? "opacity-100" : "opacity-0")} draggable={false} />
+        <span className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">{after ? "Body Double" : "Photo"}</span>
+      </button>
+      <figcaption className="px-0.5 text-[12px] text-muted-foreground">Every person in the shot gets a body. Tap the picture to compare.</figcaption>
+    </figure>
   );
 }
 

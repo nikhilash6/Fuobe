@@ -22,7 +22,7 @@ export const PRESET_MINIS: Record<string, string> = {
   "app-banana-eating": "04ba3834",
   "app-behind-the-scenes": "be67f8d3",
   "app-billboard-ad": "9249ea4c",
-  "app-body-double": "772a5d8f",
+  "app-body-double": "29a3a4a4",
   "app-breakdown": "129678e2",
   "app-brick-cube": "137c1af3",
   "app-bring-to-life": "19e2b3ce",

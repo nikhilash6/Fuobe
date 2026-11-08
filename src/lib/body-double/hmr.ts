@@ -168,8 +168,9 @@ export async function createHmr(onProgress?: (share: number) => void): Promise<H
   const cctx = crop.getContext("2d", { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
   const input = new Float32Array(3 * SIZE * SIZE);
   let box: number[] | null = null;
-  const smoothVerts = new OneEuro(N_VERTS * 3, 1.0, 4.0);
-  const smoothCam = new OneEuro(3, 0.6, 2.0);
+  // Light smoothing: enough to steady a still pose, quick enough to keep up with a dancer at 20 fps.
+  const smoothVerts = new OneEuro(N_VERTS * 3, 3.0, 30.0);
+  const smoothCam = new OneEuro(3, 2.0, 10.0);
 
   const resetTrack = () => {
     box = null;

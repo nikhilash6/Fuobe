@@ -8,16 +8,15 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createHmr, type Hmr, N_VERTS } from "@/lib/body-double/hmr";
+import { BODY_DOUBLE_DEMOS } from "@/lib/catalog/body-double";
 import { cn } from "@/lib/utils";
 
 /** A clip anyone can try Live on before turning on their camera. */
 export const LIVE_SAMPLES = [
-  { src: "/previews/presets/app-dance.mp4", label: "Ballroom dance" },
-  { src: "/previews/presets/motion-catwalk.mp4", label: "Runway walk" },
+  { src: "/previews/body-double/sample-dance.mp4", label: "Gallery dance" },
+  { src: "/previews/body-double/sample-runway.mp4", label: "Runway walk" },
 ] as const;
 
-/** A finished Body Double, played on the stage until Live starts. */
-const LIVE_PREVIEW = "/previews/presets/app-body-double.mp4";
 
 export type LiveLook = "chrome" | "iris" | "holo" | "wire";
 export const LIVE_LOOKS: { value: LiveLook; label: string }[] = [
@@ -181,6 +180,9 @@ export function LiveView() {
   const stageRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  /** The frame each body was found in, shown under it so the two always match (the video plays on, out of sight). */
+  const frameRef = useRef<HTMLCanvasElement>(null);
+  const grab = useRef<HTMLCanvasElement | null>(null);
   const orbitRef = useRef<HTMLCanvasElement>(null);
   const scenes = useRef<Scenes | null>(null);
   const hmr = useRef<Hmr | null>(null);
@@ -270,9 +272,18 @@ export function LiveView() {
       }
       const now = performance.now();
       try {
-        const res = await engine.step(video, W, H, now / 1000);
+        // Freeze this frame, find its body, then show the frame and its body together.
+        const g = (grab.current ??= document.createElement("canvas"));
+        if (g.width !== W || g.height !== H) Object.assign(g, { width: W, height: H });
+        g.getContext("2d")?.drawImage(video, 0, 0, W, H);
+        const res = await engine.step(g, W, H, now / 1000);
+        const shown = frameRef.current;
+        if (shown) {
+          if (shown.width !== W || shown.height !== H) Object.assign(shown, { width: W, height: H });
+          shown.getContext("2d")?.drawImage(g, 0, 0);
+        }
         if (scenes.current) drawBody(scenes.current, res.verts, res.cam, res.f, W, H, now / 1000);
-        if (rec.current) composite(rec.current.canvas, video, overlayRef.current, mirror && source?.kind === "camera");
+        if (rec.current) composite(rec.current.canvas, g, overlayRef.current, mirror && source?.kind === "camera");
         r.fps.push(now);
         while (r.fps.length > 30) r.fps.shift();
         if (r.fps.length % 10 === 0) {
@@ -374,9 +385,10 @@ export function LiveView() {
   return (
     <div className={cn("grid gap-3", live ? "lg:grid-cols-[minmax(0,1fr)_300px]" : "mx-auto w-full max-w-[860px]")}>
       <div ref={stageRef} className="relative overflow-hidden rounded-2xl bg-media" style={{ aspectRatio: "4 / 3" }}>
-        <video ref={videoRef} muted playsInline className={cn("absolute inset-0 size-full object-contain", flipped && "-scale-x-100")} />
+        <video ref={videoRef} muted playsInline className="absolute inset-0 size-full object-contain opacity-0" aria-hidden />
+        <canvas ref={frameRef} className={cn("absolute inset-0 size-full object-contain", flipped && "-scale-x-100")} aria-label="Your camera" />
         <canvas ref={overlayRef} className={cn("pointer-events-none absolute inset-0 size-full", flipped && "-scale-x-100")} aria-hidden />
-        {!live && <video src={LIVE_PREVIEW} autoPlay muted loop playsInline aria-hidden className="absolute inset-0 size-full object-cover" />}
+        {!live && <video src={BODY_DOUBLE_DEMOS.live.video} poster={BODY_DOUBLE_DEMOS.live.poster} autoPlay muted loop playsInline aria-hidden className="absolute inset-0 size-full object-cover" />}
         {status.kind !== "live" && (
           <div className={cn("absolute inset-0 grid p-4 text-center", status.kind === "loading" ? "place-items-center bg-black/35" : "items-end justify-items-center bg-gradient-to-t from-black/75 via-black/10 to-transparent pb-6")}>
             {status.kind === "loading" ? (
@@ -462,7 +474,7 @@ export function LiveView() {
 }
 
 /** The picture with the body on it, into the recording's canvas. */
-function composite(canvas: HTMLCanvasElement, video: HTMLVideoElement, overlay: HTMLCanvasElement | null, flip: boolean) {
+function composite(canvas: HTMLCanvasElement, video: CanvasImageSource, overlay: HTMLCanvasElement | null, flip: boolean) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.save();

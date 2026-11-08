@@ -155,8 +155,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-body-double": {
-    "poster": "/previews/presets/app-body-double.jpg?v=09b1def0",
-    "video": "/previews/presets/app-body-double.mp4?v=cc37f262",
+    "poster": "/previews/presets/app-body-double.jpg?v=126dc81a",
+    "video": "/previews/presets/app-body-double.mp4?v=db8221c5",
     "run": "body-double-covers",
     "engine": "comfyui",
     "model": "oss-body-double",
