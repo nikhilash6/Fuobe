@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { type DrawBody, N_VERTS } from "@/lib/body-double/hmr";
 import { BODY_DOUBLE_DEMOS } from "@/lib/catalog/body-double";
+import { usePlayInView } from "./use-play-in-view";
 import { cn } from "@/lib/utils";
 import type { LiveReply, LiveRequest } from "./hmr.worker";
 
@@ -177,6 +178,13 @@ function drawBody(s: Scenes, last: Found, prev: Found | null, now: number) {
   s.orbit.r.render(s.orbit.scene, s.orbit.cam);
 }
 
+/** The finished motion capture on the stage until Live starts, playing only while it is on screen. */
+function IdleClip() {
+  const ref = useRef<HTMLVideoElement>(null);
+  usePlayInView(ref);
+  return <video ref={ref} src={BODY_DOUBLE_DEMOS.live.video} poster={BODY_DOUBLE_DEMOS.live.poster} muted loop playsInline preload="none" aria-hidden className="absolute inset-0 size-full object-cover" />;
+}
+
 type Source = { kind: "camera" } | { kind: "sample"; src: string };
 
 /**
@@ -208,17 +216,7 @@ export function LiveView() {
     const s = makeScenes(overlayRef.current, orbitRef.current, "chrome");
     scenes.current = s;
     const r = run.current;
-    let frame = 0;
-    const idle = () => {
-      if (!r.on) {
-        s.orbit.controls.update();
-        s.orbit.r.render(s.orbit.scene, s.orbit.cam);
-      }
-      frame = requestAnimationFrame(idle);
-    };
-    frame = requestAnimationFrame(idle);
     return () => {
-      cancelAnimationFrame(frame);
       r.on = false;
       worker.current?.terminate();
       worker.current = null;
@@ -416,7 +414,7 @@ export function LiveView() {
       <div ref={stageRef} className="relative overflow-hidden rounded-2xl bg-media" style={{ aspectRatio: "4 / 3" }}>
         <video ref={videoRef} muted playsInline className={cn("absolute inset-0 size-full object-contain", flipped && "-scale-x-100")} />
         <canvas ref={overlayRef} className={cn("pointer-events-none absolute inset-0 size-full", flipped && "-scale-x-100")} aria-hidden />
-        {!live && <video src={BODY_DOUBLE_DEMOS.live.video} poster={BODY_DOUBLE_DEMOS.live.poster} autoPlay muted loop playsInline aria-hidden className="absolute inset-0 size-full object-cover" />}
+        {!live && <IdleClip />}
         {status.kind !== "live" && (
           <div className={cn("absolute inset-0 grid p-4 text-center", status.kind === "loading" ? "place-items-center bg-black/35" : "items-end justify-items-center bg-gradient-to-t from-black/75 via-black/10 to-transparent pb-6")}>
             {status.kind === "loading" ? (

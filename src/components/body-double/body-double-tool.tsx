@@ -21,6 +21,7 @@ import { toastError } from "@/lib/refusals";
 import { postFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { LiveView } from "./live-view";
+import { usePlayInView } from "./use-play-in-view";
 
 type Mode = "live" | "photo" | "clip";
 const SUBTITLE = "A 3D body for every person: live from your camera, from a photo, or from a clip as motion capture you can animate with.";
@@ -289,6 +290,13 @@ export function BodyDoubleTool({ app }: { app: { name: string; description: stri
   );
 }
 
+/** The motion capture example, playing only while it is on screen. */
+function DemoClip({ src, poster }: { src: string; poster: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  usePlayInView(ref);
+  return <video ref={ref} src={src} poster={poster} muted loop playsInline preload="none" className="block w-full rounded-xl bg-media" />;
+}
+
 /** A finished example of the mode: what a run gives back. */
 function Demo({ mode }: { mode: "photo" | "clip" }) {
   const [after, setAfter] = useState(true);
@@ -296,7 +304,7 @@ function Demo({ mode }: { mode: "photo" | "clip" }) {
     const d = BODY_DOUBLE_DEMOS.clip;
     return (
       <figure className="space-y-2 rounded-2xl border bg-background p-2.5 shadow-soft">
-        <video src={d.video} poster={d.poster} autoPlay muted loop playsInline className="block w-full rounded-xl bg-media" />
+        <DemoClip src={d.video} poster={d.poster} />
         <figcaption className="px-0.5 text-[12px] text-muted-foreground">A dance in, its motion capture out: the body over every frame, the pose, and an animated 3D body.</figcaption>
       </figure>
     );
