@@ -1266,16 +1266,16 @@
     "at": "2026-11-03T18:55:14.135Z"
   },
   "video-fix-faces-h3": {
-    "sha256": "ebd29b6754b0b406a73dec05b4cebc22bf0acf5774e732b4c42d6a57a7e0f2a6",
+    "sha256": "f2614478685aea6b16452084b2eeadf211b30494c897be2401c6bc39aa42e10d",
     "validated": true,
     "error": null,
-    "at": "2026-11-03T18:55:13.488Z"
+    "at": "2026-11-08T08:27:28.762Z"
   },
   "video-from-picture-h3": {
-    "sha256": "a07fc6d3c3ea995ebb79839a29269270a3224563031ff6b70e67a0f5dda88aeb",
+    "sha256": "19564313c384952d35a88fcc9026b89150391a6f7f13b832ec755489f82ff809",
     "validated": true,
     "error": null,
-    "at": "2026-11-04T22:58:35.061Z"
+    "at": "2026-11-08T08:27:28.210Z"
   },
   "video-from-picture-solar": {
     "sha256": "dcb8ca8b4918c4a4e9a488eb02eff30e4f77767a553f3f22d5a4e4511e606271",
@@ -1284,16 +1284,16 @@
     "at": "2026-11-04T22:58:35.056Z"
   },
   "video-group-swap-h3": {
-    "sha256": "a946ec11f2e0ed403b49e2f43a10801918829e407bd7fe3ab10a6065fc3ec25a",
+    "sha256": "f877cceb1702f887e3f939f7060984c5fbc3ea69cc4a2b4671e11043a4310115",
     "validated": true,
     "error": null,
-    "at": "2026-11-03T19:15:30.473Z"
+    "at": "2026-11-08T08:27:25.481Z"
   },
   "video-group-swap-h3-one-by-one": {
-    "sha256": "9d0da7b722affa7801f563599740f334e39308f506f41ca71ee31ed6fd5fd989",
+    "sha256": "6a5fbe1c076887799e88a9bd1b4dcc78b0dba6084bccbdae2a0d3a35d968f347",
     "validated": true,
     "error": null,
-    "at": "2026-11-05T00:47:07.475Z"
+    "at": "2026-11-08T08:27:27.653Z"
   },
   "video-h3-t2v-2k": {
     "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
@@ -1416,10 +1416,10 @@
     "at": "2026-11-04T21:42:15.692Z"
   },
   "video-scene-edit-h3": {
-    "sha256": "8fa9cbb6333cd03f6f06c7dc767857c87c86428d4f6fc1f233374caf828d98eb",
+    "sha256": "9ccb0dd856036f1f9fdc9eb2ca45b09deec4758c874d0beedc5b9bce3f4d1536",
     "validated": true,
     "error": null,
-    "at": "2026-11-03T19:15:31.867Z"
+    "at": "2026-11-08T08:27:27.939Z"
   },
   "video-sdr-to-hdr": {
     "sha256": "f51f27af77dd2f61d51553241b15f6b5af14e6c06ff3342b24e810dff3e87f93",

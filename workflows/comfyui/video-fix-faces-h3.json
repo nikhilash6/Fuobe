@@ -397,7 +397,7 @@
   "22": {
     "inputs": {
       "model": [
-        "15",
+        "90",
         0
       ],
       "conditioning": [
@@ -434,7 +434,7 @@
       "steps": 6,
       "denoise": 1,
       "model": [
-        "15",
+        "90",
         0
       ]
     },
@@ -566,6 +566,27 @@
     "class_type": "VHS_VideoCombine",
     "_meta": {
       "title": "Fixed video"
+    }
+  },
+  "90": {
+    "inputs": {
+      "selection": "sol-attn",
+      "selection.tau": 1.3,
+      "start_percent": 0.2,
+      "end_percent": 1,
+      "dense_blocks": "",
+      "min_tokens": 12288,
+      "extra_tokens": 256,
+      "sink_conditioning": "exact_kv_and_rows",
+      "verbose": false,
+      "model": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "BlockSparseAttention",
+    "_meta": {
+      "title": "Sparse attention (sol-attn)"
     }
   }
 }

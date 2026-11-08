@@ -278,7 +278,7 @@
       "shift_video": 12,
       "shift_audio": 2,
       "model": [
-        "20",
+        "103",
         0
       ]
     },
@@ -1843,6 +1843,27 @@
     "class_type": "AudioAdjustVolume",
     "_meta": {
       "title": "Mute the reference audio H3 hears"
+    }
+  },
+  "103": {
+    "inputs": {
+      "selection": "sol-attn",
+      "selection.tau": 1.3,
+      "start_percent": 0.2,
+      "end_percent": 1,
+      "dense_blocks": "",
+      "min_tokens": 12288,
+      "extra_tokens": 256,
+      "sink_conditioning": "exact_kv_and_rows",
+      "verbose": false,
+      "model": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "BlockSparseAttention",
+    "_meta": {
+      "title": "Sparse attention (sol-attn)"
     }
   },
   "pad_silence": {
