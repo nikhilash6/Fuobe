@@ -16,6 +16,9 @@ export const LIVE_SAMPLES = [
   { src: "/previews/presets/motion-catwalk.mp4", label: "Runway walk" },
 ] as const;
 
+/** A finished Body Double, played on the stage until Live starts. */
+const LIVE_PREVIEW = "/previews/presets/app-body-double.mp4";
+
 export type LiveLook = "chrome" | "iris" | "holo" | "wire";
 export const LIVE_LOOKS: { value: LiveLook; label: string }[] = [
   { value: "chrome", label: "Chrome" },
@@ -215,6 +218,21 @@ export function LiveView() {
   }, []);
 
   useEffect(() => {
+    const canvas = orbitRef.current;
+    if (!canvas) return;
+    const ro = new ResizeObserver(([e]) => {
+      const s = scenes.current;
+      const { width, height } = e.contentRect;
+      if (!s || !width || !height) return;
+      s.orbit.r.setSize(width, height, false);
+      s.orbit.cam.aspect = width / height;
+      s.orbit.cam.updateProjectionMatrix();
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
     const s = scenes.current;
     if (!s) return;
     for (const [m, env] of [
@@ -351,13 +369,16 @@ export function LiveView() {
   };
 
   const flipped = mirror && source?.kind === "camera";
+  const live = status.kind === "live";
+  // Before Live starts, the stage plays a finished Body Double and the turning view stays out of the page.
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className={cn("grid gap-3", live ? "lg:grid-cols-[minmax(0,1fr)_300px]" : "mx-auto w-full max-w-[860px]")}>
       <div ref={stageRef} className="relative overflow-hidden rounded-2xl bg-media" style={{ aspectRatio: "4 / 3" }}>
         <video ref={videoRef} muted playsInline className={cn("absolute inset-0 size-full object-contain", flipped && "-scale-x-100")} />
         <canvas ref={overlayRef} className={cn("pointer-events-none absolute inset-0 size-full", flipped && "-scale-x-100")} aria-hidden />
+        {!live && <video src={LIVE_PREVIEW} autoPlay muted loop playsInline aria-hidden className="absolute inset-0 size-full object-cover" />}
         {status.kind !== "live" && (
-          <div className="absolute inset-0 grid place-items-center bg-black/35 p-4 text-center backdrop-blur-[2px]">
+          <div className={cn("absolute inset-0 grid p-4 text-center", status.kind === "loading" ? "place-items-center bg-black/35" : "items-end justify-items-center bg-gradient-to-t from-black/75 via-black/10 to-transparent pb-6")}>
             {status.kind === "loading" ? (
               <p className="inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-[13px] text-white" role="status">
                 <Loader2 className="size-3.5 animate-spin" /> Getting the body model ready{status.share ? ` · ${Math.round(status.share * 100)}%` : "…"}
@@ -392,7 +413,7 @@ export function LiveView() {
           </span>
         )}
       </div>
-      <div className="space-y-3">
+      <div className={cn("space-y-3", !live && "hidden")}>
         <div className="overflow-hidden rounded-2xl bg-[radial-gradient(ellipse_at_top,#2a2340,#0d0c12)]">
           <canvas ref={orbitRef} className="block aspect-square w-full touch-none" aria-label="Your 3D body, turning" />
         </div>
