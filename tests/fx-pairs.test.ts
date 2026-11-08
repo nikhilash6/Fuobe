@@ -13,7 +13,7 @@ describe("Fuobe FX cover pairs", () => {
     for (const [id, pair] of Object.entries(FX_PAIRS)) {
       expect(items.has(id), id).toBe(true);
       expect(pair.v, id).toMatch(/^[0-9a-f]{8}$/);
-      for (const [size, w, h, max] of [["480", 480, 360, 40_000], ["960", 960, 720, 140_000]] as const) {
+      for (const [size, w, h, max] of [["480", 480, 360, 40_000], ["960", 960, 720, 140_000], ...(pair.hd ? ([["1440", 1440, 1080, 300_000]] as const) : [])] as const) {
         for (const side of ["before", "after"])
           for (const ext of ["webp", "avif"]) {
             const file = path.join(dir(id), `${side}.${size}.${ext}`);

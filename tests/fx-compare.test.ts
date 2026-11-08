@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   FX_REST,
+  FX_REST_LOUPE,
   followsPointer,
   fxLoupeSources,
   fxSources,
@@ -22,6 +23,7 @@ import {
   showPos,
   stripShift,
   tapToggles,
+  restFor,
 } from "@/lib/fx-compare";
 import { FX_PAIRS } from "@/lib/fx-pairs.generated";
 import { fxSections, fxShowcase } from "@/lib/area-showcase";
@@ -41,14 +43,16 @@ describe("Fuobe FX before/after cards: the pairs", () => {
     expect(fxView("no-such-item")).toBeUndefined();
   });
 
-  it("points every source at a file that exists, versioned, AVIF and WebP at both sizes", () => {
+  it("points every source at a file that exists, versioned, AVIF and WebP at every size", () => {
     for (const id of Object.keys(FX_PAIRS)) {
       const v = fxView(id)!;
       const urls: string[] = [];
       if (v.kind === "reframe") urls.push(...fxWideSources(v).webp.split(", ").map((s) => s.split(" ")[0]));
       for (const side of ["before", "after"] as const) {
         const s = fxSources(v, side);
-        expect(s.avif, id).toMatch(/\.480\.avif\?v=[0-9a-f]{8} 480w, .+\.960\.avif\?v=[0-9a-f]{8} 960w$/);
+        // A sharp source (hd) also has a 1440 px copy, for a large card on a 2x screen.
+        const sizes = v.hd ? /\.480\.avif\?v=[0-9a-f]{8} 480w, .+\.960\.avif\?v=[0-9a-f]{8} 960w, .+\.1440\.avif\?v=[0-9a-f]{8} 1440w$/ : /\.480\.avif\?v=[0-9a-f]{8} 480w, .+\.960\.avif\?v=[0-9a-f]{8} 960w$/;
+        expect(s.avif, id).toMatch(sizes);
         urls.push(s.src, ...[s.avif, s.webp].flatMap((x) => x.split(", ").map((y) => y.split(" ")[0])));
         if (v.kind === "loupe") urls.push(...fxLoupeSources(v, side).srcSet.split(", ").map((y) => y.split(" ")[0]));
       }
@@ -78,6 +82,11 @@ describe("Fuobe FX before/after cards: the divider", () => {
   it("rests at a 35/65 split, and a tap shows all of one side, then the other", () => {
     expect(FX_REST).toBe(35);
     expect(showPos("rest")).toBe(35);
+    // An upscale's card rests on its sharp side: the divider near the left.
+    expect(restFor({ kind: "loupe" })).toBe(FX_REST_LOUPE);
+    expect(FX_REST_LOUPE).toBeLessThan(20);
+    expect(restFor({ kind: "pair" })).toBe(FX_REST);
+    expect(showPos("rest", restFor({ kind: "loupe" }))).toBe(FX_REST_LOUPE);
     expect(nextShow("rest")).toBe("after");
     expect(nextShow("after")).toBe("before");
     expect(nextShow("before")).toBe("after");

@@ -17,6 +17,7 @@ import {
   nextShow,
   posAt,
   reframeVars,
+  restFor,
   showPos,
   stripFrames,
   stripShift,
@@ -32,7 +33,8 @@ import { cn } from "@/lib/utils";
  * still split with a hairline and tiny "Before" and "After" tags (fx-compare.css draws every state):
  *   pair, depth  a mouse moves the divider; the after (a depth pass for depth) is cut there
  *   matte        the same, the cut-out on a transparency checkerboard
- *   loupe        a lens under the mouse: the soft before detail on its left, the sharp after on its right
+ *   loupe        at rest the divider sits near the left (the sharp after fills the card); a lens under the mouse:
+ *                the soft before detail on its left, the sharp after on its right
  *   reframe      the wide still with the tall crop's box outlined; the outside dims under the mouse
  *   strip        frame 1; under the mouse, the output's frames as a flipbook
  * A finger's tap shows the after, the next the before (the card's name still opens the page). With reduced motion the
@@ -84,7 +86,8 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
   const [armed, setArmed] = useState(false);
   const [ready, setReady] = useState(false);
   const loaded = useRef(0);
-  const pos = useRef(FX_REST);
+  const rest = restFor(view);
+  const pos = useRef(rest);
   const at = useRef<{ x: number; y: number } | null>(null);
   const raf = useRef(0);
   const pointer = useRef("mouse");
@@ -112,7 +115,7 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
     showRef.current = show;
     const el = ref.current;
     if (!el) return;
-    if (divides) setPos(showPos(show));
+    if (divides) setPos(showPos(show, rest));
     if (kind === "loupe" && show === "after") {
       const [x, y] = lensHome(view.loupe, el.clientWidth, el.clientHeight);
       const [dx, dy] = loupePan(0.5, 0.5, LENS_DETAIL, LENS);
@@ -189,7 +192,7 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
     raf.current = 0;
     delete el.dataset.hover;
     delete el.dataset.follow;
-    if (divides) setPos(showPos(showRef.current));
+    if (divides) setPos(showPos(showRef.current, rest));
   };
 
   return (
@@ -207,7 +210,9 @@ export function FxCompare({ view, sizes, eager, keys, className }: Props) {
           ? (reframeVars(view.rect) as React.CSSProperties)
           : kind === "strip"
             ? ({ "--fxc-frames": frames, "--fxc-last": `${stripShift(frames - 1, frames)}%` } as React.CSSProperties)
-            : undefined
+            : rest !== FX_REST
+              ? ({ "--fxc-pos": `${rest}%` } as React.CSSProperties)
+              : undefined
       }
       onPointerEnter={onPointerEnter}
       onPointerMove={onPointerMove}

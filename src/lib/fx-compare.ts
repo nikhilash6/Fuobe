@@ -18,6 +18,11 @@ export function fxView(id: string): FxView | undefined {
 
 /** Where the divider rests: the before on the left 35 %, the after on the right 65 %. */
 export const FX_REST = 35;
+/** An upscale's (a loupe card's) divider rests near the left, so the sharp after fills the card at a glance. */
+export const FX_REST_LOUPE = 12;
+
+/** Where a card's divider rests. */
+export const restFor = (v: Pick<FxView, "kind">) => (v.kind === "loupe" ? FX_REST_LOUPE : FX_REST);
 
 /** How far one arrow key moves the divider (Shift: a bigger step). */
 export const FX_STEP = 5;
@@ -56,7 +61,7 @@ export const followsPointer = (pointerType: string, reduced: boolean) => pointer
 /** Whether a tap toggles the card instead of opening its page: a touch screen's finger or pen. */
 export const tapToggles = (pointerType: string) => pointerType === "touch" || pointerType === "pen";
 
-/** A side's files: AVIF and WebP srcsets (480 and 960 px wide), and the 480 px WebP as the fallback src. */
+/** A side's files: AVIF and WebP srcsets (480 and 960 px wide, and 1440 for an `hd` pair), and the 480 px WebP as the fallback src. */
 export interface FxSources {
   avif: string;
   webp: string;
@@ -66,16 +71,16 @@ export interface FxSources {
 export function fxSources(v: FxView, side: "before" | "after"): FxSources {
   const at = (f: string) => fxPairSrc(v.id, f)!;
   return {
-    avif: `${at(`${side}.480.avif`)} 480w, ${at(`${side}.960.avif`)} 960w`,
-    webp: `${at(`${side}.480.webp`)} 480w, ${at(`${side}.960.webp`)} 960w`,
+    avif: `${at(`${side}.480.avif`)} 480w, ${at(`${side}.960.avif`)} 960w${v.hd ? `, ${at(`${side}.1440.avif`)} 1440w` : ""}`,
+    webp: `${at(`${side}.480.webp`)} 480w, ${at(`${side}.960.webp`)} 960w${v.hd ? `, ${at(`${side}.1440.webp`)} 1440w` : ""}`,
     src: at(`${side}.480.webp`),
   };
 }
 
-/** Reframe's 16:9 still (WebP only). */
+/** Reframe's 16:9 still (WebP only), 480 and 960 px wide (and 1440 for an `hd` pair). */
 export function fxWideSources(v: FxView): { webp: string; src: string } {
   const at = (f: string) => fxPairSrc(v.id, f)!;
-  return { webp: `${at("wide.480.webp")} 480w, ${at("wide.960.webp")} 960w`, src: at("wide.480.webp") };
+  return { webp: `${at("wide.480.webp")} 480w, ${at("wide.960.webp")} 960w${v.hd ? `, ${at("wide.1440.webp")} 1440w` : ""}`, src: at("wide.480.webp") };
 }
 
 /** The loupe's detail of one side: 240 px, and 480 px for a 2x screen. */
