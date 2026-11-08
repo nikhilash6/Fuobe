@@ -75,11 +75,34 @@ function readJson(p, fallback) {
   }
 }
 
+/**
+ * renameSync that waits out a reader. On Windows a rename onto a file another program has open (a helper reading
+ * status.json or site.json at that moment) fails with EPERM, EACCES or EBUSY for a few milliseconds: try again a few
+ * times before giving up. Never throws for that alone: the next write comes within seconds.
+ */
+export function renameRetry(from, to, tries = 8) {
+  for (let i = 1; ; i++) {
+    try {
+      fs.renameSync(from, to);
+      return true;
+    } catch (e) {
+      if (!["EPERM", "EACCES", "EBUSY"].includes(e?.code)) throw e;
+      if (i >= tries) {
+        try {
+          fs.rmSync(from, { force: true });
+        } catch {}
+        return false;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 * i);
+    }
+  }
+}
+
 function writePrivate(p, data) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(tmp, p);
+  if (!renameRetry(tmp, p)) return;
   try {
     fs.chmodSync(p, 0o600);
   } catch {}

@@ -15,6 +15,7 @@
 // decides what to do with them.
 import fs from "node:fs";
 import path from "node:path";
+import { renameRetry } from "./config.mjs";
 
 const HOUR = 3_600_000;
 
@@ -49,7 +50,7 @@ export function writeSite(folder, body) {
   const p = path.join(folder, "site.json");
   const tmp = `${p}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(body)}\n`);
-  fs.renameSync(tmp, p);
+  renameRetry(tmp, p);
 }
 
 /**
@@ -65,7 +66,7 @@ export function writeMode(folder, q, t) {
   const p = path.join(folder, "mode.json");
   const tmp = `${p}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify({ mode: q.mode, localWork: q.localWork, until: finite(q.until) ? q.until : null, at: t })}\n`);
-  fs.renameSync(tmp, p);
+  renameRetry(tmp, p);
   return true;
 }
 
