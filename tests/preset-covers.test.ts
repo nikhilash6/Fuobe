@@ -19,6 +19,7 @@ import { presetHdFiles } from "@/lib/preset-hd";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { STUDIO_COVERS } from "@/lib/studio-covers";
+import { BUILT_IN_CHARACTERS } from "@/lib/chat/catalog";
 import { mp4Seconds } from "./helpers/mp4-length";
 
 /*
@@ -112,6 +113,8 @@ describe("the preset covers manifest", () => {
     for (const id of Object.keys(PRESET_HD)) for (const f of presetHdFiles(id, !!PRESET_PEAKS[id])) named.add(f);
     // Home's first screen makes its own clips and stills (scripts/gen-home-bento.mjs, tests/home-bento.test.ts).
     for (const f of Object.keys(HOME_BENTO_MEDIA)) named.add(f);
+    // Chat's built-in characters' portraits (src/lib/chat/catalog.ts).
+    for (const c of BUILT_IN_CHARACTERS) if (c.portrait) named.add(c.portrait.split("?")[0]);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
     // public/previews/templates is the template covers' (tests/template-covers.test.ts checks it).

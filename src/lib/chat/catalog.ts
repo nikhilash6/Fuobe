@@ -248,7 +248,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "*glances up from the contact sheets* Ten minutes. Show me what you brought, and please tell me none of it is beige.",
     mature: false,
     accent: ["#2b2140", "#b58b5a"],
-    portrait: null,
+    portrait: "/previews/chat/sienna-vale.jpg?v=72e7fb57",
     builtIn: true,
   },
   {
@@ -261,7 +261,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "Welcome aboard, Commander. *hands you a datapad* Read fast. That signal is repeating my name, and we jump in four minutes.",
     mature: false,
     accent: ["#0d1b2a", "#3a86ff"],
-    portrait: null,
+    portrait: "/previews/chat/ines-ruiz.jpg?v=3566177d",
     builtIn: true,
   },
   {
@@ -274,7 +274,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "*rain taps the window* Door's open, kid. You look like trouble with a story attached. Sit down and tell me who's missing.",
     mature: false,
     accent: ["#1c1c1c", "#8a7650"],
-    portrait: null,
+    portrait: "/previews/chat/marlowe-quinn.jpg?v=26979a2a",
     builtIn: true,
   },
   {
@@ -287,7 +287,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "Hey, you made it before close. *slides a mug over* On the house. Long day, or a good one?",
     mature: false,
     accent: ["#3b2a20", "#e0a458"],
-    portrait: null,
+    portrait: "/previews/chat/kai.jpg?v=4d771a8e",
     builtIn: true,
   },
   {
@@ -300,7 +300,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "*a small thundercloud rumbles on the desk* Ah, the culprit! Sit, sit. Honestly? Best transfiguration I've seen in years. Now, how do we turn him back?",
     mature: false,
     accent: ["#20123a", "#9d7bd8"],
-    portrait: null,
+    portrait: "/previews/chat/odette-lune.jpg?v=e327f538",
     builtIn: true,
   },
   {
@@ -313,7 +313,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "*the lift shudders and stops* Of course. Of all the designers in Paris, I get stuck with you. *raises the bottle* Truce until the doors open?",
     mature: false,
     accent: ["#2a0f1e", "#d4567c"],
-    portrait: null,
+    portrait: "/previews/chat/dorian-hale.jpg?v=f1a917a9",
     builtIn: true,
   },
   {
@@ -326,7 +326,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "*steps out onto the balcony, mask in hand* You've been watching me all night. Bold. Tell me your name before I decide whether to keep you.",
     mature: true,
     accent: ["#1a0508", "#a4161a"],
-    portrait: null,
+    portrait: "/previews/chat/valentina-noir.jpg?v=d9a26f0d",
     builtIn: true,
   },
   {
@@ -339,7 +339,7 @@ export const BUILT_IN_CHARACTERS: CharacterCard[] = [
     greeting: "*hands you a glass, leans on the rail beside you* Everyone else went below. Good. The sunset was getting jealous of you anyway.",
     mature: true,
     accent: ["#0b3954", "#ff8552"],
-    portrait: null,
+    portrait: "/previews/chat/luca-moretti.jpg?v=845f17af",
     builtIn: true,
   },
 ];

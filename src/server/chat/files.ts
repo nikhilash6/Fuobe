@@ -1,4 +1,6 @@
 import "server-only";
+import fs from "node:fs";
+import path from "node:path";
 import { localHead, readRef, saveFile } from "../storage";
 import { runAsTenant } from "../tenant";
 
@@ -35,8 +37,19 @@ export async function readPicture(who: string, ref: string): Promise<{ data: Buf
   }
 }
 
+/** A built-in character's portrait: a public file the site ships (src/lib/chat/catalog.ts). */
+const BUILT_IN_PORTRAIT = /^\/previews\/chat\/([a-z0-9-]{1,60})\.jpg(?:\?v=[0-9a-f]{8})?$/;
+
 /** A picture read for anyone (a shared chat's portrait): no account check. Only for refs a share row holds. */
 export async function readSharedPicture(ref: string): Promise<{ data: Buffer; contentType: string } | null> {
+  const builtIn = BUILT_IN_PORTRAIT.exec(ref);
+  if (builtIn) {
+    try {
+      return { data: await fs.promises.readFile(path.join(process.cwd(), "public", "previews", "chat", `${builtIn[1]}.jpg`)), contentType: "image/jpeg" };
+    } catch {
+      return null;
+    }
+  }
   if (!FILE_REF.test(ref) || ref.includes("..")) return null;
   try {
     const f = await readRef(ref);
