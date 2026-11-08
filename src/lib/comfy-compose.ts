@@ -219,6 +219,7 @@ const MEDIA_LOADERS: Record<string, string> = {
   LoadImageMask: "image",
   LoadVideo: "file",
   VHS_LoadVideo: "video",
+  VHS_LoadVideoFFmpeg: "video",
   LoadAudio: "audio",
   VHS_LoadAudioUpload: "audio",
   AUSBOSS_NODES_ImageCropRotatePad: "image",

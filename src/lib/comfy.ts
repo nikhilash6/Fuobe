@@ -687,12 +687,14 @@ export function tagMetaBatch(wf: ComfyWorkflow, job: string): ComfyWorkflow {
   return out;
 }
 
+/** The VHS video loaders: their audio is output 2, read lazily (a file without sound stops the run once it is read). */
+const VHS_VIDEO_LOADERS = new Set(["VHS_LoadVideo", "VHS_LoadVideoFFmpeg"]);
 /** Inputs that may go without sound: a VHS soundtrack link into them is dropped for a silent clip. */
 const OPTIONAL_SOUND: Record<string, string[]> = { VHS_VideoCombine: ["audio"], CreateVideo: ["audio"], TextGenerate: ["audio"], RemakeConditioning: ["audio"] };
 /** Nodes that pad the sound they get to the loaded frames themselves: an empty track is enough (and never too long). */
 const PADS_TO_FRAMES = new Set(["H3SoundtrackOrSilence"]);
 /**
- * A clip with no sound: VHS_LoadVideo fails ("failed to extract audio") once its audio output is read, so no
+ * A clip with no sound: a VHS video loader fails ("failed to extract audio") once its audio output is read, so no
  * link from that output is left. Where sound is optional (VHS_VideoCombine.audio) the link is dropped, and the
  * result has no sound track. Where a node needs sound (the Openjutsu graphs' AudioConcat, H3 Face Chunks) it
  * gets stereo silence `seconds` long (the clip's length; 1 s when unknown), and H3 Soundtrack or Silence an empty
@@ -700,7 +702,7 @@ const PADS_TO_FRAMES = new Set(["H3SoundtrackOrSilence"]);
  * says they have no sound.
  */
 export function dropVhsAudio(wf: ComfyWorkflow, seconds?: number): ComfyWorkflow {
-  const loaders = new Set(Object.entries(wf).filter(([, n]) => n.class_type === "VHS_LoadVideo").map(([id]) => id));
+  const loaders = new Set(Object.entries(wf).filter(([, n]) => VHS_VIDEO_LOADERS.has(n.class_type)).map(([id]) => id));
   if (!loaders.size) return wf;
   const out = cloneWorkflow(wf);
   const clipLength = seconds && Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds * 1000) / 1000 : 1;
@@ -730,7 +732,7 @@ export function dropVhsAudio(wf: ComfyWorkflow, seconds?: number): ComfyWorkflow
  * loader's own sound is then never read (a file without one would stop VHS).
  */
 export function silenceVhsAudio(wf: ComfyWorkflow, seconds: number): ComfyWorkflow {
-  const loaders = new Set(Object.entries(wf).filter(([, n]) => n.class_type === "VHS_LoadVideo").map(([id]) => id));
+  const loaders = new Set(Object.entries(wf).filter(([, n]) => VHS_VIDEO_LOADERS.has(n.class_type)).map(([id]) => id));
   if (!loaders.size) return wf;
   const out = cloneWorkflow(wf);
   let id = "silence";

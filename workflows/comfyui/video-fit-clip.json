@@ -1,6 +1,6 @@
 {
   "1": {
-    "class_type": "VHS_LoadVideo",
+    "class_type": "VHS_LoadVideoFFmpeg",
     "inputs": {
       "video": "input.mp4",
       "force_rate": [
@@ -13,11 +13,10 @@
         "7",
         1
       ],
-      "skip_first_frames": [
-        "6",
-        1
+      "start_time": [
+        "8",
+        0
       ],
-      "select_every_nth": 1,
       "format": "None",
       "meta_batch": [
         "2",
@@ -93,23 +92,6 @@
     },
     "_meta": {
       "title": "fps"
-    }
-  },
-  "6": {
-    "class_type": "ComfyMathExpression",
-    "inputs": {
-      "expression": "round(a * b)",
-      "values.a": [
-        "8",
-        0
-      ],
-      "values.b": [
-        "5",
-        0
-      ]
-    },
-    "_meta": {
-      "title": "Frames to skip: startTime x fps"
     }
   },
   "7": {

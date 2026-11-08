@@ -5438,8 +5438,8 @@ export const SPEC = [
     license: 'n/a (no model; ComfyUI core + VideoHelperSuite GPL-3.0 code)',
     notes:
       'The Canvas Video concatenator, one job per clip, then video-concat-encoded joins them: every clip comes out at the film\'s size (width x height, scaled to cover and centre-cropped), ' +
-      'at fps (30) and as H.264 + AAC from VHS, so ConcatenateVideo can copy the packets. VHS_LoadVideo resamples to fps and skips round(startTime x fps) frames, keeping round(duration x fps) ' +
-      '(duration 0 = to the end); its sound is cut to the same window (VHS lazy audio: start = skipped frames / fps, length = kept frames / fps), so picture and sound stay in sync. ' +
+      'at fps (30) and as H.264 + AAC from VHS, so ConcatenateVideo can copy the packets. VHS_LoadVideoFFmpeg (ffmpeg decodes the colours as the file tags them) resamples to fps and starts at startTime, keeping round(duration x fps) ' +
+      '(duration 0 = to the end); its sound is cut to the same window (VHS lazy audio: start = startTime, length = kept frames / fps), so picture and sound stay in sync. ' +
       'framesPerBatch frames per pass (64): memory stays flat however long the clip. Muted clips and clips with no sound: the provider replaces the combine\'s audio with an EmptyAudio as long as the window ' +
       '(silenceVhsAudio), so every clip of a film has a sound track; when the window\'s length is unknown (no header, no end) the sound is dropped instead.',
   },

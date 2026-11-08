@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow } from "@/lib/comfy";
-import { dropVhsAudio } from "@/lib/comfy";
+import { dropVhsAudio, silenceVhsAudio } from "@/lib/comfy";
 import { composeWorkflow, type ComposeCatalog } from "@/lib/comfy-compose";
 import type { MediaInfo } from "@/lib/media-probe";
 import { OPENJUTSU_WORKFLOWS } from "@/lib/openjutsu-graphs";
@@ -32,7 +32,7 @@ const clipFacts = (hasAudio: boolean): MediaInfo => ({
 const PICTURE: MediaInfo = { container: "image", width: 1024, height: 1024, hasVideo: false, hasAudio: false };
 
 const isLink = (v: unknown): v is [string, number] => Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && typeof v[1] === "number";
-const vhsLoaders = (wf: ComfyWorkflow) => Object.keys(wf).filter((id) => wf[id].class_type === "VHS_LoadVideo");
+const vhsLoaders = (wf: ComfyWorkflow) => Object.keys(wf).filter((id) => wf[id].class_type === "VHS_LoadVideo" || wf[id].class_type === "VHS_LoadVideoFFmpeg");
 /** Every input that reads a VHS loader's sound (output 2). */
 const soundReads = (wf: ComfyWorkflow) => {
   const loaders = new Set(vhsLoaders(wf));
@@ -140,6 +140,15 @@ describe("dropVhsAudio", () => {
     expect(out["4"].inputs.video_info).toEqual(["1", 3]);
     // The source graph is left as it was.
     expect(wf["2"].inputs.audio).toEqual(["1", 2]);
+  });
+
+  it("treats the ffmpeg loader the same way (its sound is output 2 too)", () => {
+    const ff: ComfyWorkflow = { ...wf, "1": { class_type: "VHS_LoadVideoFFmpeg", inputs: { video: "a.mp4" } } };
+    const out = dropVhsAudio(ff, 2);
+    expect(out["2"].inputs.audio).toBeUndefined();
+    expect(out[(out["5"].inputs.audio as [string, number])[0]]).toMatchObject({ class_type: "EmptyAudio", inputs: { duration: 2 } });
+    const quiet = silenceVhsAudio(ff, 3);
+    expect(quiet[(quiet["2"].inputs.audio as [string, number])[0]]).toMatchObject({ class_type: "EmptyAudio", inputs: { duration: 3 } });
   });
 
   it("uses 1 s when the clip's length is unknown, and leaves a graph without VHS loaders alone", () => {

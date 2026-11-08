@@ -6,11 +6,10 @@
       "custom_width": 0,
       "custom_height": 0,
       "frame_load_cap": 0,
-      "skip_first_frames": 0,
-      "select_every_nth": 1,
+      "start_time": 0,
       "format": "None"
     },
-    "class_type": "VHS_LoadVideo",
+    "class_type": "VHS_LoadVideoFFmpeg",
     "_meta": {
       "title": "Video to fix"
     }

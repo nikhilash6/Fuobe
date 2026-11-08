@@ -120,6 +120,7 @@ const FILE_LOADERS: Record<string, string[]> = {
   LoadVideo: ["file"],
   LoadAudio: ["audio"],
   VHS_LoadVideo: ["video"],
+  VHS_LoadVideoFFmpeg: ["video"],
   VHS_LoadVideoPath: ["video"],
   VHS_LoadAudio: ["audio_file"],
   VHS_LoadAudioUpload: ["audio"],
