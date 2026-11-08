@@ -538,3 +538,18 @@ describe("create and prefetch", () => {
     expect(list.every((h) => entriesFor("guest").some((e) => e.href === h))).toBe(true);
   });
 });
+
+describe("the menus' clips on any device", () => {
+  it("play eight at once on a capable device, three on a modest one, none on a slow connection or when saving data", async () => {
+    const { playCap, PLAY_AT_ONCE, PLAY_AT_ONCE_MODEST } = await import("@/components/nav/mega-panel");
+    const dev = (o: object) => o as Navigator;
+    expect(PLAY_AT_ONCE).toBe(8);
+    expect(playCap(dev({ hardwareConcurrency: 10, deviceMemory: 16 }))).toBe(PLAY_AT_ONCE);
+    // Safari says neither: it counts as capable (its Low Power Mode refuses autoplay by itself).
+    expect(playCap(dev({}))).toBe(PLAY_AT_ONCE);
+    expect(playCap(dev({ hardwareConcurrency: 4, deviceMemory: 8 }))).toBe(PLAY_AT_ONCE_MODEST);
+    expect(playCap(dev({ hardwareConcurrency: 8, deviceMemory: 4 }))).toBe(PLAY_AT_ONCE_MODEST);
+    expect(playCap(dev({ hardwareConcurrency: 8, connection: { effectiveType: "3g" } }))).toBe(0);
+    expect(playCap(dev({ hardwareConcurrency: 8, connection: { effectiveType: "4g", saveData: true } }))).toBe(0);
+  });
+});

@@ -11,7 +11,7 @@ import { NEW_CREATION_HREF } from "@/lib/nav";
 import { bundledMenu, MEGA_AREAS, type MegaColumn, type MegaId, type MegaItem, type MegaModel } from "@/lib/mega-menus";
 import { isNew, subParent, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { clipsAllowed, CoverThumb, useAliveCard, useHasClip } from "./cover-thumb";
+import { AUTOPLAY_BLOCKED, clipsAllowed, CoverThumb, useAliveCard, useHasClip } from "./cover-thumb";
 import { useMegaMenu } from "./mega-data";
 import { megaCurrent, MegaSkeleton } from "./mega-launcher";
 import { useViewerKind } from "./nav-ui";
@@ -37,6 +37,24 @@ export const TILE_SIZES = "(min-width: 1680px) 316px, (min-width: 1280px) calc((
 
 /** How many tiles play their clips at once: enough to bring the menu to life, few enough for any laptop. */
 export const PLAY_AT_ONCE = 8;
+/** On a modest device (4 GB of memory or less, or 4 cores or fewer): fewer at once, so the menu stays smooth. */
+export const PLAY_AT_ONCE_MODEST = 3;
+
+/**
+ * How many clips this device plays at once: none on a slow connection (2G or 3G) or when saving data, a few on a modest
+ * device, else PLAY_AT_ONCE. Browsers that don't say (Safari) count as capable; Safari's Low Power Mode refuses autoplay
+ * by itself (AUTOPLAY_BLOCKED), and the stills stay.
+ */
+export function playCap(nav: Navigator | undefined = typeof navigator === "undefined" ? undefined : navigator): number {
+  if (!nav) return 0;
+  const n = nav as Navigator & { connection?: { saveData?: boolean; effectiveType?: string }; deviceMemory?: number };
+  if (n.connection?.saveData || /(^|-)2g$|^3g$/.test(n.connection?.effectiveType ?? "")) return 0;
+  if ((n.deviceMemory ?? 8) <= 4 || (n.hardwareConcurrency || 8) <= 4) return PLAY_AT_ONCE_MODEST;
+  return PLAY_AT_ONCE;
+}
+
+/** The browser refused a clip this visit: no tile asks again until the next page load. */
+let autoplayBlocked = false;
 
 function NewBadge() {
   return (
@@ -146,17 +164,27 @@ function usePlaceKeys(root: React.RefObject<HTMLElement | null>, key: unknown) {
 }
 
 /**
- * The menu's player: the tiles on screen with a clip play it, at most PLAY_AT_ONCE, the first ones first. Nothing plays
- * while the panel is closed or scrolled past, in a hidden tab, with previews paused (Pause previews), under reduced
- * motion or when saving data. Returns the ids playing.
+ * The menu's player: the tiles on screen with a clip play it, at most playCap() (eight; three on a modest device; none on
+ * a slow connection), the first ones first. Nothing plays while the panel is closed or scrolled past, in a hidden tab,
+ * with previews paused (Pause previews), under reduced motion, when saving data, or once the browser has refused a clip
+ * (iOS Low Power Mode). Returns the ids playing.
  */
 const NONE: ReadonlySet<string> = new Set();
 
 function useMenuPlayer(root: React.RefObject<HTMLElement | null>, key: unknown): ReadonlySet<string> {
   const paused = usePreviewsPaused();
-  const [allowed] = useState(() => typeof window !== "undefined" && clipsAllowed());
+  const [cap] = useState(() => (typeof window !== "undefined" && clipsAllowed() ? playCap() : 0));
+  const [blocked, setBlocked] = useState(() => autoplayBlocked);
   const [ids, setIds] = useState<ReadonlySet<string>>(NONE);
-  const off = paused || !allowed;
+  const off = paused || !cap || blocked;
+  useEffect(() => {
+    const stop = () => {
+      autoplayBlocked = true;
+      setBlocked(true);
+    };
+    window.addEventListener(AUTOPLAY_BLOCKED, stop);
+    return () => window.removeEventListener(AUTOPLAY_BLOCKED, stop);
+  }, []);
   useEffect(() => {
     const el = root.current;
     if (!el || off) return;
@@ -164,7 +192,7 @@ function useMenuPlayer(root: React.RefObject<HTMLElement | null>, key: unknown):
     const order = new Map(tiles.map((t, i) => [t, i]));
     const seen = new Set<HTMLElement>();
     const update = () => {
-      const next = document.hidden ? [] : [...seen].sort((a, b) => order.get(a)! - order.get(b)!).slice(0, PLAY_AT_ONCE).map((t) => t.dataset.tile!);
+      const next = document.hidden ? [] : [...seen].sort((a, b) => order.get(a)! - order.get(b)!).slice(0, cap).map((t) => t.dataset.tile!);
       setIds((prev) => (prev.size === next.length && next.every((id) => prev.has(id)) ? prev : new Set(next)));
     };
     // The panel scrolls inside itself: its section is the box the tiles must be in to count as on screen.
@@ -184,7 +212,7 @@ function useMenuPlayer(root: React.RefObject<HTMLElement | null>, key: unknown):
       io.disconnect();
       document.removeEventListener("visibilitychange", update);
     };
-  }, [root, key, off]);
+  }, [root, key, off, cap]);
   return off ? NONE : ids;
 }
 

@@ -20,6 +20,9 @@ const ALIVE_AFTER = 120;
 /** The one cover clip playing on hover (a card under the pointer: one decoder at a time). A menu's player runs its own (shared). */
 let playingClip: HTMLVideoElement | null = null;
 
+/** Sent on window when the browser refuses to start a muted clip (iOS Low Power Mode, an autoplay policy). */
+export const AUTOPLAY_BLOCKED = "fuobe:autoplay-blocked";
+
 /** Clips play unless the viewer asks for less motion or to save data. */
 export function clipsAllowed(): boolean {
   if (reducedMotion()) return false;
@@ -94,7 +97,10 @@ function CoverClip({ src, at, leaving, focus, shared }: { src: string; at?: numb
     v.addEventListener("playing", playing, { once: true });
     v.addEventListener("timeupdate", tail);
     v.src = src;
-    void v.play().catch(() => {});
+    void v.play().catch((e: unknown) => {
+      // Refused (not just interrupted by a pause): a menu's player stops asking for the rest of the visit.
+      if (shared && e instanceof DOMException && e.name === "NotAllowedError") window.dispatchEvent(new Event(AUTOPLAY_BLOCKED));
+    });
     return () => {
       live = false;
       v.removeEventListener("timeupdate", tail);
