@@ -4866,25 +4866,9 @@
   }
  },
  {
-  "id": "video-tools.1",
-  "surface": "hub:video-tools",
-  "rank": 1,
-  "caption": "Cut from a lavender field, cape and all",
-  "modelId": "oss-video-matte-birefnet",
-  "inputs": {
-   "video": "/examples/video-tools/1/in-video.mp4"
-  },
-  "output": "/examples/video-tools/1/show.mp4",
-  "rest": {
-   "src": "/examples/video-tools/1/show.peak.webp",
-   "at": 2.5,
-   "from": 0
-  }
- },
- {
   "id": "video-tools.2",
   "surface": "hub:video-tools",
-  "rank": 2,
+  "rank": 1,
   "caption": "Windswept hair, cut out strand by strand",
   "modelId": "oss-video-matte-birefnet",
   "inputs": {

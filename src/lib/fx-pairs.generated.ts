@@ -116,7 +116,7 @@ export const FX_PAIRS: Record<string, FxPair> = {
   ]
  },
  "video-tools": {
-  "v": "5a5c1320",
+  "v": "a5c1dd99",
   "kind": "matte"
  },
  "video-tools-colors": {
