@@ -30,6 +30,15 @@ export const FIX_FACES_DEMO = {
 
 export type FixFacesClip = { url: string; name?: string; duration?: number; width?: number; height?: number };
 
+/**
+ * Fix Faces with a finished video in, and the picture it was made from as the face when it had one (an H3 video from a
+ * start picture: the face the video was meant to have).
+ */
+export function fixFacesHref(video: string, photo?: string): string {
+  const q = encodeURIComponent;
+  return `/apps/${FIX_FACES.appId}?video=${q(video)}${photo ? `&photo=${q(photo)}` : ""}`;
+}
+
 /** The part of the clip one run fixes: from the start, at most maxSeconds. */
 export function fixFacesRange(duration: number | undefined): { start: number; end: number } | undefined {
   if (!duration || !Number.isFinite(duration) || duration <= 0) return undefined;

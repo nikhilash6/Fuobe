@@ -2,6 +2,7 @@
 
 import {
   ArchiveRestore,
+  ScanFace,
   LetterText,
   Disc3,
   Layers3,
@@ -146,6 +147,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "delete-own": Trash2,
   restore: ArchiveRestore,
   "restore-video": Palette,
+  "fix-faces": ScanFace,
   "export-pro": Film,
   "extend-song": ListMusic,
   "remix-song": Disc3,

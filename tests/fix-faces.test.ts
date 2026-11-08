@@ -76,3 +76,17 @@ describe("Fix Faces app", () => {
     expect(PRESET_PREVIEWS["app-fix-faces"]?.video).toMatch(/app-fix-faces\.mp4\?v=/);
   });
 });
+
+describe("the Fix faces action on a finished video", () => {
+  it("opens Fix Faces with the clip, and an H3 video's start picture as the face", async () => {
+    const { outputActions } = await import("@/lib/output-actions");
+    const g = (over: Record<string, unknown>) =>
+      ({ id: "g1", status: "succeeded", modelId: "oss-minimax-h3", engine: "open", feature: "studio", op: "i2v", prompt: "", outputs: [{ kind: "video", url: "/api/files/v.mp4" }], request: { inputs: { images: ["/api/files/start.png"] } }, ...over }) as never;
+    const h3 = outputActions(g({}), 0).find((a) => a.id === "fix-faces");
+    expect(h3?.href).toBe("/apps/app-fix-faces?video=%2Fapi%2Ffiles%2Fv.mp4&photo=%2Fapi%2Ffiles%2Fstart.png");
+    expect(h3?.ownSetup).toBe("oss-h3-fix-faces");
+    const other = outputActions(g({ modelId: "wan-2-2", request: { inputs: { images: ["/api/files/start.png"] } } }), 0).find((a) => a.id === "fix-faces");
+    expect(other?.href).toBe("/apps/app-fix-faces?video=%2Fapi%2Ffiles%2Fv.mp4");
+    expect(outputActions(g({ feature: "app:app-fix-faces" }), 0).some((a) => a.id === "fix-faces")).toBe(false);
+  });
+});

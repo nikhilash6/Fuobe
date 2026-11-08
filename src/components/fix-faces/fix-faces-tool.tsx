@@ -141,11 +141,13 @@ type Meta = { duration?: number; width?: number; height?: number };
 type Auto = { url: string; blob: Blob } | null;
 
 export function FixFacesTool({ app }: { app: { name: string; description: string } }) {
-  // ?video=<url> (a finished result's "Fix faces"): opens on that clip.
-  const asked = useSearchParams().get("video");
+  // ?video=<url> (a finished result's "Fix faces"): opens on that clip; ?photo=<url> (an H3 video's start picture) is its face.
+  const params = useSearchParams();
+  const asked = params.get("video");
+  const askedPhoto = params.get("photo");
   const [clip, setClip] = useState<SlotValue | null>(asked ? { ref: asked, preview: asked, kind: "video", name: "video.mp4" } : null);
   const [meta, setMeta] = useState<Meta>({});
-  const [photo, setPhoto] = useState<SlotValue | null>(null);
+  const [photo, setPhoto] = useState<SlotValue | null>(askedPhoto ? { ref: askedPhoto, preview: askedPhoto, kind: "image", name: "face.jpg" } : null);
   // The clip's clearest face, and how far the search is: each kept with the clip it belongs to.
   const [found, setFound] = useState<{ for: string; face: Auto } | null>(null);
   const [progress, setProgress] = useState<{ for: string; done: number; total: number } | null>(null);
