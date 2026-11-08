@@ -23,8 +23,30 @@ function turnsAllowed(): boolean {
   return !conn?.saveData;
 }
 
-/** The studio colour behind a preview's backdrop (its edges), so a letterboxed tile has no seam. */
+/** The studio colour at a preview's corners: what a tile shows before its still arrives. */
 const STUDIO_FILL = "bg-[#dad8d4] dark:bg-[#141417]";
+
+/**
+ * The preview's studio sweep, continued past a square still in a wider or taller tile (a letterboxed one), so the still
+ * sits in it with no seam: the sweep scripts/model3d/preview3d-core.mjs draws (backdrop()), centred on the still, sized
+ * by the tile's shorter side (container units).
+ */
+const SWEEP_STOPS = [0, 0.25, 0.5, 0.75, 1].map((f) => [f, f ** 1.5] as const);
+const sweep = (c0: number[], c1: number[]) => {
+  const stops = SWEEP_STOPS.map(([f, t]) => `rgb(${c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(" ")}) ${f * 100}%`).join(", ");
+  // The still's sweep is centred at 42 % of its height, 0.78 of its side wide and 0.78 / 1.15 high.
+  return `radial-gradient(78cqmin 67.8cqmin at 50% calc(50% - 8cqmin), ${stops})`;
+};
+const SWEEP = { light: sweep([246, 245, 243], [218, 216, 212]), dark: sweep([44, 44, 48], [20, 20, 23]) };
+
+function StudioSweep() {
+  return (
+    <>
+      <div aria-hidden className="absolute inset-0 dark:hidden" style={{ backgroundImage: SWEEP.light }} />
+      <div aria-hidden className="absolute inset-0 hidden dark:block" style={{ backgroundImage: SWEEP.dark }} />
+    </>
+  );
+}
 
 /**
  * A 3D result as a tile: its preview's still (the light or the dark studio, with the theme), and its turntable playing
@@ -74,7 +96,8 @@ export function ModelTile({ preview, fit, autoPlay, className }: { preview: Read
   }, [autoPlay]);
   const { mounted, leaving } = usePresence(on);
   return (
-    <div ref={root} className={cn("relative size-full overflow-hidden", STUDIO_FILL, className)} data-model-tile="">
+    <div ref={root} className={cn("relative size-full overflow-hidden [container-type:size]", STUDIO_FILL, className)} data-model-tile="">
+      {fit && <StudioSweep />}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={preview.poster.light} alt="" loading="lazy" decoding="async" className={cn("absolute inset-0 size-full dark:hidden", object)} />
       {/* eslint-disable-next-line @next/next/no-img-element */}

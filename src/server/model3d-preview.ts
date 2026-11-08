@@ -52,10 +52,18 @@ type Row = {
   completed_at: number | null;
 };
 
+/** How many results one look reads, and how long it rests when nothing is left to make or follow. */
+const PAGE = 40;
+const IDLE_MS = 60_000;
+
 declare global {
-  var __fuobePreview3d: { last: number; here: Map<string, AbortController> } | undefined;
+  var __fuobePreview3d: { last: number; cursor: number; here: Map<string, AbortController> } | undefined;
 }
-const state = () => (globalThis.__fuobePreview3d ??= { last: 0, here: new Map() });
+const state = () => {
+  const s = (globalThis.__fuobePreview3d ??= { last: 0, cursor: Infinity, here: new Map() });
+  s.cursor ??= Infinity;
+  return s;
+};
 
 const turntableOf = (o: OutputFile) => (o.meta?.finish as { turntable?: unknown } | undefined)?.turntable;
 
@@ -171,24 +179,13 @@ function drawsHere(r: Pick<Row, "provider">, account: string | undefined): boole
 const accountOf = (r: Pick<Row, "request_json">) => json<GenerationRequest | null>(r.request_json, null)?.account;
 
 /** Start one output's preview: queued for a worker, drawn here, or (neither now) left for a later look. */
-function start(r: Row, i: number, outputs: OutputFile[], tries: number): void {
+/** Start one output's preview. False: nothing could start it now (no worker draws previews yet, and this server doesn't). */
+function start(r: Row, i: number, outputs: OutputFile[], tries: number): boolean {
   const o = outputs[i];
   const asset = getAsset(o.assetId!);
   const s = previewSettings(r, o);
-  if (!asset || !s)
-    return void setPreview(r.id, o.assetId!, {
-      state: "failed",
-      at: Date.now(),
-      tries,
-      why: "no file",
-    });
-  if (asset.size > PREVIEW_MAX_BYTES)
-    return void setPreview(r.id, o.assetId!, {
-      state: "failed",
-      at: Date.now(),
-      tries,
-      why: "too big",
-    });
+  if (!asset || !s) return setPreview(r.id, o.assetId!, { state: "failed", at: Date.now(), tries, why: "no file" }), true;
+  if (asset.size > PREVIEW_MAX_BYTES) return setPreview(r.id, o.assetId!, { state: "failed", at: Date.now(), tries, why: "too big" }), true;
   const account = accountOf(r);
   if (workersFinish("preview3d")) {
     // A run finished in the last hour keeps its place in line; an older result's preview goes after everyone's.
@@ -234,9 +231,9 @@ function start(r: Row, i: number, outputs: OutputFile[], tries: number): void {
         why: "not queued",
       });
     }
-    return;
+    return true;
   }
-  if (!drawsHere(r, account)) return;
+  if (!drawsHere(r, account)) return false;
   const ctl = new AbortController();
   state().here.set(`${r.id}:${o.assetId}`, ctl);
   setPreview(r.id, o.assetId!, {
@@ -277,6 +274,7 @@ function start(r: Row, i: number, outputs: OutputFile[], tries: number): void {
       }
     })
     .finally(() => state().here.delete(`${r.id}:${o.assetId}`));
+  return true;
 }
 
 /** Look at a preview on its way: a worker's job that ended (its files kept, or failed), or a draw here that stopped. */
@@ -367,16 +365,20 @@ export function tickPreviews(now = Date.now()): void {
       }
     }
     if (inFlight >= IN_FLIGHT) return;
-    // Results with a model and no preview yet (or one to try again), newest first; a run in the Trash waits.
+    // Results with a model and no preview yet (or one to try again), newest first, a page at a time from where the last
+    // look stopped (results that get none, such as a model with its own turntable, never hold up older ones); a run in the
+    // Trash waits.
     const rows = db()
       .prepare(
-        `SELECT g.id, g.status, g.provider, g.model_id, g.op, g.request_json, g.outputs_json, g.completed_at FROM generations g
+        `SELECT g.id, g.status, g.provider, g.model_id, g.op, g.request_json, g.outputs_json, g.completed_at, COALESCE(g.completed_at, g.created_at) AS at FROM generations g
          LEFT JOIN generation_trash t ON t.generation_id = g.id
          WHERE g.status = 'succeeded' AND t.generation_id IS NULL AND g.outputs_json LIKE '%"kind":"model3d"%'
            AND (g.outputs_json NOT LIKE '%"preview3d"%' OR g.outputs_json LIKE '%"preview3d":{"state":"failed"%')
-         ORDER BY COALESCE(g.completed_at, g.created_at) DESC LIMIT 40`,
+           AND COALESCE(g.completed_at, g.created_at) < @cursor
+         ORDER BY at DESC LIMIT ${PAGE}`,
       )
-      .all() as Row[];
+      .all({ cursor: s.cursor }) as (Row & { at: number })[];
+    const before = inFlight;
     for (const r of rows) {
       if (inFlight >= IN_FLIGHT) break;
       const outputs = json<OutputFile[]>(r.outputs_json, []);
@@ -388,15 +390,20 @@ export function tickPreviews(now = Date.now()): void {
           if (p.state !== "failed" || (p.tries ?? 1) >= TRIES || now - p.at < 10 * 60_000 || !RETRY.includes(p.why ?? "")) continue;
           const again = outputs.map((x, j) => (j === i ? { ...x, meta: { ...x.meta, preview3d: undefined } } : x));
           if (!previewTargets(again).includes(i)) continue;
-          start(r, i, outputs, (p.tries ?? 1) + 1);
-          inFlight++;
+          if (start(r, i, outputs, (p.tries ?? 1) + 1)) inFlight++;
           continue;
         }
         if (!previewTargets(outputs).includes(i)) continue;
-        start(r, i, outputs, 1);
-        inFlight++;
+        if (start(r, i, outputs, 1)) inFlight++;
       }
     }
+    // Nothing to start on this page: the next look reads the page after it; past the oldest, from the newest again,
+    // and, with nothing on its way either, after a longer rest.
+    if (inFlight === before) {
+      const last = rows.at(-1);
+      s.cursor = rows.length === PAGE && last ? last.at : Infinity;
+      if (s.cursor === Infinity && inFlight === 0) s.last = now + IDLE_MS - LOOK_MS;
+    } else s.cursor = Infinity;
   } catch (e) {
     console.warn(`[fuobe] 3D previews: ${(e as Error).message}`);
   }
