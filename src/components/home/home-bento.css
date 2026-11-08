@@ -354,10 +354,10 @@
     box-shadow 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
+/* A pointed-at tile brightens its edge and stays in place: a tile moving out of the grid reads as a misalignment. */
 @media (hover: hover) {
   .hb-tile:hover {
     border-color: rgb(255 255 255 / 26%);
-    transform: translateY(-2px);
   }
 }
 .hb-tile:focus-visible {
@@ -484,12 +484,11 @@
     font-size: 28px;
   }
 }
+/*
+ * The words keep the same inset in every tile, whatever its width, so tiles side by side (the reel, Live edit and
+ * Genjutsu) set their titles and links on the same lines.
+ */
 @container (min-width: 460px) {
-  .hb-copy {
-    left: 26px;
-    right: 26px;
-    bottom: 26px;
-  }
   .hb-video .hb-title {
     font-size: 40px;
   }
@@ -1539,9 +1538,6 @@ html:has([role="dialog"]) .hb-cue-float[data-shown] {
   .hb-tile,
   .hb-frame {
     transition: none;
-  }
-  .hb-tile:hover {
-    transform: none;
   }
   .hb-bento .hb-kenburns,
   .hb-bento .hb-caret,
