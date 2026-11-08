@@ -3,7 +3,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { IDOL_MODELS, model3dView, splatFormatOf } from "@/lib/av/model3d";
-import { FALLBACK_TEXT, hazeCutoffFor, SPLAT_MAX_BYTES, splatFallback, splatTooBig, stillFileName, viewerFor } from "@/lib/av/splat-view";
+import { FALLBACK_TEXT, HOME_ELEVATION_DEG, hazeCutoffFor, homeView, SPLAT_MAX_BYTES, splatFallback, splatPose, splatTooBig, stillFileName, subjectBounds, viewerFor } from "@/lib/av/splat-view";
 
 /**
  * Looking around splats (idol-4): which viewer a 3D output opens in, the haze cut-off each model starts with, when
@@ -146,5 +146,107 @@ describe("the viewer leaves the page as it found it", () => {
     // A dialog that focuses the stage on opening doesn't hand it ArrowLeft / ArrowRight (tests/e2e/splat-viewer.mjs checks it in a browser).
     const viewer = read("src/components/model3d/splat-viewer.tsx");
     expect(viewer).toMatch(/if \(!engaged\.current && \(e\.key === "ArrowLeft" \|\| e\.key === "ArrowRight"\)\) return;/);
+  });
+});
+
+describe("how a splat stands and where the camera starts", () => {
+  /**
+   * A standing figure as ComfyUI's TripoSplat decoder saves it (Idol 3D): the 3DGS frame, y down, so the head is at
+   * -y and the feet at +y, its front towards +x once stood up. Solid body Gaussians plus faint haze and a few floaters.
+   */
+  function comfyFigure() {
+    const centers: number[] = [];
+    const opacities: number[] = [];
+    let seed = 7;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+    for (let i = 0; i < 4000; i++) {
+      const y = -0.5 + (i / 3999) * 1; // head (-0.5) to feet (+0.5)
+      centers.push(rand() * 0.12, y, rand() * 0.1);
+      opacities.push(0.9);
+    }
+    for (let i = 0; i < 4000; i++) {
+      centers.push(rand() * 0.3, rand() * 0.6, rand() * 0.3);
+      opacities.push(0.02); // haze
+    }
+    for (let i = 0; i < 10; i++) {
+      centers.push(3 + i, -4, 5); // floaters far off
+      opacities.push(0.5);
+    }
+    return { centers, opacities };
+  }
+  /** The viewer's half turn about x for a y-down file: (x, y, z) to (x, -y, -z). */
+  const turn = (c: number[]) => c.map((v, i) => (i % 3 === 0 ? v : -v));
+
+  it("a ComfyUI splat (Idol 3D on your GPU or ours) is y-down and faces +x; cloud, demo and other files stand as they are", () => {
+    expect(splatPose({ provider: "comfyui" }, { url: "/api/files/outputs/2026-11-07/a.spz", meta: { role: "splat", format: "spz" } })).toEqual({ yDown: true, frontYaw: 90 });
+    expect(splatPose({ provider: "fal" }, { url: "https://fal.test/splat.ply" })).toEqual({ yDown: false, frontYaw: 0 });
+    // Demo mode's splats are y-up wherever they show (scripts/gen-demo-splat.mjs).
+    expect(splatPose({ provider: "mock" }, { url: "sample:demo-splat.spz", meta: { demo: true } })).toEqual({ yDown: false, frontYaw: 0 });
+    expect(splatPose({ provider: "comfyui" }, { url: "sample:demo-splat.spz" })).toEqual({ yDown: false, frontYaw: 0 });
+    expect(splatPose(undefined)).toEqual({ yDown: false, frontYaw: 0 });
+  });
+
+  it("the half turn stands the figure upright: its head ends up at the top", () => {
+    const { centers, opacities } = comfyFigure();
+    const head = (c: number[]) => c[1]; // the first Gaussian is the top of the head
+    expect(head(centers)).toBeLessThan(0); // as saved: upside down in three.js (y up)
+    const upright = turn(centers);
+    expect(head(upright)).toBeGreaterThan(0);
+    const b = subjectBounds(upright, opacities)!;
+    expect(b.max[1]).toBeGreaterThan(0.45);
+    expect(b.min[1]).toBeLessThan(-0.45);
+  });
+
+  it("the subject's box leaves out faint haze and stray floaters, so the figure isn't small in the middle", () => {
+    const { centers, opacities } = comfyFigure();
+    const b = subjectBounds(turn(centers), opacities)!;
+    for (let k = 0; k < 3; k++) {
+      expect(b.max[k] - b.min[k]).toBeLessThan(1.1);
+      expect(Math.abs((b.max[k] + b.min[k]) / 2)).toBeLessThan(0.05);
+    }
+    // Without the opacity filter the floaters stretch it.
+    const all = subjectBounds(turn(centers), opacities, { minOpacity: 0, trim: 0 })!;
+    expect(all.max[0]).toBeGreaterThan(10);
+    expect(subjectBounds([], [])).toBeNull();
+  });
+
+  it("home is in front of the subject, a little above, turning about its centre, filling the stage", () => {
+    const b = { min: [-0.15, -0.5, -0.12] as [number, number, number], max: [0.15, 0.5, 0.12] as [number, number, number] };
+    const fov = 40;
+    const tan = Math.tan((fov / 2) * (Math.PI / 180));
+    for (const aspect of [1440 / 900, 390 / 747, 844 / 300]) {
+      const v = homeView(b, fov, aspect, { frontYaw: 90 });
+      expect(v.target).toEqual([0, 0, 0]);
+      const [dx, dy, dz] = v.position.map((p, i) => p - v.target[i]);
+      // Faces +x (the decoder's front), barely above: no view from overhead.
+      expect(dx).toBeGreaterThan(0);
+      expect(Math.abs(dz)).toBeLessThan(1e-9);
+      expect(dy / v.distance).toBeCloseTo(Math.sin((HOME_ELEVATION_DEG * Math.PI) / 180), 6);
+      // The 1.0-tall figure takes 90% of the stage's height (its near face at distance - depth / 2).
+      const near = v.distance - 0.15;
+      expect(1 / (2 * near * tan)).toBeCloseTo(0.9, 2);
+    }
+    // A wide subject on a phone's tall stage fits its width instead.
+    const wide = { min: [-1, -0.2, -0.2] as [number, number, number], max: [1, 0.2, 0.2] as [number, number, number] };
+    const phone = homeView(wide, fov, 390 / 747);
+    expect(2 / (2 * (phone.distance - 0.2) * tan * (390 / 747))).toBeCloseTo(0.9, 2);
+    // The controls bar over the stage's foot: the subject keeps to the space above it.
+    expect(homeView(b, fov, 1.5, { room: 0.8 }).distance).toBeGreaterThan(homeView(b, fov, 1.5).distance);
+  });
+
+  it("every viewer of a result passes how its file stands", () => {
+    for (const f of ["src/components/studio/result-media.tsx", "src/components/model3d/model-card.tsx"]) {
+      const text = fs.readFileSync(path.join(process.cwd(), f), "utf8");
+      for (const tag of text.match(/<SplatViewer[\s\S]*?\/>/g) ?? []) expect(tag, f).toMatch(/pose=\{splatPose\(g, /);
+    }
+  });
+
+  it("on a phone the stage keeps every touch: no page scroll, pull to refresh, back swipe or page zoom", () => {
+    const viewer = fs.readFileSync(path.join(process.cwd(), "src/components/model3d/splat-viewer.tsx"), "utf8");
+    expect(viewer).toMatch(/touch-none overflow-hidden overscroll-none/);
+    expect(viewer).toMatch(/"gesturestart", "gesturechange", "gestureend"/);
+    expect(viewer).toMatch(/onTouchMove=\{\(e\) => e\.stopPropagation\(\)\}/);
+    // 44 px targets for a finger.
+    expect(viewer.match(/pointer-coarse:size-11/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });

@@ -205,7 +205,13 @@ for (const phone of [false, true]) {
       await page.keyboard.press("Enter");
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("toolbar", { name: "3D view" }).waitFor({ timeout: 60_000 });
-      assert.equal(await dialog.getByRole("slider", { name: "Hide faint haze" }).count(), 1, `${tag}: the panel's haze slider`);
+      // The haze slider sits in the bar on a computer, and behind its button on a phone (the bar stays one row).
+      if (phone) {
+        assert.equal(await dialog.getByRole("slider", { name: "Hide faint haze" }).count(), 0, `${tag}: the phone's bar keeps to one row`);
+        await dialog.getByRole("button", { name: "Hide faint haze" }).click();
+        await page.getByRole("slider", { name: "Hide faint haze" }).waitFor({ timeout: 5000 });
+        await page.keyboard.press("Escape");
+      } else assert.equal(await dialog.getByRole("slider", { name: "Hide faint haze" }).count(), 1, `${tag}: the panel's haze slider`);
       await until(() => drawn(dialog.getByRole("application").locator("canvas")), `${tag}: the panel's splat drawn`, 30_000);
       assert.ok((await dialog.getByRole("link", { name: /^\.(spz|ply)$/ }).count()) >= 1, `${tag}: the panel's download`);
       await noSideScroll(page, `${tag} library viewer`);

@@ -3,6 +3,7 @@
 import { dyno, SparkRenderer, SplatFileType, SplatMesh } from "@sparkjsdev/spark";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { homeView, subjectBounds, type SplatBounds, type SplatPose } from "@/lib/av/splat-view";
 
 /**
  * The splat viewer's three.js side (idol-4): Spark (@sparkjsdev/spark 2.3.1, MIT, World Labs) draws the Gaussians
@@ -27,6 +28,15 @@ export class SplatEngine {
   private mesh: SplatMesh | null = null;
   private cutoff = dyno.dynoFloat(0);
   private home = { position: new THREE.Vector3(0, 0, 3), target: new THREE.Vector3() };
+  /** A sample of the splat's centres and opacities in its own frame, to frame it again after a turn. */
+  private sample: { centers: Float32Array; opacities: Float32Array } | null = null;
+  private bounds: SplatBounds | null = null;
+  /** The yaw the subject faces (splatPose): where the camera starts. */
+  private frontYaw = 0;
+  /** The stage's size and the bar's height over its foot, in CSS px. */
+  private view = { width: 0, height: 0, inset: 0 };
+  /** The camera is where Reset view puts it: a resize frames the splat again for the stage's new shape. */
+  private atHome = true;
   private frame = 0;
   /** Keep drawing until then (performance.now()): Spark builds, sorts and uploads over a few frames after a change. */
   private until = 0;
@@ -39,24 +49,35 @@ export class SplatEngine {
     if (!this.disposed) this.onContextLost?.();
   };
 
-  /** onContextLost: the browser took the WebGL context away (too many open, a GPU reset) while this was showing. */
+  /**
+   * onContextLost: the browser took the WebGL context away (too many open, a GPU reset) while this was showing.
+   * coarse: a phone or tablet, which draws each Gaussian a little tighter (less overdraw in every frame).
+   */
   constructor(
     private canvas: HTMLCanvasElement,
     private onContextLost?: () => void,
+    { coarse = false }: { coarse?: boolean } = {},
   ) {
     canvas.addEventListener("webglcontextlost", this.onLost);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
-    this.spark = new SparkRenderer({ renderer: this.renderer, onDirty: () => this.requestRender() });
+    this.spark = new SparkRenderer({ renderer: this.renderer, onDirty: () => this.requestRender(), ...(coarse ? { maxStdDev: Math.sqrt(6) } : {}) });
     this.scene.add(this.spark);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
     this.controls.zoomToCursor = false;
+    // One finger turns it; two pinch to zoom and drag to move it.
+    this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     this.controls.addEventListener("change", () => this.requestRender());
+    this.controls.addEventListener("start", () => void (this.atHome = false));
   }
 
   /** Fetch the file (abortable, its size checked against maxBytes first), then build the splat. */
-  async load(url: string, format: string, { signal, maxBytes, onProgress }: { signal?: AbortSignal; maxBytes?: number; onProgress?: (p: number) => void } = {}): Promise<SplatLoadInfo> {
+  async load(
+    url: string,
+    format: string,
+    { signal, maxBytes, onProgress, pose }: { signal?: AbortSignal; maxBytes?: number; onProgress?: (p: number) => void; pose?: SplatPose } = {},
+  ): Promise<SplatLoadInfo> {
     const bytes = await fetchSplat(url, { signal, maxBytes, onProgress });
     if (this.disposed || signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const mesh = await buildSplatMesh(bytes, format, this.cutoff);
@@ -64,42 +85,76 @@ export class SplatEngine {
       mesh.dispose();
       throw new DOMException("Aborted", "AbortError");
     }
+    // A y-down file (splatPose): half a turn about x stands it upright.
+    if (pose?.yDown) mesh.quaternion.set(1, 0, 0, 0);
+    this.frontYaw = pose?.frontYaw ?? 0;
     this.mesh = mesh;
+    this.sample = sampleSplats(mesh);
     this.scene.add(mesh);
-    this.frameObject(mesh.getBoundingBox(true));
+    this.frameSubject();
     this.requestRender(1500);
     return { splats: mesh.packedSplats?.numSplats ?? 0, bytes: bytes.byteLength };
   }
 
-  /** Point the camera at the splat from the front, a little above, far enough to see all of it. */
-  private frameObject(box: THREE.Box3) {
-    const center = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
-    const size = box.isEmpty() ? 2 : Math.max(...box.getSize(new THREE.Vector3()).toArray(), 0.01);
-    const distance = (size * 0.62) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    this.home.target.copy(center);
-    this.home.position.copy(center).add(new THREE.Vector3(0, size * 0.18, distance));
-    this.camera.near = Math.max(distance / 200, 0.001);
-    this.camera.far = distance * 50;
-    this.camera.updateProjectionMatrix();
-    this.controls.minDistance = size * 0.25;
-    this.controls.maxDistance = distance * 6;
+  /** Measure the splat as it stands now (its turn included), then look at it from the front. */
+  private frameSubject() {
+    const mesh = this.mesh;
+    if (!mesh) return;
+    mesh.updateMatrixWorld(true);
+    let bounds: SplatBounds | null = null;
+    if (this.sample) {
+      const { centers, opacities } = this.sample;
+      const world = new Float32Array(centers.length);
+      const v = new THREE.Vector3();
+      for (let i = 0; i < centers.length; i += 3) {
+        v.set(centers[i], centers[i + 1], centers[i + 2]).applyMatrix4(mesh.matrixWorld);
+        world[i] = v.x;
+        world[i + 1] = v.y;
+        world[i + 2] = v.z;
+      }
+      bounds = subjectBounds(world, opacities);
+    }
+    if (!bounds) {
+      const box = mesh.getBoundingBox(true).applyMatrix4(mesh.matrixWorld);
+      bounds = box.isEmpty() ? { min: [-1, -1, -1], max: [1, 1, 1] } : { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] };
+    }
+    this.bounds = bounds;
+    this.placeHome();
     this.reset();
+  }
+
+  /** Where Reset view goes for the stage's current shape. */
+  private placeHome() {
+    if (!this.bounds) return;
+    const { height, inset } = this.view;
+    // With the bar's offset on, the subject fits the part of the taller frame above the bar.
+    const room = this.camera.view?.enabled ? (height - inset) / (height + inset) : 1;
+    const view = homeView(this.bounds, this.camera.fov, this.camera.aspect, { frontYaw: this.frontYaw, room });
+    this.home.target.fromArray(view.target);
+    this.home.position.fromArray(view.position);
+    this.camera.near = Math.max(view.distance / 200, 0.001);
+    this.camera.far = view.distance * 50;
+    this.camera.updateProjectionMatrix();
+    this.controls.minDistance = view.size * 0.15;
+    this.controls.maxDistance = view.distance * 6;
   }
 
   reset() {
     this.camera.position.copy(this.home.position);
     this.controls.target.copy(this.home.target);
+    // Without damping for this one update: a glide left over from a drag would carry the camera off home.
+    this.controls.enableDamping = false;
     this.controls.update();
+    this.controls.enableDamping = true;
+    this.atHome = true;
     this.requestRender();
   }
 
-  /** Turn the splat over (a file saved y-down shows upside down). */
+  /** Turn the splat over (a file saved the other way up shows upside down), and frame it again. */
   flip() {
     if (!this.mesh) return;
     this.mesh.rotateX(Math.PI);
-    this.mesh.updateMatrixWorld();
-    const box = this.mesh.getBoundingBox(true).applyMatrix4(this.mesh.matrixWorld);
-    this.frameObject(box);
+    this.frameSubject();
   }
 
   /** Orbit by angles in radians (the arrow keys), around the target. */
@@ -109,6 +164,7 @@ export class SplatEngine {
     s.theta -= azimuth;
     s.phi = THREE.MathUtils.clamp(s.phi - polar, 0.05, Math.PI - 0.05);
     this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(s));
+    this.atHome = false;
     this.controls.update();
     this.requestRender();
   }
@@ -118,6 +174,7 @@ export class SplatEngine {
     const offset = this.camera.position.clone().sub(this.controls.target);
     const d = THREE.MathUtils.clamp(offset.length() * factor, this.controls.minDistance, this.controls.maxDistance);
     this.camera.position.copy(this.controls.target).add(offset.setLength(d));
+    this.atHome = false;
     this.controls.update();
     this.requestRender();
   }
@@ -137,15 +194,61 @@ export class SplatEngine {
     if (!width || !height) return;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
+    this.view.width = width;
+    this.view.height = height;
+    this.applyView();
+  }
+
+  /**
+   * The height (CSS px) the controls bar covers at the stage's foot: the view centres the subject in the space above
+   * it, so the bar never sits on the subject at home (it still draws behind the bar, the stage stays whole).
+   */
+  setBottomInset(px: number) {
+    const inset = Math.max(0, Math.round(px));
+    if (inset === this.view.inset) return;
+    this.view.inset = inset;
+    this.applyView();
+  }
+
+  /** The projection for the stage and the bar: a taller frame whose top `inset` px are off the stage. */
+  private applyView() {
+    const { width, height, inset } = this.view;
+    if (!width || !height) return;
+    // A drag the stage's height turns the splat once round; a small stage (a card on a phone) turns it slower.
+    this.controls.rotateSpeed = Math.min(1, Math.max(0.5, height / 520));
+    if (inset > 0 && inset < height / 2) {
+      this.camera.aspect = width / (height + inset);
+      this.camera.setViewOffset(width, height + inset, 0, inset, width, height);
+    } else {
+      this.camera.aspect = width / height;
+      this.camera.clearViewOffset();
+    }
     this.camera.updateProjectionMatrix();
+    // Reset view fits the new shape, and a view nobody has moved yet follows it (the stage settling, a phone turning).
+    this.placeHome();
+    if (this.atHome && this.bounds) this.reset();
     this.requestRender();
   }
 
   /** The current view as a PNG, at the canvas's own size (rendered and read in the same task). */
   capture(): Promise<Blob> {
+    // The still has no bar over it: the subject at the centre of the whole frame.
+    const offset = this.camera.view?.enabled;
+    if (offset) {
+      this.camera.clearViewOffset();
+      this.camera.aspect = this.view.width / this.view.height;
+      this.camera.updateProjectionMatrix();
+    }
     this.render();
-    return new Promise((resolve, reject) => this.canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't save the still"))), "image/png"));
+    const still = new Promise<Blob>((resolve, reject) => this.canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't save the still"))), "image/png"));
+    if (offset) {
+      const { width, height, inset } = this.view;
+      this.camera.aspect = width / (height + inset);
+      this.camera.setViewOffset(width, height + inset, 0, inset, width, height);
+      this.camera.updateProjectionMatrix();
+      this.requestRender();
+    }
+    return still;
   }
 
   /** Draw on the next frame, and keep drawing for `settleMs` (Spark finishing its work), or while the camera glides. */
@@ -180,6 +283,34 @@ export class SplatEngine {
     this.renderer.forceContextLoss();
     this.canvas.removeEventListener("webglcontextlost", this.onLost);
   }
+}
+
+/** At most this many Gaussians are measured to frame a splat: enough for its outline, quick on a phone. */
+const SAMPLE_MAX = 65_536;
+
+/** Every k-th Gaussian's centre and opacity, in the splat's own frame (at most SAMPLE_MAX of them). */
+function sampleSplats(mesh: SplatMesh): { centers: Float32Array; opacities: Float32Array } | null {
+  const splats = mesh.packedSplats;
+  const total = splats?.numSplats ?? 0;
+  if (!splats || !total) return null;
+  const step = Math.max(1, Math.ceil(total / SAMPLE_MAX));
+  const n = Math.ceil(total / step);
+  const centers = new Float32Array(n * 3);
+  const opacities = new Float32Array(n);
+  let k = 0;
+  try {
+    splats.forEachSplat((i, center, _scales, _quaternion, opacity) => {
+      if (i % step || k >= n) return;
+      centers[k * 3] = center.x;
+      centers[k * 3 + 1] = center.y;
+      centers[k * 3 + 2] = center.z;
+      opacities[k] = opacity;
+      k++;
+    });
+  } catch {
+    return null;
+  }
+  return k ? { centers: centers.subarray(0, k * 3), opacities: opacities.subarray(0, k) } : null;
 }
 
 /** Fetch a splat file (abortable; refused past maxBytes, by its length or as it streams). */

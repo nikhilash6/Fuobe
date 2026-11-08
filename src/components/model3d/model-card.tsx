@@ -24,7 +24,7 @@ import { PlaceholderChip } from "@/components/demo-mode";
 import { NextSteps } from "@/components/nav/next-steps";
 import { recordableType, recordTurntable } from "./turntable";
 import { hasWebgl2, SplatViewer, useReducedMotion } from "./splat-viewer";
-import { FALLBACK_TEXT, hazeCutoffFor } from "@/lib/av/splat-view";
+import { FALLBACK_TEXT, hazeCutoffFor, splatPose } from "@/lib/av/splat-view";
 import { TurnChips } from "./turn-chips";
 import { OwnSetupChip, useOwnSetupPress } from "@/components/own-setup";
 import { useModel3dSetup } from "./own-setups";
@@ -320,6 +320,7 @@ export function ModelCard({
             poster={view.poster}
             name={name}
             defaultCutoff={hazeCutoffFor(g.modelId)}
+            pose={splatPose(g, view.splat)}
             label={`the ${label} splat`}
             autoFocus={focusLook}
             onUnavailable={(note) => {

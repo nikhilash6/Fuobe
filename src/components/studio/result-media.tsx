@@ -5,7 +5,7 @@ import { createElement, useEffect, useState } from "react";
 import { loadModelViewer, useViewerSrc, viewerLook } from "@/components/model3d/model-viewer";
 import { hasWebgl2, SplatViewer, useReducedMotion } from "@/components/model3d/splat-viewer";
 import { useHydrated } from "@/lib/api";
-import { FALLBACK_TEXT, hazeCutoffFor, splatFallback } from "@/lib/av/splat-view";
+import { FALLBACK_TEXT, hazeCutoffFor, splatFallback, splatPose } from "@/lib/av/splat-view";
 import { TurnChips } from "@/components/model3d/turn-chips";
 import { FORMAT_INFO } from "@/lib/av/formats";
 import { firstFrameSrc, FRONT_YAW, splatFormatOf, turnOrbit, viewerGlb } from "@/lib/av/model3d";
@@ -283,7 +283,7 @@ function SplatPanel({ output, format, poster, video, g }: { output: OutputFile; 
     return (
       <div className="flex size-full flex-col">
         <div className="relative min-h-0 flex-1 overflow-hidden md:rounded-lg">
-          <SplatViewer url={output.url} format={format} poster={picture} name={name} defaultCutoff={hazeCutoffFor(g.modelId)} tone="panel" label={g.request.prompt || "the splat"} autoFocus={asked} onUnavailable={setNote} />
+          <SplatViewer url={output.url} format={format} poster={picture} name={name} defaultCutoff={hazeCutoffFor(g.modelId)} pose={splatPose(g, output)} tone="panel" label={g.request.prompt || "the splat"} autoFocus={asked} onUnavailable={setNote} />
         </div>
         <div className="flex shrink-0 justify-center pt-2">{download}</div>
       </div>
