@@ -156,3 +156,25 @@ describe("POST /api/generations?preview=1", () => {
     expect((await res.json()).error).toBe("Add a start frame");
   });
 });
+
+describe("POST /api/generations: where an owner's run came from", () => {
+  const send = (body: unknown, headers: Record<string, string> = {}) => postGeneration(new Request("http://localhost/api/generations", { method: "POST", headers, body: JSON.stringify(body) }));
+  const stored = (id: string) => listGenerations({ limit: 200, steps: true }).find((g) => g.id === id)!.request;
+  const idOf = async (res: Response) => {
+    expect(res.status).toBeLessThan(300);
+    const j = (await res.json()) as { id?: string; ids?: string[]; items?: { id: string }[] };
+    return j.id ?? j.ids?.[0] ?? j.items![0]!.id;
+  };
+
+  it("keeps a script's source and name, reads an API token's run as automated, and the site's own as hands-on", async () => {
+    const { createToken } = await import("@/server/auth");
+    const { token } = createToken("runner");
+    const tagged = await idOf(await send({ feature: "cli", modelId: "nano-banana-pro", prompt: "a fox", source: "example", sourceName: "Object Remover" }, { authorization: `Bearer ${token}` }));
+    expect(stored(tagged)).toMatchObject({ source: "example", sourceName: "Object Remover" });
+    const api = await idOf(await send({ feature: "cli", modelId: "nano-banana-pro", prompt: "a fox" }, { authorization: `Bearer ${token}` }));
+    expect(stored(api).source).toBe("api");
+    const site = await idOf(await send({ feature: "cli", modelId: "nano-banana-pro", prompt: "a fox" }));
+    expect(stored(site).source).toBeUndefined();
+    expect((await send({ feature: "cli", modelId: "nano-banana-pro", prompt: "a fox", source: "robot" })).status).toBe(400);
+  });
+});

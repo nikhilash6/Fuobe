@@ -136,8 +136,10 @@ export function accountRunOptions(sp: URLSearchParams): (ListOptions & { whose: 
   const asked = Math.trunc(Number(sp.get("limit")));
   const source = sp.get("source");
   const askedWhose = sp.get("whose");
+  // Up to 100 runs by id (the panel's Queue and Activity: whose each run is), whoever's they are.
+  const ids = sp.get("ids") === null ? undefined : [...new Set(sp.get("ids")!.split(",").map((x) => x.trim()).filter((x) => /^[\w-]{1,64}$/.test(x)))].slice(0, MAX_RUNS_PAGE);
   // A source names the owner's runs, so it means Ours.
-  const whose: RunsWhose = account ? "people" : source === "hands-on" || source === "batch" ? "ours" : askedWhose === "ours" || askedWhose === "everyone" ? askedWhose : "people";
+  const whose: RunsWhose = account ? "people" : ids ? "everyone" : source === "hands-on" || source === "batch" ? "ours" : askedWhose === "ours" || askedWhose === "everyone" ? askedWhose : "people";
   const where = sp.get("where");
   const model = sp.get("model")?.trim().slice(0, 80);
   const q = sp.get("q")?.trim().slice(0, 200);
@@ -152,10 +154,11 @@ export function accountRunOptions(sp: URLSearchParams): (ListOptions & { whose: 
     kind: KINDS.has(kind) ? kind : undefined,
     ...(model && { modelLike: model }),
     ...(q && { q }),
+    ...(ids && { ids }),
     ...(from !== undefined && { since: from }),
     ...(to !== undefined && { until: to + DAY }),
     ...cursorFrom(sp.get("before")),
-    limit: sp.get("limit") && Number.isFinite(asked) ? Math.max(1, Math.min(asked, MAX_RUNS_PAGE)) : RUNS_PAGE,
+    limit: ids ? Math.max(1, ids.length) : sp.get("limit") && Number.isFinite(asked) ? Math.max(1, Math.min(asked, MAX_RUNS_PAGE)) : RUNS_PAGE,
   };
 }
 
@@ -180,7 +183,7 @@ export type RunWhose = "account" | "guest" | "owner";
  * A run in the owner's admin list: an account's or a guest's (as AccountRun), or the owner's own (`account` null, `whose`
  * "owner", and `source`: what made it, "hands-on" when its runner said nothing).
  */
-export type AdminRun = Omit<AccountRun, "account"> & { account: AccountOfRun | null; source?: RunSource };
+export type AdminRun = Omit<AccountRun, "account"> & { account: AccountOfRun | null; source?: RunSource; sourceName?: string };
 
 /** Whose a run is: its email (null: the account was deleted), or no email and `emailHidden` for a reader that may not see emails. */
 export type AccountOfRun = { id: string; email?: string | null; emailHidden?: true };
@@ -203,7 +206,7 @@ function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState }
  */
 export type AccountRunFacts = Pick<
   AdminRun,
-  "id" | "batchId" | "feature" | "presetId" | "presetName" | "modelId" | "modelName" | "engine" | "provider" | "op" | "kind" | "status" | "progress" | "costUsd" | "createdAt" | "updatedAt" | "completedAt" | "place" | "account" | "whose" | "source"
+  "id" | "batchId" | "feature" | "presetId" | "presetName" | "modelId" | "modelName" | "engine" | "provider" | "op" | "kind" | "status" | "progress" | "costUsd" | "createdAt" | "updatedAt" | "completedAt" | "place" | "account" | "whose" | "source" | "sourceName"
 > & { outputs: { kind: OutputFile["kind"]; state: OutputState }[] };
 
 function factsOnly(r: AdminRun): AccountRunFacts {
@@ -229,6 +232,7 @@ function factsOnly(r: AdminRun): AccountRunFacts {
     account: r.account,
     whose: r.whose,
     ...(r.source && { source: r.source }),
+    ...(r.sourceName && { sourceName: r.sourceName }),
     outputs: r.outputs.map((x) => ({ kind: x.kind, state: x.state })),
   };
 }
@@ -288,7 +292,7 @@ function asAccountRun(g: Generation, emails: Map<string, string>, showEmails: bo
 /** Any run as the owner's admin list has it: an account's (asAccountRun), or the owner's own with its source. */
 function asAdminRun(g: Generation, emails: Map<string, string>, showEmails: boolean): AdminRun {
   if (g.request.account) return asAccountRun(g, emails, showEmails);
-  return { ...g, outputs: withStates(g.outputs), account: null, whose: "owner", source: g.request.source ?? "hands-on", ...ownDetail(g), ...declinedCardsIn(g.id) };
+  return { ...g, outputs: withStates(g.outputs), account: null, whose: "owner", source: g.request.source ?? "hands-on", ...(g.request.sourceName && { sourceName: g.request.sourceName }), ...ownDetail(g), ...declinedCardsIn(g.id) };
 }
 
 /**

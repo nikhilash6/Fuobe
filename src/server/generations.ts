@@ -736,6 +736,8 @@ export interface ListOptions {
   where?: "pool" | "provider" | "own";
   /** A model id that holds these letters. */
   modelLike?: string;
+  /** Only these runs (by id), helper steps too. */
+  ids?: string[];
   /** The owner's runs only, by `request.source`: "hands-on" (none set, or "hands-on") or "batch" (any other source). */
   source?: "hands-on" | "batch";
   /** Date range on createdAt: since ≤ t < until. */
@@ -767,6 +769,10 @@ export function listGenerations(o: ListOptions = {}): Generation[] {
   else if (o.where === "provider") add(`${place} <> 'pool' AND g.provider NOT IN ('comfyui', 'mock')`);
   else if (o.where === "own") add(`${place} <> 'pool' AND g.provider = 'comfyui' AND json_extract(g.request_json, '$.account') > ''`);
   if (o.modelLike) add("g.model_id LIKE ? ESCAPE '!'", `%${o.modelLike.replace(/[!%_]/g, (c) => `!${c}`)}%`);
+  if (o.ids) {
+    if (!o.ids.length) add("0");
+    else oneOf("g.id", o.ids);
+  }
   if (o.batchId) add("g.batch_id = ?", o.batchId);
   if (o.feature) add("g.feature = ?", o.feature);
   if (o.features?.length) add(`(${o.features.map(() => "g.feature LIKE ?").join(" OR ")})`, ...o.features.map(featureLike));
@@ -785,7 +791,7 @@ export function listGenerations(o: ListOptions = {}): Generation[] {
     const any = [set.length ? `g.review IN (${set.map(() => "?").join(", ")})` : "", o.reviews.includes("none") ? "g.review IS NULL" : ""].filter(Boolean);
     add(`(${any.join(" OR ")})`, ...set);
   }
-  if (!o.steps && !o.feature && !o.features?.length && !o.batchId) {
+  if (!o.steps && !o.feature && !o.features?.length && !o.batchId && !o.ids) {
     add(`g.feature NOT LIKE ? AND g.feature NOT IN (${HELPER_FEATURES.map(() => "?").join(", ")})`, `%${HELPER_SUFFIX}`, ...HELPER_FEATURES);
   }
   // The cursor's order: the Trash by deletion, a pinned list by pin, the rest by creation (then id, all descending).

@@ -164,4 +164,5 @@ export const GenerationRequestSchema = z.object({
   batchTitle: z.string().max(200).optional(),
   // An owner's script or runner says what made the run (a batch, a drill…); an account's run drops it.
   source: z.enum(RUN_SOURCES).optional(),
+  sourceName: z.string().trim().min(1).max(80).optional(),
 });

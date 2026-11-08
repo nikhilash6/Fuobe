@@ -306,6 +306,11 @@ describe("Settings → Accounts: what accounts make", () => {
     const day = new Date().toISOString().slice(0, 10);
     expect(ids(await listed(`from=${day}&to=${day}&limit=100`))).toContain(ofB);
     expect(ids(await listed("from=2001-01-01&to=2001-01-02&limit=100"))).toEqual([]);
+    // By id, whoever's: the panel's Queue and Activity ask whose each run is.
+    const byId = await listed(`ids=${ofB},${mineDrill},${guest},nope,../x`);
+    expect(ids(byId).sort()).toEqual([guest, mineDrill, ofB].sort());
+    expect(byId.items.find((g) => g.id === mineDrill)).toMatchObject({ whose: "owner", account: null, source: "drill" });
+    expect(ids(await listed("ids="))).toEqual([]);
   });
 
   it("never lists the owner's runs unless asked, and never deletes them", async () => {

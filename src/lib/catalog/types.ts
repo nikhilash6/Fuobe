@@ -1362,9 +1362,12 @@ export interface GenerationRequest {
   batchTitle?: string;
   /**
    * Where an owner's run came from, as the script or runner that made it said (POST /api/generations): "hands-on" (none
-   * said), or a batch, drill, example or test run. The admin runs list tells them apart. An account's run never has one.
+   * said, from the site), a batch, drill, example or test run, or "api" (sent with an API token and no source of its
+   * own: a script, the CLI or an agent). The admin runs list tells them apart. An account's run never has one.
    */
   source?: RunSource;
+  /** The script, runner or app that made an owner's run, in its own words ("Object Remover examples"): shown beside its source. */
+  sourceName?: string;
   /**
    * Server-set: made by a run of a skill's recipe (src/lib/recipe.ts): the skill's name and the run's id (its batch), so
    * a run's history can be read back. Stripped from API input, like chainFilled.
@@ -1800,5 +1803,5 @@ export interface PrestepRoute {
 export const LAST_FRAME_CHAIN = "chain:last-frame";
 
 /** Where an owner's run came from (GenerationRequest.source). */
-export const RUN_SOURCES = ["hands-on", "batch", "drill", "example", "test"] as const;
+export const RUN_SOURCES = ["hands-on", "batch", "drill", "example", "test", "api"] as const;
 export type RunSource = (typeof RUN_SOURCES)[number];

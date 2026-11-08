@@ -180,7 +180,8 @@ export async function POST(request: Request) {
   // or key only (src/lib/own-setup.ts), as on the Genjutsu page: an account's run goes there (accountRun answers Connect
   // your GPU or Add your key when it has neither), a run on this install's GPUs is refused with the setup's label
   // (hosted-run.ts poolGate), and a guest signs up first. Never this studio's own GPU for a visitor.
-  let req = account ? { ...asked, account: account.id, source: undefined, engine: accountEngineMode(account.id) === "open" ? ("open" as const) : asked.engine } : { ...asked, account: undefined };
+  // The owner's run sent with an API token (a script, the CLI, an agent) and no source of its own reads as automated.
+  let req = account ? { ...asked, account: account.id, source: undefined, sourceName: undefined, engine: accountEngineMode(account.id) === "open" ? ("open" as const) : asked.engine } : { ...asked, account: undefined, ...(token && !asked.source && { source: "api" as const }) };
   const onOwn = <T,>(fn: () => T): T => (account ? asAccount(account.id, fn) : fn());
   // A visitor's price check: priced as it would run, as that visitor (an account: its own GPU and keys; a guest: the open
   // engine, no demo).

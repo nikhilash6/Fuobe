@@ -6,7 +6,7 @@ import { laneLabel } from "@/lib/lanes";
 import { HOLDING_OTHER, HOLDING_WHY, SENT_STATES, type WorkerHolding } from "@/lib/relay";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { claimableNow, controlledLine, localWorkOf, ownerWaitingNow, workerState } from "./pool";
+import { claimableNow, controlledLine, firstClaimableNow, localWorkOf, ownerWaitingNow, workerState } from "./pool";
 import { controlWords, effectiveMode, liveOverrides, MODE_WORDS, overrideView, personKey, poolMode, poolModes, recentOverrides, sweepControls, workerModeOf, type EffectiveMode, type OverrideView, type QueueMode } from "./queue-controls";
 import type { LocalWork } from "@/lib/relay";
 import { json, taskCold, taskProgress, type TaskRow } from "./tasks";
@@ -90,8 +90,8 @@ export interface QueueControls {
 
 /**
  * Held on a worker: a job a worker took that doesn't run yet (`task` set), or a worker that may take the line's work
- * and holds it back (`task` null; `waiting`: how many jobs in line it could take now). `why` in plain words, `code`
- * short, `since` when known.
+ * and holds it back (`task` null; `waiting`: how many jobs in line it could take now; `generationId`, `model`, `op`
+ * and `principal`: the job it would take first). `why` in plain words, `code` short, `since` when known.
  */
 export interface HeldJob {
   worker: string;
@@ -237,8 +237,12 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
     const waiting = claimableNow(w, now) + ownerWaitingNow(w, now);
     if (!waiting) continue;
     const s = workerState(w, now);
-    if (h && now - w.seen_at <= HOLDING_FRESH_MS) holding.push({ worker: w.name, task: null, generationId: null, model: null, op: null, principal: null, why: holdingWords(h.why), code: h.why, since: h.since, waiting });
-    else if (!busy.has(w.id) && s.state !== "idle" && s.state !== "busy") holding.push({ worker: w.name, task: null, generationId: null, model: null, op: null, principal: null, why: s.words, code: s.state, since: null, waiting });
+    // The job it would take first: whose run the worker holds back.
+    const first = firstClaimableNow(w, now);
+    const g = first ? genOf(first.generation_id) : undefined;
+    const next = first ? { generationId: first.generation_id, model: modelLabel(g?.model_id), op: g?.op ?? null, principal: principalKind(first) } : { generationId: null, model: null, op: null, principal: null };
+    if (h && now - w.seen_at <= HOLDING_FRESH_MS) holding.push({ worker: w.name, task: null, ...next, why: holdingWords(h.why), code: h.why, since: h.since, waiting });
+    else if (!busy.has(w.id) && s.state !== "idle" && s.state !== "busy") holding.push({ worker: w.name, task: null, ...next, why: s.words, code: s.state, since: null, waiting });
   }
 
   // Later steps of chains: queued, not handed to a provider, waiting for their earlier steps.

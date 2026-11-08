@@ -523,6 +523,11 @@ export function ownerWaitingNow(w: WorkerRow, now = Date.now()): number {
   return gpuClaimable(w, now, "owner");
 }
 
+/** The first job in line this worker may claim right now (people's before the owner's), or null: what a worker that holds back the line would take first. */
+export function firstClaimableNow(w: WorkerRow, now = Date.now()): TaskRow | null {
+  return gpuClaimableRows(w, now, "people")[0] ?? gpuClaimableRows(w, now, "owner")[0] ?? null;
+}
+
 function gpuClaimable(w: WorkerRow, now: number, whose: "people" | "owner"): number {
   return gpuClaimableRows(w, now, whose).length;
 }

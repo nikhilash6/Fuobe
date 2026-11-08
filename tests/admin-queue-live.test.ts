@@ -159,9 +159,12 @@ describe("what the workers do now", () => {
   it("a worker that holds back the line's work: its reason, since when and how many jobs it could take", () => {
     const w = worker("holds");
     task();
-    task({ account: "acct-2" });
+    const person = task({ account: "acct-2" });
     beat(w, { holding: { why: "local-work", since: clock - 12 * MIN } });
-    expect(liveQueue(clock).holding).toEqual([{ worker: "holds", task: null, generationId: null, model: null, op: null, principal: null, why: "Waiting for local ComfyUI work to finish", code: "local-work", since: clock - 12 * MIN, waiting: 2 }]);
+    // It names the job it would take first, a person's before the owner's, so the panel can say whose it holds back.
+    expect(liveQueue(clock).holding).toEqual([
+      { worker: "holds", task: null, generationId: person.gid, model: expect.anything(), op: expect.anything(), principal: "user", why: "Waiting for local ComfyUI work to finish", code: "local-work", since: clock - 12 * MIN, waiting: 2 },
+    ]);
     // An unknown reason from a newer worker reads plainly.
     beat(w, { holding: { why: "something-new", since: clock } });
     expect(liveQueue(clock).holding[0]).toMatchObject({ why: "Not starting yet", code: "something-new" });
