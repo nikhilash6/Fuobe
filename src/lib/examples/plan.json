@@ -5137,6 +5137,7 @@
     "mode": "swap",
     "engine": "open",
     "model": "fuobe-genjutsu-swap",
+    "tier": "high",
     "quality": "720p",
     "target": "type",
     "subject": "the dress",

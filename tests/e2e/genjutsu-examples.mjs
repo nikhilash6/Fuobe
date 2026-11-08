@@ -152,7 +152,19 @@ try {
         } else {
           check(`${tag} ${label}: the phone card is short (480 px at most)`, cardBox.height <= 480, `${Math.round(cardBox.height)} px`);
         }
-        const sizes = await c.evaluate((el) => [...el.querySelectorAll("button, summary")].filter((b) => b.getClientRects().length).map((b) => `${b.getAttribute("aria-label") ?? b.textContent?.trim()}:${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`));
+        // A button's hit area is its box plus an absolutely placed ::before that reaches past it (the example picks: a 24 px
+        // number with a 44 px target).
+        const sizes = await c.evaluate((el) =>
+          [...el.querySelectorAll("button, summary")]
+            .filter((b) => b.getClientRects().length)
+            .map((b) => {
+              const r = b.getBoundingClientRect();
+              const before = getComputedStyle(b, "::before");
+              const out = (v) => Math.max(0, -parseFloat(v) || 0);
+              const hit = before.position === "absolute" && before.content !== "none" ? [out(before.left) + out(before.right), out(before.top) + out(before.bottom)] : [0, 0];
+              return `${b.getAttribute("aria-label") ?? b.textContent?.trim()}:${Math.round(r.width + hit[0])}x${Math.round(r.height + hit[1])}`;
+            }),
+        );
         check(`${tag} ${label}: every target is 44 px or more`, sizes.every((s) => s.split(":").pop().split("x").every((d) => Number(d) >= 44) || /summary/.test(s)), JSON.stringify(sizes));
         const summary = c.locator("summary");
         check(`${tag} ${label}: "How it was made" is a 44 px toggle`, (await summary.innerText()).includes("How it was made") && ((await summary.boundingBox())?.height ?? 0) >= 44);
@@ -174,10 +186,13 @@ try {
         }
         check(`${tag} ${label}: fits the screen`, (await sideways()) <= 0);
         await shot(`${id}`);
-        // Leaving the mode drops the loop.
-        await page.getByRole("tablist", { name: "Genjutsu modes" }).getByRole("tab", { name: /^Motion transfer/ }).click();
-        await page.waitForTimeout(400);
-        check(`${tag} ${label}: leaving the mode removes its loop`, (await page.locator("[data-example-video]").count()) === 0 && (await cards().count()) === (expected.motion ? 1 : 0));
+        // Leaving the mode drops the loop: to a mode with no example of its own, where nothing else plays.
+        const away = Object.entries(MODES).find(([m, l]) => m !== id && !expected[m] && tabNames.includes(l));
+        if (away) {
+          await page.getByRole("tablist", { name: "Genjutsu modes" }).getByRole("tab", { name: new RegExp(`^${away[1]}`) }).click();
+          await page.waitForTimeout(400);
+          check(`${tag} ${label}: leaving the mode removes its loop`, (await page.locator("[data-example-video]").count()) === 0 && (await cards().count()) === 0);
+        }
 
         // The owner: Use this example with no clip puts the exact recipe in the form ("In use"), and Undo takes it out.
         if (!visitor && scheme === "light") {
@@ -190,7 +205,10 @@ try {
           const focused = await page.evaluate(() => document.activeElement?.textContent?.trim() || document.activeElement?.tagName);
           check(`${tag} ${label}: the focus moves to Choose a video`, focused === "Choose a video", String(focused));
           const photos = Object.keys(row.inputs).filter((k) => k.startsWith("photo")).length;
-          const want = `Add your clip${photos ? ` and ${photos} character photos` : ""}, then Generate.`;
+          // The studio's words (src/components/genjutsu/genjutsu-studio.tsx loadExample).
+          const character = row.genjutsu.recipe.mode === "character";
+          const photoWords = !photos ? "" : character ? (photos === 1 ? "a character photo" : `${photos} character photos`) : photos === 1 ? "a photo" : `${photos} photos`;
+          const want = `Add your clip${photoWords ? ` and ${photoWords}` : ""}, then Generate.`;
           check(`${tag} ${label}: the toast says what is still needed`, await page.getByText(want).isVisible().catch(() => false), want);
           check(`${tag} ${label}: it runs nothing (no run request)`, runs.length === 0);
           const undo = page.getByRole("button", { name: "Undo" });
@@ -290,11 +308,31 @@ try {
           if (typed.includes(i)) check(`owner ${width} ${row.id}: who becomes who typed before stays (${i + 1})`, (await role(i).inputValue()) === people[i].role, await role(i).inputValue());
           else await role(i).fill(people[i].role);
         }
+        // A paint example: the painted spot is the viewer's own, so the test paints one (the request then has a mask).
+        if (row.genjutsu.recipe.target === "paint") {
+          const brush = page.getByRole("button", { name: /Paint the spot|Paint over it/ });
+          await brush.waitFor({ timeout: 60_000 });
+          await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => /Paint the spot|Paint over it/.test(b.textContent ?? "") && !b.disabled), null, { timeout: 120_000 }).catch(() => {});
+          await brush.click();
+          const canvas = page.getByRole("dialog").locator("canvas").first();
+          await canvas.waitFor({ timeout: 30_000 });
+          const b = await canvas.boundingBox();
+          await page.mouse.move(b.x + b.width * 0.45, b.y + b.height * 0.55);
+          await page.mouse.down();
+          for (let i = 1; i <= 8; i++) await page.mouse.move(b.x + b.width * (0.45 + i * 0.01), b.y + b.height * 0.55, { steps: 2 });
+          await page.mouse.up();
+          await page.getByRole("button", { name: "Use this mask" }).click();
+          await page.getByRole("dialog").waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
+        }
         await page.waitForTimeout(1500);
         const last = bodies.at(-1);
         const strip = (b) => {
           // The clip, its first frame's size and the photos are the viewer's own (the test's here).
-          const rest = Object.fromEntries(Object.entries(b ?? {}).filter(([k]) => !["source", "references", "requestId", "frame"].includes(k)));
+          const rest = Object.fromEntries(Object.entries(b ?? {}).filter(([k]) => !["source", "references", "requestId", "frame", "mask"].includes(k)));
+          // The tier is the model's own (each tier is its own model, and modelId is compared), and the whole original
+          // sound is what a run keeps when it names none.
+          delete rest.tier;
+          if (rest.originalSound === "everything") delete rest.originalSound;
           // Finish keeps the clip's size: its quality plays no part in the run (tests/genjutsu-examples.test.ts).
           if (rest.mode === "finish") delete rest.quality;
           // Fix colours' settings a run left out are the plan's defaults (FINISH_COLOURS_DEFAULT): the run used them.
@@ -323,15 +361,22 @@ try {
       const bodies = [];
       page.on("request", (r) => r.method() === "POST" && r.url().endsWith("/api/genjutsu/estimate") && bodies.push(JSON.parse(r.postData() ?? "{}")));
       await page.goto(`${app}/genjutsu?mode=${switchMode ? "character" : "finish"}`, { waitUntil: "load", timeout: 180_000 });
-      await page.locator("[data-use-example]").first().click();
-      await page.waitForTimeout(600);
+      await page.getByRole("tablist", { name: "Genjutsu modes" }).waitFor({ timeout: 120_000 });
+      // Until the page is interactive a click does nothing: press until the card says "In use".
+      const use = page.locator("[data-use-example]").first();
+      for (let i = 0; i < 10 && !(await use.innerText()).includes("In use"); i++) {
+        await use.click();
+        await page.waitForTimeout(600);
+      }
       if (switchMode) {
         await page.getByRole("tablist", { name: "Genjutsu modes" }).getByRole("tab", { name: /^Finish/ }).click();
         await page.waitForTimeout(400);
       }
       await page.locator("#gj-clip-drop input[type=file]").setInputFiles(path.join(root, "scripts/eval/fixtures/walk-6s.mp4"));
       await page.waitForFunction(() => !document.querySelector("#gj-clip-drop input[type=file]"), null, { timeout: 120_000 }).catch(() => {});
-      await page.waitForTimeout(6000);
+      // The first estimate goes once the clip is uploaded and read (a first upload of the file can take a while).
+      for (let i = 0; i < 120 && !bodies.length; i++) await page.waitForTimeout(500);
+      await page.waitForTimeout(1500);
       const range = bodies.at(-1)?.range;
       const len = range ? Math.round((range.end - range.start) * 1000) / 1000 : null;
       const want = switchMode ? 6 : expected.finish.genjutsu.recipe.length;

@@ -37,6 +37,7 @@ import {
   GENJUTSU_FEATURE_KEYS,
   GENJUTSU_FEATURES,
   GENJUTSU_MODES,
+  getMaker,
   modeOpen,
   requestFeatures,
   type FeatureCheck,
@@ -477,7 +478,10 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     setMode(s.mode);
     const e = s.engine && engineMode === "both" ? s.engine : engine;
     if (s.engine && engineMode === "both") setEngine(s.engine);
-    if (s.tier) setTier(s.tier);
+    // A setup that names a model with a tier of its own (Object swap's full Original is "high") takes that tier, so the
+    // form keeps that model rather than its pair on the default tier.
+    const setupTier = s.tier ?? (s.model ? getMaker(s.model, e)?.tier : undefined);
+    if (setupTier) setTier(setupTier);
     if (s.mode === "character") {
       if (s.quality && ([...CHARACTER_SWAP.qualities, ...CHARACTER_SWAP.finishes] as string[]).includes(s.quality)) setCharQuality(s.quality as CharacterChoice);
       if (s.quality && (GENJUTSU.qualities as string[]).includes(s.quality)) setQuality(s.quality);
