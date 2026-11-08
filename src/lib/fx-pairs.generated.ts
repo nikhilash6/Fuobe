@@ -153,7 +153,7 @@ export const FX_PAIRS: Record<string, FxPair> = {
   "hd": true
  },
  "video-tools-remove-object": {
-  "v": "0e5e3f52",
+  "v": "223c516a",
   "kind": "pair",
   "hd": true
  },
