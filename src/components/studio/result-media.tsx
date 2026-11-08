@@ -3,6 +3,7 @@
 import { AudioLines, Box, Download, FileText, Film, Layers, Rotate3d } from "lucide-react";
 import { createElement, useEffect, useState } from "react";
 import { loadModelViewer, useViewerSrc, viewerLook } from "@/components/model3d/model-viewer";
+import { ModelStandIn, ModelTile } from "@/components/model3d/model-tile";
 import { hasWebgl2, SplatViewer, useReducedMotion } from "@/components/model3d/splat-viewer";
 import { useHydrated } from "@/lib/api";
 import { FALLBACK_TEXT, hazeCutoffFor, splatFallback, splatPose } from "@/lib/av/splat-view";
@@ -12,6 +13,7 @@ import { firstFrameSrc, FRONT_YAW, splatFormatOf, turnOrbit, viewerGlb } from "@
 import type { Generation, OutputFile, VideoFormat } from "@/lib/catalog/types";
 import { extensionOf } from "@/lib/library";
 import { cuesOf, cueTime, editOnlyFormat, isLayered, layerInfo, modelPreview, textOf, videoPoster } from "@/lib/output-actions";
+import { preview3dOf } from "@/lib/preview3d";
 import { cn } from "@/lib/utils";
 
 /** Any result as a tile picture: image, video (plays on hover), audio, text card, 3D preview. */
@@ -56,21 +58,21 @@ export function MediaThumb({
   }
   if (output.kind === "text") return <TextPreview output={output} className={className} tag={tag} inset={inset} />;
   if (output.kind === "model3d") {
+    // Its preview (a still on the theme's studio, turning on hover), else what the run brought (an orbit clip, a
+    // still), else the photo it was made from; the 3D file loads only when the result is opened.
+    const ready = preview3dOf(output);
+    if (ready) return <ModelTile preview={ready} fit={fit} autoPlay={autoPlay} className={className} />;
     const { poster, video } = modelPreview(g ?? { outputs: [output] }, output);
-    if (video) return <MediaThumb output={{ url: video, kind: "video" }} autoPlay={autoPlay} fit={fit} className={className} />;
-    return (
-      <div className={cn("relative flex size-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground", className)}>
-        {poster ? (
-          // eslint-disable-next-line @next/next/no-img-element
+    if (video) return <MediaThumb output={{ url: video, kind: "video", ...(poster && { meta: { poster } }) }} autoPlay={autoPlay} fit={fit} className={className} />;
+    if (poster) {
+      return (
+        <div className={cn("relative size-full bg-muted", className)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={poster} alt="" loading="lazy" decoding="async" className={cn("absolute inset-0 size-full", object)} />
-        ) : (
-          <>
-            <Box className="size-8" />
-            <span className="text-[12px] font-medium">3D model</span>
-          </>
-        )}
-      </div>
-    );
+        </div>
+      );
+    }
+    return <ModelStandIn output={output} photo={g?.request?.inputs?.images?.[0]} fit={fit} className={className} />;
   }
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={output.url} alt="" loading="lazy" decoding="async" className={cn("size-full", object, className)} />;

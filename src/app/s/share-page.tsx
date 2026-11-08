@@ -211,19 +211,37 @@ function Media({ media: m, alt, fit, short }: { media: PublicMedia; alt: string;
       );
     default:
       return (
-        <div className="flex items-center gap-3 p-4">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-faint text-brand-text">
-            <Box className="size-5" />
-          </span>
-          <div className="min-w-0 text-[13px]">
-            <p className="font-medium break-all">{m.download}</p>
-            <a href={`${m.url}?download=${encodeURIComponent(m.download)}`} download={m.download} className="text-brand-text underline underline-offset-2">
-              Download the 3D file
-            </a>
+        <>
+          {m.turntable && <Turntable media={m} alt={alt} box={box} />}
+          <div className="flex items-center gap-3 p-4">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-faint text-brand-text">
+              <Box className="size-5" />
+            </span>
+            <div className="min-w-0 text-[13px]">
+              <p className="font-medium break-all">{m.download}</p>
+              <a href={`${m.url}?download=${encodeURIComponent(m.download)}`} download={m.download} className="text-brand-text underline underline-offset-2">
+                Download the 3D file
+              </a>
+            </div>
           </div>
-        </div>
+        </>
       );
   }
+}
+
+/**
+ * A 3D model's turntable: one turn that loops, muted, on the studio of the page's theme, over its still (so there is no
+ * blank frame while it loads).
+ */
+function Turntable({ media: m, alt, box }: { media: PublicMedia; alt: string; box: string }) {
+  const t = m.turntable!;
+  const video = "block aspect-square h-auto object-contain";
+  return (
+    <figure className="bg-[#dad8d4] dark:bg-[#141417]" aria-label={`${alt}, turning`}>
+      <video src={t.light} poster={m.poster} autoPlay muted loop playsInline preload="metadata" className={cn(video, box, "dark:hidden")} />
+      <video src={t.dark} poster={t.posterDark} autoPlay muted loop playsInline preload="metadata" className={cn(video, box, "hidden dark:block")} />
+    </figure>
+  );
 }
 
 function Nothing() {

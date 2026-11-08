@@ -11,6 +11,7 @@ import { OPERATION_LABELS, type Generation, type OutputFile } from "@/lib/catalo
 import { HELPER_FEATURES, HELPER_SUFFIX, extensionOf, userTitle } from "@/lib/library";
 import { unwrapScene } from "@/lib/storyboard-board";
 import { shownOutputs } from "@/lib/output-actions";
+import { preview3dOf } from "@/lib/preview3d";
 import {
   expiryFrom,
   fileName,
@@ -113,6 +114,14 @@ function parseIds(json: string): string[] {
   }
 }
 
+/** A 3D model's preview on a page: its light still as the poster, and its turntables (share-scoped). */
+function turntableOf(token: string, o: OutputFile): Pick<PublicMedia, "poster" | "turntable"> | Record<string, never> {
+  const p = preview3dOf(o);
+  if (!p) return {};
+  const [poster, posterDark, light, dark] = [p.poster.light, p.poster.dark, p.clip.light, p.clip.dark].map((u) => shareFileUrl(token, u));
+  return poster && posterDark && light && dark ? { poster, turntable: { light, dark, posterDark } } : {};
+}
+
 /** The outputs a piece shows: a 3D result its turntable (a video output) with the model as a download, else what feeds show. */
 const shownIndices = (g: Generation) => (g.kind === "model3d" ? g.outputs.map((_, i) => i) : shownOutputs(g));
 
@@ -174,6 +183,7 @@ export function buildPublicShare(row: ShareRow, token: string): { page: PublicSh
       ...(o.width && { width: o.width }),
       ...(o.height && { height: o.height }),
       ...(o.kind === "video" && posterSrc && { poster: shareFileUrl(token, posterSrc)! }),
+      ...(o.kind === "model3d" && turntableOf(token, o)),
       ...(o.kind === "text" && typeof o.text === "string" && { text: o.text.slice(0, 20_000) }),
       download: fileName(title, index, extensionOf(o)),
     };

@@ -13,7 +13,7 @@ import { getSetting } from "../settings";
 import { absolutePath, deleteAsset, getAsset, readRef, saveFile, type Asset } from "../storage";
 import { tenantAccount } from "../tenant";
 import { cpuSlotOf, poolWaitMs, RETRY_WINDOW_MS, runPlaceOf, ticketReady } from "./pool";
-import { createTask, endTask, json, receivedFile, resultOf, stageInput, stagedInput, type FinishedPlan, type TaskRow } from "./tasks";
+import { createTask, endTask, json, receivedFile, resultOf, stageInput, stagedInput, type FinishedPlan, type Principal, type TaskRow } from "./tasks";
 import type { WorkerRow } from "./workers";
 
 /**
@@ -88,12 +88,15 @@ function runWaitMs(generationId: string): number | undefined {
 export function queueFinish(o: {
   kind: FinishKind;
   generationId: string;
-  account: string;
+  /** The run's account; none: the owner's run. */
+  account?: string;
   inputs: { slot: string; data: Buffer; contentType: string; name: string }[];
   settings: Record<string, unknown>;
   step?: number;
+  /** Its class and place in the line, in place of the run's own (a preview made for an older result goes last). */
+  place?: { class: "paid" | "free" | "owner"; rankAt: number };
 }): string {
-  const principal = `acct:${o.account}` as const;
+  const principal: Principal = o.account ? `acct:${o.account}` : "owner";
   const queued = () => {
     const had = finishTask(o.generationId, o.kind, o.step ?? 0);
     return had && had.state !== "canceled" ? had.id : null;
@@ -121,7 +124,7 @@ export function queueFinish(o: {
       if (again) return again;
       // The run's class and place in line (pool.ts runPlaceOf): a chain's camera path is queued for a step that has no
       // job of its own yet, and keeps the place of the steps of its run before it.
-      const run = runPlaceOf(o.generationId);
+      const run = o.place ?? runPlaceOf(o.generationId);
       const now = Date.now();
       const wait = runWaitMs(o.generationId);
       const t = createTask({
@@ -135,7 +138,7 @@ export function queueFinish(o: {
         pool: {
           pools: ["pool"],
           account: o.account,
-          class: run?.class ?? "free",
+          class: run?.class ?? (o.account ? "free" : "owner"),
           rankAt: run?.rankAt ?? now,
           lane: "small",
           needs: { workflowId: `finish-${o.kind}`, files: [], packs: [], minVramBytes: 0 },

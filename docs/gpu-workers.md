@@ -761,10 +761,18 @@ Set `"cpuSlot": true` in `worker.json` (setup asks) and the worker runs one CPU 
     browser or ffmpeg for the turntable, the model comes back without one. This needs `pnpm install` in its checkout.
   - `path`, a camera path drawn through a still and its depth picture (the guide of a camera move), encoded by ffmpeg.
     This needs ffmpeg.
+  - `preview3d`, the preview of any finished 3D result: a GLB mesh, or a Gaussian splat as `.spz` or `.ply`, from any
+    run (the owner's, an account's, a provider's). `scripts/model3d/render-preview.mjs` draws one turn of the model (120
+    frames, 5 s, a loop with no seam) on the CPU, with no browser and no GPU, on a light and a dark studio backdrop, and
+    ffmpeg encodes each as H.264 (and AV1 when its ffmpeg has an AV1 encoder); the stills are the first frame. This needs
+    ffmpeg and sharp. The studio follows these jobs in `src/server/model3d-preview.ts`: every finished 3D result without
+    a preview gets one, newest first, a few at a time; an older result's job goes after everyone's runs. Without a
+    worker that draws previews, a server that runs ComfyUI itself draws them; one with workers draws only a provider's
+    result of the owner's, and an account's waits for a worker.
 
   A finishing job comes as a finish ticket (`src/lib/finish-ticket.ts`): its kind, typed settings, and its input
   files by slot, name and SHA-256. The worker checks it the same way the studio does, and sends back only the files its
-  kind makes (`web`, `turntable` and `poster`; or `path`). The studio stores them, and checks the web GLB is
+  kind makes (`web`, `turntable` and `poster`; `path`; or the preview's stills and clips). The studio stores them, and checks the web GLB is
   self-contained again before it keeps it. The owner's own runs, and runs on an account's own GPU or keys, keep the
   studio's own finish, as before.
 
@@ -935,7 +943,7 @@ its target), at most once an hour each.
   - `protocol` is 2 for a worker that says which inputs it takes, makes clips and sound again, and keeps its ComfyUI
     behind the guard. It is 3 for a worker that also makes an account's pictures again (see "Pictures of an account's
     run") and may have a CPU slot.
-  - `cpuSlot` (optional) says its CPU slot and the finishing jobs it runs (`{ finishes: ["model3d", "path"] }`), and
+  - `cpuSlot` (optional) says its CPU slot and the finishing jobs it runs (`{ finishes: ["model3d", "path", "preview3d"] }`), and
     `cpuRunning` the task that slot works on, as `running` does for its GPU's. With no `cpuSlot`, it has none.
   - `held` (optional) names the jobs whose finished results the worker keeps on its disk. A pause now sends those
     jobs back in line only when the worker doesn't name them.

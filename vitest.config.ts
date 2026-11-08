@@ -20,6 +20,8 @@ export default defineConfig({
     // one set a key in Settings and point the provider at a stand-in (FUOBE_LLM_TEST_BASE).
     env: {
       LMSTUDIO_URL: "http://127.0.0.1:9",
+      // No 3D previews drawn in the background of other tests (tests/preview3d.test.ts turns them on for its own).
+      FUOBE_PREVIEWS_3D: "0",
       UNSLOTH_URL: "http://127.0.0.1:9",
       ...Object.fromEntries(
         [

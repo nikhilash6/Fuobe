@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CircleAlert, ImageIcon, Loader2, MessageCircle, Video, Wand2, Zap } from "lucide-react";
+import { ArrowRight, CircleAlert, ImageIcon, MessageCircle, Video, Wand2, Zap } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { GetStarted } from "@/components/get-started";
@@ -13,6 +13,9 @@ import { HadItemsScript, useHadItems } from "@/components/use-had-items";
 import { IntentLink } from "@/components/intent-link";
 import { useFadeEdges } from "@/components/use-fade-edges";
 import { MediaThumb } from "@/components/studio/result-media";
+import { RunAura, RunRing } from "@/components/studio/run-visuals";
+import { pendingWords } from "@/lib/pending-words";
+import { runStage, STAGE_WORDS } from "@/lib/run-stage";
 import { CONNECT_GPU_EVENT, signInHref, useEngine, useGenerations, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import type { Generation } from "@/lib/catalog/types";
@@ -65,14 +68,7 @@ function RecentStrip({ items }: { items: Generation[] }) {
                   <MediaThumb output={g.outputs[0]} g={g} />
                 </button>
               ) : (
-                <Link
-                  href="/library"
-                  title={title}
-                  aria-label={`${failed ? "Failed" : "Rendering"}: “${title}” — open the Library`}
-                  className="grid aspect-square w-full place-items-center rounded-xl border border-dashed bg-muted/40 text-muted-foreground"
-                >
-                  {failed ? <CircleAlert className="size-5" /> : <Loader2 className="size-5 animate-spin" />}
-                </Link>
+                <RecentWaiting g={g} title={title} failed={failed} />
               )}
             </li>
           );
@@ -90,6 +86,39 @@ function RecentStrip({ items }: { items: Generation[] }) {
         </Suspense>
       )}
     </>
+  );
+}
+
+/**
+ * A recent run that has no result to show: on its way, the living fill and ring the run cards have, with its stage
+ * ("In line", "Creating") and what it is (its title, else its model or app); stopped, what happened. A tap opens the
+ * Library, where it is followed.
+ */
+function RecentWaiting({ g, title, failed }: { g: Generation; title: string; failed: boolean }) {
+  const st = runStage(g);
+  const { label, place } = pendingWords(g);
+  // "In line" for a run waiting its turn, whatever its last message said; else the run's own words.
+  const words = failed ? (g.status === "canceled" ? "Canceled" : "Couldn't generate this one") : st?.stage === "in-line" && g.place !== "pool" ? STAGE_WORDS["in-line"] : label;
+  const what = g.request.title?.trim() || g.modelName || title;
+  return (
+    <Link
+      href="/library"
+      title={title}
+      aria-label={`${words}: “${what}”. Open the Library`}
+      data-stage={failed ? g.status : st?.stage}
+      className={cn(
+        "relative flex aspect-square w-full flex-col justify-end overflow-hidden rounded-xl p-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        failed ? "border bg-muted/40" : "bg-muted",
+      )}
+    >
+      {!failed && <RunAura />}
+      <span className="relative flex min-w-0 items-start gap-1.5 text-[12px] leading-snug font-medium">
+        {failed ? <CircleAlert className="mt-px size-4 shrink-0 text-muted-foreground" aria-hidden /> : <RunRing fraction={st?.stage === "in-line" ? null : (st?.fraction ?? null)} stage={st?.stage ?? "creating"} />}
+        <span className="line-clamp-2">{words}</span>
+      </span>
+      <span className="relative mt-0.5 line-clamp-2 pl-[22px] text-[11px] leading-snug text-muted-foreground">{what}</span>
+      {!failed && place && <span className="relative line-clamp-1 pl-[22px] text-[11px] text-muted-foreground">{place}</span>}
+    </Link>
   );
 }
 

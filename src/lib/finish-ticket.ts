@@ -5,6 +5,9 @@
  * - "model3d": an image-to-3D model's finish. The worker checks the GLB (a self-contained binary glTF only: no buffer or
  *   picture that names another file), writes the web GLB, and renders a turntable clip and its poster.
  * - "path": a camera path drawn through a still and its depth picture (the guide of a camera move), as an MP4.
+ * - "preview3d": the preview of any finished 3D result (a GLB mesh or a Gaussian splat): a turntable clip that loops and
+ *   a still from its first frame, each on a light and a dark studio backdrop, drawn on the CPU with no browser
+ *   (scripts/model3d/render-preview.mjs).
  *
  * A finish ticket names its kind, its typed settings and its input files (slot, name, SHA-256). The worker runs it with
  * its own code (bin/lib/worker/finish.mjs) and sends back only the files its kind makes (FINISH_FILES). Both sides check
@@ -16,8 +19,12 @@ import { INPUT_NAME } from "./relay";
 
 export const FINISH_VERSION = 1;
 
-export const FINISH_KINDS = ["model3d", "path"] as const;
+export const FINISH_KINDS = ["model3d", "path", "preview3d"] as const;
 export type FinishKind = (typeof FINISH_KINDS)[number];
+
+/** The 3D files a preview is drawn from. */
+export const PREVIEW_FORMATS = ["glb", "spz", "ply"] as const;
+export type PreviewFormat = (typeof PREVIEW_FORMATS)[number];
 
 /** The materials the GLB finish knows (scripts/model3d/finish-glb.mjs --material). */
 export const FINISH_MATERIALS = ["auto", "matte", "metal", "mixed"] as const;
@@ -34,14 +41,14 @@ export interface FinishPathKey {
 export interface FinishTicket {
   v: typeof FINISH_VERSION;
   kind: FinishKind;
-  /** model3d: { material, turntable }; path: { keys, frames, fps }. */
+  /** model3d: { material, turntable }; path: { keys, frames, fps }; preview3d: { format, yDown, frontYaw, cutoff }. */
   settings: Record<string, unknown>;
-  /** model3d: one "model" (the raw GLB); path: a "photo" and its "depth" picture. */
+  /** model3d and preview3d: one "model" (the raw GLB, or the splat); path: a "photo" and its "depth" picture. */
   inputs: { slot: string; name: string; sha256: string }[];
 }
 
 /** The input slots each kind takes, in order. */
-export const FINISH_SLOTS: Record<FinishKind, readonly string[]> = { model3d: ["model"], path: ["photo", "depth"] };
+export const FINISH_SLOTS: Record<FinishKind, readonly string[]> = { model3d: ["model"], path: ["photo", "depth"], preview3d: ["model"] };
 
 /**
  * The files each kind may send back, by role: their kind on the server and the most each may weigh. The worker names
@@ -54,7 +61,28 @@ export const FINISH_FILES: Record<FinishKind, Record<string, { kind: "model3d" |
     poster: { kind: "image", maxBytes: 16 * 2 ** 20 },
   },
   path: { path: { kind: "video", maxBytes: 512 * 2 ** 20 } },
+  preview3d: {
+    posterLight: { kind: "image", maxBytes: 4 * 2 ** 20 },
+    posterDark: { kind: "image", maxBytes: 4 * 2 ** 20 },
+    clipLight: { kind: "video", maxBytes: 32 * 2 ** 20 },
+    clipDark: { kind: "video", maxBytes: 32 * 2 ** 20 },
+    webmLight: { kind: "video", maxBytes: 32 * 2 ** 20 },
+    webmDark: { kind: "video", maxBytes: 32 * 2 ** 20 },
+  },
 };
+
+/** A preview's files by role, as scripts/model3d/render-preview.mjs names them in its folder. */
+export const PREVIEW_FILES: Record<string, { file: string; contentType: string }> = {
+  posterLight: { file: "poster-light.webp", contentType: "image/webp" },
+  posterDark: { file: "poster-dark.webp", contentType: "image/webp" },
+  clipLight: { file: "turntable-light.mp4", contentType: "video/mp4" },
+  clipDark: { file: "turntable-dark.mp4", contentType: "video/mp4" },
+  webmLight: { file: "turntable-light.webm", contentType: "video/webm" },
+  webmDark: { file: "turntable-dark.webm", contentType: "video/webm" },
+};
+
+/** The largest 3D file a preview is drawn from: a bigger one keeps its other stills (the photo it was made from). */
+export const PREVIEW_MAX_BYTES = 200 * 2 ** 20;
 
 /** A path's frames and frame rate: at most this many, and this fast. */
 export const PATH_LIMITS = { maxFrames: 241, maxFps: 60, maxKeys: 64 };
@@ -86,6 +114,12 @@ export function finishProblem(t: unknown, o: { inputs?: { name: string; sha256: 
     if (Object.keys(set).some((x) => x !== "material" && x !== "turntable")) return "a setting isn't one";
     if (!(FINISH_MATERIALS as readonly string[]).includes(String(set.material))) return "material isn't one";
     if (typeof set.turntable !== "boolean") return "turntable isn't a yes or no";
+  } else if (kind === "preview3d") {
+    if (Object.keys(set).some((x) => !["format", "yDown", "frontYaw", "cutoff"].includes(x))) return "a setting isn't one";
+    if (!(PREVIEW_FORMATS as readonly string[]).includes(String(set.format))) return "format isn't one";
+    if (typeof set.yDown !== "boolean") return "yDown isn't a yes or no";
+    if (!Number.isInteger(set.frontYaw) || !finite(set.frontYaw, -360, 360)) return "frontYaw out of range";
+    if (!finite(set.cutoff, 0, 0.5)) return "cutoff out of range";
   } else {
     if (Object.keys(set).some((x) => !["keys", "frames", "fps"].includes(x))) return "a setting isn't one";
     if (!Number.isInteger(set.frames) || !finite(set.frames, 2, PATH_LIMITS.maxFrames)) return "frames out of range";

@@ -175,6 +175,9 @@ export function outputFiles(o: { url: string; meta?: Record<string, unknown> }):
     const v = o.meta?.[k];
     if (typeof v === "string") out.push(storedPath(v));
   }
+  // A 3D result's preview: its stills and turntables (src/lib/preview3d.ts).
+  const p = o.meta?.preview3d as { state?: unknown; poster?: Record<string, unknown>; clip?: Record<string, unknown>; webm?: Record<string, unknown> } | undefined;
+  if (p?.state === "done") for (const set of [p.poster, p.clip, p.webm]) for (const v of Object.values(set ?? {})) if (typeof v === "string") out.push(storedPath(v));
   return out.filter((p): p is string => !!p);
 }
 
@@ -265,6 +268,8 @@ export interface PublicMedia {
   width?: number;
   height?: number;
   poster?: string;
+  /** A 3D model's turntable (one turn that loops) and its stills, on the light and the dark studio; poster is the light still. */
+  turntable?: { light: string; dark: string; posterDark: string };
   /** A text output's words, inline. */
   text?: string;
   /** A file name for Download. */

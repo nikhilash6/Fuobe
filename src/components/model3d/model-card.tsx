@@ -15,6 +15,8 @@ import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
+import { ModelTile } from "./model-tile";
+import { preview3dOf } from "@/lib/preview3d";
 import { RetextureDialog } from "./retexture-dialog";
 import { RigDialog } from "./rig-dialog";
 import { PrintDialog } from "./print-dialog";
@@ -137,6 +139,8 @@ export function ModelCard({
   useEffect(() => () => void (recordedUrl && URL.revokeObjectURL(recordedUrl)), [recordedUrl]);
   // The turntable the server rendered (open models), TripoSplat's orbit or the demo's, or the one recorded here.
   const clip = view.turntable ?? recordedUrl;
+  // Its preview (src/lib/preview3d.ts): the still and the turntable on a light and a dark studio.
+  const shown = preview3dOf(g.outputs[modelAt(g)]);
   // What the card shows while the viewer is closed: the poster, else the photo it was made from. An Idol 3D clean splat
   // shows its orbit's first frame instead (view.stillClip), so the turntable shows its own.
   const still = view.stillClip ? undefined : (view.poster ?? view.photo);
@@ -330,7 +334,16 @@ export function ModelCard({
           />
         ) : !open3d ? (
           <>
-            {clip && show === "preview" ? <TurntableLoop src={clip} poster={still} label={`Turntable of the ${label} model`} /> : placeholder}
+            {/* Its preview turns on the studio of the page's theme; else the turntable it came with, or one recorded here. */}
+            {shown && show === "preview" ? (
+              <div className="absolute inset-0" role="img" aria-label={`Turntable of the ${label} model`}>
+                <ModelTile preview={shown} fit autoPlay />
+              </div>
+            ) : clip && show === "preview" ? (
+              <TurntableLoop src={clip} poster={still} label={`Turntable of the ${label} model`} />
+            ) : (
+              placeholder
+            )}
             {(view.glb || canLook) && (
               <Button
                 size="sm"

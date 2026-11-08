@@ -13,6 +13,7 @@ import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 import { idolCameraStills, showableOutputs } from "./av/idol-camera-still";
+import { preview3dOf } from "./preview3d";
 import { canEnhance, canRerender, ENHANCE_LABEL, REGEN_OFFERED, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 import { exportsCleanly } from "./av/keying";
@@ -546,6 +547,9 @@ export function editOnlyFormat(g: Partial<Pick<Generation, "op" | "request">> | 
  * its orbit, and its orbit stands in.
  */
 export function modelPreview(g: Pick<Generation, "outputs">, o: OutputFile): { poster?: string; video?: string } {
+  // Its own preview (src/lib/preview3d.ts) first: the still and the turntable on the light studio.
+  const ready = preview3dOf(o);
+  if (ready) return { poster: ready.poster.light, video: ready.clip.light };
   const m = (o.meta ?? {}) as Record<string, unknown>;
   const cameraStills = idolCameraStills(g);
   const str = (...keys: string[]) => keys.map((k) => m[k]).find((v): v is string => typeof v === "string" && v.length > 0 && !cameraStills.has(v));

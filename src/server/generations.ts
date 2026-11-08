@@ -138,6 +138,7 @@ import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { appliesOwnStyle } from "@/lib/catalog/applied-style";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
+import { stopPreviews, tickPreviews } from "./model3d-preview";
 import { finishTask, pathOnWorker, poolFinishes3d, startWorkerModelFinish, stopWorkerFinish } from "./computer/finish";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { cropPicture, isCropWindow } from "./crop-picture";
@@ -1016,9 +1017,10 @@ export function assetInUse(assetId: string, exceptGeneration = ""): boolean {
  * src/server/library.ts (they cancel running jobs first); moving to the Trash is trashGenerations.
  */
 export function deleteGeneration(id: string): void {
-  // A 3D job's finish or turntable render stops with it.
+  // A 3D job's finish, turntable render or preview stops with it.
   stopModelFinish(id);
   stopWorkerFinish(id);
+  stopPreviews(id);
   const assets = db().prepare("SELECT id FROM assets WHERE generation_id = ?").all(id) as { id: string }[];
   db().transaction(() => {
     db().prepare("DELETE FROM generations WHERE id = ?").run(id);
@@ -4207,6 +4209,8 @@ async function tick(): Promise<void> {
     // service. Neither does anything while no service is set.
     if (moderationConfigured()) await sweepOutputChecks();
     void sweepBilling();
+    // Finished 3D results without a preview yet (and the ones on their way): model3d-preview.ts, every few seconds.
+    if (!draining()) tickPreviews();
     // The hourly run counts forget a run (and the client address it came from) two hours on, whether more runs come.
     try {
       prunePoolAdmissions();

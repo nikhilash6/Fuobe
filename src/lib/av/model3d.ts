@@ -3,6 +3,7 @@ import type { OwnSetup } from "@/lib/own-setup";
 import { PATH_FRAMES, keyAt } from "@/lib/camera-path";
 import { exactOrbitKeys, type ExactOrbit } from "@/lib/exact-orbit";
 import { idolCameraStills, isIdolClean } from "./idol-camera-still";
+import { preview3dOf } from "@/lib/preview3d";
 
 export { idolCameraStills, isIdolCameraStill, isIdolClean, showableOutputs } from "./idol-camera-still";
 
@@ -429,7 +430,9 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const format = splatFormatOf(mesh);
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
   const clean = splat ? idolCleanLine(meta) : undefined;
-  const turntable = str(meta.turntable) ?? str(meta.video) ?? video?.url;
+  // Its own preview first (src/lib/preview3d.ts): a turn and its still drawn from the model itself.
+  const ready = preview3dOf(mesh);
+  const turntable = ready?.clip.light ?? str(meta.turntable) ?? str(meta.video) ?? video?.url;
   const photo = g.request.inputs?.images?.[0];
   const images = g.outputs.filter((o) => o.kind === "image");
   // Idol 3D's clean graph: its own still (role "preview") is rendered from the camera Idol predicts, which can collapse
@@ -450,8 +453,8 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
     turntable,
     rendering: pending ? { queued: finish.turntable === "queued", progress: typeof finish.turntableProgress === "number" ? finish.turntableProgress : 0 } : undefined,
     material: str(finish.material),
-    poster: idolClean ? (orbitStill ?? photo) : (str(meta.preview) ?? str(meta.poster) ?? images[0]?.url),
-    ...(fromOrbit && !orbitStill && { stillClip: turntable }),
+    poster: ready?.poster.light ?? (idolClean ? (orbitStill ?? photo) : (str(meta.preview) ?? str(meta.poster) ?? images[0]?.url)),
+    ...(fromOrbit && !orbitStill && !ready && { stillClip: turntable }),
     photo,
     formats,
     rigged: meta.rigged === true || undefined,

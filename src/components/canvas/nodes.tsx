@@ -65,6 +65,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { LanguageChip, SliderControls } from "@/components/studio/audio-controls";
 import { downloadName } from "@/components/studio/feed";
 import { RunAura, RunRing } from "@/components/studio/run-visuals";
+import { ModelTile } from "@/components/model3d/model-tile";
+import { preview3dOf } from "@/lib/preview3d";
 import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ControlsChip } from "@/components/studio/model-controls";
 import { ModelPicker } from "@/components/studio/model-picker";
@@ -517,6 +519,15 @@ function OutputThumb({ o, onOpen, className, large }: { o: OutputFile; onOpen: (
     );
   }
   if (o.kind === "model3d") {
+    // Its preview: the still, turning on hover (the viewer loads the model when it is opened).
+    const ready = preview3dOf(o);
+    if (ready) {
+      return (
+        <button onClick={onOpen} className={cn("block aspect-square w-full overflow-hidden rounded-lg", large ? "max-h-80" : "max-h-44", NO_DRAG, className)} aria-label="Open the 3D model">
+          <ModelTile preview={ready} fit />
+        </button>
+      );
+    }
     return (
       <button onClick={onOpen} className={cn("flex h-20 w-full items-center justify-center gap-2 rounded-lg bg-muted text-[12px] font-medium text-muted-foreground hover:text-foreground", NO_DRAG, className)}>
         <Box className="size-4" /> 3D model

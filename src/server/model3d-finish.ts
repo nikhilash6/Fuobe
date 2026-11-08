@@ -430,3 +430,33 @@ async function renderTurntable(generationId: string, mesh: OutputFile, store: Ou
     await removeDir(tmp);
   }
 }
+
+// ---------------------------------------------------------------------------
+// A 3D result's preview drawn on this server (model3d-preview.ts: only where no worker's CPU slot draws it).
+
+/**
+ * Draw a 3D file's preview here (scripts/model3d/render-preview.mjs: the CPU, no browser), one at a time with the
+ * turntables, at below-normal priority, into a temp folder. Returns the folder (the caller removes it) and the script's
+ * exit code: 0 drew it, 3 can't draw this file here (no ffmpeg, a compressed glTF).
+ */
+export async function renderPreviewHere(file: string, s: { format: string; yDown: boolean; frontYaw: number; cutoff: number }, signal: AbortSignal): Promise<{ dir: string; code: number | null; error: string }> {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "fuobe-preview-"));
+  const out = path.join(dir, "preview");
+  try {
+    const run = await oneAtATime(() =>
+      runScript("render-preview.mjs", ["--in", file, "--out-dir", out, "--format", s.format, "--front-yaw", String(s.frontYaw), "--cutoff", String(s.cutoff), ...(s.yDown ? ["--y-down"] : [])], {
+        timeoutMs: TURNTABLE_TIMEOUT_MS,
+        signal,
+        cwd: dir,
+        lowPriority: true,
+      }),
+    );
+    return { dir: out, code: run.code, error: tail(run.stderr) };
+  } catch (e) {
+    await removeDir(dir);
+    throw e;
+  }
+}
+
+/** Remove the temp folder a preview was drawn in (renderPreviewHere's `dir` is a folder inside it). */
+export const removePreviewDir = (dir: string) => removeDir(path.dirname(dir));

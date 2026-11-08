@@ -7,6 +7,8 @@
 //   GLB; then scripts/model3d/render-turntable.mjs renders the turntable and its poster (CPU only). With no browser or
 //   ffmpeg for the turntable here, the model goes back without one ("skipped").
 // - "path": path-child.mjs draws the camera path through the still and its depth picture, and ffmpeg encodes it.
+// - "preview3d": scripts/model3d/render-preview.mjs draws a 3D result's turntable and its stills on the CPU (no browser,
+//   no GPU), and ffmpeg encodes them.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -18,6 +20,16 @@ const ROOT = path.resolve(here, "../../..");
 
 /** Exit code 3 of the 3D scripts: the GLB isn't self-contained (finish-glb.mjs), or no browser or ffmpeg (render-turntable.mjs). */
 const REFUSED = 3;
+
+/** A preview's files by role (src/lib/finish-ticket.ts PREVIEW_FILES; tests/preview3d.test.ts keeps the two the same). */
+export const PREVIEW_FILES = {
+  posterLight: { file: "poster-light.webp", contentType: "image/webp" },
+  posterDark: { file: "poster-dark.webp", contentType: "image/webp" },
+  clipLight: { file: "turntable-light.mp4", contentType: "video/mp4" },
+  clipDark: { file: "turntable-dark.mp4", contentType: "video/mp4" },
+  webmLight: { file: "turntable-light.webm", contentType: "video/webm" },
+  webmDark: { file: "turntable-dark.webm", contentType: "video/webm" },
+};
 
 /** The variables the scripts read (and what Node, a browser and ffmpeg need to start): nothing else of this PC's. */
 const PASS = ["PATH", "Path", "SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "LANG", "CHROMIUM_PATH", "FUOBE_CHROMIUM", "PLAYWRIGHT_BROWSERS_PATH"];
@@ -96,11 +108,14 @@ export function finishers(o) {
   const root = o.root ?? ROOT;
   const finishGlb = o.scripts?.finishGlb ?? path.join(root, "scripts/model3d/finish-glb.mjs");
   const turntableScript = o.scripts?.turntable ?? path.join(root, "scripts/model3d/render-turntable.mjs");
+  const previewScript = o.scripts?.preview ?? path.join(root, "scripts/model3d/render-preview.mjs");
   const dist = o.distDir ?? path.join(here, "dist");
   const env = scriptEnv(o.env ?? process.env, o.ffmpeg);
   const kinds = [];
   if (hasPackage("@gltf-transform/core") && hasPackage("sharp")) kinds.push("model3d");
   if (o.ffmpeg && ["camera-path.mjs", "path-splat.mjs", "scene3d.mjs"].every((f) => fs.existsSync(path.join(dist, f))) && hasPackage("sharp")) kinds.push("path");
+  // A 3D result's preview: drawn on the CPU (no browser), encoded by ffmpeg.
+  if (o.ffmpeg && fs.existsSync(previewScript) && hasPackage("sharp")) kinds.push("preview3d");
 
   async function finish(t, inputs, { signal, progress }) {
     const kind = t.finish?.kind;
@@ -146,6 +161,29 @@ export function finishers(o) {
         }
         const stat = { material: stats.material, triangles: stats.triangles, bytesIn: stats.bytesIn, bytesOut: stats.bytesOut };
         return { files, stats: stat, ...(turntable && { turntable }) };
+      }
+      if (kind === "preview3d") {
+        const s = t.finish.settings;
+        const model = put(`model.${s.format}`, inputs.model);
+        const out = path.join(dir, "preview");
+        const args = ["--in", model, "--out-dir", out, "--format", String(s.format), "--front-yaw", String(s.frontYaw), "--cutoff", String(s.cutoff), ...(s.yDown ? ["--y-down"] : [])];
+        const r = await runScript(previewScript, args, {
+          cwd: dir,
+          signal,
+          env,
+          timeoutMs,
+          onLine: (line) => {
+            const m = /^frame (\d+)\/(\d+)$/.exec(line.trim());
+            if (m) progress(Number(m[1]) / Number(m[2]));
+          },
+        });
+        if (r.code === REFUSED) return { refused: "unsafe-model" };
+        if (r.code !== 0) return { refused: "finish-failed" };
+        const files = Object.entries(PREVIEW_FILES)
+          .filter(([, f]) => fs.existsSync(path.join(out, f.file)))
+          .map(([role, f]) => ({ role, name: f.file, data: fs.readFileSync(path.join(out, f.file)), contentType: f.contentType }));
+        if (!["posterLight", "posterDark", "clipLight", "clipDark"].every((role) => files.some((f) => f.role === role))) return { refused: "finish-failed" };
+        return { files };
       }
       // "path"
       const photo = put("photo.png", inputs.photo);
