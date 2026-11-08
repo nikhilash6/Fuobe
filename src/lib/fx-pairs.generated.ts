@@ -77,7 +77,7 @@ export const FX_PAIRS: Record<string, FxPair> = {
   "kind": "pair"
  },
  "motion-control": {
-  "v": "79f7c2c9",
+  "v": "4480ab9c",
   "kind": "pair"
  },
  "reframe": {

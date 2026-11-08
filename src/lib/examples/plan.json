@@ -5050,5 +5050,25 @@
    "at": 3,
    "from": 0
   }
+ },
+ {
+  "id": "motion-control.1",
+  "surface": "studio:motion-control",
+  "rank": 1,
+  "caption": "Her street dance, now on a baobab road",
+  "modelId": "oss-wan22-animate",
+  "params": {
+   "seed": 7
+  },
+  "inputs": {
+   "image": "/examples/motion-control/1/in-image.jpg",
+   "video": "/examples/motion-control/1/in-video.mp4"
+  },
+  "output": "/examples/motion-control/1/show.mp4",
+  "rest": {
+   "src": "/examples/motion-control/1/show.peak.webp",
+   "at": 0.85,
+   "from": 0
+  }
  }
 ]
