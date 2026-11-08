@@ -148,7 +148,51 @@ export function workerFactsFrom(a: { stats?: unknown; dbs?: unknown; reuse?: unk
 
 export type TicketOutcome =
   | { ok: true; graph: ComfyWorkflow; workflowId: string; size: ComposedSize; made: { name: string; data: Buffer; contentType: string }[] }
-  | { ok: false; reason: "update-worker" | "bad-ticket" | "outside-ceiling"; detail: string };
+  | { ok: false; reason: "update-worker" | "bad-ticket" | "outside-ceiling"; detail: string; graphChanged?: true };
+
+/** A value in canonical form: object keys sorted, at every depth. */
+function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+      const x = (v as Record<string, unknown>)[k];
+      if (x !== undefined) out[k] = canonical(x);
+    }
+    return out;
+  }
+  return v;
+}
+
+/**
+ * A composed graph's fingerprint (a job ticket's `graphSha`): the SHA-256 of "fuobe-graph-1\n" and the canonical JSON of
+ * { graph, made }. `graph`: each node's class and inputs (a node's `_meta`, its title only, is left out); keys sorted at
+ * every depth. `made`: the SHA-256 of each file the composer makes, in order. Two composers that make the same graph and
+ * the same files from a ticket give the same fingerprint, whatever else differs between their builds.
+ */
+export function graphFingerprint(graph: ComfyWorkflow, made: { data: Uint8Array }[] = []): string {
+  const nodes: Record<string, unknown> = {};
+  for (const [id, node] of Object.entries(graph)) {
+    const { _meta: _title, ...rest } = node as unknown as Record<string, unknown>;
+    void _title;
+    nodes[id] = rest;
+  }
+  const body = JSON.stringify(canonical({ graph: nodes, made: made.map((m) => crypto.createHash("sha256").update(m.data).digest("hex")) }));
+  return crypto.createHash("sha256").update(`fuobe-graph-1\n${body}`).digest("hex");
+}
+
+/**
+ * The fingerprint the studio puts on a ticket (`graphSha`): the graph its own composer makes from the ticket with its own
+ * catalog and no facts of any PC, as a worker checks it (composeTicket). Null when the ticket doesn't compose.
+ */
+export async function ticketGraphSha(job: { ticket: JobTicket; generationId: string; inputs: { name: string; sha256: string }[] }, env: { catalog: ComposeCatalog; catalogVersion: string }): Promise<string | null> {
+  const { graphSha: _old, runLimitMs: _run, stallMs: _stall, ...ticket } = job.ticket;
+  void _old;
+  void _run;
+  void _stall;
+  const r = await composeOne({ ...job, ticket: { ...ticket, catalogVersion: env.catalogVersion } }, { catalog: env.catalog, catalogVersion: env.catalogVersion }, false).catch(() => null);
+  return r?.ok ? graphFingerprint(r.graph, r.made) : null;
+}
 
 /** A run's id as the studio makes them. */
 const GENERATION_ID = /^[\w-]{1,64}$/;
@@ -165,12 +209,29 @@ export const catalogKnows = (catalog: ComposeCatalog, id: string) => catalog.has
  * the files the graph makes may come out other than the ticket's (the composer that makes them changed), so they are
  * given back as they came out, for the studio to stage in place of the old ones, never checked against them.
  */
-export async function composeTicket(
-  job: { ticket: unknown; generationId: string; inputs: { name: string; sha256: string }[] },
-  env: { catalog: ComposeCatalog; catalogVersion: string; ceiling?: Ceiling | null; laneOf?: (workflowId: string) => string | null; facts?: WorkerFacts; remake?: boolean },
-): Promise<TicketOutcome> {
+export async function composeTicket(job: TicketJob, env: ComposeEnv): Promise<TicketOutcome> {
+  const t = job.ticket as Partial<JobTicket> | null;
+  const other = !env.remake && !!t && typeof t === "object" && t.catalogVersion !== env.catalogVersion && typeof t.graphSha === "string" && /^[0-9a-f]{64}$/.test(t.graphSha);
+  if (!other) return composeOne(job, env, false);
+  // A ticket made for another catalog: first the graph as the studio made it (no facts of this PC, no ceiling), checked
+  // against its fingerprint. Anything but the same graph (another graph, a ticket this build can't read or compose) is
+  // the catalog's change, never the ticket's fault: the job goes back in line for an updated worker.
+  const changed = (detail: string): TicketOutcome => ({ ok: false, reason: "update-worker", detail, graphChanged: true });
   if (!GENERATION_ID.test(String(job.generationId))) return { ok: false, reason: "bad-ticket", detail: "not a run id" };
-  const refused = ticketProblem(job.ticket, { catalogVersion: env.catalogVersion, known: (id) => catalogKnows(env.catalog, id), inputs: job.inputs });
+  const plain = await composeOne(job, { catalog: env.catalog, catalogVersion: env.catalogVersion }, true).catch(() => null);
+  if (!plain?.ok) return changed("the ticket doesn't compose with this build");
+  if (graphFingerprint(plain.graph, plain.made) !== t!.graphSha) return changed("the graph changed in the studio's catalog");
+  // The same graph: the job runs here, composed as always with this PC's facts and inside its ceiling.
+  const r = await composeOne(job, env, true);
+  return r.ok || r.reason === "outside-ceiling" ? r : changed("the ticket doesn't compose with this build");
+}
+
+type TicketJob = { ticket: unknown; generationId: string; inputs: { name: string; sha256: string }[] };
+type ComposeEnv = { catalog: ComposeCatalog; catalogVersion: string; ceiling?: Ceiling | null; laneOf?: (workflowId: string) => string | null; facts?: WorkerFacts; remake?: boolean };
+
+async function composeOne(job: TicketJob, env: ComposeEnv, otherCatalog: boolean): Promise<TicketOutcome> {
+  if (!GENERATION_ID.test(String(job.generationId))) return { ok: false, reason: "bad-ticket", detail: "not a run id" };
+  const refused = ticketProblem(job.ticket, { catalogVersion: env.catalogVersion, known: (id) => catalogKnows(env.catalog, id), inputs: job.inputs, otherCatalog });
   if (refused) return { ok: false, ...refused };
   const t = job.ticket as JobTicket;
   const lane = (id: string) => env.laneOf?.(id) ?? null;

@@ -478,6 +478,11 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
       const { noteCatalogProcess, processStart } = await import("@/server/computer/ticket-refresh");
       noteCatalogProcess(OTHER, processStart() - 60_000, Date.now() - 60_000);
       expect(await refreshTickets()).toEqual({ refreshed: 1, ended: 0 });
+      // Its graph's fingerprint is made again for the new ticket (its graph names the swatch staged now).
+      expect(JSON.parse(row(id).ticket_json!).graphSha).toBeUndefined();
+      const { fillGraphShas } = await import("@/server/computer/ticket-refresh");
+      expect(await fillGraphShas()).toBe(1);
+      expect(JSON.parse(row(id).ticket_json!).graphSha).toMatch(/^[0-9a-f]{64}$/);
       const after = row(id);
       const next = JSON.parse(after.ticket_json!) as import("@/lib/job-ticket").JobTicket;
       const swatch = next.inputs.find((i) => i.slot === made.slot)!;
@@ -495,6 +500,8 @@ describe("the line hands out tickets inside each PC's ceiling", () => {
       expect(got.id).toBe(id);
       const out = await composer.composeTicket({ ticket: got.ticket, generationId: gid, inputs: tasks.inputsOf(id).map((i) => ({ name: i.name, sha256: i.sha256 })) }, { catalog: { has: () => true, get: (await import("@/server/providers/comfyui")).getWorkflow } as never, catalogVersion: VERSION });
       expect(out.ok, out.ok ? "" : out.detail).toBe(true);
+      // The fingerprint the studio made is the one the composer makes.
+      if (out.ok) expect(composer.graphFingerprint(out.graph, out.made)).toBe(JSON.parse(after.ticket_json!).graphSha);
     } finally {
       db().prepare("DELETE FROM catalog_processes").run();
     }
@@ -752,13 +759,72 @@ describe("the worker program composes tickets and keeps to its PC's ceiling", ()
     expect(p.logs.some((l) => /more than this PC runs/.test(l))).toBe(true);
   });
 
-  it("a ticket for another catalog is given back, and the worker says to update", async () => {
+  /** A worker whose build composes for another catalog (OTHER) than the studio's (VERSION). */
+  const olderWorker = (w: ReturnType<typeof addWorker>, s: ReturnType<typeof studio>, p: Pc) => {
+    const ctrl = new AbortController();
+    const done = runWorker(
+      { site: SITE, token: w.token, comfyDir: p.comfyDir, workDir: p.workDir, modelDirs: [], comfyCommand: [process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", FAKE, "--port", "{port}", "--cors", "off", "--steps", "3", "--step-ms", "30", "--worker-guard", "1", "--count-file", p.countFile, "--graph-file", p.graphFile], comfyGuard: true, ffmpeg: null },
+      { fetch: router(w, s), home: p.home, signal: ctrl.signal, requirements: { folders: [], files: {}, packs: {}, workflows: {} }, ComputerRunner, rules: RULES, pins: {}, allowed: ALLOWED, readGpu: async () => null, ffmpegVersion: async () => null, awake: { set: () => {} }, sleep: (ms: number) => sleep(Math.min(ms, 50)), log: (line: string) => void p.logs.push(line), composer, catalogVersion: OTHER, allLanes },
+    );
+    running.push({ ctrl, done });
+  };
+
+  it("a worker built for an older catalog runs a person's ticket whose graph didn't change", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const mine = await accountTask();
+    expect(JSON.parse(row(mine.id).ticket_json!).graphSha).toMatch(/^[0-9a-f]{64}$/);
+    olderWorker(w, s, p);
+    const t = await ended(mine.id);
+    expect(t.state, t.error ?? "").toBe("done");
+    expect(t.requeues).toBe(0);
+    expect(prompts(p)).toBe(1);
+    expect(graphsSent(p)[0]).toEqual(mine.graph);
+    expect(workerRow(w).catalog_version).toBe(OTHER);
+    expect(s.reports).not.toContainEqual(expect.objectContaining({ event: "give-back" }));
+  });
+
+  it("a ticket whose graph changed goes back in line at no cost, is offered to that worker no more, and the worker asks for its update", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const mine = await accountTask();
+    // The studio's graph for it differs from the one this worker's build makes.
+    s.rewrite = (q, body) => {
+      if (q !== "/api/gpu/computer/claim") return body;
+      const { task } = body as { task: { ticket?: Record<string, unknown> } | null };
+      if (task?.ticket) task.ticket.graphSha = "f".repeat(64);
+      return body;
+    };
+    olderWorker(w, s, p);
+    await until(() => s.reports.some((r) => r.event === "give-back"));
+    expect(s.reports).toContainEqual({ event: "give-back", why: "update-worker" });
+    expect(prompts(p)).toBe(0);
+    // Not failed, not counted, its place and wait kept.
+    expect(row(mine.id)).toMatchObject({ state: "waiting", requeues: 0, claimed_at: null, error: null });
+    expect(p.logs.some((l) => /its graph changed/.test(l))).toBe(true);
+    // The update is asked for at once, for the updater on the PC (status.json).
+    await until(() => JSON.parse(fs.readFileSync(path.join(p.home, "status.json"), "utf8")).update?.why === "graph", 30_000);
+    // Not offered again until the worker is on another catalog.
+    expect(claim(w)).toBeNull();
+    expect(row(mine.id).state).toBe("waiting");
+  });
+
+  it("a ticket for another catalog with no graph fingerprint is given back, and the worker says to update", async () => {
     const w = addWorker();
     const s = studio();
     const p = pc();
     const mine = await accountTask();
     // The studio hears its own version from the worker, but the worker's build composes for another one.
     s.send = (q, body) => (q === "/api/gpu/computer/beat" ? { ...body, catalogVersion: VERSION } : body);
+    // A ticket made before graph fingerprints.
+    s.rewrite = (q, body) => {
+      if (q !== "/api/gpu/computer/claim") return body;
+      const { task } = body as { task: { ticket?: Record<string, unknown> } | null };
+      if (task?.ticket) delete task.ticket.graphSha;
+      return body;
+    };
     const ctrl = new AbortController();
     const done = runWorker(
       { site: SITE, token: w.token, comfyDir: p.comfyDir, workDir: p.workDir, modelDirs: [], comfyCommand: [process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", FAKE, "--port", "{port}", "--cors", "off", "--steps", "3", "--step-ms", "30", "--worker-guard", "1", "--count-file", p.countFile], comfyGuard: true, ffmpeg: null },

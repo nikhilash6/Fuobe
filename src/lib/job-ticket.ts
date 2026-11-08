@@ -72,6 +72,11 @@ export interface JobTicket {
   size: TicketSize;
   /** The route puts the run's one LoRA in the graph's own LoRA slot (comfy-compose.ts ComposeContext.loraSlot). */
   loraSlot?: boolean;
+  /**
+   * The SHA-256 of the graph this ticket composes to (graphFingerprint, src/lib/ticket-compose.ts), set by the studio. A
+   * worker built from another catalog runs the ticket when its own composer makes the same graph from it.
+   */
+  graphSha?: string;
   /** Set at the claim: how long the job may run, and go without progress. */
   runLimitMs?: number;
   stallMs?: number;
@@ -309,14 +314,20 @@ const OUTPUT_KINDS = ["image", "video", "audio", "text", "model3d", "frame", "fi
  * whether the catalog has a workflow; `o.inputs`: the files the task sends (each input must be one of them, with the
  * same SHA-256; a made file's copy is never read, so only its name counts).
  */
-export function ticketProblem(t: unknown, o: { catalogVersion?: string; known?: (id: string) => boolean; inputs?: { name: string; sha256: string }[] } = {}): TicketRefusal | null {
+export function ticketProblem(
+  t: unknown,
+  o: { catalogVersion?: string; known?: (id: string) => boolean; inputs?: { name: string; sha256: string }[]; otherCatalog?: boolean } = {},
+): TicketRefusal | null {
   const bad = (detail: string): TicketRefusal => ({ reason: "bad-ticket", detail });
   if (!t || typeof t !== "object" || Array.isArray(t)) return bad("not a ticket");
   const k = t as Partial<JobTicket> & Record<string, unknown>;
-  for (const key of Object.keys(k)) if (!["v", "workflowId", "catalogVersion", "op", "settings", "inputs", "outputs", "size", "loraSlot", "runLimitMs", "stallMs"].includes(key)) return bad(`${key} isn't part of a ticket`);
+  for (const key of Object.keys(k)) if (!["v", "workflowId", "catalogVersion", "op", "settings", "inputs", "outputs", "size", "loraSlot", "graphSha", "runLimitMs", "stallMs"].includes(key)) return bad(`${key} isn't part of a ticket`);
   if (k.v !== TICKET_VERSION) return { reason: "update-worker", detail: "another ticket version" };
   if (typeof k.catalogVersion !== "string" || !SHA.test(k.catalogVersion)) return bad("no catalog version");
-  if (o.catalogVersion !== undefined && k.catalogVersion !== o.catalogVersion) return { reason: "update-worker", detail: "another catalog version" };
+  if (k.graphSha !== undefined && (typeof k.graphSha !== "string" || !SHA.test(k.graphSha))) return bad("graphSha isn't a SHA-256");
+  // Another catalog: only a reader that checks the composed graph itself (o.otherCatalog: composeTicket) goes on, and
+  // only with the ticket's graph SHA-256 to check it against.
+  if (o.catalogVersion !== undefined && k.catalogVersion !== o.catalogVersion && !(o.otherCatalog && k.graphSha)) return { reason: "update-worker", detail: "another catalog version" };
   if (typeof k.workflowId !== "string" || !WORKFLOW_ID.test(k.workflowId)) return bad("not a workflow id");
   if (o.known && !o.known(k.workflowId)) return bad("an unknown workflow");
   if (typeof k.op !== "string" || !OP.test(k.op)) return bad("not an operation");

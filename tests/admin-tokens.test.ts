@@ -32,6 +32,7 @@ const routes = {
   queueSettings: await import("@/app/api/admin/queue/settings/route"),
   workers: await import("@/app/api/admin/workers/route"),
   worker: await import("@/app/api/admin/workers/[id]/route"),
+  workerUpdate: await import("@/app/api/admin/workers/[id]/update/route"),
   reports: await import("@/app/api/admin/reports/route"),
   audit: await import("@/app/api/admin/audit/route"),
   files: await import("@/app/api/admin/files/[...path]/route"),
@@ -252,6 +253,7 @@ describe("admin tokens: every admin route asks for its scope", () => {
     { name: "POST workers", scope: "workers:tokens", run: (o) => routes.workers.POST(req("/api/admin/workers", { ...o, method: "POST", body: { name: `w${++n}` } })) },
     { name: "PATCH worker", scope: "workers:write", run: (o) => routes.worker.PATCH(req("/api/admin/workers/nope", { ...o, method: "PATCH", body: { paused: true } }), ctx({ id: "nope" })) },
     { name: "PATCH worker rotate", scope: "workers:tokens", run: (o) => routes.worker.PATCH(req("/api/admin/workers/nope", { ...o, method: "PATCH", body: { rotate: true } }), ctx({ id: "nope" })) },
+    { name: "POST worker update", scope: "workers:update", run: (o) => routes.workerUpdate.POST(req("/api/admin/workers/nope/update", { ...o, method: "POST", body: {} }), ctx({ id: "nope" })) },
     { name: "GET reports", scope: "reports:read", run: (o) => routes.reports.GET(req("/api/admin/reports", o)) },
     { name: "GET audit", scope: "audit:read", run: (o) => routes.audit.GET(req("/api/admin/audit", o)) },
   ];
@@ -271,7 +273,7 @@ describe("admin tokens: every admin route asks for its scope", () => {
 
   it("refuses a token without the scope (403 scope) and takes one with it", async () => {
     for (const c of calls) {
-      const other = make(admin.SCOPES.filter((s) => s !== c.scope && !(c.scope === "outputs:hide" && s === "outputs:moderate")));
+      const other = make(admin.SCOPES.filter((s) => s !== c.scope && !(c.scope === "outputs:hide" && s === "outputs:moderate") && !(c.scope === "workers:update" && s === "workers:write")));
       const res = await c.run({ token: other.token });
       expect(res.status, c.name).toBe(403);
       expect(await res.json(), c.name).toMatchObject({ code: "scope", scope: c.scope });

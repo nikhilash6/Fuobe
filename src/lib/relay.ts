@@ -244,6 +244,11 @@ export interface WorkerAnswer {
   lanesInside?: string[];
   /** The owner's mode it follows now (absent: an older studio, which has people first). */
   queue?: WorkerQueueMode;
+  /**
+   * The owner asked it to update now (when they asked): it looks for new code at once, and restarts on it after the job
+   * in hand. Sent until it comes back on the studio's version, or for a quarter of an hour.
+   */
+  updateNow?: number;
 }
 
 /** What a worker says in its beat, on top of a browser's. */
@@ -251,6 +256,8 @@ export interface WorkerBeat {
   device: string;
   protocol: number;
   version: string;
+  /** The commit its code came from (absent: an older worker, or a copy that isn't a git checkout). */
+  commit?: string;
   /** It saves the next token a beat answer gives it (`worker.token`) and uses it from its next call on. */
   canRotateToken?: boolean;
   ready: boolean;

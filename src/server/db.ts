@@ -1131,6 +1131,13 @@ const RELAY_COLUMNS: [string, string, string][] = [
   // The owner's mode for one worker (computer/queue-controls.ts), and local work on its PC as its last beat said.
   ["relay_workers", "mode_json", "TEXT"],
   ["relay_workers", "local_work_json", "TEXT"],
+  // A worker's code commit as its last beat said, since when it is behind the studio's catalog, and the owner's "Update
+  // now" (when, by whom, and the commit it was on then) until it is on new code (pool.ts askWorkerUpdate).
+  ["relay_workers", "commit_sha", "TEXT"],
+  ["relay_workers", "behind_since", "INTEGER"],
+  ["relay_workers", "update_asked_at", "INTEGER"],
+  ["relay_workers", "update_asked_by", "TEXT"],
+  ["relay_workers", "update_asked_commit", "TEXT"],
 ];
 
 declare global {

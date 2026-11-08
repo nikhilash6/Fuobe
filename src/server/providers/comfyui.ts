@@ -97,7 +97,7 @@ import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitW
 import { notOnGpusText } from "../runs-here";
 import { catalogVersion } from "../computer/catalog-version";
 import { ticketProblem, type JobTicket } from "@/lib/job-ticket";
-import { catalogKnows, ticketFor } from "@/lib/ticket-compose";
+import { catalogKnows, ticketFor, ticketGraphSha } from "@/lib/ticket-compose";
 import { ownerWaitMs } from "../queue-settings";
 import { worldcastBase, worldcastHealth } from "../worldcast";
 
@@ -305,7 +305,7 @@ export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this mach
  * limit (the run was taken in line once; the wait limit applies only before its first start). The run's wait limit is
  * the one stamped on it (0: as long as it takes), else the install's own (FUOBE_POOL_WAIT_MIN).
  */
-function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string; runtime?: FileNeed[] }) {
+function accountPoolFields(workflowId: string, account: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; catalogVersion?: string; graphSha?: boolean; runtime?: FileNeed[] }) {
   const stamp = runStamp();
   const run = generationId ? runPlaceOf(generationId) : null;
   // A run that waited to enter the line (pool-holds.ts) enters where its release says (stamp.rankAt): for the system's
@@ -321,6 +321,7 @@ function accountPoolFields(workflowId: string, account: string, generationId: st
     waitMs: run?.started || run?.later ? undefined : (stamp?.waitMs ?? poolWaitMs()),
     size: o.size,
     catalogVersion: o.catalogVersion,
+    graphSha: o.graphSha,
     runtime: o.runtime,
   });
 }
@@ -1321,6 +1322,19 @@ export function accountTicket(p: PreparedPrompt, principal: Principal, o: { outp
   return ticket;
 }
 
+/**
+ * Put its graph's fingerprint on a job ticket (graphSha: src/lib/ticket-compose.ts ticketGraphSha), as this studio's
+ * composer makes it with this catalog. A ticket it can't make one for goes without (only a worker built for this
+ * catalog takes it then). Returns the ticket.
+ */
+export async function withGraphSha(ticket: JobTicket, generationId: string): Promise<JobTicket> {
+  const catalog = { has: (id: string) => loadManifest().workflows.some((w) => w.id === id), get: getWorkflow };
+  const sha = await ticketGraphSha({ ticket, generationId, inputs: ticket.inputs.map((i) => ({ name: i.name, sha256: i.sha256 })) }, { catalog, catalogVersion: ticket.catalogVersion }).catch(() => null);
+  if (sha) ticket.graphSha = sha;
+  else delete ticket.graphSha;
+  return ticket;
+}
+
 /** What ComfyUI's /prompt answers when it refuses a graph. */
 export type PromptRefusalBody = { error?: { type?: string; message?: string; extra_info?: { class_type?: string } }; node_errors?: unknown };
 
@@ -2026,6 +2040,8 @@ export const comfyProvider: ProviderAdapter = {
       const outputs = Math.max(1, manifest.outputs.length) * Math.max(1, Math.round(Number(input.numOutputs) || 1));
       // An account's run on the workers: a job ticket, and the worker composes the graph (the owner's own jobs keep theirs).
       const ticket = forPool && computer !== "owner" ? accountTicket(prepared, computer, { outputs, kind: model?.kind }) : undefined;
+      // Its graph's fingerprint: a worker built for another catalog runs it when its composer makes the same graph.
+      if (ticket) await withGraphSha(ticket, generationId);
       const task = createTask({
         principal: computer,
         generationId,
@@ -2051,7 +2067,7 @@ export const comfyProvider: ProviderAdapter = {
               : // An account's: the lane and files they need, in its class (paid before free), in the order they came
                 // (with the billing service's head start inside the class), with the wait set for the run.
                 // A ticket's task goes only to a worker built for its catalog, and inside that PC's ceiling.
-                accountPoolFields(manifest.id, computer.slice(5), generationId, { size: prepared.size, catalogVersion: ticket?.catalogVersion, runtime: runtime?.files }),
+                accountPoolFields(manifest.id, computer.slice(5), generationId, { size: prepared.size, catalogVersion: ticket?.catalogVersion, graphSha: !!ticket?.graphSha, runtime: runtime?.files }),
         }),
       });
       // (`workers`: the run keeps its task's clocks, pool.ts, even when a poll of it fails.)

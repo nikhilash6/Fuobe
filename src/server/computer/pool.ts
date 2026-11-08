@@ -6,6 +6,8 @@ import { ceilingProblem, cleanCeiling, insideCeiling, lanesInside, type Ceiling 
 import { allLanes, hasFiles, laneLabel, lanesFor, MEDIA_KINDS, needsOf, packKey, partLanes, unloadedNodes, type FileNeed, type Inventory, type NodePack, type Needs } from "@/lib/lanes";
 import { POOL_WORDS, RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type CpuSlot, type WorkerAnswer, type WorkerBeat, type WorkerHolding } from "@/lib/relay";
 import { runtimeFileKeys } from "@/lib/runtime-files";
+import { APPS, MODELS } from "@/lib/catalog";
+import { laneName, type LaneName } from "@/lib/lane-names";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
@@ -38,6 +40,19 @@ export const MIN_PROTOCOL = 2;
  * ComfyUI reads it (the studio sends an account's pictures as they came), and has a CPU slot when worker.json asks.
  */
 export const TICKET_PROTOCOL = 3;
+/**
+ * The oldest worker program that checks a job ticket's graph itself (its graphSha, src/lib/ticket-compose.ts): it runs a
+ * ticket made for another catalog when its own composer makes the same graph from it, and gives the job back at no cost
+ * otherwise. So a new version of the studio holds back only the people's runs whose graph it changed, and only until
+ * the worker is updated.
+ */
+export const GRAPH_PROTOCOL = 4;
+/** A worker behind the studio's version for less than this is updating; past it, the owner is shown "Update now". */
+export const BEHIND_NOTICE_MS = 3 * 60_000;
+/** The owner's "Update now" goes with each beat answer until the worker is on new code, or this long at most. */
+export const UPDATE_ASK_MS = 15 * 60_000;
+/** A worker behind the studio's version for a short while, on its own way to the new one. */
+export const UPDATING_WORDS = "Updating to the new version · back in about a minute";
 /** A worker's own pause while a model folder of its isn't there yet: it keeps its last list of files. */
 export const MODELS_NOT_READY = "models-not-ready";
 /** A task avoids workers that lost or failed it, unless no other worker that can run it beat this recently. */
@@ -174,9 +189,13 @@ export const catalogCurrent = (w: Pick<WorkerRow, "catalog_version">): boolean =
 
 /**
  * Takes an account's job ticket: a worker program new enough (TICKET_PROTOCOL: it makes every picture again from its
- * pixels) built for this studio's catalog.
+ * pixels) built for this studio's catalog, or one that checks a ticket's graph itself (GRAPH_PROTOCOL) built for any.
  */
-export const ticketReady = (w: Pick<WorkerRow, "protocol" | "catalog_version">): boolean => (w.protocol ?? 0) >= TICKET_PROTOCOL && catalogCurrent(w);
+export const ticketReady = (w: Pick<WorkerRow, "protocol" | "catalog_version">): boolean =>
+  (w.protocol ?? 0) >= TICKET_PROTOCOL && (catalogCurrent(w) || ((w.protocol ?? 0) >= GRAPH_PROTOCOL && !!w.catalog_version));
+
+/** How long a worker has been behind the studio's catalog, as its beats said (0: it isn't). */
+export const behindFor = (w: Pick<WorkerRow, "behind_since">, now = Date.now()): number => (w.behind_since ? Math.max(0, now - w.behind_since) : 0);
 
 export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "models-not-ready" | "waiting-for-yield" | "update-worker" | "offline";
 
@@ -208,7 +227,16 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
     return { state: "waiting-for-yield", words: `Waiting for local ComfyUI work to make room${w.local_until ? ` (starts about ${clock(w.local_until, tz)})` : ""}` };
   }
   // Built from another catalog while people's runs may come here: it takes the owner's own jobs, and theirs once updated.
-  if (hostedRunsOn() && ((catalogVersion() && !catalogCurrent(w)) || (w.protocol ?? 0) < TICKET_PROTOCOL)) return { state: "update-worker", words: "Update the worker: it takes only your own jobs until then" };
+  if (hostedRunsOn() && (w.protocol ?? 0) < TICKET_PROTOCOL) return { state: "update-worker", words: "Update the worker: it takes only your own jobs until then" };
+  // Behind the studio's catalog. One that checks a ticket's graph takes people's runs meanwhile (all but those whose
+  // graph changed); an older one takes only the owner's own jobs. A short while behind, it is on its way to the new
+  // version by itself; past BEHIND_NOTICE_MS the owner sees how long, and "Update now".
+  if (hostedRunsOn() && catalogVersion() && !catalogCurrent(w)) {
+    const graphs = (w.protocol ?? 0) >= GRAPH_PROTOCOL;
+    const behind = behindFor(w, now);
+    if (behind < BEHIND_NOTICE_MS) return { state: graphs ? "idle" : "update-worker", words: UPDATING_WORDS };
+    return { state: "update-worker", words: `Behind the site's version for ${Math.round(behind / 60_000)} min: ${graphs ? "people's runs whose graph changed wait for its update" : "it takes only your own jobs until then"}` };
+  }
   return { state: "idle", words: "Ready" };
 }
 
@@ -244,6 +272,7 @@ export function cleanBeat(b: unknown): WorkerBeat {
     device: String(o.device ?? ""),
     protocol: num(o.protocol) ?? 0,
     version: text(o.version, 40) ?? "",
+    ...(typeof o.commit === "string" && /^[0-9a-f]{40,64}$/.test(o.commit) && { commit: o.commit }),
     ...(o.canRotateToken === true && { canRotateToken: true }),
     ready: o.ready !== false,
     why: text(o.why, 64),
@@ -319,8 +348,19 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     // The owner's controls that ran their course end first (a mode or a hold past its time).
     sweepControls(now);
     // Its saved state and version before this beat: a timeline row only when either changes.
-    const before = d.prepare("SELECT state, version FROM relay_workers WHERE id = ?").get(w.id) as Pick<WorkerRow, "state" | "version"> | undefined;
+    const before = d.prepare("SELECT state, version, commit_sha, behind_since, update_asked_at, update_asked_commit FROM relay_workers WHERE id = ?").get(w.id) as
+      | Pick<WorkerRow, "state" | "version" | "commit_sha" | "behind_since" | "update_asked_at" | "update_asked_commit">
+      | undefined;
     const facts = b.facts ? { ...b.facts, loras: undefined } : undefined;
+    // Behind the studio's catalog since when (kept while it stays behind), and the owner's "Update now" until it is on
+    // new code (another commit, or the studio's catalog again) or UPDATE_ASK_MS went by.
+    const site = catalogVersion();
+    const behind = !!site && b.catalogVersion !== site;
+    const behindSince = behind ? (before?.behind_since ?? now) : null;
+    const asked = before?.update_asked_at ?? null;
+    const onNewCode = !!b.commit && !!before?.update_asked_commit && b.commit !== before.update_asked_commit;
+    const askDone = !!asked && (now - asked > UPDATE_ASK_MS || onNewCode || (!!before?.behind_since && !behind));
+    d.prepare("UPDATE relay_workers SET commit_sha = ?, behind_since = ?, update_asked_at = ? WHERE id = ?").run(b.commit ?? null, behindSince, askDone ? null : asked, w.id);
     d.prepare(
       `UPDATE relay_workers SET seen_at = ?, device = ?, protocol = ?, version = ?, paused_local = ?, local_why = ?, local_until = ?,
          warm_lane = ?, facts_json = COALESCE(?, facts_json), catalog_version = ?, ceiling_json = ?, cpu_slot_json = ?, holding_json = ?, local_work_json = ? WHERE id = ?`,
@@ -397,6 +437,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     // Best-effort from here: the timeline never fails a beat.
     const rows: NewWorkerEvent[] = [];
     if (before?.version && b.version && before.version !== b.version) rows.push({ kind: "version", event: "updated", workerId: w.id, words: `Worker program updated to ${b.version}`, detail: { from: before.version, to: b.version } });
+    else if (before?.commit_sha && b.commit && before.commit_sha !== b.commit) rows.push({ kind: "version", event: "updated", workerId: w.id, words: `Worker program updated to ${b.commit.slice(0, 12)}`, detail: { from: before.commit_sha, to: b.commit } });
     // Its PC's clock may run ahead of the studio's: never later than now.
     for (const l of b.log ?? []) rows.push({ kind: "log", event: l.level, workerId: w.id, words: l.line, at: Math.min(l.at, now) });
     logWorkerEvents(rows, now);
@@ -432,6 +473,8 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         ...(fresh.expires_at && { tokenExpiresAt: fresh.expires_at }),
         // The owner's mode it follows now: who goes first, and what local work on its PC does.
         queue: { mode: mode.mode, localWork: LOCAL_WORK[mode.mode], until: mode.until },
+        // The owner asked it to update now.
+        ...(fresh.update_asked_at && { updateNow: fresh.update_asked_at }),
       },
     };
   }).immediate();
@@ -745,7 +788,10 @@ function fits(t: TaskRow, w: WorkerRow, now: number): boolean {
   const cap = capableOf(w);
   const needs = json<Needs | null>(t.needs_json, null);
   if (ceilingProblem(ceilingOf(w), { workflowId: needs?.workflowId, lane, size: needs?.size })) return false;
-  if (needs?.catalogVersion && needs.catalogVersion !== w.catalog_version) return false;
+  // A ticket made for another catalog than the worker's goes only to a worker that checks the graph itself
+  // (GRAPH_PROTOCOL), with the ticket's graph fingerprint to check. One that found the graph changed gave the job back
+  // (refusedBy, below) and isn't offered it again until it is updated.
+  if (needs?.catalogVersion && needs.catalogVersion !== w.catalog_version && !(needs.graphSha && !!w.catalog_version && (w.protocol ?? 0) >= GRAPH_PROTOCOL)) return false;
   // A ticket's pictures come as they were sent: only a worker that makes them again from their pixels takes it.
   if (needs?.catalogVersion && (w.protocol ?? 0) < TICKET_PROTOCOL) return false;
   if (refusedBy(t).includes(refusalKey(w))) return false;
@@ -1055,7 +1101,7 @@ setPoolGiveBack((t, why) => {
         const { claimedBefore, claimFor, ...rest } = json<Record<string, unknown>>(t.extra_json, {});
         const extra = { ...rest, refusedBy: [...new Set([...refusedBy(t), ...(w ? [refusalKey(w)] : [])])].slice(-64) };
         const untouched = typeof claimFor === "number" && claimFor === t.claimed_at && t.state === "sending" && !t.sent_at && !t.started_at;
-        const sentBack = why === "update-worker" ? "its ticket is for another catalog than the worker's" : "more than its PC runs";
+        const sentBack = why === "update-worker" ? "its graph is another on the worker's version (it waits for the worker's update)" : "more than its PC runs";
         if (!backInLine(t, untouched ? { blame: false, sentBack } : { blame: true, why: GAVE_BACK_WORDS, sentBack })) return;
         if (taskById(t.id)?.state !== "waiting") return;
         setTask(t.id, { extra_json: JSON.stringify(extra), ...(untouched && { claimed_at: typeof claimedBefore === "number" ? claimedBefore : null }) });
@@ -1214,16 +1260,49 @@ function memo<A, R>(fn: (a: A) => R): (a: A) => R {
 // Making tasks for workers
 
 /** The catalog's lanes, worked out once for each requirements index (loadIndex keeps one until its file changes). */
-const lanesByIndex = new WeakMap<ReturnType<typeof loadIndex>, { lanes: ReturnType<typeof allLanes>; byWorkflow: Map<string, string> }>();
-function catalogLanes(): { lanes: ReturnType<typeof allLanes>; byWorkflow: Map<string, string> } {
+const lanesByIndex = new WeakMap<ReturnType<typeof loadIndex>, { lanes: (ReturnType<typeof allLanes>[number] & LaneName)[]; byWorkflow: Map<string, string> }>();
+function catalogLanes(): { lanes: (ReturnType<typeof allLanes>[number] & LaneName)[]; byWorkflow: Map<string, string> } {
   const index = loadIndex();
   let kept = lanesByIndex.get(index);
   if (!kept) {
-    const lanes = allLanes(index, sha);
+    // Each lane by name: who uses its workflows, and its model (its largest file).
+    const users = workflowUsers();
+    const lanes = allLanes(index, sha).map((l) => {
+      const files = l.workflows.flatMap((id) => index.workflows[id]?.files ?? []).map((k) => index.files[k]).filter(Boolean);
+      const biggest = files.sort((a, b) => b.sizeBytes - a.sizeBytes)[0];
+      const name = laneName(l.lane, { file: biggest?.file ?? null, apps: l.workflows.flatMap((id) => users.get(id) ?? []), fallback: l.label });
+      return { ...l, ...name, label: l.lane === "small" ? l.label : name.label };
+    });
     kept = { lanes, byWorkflow: new Map(lanes.flatMap((l) => l.workflows.map((id) => [id, l.lane] as const))) };
     lanesByIndex.set(index, kept);
   }
   return kept;
+}
+
+/**
+ * Who runs each workflow, by name: the catalog's models whose route on ComfyUI is the workflow (a template's variants,
+ * video-concat-{n}, too), then the apps made on those models.
+ */
+function workflowUsers(): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const modelsOf = new Map<string, string[]>();
+  const add = (wf: string, name: string) => {
+    const list = out.get(wf) ?? [];
+    if (!list.includes(name)) list.push(name);
+    out.set(wf, list);
+  };
+  for (const m of MODELS) {
+    for (const r of m.routes ?? []) {
+      if (r.provider !== "comfyui" || !r.endpoint) continue;
+      const ids = r.endpoint.includes("{n}") ? [1, 2, 3, 4].map((n) => r.endpoint.replace("{n}", String(n))) : [r.endpoint];
+      for (const id of ids) {
+        add(id, m.name);
+        modelsOf.set(m.id, [...(modelsOf.get(m.id) ?? []), id]);
+      }
+    }
+  }
+  for (const a of APPS) for (const r of [a.open, ...(a.openAlso ?? [])]) for (const id of r ? (modelsOf.get(r.modelId) ?? []) : []) add(id, a.name);
+  return out;
 }
 
 /** The lane a workflow's tasks go in (a workflow the catalog doesn't know: the small lane). */
@@ -1371,14 +1450,14 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
  */
 export function poolFields(
   workflowId: string,
-  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; rankAt?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string; runtime?: FileNeed[] } = {},
+  o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; rankAt?: number; waitMs?: number; onlyWorker?: string; size?: Needs["size"]; catalogVersion?: string; graphSha?: boolean; runtime?: FileNeed[] } = {},
   now = Date.now(),
 ) {
   const index = loadIndex();
   const found = needsOf(index, workflowId);
   // How big the job is (a PC's ceiling reads it), and a job ticket's catalog version (only a worker built for it takes it).
   // And the files the run adds beyond its workflow's own (a look's LoRAs): only a worker that verified them takes it.
-  const extra = { ...(o.size && { size: o.size }), ...(o.catalogVersion && { catalogVersion: o.catalogVersion }), ...(o.runtime?.length && { runtime: o.runtime }) };
+  const extra = { ...(o.size && { size: o.size }), ...(o.catalogVersion && { catalogVersion: o.catalogVersion }), ...(o.catalogVersion && o.graphSha && { graphSha: true }), ...(o.runtime?.length && { runtime: o.runtime }) };
   const needs = found && { ...found, ...extra };
   const lane = poolLane(workflowId);
   const cls = o.class ?? (o.account ? ("free" as const) : ("owner" as const));
@@ -1561,6 +1640,76 @@ export interface WorkerView {
   ownMode: { mode: QueueMode; until: number | null; by: string; at: number } | null;
   /** Local work on its PC, as its last beat said while fresh (null: none). */
   localWork: LocalWork | null;
+  /** Its program against the studio's version: current, updating by itself, or behind long enough for the owner to act. */
+  update: WorkerUpdate;
+}
+
+/** A worker's program against the studio's version (WorkerView.update). Versions and commits as their first 12 hex. */
+export interface WorkerUpdate {
+  /** "updating": behind for less than BEHIND_NOTICE_MS; "behind": longer (the owner may press Update now). */
+  state: "current" | "updating" | "behind";
+  since: number | null;
+  behindMs: number;
+  site: string | null;
+  worker: string | null;
+  commit: string | null;
+  /** People's runs it gave back because their graph is another on its version, still waiting. */
+  peopleHeld: number;
+  /** People's runs waiting now that it could take. */
+  peopleWaiting: number;
+  /** When the owner asked it to update now (null: not asked, or done). */
+  askedAt: number | null;
+  words: string;
+  /** Tell the owner: behind for BEHIND_NOTICE_MS or more. */
+  needsOwner: boolean;
+}
+
+const short = (v: string | null | undefined) => (v ? v.slice(0, 12) : null);
+
+/** A worker's program against the studio's version, for the owner. A silent worker is offline, never behind. */
+export function updateOf(w: WorkerRow, now = Date.now()): WorkerUpdate {
+  const site = catalogVersion();
+  const live = !!w.seen_at && now - w.seen_at <= RELAY_TIMES.poolSilentMs;
+  const behind = live && !!site && w.catalog_version !== site;
+  const behindMs = behind ? behindFor(w, now) : 0;
+  const state = !behind ? "current" : behindMs < BEHIND_NOTICE_MS ? "updating" : "behind";
+  const key = refusalKey(w);
+  const held = behind
+    ? (db().prepare("SELECT extra_json FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND account IS NOT NULL AND INSTR(extra_json, ?) > 0").all(key) as Pick<TaskRow, "extra_json">[]).filter((t) => refusedBy(t).includes(key)).length
+    : 0;
+  const waiting = live && w.kind === "pool" ? claimableNow(w, now) : 0;
+  const words =
+    state === "current"
+      ? `On the site's version${w.commit_sha ? ` (${short(w.commit_sha)})` : ""}`
+      : state === "updating"
+        ? UPDATING_WORDS
+        : `Behind the site's version for ${Math.round(behindMs / 60_000)} min${held ? `: ${held} ${held === 1 ? "person's run waits" : "people's runs wait"} for it` : ""}`;
+  return {
+    state,
+    since: behind ? (w.behind_since ?? null) : null,
+    behindMs,
+    site: short(site),
+    worker: short(w.catalog_version),
+    commit: short(w.commit_sha),
+    peopleHeld: held,
+    peopleWaiting: waiting,
+    askedAt: w.update_asked_at ?? null,
+    words,
+    needsOwner: state === "behind",
+  };
+}
+
+/**
+ * The owner asks a worker to update now: the next beat answer carries it, and the worker looks for new code at once and
+ * restarts on it after the job in hand (a person's job is never cut off). Until it is on new code, or UPDATE_ASK_MS.
+ */
+export function askWorkerUpdate(id: string, by = "owner", now = Date.now()): WorkerView | null {
+  const d = db();
+  const w = d.prepare("SELECT * FROM relay_workers WHERE id = ? AND kind = 'pool' AND revoked_at IS NULL").get(id) as WorkerRow | undefined;
+  if (!w) return null;
+  d.prepare("UPDATE relay_workers SET update_asked_at = ?, update_asked_by = ?, update_asked_commit = ? WHERE id = ?").run(now, by.slice(0, 64), w.commit_sha ?? null, id);
+  noteAdmin(id, [["update-now", "Update now asked: it looks for new code and restarts after its job"]], by, now);
+  return workerView(d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(id) as WorkerRow, now);
 }
 
 /** A task a worker holds now: where it is, and how long it should take. No prompt, no account's details. */
@@ -1687,6 +1836,7 @@ export function workerView(w: WorkerRow, now = Date.now(), typical: (lane: strin
     mode: effectiveMode(w, now),
     ownMode: workerModeOf(w),
     localWork: localWorkOf(w, now),
+    update: updateOf(w, now),
   };
 }
 
@@ -1838,7 +1988,7 @@ export function queueView(now = Date.now()) {
 }
 
 /** Every lane in this studio's catalog, for the owner to allow per worker. */
-export const lanesCatalog = () => catalogLanes().lanes.map((l) => ({ lane: l.lane, label: l.label, workflows: l.workflows.length }));
+export const lanesCatalog = () => catalogLanes().lanes.map((l) => ({ lane: l.lane, label: l.label, workflows: l.workflows.length, apps: l.apps, model: l.model, file: l.file, workflowIds: l.workflows }));
 
 /**
  * The waiting line of a pool as the owner's Queue page shows it (GET /api/admin/queue): in the order its workers serve

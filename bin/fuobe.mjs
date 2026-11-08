@@ -66,6 +66,8 @@ process.exitCode = await main(process.argv.slice(2), {
   onInterrupt: (fn) => onSignals(fn),
   /** Ctrl+C, and a stop from the system (SIGTERM): a long-running command ends its own way, cleaning up as it goes. */
   onStop: (fn) => onSignals(fn, STOP_SIGNALS),
+  /** `fuobe worker run` runs the worker as a child process, which starts again at once on new code. */
+  superviseWorker: true,
   ask,
   readStdin,
 });

@@ -85,6 +85,14 @@ export interface WorkerRow {
   mode_json?: string | null;
   /** Local work on its PC (a queue of the owner's own), as its last beat said (src/lib/relay.ts LocalWork). NULL: none. */
   local_work_json?: string | null;
+  /** The commit its code came from, as its last beat said. NULL: unknown. */
+  commit_sha?: string | null;
+  /** Since when its beats say a catalog other than the studio's. NULL: it is on the studio's. */
+  behind_since?: number | null;
+  /** The owner's "Update now": when, by whom, and the commit it was on then. NULL: not asked, or done. */
+  update_asked_at?: number | null;
+  update_asked_by?: string | null;
+  update_asked_commit?: string | null;
 }
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");

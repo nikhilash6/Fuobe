@@ -30,6 +30,11 @@ export interface Needs {
   /** A job ticket's catalog version (src/lib/job-ticket.ts): only a worker built for that catalog takes the task. */
   catalogVersion?: string;
   /**
+   * The ticket carries its graph's fingerprint (graphSha): a worker built for another catalog that checks the graph itself
+   * may take the task too.
+   */
+  graphSha?: boolean;
+  /**
    * The files the run adds beyond its workflow's own (a look's, a motion's or a recipe's LoRAs: src/lib/runtime-files.ts):
    * only a worker that verified each one takes the task.
    */

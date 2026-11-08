@@ -5,7 +5,7 @@ import { graphLoraNames, runtimeNeeds } from "@/lib/runtime-files";
 import { composeTicket, inputKind } from "@/lib/ticket-compose";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { getWorkflow, loadManifest } from "../providers/comfyui";
+import { getWorkflow, loadManifest, withGraphSha } from "../providers/comfyui";
 import { catalogVersion } from "./catalog-version";
 import { GAVE_BACK_WORDS, poolFields } from "./pool";
 import { endTask, inputsOf, json, setTask, swapTaskInput, type TaskRow } from "./tasks";
@@ -83,6 +83,8 @@ export async function refreshTickets(o: { version?: string; startedAt?: number; 
     const ticket: JobTicket = { ...old, catalogVersion: version };
     delete ticket.runLimitMs;
     delete ticket.stallMs;
+    // Its graph's fingerprint is made again for the new ticket (fillGraphShas).
+    delete ticket.graphSha;
     const inputs = inputsOf(t.id).map((i) => ({ name: i.name, sha256: i.sha256 }));
     const r = await composeTicket({ ticket, generationId: t.generation_id, inputs }, { catalog, catalogVersion: version, remake: true }).catch(() => null);
     // Written only while the task is as it was read (still waiting, the same ticket).
@@ -122,6 +124,40 @@ export async function refreshTickets(o: { version?: string; startedAt?: number; 
   return { refreshed, ended };
 }
 
+/** Waiting tickets of this catalog that have no graph fingerprint yet, at most this many per look. */
+const FILL_AT_MOST = 50;
+
+/**
+ * Waiting job tickets of this studio's catalog that carry no graph fingerprint yet (made again after an update, or made
+ * by an older version of the studio) get one (withGraphSha), and their task says so in what it needs, so a worker built
+ * for another catalog that checks the graph itself may take them. Only while the task is as it was read.
+ */
+export async function fillGraphShas(o: { version?: string } = {}): Promise<number> {
+  const version = o.version ?? catalogVersion();
+  if (!version) return 0;
+  const rows = db()
+    .prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND ticket_json IS NOT NULL AND json_extract(ticket_json, '$.catalogVersion') = ? AND json_extract(ticket_json, '$.graphSha') IS NULL AND json_extract(needs_json, '$.graphShaTried') IS NULL LIMIT ?")
+    .all(version, FILL_AT_MOST) as TaskRow[];
+  let filled = 0;
+  for (const t of rows) {
+    const ticket = json<JobTicket | null>(t.ticket_json ?? null, null);
+    if (!ticket) continue;
+    const made = await withGraphSha({ ...ticket }, t.generation_id).catch(() => null);
+    db()
+      .transaction(() => {
+        const now = db().prepare("SELECT state, ticket_json, needs_json FROM relay_tasks WHERE id = ?").get(t.id) as Pick<TaskRow, "state" | "ticket_json" | "needs_json"> | undefined;
+        if (!now || now.state !== "waiting" || now.ticket_json !== t.ticket_json) return;
+        const needs = json<Record<string, unknown>>(now.needs_json ?? null, {});
+        // A ticket that makes no fingerprint isn't tried again (only a worker built for this catalog takes it).
+        if (!made?.graphSha) return void setTask(t.id, { needs_json: JSON.stringify({ ...needs, graphShaTried: true }) });
+        setTask(t.id, { ticket_json: JSON.stringify(made), needs_json: JSON.stringify({ ...needs, graphSha: true }) });
+        filled++;
+      })
+      .immediate();
+  }
+  return filled;
+}
+
 declare global {
   var __fuobeTicketRefresh: { version: string; at: number; running: Promise<unknown> } | undefined;
 }
@@ -138,7 +174,9 @@ export async function refreshTicketsBeforeClaim(now = Date.now()): Promise<void>
     await last.running.catch(() => {});
     return;
   }
-  const running = refreshTickets().catch(() => null);
+  const running = refreshTickets()
+    .catch(() => null)
+    .then(() => fillGraphShas().catch(() => 0));
   globalThis.__fuobeTicketRefresh = { version, at: now, running };
   await running;
 }

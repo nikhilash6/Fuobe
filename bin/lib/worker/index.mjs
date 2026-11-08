@@ -34,6 +34,8 @@ export async function worker(args, io) {
     case "setup":
       return setup(home, io, say);
     case "run": {
+      // From the command line: the worker runs as a child that starts again at once on new code (supervise.mjs).
+      if (io.superviseWorker && !io.env?.FUOBE_WORKER_CHILD) return (await import("./supervise.mjs")).superviseWorker(rest, io);
       const cfg = loadConfig(home, io.env);
       if (!cfg.site || !cfg.token || !cfg.workDir) {
         io.stderr.write("This worker isn't set up yet. Run: fuobe worker setup\n");

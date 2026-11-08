@@ -44,7 +44,7 @@ import { failure, Reach, retrying } from "./retry.mjs";
 import { builtCatalogVersion, ceilingOf, ceilingWords, graphInside, laneMap, readPcAnswers, workerCatalog } from "./tickets.mjs";
 import { TEXT_DRAIN_MS, TextSlot, textSlotOf, textTurn } from "./text.mjs";
 import { readLocalWork, SiteTurns, writeMode, writeSite } from "./turns.mjs";
-import { CodeWatch, restartDue, UPDATE_DEFER_MAX_MS } from "./update.mjs";
+import { CodeWatch, headOf, restartDue, UPDATE_DEFER_MAX_MS } from "./update.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "../../..");
@@ -333,6 +333,25 @@ async function work(saved, deps, owner) {
   let updateFoundAt = null;
   // When its last GPU or CPU job ended while it waits to restart on new code (a text job in hand may still end).
   let textDrainAt = null;
+  // An update asked for now (status.json `update`, which the updater on the PC reads): by the owner ("owner", the beat
+  // answer's updateNow) or by a job whose graph changed in the studio's newer catalog ("graph"). Its restart keeps the
+  // rules above: after the job in hand, never cutting a person's job off.
+  let updateWanted = null;
+  let ownerAskSeen = null;
+  const wantUpdate = (why) => {
+    if (updateWanted?.why === why && now() - updateWanted.at < 60_000) return;
+    updateWanted = { at: now(), why };
+    // New code may already be there: look at once.
+    codeWatch.checkedAt = -Infinity;
+  };
+  // The commit its code came from (the studio shows it, "Back on <commit>").
+  const startedCommit = (() => {
+    try {
+      return headOf(ROOT);
+    } catch {
+      return null;
+    }
+  })();
   // Its ComfyUI's start, while it goes on (beats go on meanwhile), and the signal that ends a start when the worker stops.
   let starting = null;
   const stopStarts = new AbortController();
@@ -551,6 +570,13 @@ async function work(saved, deps, owner) {
     const facts = composer.workerFactsFrom(await readPcAnswers(ownFetch, base));
     const r = await composer.composeTicket({ ticket: t.ticket, generationId: t.generationId, inputs: t.inputs }, { catalog: workerCatalog(catalogDir), catalogVersion, ceiling, laneOf, facts });
     if (r.ok) return { graph: r.graph, made: r.made };
+    // A ticket for the studio's newer catalog whose graph this build makes otherwise: back in line at no cost, and the
+    // update is asked for at once (the updater reads it in status.json).
+    if (r.graphChanged) {
+      wantUpdate("graph");
+      log(`Job ${t.id} goes back in line: its graph changed in the studio's newer catalog. Asking for the update now.`);
+      return { refused: r.reason };
+    }
     // Why, for the PC's owner (never a setting's value: those are someone's prompt).
     log(`Refused job ${t.id}: ${r.reason === "update-worker" ? "its ticket is for another catalog (update the worker)" : r.reason === "outside-ceiling" ? "it is more than this PC runs (its ceiling in worker.json)" : "its ticket isn't one it can use"}.`);
     return { refused: r.reason };
@@ -659,6 +685,7 @@ async function work(saved, deps, owner) {
           // Without its picture tool, it takes no job ticket: the studio sends it the owner's own jobs only.
           protocol: protocolOf(pictureTool),
           version: VERSION,
+          ...(startedCommit && { commit: startedCommit }),
           // It saves the next token a beat answer gives it (never one for a token from the environment).
           canRotateToken: canRotate,
           local: pause,
@@ -691,7 +718,14 @@ async function work(saved, deps, owner) {
         if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
         // A studio whose catalog is another than this build's: its people's runs wait for an updated worker. Said once.
         const theirs = a?.worker?.catalogVersion;
-        if (typeof theirs === "string" && theirs !== catalogVersion && theirs !== studioCatalog) log("The studio's catalog is another than this worker's: it takes only the owner's own jobs until it is updated (docs/gpu-workers.md, \"Install and update\").");
+        if (typeof theirs === "string" && theirs !== catalogVersion && theirs !== studioCatalog) log("The studio's catalog is another than this worker's: it runs people's jobs whose graphs are the same in both, and waits for its update (docs/gpu-workers.md, \"Install and update\").");
+        // The owner asked for an update now (once for each ask).
+        const ask = Number(a?.worker?.updateNow);
+        if (Number.isFinite(ask) && ask > 0 && ask !== ownerAskSeen) {
+          ownerAskSeen = ask;
+          wantUpdate("owner");
+          log("The owner asked for an update now: it looks for new code at once and restarts after the job in hand.");
+        }
         if (typeof theirs === "string") studioCatalog = theirs;
         answer = a;
         takeToken(a?.worker?.token);
@@ -1171,7 +1205,7 @@ async function work(saved, deps, owner) {
         lastState = s;
         log(s);
       }
-      writeStatus(deps.home, { state: s, pause, at: t, comfy: comfy.alive() ? comfy.pid : null, answer: answer?.worker ?? null });
+      writeStatus(deps.home, { state: s, pause, at: t, comfy: comfy.alive() ? comfy.pid : null, answer: answer?.worker ?? null, ...(updateWanted && !updating && { update: { asked: updateWanted.at, why: updateWanted.why } }) });
       const before = now();
       await sleep(1000);
       // A second that took over a minute: the PC slept (the whole process stopped). The next beat says so.

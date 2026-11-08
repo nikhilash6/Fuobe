@@ -177,10 +177,20 @@ job waits for it: while the beat's `claimableNow` says that people's jobs wait t
 them on the code it runs, and its log says "New worker code is installed: restarting once no person's job waits for it
 (at most 30 min)." The owner's own jobs never hold the restart back. After 30 minutes it restarts anyway. Then it takes
 no new job, finishes the job that it has, writes "New worker code is installed: restarting after this job." in its log,
-and ends with exit code 75. Kept results that are not sent yet stay for its next start. Whatever starts the worker can start it
-again at once on exit code 75. An update that is only half done (a new checkout whose build has not run yet) does not
-end the worker: it works on until the parts match, and checks the stamp once a minute meanwhile. A program that
-installs updates writes `update-ready.json` last, after it has checked the new build.
+and ends with exit code 75. Kept results that are not sent yet stay for its next start. `fuobe worker run` runs the
+worker as a child process: when the child ends with exit code 75, it starts it again on the new code after 3 seconds,
+so a start file's longer pause after a crash never applies to an update. Any other end is passed on as it came. When
+the starter itself (`bin/fuobe.mjs` or `bin/lib/worker/supervise.mjs`) changed with the new code, it ends with exit
+code 75 too, and whatever started it starts it again. An update that is only half done (a new checkout whose build has
+not run yet) does not end the worker: it works on until the parts match, and checks the stamp once a minute meanwhile.
+A program that installs updates writes `update-ready.json` last, after it has checked the new build.
+
+**Update now.** The owner can ask a worker to update now: **Update now** in Settings → Workers, or
+`POST /api/admin/workers/{id}/update` (docs/admin-api.md). The next beat answers carry `worker.updateNow` (when it was
+asked) until the worker runs new code, or for 15 minutes. The worker then looks at its code on disk at once, and writes
+`update: { asked, why }` into `status.json` in its home folder, so a program that installs updates can look for new
+code at once. It writes the same when a job ticket's graph changed in the studio's newer catalog (`why: "graph"`). The
+restart keeps the rules above: after the job in hand, and never while it cuts off a person's job.
 
 ### The worker's own ComfyUI
 
@@ -553,9 +563,20 @@ graphs, and so do a person's own computer's jobs (Fuobe Connect and the browser)
   pages quote, the cloud models and the record of real renders are left out, so an update that changes only what people
   read or see keeps the version, and the workers keep taking accounts' runs. The worker's build writes it
   (`dist/catalog-version.json`), and the studio computes the same from its own files (or reads `FUOBE_CATALOG_VERSION`).
-  Each beat says the worker's version. A ticket goes only to a worker with the same version.
-  A worker built from another catalog takes the owner's own jobs, and its state in Settings → Workers reads **Update
-  the worker** while accounts' runs may come to the install's GPUs. Update it (see "Install and update").
+  Each beat says the worker's version.
+- **The graph's fingerprint.** The studio puts `graphSha` on each ticket: the SHA-256 of the graph its own composer
+  makes from the ticket with no facts of any PC, in a canonical form (each node's class and inputs, keys sorted at every
+  depth, a node's `_meta` left out, and the SHA-256 of each file the composer makes; `graphFingerprint` in
+  `src/lib/ticket-compose.ts`). A worker built for the same catalog runs a ticket as before. A worker built for
+  another catalog (protocol 4 and later) composes the ticket the same way with its own build and compares: the same
+  fingerprint, and it runs the job for anyone, composed with its own PC's facts as always; any other graph, or a ticket
+  its build can't read, and it gives the job back with `update-worker`. The job goes back in line untouched (no
+  attempt counted, no failure, no charge, its place and wait kept), the worker asks for its update at once, and the
+  studio offers that job to it no more until it reports another catalog. A ticket with no fingerprint, and a worker
+  program older than protocol 4, keep the old rule: a ticket goes only to a worker with the same version.
+  While a worker is behind the studio's version for less than 3 minutes, Settings → Workers reads **Updating to the new
+  version · back in about a minute**. After that it says how long, with **Update now**. A worker program older than
+  protocol 4 takes only the owner's own jobs while it is behind.
 - **The PC is the ceiling.** `ceiling` in `worker.json` (setup asks for it) is the most the PC ever runs:
   `{ "lanes": [...], "workflows": [...], "maxMegapixels": 4, "maxSeconds": 10, "maxOutputs": 4 }`. Leave out a field
   for no limit of its own. Each beat says the ceiling. The lanes that the owner allows in Settings → Workers only
