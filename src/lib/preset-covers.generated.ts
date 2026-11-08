@@ -26,6 +26,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-banana-eating": "2a384f15",
   "app-behind-the-scenes": ["88905b1a","05e545ab"],
   "app-billboard-ad": ["1c66a2bd","aa072b3d"],
+  "app-body-double": ["09b1def0","cc37f262"],
   "app-breakdown": ["c7d1bbc5","6649ebea"],
   "app-brick-cube": ["c68c8d72","d10e386f"],
   "app-bring-to-life": ["6dd3e57d","17c2d9d8"],

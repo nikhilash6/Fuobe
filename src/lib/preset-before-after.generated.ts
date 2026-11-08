@@ -7,6 +7,7 @@
 export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-age-shift": "b83e4f3f",
   "app-ai-stylist": "2d44471d",
+  "app-body-double": "5fa15a4e",
   "app-breakdown": "8ff71c28",
   "app-change-background": "4814208f",
   "app-character-swap": "cf77d26d",

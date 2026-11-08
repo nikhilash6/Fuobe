@@ -154,6 +154,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "lean-json"
   },
+  "app-body-double": {
+    "poster": "/previews/presets/app-body-double.jpg?v=09b1def0",
+    "video": "/previews/presets/app-body-double.mp4?v=cc37f262",
+    "run": "body-double-covers",
+    "engine": "comfyui",
+    "model": "oss-body-double",
+    "variant": ""
+  },
   "app-breakdown": {
     "poster": "/previews/presets/app-breakdown.jpg?v=c7d1bbc5",
     "video": "/previews/presets/app-breakdown.mp4?v=6649ebea",
