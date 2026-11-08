@@ -180,7 +180,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "creative",
     icon: "brief",
     accent: ["#2e2a26", "#c9a97a"],
-    cover: null,
+    cover: "/previews/chat/workshop/creative-brief.jpg?v=0a107c75",
     ask: { label: "Your idea", placeholder: "A summer linen campaign shot on a Positano rooftop" },
     brief:
       "Turn the idea into a one-page creative brief with short sections: Objective, Audience, Big idea, Mood and look (palette, light, styling), References (describe each in one line), Deliverables (formats and sizes) and Timeline. End with one line \"Prompt (image): …\" for the hero visual.",
@@ -193,7 +193,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "creative",
     icon: "board",
     accent: ["#5b4636", "#c76b4a"],
-    cover: null,
+    cover: "/previews/chat/workshop/moodboard.jpg?v=32a89ecc",
     ask: { label: "What it's for", placeholder: "A dark-romance fragrance launch" },
     brief:
       "Describe a moodboard in words: a palette of five colours (names and hex), textures and materials, light, wardrobe and styling, locations, and three reference images in one line each. End with three or four lines \"Prompt (image): …\", one for each board image.",
@@ -206,7 +206,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "creative",
     icon: "shots",
     accent: ["#0d1b2a", "#3a86ff"],
-    cover: null,
+    cover: "/previews/chat/workshop/shot-list.jpg?v=89a2bc7e",
     ask: { label: "The scene or campaign", placeholder: "A 30-second sneaker launch in a rainy city at night" },
     brief:
       "Write a numbered shot list of six to ten shots. For each: shot size, lens, camera move, light and what happens. After the list, add one line \"Prompt (video): …\" for each of the first three shots.",
@@ -219,7 +219,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "artistic",
     icon: "style",
     accent: ["#2b2140", "#b58b5a"],
-    cover: null,
+    cover: "/previews/chat/workshop/style-critique.jpg?v=273b39e9",
     picture: true,
     brief:
       "You are a senior fashion editor. Give styling notes on the outfit in the picture: fit, proportion, colour, fabric and accessories. Then name the one change that would lift it most, and close with a short verdict. Talk about the clothes and the styling only.",
@@ -232,7 +232,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "artistic",
     icon: "photo",
     accent: ["#1c1c22", "#8c8c99"],
-    cover: null,
+    cover: "/previews/chat/workshop/photo-critique.jpg?v=7ab8293e",
     picture: true,
     brief:
       "You are a picture editor. Critique the photo: composition, light, colour and grade, focus and retouching. Suggest a stronger crop and two concrete ways to improve the next shot.",
@@ -245,7 +245,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "artistic",
     icon: "song",
     accent: ["#3b2a20", "#e0a458"],
-    cover: null,
+    cover: "/previews/chat/workshop/song.jpg?v=b7e12e74",
     ask: { label: "What the song is about", placeholder: "A slow-burn love song about a summer in Lisbon" },
     brief:
       "Write a short song: a title, two verses and a chorus with a clear hook. Then one line \"Prompt (music): …\" describing the genre, mood, instruments, tempo and voice, so the track can be made in one tap.",
@@ -258,7 +258,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "productive",
     icon: "calendar",
     accent: ["#3e3a36", "#7fa6b8"],
-    cover: null,
+    cover: "/previews/chat/workshop/content-calendar.jpg?v=013956ee",
     ask: { label: "The brand or creator", placeholder: "A slow-fashion knitwear label on Instagram and TikTok" },
     brief:
       "Write a two-week content calendar as a list by day: the format (reel, carousel, story or post), the hook line and what it shows. Mix the formats, build to one hero post each week, and end with three lines \"Prompt (image): …\" for the hero posts.",
@@ -271,7 +271,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "productive",
     icon: "campaign",
     accent: ["#1b263b", "#c1121f"],
-    cover: null,
+    cover: "/previews/chat/workshop/campaign-plan.jpg?v=164d7fa8",
     ask: { label: "The product or launch", placeholder: "A capsule collection of silk scarves for spring" },
     brief:
       "Write a campaign plan: the big idea in one line, the audience, the key message, channels, an asset list (each with its format and size), a four-week timeline and how to measure it. End with two lines \"Prompt (image): …\" for the hero assets.",
@@ -284,7 +284,7 @@ export const PLAY_FORMATS: PlayFormat[] = [
     group: "productive",
     icon: "pitch",
     accent: ["#1f2a36", "#2e86ab"],
-    cover: null,
+    cover: "/previews/chat/workshop/client-pitch.jpg?v=ae32b3cc",
     ask: { label: "Who and what", placeholder: "A boutique hotel in Capri, a summer brand film" },
     brief:
       "Write a client pitch: a short, specific email that opens with the idea, then the scope (deliverables and what's included), a simple price outline with two options, and a clear next step. Confident and warm, with no filler.",
