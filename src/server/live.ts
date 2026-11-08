@@ -28,18 +28,85 @@ interface LiveState {
   /** Turns changed ids into events: set (and re-set after hot reloads) by src/server/generations.ts. */
   resolve?: (ids: string[]) => LiveEvent[];
   hooked: WeakSet<object>;
+  /** The connection the change hooks are on (read by the sweep for other processes' writes). */
+  db?: Database.Database;
+  /** The last updated_at each changed row had, as this process saw it (its own writes, or the sweep). */
+  seen: Map<string, number>;
+  /** Rows updated after this (less a margin) are what the sweep reads. */
+  mark: number;
+  sweep: ReturnType<typeof setInterval> | null;
 }
 
 declare global {
   var __fuobeLive: LiveState | undefined;
 }
 
-const state = (): LiveState => (globalThis.__fuobeLive ??= { listeners: new Set(), pending: new Set(), scheduled: false, hooked: new WeakSet() });
+const state = (): LiveState => {
+  const s = (globalThis.__fuobeLive ??= { listeners: new Set(), pending: new Set(), scheduled: false, hooked: new WeakSet(), seen: new Map(), mark: Date.now(), sweep: null });
+  // A state kept across a dev hot reload may predate these.
+  s.seen ??= new Map();
+  s.mark ??= Date.now();
+  s.sweep ??= null;
+  return s;
+};
+
+/**
+ * Writes by another app process (the site's other instance while an update switches over: both run for a moment, and
+ * the runner in either may save a run's result) fire no trigger here: TEMP triggers belong to their own connection.
+ * So while anyone listens, this process also reads the rows updated lately every SWEEP_MS, and passes on the ones
+ * whose change it hasn't seen. A stream then brings every change within seconds, whichever process wrote it.
+ */
+export const SWEEP_MS = 2000;
+/** How far back each sweep reads (the processes share a clock; a write can commit a moment after its timestamp). */
+const SWEEP_MARGIN_MS = 10_000;
+
+/** Read the rows updated since the last sweep and pass on the ones another process changed (exported for tests). */
+export function sweepForeign(now = Date.now()): number {
+  const s = state();
+  if (!s.db || !s.listeners.size) return 0;
+  const since = s.mark - SWEEP_MARGIN_MS;
+  let rows: { id: string; updated_at: number }[];
+  try {
+    rows = s.db.prepare("SELECT id, updated_at FROM main.generations WHERE updated_at > ?").all(since) as { id: string; updated_at: number }[];
+  } catch {
+    return 0;
+  }
+  let n = 0;
+  for (const r of rows) {
+    if ((s.seen.get(r.id) ?? -Infinity) >= r.updated_at) continue;
+    s.seen.set(r.id, r.updated_at);
+    changed(r.id);
+    n++;
+  }
+  s.mark = Math.max(s.mark, now);
+  // Forget what is out of the sweep's reach.
+  for (const [id, at] of s.seen) if (at < since - 60_000) s.seen.delete(id);
+  return n;
+}
+
+function startSweep(): void {
+  const s = state();
+  if (s.sweep) return;
+  s.mark = Date.now();
+  s.sweep = setInterval(() => sweepForeign(), SWEEP_MS);
+  s.sweep.unref?.();
+}
+
+function stopSweep(): void {
+  const s = state();
+  if (!s.sweep) return;
+  clearInterval(s.sweep);
+  s.sweep = null;
+}
 
 export function subscribe(listener: Listener): () => void {
   const s = state();
   s.listeners.add(listener);
-  return () => void s.listeners.delete(listener);
+  startSweep();
+  return () => {
+    s.listeners.delete(listener);
+    if (!s.listeners.size) stopSweep();
+  };
 }
 
 export const listenerCount = () => state().listeners.size;
@@ -48,8 +115,10 @@ export function setResolver(resolve: (ids: string[]) => LiveEvent[]): void {
   state().resolve = resolve;
 }
 
-function changed(id: string): void {
+function changed(id: string, updatedAt?: number): void {
   const s = state();
+  // This process's own write: the sweep needn't pass it on again.
+  if (typeof updatedAt === "number" && updatedAt > (s.seen.get(id) ?? -Infinity)) s.seen.set(id, updatedAt);
   if (!s.listeners.size) return;
   s.pending.add(id);
   if (s.scheduled) return;
@@ -86,15 +155,16 @@ function flush(): void {
 export function watchGenerations(d: Database.Database): void {
   const s = state();
   if (s.hooked.has(d)) return;
-  d.function("fuobe_generation_changed", { deterministic: false }, (id: unknown) => {
-    changed(String(id));
+  d.function("fuobe_generation_changed", { deterministic: false, varargs: true }, (id: unknown, updatedAt?: unknown) => {
+    changed(String(id), typeof updatedAt === "number" ? updatedAt : typeof updatedAt === "bigint" ? Number(updatedAt) : undefined);
     return null;
   });
   d.exec(`
-    CREATE TEMP TRIGGER IF NOT EXISTS fuobe_generations_insert AFTER INSERT ON main.generations BEGIN SELECT fuobe_generation_changed(NEW.id); END;
-    CREATE TEMP TRIGGER IF NOT EXISTS fuobe_generations_update AFTER UPDATE ON main.generations BEGIN SELECT fuobe_generation_changed(NEW.id); END;
+    CREATE TEMP TRIGGER IF NOT EXISTS fuobe_generations_insert AFTER INSERT ON main.generations BEGIN SELECT fuobe_generation_changed(NEW.id, NEW.updated_at); END;
+    CREATE TEMP TRIGGER IF NOT EXISTS fuobe_generations_update AFTER UPDATE ON main.generations BEGIN SELECT fuobe_generation_changed(NEW.id, NEW.updated_at); END;
     CREATE TEMP TRIGGER IF NOT EXISTS fuobe_generations_delete AFTER DELETE ON main.generations BEGIN SELECT fuobe_generation_changed(OLD.id); END;
   `);
+  s.db = d;
   s.hooked.add(d);
 }
 

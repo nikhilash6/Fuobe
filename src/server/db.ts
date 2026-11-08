@@ -1302,6 +1302,13 @@ function open(): Database.Database {
   } catch (e) {
     console.warn(`[fuobe] Couldn't index runs by account: ${(e as Error).message}`);
   }
+  // The live stream's sweep reads the runs updated in the last moments (live.ts sweepForeign): through this index, not
+  // by reading every run. Not a numbered migration either; a failure only leaves the sweep slower.
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS generations_updated ON generations(updated_at)");
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't index runs by update time: ${(e as Error).message}`);
+  }
   keepPrivate(file);
   return db;
 }

@@ -15,8 +15,10 @@ import {
   backoff,
   needsCatchUp,
   parseSse,
+  pollDelay,
   shareById,
   sharePagesById,
+  STREAM_IDLE_MS,
   streamResponse,
   toChannelMessage,
   toStreamEvent,
@@ -89,8 +91,8 @@ async function json<T>(res: Response): Promise<T> {
 export type { FeedFilter } from "./library";
 
 const isActive = (g: Generation) => g.status === "queued" || g.status === "running";
-/** Poll while something renders: fast without the live stream, a slow safety net with it. */
-const pollEvery = (items: Generation[] | undefined, live: boolean) => (items?.some(isActive) ? (live ? 10_000 : 1500) : false);
+/** Poll while something renders: fast without the live stream, a safety net with it (pollDelay). */
+const pollEvery = (items: Generation[] | undefined, live: boolean) => pollDelay(items, live) ?? false;
 
 /** Apply one change to every cached list and thread, skipping caches it doesn't change. */
 function applyEvent(qc: QueryClient, ev: StreamEvent): void {
@@ -248,6 +250,17 @@ async function connect() {
   const ctrl = new AbortController();
   s.abort = ctrl;
   let retryIn = 0;
+  // A stream that goes quiet past the server's pings is gone (a laptop that slept, a proxy holding a stream whose
+  // server stopped): drop it and open another at once, which catches up on what changed meanwhile.
+  let stale = false;
+  let idle: ReturnType<typeof setTimeout> | null = null;
+  const awake = () => {
+    if (idle) clearTimeout(idle);
+    idle = setTimeout(() => {
+      stale = true;
+      ctrl.abort();
+    }, STREAM_IDLE_MS);
+  };
   try {
     const res = await fetch("/api/generations/stream", { headers: { Accept: "text/event-stream" }, signal: ctrl.signal, cache: "no-store" });
     const next = streamResponse({ ok: res.ok, status: res.status, contentType: res.headers.get("content-type"), hasBody: !!res.body }, s.attempt++);
@@ -259,9 +272,11 @@ async function connect() {
       setLive(true);
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
       let buf = "";
+      awake();
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
+        awake();
         const parsed = parseSse(buf + value);
         buf = parsed.rest;
         for (const m of parsed.events) {
@@ -274,8 +289,10 @@ async function connect() {
       retryIn = backoff(s.attempt++);
     }
   } catch {
-    if (ctrl.signal.aborted) return;
-    retryIn = backoff(s.attempt++);
+    if (ctrl.signal.aborted && !stale) return;
+    retryIn = stale ? 0 : backoff(s.attempt++);
+  } finally {
+    if (idle) clearTimeout(idle);
   }
   if (s.abort !== ctrl) return;
   s.abort = null;
@@ -376,6 +393,23 @@ function onVisibility() {
   if (s.hiddenTimer) clearTimeout(s.hiddenTimer);
   s.hiddenTimer = null;
   if (s.subscribers) start();
+  catchUpActive();
+}
+
+/**
+ * Back on screen, or back online: lists with a run on its way read again at once, so a run that finished meanwhile
+ * shows done straight away (a hidden tab stops polling, and its stream may have been let go).
+ */
+function catchUpActive() {
+  const qc = live().client;
+  if (!qc) return;
+  const waiting = (data: unknown): boolean =>
+    Array.isArray(data) ? data.some((g) => isActive(g as Generation)) : !!(data as Pages | undefined)?.pages?.some((p) => p.some(isActive));
+  for (const key of [["generations"], ["library"]]) {
+    for (const q of qc.getQueryCache().findAll({ queryKey: key })) {
+      if (waiting(q.state.data)) void qc.invalidateQueries({ queryKey: q.queryKey, exact: true });
+    }
+  }
 }
 
 /** Share one stream between every list on the page (and every tab, and canvas boards); returns whether it's connected. */
@@ -390,6 +424,7 @@ export function useGenerationStream(): boolean {
     if (!s.hooked) {
       s.hooked = true;
       document.addEventListener("visibilitychange", onVisibility);
+      window.addEventListener("online", catchUpActive);
     }
     // A tab opened in the background waits until it's shown.
     if (document.visibilityState !== "hidden") start();
@@ -550,15 +585,16 @@ export function goesToPool(req: GenerationRequest | undefined): boolean {
 }
 
 /**
- * The runs on this studio's GPUs being made now (Run pressed, no answer yet), with when Run was pressed. The feed shows
- * each one as "In line" until the run is made, so a short wait before it starts never looks like nothing happened.
+ * The runs being made now (Run pressed, no answer yet), with when Run was pressed. The feed shows each one's card at
+ * once ("In line" on this studio's GPUs, else "Starting") until the run is made, so a press never looks like nothing
+ * happened.
  */
-export function useMakingPoolRuns(): { at: number; request: GenerationRequest }[] {
+export function useMakingRuns(): { at: number; request: GenerationRequest }[] {
   const pending = useMutationState({
     filters: { mutationKey: CREATE_GENERATION_KEY, status: "pending" },
     select: (m) => ({ at: m.state.submittedAt, request: m.state.variables as GenerationRequest | undefined }),
   });
-  return pending.filter((p): p is { at: number; request: GenerationRequest } => goesToPool(p.request));
+  return pending.filter((p): p is { at: number; request: GenerationRequest } => !!p.request && typeof p.request === "object");
 }
 
 /**

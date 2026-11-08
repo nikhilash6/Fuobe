@@ -1,20 +1,22 @@
-<div class="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style="aspect-ratio:1">
-<div class="skeleton-sweep absolute inset-0 animate-skeleton">
+<div class="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style="aspect-ratio:1" data-stage="in-line">
+<div aria-hidden="true" class="run-aura absolute inset-0">
 </div>
-<div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
+<div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-background/85 via-background/45 to-transparent p-3 pt-10">
 <div class="min-w-0">
-<p title="Queued" class="flex items-start gap-1.5 text-[13px] font-medium">
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-circle lucide-loader-2 mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden="true" data-run-spinner="true">
-<path d="M21 12a9 9 0 1 1-6.219-8.56">
-</path>
+<p title="Queued" class="flex items-start gap-2 text-[13px] leading-snug font-medium">
+<svg viewBox="0 0 18 18" aria-hidden="true" data-run-spinner="true" class="mt-px size-4 shrink-0 animate-spin [animation-duration:1.4s] motion-reduce:animate-none text-muted-foreground">
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-opacity="0.2" stroke-width="2">
+</circle>
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="43.98" stroke-dashoffset="31.67" class="transition-[stroke-dashoffset] duration-(--motion-slow) ease-standard">
+</circle>
 </svg>
-<span class="shimmer-text animate-shimmer-text line-clamp-2">Queued</span>
+<span class="line-clamp-2">Queued</span>
 </p>
-<p class="flex flex-wrap gap-x-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+<p class="mt-0.5 flex flex-wrap gap-x-1.5 pl-6 text-[11px] text-muted-foreground tabular-nums">
 <span class="">1m 30s</span>
 </p>
 </div>
-<button class="grid size-7 shrink-0 place-items-center rounded-full bg-background/70 text-muted-foreground hover:text-foreground" aria-label="Cancel" data-state="closed" data-slot="tooltip-trigger">
+<button class="grid size-7 shrink-0 place-items-center rounded-full bg-background/70 text-muted-foreground backdrop-blur transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" aria-label="Cancel" data-state="closed" data-slot="tooltip-trigger">
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x size-3.5" aria-hidden="true">
 <path d="M18 6 6 18">
 </path>
@@ -23,26 +25,29 @@
 </svg>
 </button>
 </div>
+<span class="sr-only" role="status" aria-live="polite">In line</span>
 </div>
 
-<div class="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style="aspect-ratio:1">
-<div class="skeleton-sweep absolute inset-0 animate-skeleton">
+<div class="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style="aspect-ratio:1" data-stage="creating">
+<div aria-hidden="true" class="run-aura absolute inset-0">
 </div>
-<div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
+<div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-background/85 via-background/45 to-transparent p-3 pt-10">
 <div class="min-w-0">
-<p title="Generating" class="flex items-start gap-1.5 text-[13px] font-medium">
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-circle lucide-loader-2 mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden="true" data-run-spinner="true">
-<path d="M21 12a9 9 0 1 1-6.219-8.56">
-</path>
+<p title="Generating" class="flex items-start gap-2 text-[13px] leading-snug font-medium">
+<svg viewBox="0 0 18 18" aria-hidden="true" data-run-spinner="true" class="mt-px size-4 shrink-0 -rotate-90 text-primary">
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-opacity="0.2" stroke-width="2">
+</circle>
+<circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="43.98" stroke-dashoffset="25.51" class="transition-[stroke-dashoffset] duration-(--motion-slow) ease-standard">
+</circle>
 </svg>
-<span class="shimmer-text animate-shimmer-text line-clamp-2">Generating</span>
+<span class="line-clamp-2">Generating</span>
 </p>
-<p class="flex flex-wrap gap-x-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+<p class="mt-0.5 flex flex-wrap gap-x-1.5 pl-6 text-[11px] text-muted-foreground tabular-nums">
 <span>42%</span>
 <span class="before:mr-1.5 before:content-[&#x27;·&#x27;]">1m 30s</span>
 </p>
 </div>
-<button class="grid size-7 shrink-0 place-items-center rounded-full bg-background/70 text-muted-foreground hover:text-foreground" aria-label="Cancel" data-state="closed" data-slot="tooltip-trigger">
+<button class="grid size-7 shrink-0 place-items-center rounded-full bg-background/70 text-muted-foreground backdrop-blur transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" aria-label="Cancel" data-state="closed" data-slot="tooltip-trigger">
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x size-3.5" aria-hidden="true">
 <path d="M18 6 6 18">
 </path>
@@ -55,15 +60,16 @@
 <div class="h-full origin-left bg-primary transition-transform duration-(--motion-slow) ease-standard" style="transform:scaleX(0.42)">
 </div>
 </div>
+<span class="sr-only" role="status" aria-live="polite">Creating</span>
 </div>
 
-<div class="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style="aspect-ratio:1">
+<div class="flex h-full max-w-full flex-col justify-between overflow-hidden rounded-xl border bg-muted/40 p-3" style="aspect-ratio:1" data-stage="failed">
 <div class="flex min-h-0 flex-col gap-1 overflow-hidden">
 <p class="shrink-0 text-[13px] font-medium">Couldn&#x27;t generate this one</p>
 <p class="shrink-0 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground line-clamp-4">Your GPU ran out of memory. Try a smaller size or a shorter clip.</p>
 </div>
 <div class="mt-2 flex shrink-0 flex-wrap gap-1.5">
-<button class="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent disabled:opacity-70">
+<button class="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground shadow-xs transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none disabled:opacity-70">
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw size-3" aria-hidden="true">
 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8">
 </path>
@@ -73,12 +79,12 @@
 </div>
 </div>
 
-<div class="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style="aspect-ratio:1">
+<div class="flex h-full max-w-full flex-col justify-between overflow-hidden rounded-xl border bg-muted/40 p-3" style="aspect-ratio:1" data-stage="canceled">
 <div class="flex min-h-0 flex-col gap-1 overflow-hidden">
 <p class="shrink-0 text-[13px] font-medium">Canceled</p>
 </div>
 <div class="mt-2 flex shrink-0 flex-wrap gap-1.5">
-<button class="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent disabled:opacity-70">
+<button class="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground shadow-xs transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none disabled:opacity-70">
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw size-3" aria-hidden="true">
 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8">
 </path>

@@ -580,7 +580,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
       <div className={cn("mx-auto w-full max-w-[1240px] min-w-0 px-4 sm:px-6", hasItems && "flex-1 pb-8", live && "hidden")}>
         {hasItems ? (
           <div className="pt-4">
-            <Feed items={items} onReuse={reuse} />
+            <Feed items={items} onReuse={reuse} features={config.feed.features} />
           </div>
         ) : (
           <div className="flex flex-col items-center pt-6 text-center sm:pt-[16vh]">
@@ -621,7 +621,9 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         className={cn(
           live && "hidden",
           hasItems
-            ? "sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
+            ? // Docked: a solid ground under the composer (the feed never shows through it), with a short fade above it
+              // where the feed scrolls under.
+              "sticky bottom-chrome z-20 bg-background px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:from-background before:to-transparent sm:px-6"
             : "px-4 pt-6 sm:px-6 sm:pt-10",
         )}
       >

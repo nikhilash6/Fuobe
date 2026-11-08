@@ -54,6 +54,16 @@ export function useArrival<T extends HTMLElement>(id: string, index: number) {
   return ref;
 }
 
+/** Presses of Run whose card already rose in (useMakingCard), with when: their run's own card takes its place still. */
+const handed: number[] = [];
+
+/** The card a press of Run shows at once: it rises in itself, so the run's own card that takes its place doesn't again. */
+export function useMakingCard(at: number) {
+  useLayoutEffect(() => {
+    handed.push(at);
+  }, [at]);
+}
+
 /** A request's section: it rises in when it was just sent (in progress, made in the last moments), never on a load. */
 export function useEnter<T extends HTMLElement>(id: string, active: boolean, createdAt: number) {
   const ref = useRef<T>(null);
@@ -61,7 +71,12 @@ export function useEnter<T extends HTMLElement>(id: string, active: boolean, cre
   useLayoutEffect(() => {
     if (seen.current === id) return;
     seen.current = id;
-    if (active && Date.now() - createdAt < 15_000) mark(ref.current, "data-enter");
+    if (!active || Date.now() - createdAt >= 15_000) return;
+    // The card of its press was on screen: the run takes its place without moving.
+    const now = Date.now();
+    while (handed.length && now - handed[0] > 2 * 60_000) handed.shift();
+    if (handed.length) return void handed.shift();
+    mark(ref.current, "data-enter");
   }, [id, active, createdAt]);
   return ref;
 }

@@ -386,8 +386,9 @@ img[data-fade="wait"] { opacity: 0; }
 /* ----- A result that finishes while the studio is open: the picture settles in over its tile, one soft light passes
    across it, and its next steps follow. Never on a page load or a scroll back. ----- */
 [data-arrive] {
-  /* The tile's frame stays; only the picture settles into it (its own load fade and the skeleton hand-over skip it). */
-  & > :first-child { animation: motion-settle var(--motion-slow) var(--ease-standard) backwards; animation-delay: calc(min(var(--i, 0), 6) * var(--motion-stagger)); }
+  /* The tile's frame stays; only the picture blooms into it, from soft to sharp (as its last preview looked), with its
+     own load fade and the skeleton hand-over skipped. */
+  & > :first-child { animation: motion-bloom calc(var(--motion-slow) * 1.75) var(--ease-standard) backwards; animation-delay: calc(min(var(--i, 0), 6) * var(--motion-stagger)); }
   &::after {
     content: "";
     position: absolute;
@@ -402,8 +403,42 @@ img[data-fade="wait"] { opacity: 0; }
 }
 [data-follow] { animation: motion-rise var(--motion-base) var(--ease-enter) backwards; animation-delay: calc(120ms + min(var(--i, 0), 6) * var(--motion-stagger)); }
 
-/* A new request at the top of a feed (not the ones there when it loaded). */
-[data-enter] { animation: motion-rise var(--motion-base) var(--ease-enter) backwards; }
+/* A new request at the top of a feed (not the ones there when it loaded), and the card a press of Run shows at once. */
+[data-enter], [data-making] { animation: motion-rise var(--motion-base) var(--ease-enter) backwards; }
+
+/* ----- A run on its way: a soft light in the brand's iris and spark that drifts across its card, so a wait reads as
+   work under way. The light is a layer larger than the card that only moves (translate), so it stays on the compositor;
+   still (one resting frame) under reduced motion. ----- */
+.run-aura { overflow: hidden; isolation: isolate; }
+.run-aura::before {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 44% at 38% 38%, oklch(0.52 0.21 282 / 22%), transparent 70%),
+    radial-gradient(38% 40% at 62% 62%, oklch(0.88 0.16 95 / 28%), transparent 70%),
+    radial-gradient(32% 34% at 64% 36%, oklch(0.70 0.115 195 / 15%), transparent 70%);
+  animation: run-aura 9s var(--ease-move) infinite alternate;
+}
+.dark .run-aura::before {
+  background:
+    radial-gradient(42% 44% at 38% 38%, oklch(0.57 0.20 282 / 26%), transparent 70%),
+    radial-gradient(38% 40% at 62% 62%, oklch(0.85 0.15 95 / 10%), transparent 70%),
+    radial-gradient(32% 34% at 64% 36%, oklch(0.75 0.12 195 / 12%), transparent 70%);
+}
+/* Waiting in line breathes slower and quieter than a run being made. */
+[data-stage="in-line"] > .run-aura::before, [data-stage="sending"] > .run-aura::before { animation-duration: 14s; opacity: 0.8; }
+@keyframes run-aura {
+  from { translate: -14% -10%; }
+  50% { translate: 8% 12%; }
+  to { translate: 14% -8%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-aura::before { animation: none; }
+}
+@keyframes motion-bloom { from { opacity: 0; scale: 1.04; } 55% { opacity: 1; } }
 
 @keyframes motion-fade { from { opacity: 0; } }
 @keyframes motion-fade-out { to { opacity: 0; } }

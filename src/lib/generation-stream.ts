@@ -182,6 +182,28 @@ export function sharePagesById(prev: unknown, next: unknown): unknown {
   return samePages && pageParams === p.pageParams ? p : { ...n, pages, pageParams };
 }
 
+/**
+ * How often a list with runs on their way asks for them again (null: none on its way, so it doesn't). The live stream
+ * brings every change at once; polling is the safety net that makes a missed change (a stream cut by an update of the
+ * site, a sleeping laptop, a proxy holding a stream open after its server went away) show within seconds anyway.
+ * A run just sent is asked about most often; one that has been going a long while, less.
+ */
+export function pollDelay(items: readonly Pick<Generation, "status" | "createdAt">[] | undefined, live: boolean, now = Date.now()): number | null {
+  let youngest = -Infinity;
+  for (const g of items ?? []) if ((g.status === "queued" || g.status === "running") && g.createdAt > youngest) youngest = g.createdAt;
+  if (youngest === -Infinity) return null;
+  const age = Math.max(0, now - youngest);
+  if (live) return age < 3 * 60_000 ? 4000 : 10_000;
+  return age < 60_000 ? 1500 : age < 10 * 60_000 ? 3000 : 6000;
+}
+
+/**
+ * A stream that has said nothing for this long is taken as gone (the server pings every 15 s): it is dropped and
+ * opened again, with a catch-up read of the lists. A connection can stay open while nothing comes through it (a
+ * laptop that slept, a proxy that kept it after the server behind it stopped).
+ */
+export const STREAM_IDLE_MS = 40_000;
+
 /** Reconnect delays: 1 s, 2 s, 4 s … capped at 30 s (5 min once the endpoint said it doesn't exist). */
 export function backoff(attempt: number, missing = false): number {
   return missing ? 300_000 : Math.min(30_000, 1000 * 2 ** Math.max(0, attempt));

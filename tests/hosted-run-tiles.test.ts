@@ -139,15 +139,23 @@ describe("a run on this studio's GPUs between Run and its answer", () => {
     expect(html).not.toMatch(/pause|error|billing|GPU/i);
   });
   it("a run that names no place but sends the price it showed goes there too, above the runs already made", () => {
-    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", shown: { amount: 0, priceVersion: "" } }], [gen({ place: "pool", status: "running", message: POOL_WORDS.working })]);
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", shown: { amount: 0, priceVersion: "" } }], [gen({ place: "pool", status: "running", message: POOL_WORDS.working, prompt: "an earlier fox", request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "an earlier fox" } })]);
     expect(html.indexOf('data-run-state="in-line"')).toBeGreaterThan(-1);
     expect(html.indexOf('data-run-state="in-line"')).toBeLessThan(html.indexOf('data-run-state="working"'));
   });
-  it("every other run being made shows nothing new", () => {
+  it("every other run being made shows its card at once too, saying it is starting (never In line)", () => {
     const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" }, { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", place: "own" }]);
     expect(html).not.toContain("data-run-state");
-    expect(html).toContain("Nothing yet");
+    expect(html).not.toContain("Nothing yet");
+    expect(html.match(/data-stage="sending"/g)).toHaveLength(2);
+    expect(html).toContain(">Starting<");
+    expect(html).not.toContain(`>${POOL_WORDS.inLine}<`);
     expect(goesToPool(undefined)).toBe(false);
+  });
+  it("a run made meanwhile takes its press's place: one card, never two", () => {
+    const html = feedWhileMaking([{ feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox", place: "pool" }], [gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine })]);
+    expect(html.match(/data-run-state="in-line"/g)).toHaveLength(1);
+    expect(html).not.toContain("data-making");
   });
 });
 

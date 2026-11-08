@@ -1,7 +1,7 @@
 "use client";
 
 import { OrbitPad, orbitOptions } from "@/components/studio/orbit-pad";
-import { ArrowUp, AtSign, Cloud, Cpu, GalleryHorizontalEnd, LayoutDashboard, Library, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowUp, AtSign, Check, Cloud, Cpu, GalleryHorizontalEnd, LayoutDashboard, Library, Loader2, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -291,6 +291,13 @@ export function Composer({ docked }: { docked: boolean }) {
   const [engine, setEngine, engineMode] = useEngine();
   const visitor = useLikelyVisitor();
   const create = useCreateGeneration();
+  // A run just taken: Generate shows a tick for a moment (its card is already at the top of the feed).
+  const [taken, setTaken] = useState(0);
+  useEffect(() => {
+    if (!taken) return;
+    const t = setTimeout(() => setTaken(0), 1200);
+    return () => clearTimeout(t);
+  }, [taken]);
   const [enhancing, setEnhancing] = useState(false);
   const [focused, setFocused] = useState(false);
   const promptRef = useRef<PromptInputHandle>(null);
@@ -1157,6 +1164,7 @@ export function Composer({ docked }: { docked: boolean }) {
       // Accepted: nothing to try again (a card opened later never starts this run a second time). Back from sign-up, the
       // line says the run is on its way (hosted runs: its tile shows "In line" too).
       onSuccess: () => {
+        setTaken(Date.now());
         dropGpuRetry();
         setLorasOff(false);
         if (signedUp && viewerInfo?.hosted) setPriceNote(PENDING_WORDS.made);
@@ -2244,6 +2252,8 @@ export function Composer({ docked }: { docked: boolean }) {
                   <ArrowUp className="motion-hand-off col-start-1 row-start-1 size-4" />
                   <Loader2 className="motion-spinner col-start-1 row-start-1 size-4" />
                 </span>
+              ) : taken ? (
+                <Check key={taken} className="motion-confirm size-4" aria-label="Sent" />
               ) : (
                 <ArrowUp className="size-4" />
               )}
