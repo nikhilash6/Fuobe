@@ -1,12 +1,9 @@
 "use client";
 
-import { BookOpen, Brain, CalendarClock, Clapperboard, ImageIcon, Music4, Plus } from "lucide-react";
-import Link from "next/link";
+import { Clapperboard, ImageIcon, Music4 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { askToSignUp, useAssistActions, useEngine } from "@/lib/api";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
 import { makeItHref, type MakeStudio } from "@/lib/chat/prompt";
@@ -101,35 +98,5 @@ export function MakeBox({ owner, guest }: { owner: boolean; guest: boolean }) {
         ))}
       </div>
     </div>
-  );
-}
-
-/** The "+" menu: the tools that keep working across chats (skills, memory, scheduled tasks). */
-export function MoreMenu() {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="More in Chat">
-          <Plus />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuItem asChild>
-          <Link href="/chat/skills">
-            <BookOpen /> Skills
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/chat/memory">
-            <Brain /> Memory
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/chat/scheduled">
-            <CalendarClock /> Scheduled tasks
-          </Link>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

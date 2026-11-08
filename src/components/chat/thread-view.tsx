@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Copy, MoreHorizontal, Pencil, RotateCcw, Share2, Tras
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { RailButton } from "@/components/assist/shell";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import {
   AlertDialog,
@@ -108,7 +109,7 @@ export function ThreadView({ id }: { id: string }) {
   }
 
   const c = t?.characterCard ?? null;
-  const label = !t ? "" : c ? c.tagline : t.kind === "play" ? (playFormat(t.play)?.name ?? "Play") : t.kind === "write" ? (writeTool(t.tool)?.name ?? "Write") : CHAT_KINDS.find((k) => k.id === t.kind)?.label;
+  const label = !t ? "" : c ? c.tagline : t.kind === "play" ? (playFormat(t.play)?.name ?? "Workshop") : t.kind === "write" ? (writeTool(t.tool)?.name ?? "Write") : CHAT_KINDS.find((k) => k.id === t.kind)?.label;
   const lastAssistant = t?.messages.findLast((m) => m.role === "assistant");
   const lastUser = t?.messages.findLast((m) => m.role === "user");
   const canRetry = !!t && !busy && t.messages.at(-1)?.role === "assistant" && t.messages.length > 1;
@@ -116,7 +117,8 @@ export function ThreadView({ id }: { id: string }) {
   return (
     <Frame>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-5">
-        <Button variant="ghost" size="icon" asChild aria-label="All chats">
+        <RailButton />
+        <Button variant="ghost" size="icon" asChild aria-label="Chat home" className="xl:hidden">
           <Link href="/chat">
             <ArrowLeft />
           </Link>

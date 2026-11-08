@@ -10,7 +10,7 @@ export const CHAT_KINDS: { id: ChatKind; label: string; hint: string; placeholde
   { id: "ideas", label: "Ideas", hint: "Concepts you can make in one tap", placeholder: "What should we come up with ideas for?" },
   { id: "write", label: "Write", hint: "Captions, bios, rewrites and scripts", placeholder: "Paste text to rewrite, or say what to write…" },
   { id: "character", label: "Characters", hint: "Stories with characters who stay in role", placeholder: "Pick a character below to start a story" },
-  { id: "play", label: "Play", hint: "Quick, fun chats worth sharing", placeholder: "Pick a game below" },
+  { id: "play", label: "Workshop", hint: "Briefs, critiques, plans and songs", placeholder: "Pick a format below" },
 ];
 
 export const isChatKind = (v: unknown): v is ChatKind => typeof v === "string" && CHAT_KINDS.some((k) => k.id === v);
@@ -138,80 +138,169 @@ export const WRITE_TOOLS: WriteTool[] = [
 export const writeTool = (id: string | null | undefined) => WRITE_TOOLS.find((t) => t.id === id) ?? null;
 
 // ---------------------------------------------------------------------------
-// Play formats
+// Workshop (the "play" kind): creative, artistic and productive formats, most ending in something to make
+
+export type WorkshopGroup = "creative" | "artistic" | "productive";
+
+export const WORKSHOP_GROUPS: { id: WorkshopGroup; label: string; note: string }[] = [
+  { id: "creative", label: "Creative", note: "From a rough idea to a plan you can shoot" },
+  { id: "artistic", label: "Artistic", note: "An expert eye on your work, and songs to make" },
+  { id: "productive", label: "Productive", note: "Plans and pitches, ready to send" },
+];
 
 export interface PlayFormat {
   id: string;
   name: string;
   blurb: string;
+  group: WorkshopGroup;
+  /** The card's icon (a lucide name the page maps) and colours, until its cover shows. */
+  icon: "brief" | "board" | "shots" | "style" | "photo" | "song" | "calendar" | "campaign" | "pitch";
+  accent: [string, string];
+  /** Its cover picture (4:5), when made. */
+  cover: string | null;
   /** Takes a picture (the model sees it). */
   picture?: boolean;
   /** What the person fills in before it starts; empty: it starts at once. */
   ask?: { label: string; placeholder: string };
-  /** What the model is told the game is. */
+  /** What the model is told the job is. */
   brief: string;
   /** The first message sent for the person ({input} is what they typed). */
   opener: string;
-  emoji: string;
+  /** No longer offered: kept so chats started with it keep their instructions. */
+  retired?: boolean;
 }
+
+const RETIRED = { group: "creative" as const, icon: "brief" as const, accent: ["#241a3a", "#6a5ee7"] as [string, string], cover: null, retired: true };
 
 export const PLAY_FORMATS: PlayFormat[] = [
   {
-    id: "rate-my-look",
-    name: "Rate my look",
-    blurb: "A stylist's honest score for your outfit",
+    id: "creative-brief",
+    name: "Creative brief",
+    blurb: "A rough idea, turned into a one-page brief",
+    group: "creative",
+    icon: "brief",
+    accent: ["#2e2a26", "#c9a97a"],
+    cover: null,
+    ask: { label: "Your idea", placeholder: "A summer linen campaign shot on a Positano rooftop" },
+    brief:
+      "Turn the idea into a one-page creative brief with short sections: Objective, Audience, Big idea, Mood and look (palette, light, styling), References (describe each in one line), Deliverables (formats and sizes) and Timeline. End with one line \"Prompt (image): …\" for the hero visual.",
+    opener: "Write a creative brief for: {input}",
+  },
+  {
+    id: "moodboard",
+    name: "Moodboard in words",
+    blurb: "Palette, textures, light and styling, ready to make",
+    group: "creative",
+    icon: "board",
+    accent: ["#5b4636", "#c76b4a"],
+    cover: null,
+    ask: { label: "What it's for", placeholder: "A dark-romance fragrance launch" },
+    brief:
+      "Describe a moodboard in words: a palette of five colours (names and hex), textures and materials, light, wardrobe and styling, locations, and three reference images in one line each. End with three or four lines \"Prompt (image): …\", one for each board image.",
+    opener: "Build a moodboard for: {input}",
+  },
+  {
+    id: "shot-list",
+    name: "Shot list",
+    blurb: "A scene or campaign, shot by shot",
+    group: "creative",
+    icon: "shots",
+    accent: ["#0d1b2a", "#3a86ff"],
+    cover: null,
+    ask: { label: "The scene or campaign", placeholder: "A 30-second sneaker launch in a rainy city at night" },
+    brief:
+      "Write a numbered shot list of six to ten shots. For each: shot size, lens, camera move, light and what happens. After the list, add one line \"Prompt (video): …\" for each of the first three shots.",
+    opener: "Write a shot list for: {input}",
+  },
+  {
+    id: "style-critique",
+    name: "Style critique",
+    blurb: "A fashion editor's notes on an outfit",
+    group: "artistic",
+    icon: "style",
+    accent: ["#2b2140", "#b58b5a"],
+    cover: null,
     picture: true,
     brief:
-      "You are a sharp, kind fashion editor. Score the outfit in the picture out of 10, then give: what works (two points), one change that would lift it, and a one-line verdict worth posting. Talk about the clothes, styling and colour, never the person's body.",
-    opener: "Rate my look.",
-    emoji: "🪞",
+      "You are a senior fashion editor. Give styling notes on the outfit in the picture: fit, proportion, colour, fabric and accessories. Then name the one change that would lift it most, and close with a short verdict. Talk about the clothes and the styling only.",
+    opener: "Give me styling notes on this look.",
   },
   {
-    id: "roast",
-    name: "Roast me, gently",
-    blurb: "A friendly roast of your habits",
-    ask: { label: "Tell it about yourself", placeholder: "I own 40 black t-shirts and call them all different" },
-    brief: "Write a short, affectionate roast (5–7 lines) of the person from what they share. Clever, never cruel, nothing about looks, identity or anything they can't change. End with one genuine compliment.",
-    opener: "Roast me, gently: {input}",
-    emoji: "🔥",
-  },
-  {
-    id: "horoscope",
-    name: "Style horoscope",
-    blurb: "Today's outfit, written in the stars",
-    ask: { label: "Your star sign", placeholder: "Leo" },
-    brief: "Write today's playful style horoscope for the sign: the mood, a lucky colour, an outfit formula, one thing to avoid, and a one-line prophecy. Fun, specific and fashion-forward.",
-    opener: "My sign is {input}. What's my style horoscope today?",
-    emoji: "✨",
-  },
-  {
-    id: "plot-twist",
-    name: "Plot twist my day",
-    blurb: "Your day, rewritten as a film",
-    ask: { label: "What happened today", placeholder: "Missed the bus, spilled coffee, got a callback" },
-    brief: "Retell the person's day as a dramatic film trailer: a title, a tagline, and 5–6 short trailer beats with a twist at the end. Cinematic, funny and warm.",
-    opener: "Plot twist my day: {input}",
-    emoji: "🎬",
-  },
-  {
-    id: "debate",
-    name: "Two characters argue",
-    blurb: "A tiny debate on any topic",
-    ask: { label: "The topic", placeholder: "Is double denim ever okay?" },
+    id: "photo-critique",
+    name: "Photo critique",
+    blurb: "A picture editor's notes on your shot",
+    group: "artistic",
+    icon: "photo",
+    accent: ["#1c1c22", "#8c8c99"],
+    cover: null,
+    picture: true,
     brief:
-      "Write a short, funny debate between two invented characters with strong opinions (give each a name and a one-line description first). Six to eight lines, alternating, each line punchy. End with a surprising agreement.",
-    opener: "Debate: {input}",
-    emoji: "🎤",
+      "You are a picture editor. Critique the photo: composition, light, colour and grade, focus and retouching. Suggest a stronger crop and two concrete ways to improve the next shot.",
+    opener: "Critique this photo.",
   },
   {
-    id: "would-you-rather",
-    name: "Would you rather",
-    blurb: "Impossible choices, one at a time",
-    brief: "Play would-you-rather. Ask one clever, creative or fashion-flavoured would-you-rather question at a time. After each answer, react in one line, then ask the next.",
-    opener: "Let's play would you rather.",
-    emoji: "🎲",
+    id: "song",
+    name: "Song and lyrics",
+    blurb: "A song written for you, ready to record",
+    group: "artistic",
+    icon: "song",
+    accent: ["#3b2a20", "#e0a458"],
+    cover: null,
+    ask: { label: "What the song is about", placeholder: "A slow-burn love song about a summer in Lisbon" },
+    brief:
+      "Write a short song: a title, two verses and a chorus with a clear hook. Then one line \"Prompt (music): …\" describing the genre, mood, instruments, tempo and voice, so the track can be made in one tap.",
+    opener: "Write a song about: {input}",
   },
+  {
+    id: "content-calendar",
+    name: "Content calendar",
+    blurb: "Two weeks of posts, with hooks and formats",
+    group: "productive",
+    icon: "calendar",
+    accent: ["#3e3a36", "#7fa6b8"],
+    cover: null,
+    ask: { label: "The brand or creator", placeholder: "A slow-fashion knitwear label on Instagram and TikTok" },
+    brief:
+      "Write a two-week content calendar as a list by day: the format (reel, carousel, story or post), the hook line and what it shows. Mix the formats, build to one hero post each week, and end with three lines \"Prompt (image): …\" for the hero posts.",
+    opener: "Plan two weeks of content for: {input}",
+  },
+  {
+    id: "campaign-plan",
+    name: "Campaign plan",
+    blurb: "Concept, channels, assets and timeline",
+    group: "productive",
+    icon: "campaign",
+    accent: ["#1b263b", "#c1121f"],
+    cover: null,
+    ask: { label: "The product or launch", placeholder: "A capsule collection of silk scarves for spring" },
+    brief:
+      "Write a campaign plan: the big idea in one line, the audience, the key message, channels, an asset list (each with its format and size), a four-week timeline and how to measure it. End with two lines \"Prompt (image): …\" for the hero assets.",
+    opener: "Plan a campaign for: {input}",
+  },
+  {
+    id: "client-pitch",
+    name: "Client pitch",
+    blurb: "The email, the scope and a price outline",
+    group: "productive",
+    icon: "pitch",
+    accent: ["#1f2a36", "#2e86ab"],
+    cover: null,
+    ask: { label: "Who and what", placeholder: "A boutique hotel in Capri, a summer brand film" },
+    brief:
+      "Write a client pitch: a short, specific email that opens with the idea, then the scope (deliverables and what's included), a simple price outline with two options, and a clear next step. Confident and warm, with no filler.",
+    opener: "Write a client pitch for: {input}",
+  },
+  // Retired: still read for chats that began with them.
+  { ...RETIRED, id: "rate-my-look", name: "Rate my look", blurb: "", picture: true, brief: "You are a sharp, kind fashion editor. Score the outfit in the picture out of 10, then give what works, one change that would lift it, and a one-line verdict.", opener: "Rate my look." },
+  { ...RETIRED, id: "roast", name: "Roast me, gently", blurb: "", brief: "Write a short, affectionate roast of the person from what they share. Clever and warm, ending with one genuine compliment.", opener: "Roast me, gently: {input}" },
+  { ...RETIRED, id: "horoscope", name: "Style horoscope", blurb: "", brief: "Write today's playful style horoscope for the sign: the mood, a lucky colour, an outfit formula and a one-line prophecy.", opener: "My sign is {input}. What's my style horoscope today?" },
+  { ...RETIRED, id: "plot-twist", name: "Plot twist my day", blurb: "", brief: "Retell the person's day as a dramatic film trailer: a title, a tagline and five or six short beats with a twist.", opener: "Plot twist my day: {input}" },
+  { ...RETIRED, id: "debate", name: "Two characters argue", blurb: "", brief: "Write a short, witty debate between two invented characters with strong opinions, ending with a surprising agreement.", opener: "Debate: {input}" },
+  { ...RETIRED, id: "would-you-rather", name: "Would you rather", blurb: "", brief: "Play would-you-rather, one clever question at a time, reacting to each answer in one line.", opener: "Let's play would you rather." },
 ];
+
+/** The formats the Workshop offers (retired ones stay readable for their chats). */
+export const WORKSHOP_FORMATS = PLAY_FORMATS.filter((p) => !p.retired);
 
 export const playFormat = (id: string | null | undefined) => PLAY_FORMATS.find((p) => p.id === id) ?? null;
 
@@ -368,3 +457,6 @@ export const CHAT_LIMITS = {
   greetingChars: 600,
   shareMessages: 12,
 };
+
+/** A format a new chat may start with (not a retired one). */
+export const workshopFormat = (id: string | null | undefined) => WORKSHOP_FORMATS.find((p) => p.id === id) ?? null;

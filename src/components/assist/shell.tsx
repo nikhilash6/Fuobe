@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useIsOwner } from "@/lib/api";
+import { useHydrated, useIsGuest, useIsOwner } from "@/lib/api";
+import { CharacterFace } from "@/components/chat/character-face";
+import { useChatThreads } from "@/components/chat/hooks";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ChatMenu } from "./chat-menu";
@@ -18,14 +20,14 @@ import { ProjectDialog } from "./project-dialog";
 import { ProjectDot } from "./project-dot";
 
 /**
- * Assist's own sidebar (Supercomputer's): New chat, Search, Skills, Memory, Scheduled, Projects and Chats.
+ * Chat's workspace sidebar: New chat, Search, Skills, Memory, Scheduled, Projects and every chat (talking and making).
  * A column from xl up; below that the same list opens as a sheet from the header button.
  */
 
 export function AssistShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1">
-      <aside className="sticky top-chrome hidden h-content w-64 shrink-0 flex-col border-r bg-sidebar/40 xl:flex" aria-label="Make">
+      <aside className="sticky top-chrome hidden h-content w-64 shrink-0 flex-col border-r bg-sidebar/40 xl:flex" aria-label="Chat">
         <Suspense fallback={<RailSkeleton />}>
           <Rail />
         </Suspense>
@@ -50,7 +52,7 @@ export function RailButton({ className }: { className?: string }) {
       </Tooltip>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-[min(86vw,320px)] gap-0 p-0" aria-describedby={undefined} onOpenAutoFocus={(e) => e.preventDefault()}>
-          <SheetTitle className="sr-only">Make</SheetTitle>
+          <SheetTitle className="sr-only">Chat</SheetTitle>
           <SheetDescription className="sr-only">Chats, projects, skills, memory and scheduled tasks</SheetDescription>
           <Suspense fallback={<RailSkeleton />}>
             <Rail onNavigate={() => setOpen(false)} />
@@ -100,12 +102,21 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
   const [creating, setCreating] = useState(false);
   // A guest or an account (public sign-up): Assist's projects are the owner's.
   const owner = useIsOwner();
+  // Talking chats (Chat's own) beside the making chats, newest first. A guest has none (and isn't asked).
+  const hydrated = useHydrated();
+  const guest = useIsGuest();
+  const talks = useChatThreads(hydrated && !guest, q);
+  const rows = [
+    ...(talks.data?.items ?? []).map((t) => ({ kind: "talk" as const, id: t.id, title: t.title, updatedAt: t.updatedAt, href: `/chat/${t.id}`, talk: t })),
+    ...(chats.data?.threads ?? []).map((t) => ({ kind: "make" as const, id: t.id, title: t.title, updatedAt: t.updatedAt, href: `/chat/make?c=${t.id}`, make: t })),
+  ].sort((a, b) => b.updatedAt - a.updatedAt);
+  const loading = chats.isLoading || (hydrated && !guest && talks.isLoading);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("space-y-2 p-3 pb-2", onNavigate && "pt-12")}>
         <Button asChild variant="outline" className="h-9 w-full justify-start rounded-full">
-          <Link href="/chat/make" onClick={onNavigate}>
+          <Link href="/chat" onClick={onNavigate}>
             <MessageSquarePlus /> New chat
           </Link>
         </Button>
@@ -118,7 +129,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
             </button>
           )}
         </div>
-        <nav className="space-y-0.5" aria-label="Make pages">
+        <nav className="space-y-0.5" aria-label="Chat pages">
           <RailLink href="/chat/skills" icon={Sparkles} label="Skills" active={pathname.startsWith("/chat/skills")} onNavigate={onNavigate} />
           <RailLink href="/chat/memory" icon={Brain} label="Memory" active={pathname.startsWith("/chat/memory")} onNavigate={onNavigate} />
           <RailLink href="/chat/scheduled" icon={CalendarClock} label="Scheduled" active={pathname.startsWith("/chat/scheduled")} onNavigate={onNavigate} />
@@ -177,15 +188,33 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
           <h2 id="rail-chats" className="px-2.5 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
             {q ? `Results for “${q}”` : "Chats"}
           </h2>
-          {chats.isLoading ? (
+          {loading ? (
             <div className="space-y-1.5 px-2.5">
               {Array.from({ length: 4 }, (_, i) => (
                 <Skeleton key={i} className="h-6" />
               ))}
             </div>
-          ) : chats.data?.threads.length ? (
+          ) : rows.length ? (
             <ul className="space-y-0.5">
-              {chats.data.threads.map((t) => {
+              {rows.map((row) => {
+                if (row.kind === "talk") {
+                  const t = row.talk;
+                  const active = pathname === row.href;
+                  return (
+                    <li key={`talk-${t.id}`}>
+                      <Link
+                        href={row.href}
+                        onClick={onNavigate}
+                        aria-current={active ? "page" : undefined}
+                        className={cn("flex min-h-8 items-center gap-2 rounded-lg py-1.5 pr-2 pl-2.5 transition-colors hover:bg-accent", active && "bg-accent")}
+                      >
+                        {t.character && <CharacterFace name={t.character.name} accent={t.character.accent} portrait={t.character.portrait} className="size-5" />}
+                        <span className="min-w-0 flex-1 truncate text-[13px]">{t.title}</span>
+                      </Link>
+                    </li>
+                  );
+                }
+                const t = row.make;
                 const project = t.projectId ? projects.data?.find((p) => p.id === t.projectId) : undefined;
                 return (
                   <li key={t.id} className="group/chat relative">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Settings2, Sparkles } from "lucide-react";
+import { Pencil, Plus, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,20 +11,19 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TAB_PILL, TabRow, onAttr } from "@/components/ui/tab-row";
 import { askToSignUp, useHydrated, useIsGuest, useViewer } from "@/lib/api";
-import { BUILT_IN_CHARACTERS, CHAT_KINDS, isChatKind, MANGO_CHILLI, PLAY_FORMATS, STARTERS, WRITE_TOOLS, playFormat, writeTool, type CharacterCard, type ChatKind, type PlayFormat, type WriteTool } from "@/lib/chat/catalog";
+import { BUILT_IN_CHARACTERS, CHAT_KINDS, isChatKind, MANGO_CHILLI, STARTERS, WRITE_TOOLS, workshopFormat, writeTool, type CharacterCard, type ChatKind, type PlayFormat, type WriteTool } from "@/lib/chat/catalog";
 import { playMessage, toolMessage } from "@/lib/chat/prompt";
-import type { ChatThreadSummary } from "@/lib/chat/types";
 import { toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
-import { useChats } from "@/components/assist/hooks";
-import type { AssistThreadSummary } from "@/lib/assist";
+import { RailButton } from "@/components/assist/shell";
 import { CharacterBuilder } from "./character-builder";
 import { CharacterFace } from "./character-face";
 import { ChatComposer } from "./composer";
 import { ChatSettingsDialog, ChilliDot, CHILLI_BG, MangoChilliDialog, PlayDialog, WriteToolDialog } from "./dialogs";
-import { chatSend, useCharacters, useChatMe, useChatThreads, useStartChat } from "./hooks";
-import { EngineLine, KindIcon, timeAgo } from "./bits";
-import { MakeBox, MoreMenu } from "./make";
+import { chatSend, useCharacters, useChatMe, useStartChat } from "./hooks";
+import { EngineLine } from "./bits";
+import { MakeBox } from "./make";
+import { WorkshopGrid } from "./workshop";
 
 /**
  * Fuobe Chat's home: one box to start talking, the kinds of chat (Chat, Ideas, Write, Characters, Play), the
@@ -42,20 +41,17 @@ export function ChatHome() {
   const known = hydrated && viewer.isSuccess;
   const signedIn = known && !guest;
   const me = useChatMe(signedIn);
-  const threads = useChatThreads(signedIn);
   const characters = useCharacters(signedIn);
-  // The owner's Assist chats sit in Recent too, until they open in Chat itself (an account's list comes back empty).
-  const assistChats = useChats();
   const start = useStartChat();
 
   // A link can open a kind, a writing tool or a game with its form (?kind=, ?tool=, ?play=).
   const [kind, setKind] = useState<ChatKind>(() => {
     const k = sp.get("kind");
-    return playFormat(sp.get("play")) ? "play" : writeTool(sp.get("tool")) ? "write" : isChatKind(k) ? k : "chat";
+    return workshopFormat(sp.get("play")) ? "play" : writeTool(sp.get("tool")) ? "write" : isChatKind(k) ? k : "chat";
   });
   const [tool, setTool] = useState<WriteTool | null>(() => writeTool(sp.get("tool")));
   const [play, setPlay] = useState<PlayFormat | null>(() => {
-    const p = playFormat(sp.get("play"));
+    const p = workshopFormat(sp.get("play"));
     return p && (p.ask || p.picture) ? p : null;
   });
   const [building, setBuilding] = useState<{ open: boolean; editing: CharacterCard | null }>({ open: false, editing: null });
@@ -92,7 +88,7 @@ export function ChatHome() {
     if (handled.current || !known) return;
     const character = sp.get("character");
     const from = sp.get("from");
-    const p = playFormat(sp.get("play"));
+    const p = workshopFormat(sp.get("play"));
     const now = p && !p.ask && !p.picture ? p : null;
     if (!character && !from && !now) return;
     handled.current = true;
@@ -122,6 +118,7 @@ export function ChatHome() {
   return (
     <div className="flex h-content min-w-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 px-4 sm:px-6">
+        <RailButton />
         <Link href="/chat" className="font-heading text-[22px] leading-none">
           Chat
         </Link>
@@ -146,7 +143,6 @@ export function ChatHome() {
             </Button>
           </>
         )}
-        <MoreMenu />
         <PhoneNavButton />
       </header>
 
@@ -236,28 +232,13 @@ export function ChatHome() {
                 ))}
               </div>
             ) : kind === "play" ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {PLAY_FORMATS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      if (!gate()) return;
-                      if (p.ask || p.picture) setPlay(p);
-                      else void go({ kind: "play", play: p.id, text: playMessage(p.id, "") });
-                    }}
-                    className="flex items-start gap-3 rounded-2xl border bg-background p-4 text-left transition-[border-color,box-shadow] hover:border-primary hover:shadow-soft focus-visible:ring-4 focus-visible:ring-brand-faint focus-visible:outline-none"
-                  >
-                    <span className="text-[26px] leading-none" aria-hidden>
-                      {p.emoji}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[15px] font-medium">{p.name}</span>
-                      <span className="mt-0.5 block text-[13.5px] text-muted-foreground">{p.blurb}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+              <WorkshopGrid
+                onPick={(p) => {
+                  if (!gate()) return;
+                  if (p.ask || p.picture) setPlay(p);
+                  else void go({ kind: "play", play: p.id, text: playMessage(p.id, "") });
+                }}
+              />
             ) : null}
           </section>
 
@@ -281,7 +262,6 @@ export function ChatHome() {
             </section>
           )}
 
-          {signedIn && <Recent threads={threads.data?.items} assist={me.data?.owner ? assistChats.data?.threads : undefined} loading={threads.isPending} />}
         </div>
       </div>
 
@@ -369,67 +349,3 @@ function CharacterShelf({
   );
 }
 
-type RecentRow = ChatThreadSummary & { href: string; making?: boolean };
-
-function Recent({ threads, assist, loading }: { threads: ChatThreadSummary[] | undefined; assist?: AssistThreadSummary[]; loading: boolean }) {
-  const [all, setAll] = useState(false);
-  // Chats and (the owner's) making chats in one list, newest first.
-  const rows: RecentRow[] = [
-    ...(threads ?? []).map((t) => ({ ...t, href: `/chat/${t.id}` })),
-    ...(assist ?? []).map((a) => ({
-      id: a.id,
-      kind: "ideas" as const,
-      title: a.title,
-      characterId: null,
-      character: null,
-      tool: null,
-      play: null,
-      mature: false,
-      preview: "Plans and makes",
-      updatedAt: a.updatedAt,
-      href: `/chat/make?c=${a.id}`,
-      making: true,
-    })),
-  ].sort((x, y) => y.updatedAt - x.updatedAt);
-  if (!loading && !rows.length) return null;
-  const more = rows.length - 12;
-  return (
-    <section className="mt-12">
-      <h2 className="mb-2 font-heading text-[28px] leading-none">Recent</h2>
-      <ul className="divide-y">
-        {loading
-          ? Array.from({ length: 3 }, (_, i) => (
-              <li key={i} className="py-3">
-                <Skeleton className="h-10 w-full" />
-              </li>
-            ))
-          : rows.slice(0, all ? undefined : 12).map((t) => (
-              <li key={t.id}>
-                <Link href={t.href} className="group flex items-center gap-3 py-3">
-                  {t.character ? (
-                    <CharacterFace name={t.character.name} accent={t.character.accent} portrait={t.character.portrait} className="size-10" />
-                  ) : (
-                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-                      {t.making ? <Sparkles className="size-[18px]" /> : <KindIcon kind={t.kind} />}
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[15px] font-medium group-hover:text-brand-text">{t.title}</span>
-                      {t.mature && <ChilliDot className="size-2" />}
-                    </span>
-                    <span className="block truncate text-[13px] text-muted-foreground">{t.preview || " "}</span>
-                  </span>
-                  <span className="shrink-0 text-[12px] text-subtle-foreground">{timeAgo(t.updatedAt)}</span>
-                </Link>
-              </li>
-            ))}
-      </ul>
-      {!loading && !all && more > 0 && (
-        <Button variant="ghost" size="sm" className="mt-2 text-muted-foreground" onClick={() => setAll(true)}>
-          Show {more} more
-        </Button>
-      )}
-    </section>
-  );
-}

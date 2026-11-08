@@ -69,7 +69,7 @@ export function systemPrompt(s: ChatSetup): string {
       );
     } else if (s.kind === "play") {
       const p = playFormat(s.play);
-      if (p) parts.push(p.brief, "Keep it fun, quick and worth sharing. Never be mean about anything the person can't change.");
+      if (p) parts.push(p.brief, "Write as an expert in the field: specific, practical and ready to use as it is, with clear headings and no filler.");
     } else parts.push(CHAT_EXTRA);
   }
   parts.push(s.mature ? MATURE : GENERAL);

@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { CharacterFace } from "./character-face";
 import { chatSend } from "./hooks";
 import { ReplyBody } from "./prose";
+import { WorkshopCover } from "./workshop";
 
 /** Mango Chilli's mark: its two colours, used only for this mode. */
 export const CHILLI_BG = "bg-[linear-gradient(135deg,#ffb020_0%,#ff6a2b_55%,#e8352b_100%)]";
@@ -377,8 +378,8 @@ export function PlayDialog({ play, onOpenChange, onStart }: { play: PlayFormat |
             }}
           >
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <span aria-hidden>{play.emoji}</span>
+              <DialogTitle className="flex items-center gap-2.5">
+                <WorkshopCover format={play} className="size-9 shrink-0 rounded-lg" />
                 {play.name}
               </DialogTitle>
               <DialogDescription>{play.blurb}</DialogDescription>
@@ -400,7 +401,7 @@ export function PlayDialog({ play, onOpenChange, onStart }: { play: PlayFormat |
                   ) : (
                     <span className="flex flex-col items-center gap-2 text-[14px]">
                       <ImagePlus className="size-6" />
-                      Add a full-length photo of your outfit
+                      {play.id === "style-critique" ? "Add a full-length photo of the outfit" : "Add the photo you want notes on"}
                     </span>
                   )}
                 </button>

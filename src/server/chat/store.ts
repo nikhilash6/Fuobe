@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import { BUILT_IN_CHARACTERS, builtInCharacter, CHAT_LIMITS, isChatKind, playFormat, writeTool, type CharacterCard, type ChatKind } from "@/lib/chat/catalog";
+import { BUILT_IN_CHARACTERS, builtInCharacter, CHAT_LIMITS, isChatKind, playFormat, workshopFormat, writeTool, type CharacterCard, type ChatKind } from "@/lib/chat/catalog";
 import { titleFrom } from "@/lib/chat/prompt";
 import type { ChatEngine, ChatMessage, ChatPlan, ChatShareSnapshot, ChatThreadSummary, ChatThreadView } from "@/lib/chat/types";
 import { generationAccount } from "../account-library";
@@ -276,7 +276,7 @@ export function createThread(who: string, t: NewThread): ChatThreadView {
   if (t.kind === "character" && !character) throw new ChatError("Pick a character to chat with.", 404);
   if (character?.mature && !t.mature) throw new ChatError("Turn on Mango Chilli mode to chat with this character.", 403, "mature-off");
   const tool = t.kind === "write" ? (writeTool(t.tool)?.id ?? null) : null;
-  const play = t.kind === "play" ? (playFormat(t.play)?.id ?? null) : null;
+  const play = t.kind === "play" ? (workshopFormat(t.play)?.id ?? null) : null;
   const id = newId("ct");
   const now = Date.now();
   const title = clip(t.title, CHAT_LIMITS.titleChars) || (character ? character.name : tool ? writeTool(tool)!.name : play ? playFormat(play)!.name : "New chat");
