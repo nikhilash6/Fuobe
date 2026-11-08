@@ -1499,6 +1499,13 @@
     transform 0.3s var(--ease-enter, cubic-bezier(0.08, 0.82, 0.17, 1)),
     visibility 0s;
 }
+/* Out of the way while a bar menu, the search or any dialog is open over the page. */
+html:has([data-bar-scrim][data-open]) .hb-cue-float[data-shown],
+html:has([role="dialog"]) .hb-cue-float[data-shown] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 /* The arrow dips three times as the floating copy arrives, then rests. */
 .hb-cue-float[data-shown] .hb-cue-arrow {
   animation: hb-cue-dip 1.4s ease-in-out 0.3s 3;

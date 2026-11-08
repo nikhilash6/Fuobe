@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowDown, ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CardPending, IntentLink } from "@/components/intent-link";
 import { useFadeEdges } from "@/components/use-fade-edges";
 import { useRailStills } from "@/components/use-rail-stills";
-import { PresetPreview, setPreviewsPaused, usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
+import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { placeOf } from "@/lib/place-name";
 import { copyWithToast } from "@/lib/clipboard";
@@ -39,28 +39,8 @@ export function HomeRail({ className, children }: { className?: string; children
   );
 }
 
-/** Stops every preview playing by itself, on every page, for this visit; a hover still plays one. */
-export function PausePreviews({ className }: { className?: string }) {
-  const paused = usePreviewsPaused();
-  const Icon = paused ? Play : Pause;
-  const label = paused ? "Play previews" : "Pause previews";
-  return (
-    <button
-      type="button"
-      onClick={() => setPreviewsPaused(!paused)}
-      aria-label={label}
-      title={label}
-      // 44 px to tap: its hit area reaches past its 28 px circle.
-      className={cn(
-        "relative inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-accent hover:text-foreground sm:w-[8.5rem]",
-        className,
-      )}
-    >
-      <Icon className="size-3" />
-      <span className="max-sm:hidden">{label}</span>
-    </button>
-  );
-}
+/** Home's first screen shows it too (home-bento.tsx); it lives on its own so the bar's menus share it. */
+export { PausePreviews } from "@/components/pause-previews";
 
 /** The self-host card's Copy button: the commands go to the clipboard, and the icon turns to a check for a moment. */
 export function CopyCommand({ text }: { text: string }) {

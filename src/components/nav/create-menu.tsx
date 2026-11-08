@@ -8,17 +8,14 @@ import { navActive, NEW_CREATION_HREF } from "@/lib/nav";
 import { area } from "@/lib/nav-areas";
 import { CREATE_COLUMNS, entry, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { BarCardMenu } from "./bar-split";
-import { warmNav } from "./nav-prefetch";
 import { NavIcon } from "./cover-thumb";
 import { useViewerKind } from "./nav-ui";
 import { CARD_ROW, MENU_HEADING, MENU_ROW_1, MENU_ROW_2, ROW_LINE, rowName, SeeAllRow, SHEET_HEADING, SHEET_ROW } from "./nav-row";
 
 /*
- * Create: the tools that start from words or a picture, in two labelled columns. The bar's Create card (links in a
- * grid: arrow keys move up and down a column and across to the other, Esc gives focus back to the item) and the
- * phone's Create sheet (a plain list) show the same items.
- * "New creation" (a fresh composer on Home) closes both.
+ * Create: the tools that start from words or a picture, in two labelled columns. The phone's Create sheet lists them
+ * here; the bar's Create menu shows the same groups as picture tiles (createMenu in lib/mega-menus.ts, drawn by
+ * mega-panel.tsx). "New creation" (a fresh composer on Home) is in both.
  */
 
 /** The two columns, in order: kept in the navigation model, so the /create page (a server component) reads them too. */
@@ -152,19 +149,4 @@ export function columnMove(lengths: readonly number[], at: { col: number; row: n
   const len = lengths[col] ?? 0;
   if (col < 0 || col >= lengths.length || !len) return null;
   return { col, row: Math.min(at.row, len - 1) };
-}
-
-/** Opened: the routes its rows lead to start loading. */
-const warmCreate = () => warmNav("create");
-
-/**
- * The bar's Create item: one button that opens the Create card (resting on it with a mouse, a click, a tap, Enter,
- * Space or ArrowDown). Its page (/create) is the card's first link, "See all". `active`: a Create page is open.
- */
-export function CreateMenu({ active }: { active?: boolean }) {
-  return (
-    <BarCardMenu id="create" href={CREATE_AREA_HREF} label="Create" active={active} onOpen={warmCreate} cardClassName="relative w-[520px] max-w-[calc(100vw-24px)]">
-      <CreateList variant="menu" />
-    </BarCardMenu>
-  );
 }

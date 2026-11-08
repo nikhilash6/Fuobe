@@ -112,6 +112,7 @@ export const MENU_LINES: Record<string, string> = {
   "effect-chain-monet-muse": "Into a Monet lily pond",
   "effect-chain-superstar": "On stage under spotlights",
   "effect-chain-fairytale-castle": "A fairytale castle rises",
+  "effect-chain-fallen-angel": "Dark wings in a storm",
   "effect-chain-blue-depth": "You drift in deep blue",
   "effect-chain-dolphin-ride": "You ride a dolphin",
   "effect-chain-skatedog": "A dog on a skateboard",

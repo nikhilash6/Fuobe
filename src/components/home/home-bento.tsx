@@ -276,8 +276,8 @@ export function HomeBento({ bento }: { bento: Bento }) {
 
       <div id="home-bento-foot" className={s.foot}>
         <p className="min-w-0">
-          <span className="lg:hidden">Rendered locally on ComfyUI, on one RTX 5090.</span>
-          <span className="max-lg:hidden">Every preview on this page was rendered locally on ComfyUI, on one RTX 5090.</span>
+          <span className="xl:hidden">Rendered locally on ComfyUI, on one RTX 5090.</span>
+          <span className="max-xl:hidden">Every preview on this page was rendered locally on ComfyUI, on one RTX 5090.</span>
         </p>
         <ScrollCue footId="home-bento-foot" />
         <PausePreviews className="justify-self-end [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" />

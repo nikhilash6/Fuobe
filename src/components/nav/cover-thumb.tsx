@@ -17,11 +17,11 @@ const CLIP_FADE = 200;
 /** How long a mouse stays on a card before it comes alive (ms). */
 const ALIVE_AFTER = 120;
 
-/** The one cover clip playing (a menu plays only the card under the pointer: one decoder at a time). */
+/** The one cover clip playing on hover (a card under the pointer: one decoder at a time). A menu's player runs its own (shared). */
 let playingClip: HTMLVideoElement | null = null;
 
-/** Clips play on hover unless the viewer asks for less motion or to save data. */
-function clipsAllowed(): boolean {
+/** Clips play unless the viewer asks for less motion or to save data. */
+export function clipsAllowed(): boolean {
   if (reducedMotion()) return false;
   const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
   return !conn?.saveData;
@@ -58,16 +58,19 @@ export function useAliveCard() {
 /**
  * A cover's clip over its still: it shows once its first frame is drawn (so the still stays until then: never a blank
  * frame) and fades in; `leaving`, it fades back out to the still. `at`: a still from inside the clip (a template's
- * peak frame), where it starts and loops back to, short of the clip's last stretch.
+ * peak frame), where it starts and loops back to, short of the clip's last stretch. `shared`: one of several playing
+ * at once (a menu's player, which keeps their number down), so it leaves the others playing.
  */
-function CoverClip({ src, at, leaving, focus }: { src: string; at?: number; leaving: boolean; focus?: string }) {
+function CoverClip({ src, at, leaving, focus, shared }: { src: string; at?: number; leaving: boolean; focus?: string; shared?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [drawn, setDrawn] = useState(false);
   useLayoutEffect(() => {
     const v = ref.current;
     if (!v) return;
-    if (playingClip && playingClip !== v) playingClip.pause();
-    playingClip = v;
+    if (!shared) {
+      if (playingClip && playingClip !== v) playingClip.pause();
+      playingClip = v;
+    }
     let live = true;
     let from = 0;
     const seek = () => {
@@ -98,7 +101,7 @@ function CoverClip({ src, at, leaving, focus }: { src: string; at?: number; leav
       if (playingClip === v) playingClip = null;
       releaseVideo(v);
     };
-  }, [src, at]);
+  }, [src, at, shared]);
   return (
     <video
       ref={ref}
@@ -181,6 +184,7 @@ export function CoverThumb({
   eager,
   low,
   alive,
+  shared,
   sizes: boxSizes,
   className,
 }: {
@@ -200,6 +204,8 @@ export function CoverThumb({
    * leans in a little. Neither under reduced motion; no clip when saving data.
    */
   alive?: boolean;
+  /** Its clip is one of several a menu's player runs at once (CoverClip's `shared`). */
+  shared?: boolean;
   /** A fluid box's width for the srcset, when it isn't its size's usual one (a lead card two tracks wide, a phone's tile). */
   sizes?: string;
   className?: string;
@@ -218,7 +224,7 @@ export function CoverThumb({
   // A fetched menu's cover names its clip; a Studios lead's nav cover gives its version (nav-covers.ts).
   const clip = !allowed ? undefined : (cover?.clip ?? (id && nav?.clipV ? `/previews/presets/${id}.mp4?v=${nav.clipV}` : undefined));
   const { mounted, leaving } = useClipPresence(!!alive && !!clip);
-  const clipEl = clip && mounted && <CoverClip src={clip} at={cover?.clipAt} leaving={leaving} focus={cover?.framing?.focus} />;
+  const clipEl = clip && mounted && <CoverClip src={clip} at={cover?.clipAt} leaving={leaving} focus={cover?.framing?.focus} shared={shared} />;
   const still = cover && (
     // eslint-disable-next-line @next/next/no-img-element -- versioned static covers, sized by the box (no optimizer round trip)
     <img
@@ -272,6 +278,12 @@ export function CoverThumb({
       ) : null}
     </span>
   );
+}
+
+/** Whether a cover (inline, or a nav cover by preset id) has a clip to play. */
+export function useHasClip(id: string | undefined, cover: MegaCover | undefined): boolean {
+  const nav = useNavCover(cover ? undefined : id);
+  return !!(cover?.clip ?? (id && nav?.clipV));
 }
 
 /** A model icon by name (NavEntry.icon), decorative. */

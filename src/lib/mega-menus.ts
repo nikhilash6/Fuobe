@@ -1,19 +1,24 @@
 /**
- * The bar's grouped menus (Studios, Apps, Motions & effects, Canvas) as one model the launcher draws: a header line
- * with the true count, columns of a lead card and rows (or cover tiles), and "See all". Client-safe (no catalog):
- * Studios is built here from the navigation model; the other three are built on the server from the catalog and the
- * covers (mega-menus.server.ts) and fetched as small static files (/nav-menus/<id>) the first time a menu warms.
+ * The bar's menus (Create, Studios, Fuobe FX, Apps, Motions & effects, Canvas) as one model the panel draws: a header
+ * line with the true count, its groups (each a lead and the rest, every one of them: the panel scrolls inside), and
+ * "See all". Client-safe (no catalog): Create and Studios are built here from the navigation model; the others are
+ * built on the server from the catalog and the covers (mega-menus.server.ts) and fetched as small static files
+ * (/nav-menus/<id>) the first time a menu warms.
  */
 import type { CoverFraming } from "./cover-framing";
 import type { FxView } from "./fx-compare";
+import { LIVE_DEMO_POSTER } from "./live/demo";
 import { area } from "./nav-areas";
 import type { StillSources } from "./preset-hd";
-import { entriesFor, launcherColumns, studioCount, studioSubs, STUDIO_SUBS, subLabel, subParent, type NavEntry, type NavIconName, type ViewerKind } from "./nav-model";
+import { CREATE_COLUMNS, entriesFor, entry, launcherColumns, studioCount, studioSubs, STUDIO_SUBS, subLabel, subParent, visibleTo, type NavEntry, type NavIconName, type ViewerKind } from "./nav-model";
 
-export type MegaId = "studios" | "apps" | "motions" | "canvas" | "fx";
+export type MegaId = "create" | "studios" | "apps" | "motions" | "canvas" | "fx";
 
-/** The menus fetched from the server (Studios is in the bundle). */
-export type FetchedMegaId = Exclude<MegaId, "studios">;
+/** The menus built in the browser from the navigation model (in the bundle, never fetched). */
+export const BUNDLED_MENUS: readonly MegaId[] = ["create", "studios"];
+
+/** The menus fetched from the server (Create and Studios are in the bundle). */
+export type FetchedMegaId = Exclude<MegaId, "studios" | "create">;
 export const FETCHED_MENUS: readonly FetchedMegaId[] = ["apps", "motions", "canvas", "fx"];
 
 /** Where a fetched menu's data is: a static file, made at build time. */
@@ -129,6 +134,7 @@ export interface MegaModel {
 
 /** Each menu's bar item: its name, the page its name opens, and the names of its chevron and panel. */
 export const MEGA_AREAS: Record<MegaId, { label: string; href: string; menu: string; panel: string }> = {
+  create: { label: "Create", href: area("create").href, menu: "Create menu", panel: "Create" },
   studios: { label: "Studios", href: area("studios").href, menu: "Studios menu", panel: "All studios" },
   apps: { label: "Apps", href: area("apps").href, menu: "Apps menu", panel: "All apps" },
   motions: { label: "Motions & effects", href: area("motions").href, menu: "Motions & effects menu", panel: "All motions and effects" },
@@ -240,6 +246,46 @@ export function studiosMenu(kind: ViewerKind | undefined): MegaModel {
   return model;
 }
 
+/**
+ * Create's tools that have no preset cover: a picture of their own work (Chat's Creative brief workshop, Live edit's
+ * recorded session). A test keeps each file in step.
+ */
+export const CREATE_COVERS: Readonly<Record<string, MegaCover>> = {
+  chat: { poster: "/previews/chat/workshop/creative-brief.jpg?v=0a107c75", thumb: "/previews/chat/workshop/creative-brief.jpg?v=0a107c75" },
+  "live-edit": { poster: LIVE_DEMO_POSTER.webp[1].src, thumb: LIVE_DEMO_POSTER.webp[0].src },
+};
+
+/** The Create menu for each kind of viewer, built once (it only reads the navigation model). */
+const createMenus = new Map<ViewerKind | undefined, MegaModel>();
+
+/**
+ * Create as a menu: its two groups (CREATE_COLUMNS: Make, Edit a picture), each tool a tile with its cover (or its icon
+ * where it has none), for who is looking.
+ */
+export function createMenu(kind: ViewerKind | undefined): MegaModel {
+  const built = createMenus.get(kind);
+  if (built) return built;
+  const columns: MegaColumn[] = CREATE_COLUMNS.map((c) => {
+    const items = c.ids.map((id) => entry(id)).filter((e): e is NavEntry => !!e && visibleTo(e, kind))
+      .map((e) => (CREATE_COVERS[e.id] ? { ...studioItem(e), cover: CREATE_COVERS[e.id] } : studioItem(e)));
+    const [lead, ...rows] = items;
+    return { id: c.label.toLowerCase().replace(/[^a-z]+/g, "-"), label: c.label, chip: c.label, ...(lead && { lead }), rows };
+  });
+  const n = columns.reduce((sum, c) => sum + (c.lead ? 1 : 0) + c.rows.length, 0);
+  const model: MegaModel = {
+    id: "create",
+    count: n,
+    countLine: "Start from words or a picture",
+    seeAll: { href: MEGA_AREAS.create.href, name: "See all of Create" },
+    columns,
+  };
+  createMenus.set(kind, model);
+  return model;
+}
+
+/** A bundled menu's model (Create, Studios) for who is looking. */
+export const bundledMenu = (id: "create" | "studios", kind: ViewerKind | undefined): MegaModel => (id === "create" ? createMenu(kind) : studiosMenu(kind));
+
 /** Every item of a menu, leads first in each column, in column order (a phone's "All", a test). */
 export const megaItems = (m: MegaModel): MegaItem[] => m.columns.flatMap((c) => [...(c.lead ? [c.lead] : []), ...c.rows]);
 
@@ -252,25 +298,38 @@ function presetUrls(id: string, v: string): MegaCover {
   return { poster, thumb: `/previews/presets/thumbs/${id}.jpg?v=${v}`, mini: `/previews/presets/mini/${id}.jpg?v=${v}` };
 }
 
-/** An item as the menu files carry it: a preset's cover by its version (`cv`) and its page left out when it is the usual one. */
-type WireItem = Omit<MegaItem, "href" | "cover"> & { href?: string; cover?: MegaCover; cv?: string };
+/**
+ * An item as the menu files carry it: a preset's cover by its version (`cv`), its clip by its version (`clv`) when it is
+ * the preset's own (/previews/presets/<id>.mp4), and its page left out when it is the usual one.
+ */
+type WireItem = Omit<MegaItem, "href" | "cover"> & { href?: string; cover?: MegaCover; cv?: string; clv?: string };
+
+/** A preset's own clip: /previews/presets/<id>.mp4?v=<v>. */
+const presetClip = (id: string, v: string) => `/previews/presets/${id}.mp4?v=${v}`;
 
 function packItem(e: MegaItem): WireItem {
   const { href, cover, ...rest } = e;
   const v = cover && /^\/previews\/presets\/([^/]+)\.jpg\?v=([0-9a-f]{8})$/.exec(cover.poster);
   const usual = v && v[1] === e.id && JSON.stringify({ ...presetUrls(e.id, v[2]) }) === JSON.stringify({ poster: cover!.poster, thumb: cover!.thumb, mini: cover!.mini });
-  // The usual cover goes by its version, with what its URLs don't say (its framing, its clip) beside it.
-  const extra = usual && { ...(cover!.framing && { framing: cover!.framing }), ...(cover!.clip && { clip: cover!.clip }), ...(cover!.clipAt !== undefined && { clipAt: cover!.clipAt }) };
+  const clv = usual && cover!.clip ? /^\/previews\/presets\/([^/]+)\.mp4\?v=([0-9a-f]{8})$/.exec(cover!.clip) : null;
+  const ownClip = clv && clv[1] === e.id ? clv[2] : undefined;
+  // The usual cover goes by its version, with what its URLs don't say (its framing, another preset's clip) beside it.
+  const extra = usual && {
+    ...(cover!.framing && { framing: cover!.framing }),
+    ...(cover!.clip && !ownClip && { clip: cover!.clip }),
+    ...(cover!.clipAt !== undefined && { clipAt: cover!.clipAt }),
+  };
   return {
     ...rest,
     ...(href !== presetPage(e.id) && { href }),
-    ...(usual ? { cv: v![2], ...(extra && Object.keys(extra).length && { cover: extra as MegaCover }) } : cover && { cover }),
+    ...(usual ? { cv: v![2], ...(ownClip && { clv: ownClip }), ...(extra && Object.keys(extra).length && { cover: extra as MegaCover }) } : cover && { cover }),
   };
 }
 
 function unpackItem(w: WireItem): MegaItem {
-  const { cv, href, cover, ...rest } = w;
-  return { ...rest, href: href ?? presetPage(w.id), ...(cv ? { cover: { ...presetUrls(w.id, cv), ...cover } } : cover && { cover }) };
+  const { cv, clv, href, cover, ...rest } = w;
+  const own = cv ? { ...presetUrls(w.id, cv), ...(clv && { clip: presetClip(w.id, clv) }), ...cover } : undefined;
+  return { ...rest, href: href ?? presetPage(w.id), ...(own ? { cover: own } : cover && { cover }) };
 }
 
 /** A menu as its file carries it (smaller: presets' covers by version): packMenu on the server, unpackMenu in the browser. */

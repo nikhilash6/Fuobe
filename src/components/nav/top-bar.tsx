@@ -11,7 +11,6 @@ import { activeEntry, entry, type NavEntry } from "@/lib/nav-model";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
 import { cn } from "@/lib/utils";
 import { CoverThumb, NavIcon } from "./cover-thumb";
-import { CreateMenu } from "./create-menu";
 import { CARD_ROW, MENU_ROW_2, ROW_LINE, rowName, SeeAllRow } from "./nav-row";
 import { useNavUi, useViewerKind } from "./nav-ui";
 import { useSearchPalette } from "./search-context";
@@ -189,7 +188,7 @@ function BarLinks({ active, onTap }: { active: Active; onTap?: (href: string) =>
   return (
     <>
       {/* An item is marked anywhere in its area, its own page (/create, /studios …) included. */}
-      <CreateMenu active={active.create || active.page === "create"} />
+      <MegaLauncher id="create" active={active.create || active.page === "create"} />
       <MegaLauncher id="studios" active={active.studios || active.page === "studios"} />
       <MegaLauncher id="fx" active={active.fx || active.page === "fx"} className="hidden xl:inline-flex" />
       <MegaLauncher id="apps" active={active.apps || active.page === "apps"} className="hidden xl:inline-flex" />

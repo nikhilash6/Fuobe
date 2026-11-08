@@ -37,8 +37,13 @@ export const FX_COVERS: Readonly<Record<string, string>> = {
   "video-tools-depth": "effect-lidar-transition",
   "video-tools-relight": "app-relight",
   "video-tools-evolution": "effect-world-morphing",
+  "video-tools-trim": "app-clipcut",
+  "video-tools-join": "app-urban-cuts",
+  "video-tools-captions": "app-text-edit",
+  "video-tools-remove-dialogue": "app-clean-up-voice",
   [gj("restyle")]: "effect-layer-mixed-media",
   [gj("finish")]: "effect-film-colors",
+  [gj("reshoot")]: "app-expression-edit",
   "upscale-fps": "motion-slow-motion",
   // Body Double (an app with a navigation entry): its own cover, a card here.
   "body-double": "app-body-double",

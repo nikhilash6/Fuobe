@@ -144,7 +144,7 @@ describe("which bar item holds the page", () => {
   });
 });
 
-describe("the launcher's columns", () => {
+describe("the Studios menu's tiles", () => {
   const html = render(createElement(LauncherColumns, { kind: undefined, now: Date.parse("2026-11-02") }));
 
   it("shows every studio, Apps and the Sound column, 4/6/5/4/5/3 (Ads Studio under Marketing Studio; the FX studios are Fuobe FX's), each column's lead first", () => {
@@ -157,16 +157,14 @@ describe("the launcher's columns", () => {
     expect(studiosMenu(undefined).columns.map((c) => 1 + c.rows.filter((e) => !e.under).length)).toEqual([4, 6, 5, 4, 5, 3]);
     expect(studiosMenu(undefined).columns.flatMap((c) => c.rows.filter((e) => e.under).map((e) => [e.id, e.under]))).toEqual([["ads", "marketing"]]);
     expect(launcherColumns(undefined).map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
-    expect(html).toContain("grid-cols-6");
-    // The arrow keys' places: the lead, its features, then each row and its features, top to bottom.
-    for (const [i, c] of studiosMenu(undefined).columns.entries()) {
-      const at = (href: string, sub: boolean) => anchors(html).find((a) => a.href === href && a.tag.includes(`data-col="${i}"`) && a.tag.includes("data-sub") === sub)?.tag ?? "";
-      let r = 0;
-      for (const e of [c.lead!, ...c.rows.filter((x) => !x.under)]) {
-        expect(at(e.href, false), e.id).toContain(`data-col="${i}" data-row="${r++}"`);
-        for (const s of e.subs ?? []) expect(at(s.href, true), s.id).toContain(`data-col="${i}" data-row="${r++}"`);
-      }
-    }
+    // "All": every tile flows down balanced columns (three, four from lg, five from xl), each group starting with its name.
+    expect(html).toContain("columns-3 lg:columns-4 xl:columns-5");
+    // One row of names above them: All, then each group with its count (each a button that shows that group alone).
+    expect(html).toMatch(/aria-pressed="true"[^>]*>All<span[^>]*>27</);
+    for (const [label, n] of [["Film &amp; video", 4], ["Social &amp; shorts", 6], ["Sell &amp; advertise", 5], ["People &amp; fashion", 4], ["Sound", 5], ["Finish &amp; convert", 3]] as const)
+      expect(html, label).toMatch(new RegExp(`aria-pressed="false"[^>]*>${label}<span[^>]*>${n}<`));
+    // Every link is in the arrow keys' set (their places are set from where the tiles land, in the browser).
+    for (const a of anchors(html)) expect(a.tag, a.href).toContain("data-key");
     expect(studioCount()).toBe(23);
   });
 
@@ -183,29 +181,28 @@ describe("the launcher's columns", () => {
     expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
     expect(subs("audio")).toEqual(["Speech", "Dialogue", "Voice change", "See all 15"]);
     for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "FPS Boost"]) expect(words(html)).toContain(w);
-    // Under a hairline, quieter than a row, with no picture and no line of their own (nav-subs.css: 24 px
-    // names with a mouse, 44 px pills to tap on a touch screen).
+    // Small quiet pills under the studio's tile, with no picture and no line of their own.
     const sub = anchors(html).find((a) => a.tag.includes("data-sub"))!.tag;
     expect(sub).toContain("text-muted-foreground");
-    expect(html).toMatch(/<ul[^>]*class="nav-subs /);
+    expect(sub).toContain("rounded-full");
     // A "See all N" says whose.
     expect(html).toContain('aria-label="See all 15 in Audio"');
   });
 
-  it("labels the groups, and every link has its studio's real cover in a box of fixed size", () => {
+  it("names the groups, and every tile has its studio's real cover in a 4:3 box", () => {
     for (const label of ["Film &amp; video", "Social &amp; shorts", "Sell &amp; advertise", "People &amp; fashion", ">Sound<", "Finish &amp; convert"]) expect(html).toContain(label);
     for (const c of launcherColumns(undefined)) {
       for (const e of [c.lead, ...c.rest].filter((x) => x.id !== "ads")) {
         const cover = covers[e.cover!];
         expect(cover, e.id).toBeDefined();
-        // The lead card shows the 320 px copy (and the poster by its srcset); a row the 96 px one.
-        expect(html).toContain(`src="${(e === c.lead ? cover.thumb : (cover.mini ?? cover.thumb)).replaceAll("&", "&amp;")}"`);
+        // Every tile shows the 320 px copy, and the poster by its srcset on a sharp screen.
+        expect(html).toContain(`src="${cover.thumb.replaceAll("&", "&amp;")}"`);
+        expect(html).toContain(`${cover.poster} 512w`);
       }
-      // The lead's 4:3 card picks the poster on sharp screens.
-      expect(html).toContain(`${covers[c.lead.cover!].poster} 512w`);
     }
-    // The six lead cards load as the panel warms; a row's picture when the row shows (lazy). A studio's features have none.
-    expect(count(html, 'loading="eager"')).toBe(6);
+    // The tiles at the top of each of the five columns load as the panel warms; the rest when they show (lazy). A
+    // studio's features have no picture.
+    expect(count(html, 'loading="eager"')).toBe(15);
     expect(count(html, 'alt=""')).toBe(27);
   });
 
@@ -233,17 +230,14 @@ describe("the launcher's columns", () => {
     expect(render(createElement(LauncherColumns, { kind: undefined, current: "image-to-3d", now: 0 }))).not.toContain("data-active");
   });
 
-  it("hides a row's features on a short window, and hangs them on its name's column", () => {
+  it("shows every studio's features under its tile, whatever the window's height (the panel scrolls inside)", () => {
     const ul = (id: string) => html.match(new RegExp(`<ul[^>]*data-subs="${id}"[^>]*>`))?.[0] ?? "";
-    // Genjutsu (whose modes wrapped into a line) is Fuobe FX's now.
+    // Genjutsu's modes are Fuobe FX's menu's.
     expect(ul("genjutsu")).toBe("");
-    expect(ul("image-to-3d")).toContain("[@media(max-height:799.98px)]:hidden");
-    expect(ul("image-to-3d")).not.toContain("data-subs-line");
-    // No pad after an odd list (the next row follows 4 px below, as rows do); features under a row are marked to
-    // start on its name (nav-subs.css), under a lead card on the card's words.
-    expect(html).not.toContain("data-odd");
-    expect(ul("image-to-3d")).toContain("data-under");
-    expect(ul("marketing")).not.toContain("data-under");
+    for (const id of ["image-to-3d", "marketing", "upscale", "audio"]) {
+      expect(ul(id), id).not.toBe("");
+      expect(ul(id), id).not.toContain("max-height");
+    }
   });
 
   it("shows New badges only until their date", () => {

@@ -1,35 +1,42 @@
 "use client";
 
-import { ArrowRight, RotateCw, Search } from "lucide-react";
+import { ArrowRight, ChevronRight, Plus, RotateCw, Search } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Fragment, lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { Fragment, lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
+import { PausePreviews } from "@/components/pause-previews";
+import { usePreviewsPaused } from "@/components/preset-preview";
 import { Kbd } from "@/components/ui/kbd";
-import { MEGA_AREAS, ROW_CAPS, studiosMenu, TILE_COLS, type MegaColumn, type MegaId, type MegaItem, type MegaModel } from "@/lib/mega-menus";
+import { NEW_CREATION_HREF } from "@/lib/nav";
+import { bundledMenu, MEGA_AREAS, type MegaColumn, type MegaId, type MegaItem, type MegaModel } from "@/lib/mega-menus";
 import { isNew, subParent, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { FxCompare } from "@/components/fx/fx-compare";
-import { COVER_SIZES, CoverThumb, useAliveCard } from "./cover-thumb";
+import { clipsAllowed, CoverThumb, useAliveCard, useHasClip } from "./cover-thumb";
 import { useMegaMenu } from "./mega-data";
 import { megaCurrent, MegaSkeleton } from "./mega-launcher";
 import { useViewerKind } from "./nav-ui";
 
 /*
- * A grouped menu's panel body (the bar's MegaLauncher): its count line, See all and search, then its columns of links.
- * Loaded on its own, when the pointer or focus first comes to a bar item with a menu or once the page is idle, so the
- * links, cards and tiles cost the pages nothing until then.
+ * A bar menu's panel body (the bar's MegaLauncher): its count line, See all, Pause previews and search; a row of tabs
+ * (All, then each group); then every tool as a picture tile. "All" flows the tiles down balanced columns, each group
+ * starting with its name wherever it falls, so every column ends at about the same height; a group's tab shows that
+ * group alone as a grid. The tiles on screen play their clips, a few at a time (useMenuPlayer). Loaded on its own, when
+ * the pointer or focus first comes to a bar item or once the page is idle, so it costs the pages nothing until then.
  */
 
+/** Columns of tiles by the window's width: three on a tablet, four from lg, five from xl (the Tailwind classes below). */
+const COLUMNS = "columns-3 lg:columns-4 xl:columns-5";
+const GRID = "grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+const columnsAt = (w: number) => (w >= 1280 ? 5 : w >= 1024 ? 4 : 3);
+
 /**
- * A list row from this index on hides on a short window, so the panel never scrolls (the fetched menus; Studios fits).
- * A menu with family headings (Motions & effects) gives a short window's last row to that heading line.
+ * A tile's picture width for its srcset: a fifth of the panel (at most 1680 px less its 24 px sides and 12 px gaps) from
+ * xl, a quarter from lg, a third below.
  */
-const ROW_HIDE = (i: number, families = false) =>
-  cn(
-    i >= ROW_CAPS.short - (families ? 1 : 0) && "[@media(max-height:799.98px)]:hidden",
-    i >= ROW_CAPS.mid && "[@media(max-height:959.98px)]:hidden",
-    i >= ROW_CAPS.tall && "hidden",
-  );
+export const TILE_SIZES = "(min-width: 1680px) 316px, (min-width: 1280px) calc((100vw - 96px) / 5), (min-width: 1024px) calc((100vw - 84px) / 4), calc((100vw - 72px) / 3)";
+
+/** How many tiles play their clips at once: enough to bring the menu to life, few enough for any laptop. */
+export const PLAY_AT_ONCE = 8;
 
 function NewBadge() {
   return (
@@ -40,375 +47,265 @@ function NewBadge() {
 }
 
 /**
- * The `sizes` of a picture `span` of the grid's six tracks wide (from lg), less `inset` px (a card's border), so its
- * srcset gives a 2x or 3x screen a copy at least as wide as the box: the panel's content is at most 1680 px wide less
- * its 24 px sides (px-6), its tracks 12 px apart (gap-x-3), so a track is (width - 108) / 6. For the Canvas menu,
- * which shows from 1440 px only (always six tracks); a tile is one track wide (its tiles are as far apart as the tracks).
+ * One tool: its picture (4:3), name and line, as one link; a studio's features as small links under it. `playing`:
+ * the menu's player has it on (its clip plays over the still, where it has one); a mouse resting on it or the keys
+ * focusing it plays it too. `eager`: on the menu's first screen, so its picture loads with the panel.
  */
-export function trackSizes(span: number, inset = 0): string {
-  const extra = (span - 1) * 12 - inset;
-  return `(min-width: 1680px) ${Math.floor(((1680 - 108) * span) / 6) + extra}px, calc((100vw - 108px) * ${span} / 6 + ${extra}px)`;
-}
-
-/** A lead card's picture box: 4:3 of the column, its height on the 4 px grid, shorter on a short window. */
-const LEAD_BOX = "h-[round(down,75cqw,4px)] rounded-none md:max-lg:max-h-[round(down,max(56px,calc(100dvh_-_460px)),4px)]";
-const LEAD_MAX = "max-h-[round(down,max(64px,calc(100dvh_-_592px)),4px)]";
-/** Under the owner's New board button (Canvas). */
-const LEAD_MAX_BELOW = "max-h-[round(down,max(64px,calc(100dvh_-_640px)),4px)]";
-
-/**
- * A column's first card: its cover, name and one line. `row` 1 under the owner's New board (Canvas), its cover shorter by
- * that button. The cover's height is rounded down to the 4 px grid (a 4:3 box of a fractional column width would put
- * every row under the card on a half pixel), and its words start 12 px in, the column its features hang from. `span`:
- * the tracks its column takes, when more than one (Canvas' Start here), for its picture's srcset.
- */
-export function LeadCard({ e, col, row = 0, span = 1, current, inside, now, className }: { e: MegaItem; col: number; row?: number; span?: number; current: boolean; inside?: boolean; now: number; className?: string }) {
-  // Pointed at or focused, its cover comes alive (its clip, or a lean in); a Fuobe FX card shows its before and after.
+const MegaTile = memo(function MegaTile({ e, current, inside, now, playing, eager, subCurrent }: { e: MegaItem; current: boolean; inside: boolean; now: number; playing: boolean; eager: boolean; subCurrent?: string }) {
   const { alive, handlers } = useAliveCard();
+  const clip = useHasClip(e.navCover, e.cover);
   return (
-    <IntentLink
-      {...(e.fx ? {} : handlers)}
-      href={e.href}
-      data-col={col}
-      data-row={row}
-      aria-current={current ? "page" : undefined}
-      data-active={inside ? "" : undefined}
-      className={cn("nav-row group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground [container-type:inline-size]", className)}
-    >
-      {/* A Fuobe FX item shows its before and after (the menu's arrow keys stay the menu's: keys off). */}
-      {e.fx ? (
-        <FxCompare view={e.fx} sizes={span > 1 ? trackSizes(span, 2) : COVER_SIZES.lead.sizes} eager className={cn("w-full shrink-0", LEAD_BOX, row ? LEAD_MAX_BELOW : LEAD_MAX)} />
-      ) : (
-        <CoverThumb
-          id={e.navCover}
-          cover={e.cover}
-          size="lead"
-          icon={e.icon}
-          eager
-          alive={alive}
-          sizes={span > 1 ? trackSizes(span, 2) : undefined}
-          className={cn(LEAD_BOX, row ? LEAD_MAX_BELOW : LEAD_MAX)}
-        />
+    <div data-tile={e.id} data-clip={clip ? "" : undefined} className="mb-3 break-inside-avoid">
+      <IntentLink
+        {...handlers}
+        href={e.href}
+        data-key=""
+        aria-current={current ? "page" : undefined}
+        data-active={inside ? "" : undefined}
+        title={e.line ? `${e.label}: ${e.line}` : e.label}
+        className="nav-row group/tile flex flex-col overflow-hidden rounded-[12px] border bg-card text-card-foreground"
+      >
+        <CoverThumb id={e.navCover} cover={e.cover} size="card" icon={e.icon} eager={eager} alive={alive || playing} shared={playing && !alive} sizes={TILE_SIZES} className="rounded-none" />
+        <span className="flex min-w-0 flex-col gap-0.5 px-[11px] pt-2 pb-2.5">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={cn("truncate text-[13.5px] leading-[18px] font-medium", (current || inside) && "font-semibold")}>{e.label}</span>
+            {isNew(e, now) && <NewBadge />}
+          </span>
+          {e.line && <span className="truncate text-[12px] leading-4 text-muted-foreground">{e.line}</span>}
+        </span>
+      </IntentLink>
+      {/* A studio's features (its tabs and modes): every one a click away from the menu. */}
+      {e.subs && e.subs.length > 0 && (
+        <ul aria-label={`In ${e.label}`} data-subs={e.id} className="flex flex-wrap gap-1 px-0.5 pt-1.5">
+          {e.subs.map((s) => (
+            <li key={s.id} className="min-w-0">
+              <IntentLink
+                href={s.href}
+                data-key=""
+                data-sub=""
+                aria-current={subCurrent === s.id ? "page" : undefined}
+                aria-label={s.name}
+                title={s.line}
+                className={cn(
+                  "nav-row inline-flex h-7 max-w-full items-center gap-1 rounded-full px-2.5 text-[12px] [@media(pointer:coarse)]:h-9",
+                  s.more ? "font-medium text-brand-text" : "bg-muted/70 text-muted-foreground hover:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground",
+                )}
+              >
+                <span className="truncate">{s.label}</span>
+                {s.more && <ArrowRight aria-hidden className="size-3 shrink-0" />}
+              </IntentLink>
+            </li>
+          ))}
+        </ul>
       )}
-      <span className="nav-mark-start flex min-w-0 flex-col gap-0.5 px-[11px] pt-2.5 pb-3 md:max-lg:py-2">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[14px] leading-[18px] font-semibold md:max-lg:text-[13px]">{e.label}</span>
-          {isNew(e, now) && <NewBadge />}
-        </span>
-        <span title={e.line} className="truncate text-[12px] leading-4 text-muted-foreground md:max-lg:hidden">
-          {e.line}
-        </span>
-      </span>
-    </IntentLink>
+    </div>
   );
+});
+
+/** A group's tools in the order the menu shows them: its lead, then the rest (a studio listed under another left out). */
+const groupItems = (c: MegaColumn): MegaItem[] => [...(c.lead ? [c.lead] : []), ...c.rows].filter((e) => !e.under);
+
+/**
+ * The arrow keys' places (bar-menus.tsx: gridKey reads data-col and data-row): set from where the links land, since the
+ * flowing columns decide that. Each link takes the column of its tile's left edge and the next row down in it; set
+ * again whenever the layout changes (a tab, the window's size, the owner's Canvas column arriving).
+ */
+function usePlaceKeys(root: React.RefObject<HTMLElement | null>, key: unknown) {
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const place = () => {
+      const links = [...el.querySelectorAll<HTMLElement>("[data-key], [data-col]")].filter((l) => l.offsetParent !== null);
+      const lefts: number[] = [];
+      const colOf = (l: HTMLElement) => {
+        const x = Math.round(((l.closest<HTMLElement>("[data-tile], [data-block]") ?? l).getBoundingClientRect().left));
+        let i = lefts.findIndex((v) => Math.abs(v - x) < 6);
+        if (i < 0) i = lefts.push(x) - 1;
+        return i;
+      };
+      const placed = links.map((l) => ({ l, col: colOf(l), top: l.getBoundingClientRect().top }));
+      const order = [...lefts].sort((a, b) => a - b);
+      const cols = new Map<number, typeof placed>();
+      for (const p of placed) {
+        const c = order.indexOf(lefts[p.col]);
+        (cols.get(c) ?? cols.set(c, []).get(c)!).push(p);
+      }
+      for (const [c, list] of cols) {
+        list.sort((a, b) => a.top - b.top);
+        list.forEach((p, r) => {
+          p.l.dataset.col = String(c);
+          p.l.dataset.row = String(r);
+        });
+      }
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [root, key]);
 }
 
 /**
- * A studio's row: 44 px (40 below lg), 4 px from the next, so rows fall every 48 px. From 1280 px its name and its line
- * share a 36 px box that wraps: a name too long to share its line with its New badge keeps its words and the badge starts
- * the second line, before the line; a name too long for the column takes the second line instead and the line gives way
- * (it stays in the title). Below 1280 px the name alone, on up to two lines, with its badge beside it.
+ * The menu's player: the tiles on screen with a clip play it, at most PLAY_AT_ONCE, the first ones first. Nothing plays
+ * while the panel is closed or scrolled past, in a hidden tab, with previews paused (Pause previews), under reduced
+ * motion or when saving data. Returns the ids playing.
  */
-function Row({ e, col, row, current, inside, now, eager, className }: { e: MegaItem; col: number; row: number; current: boolean; inside?: boolean; now: number; eager?: boolean; className?: string }) {
-  const fresh = isNew(e, now);
-  return (
-    <IntentLink
-      href={e.href}
-      data-col={col}
-      data-row={row}
-      aria-current={current ? "page" : undefined}
-      data-active={inside ? "" : undefined}
-      title={e.line ? `${e.label}: ${e.line}` : e.label}
-      className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1 md:max-lg:min-h-10 md:max-lg:py-0.5 [@media(pointer:coarse)]:min-h-11", className)}
-    >
-      {/* Six columns leave a row its name and line below 1440 px, and its name alone below 1280 px. `eager`: a row this
-          window shows loads its picture with the panel, so it is there on the first frame; any other row's loads when it
-          shows (lazy): a row hidden by the window's height never fetches it. */}
-      <CoverThumb id={e.navCover} cover={e.cover} size="row" icon={e.icon} eager={eager} low className="max-[1439.98px]:hidden" />
-      {/* Centred while it fits; a name on two lines starts at the top and pushes the line out of the 36 px box. */}
-      <span data-row-text className="flex max-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-1 overflow-hidden [align-content:safe_center] max-xl:flex-nowrap">
-        <span data-row-name className={cn("line-clamp-2 min-w-0 text-[13px] leading-[18px] font-medium", (current || inside) && "font-semibold")}>
-          {e.label}
-        </span>
-        {fresh && <NewBadge />}
-        {/* After a badge that wrapped, the line fills the rest of the second line; after one beside the name it can't fit
-            there and starts its own. Its basis leaves 48 px: the badge (about 34 px) and the 4 px gap, with room to spare.
-            A wider badge needs a smaller basis, or the line falls to a third line and is hidden. */}
-        <span className={cn("min-w-0 flex-1 truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden", fresh ? "basis-[calc(100%-48px)]" : "basis-full")}>
-          {e.line}
-        </span>
-      </span>
-    </IntentLink>
-  );
+const NONE: ReadonlySet<string> = new Set();
+
+function useMenuPlayer(root: React.RefObject<HTMLElement | null>, key: unknown): ReadonlySet<string> {
+  const paused = usePreviewsPaused();
+  const [allowed] = useState(() => typeof window !== "undefined" && clipsAllowed());
+  const [ids, setIds] = useState<ReadonlySet<string>>(NONE);
+  const off = paused || !allowed;
+  useEffect(() => {
+    const el = root.current;
+    if (!el || off) return;
+    const tiles = [...el.querySelectorAll<HTMLElement>("[data-tile][data-clip]")];
+    const order = new Map(tiles.map((t, i) => [t, i]));
+    const seen = new Set<HTMLElement>();
+    const update = () => {
+      const next = document.hidden ? [] : [...seen].sort((a, b) => order.get(a)! - order.get(b)!).slice(0, PLAY_AT_ONCE).map((t) => t.dataset.tile!);
+      setIds((prev) => (prev.size === next.length && next.every((id) => prev.has(id)) ? prev : new Set(next)));
+    };
+    // The panel scrolls inside itself: its section is the box the tiles must be in to count as on screen.
+    const io = new IntersectionObserver(
+      (es) => {
+        for (const e of es) {
+          if (e.isIntersecting) seen.add(e.target as HTMLElement);
+          else seen.delete(e.target as HTMLElement);
+        }
+        update();
+      },
+      { root: el.closest("section"), threshold: 0.6 },
+    );
+    tiles.forEach((t) => io.observe(t));
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      io.disconnect();
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [root, key, off]);
+  return off ? NONE : ids;
 }
-
-/**
- * Below the window height a studio's links need, they hide, so the panel never scrolls inside. With a mouse they are
- * 24 px names; on a touch screen pills 44 px to tap (nav-subs.css), so they need a taller window there.
- */
-const HIDE_SHORT: Record<800 | 880 | 960, string> = {
-  800: "[@media(max-height:799.98px)]:hidden",
-  880: "[@media(max-height:879.98px)]:hidden",
-  960: "[@media(max-height:959.98px)]:hidden",
-};
-const HIDE_TOUCH: Record<800 | 880 | 960, string> = {
-  800: "[@media(pointer:coarse)_and_(max-height:1023.98px)]:hidden",
-  880: "[@media(pointer:coarse)_and_(max-height:1099.98px)]:hidden",
-  960: "[@media(pointer:coarse)_and_(max-height:1199.98px)]:hidden",
-};
-/** `line`: with a mouse they become one line of names there instead (nav-subs.css), so only a touch screen hides them. */
-const hideBelow = (h: 800 | 880 | 960, line = false) => cn(!line && HIDE_SHORT[h], HIDE_TOUCH[h]);
-
-/**
- * What a studio holds inside (its tabs and modes), as links under its card or row: names only, smaller and quieter
- * than the rows, hung from a hairline under the studio (nav-subs.css: with a mouse, 24 px names on the studio's text
- * column; pills on a touch screen; wrapped lines of names below the height a studio with `subsLine` needs). `row`: the
- * first link's place for the arrow keys (they go down from the studio through its links to the next row). `current`:
- * the open page's feature. `under`: links under a row, whose names start where the row's name does.
- */
-function SubLinks({ e, col, row, current, under }: { e: MegaItem; col: number; row: number; current?: string; under?: boolean }) {
-  if (!e.subs?.length) return null;
-  return (
-    <ul
-      aria-label={`In ${e.label}`}
-      data-subs={e.id}
-      data-under={under ? "" : undefined}
-      data-subs-line={e.subsLine ? "" : undefined}
-      className={cn("nav-subs min-w-0", e.subsFrom && hideBelow(e.subsFrom, e.subsLine))}
-    >
-      {e.subs.map((s, i) => (
-        <li key={s.id} data-from={s.from ? "" : undefined} className={cn(s.from && hideBelow(s.from))}>
-          <IntentLink
-            href={s.href}
-            data-col={col}
-            data-row={row + i}
-            data-sub=""
-            aria-current={current === s.id ? "page" : undefined}
-            aria-label={s.name}
-            title={s.line}
-            className={cn(
-              "nav-row nav-mark-start group/sub flex items-center gap-1",
-              s.more ? "font-medium text-brand-text" : "text-muted-foreground hover:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground",
-            )}
-          >
-            <span className="truncate">{s.label}</span>
-            {s.more && <ArrowRight aria-hidden className="size-3 shrink-0 motion-safe:transition-transform group-hover/sub:translate-x-0.5" />}
-          </IntentLink>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/**
- * A ready board as a 16:9 tile: its peak frame (the finished scene), its name and one line. The first row's pictures
- * load with the panel; a later row's when it shows (lazy: a row hidden by the window's height never fetches its own).
- */
-function Tile({ e, col, row, current, eager }: { e: MegaItem; col: number; row: number; current: boolean; eager: boolean }) {
-  const { alive, handlers } = useAliveCard();
-  return (
-    <IntentLink
-      {...handlers}
-      href={e.href}
-      data-col={col}
-      data-row={row}
-      aria-current={current ? "page" : undefined}
-      title={e.line ? `${e.label}: ${e.line}` : e.label}
-      className="nav-row nav-mark-under -m-1.5 flex min-w-0 flex-col gap-1.5 rounded-[12px] p-1.5 [container-type:inline-size]"
-    >
-      {/* 16:9, its height rounded down to the 4 px grid, so a second row of tiles sits on a whole pixel. */}
-      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} alive={alive} sizes={trackSizes(1)} className="aspect-auto h-[round(down,56.25cqw,4px)]" />
-      <span className="flex min-w-0 flex-col">
-        <span className={cn("truncate text-[13px] leading-[18px] font-medium", current && "font-semibold")}>{e.label}</span>
-        <span className="truncate text-[12px] leading-4 text-muted-foreground">{e.line}</span>
-      </span>
-    </IntentLink>
-  );
-}
-
-/**
- * How many of a list column's rows show their picture in this window (ROW_HIDE's caps; none below 1440 px, where rows
- * show no picture): these load with the panel, before it opens. Read once, when the panel's body first renders (only
- * ever in the browser).
- */
-function rowsWithPictures(capped: boolean, families: boolean): number {
-  if (typeof window === "undefined" || window.innerWidth < 1440) return 0;
-  if (!capped) return Infinity;
-  const h = window.innerHeight;
-  return h < 800 ? ROW_CAPS.short - (families ? 1 : 0) : h < 960 ? ROW_CAPS.mid : ROW_CAPS.tall;
-}
-
-/** Tiles across a tiles column. */
-const across = (c: MegaColumn) => Math.min(c.span ?? 1, TILE_COLS);
-
-/**
- * Where each column's links sit for the arrow keys: its first key column and first row. A list column is one key
- * column, a tiles column one per tile across. Tiles columns one under the other (Canvas' sections) share their key
- * columns, the lower one's rows after the upper one's, so ArrowDown goes on from one section into the next.
- */
-export function keyPlaces(columns: readonly MegaColumn[]): { col: number; row: number }[] {
-  const out: { col: number; row: number }[] = [];
-  let next = 0;
-  columns.forEach((c, i) => {
-    const prev = columns[i - 1];
-    if (c.variant === "tiles" && prev?.variant === "tiles") {
-      out.push({ col: out[i - 1].col, row: out[i - 1].row + Math.ceil(prev.rows.length / across(prev)) });
-      return;
-    }
-    out.push({ col: next, row: 0 });
-    next += c.variant === "tiles" ? across(c) : 1;
-  });
-  return out;
-}
-
-/** Grid tracks a column takes: its span from lg (six tracks), the whole row below it (three). */
-const SPAN: Record<number, string> = { 1: "", 2: "col-span-3 lg:col-span-2", 3: "col-span-3", 4: "col-span-3 lg:col-span-4", 6: "col-span-3 lg:col-span-6" };
 
 /** The Canvas menu's first column for the owner (New board, recent boards): loaded only once the owner opens it. */
 const CanvasOwnerStart = lazy(() => import("./mega-canvas-owner"));
 
-/** The owner's first Canvas column while it loads: the New board button, then a lead card, at their final sizes. */
+/** The owner's Canvas start while it loads: the New board button and a tile, at their final sizes. */
 function OwnerStartSkeleton() {
   return (
-    <div aria-hidden className="flex flex-col gap-2">
+    <div aria-hidden className="mb-3 flex flex-col gap-2 break-inside-avoid">
       <span className="h-10 rounded-[10px] bg-muted" />
-      <span className="aspect-[4/3] max-h-[max(64px,calc(100dvh-640px))] w-full rounded-t-[14px] bg-muted" />
-      <span className="-mt-2 h-[59px] rounded-b-[14px] bg-muted/60" />
+      <span className="aspect-[4/3] w-full rounded-[12px] bg-muted" />
     </div>
   );
 }
 
 /**
- * A menu's columns as links (no behaviour): one per group, its label, then the lead card and rows (or the cover
- * tiles). Family headings (Motions & effects) sit over their own columns: in the order they are read, and from lg in
- * one row above all of them. `current`: the open page's item id. `now`: the clock for the "New" badges.
+ * A menu's tools: the tabs, then "All" (every group, flowing down balanced columns) or one group as a grid. `current`:
+ * the open page's item id. `now`: the clock for the "New" badges.
  */
-export function MegaColumns({ model, current, now, kind }: { model: MegaModel; current?: string; now: number; kind?: ViewerKind }) {
+export function MegaGrid({ model, current, now, kind }: { model: MegaModel; current?: string; now: number; kind?: ViewerKind }) {
   const ids = useId();
-  const capped = model.id !== "studios";
-  const families = !!model.families?.length;
-  const tileColumns = model.columns.filter((c) => c.variant === "tiles").length;
-  const places = keyPlaces(model.columns);
-  const [pictured] = useState(() => rowsWithPictures(capped, families));
+  const [tab, setTab] = useState(-1);
+  const group = tab >= 0 ? model.columns[tab] : undefined;
+  const root = useRef<HTMLDivElement>(null);
+  const layout = `${model.id}:${tab}`;
+  usePlaceKeys(root, layout);
+  const playing = useMenuPlayer(root, layout);
   // On a studio's feature (Genjutsu's Restyle, Upscale's Video), its studio is marked as holding the page too.
   const holder = current ? subParent(current) : undefined;
-
-  const column = (c: MegaColumn, ci: number) => {
-    const { col, row: firstRow } = places[ci];
-    const labelId = `${ids}-${c.id}`;
-    const label = (
-      <p id={labelId} title={c.label} className="truncate text-[11px] leading-4 font-semibold tracking-[.08em] text-brand-text uppercase">
-        {c.label}
-      </p>
-    );
-    // Two tiles sections stack on the right (Canvas): the first column takes both rows.
-    const place = cn(SPAN[c.span ?? 1], families && "lg:row-start-2", tileColumns > 1 && c.variant !== "tiles" && "lg:row-span-2");
-    if (c.owner === "canvas-start" && kind === "owner") {
-      return (
-        <div key={c.id} data-group={c.id} className={cn("flex min-w-0 flex-col gap-2", place)}>
-          {label}
-          <Suspense fallback={<OwnerStartSkeleton />}>
-            <CanvasOwnerStart col={col} labelledBy={labelId} fallback={c.lead && <LeadCard e={c.lead} col={col} row={1} span={c.span} current={false} now={now} />} />
-          </Suspense>
-        </div>
-      );
-    }
-    if (c.variant === "tiles") {
-      const n = across(c);
-      return (
-        <div key={c.id} data-group={c.id} className={cn("flex min-w-0 flex-col gap-2", place)}>
-          <div className="flex min-w-0 items-center gap-2">
-            {label}
-            {c.more && (
-              <IntentLink href={c.more.href} className="nav-row group/all -my-2 ml-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-[8px] px-2 text-[12px] font-medium text-brand-text">
-                {c.more.label}
-                <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
-              </IntentLink>
-            )}
-          </div>
-          <ul aria-labelledby={labelId} className="grid gap-3" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
-            {c.rows.map((e, i) => {
-              const row = Math.floor(i / n);
-              // Two sections: one row of tiles each below 900 px of height, two from 900 px.
-              return (
-                <li key={e.id} className={cn(tileColumns > 1 && row >= 1 && "[@media(max-height:899.98px)]:hidden")}>
-                  <Tile e={e} col={col + (i % n)} row={firstRow + row} current={current === e.id} eager={row === 0} />
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      );
-    }
-    // A studio listed under another (Ads Studio under Marketing Studio) is one of its links, not a row of its own.
-    const rows = c.rows.filter((e) => !e.under);
-    // Places for the arrow keys, top to bottom: the lead (0), its links, then each row and its links.
-    let next = 1 + (c.lead?.subs?.length ?? 0);
-    const at = rows.map((e) => {
-      const r = next;
-      next += 1 + (e.subs?.length ?? 0);
-      return r;
-    });
-    return (
-      <div key={c.id} data-group={c.id} className={cn("flex min-w-0 flex-col gap-2", place)}>
-        {label}
-        <ul aria-labelledby={labelId} className="flex flex-col gap-1">
-          {c.lead && (
-            <li>
-              <LeadCard e={c.lead} col={col} span={c.span} current={current === c.lead.id} inside={holder === c.lead.id} now={now} className="mb-1" />
-              <SubLinks e={c.lead} col={col} row={1} current={current} />
-            </li>
-          )}
-          {rows.map((e, ri) => (
-            <li key={e.id} className={capped ? ROW_HIDE(ri, families) : undefined}>
-              <Row e={e} col={col} row={at[ri]} current={current === e.id} inside={holder === e.id} now={now} eager={ri < pictured} />
-              <SubLinks e={e} col={col} row={at[ri] + 1} current={current} under />
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
+  // The tiles at the top of each column load with the panel (so it never opens on empty boxes); the rest when they show.
+  const [cols] = useState(() => (typeof window === "undefined" ? 5 : columnsAt(window.innerWidth)));
+  const all = model.columns.flatMap(groupItems);
+  const firstScreen = new Set<string>();
+  if (group) groupItems(group).slice(0, cols * 2).forEach((e) => firstScreen.add(e.id));
+  else for (let c = 0; c < cols; c++) all.slice(Math.floor((c * all.length) / cols), Math.floor((c * all.length) / cols) + 3).forEach((e) => firstScreen.add(e.id));
+  const pick = (i: number) => {
+    setTab(i);
+    root.current?.closest("section")?.scrollTo({ top: 0 });
   };
-
-  // A menu with fewer than six columns (Fuobe FX has five) shares the whole width among them, so no empty strip is
-  // left on the right under the full-width header row.
-  const spans = families ? 6 : model.columns.reduce((n, c) => n + (c.span ?? 1), 0);
-  const fewer = spans > 0 && spans < 6;
+  const tile = (e: MegaItem) => (
+    <MegaTile key={e.id} e={e} current={current === e.id} inside={holder === e.id} now={now} playing={playing.has(e.id)} eager={firstScreen.has(e.id)} subCurrent={current} />
+  );
+  // Each family's name (Camera motions, Effects) heads its first group.
+  const familyHeads = new Map<string, NonNullable<MegaModel["families"]>[number]>();
+  for (const f of model.families ?? []) {
+    const first = model.columns.find((c) => c.family === f.id);
+    if (first) familyHeads.set(first.id, f);
+  }
   return (
-    <div
-      className={cn("grid grid-cols-3 gap-x-4 gap-y-6 lg:gap-x-3", fewer ? "lg:grid-cols-(--mega-cols)" : "lg:grid-cols-6")}
-      style={fewer ? ({ "--mega-cols": `repeat(${spans}, minmax(0, 1fr))` } as React.CSSProperties) : undefined}
-    >
-      {families
-        ? model.families!.map((f) => (
-            <Fragment key={f.id}>
-              <div className={cn("flex h-10 items-center gap-2 border-b pb-px lg:row-start-1", f.span >= 3 ? "col-span-3" : SPAN[f.span])} data-family={f.id}>
-                <p className="text-[12px] leading-4 font-semibold text-foreground">
-                  {f.label} <span className="font-normal text-muted-foreground tabular-nums">· {f.count}</span>
+    <div ref={root}>
+      {/* One row of names: All, then each group (its count beside it). Pinned under the panel's header as it scrolls. */}
+      <div role="group" aria-label={`Show in ${MEGA_AREAS[model.id].label}`} className="sticky top-[var(--mega-head,0px)] z-10 -mx-6 mb-4 flex gap-1 overflow-x-auto border-b bg-popover px-6 [scrollbar-width:none]">
+        {[{ label: "All", n: all.length }, ...model.columns.map((c) => ({ label: c.label, n: groupItems(c).length }))].map((t, i) => {
+          const on = tab === i - 1;
+          return (
+            <button
+              key={t.label}
+              type="button"
+              aria-pressed={on}
+              onClick={() => pick(i - 1)}
+              className={cn(
+                "nav-row -mb-px inline-flex h-10 shrink-0 items-center gap-1.5 rounded-none border-b-2 px-3 text-[13.5px] font-medium whitespace-nowrap [@media(pointer:coarse)]:h-11",
+                on ? "border-brand-text text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+              <span className="text-[12px] font-normal text-muted-foreground tabular-nums">{t.n}</span>
+            </button>
+          );
+        })}
+      </div>
+      {group ? (
+        <div className={cn("grid gap-x-3", GRID)}>{groupItems(group).map(tile)}</div>
+      ) : (
+        <div className={cn("gap-x-3", COLUMNS)}>
+          {model.columns.map((c, ci) => {
+            const famHead = familyHeads.get(c.id);
+            const owner = c.owner === "canvas-start" && kind === "owner";
+            const items = groupItems(c);
+            return (
+              <Fragment key={c.id}>
+                {famHead && (
+                  <p data-family={famHead.id} className="break-after-avoid pt-1 pb-2 font-heading text-[22px] leading-7 text-brand-text">
+                    {famHead.label} <span className="font-sans text-[12px] text-muted-foreground tabular-nums">{famHead.count}</span>
+                  </p>
+                )}
+                <p id={`${ids}-${c.id}`} data-group={c.id} className="break-inside-avoid break-after-avoid pb-2">
+                  <button type="button" onClick={() => pick(ci)} aria-label={`Show only ${c.label}`} className="nav-row -mx-1.5 flex w-[calc(100%+12px)] min-w-0 items-baseline gap-1.5 rounded-[8px] px-1.5 py-1 text-left">
+                    <span className="truncate text-[13.5px] font-semibold">{c.label}</span>
+                    <span className="text-[12px] text-muted-foreground tabular-nums">{items.length}</span>
+                    <ChevronRight aria-hidden className="ml-auto size-3.5 shrink-0 self-center text-muted-foreground" />
+                  </button>
                 </p>
-                <IntentLink href={f.href} aria-label={`See all ${f.label.toLowerCase()}`} className="nav-row group/all ml-auto inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-[12px] font-medium text-brand-text">
-                  See all
-                  <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
-                </IntentLink>
-              </div>
-              {model.columns.map((c, ci) => (c.family === f.id ? column(c, ci) : null))}
-            </Fragment>
-          ))
-        : model.columns.map(column)}
+                {owner ? (
+                  <div data-block="" className="mb-3 break-inside-avoid">
+                    <Suspense fallback={<OwnerStartSkeleton />}>
+                      <CanvasOwnerStart col={0} labelledBy={`${ids}-${c.id}`} fallback={c.lead && tile(c.lead)} />
+                    </Suspense>
+                  </div>
+                ) : (
+                  items.map(tile)
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-
-/** Studios' columns as the bar shows them (the checks render it alone). */
+/** Studios' tools as the bar shows them (the checks render it alone). */
 export function LauncherColumns({ kind, current, now }: { kind: ViewerKind | undefined; current?: string; now: number }) {
-  return <MegaColumns model={studiosMenu(kind)} current={current} now={now} kind={kind} />;
+  return <MegaGrid model={bundledMenu("studios", kind)} current={current} now={now} kind={kind} />;
 }
 
 /**
- * The pictures a closed panel holds ready for its first frame: those it loads with the panel first (lead covers, before
- * and after stills, the first tiles), decoded, so it never opens on empty boxes that fill in after. Resolves once each
- * one is decoded or failed, or after `cap` ms. The rows' small pictures load too, after these (low priority).
+ * The pictures a closed panel holds ready for its first frame: those it loads with the panel (the tiles at the top of
+ * each column), decoded, so it never opens on empty boxes that fill in after. Resolves once each one is decoded or
+ * failed, or after `cap` ms.
  */
 function decodePictures(root: HTMLElement, cap = 4000): Promise<void> {
   const imgs = [...root.querySelectorAll<HTMLImageElement>('img:not([loading="lazy"]):not([fetchpriority="low"])')];
@@ -435,6 +332,7 @@ export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onC
   // The query too: moving from one preset to another (/video?preset=…) keeps the path.
   const search = useSearchParams()?.toString() ?? "";
   const root = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLDivElement>(null);
   const primed = useRef(onPrimed);
   useEffect(() => {
     primed.current = onPrimed;
@@ -448,13 +346,24 @@ export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onC
       live = false;
     };
   }, [model]);
+  // The tabs pin under the header row as the panel scrolls: its height is where they stop.
+  useLayoutEffect(() => {
+    const h = head.current;
+    const el = root.current;
+    if (!h || !el) return;
+    const set = () => el.style.setProperty("--mega-head", `${h.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(h);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div ref={root} className="max-w-[1680px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
-      <div className="flex min-h-10 items-center gap-3 pb-4">
+    <div ref={root} className="max-w-[1680px] px-6 pb-6 lg:pb-7">
+      <div ref={head} className="sticky top-0 z-20 -mx-6 flex min-h-10 items-center gap-3 bg-popover px-6 pt-5 pb-3 lg:pt-6">
         <p className="text-[13px] text-muted-foreground" data-count-line>
-          {model ? model.countLine : failed ? "Couldn't load this menu" : " "}
+          {model ? model.countLine : failed ? "Couldn't load this menu" : " "}
         </p>
-        {/* A plain link in Tab order before the grid; the grid's arrow keys skip it (it has no data-col). */}
+        {/* A plain link in Tab order before the tiles; the arrow keys skip it (it has no data-key). */}
         <IntentLink
           href={area.href}
           aria-current={pathname === area.href ? "page" : undefined}
@@ -465,6 +374,12 @@ export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onC
           See all
           <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
         </IntentLink>
+        {id === "create" && (
+          <IntentLink href={NEW_CREATION_HREF} eager className="nav-row inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] font-medium [@media(pointer:coarse)]:h-11">
+            <Plus aria-hidden className="size-3.5 text-brand-text" />
+            New creation
+          </IntentLink>
+        )}
         {failed && (
           <button type="button" onClick={retry} className="nav-row inline-flex h-9 items-center gap-1.5 rounded-[10px] px-2 text-[13px] font-medium">
             <RotateCw aria-hidden className="size-3.5" />
@@ -472,6 +387,7 @@ export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onC
           </button>
         )}
         <span className="flex-1" />
+        <PausePreviews className="h-8 [@media(pointer:coarse)]:h-11" />
         <button
           type="button"
           onClick={onSearch}
@@ -479,13 +395,14 @@ export function MegaPanel({ id, onClose, onSearch, onPrimed }: { id: MegaId; onC
           className="nav-row inline-flex h-10 items-center gap-2 rounded-[10px] px-2.5 text-[13px] font-medium text-brand-text"
         >
           <Search aria-hidden className="size-4" />
-          Search all apps, effects and tools
+          <span className="max-lg:hidden">Search all apps, effects and tools</span>
+          <span className="lg:hidden">Search</span>
           <Kbd aria-hidden className="[@media(hover:none)]:hidden">
             /
           </Kbd>
         </button>
       </div>
-      {model ? <MegaColumns model={model} kind={kind} current={megaCurrent(id, pathname, search)} now={now} /> : failed ? null : <MegaSkeleton id={id} />}
+      {model ? <MegaGrid model={model} kind={kind} current={megaCurrent(id, pathname, search)} now={now} /> : failed ? null : <MegaSkeleton id={id} />}
     </div>
   );
 }

@@ -354,7 +354,7 @@ describe("nav model: covers", () => {
       expect(c.poster, id).toMatch(/^\/previews\/[^?]+\.jpg\?v=[0-9a-f]{8}$/);
       expect(c.thumb, id).toMatch(/^\/previews\/[^?]+\/thumbs\/[^?/]+\.jpg\?v=[0-9a-f]{8}$/);
     }
-    // Small enough to pass down from the layout on every page.
-    expect(JSON.stringify(covers).length).toBeLessThan(12_000);
+    // Small enough to pass down from the layout on every page (each with its clip's version: the menus play them).
+    expect(JSON.stringify(covers).length).toBeLessThan(14_000);
   });
 });

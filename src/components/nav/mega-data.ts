@@ -2,11 +2,11 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { queueIdlePrefetch } from "@/lib/idle-prefetch";
-import { FETCHED_MENUS, menuUrl, studiosMenu, unpackMenu, type FetchedMegaId, type MegaId, type MegaModel } from "@/lib/mega-menus";
+import { bundledMenu, FETCHED_MENUS, menuUrl, unpackMenu, type FetchedMegaId, type MegaId, type MegaModel } from "@/lib/mega-menus";
 import type { ViewerKind } from "@/lib/nav-model";
 
 /*
- * The fetched menus' data (Apps, Motions & effects, Canvas): one small static file each (/nav-menus/<id>), asked for
+ * The fetched menus' data (Fuobe FX, Apps, Motions & effects, Canvas; Create and Studios are in the bundle): one small static file each (/nav-menus/<id>), asked for
  * once per page load, never with the page itself. The bar asks when the browser is idle (prefetchMenus) or when the
  * pointer or focus first comes to the item (loadMenu); a phone only when its sheet shows that family. A failed
  * request is forgotten, so the next warm tries again.
@@ -40,9 +40,12 @@ export function loadMenu(id: FetchedMegaId): void {
   );
 }
 
-/** A grouped menu: Studios at once (it's in the bundle), the others once loaded. */
+/** Create and Studios are in the bundle (built from the navigation model); the others are fetched. */
+const bundled = (id: MegaId): id is "create" | "studios" => id === "create" || id === "studios";
+
+/** A grouped menu: Create and Studios at once (they're in the bundle), the others once loaded. */
 export function warmMenu(id: MegaId): void {
-  if (id !== "studios") loadMenu(id);
+  if (!bundled(id)) loadMenu(id);
 }
 
 /** A browser asking to save data, or on a slow connection: menus load when asked for only. */
@@ -70,17 +73,17 @@ export interface MenuState {
   retry(): void;
 }
 
-/** A menu's data for who is looking: Studios from the navigation model, the others as loaded (undefined until then). */
+/** A menu's data for who is looking: Create and Studios from the navigation model, the others as loaded (undefined until then). */
 export function useMegaMenu(id: MegaId, kind: ViewerKind | undefined): MenuState {
   const entry = useSyncExternalStore(
     subscribe,
-    () => (id === "studios" ? undefined : entries.get(id)),
+    () => (bundled(id) ? undefined : entries.get(id)),
     () => undefined,
   );
   const retry = useCallback(() => {
-    if (id !== "studios") loadMenu(id);
+    if (!bundled(id)) loadMenu(id);
   }, [id]);
-  if (id === "studios") return { model: studiosMenu(kind), failed: false, retry };
+  if (bundled(id)) return { model: bundledMenu(id, kind), failed: false, retry };
   return { model: entry?.state === "ready" ? entry.model : undefined, failed: entry?.state === "failed", retry };
 }
 
@@ -96,9 +99,9 @@ export function resetMenus() {
   changed();
 }
 
-/** A menu's data is here (Studios always is): a hover open waits a moment for it (bar-menus.tsx), never a click. */
+/** A menu's data is here (Create and Studios always are): a hover open waits a moment for it (bar-menus.tsx), never a click. */
 export function menuReady(id: MegaId): boolean {
-  return id === "studios" || entries.get(id)?.state === "ready";
+  return bundled(id) || entries.get(id)?.state === "ready";
 }
 
 /** At once (not when idle): the data of these menus, unless the browser asks to save data. */

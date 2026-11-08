@@ -140,7 +140,7 @@ const PAGES: NavEntry[] = [
   { id: "inpaint", href: "/inpaint", label: "Inpaint", what: "Paint over a part", kind: "create", goals: ["edit", "people"], keywords: "mask fill remove brush fix", cover: "app-change-background", icon: "Brush" },
   { id: "layers", href: "/layers", label: "Layers", what: "Split a picture into layers", kind: "create", goals: ["edit"], keywords: "layered psd split cutout", cover: "app-packshot", icon: "Layers2" },
   { id: "color-grade", href: "/color-grade", label: "Color grading", what: "Grade and match colors", kind: "create", goals: ["edit", "film"], keywords: "grade lut colour color", cover: "app-color-grading", icon: "SlidersHorizontal" },
-  { id: "canvas", href: "/canvas", label: "Canvas", what: "Wire models together", kind: "create", goals: [], keywords: "nodes flow workflow graph", icon: "Network" },
+  { id: "canvas", href: "/canvas", label: "Canvas", what: "Wire models together", kind: "create", goals: [], keywords: "nodes flow workflow graph", cover: "effect-pearl-earring", icon: "Network" },
   { id: "motions", href: "/motions", label: "Camera motions", what: "Crane and drone moves for any shot", kind: "presets", goals: ["film"], keywords: "camera moves presets dolly crane drone orbit", cover: "motion-crane-up", icon: "Film" },
   { id: "effects", href: "/effects", label: "Effects", what: "Cinematic effects from one photo", kind: "presets", goals: ["film", "social"], keywords: "vfx presets visual effects", cover: "effect-nature-bloom", icon: "Sparkles" },
   { id: "library", href: "/library", label: "All creations", what: "Everything you have made", kind: "library", goals: [], keywords: "library history results creations", icon: "Library", eager: true },

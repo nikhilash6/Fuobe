@@ -28,12 +28,13 @@ import { cn } from "@/lib/utils";
 const store = createPlaybackStore(browserPlaybackEnv);
 
 /**
- * Home's "Pause previews", kept for this visit (the tab's session): it holds on every page, and a new visit plays
- * again, so a pause tapped by mistake doesn't keep every gallery still in that browser.
+ * "Pause previews" (Home's first screen, the bar's menus): one setting for every page, remembered on this device, so a
+ * viewer who paused because their computer struggles finds previews still paused on the next visit. Blocked storage
+ * keeps it for the visit only.
  */
 const PAUSE_KEY = "fuobe:previews";
 try {
-  if (typeof window !== "undefined" && sessionStorage.getItem(PAUSE_KEY) === "paused") store.setPaused(true);
+  if (typeof window !== "undefined" && localStorage.getItem(PAUSE_KEY) === "paused") store.setPaused(true);
 } catch {}
 
 /** Whether the viewer paused previews (false until hydrated, as on the server). */
@@ -42,8 +43,8 @@ export const usePreviewsPaused = () => useSyncExternalStore(store.subscribe, sto
 export function setPreviewsPaused(paused: boolean) {
   store.setPaused(paused);
   try {
-    if (paused) sessionStorage.setItem(PAUSE_KEY, "paused");
-    else sessionStorage.removeItem(PAUSE_KEY);
+    if (paused) localStorage.setItem(PAUSE_KEY, "paused");
+    else localStorage.removeItem(PAUSE_KEY);
   } catch {}
 }
 

@@ -14,7 +14,7 @@ import { canvasIntro, templateCards } from "@/lib/canvas-template-cards";
 import { templateSections, type Viewing } from "@/lib/canvas-sections";
 import { coverFraming } from "@/lib/cover-framing";
 import { HOME_EFFECTS, HOME_MOTIONS, presetHref } from "@/lib/home-showcase";
-import { ROW_CAPS, TILE_COLS, TILE_ROWS, type MegaColumn, type MegaCover, type MegaItem, type MegaModel } from "@/lib/mega-menus";
+import type { MegaColumn, MegaCover, MegaItem, MegaModel } from "@/lib/mega-menus";
 import { hasMini, miniOf } from "@/lib/preset-cards";
 import { presetCover } from "@/lib/preset-covers";
 import { presetStillSources } from "@/lib/preset-hd";
@@ -124,17 +124,18 @@ export function presetMegaCover(id: string): MegaCover | undefined {
 /** Whether a preset has a cover of its own (presetCover gives another shot's to a few: SAME_SHOT). */
 export const hasOwnCover = (id: string) => !!presetCover(id)?.poster.startsWith(`/previews/presets/${id}.jpg`);
 
-const presetItem = (p: Preset): MegaItem => ({ id: p.id, href: presetHref(p.id), label: p.name, line: presetLine(p), cover: presetMegaCover(p.id) });
-
-/** A lead card's item with its cover's clip, which plays over the still while the card is pointed at (rows show none). */
+/** An item with its cover's clip, which plays over the still while its tile is on screen or pointed at. */
 function withClip(e: MegaItem): MegaItem {
   const clip = e.cover && presetCover(e.id)?.video;
   return clip ? { ...e, cover: { ...e.cover!, clip } } : e;
 }
 
+const presetItem = (p: Preset): MegaItem => withClip({ id: p.id, href: presetHref(p.id), label: p.name, line: presetLine(p), cover: presetMegaCover(p.id) });
+
 /**
- * One column per group: its presets premium first (featuredAll), one of each idea (sameIdea), the first with its own
- * cover as the lead, then up to ROW_CAPS.tall rows (each with its cover). Columns in the order of their strongest preset.
+ * One column per group: every one of its presets, premium first (featuredAll), the first with a cover of its own as the
+ * lead. Columns in the order of their strongest preset. The menu shows all of them (it scrolls inside), so a visitor
+ * finds every app, motion and effect from the bar.
  */
 export function presetColumns(items: readonly Preset[], groups: readonly PresetGroup[], family?: string): MegaColumn[] {
   const ranked = featuredAll(items);
@@ -143,22 +144,16 @@ export function presetColumns(items: readonly Preset[], groups: readonly PresetG
   return [...groups]
     .sort((a, b) => firstAt(a) - firstAt(b))
     .map((g) => {
-      const seen = new Set<string>();
-      const mine = ranked.filter((p) => {
-        if (!inGroup(g)(p) || !hasOwnCover(p.id)) return false;
-        const k = sameIdea(p.name);
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-      const [lead, ...rest] = mine;
+      const mine = ranked.filter(inGroup(g));
+      const lead = mine.find((p) => hasOwnCover(p.id)) ?? mine[0];
+      const rest = mine.filter((p) => p !== lead);
       return {
         id: g.id,
         label: g.label,
         chip: g.chip,
         ...(family && { family }),
-        ...(lead && { lead: withClip(presetItem(lead)) }),
-        rows: rest.slice(0, ROW_CAPS.tall).map(presetItem),
+        ...(lead && { lead: presetItem(lead) }),
+        rows: rest.map(presetItem),
       };
     });
 }
@@ -204,8 +199,7 @@ function templateMegaCover(id: string): MegaCover | undefined {
 }
 
 /**
- * The ready boards a visitor can open, by section: only those with a real cover, at most TILE_ROWS rows of TILE_COLS
- * each (the panel never scrolls; the rest are a click away on /canvas). "What's a canvas?" leads, with the board the
+ * The ready boards a visitor can open, by section: every one with a real cover (the menu scrolls inside). "What's a canvas?" leads, with the board the
  * /canvas explainer shows, which the tiles then leave out. The owner's first column (New board, their recent boards)
  * replaces it in the browser (`owner`).
  */
@@ -244,9 +238,7 @@ export function canvasMenu(): MegaModel {
           chip: s.title,
           variant: "tiles",
           span: 4,
-          rows: s.items
-            .slice(0, TILE_ROWS * TILE_COLS)
-            .map((t) => ({ id: t.id, href: `/canvas/start/${t.id}`, label: t.name, line: MENU_LINES[t.id] ?? shortLine(t.description), icon: "Network", cover: templateMegaCover(t.id) })),
+          rows: s.items.map((t) => ({ id: t.id, href: `/canvas/start/${t.id}`, label: t.name, line: MENU_LINES[t.id] ?? shortLine(t.description), icon: "Network", cover: templateMegaCover(t.id) })),
           // The last section's label row ends on "See all": every ready board on /canvas.
           ...(i === shown.length - 1 && { more: { href: "/canvas?tab=templates", label: "See all ready boards" } }),
         }),
@@ -275,7 +267,7 @@ function fxMenuItem(id: string): MegaItem | undefined {
     // Its line as the Studios menu gives it (34 characters at most; CSS fits it to the row).
     line: e.what,
     icon: e.icon,
-    ...(own && { cover: own }),
+    ...(own && { cover: presetCover(mine!)?.video ? { ...own, clip: presetCover(mine!)!.video! } : own }),
     ...(nav && { navCover: nav }),
     ...(fx && { fx }),
     ...(e.short && { short: e.short }),
@@ -285,7 +277,7 @@ function fxMenuItem(id: string): MegaItem | undefined {
 
 /**
  * Fuobe FX as a menu: a column per section (src/lib/fx-tools.ts), its first card as the lead and then its other cards
- * and its pills, up to ROW_CAPS.tall rows (the page has every one). What a visitor sees: the owner's own modes are left
+ * and its pills, every one (the menu scrolls inside). What a visitor sees: the owner's own modes are left
  * to the page.
  */
 export function fxMenu(): MegaModel {
@@ -311,7 +303,7 @@ export function fxMenu(): MegaModel {
       const lead = items.find((x) => x.cover || x.navCover) ?? items[0];
       // Rows show their small cover: only the lead card shows a before and after, so only it carries one.
       const rest = items.filter((x) => x !== lead).map((x) => (x.fx ? { ...x, fx: undefined } : x));
-      return { id: s.id, label: s.title, chip: FX_SECTIONS.find((x) => x.id === s.id)!.chip, ...(lead && { lead }), rows: rest.slice(0, ROW_CAPS.tall) };
+      return { id: s.id, label: s.title, chip: FX_SECTIONS.find((x) => x.id === s.id)!.chip, ...(lead && { lead }), rows: rest };
     }),
   };
 }

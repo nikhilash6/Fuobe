@@ -5,9 +5,8 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { APPS, EFFECTS, MODELS, MOTIONS } from "@/lib/catalog";
 import { CANVAS_TEMPLATES } from "@/lib/catalog/canvas";
-import { APP_GROUPS, appsMenu, canvasMenu, EFFECT_GROUPS, LINE_MAX, menuCategory, MOTION_GROUPS, motionsMenu, presetLine, sameIdea, SERVER_MENUS, shortLine, type PresetGroup } from "@/lib/mega-menus.server";
-import { megaItems, megaMove, packMenu, ROW_CAPS, studiosMenu, TILE_COLS, TILE_ROWS, unpackMenu, type MegaModel } from "@/lib/mega-menus";
-import { keyPlaces, trackSizes } from "@/components/nav/mega-panel";
+import { APP_GROUPS, appsMenu, canvasMenu, EFFECT_GROUPS, LINE_MAX, menuCategory, MOTION_GROUPS, motionsMenu, presetLine, SERVER_MENUS, shortLine, type PresetGroup } from "@/lib/mega-menus.server";
+import { megaItems, megaMove, packMenu, studiosMenu, unpackMenu, type MegaModel } from "@/lib/mega-menus";
 import { CANVAS_INTRO } from "@/lib/canvas-template-cards";
 import { MENU_LINES } from "@/lib/menu-lines";
 import type { Preset } from "@/lib/catalog/types";
@@ -61,21 +60,20 @@ describe.each([
   // Each kind in its own premium order (a column holds one kind).
   const rank = new Map([APPS, MOTIONS, EFFECTS].flatMap((kind) => featuredAll(kind).map((p, i) => [p.id, i] as const)));
 
-  it("leads each column with its strongest preset that has a cover of its own, then the rest premium first", () => {
+  it("leads each column with its strongest preset that has a cover of its own, then every other one premium first", () => {
     for (const c of menu.columns) {
-      const ids = [c.lead!, ...c.rows].map((e) => e.id);
-      const order = ids.map((id) => rank.get(id)!);
+      const order = c.rows.map((e) => rank.get(e.id)!);
       expect(order, c.id).toEqual([...order].sort((a, b) => a - b));
       expect(Object.hasOwn(PRESET_COVERS, c.lead!.id), c.id).toBe(true);
-      expect(c.rows.length, c.id).toBeLessThanOrEqual(ROW_CAPS.tall);
-      // One of each idea ("Angles", "Fuobe Angles", "Any Angle": the strongest only).
-      expect(new Set(ids.map((id) => sameIdea(items.find((p) => p.id === id)!.name))).size, c.id).toBe(ids.length);
+      // No stronger preset in the column has a cover of its own.
+      for (const e of c.rows) if (rank.get(e.id)! < rank.get(c.lead!.id)!) expect(Object.hasOwn(PRESET_COVERS, e.id), `${c.id}: ${e.id}`).toBe(false);
     }
   });
 
-  it("shows at most seven rows under a lead, as Studios", () => {
-    expect(ROW_CAPS.tall).toBeLessThanOrEqual(7);
-    for (const c of menu.columns) expect(c.rows.length, c.id).toBeLessThanOrEqual(7);
+  it("lists every preset of its kind, each once (the menu scrolls inside, so a visitor finds all of them)", () => {
+    const ids = megaItems(menu).map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(items.map((p) => p.id).sort());
   });
 
   it("orders its columns by their strongest preset (within a family)", () => {
@@ -91,7 +89,9 @@ describe.each([
     expect(new Set(all.map((e) => e.id)).size).toBe(all.length);
     for (const e of all) {
       expect(e.cover?.poster, e.id).toMatch(/\?v=[0-9a-f]{8}$/);
-      for (const u of [e.cover!.poster, e.cover!.thumb, e.cover!.mini!]) expect(fs.existsSync(file(u)), u).toBe(true);
+      for (const u of [e.cover!.poster, e.cover!.thumb, e.cover!.mini].filter((u): u is string => !!u)) expect(fs.existsSync(file(u)), u).toBe(true);
+      // Its clip, where it has one, is a file of the site's.
+      if (e.cover!.clip) expect(fs.existsSync(file(e.cover!.clip)), e.cover!.clip).toBe(true);
       expect(e.href, e.id).toMatch(e.id.startsWith("app-") ? /^\/apps\/app-/ : /^\/video\?preset=/);
       expect(e.line, e.id).toBeTruthy();
       // One row's line, whole: no "…", within LINE_MAX (about 26 characters, as Studios' lines).
@@ -109,10 +109,9 @@ describe("the Canvas menu", () => {
   it("lists the ready boards a visitor sees, each with its finished scene (a still or a peak frame), and counts them", () => {
     const visible = CANVAS_TEMPLATES.filter((t) => t.starter !== false && templateCover("canvas", t.id));
     const bare = CANVAS_TEMPLATES.filter((t) => t.starter !== false && !templateCover("canvas", t.id));
-    // The tiles: every board with a cover but the one "What's a canvas?" shows, up to TILE_ROWS rows of TILE_COLS a section.
+    // The tiles: every board with a cover but the one "What's a canvas?" shows.
     const shown = visible.filter((t) => t.id !== CANVAS_INTRO);
-    const sections = menu.columns.filter((c) => c.variant === "tiles");
-    expect(boards.length).toBe(Math.min(shown.length, TILE_ROWS * TILE_COLS * sections.length));
+    expect(boards.length).toBe(shown.length);
     for (const b of boards) expect(shown.map((t) => t.id), b.id).toContain(b.id);
     for (const t of bare) expect(boards.map((b) => b.id)).not.toContain(t.id);
     expect(menu.count).toBe(visible.length);
@@ -121,7 +120,6 @@ describe("the Canvas menu", () => {
       expect(b.cover?.poster, b.id).toBe(templateCover("canvas", b.id)!.poster);
       expect(b.cover?.poster, b.id).toMatch(/^\/previews\/(presets\/peak|templates\/canvas)\/[^/]+\.jpg\?v=/);
     }
-    for (const c of sections) expect(c.rows.length, c.id).toBeLessThanOrEqual(TILE_ROWS * TILE_COLS);
   });
 
   it("gives each board a whole line that fits its tile: its own menu line, or its description when that is short", () => {
@@ -151,10 +149,10 @@ describe("the Canvas menu", () => {
       const [ma, mb] = [mean(a), mean(b)];
       return a.reduce((sum, v, i) => sum + Math.abs(v - ma - (b[i] - mb)), 0) / a.length;
     };
-    // The boxes as the panel and the phone sheet draw them (tests/e2e/mega-menus.mjs measures them): a tile at 1440
-    // and 1920 px on a 2x screen, the lead (two tracks) at 1440 px on a 2x screen, a phone card at 390 px on a 3x screen.
-    const tile = [222 * 2, 262 * 2, 167 * 3];
-    const lead = [454 * 2, 167 * 3];
+    // The boxes as the panel and the phone sheet draw them: a tile (a fifth of the panel) at 1440 and 1920 px on a 2x
+    // screen, a phone card at 390 px on a 3x screen; the lead is a tile like the others.
+    const tile = [269 * 2, 316 * 2, 167 * 3];
+    const lead = tile;
     const items = [...boards.map((b) => [b, tile] as const), [menu.columns[0].lead!, lead] as const];
     for (const [e, needs] of items) {
       const hd = e.cover?.hd;
@@ -171,18 +169,6 @@ describe("the Canvas menu", () => {
     }
   });
 
-  it("tells the browser each picture's box width: a tile one track, the lead two less its border", () => {
-    const at = (sizes: string, vw: number) => {
-      const [wide, calc] = sizes.split(", ");
-      if (vw >= 1680) return Number(/ (\d+)px$/.exec(wide)![1]);
-      const [, side, span, extra] = /^calc\(\(100vw - (\d+)px\) \* (\d+) \/ 6 \+ (-?\d+)px\)$/.exec(calc)!;
-      return ((vw - Number(side)) * Number(span)) / 6 + Number(extra);
-    };
-    // As the panel draws them (tests/e2e/mega-menus.mjs): tiles 222 and 262 px wide, the lead 454 and 534 px.
-    expect([1440, 1920].map((vw) => at(trackSizes(1), vw))).toEqual([222, 262]);
-    expect([1440, 1920].map((vw) => at(trackSizes(2, 2), vw))).toEqual([454, 534]);
-  });
-
   it("holds no model name", () => {
     const text = JSON.stringify(menu);
     for (const name of ["Fuobe DoP", "Qwen", "free on your GPU", ...MODELS.map((m) => m.name).filter((n) => n.length > 5)]) expect(text, name).not.toContain(name);
@@ -190,10 +176,10 @@ describe("the Canvas menu", () => {
 });
 
 describe("the menus' size", () => {
-  it.each(Object.keys(SERVER_MENUS) as (keyof typeof SERVER_MENUS)[])("%s is at most 4 KB gzipped", (id) => {
+  it.each(Object.keys(SERVER_MENUS) as (keyof typeof SERVER_MENUS)[])("%s is at most 16 KB gzipped, with every item and its clip", (id) => {
     const menu = SERVER_MENUS[id]();
     const wire = JSON.stringify(packMenu(menu));
-    expect(gzipSync(wire).length).toBeLessThanOrEqual(4096);
+    expect(gzipSync(wire).length).toBeLessThanOrEqual(16 * 1024);
     // The browser gets back exactly the menu the server built.
     expect(unpackMenu(JSON.parse(wire))).toEqual(menu);
   });
@@ -242,18 +228,6 @@ describe("the menus' groups by what an app takes", () => {
   });
 });
 
-describe("the keys' places", () => {
-  it("stack two tiles sections on the same key columns, the lower one's rows after the upper one's", () => {
-    const tiles = (n: number) => ({ id: `t${n}`, label: "", chip: "", variant: "tiles" as const, span: 4, rows: Array.from({ length: n }, (_, i) => ({ id: `b${n}-${i}`, href: "/", label: "" })) });
-    const start = { id: "start", label: "", chip: "", span: 2, rows: [] };
-    expect(keyPlaces([start, tiles(8), tiles(5)])).toEqual([
-      { col: 0, row: 0 },
-      { col: 1, row: 0 },
-      { col: 1, row: 2 },
-    ]);
-  });
-});
-
 describe("the arrow keys across columns", () => {
   it("skip hidden rows (the lengths count only the rows that show) and move between families", () => {
     // Six columns of 7 shown rows (lead + 6 at 720 px).
@@ -275,10 +249,11 @@ describe("Fuobe FX as a menu", () => {
     expect(m.id).toBe("fx");
     expect(m.seeAll.href).toBe("/fx");
     expect(m.columns.map((c) => c.id)).toEqual(FX_SECTIONS.map((s) => s.id));
-    for (const c of m.columns) {
-      expect(c.lead?.cover ?? c.lead?.navCover, c.id).toBeTruthy();
-      expect(c.rows.length, c.id).toBeLessThanOrEqual(ROW_CAPS.tall);
-    }
+    for (const c of m.columns) expect(c.lead?.cover ?? c.lead?.navCover, c.id).toBeTruthy();
+    // Every tool of every section, each once (the count is the menu's own).
+    expect(megaItems(m)).toHaveLength(m.count);
+    // Every one shows a picture: its own cover, a nav cover, or a preset that shows the same job.
+    for (const e of megaItems(m)) expect(e.cover ?? e.navCover, e.id).toBeTruthy();
     expect(m.columns[0].lead!.id).toBe("genjutsu");
     const items = megaItems(m);
     for (const id of FX_HOME) expect(items.map((e) => e.id), id).toContain(id);
