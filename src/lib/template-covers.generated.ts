@@ -285,9 +285,9 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "starters/cinema.desert-couture": "1b09e9e3",
   "starters/elements.studio-voice": "8b1977d6",
   "starters/ex.perfume-notes": "9e7bf0cb",
-  "starters/ex.riviera-light": "75ab33c3",
+  "starters/ex.riviera-light": ["57bf6889","6f946bc5"],
   "starters/faceless.boat-hotels": "17b77d7b",
-  "starters/faceless.couture-icons": "47e44316",
+  "starters/faceless.couture-icons": ["3538ced4","8bfcef19"],
   "starters/storyboard.capri-swim": "74669e1e",
   "starters/storyboard.perfume-ad": "7482c1e3"
 };

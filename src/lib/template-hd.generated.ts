@@ -76,9 +76,9 @@ export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: numbe
   "starters/cinema.desert-couture": { "w":[1024], "v":"d1ec13f2", "still":768 },
   "starters/elements.studio-voice": { "w":[1024], "v":"5c55495f", "still":768 },
   "starters/ex.perfume-notes": { "w":[1024], "v":"3716254e", "still":768 },
-  "starters/ex.riviera-light": { "w":[1024], "v":"a5e373bd", "still":768 },
+  "starters/ex.riviera-light": { "w":[640,1024], "v":"d786a217" },
   "starters/faceless.boat-hotels": { "w":[1024], "v":"a5dc7041", "still":768 },
-  "starters/faceless.couture-icons": { "w":[1024], "v":"fd74afc1", "still":768 },
+  "starters/faceless.couture-icons": { "w":[640,1024], "v":"3a761456" },
   "starters/storyboard.capri-swim": { "w":[640], "v":"edf9a371", "still":428 },
   "starters/storyboard.perfume-ad": { "w":[1024], "v":"1f45dd11", "still":768 }
 };
