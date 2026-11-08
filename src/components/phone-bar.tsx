@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { IntentLink } from "@/components/intent-link";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { useSearchPalette } from "@/components/nav/search-context";
+import { UpdateAvailable } from "@/components/update-available";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +49,10 @@ export function PhoneBar({ className }: { className?: string }) {
       >
         Fuobe
       </IntentLink>
-      <PhoneNavButton className="ml-auto" />
+      <div className="ml-auto flex items-center gap-1.5">
+        <UpdateAvailable />
+        <PhoneNavButton />
+      </div>
     </div>
   );
 }

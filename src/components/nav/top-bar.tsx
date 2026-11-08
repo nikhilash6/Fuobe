@@ -15,6 +15,7 @@ import { CreateMenu } from "./create-menu";
 import { CARD_ROW, MENU_ROW_2, ROW_LINE, rowName, SeeAllRow } from "./nav-row";
 import { useNavUi, useViewerKind } from "./nav-ui";
 import { useSearchPalette } from "./search-context";
+import { UpdateAvailable } from "@/components/update-available";
 import { BarPills } from "./status-chips";
 import { NavPrefetcher, warmNav } from "./nav-prefetch";
 import type { FetchedMegaId } from "@/lib/mega-menus";
@@ -267,6 +268,7 @@ function RightCluster() {
   return (
     <>
       <BarPills kind={kind} />
+      <UpdateAvailable />
       <SearchField />
       <NewCreation />
       <ViewerSlot />
