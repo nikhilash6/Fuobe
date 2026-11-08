@@ -240,6 +240,9 @@ ComfyUI:
   rebinding) sends its own name, so it is refused.
 - The request must carry the key in `X-Fuobe-Worker-Key`. The worker sends it with every request and with the live
   socket. Without it, the answer is 403.
+- Some routes are refused with 403 even with the key (`BLOCKED_ROUTES`), under ComfyUI's `/api` prefix too and in
+  any spelling: `/instanthmr/*`, the live capture routes of the full ComfyUI-InstantHMR. The pack that workers install
+  leaves them out; the guard refuses them again.
 
 Before the worker sends the key, the process on the port must prove two things. It signs a random challenge with the
 key (`GET /fuobe-worker/hello`, HMAC-SHA-256), and it names its process id and its parent's. One of them must be the
@@ -619,6 +622,8 @@ a workflow or a node pack that workers run, follow [Adding a model, a workflow o
 1. Every node type is on the allowlist that is built into the worker (`bin/lib/worker/dist/allowed-nodes.json`, made
    by `scripts/build-worker.mjs` from the catalog's workflows and the graph builders). For your own workflows, pass
    a file with `allowNodesFile` in `worker.json`. The studio can never send a file like that.
+   Some node types are never allowed, whatever the allowlist or that file says (`DENIED_NODES` in
+   `bin/lib/worker/checks.mjs`): `InstantHMRLiveCapture`.
 2. Every file that the graph reads was sent with the job, under the name the studio gave it.
 3. Every input keeps to its rule (`bin/lib/worker/dist/input-rules.json`). The build gives a rule to each input that
    could name a file, a folder, a download or code, from the values in the catalog's own workflows:

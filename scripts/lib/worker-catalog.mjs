@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { jsonStrings, loaderInput, MODEL_EXT, pathNamed, TEXT_NAME, textPathProblem, valueProblem } from "../../bin/lib/worker/rules.mjs";
+import { DENIED_NODES } from "../../bin/lib/worker/checks.mjs";
 import { builderSources } from "../../bin/lib/worker/stamp.mjs";
 
 const SKIP = new Set(["requirements.json", "manifest.json", "model-pins.json", "first-run-files.json"]);
@@ -41,7 +42,8 @@ const nodesOf = (graph) => Object.entries(graph ?? {}).filter(([, n]) => n && ty
 
 /**
  * The node allowlist: the catalog's node types, the ones the graph builders add (builderSources: they add nodes of
- * their own, such as LoRA loaders, joins and overlays), and the LoRA loaders.
+ * their own, such as LoRA loaders, joins and overlays), and the LoRA loaders. Never a node the worker denies
+ * (DENIED_NODES in bin/lib/worker/checks.mjs).
  */
 export function allowedNodeList(root, catalog = readCatalog(root)) {
   const nodes = new Set();
@@ -52,7 +54,7 @@ export function allowedNodeList(root, catalog = readCatalog(root)) {
   for (const g of Object.values(catalog.graphs)) for (const [, n] of nodesOf(g)) nodes.add(n.class_type);
   for (const file of builderSources(root)) for (const m of fs.readFileSync(file, "utf8").matchAll(/class_type: "([^"]+)"/g)) nodes.add(m[1]);
   for (const extra of ["LoraLoader", "LoraLoaderModelOnly"]) nodes.add(extra);
-  return [...nodes].sort();
+  return [...nodes].filter((c) => !DENIED_NODES.has(c)).sort();
 }
 
 // ---------------------------------------------------------------------------

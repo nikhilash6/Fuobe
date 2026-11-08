@@ -10,6 +10,9 @@ answers 403 to any request whose Host is not exactly 127.0.0.1:<port>, or that d
 X-Fuobe-Worker-Key. A web page that points its own name at 127.0.0.1 (DNS rebinding) sends neither, so it reaches
 nothing.
 
+Some routes answer 403 to every request, with the key or without (BLOCKED_ROUTES): routes a node pack can add that the
+worker never uses, refused under ComfyUI's /api prefix too.
+
 One request needs no key: GET /fuobe-worker/hello with X-Fuobe-Worker-Challenge (16 to 128 hex digits). The answer is
 the challenge signed with the key (HMAC-SHA-256), this process's id and its parent's (a venv's python.exe on Windows
 starts the real Python as a child of its own). The worker checks both before it sends the key, so a program that took
@@ -29,12 +32,23 @@ import os
 import re
 import runpy
 import sys
+from urllib.parse import unquote
 
 KEY_ENV = "FUOBE_WORKER_GUARD_KEY"
 KEY_HEADER = "X-Fuobe-Worker-Key"
 CHALLENGE_HEADER = "X-Fuobe-Worker-Challenge"
 HELLO_PATH = "/fuobe-worker/hello"
 CHALLENGE = re.compile(r"^[0-9a-f]{16,128}$")
+# Routes no request reaches. ComfyUI-InstantHMR's live capture (/instanthmr/*: a websocket with no login that writes
+# recordings and can send UDP) is left out of the pack the worker installs; this refuses it again if a full copy loads.
+BLOCKED_ROUTES = ("/instanthmr",)
+
+
+def blocked(path: str) -> bool:
+    """The path is a blocked route or under one, also under /api (ComfyUI serves every route there too), in any case
+    and with any doubled slash or "." step."""
+    p = "/" + "/".join(s for s in unquote(path.split("?", 1)[0]).replace("\\", "/").split("/") if s not in ("", ".")).lower()
+    return any(p == b or p.startswith(b + "/") for r in BLOCKED_ROUTES for b in (r, "/api" + r))
 
 
 def _bytes(text: str) -> bytes:
@@ -57,6 +71,8 @@ def make_middleware(web, key: str, host: str):
     @web.middleware
     async def fuobe_worker_guard(request, handler):
         if request.headers.get("Host", "") != host:
+            return web.Response(status=403)
+        if blocked(request.path) or blocked(request.raw_path):
             return web.Response(status=403)
         if request.method == "GET" and request.path == HELLO_PATH and KEY_HEADER not in request.headers:
             challenge = request.headers.get(CHALLENGE_HEADER, "")

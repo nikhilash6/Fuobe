@@ -1,6 +1,7 @@
+import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { graphCheck, vetGraph } from "../bin/lib/worker/checks.mjs";
+import { allowedNodes, DENIED_NODES, graphCheck, vetGraph } from "../bin/lib/worker/checks.mjs";
 import { inputProblem, loaderInput, pathProblem, ruleProblem, textPathProblem, verifiedIndex } from "../bin/lib/worker/rules.mjs";
 import { allowedNodeList, filePins, inputRules, missingRules, readCatalog, UNPINNED_FILES, unpinnedFiles } from "../scripts/lib/worker-catalog.mjs";
 import { tempDir } from "./helpers/temp-dir";
@@ -432,4 +433,45 @@ describe("graphs as the studio builds them", () => {
     expect(failed, failed.join("\n")).toEqual([]);
     expect(prepared).toBe(runs.length);
   }, 120_000);
+});
+
+describe("nodes the worker denies", () => {
+  // ComfyUI-InstantHMR's live capture: the pack the worker installs doesn't register it; refused again whatever a list says.
+  const live = {
+    class_type: "InstantHMRLiveCapture",
+    inputs: { recording: "instanthmr_live/a.mp4", model: "instanthmr_medium.safetensors", detector: "rt_detr_v4-x-hgnet_fp16.safetensors", camera: "This device", character: "MHR body", vmc: "127.0.0.1:39539" },
+  };
+
+  it("are never on the built allowlist, though a catalog workflow named one", () => {
+    expect(DENIED_NODES.has("InstantHMRLiveCapture")).toBe(true);
+    expect(allowed.has("InstantHMRLiveCapture")).toBe(false);
+    // Body Double's own InstantHMR nodes stay allowed.
+    expect(allowed.has("InstantHMRLoader")).toBe(true);
+    expect(allowed.has("InstantHMRPredict")).toBe(true);
+    const named = {
+      ...catalog,
+      requirements: { ...catalog.requirements, workflows: { live: { core: ["SaveVideo"], packs: { "ComfyUI-InstantHMR": ["InstantHMRLoader", "InstantHMRLiveCapture"] } } } },
+      graphs: { "live.json": { "1": live } },
+    };
+    const list = allowedNodeList(root, named as unknown as Parameters<typeof allowedNodeList>[1]);
+    expect(list).toContain("InstantHMRLoader");
+    expect(list).not.toContain("InstantHMRLiveCapture");
+  });
+
+  it("are left out of the PC owner's own list too", () => {
+    const dir = tempDir("fuobe-worker-denied-");
+    const built = path.join(dir, "allowed-nodes.json");
+    const extra = path.join(dir, "allow-nodes.json");
+    fs.writeFileSync(built, JSON.stringify({ nodes: ["LoadImage", "InstantHMRLiveCapture"] }));
+    fs.writeFileSync(extra, JSON.stringify({ nodes: ["InstantHMRLiveCapture", "MyOwnNode"] }));
+    expect([...allowedNodes(extra, built)].sort()).toEqual(["LoadImage", "MyOwnNode"]);
+    fs.writeFileSync(extra, JSON.stringify(["InstantHMRLiveCapture"]));
+    expect([...allowedNodes(extra, built)]).toEqual(["LoadImage"]);
+  });
+
+  it("refuse a graph with one, even when the set it is checked against holds it", () => {
+    const withLive = new Set([...allowed, "InstantHMRLiveCapture"]);
+    expect(graphCheck({ "1": live }, withLive, verified, { rules, staged: SENT })).toMatchObject({ reason: "unknown-node", node: "1", cls: "InstantHMRLiveCapture" });
+    expect(vetGraph({ "1": live }, allowed, verified, { rules, staged: SENT })).toBe("unknown-node");
+  });
 });

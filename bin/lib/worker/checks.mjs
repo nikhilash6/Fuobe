@@ -13,10 +13,18 @@ import { inputProblem, verifiedIndex } from "./rules.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export function allowedNodes(extraFile) {
-  const built = JSON.parse(fs.readFileSync(path.join(here, "dist", "allowed-nodes.json"), "utf8")).nodes;
+/**
+ * Node types this worker never runs, whatever the allowlist or the PC owner's file says (the build leaves them out too:
+ * scripts/lib/worker-catalog.mjs). InstantHMRLiveCapture: ComfyUI-InstantHMR's live capture, which reads recordings and
+ * 3D files from the input folder and goes with a websocket that writes files and can send UDP. The pack the worker
+ * installs doesn't register it; this refuses it again if a full copy loads (comfy_guard.py blocks its routes).
+ */
+export const DENIED_NODES = new Set(["InstantHMRLiveCapture"]);
+
+export function allowedNodes(extraFile, builtFile = path.join(here, "dist", "allowed-nodes.json")) {
+  const built = JSON.parse(fs.readFileSync(builtFile, "utf8")).nodes;
   const extra = extraFile ? JSON.parse(fs.readFileSync(extraFile, "utf8")) : [];
-  return new Set([...built, ...(Array.isArray(extra) ? extra : (extra.nodes ?? []))]);
+  return new Set([...built, ...(Array.isArray(extra) ? extra : (extra.nodes ?? []))].filter((c) => !DENIED_NODES.has(c)));
 }
 
 /** The input rules built into this worker. Throws when they aren't built: the worker never runs without them. */
@@ -33,7 +41,7 @@ export function inputRules(file = path.join(here, "dist", "input-rules.json")) {
  */
 export function graphCheck(graph, allowed, verified, o = {}) {
   for (const [id, node] of Object.entries(graph ?? {})) {
-    if (!node || typeof node.class_type !== "string" || !allowed.has(node.class_type)) return { reason: "unknown-node", node: id, cls: typeof node?.class_type === "string" ? node.class_type : null, input: null };
+    if (!node || typeof node.class_type !== "string" || DENIED_NODES.has(node.class_type) || !allowed.has(node.class_type)) return { reason: "unknown-node", node: id, cls: typeof node?.class_type === "string" ? node.class_type : null, input: null };
   }
   const ctx = { rules: o.rules ?? null, staged: o.staged ?? [], byName: verifiedIndex(verified) };
   let unverified = null;

@@ -99,6 +99,11 @@ if __name__ == "__main__":
     app.router.add_get("/system_stats", stats)
     app.router.add_get("/env", env)
     app.router.add_get("/ws", ws)
+    # A pack's own routes, as ComfyUI serves them: as the pack names them and again under /api.
+    for base in ("", "/api"):
+        app.router.add_get(base + "/instanthmr/ws", ws)
+        app.router.add_get(base + "/instanthmr", files)
+        app.router.add_get(base + "/instanthmr_other", files)
     app.add_subapp("/internal", internal)
     web.run_app(app, host=args.listen, port=args.port, print=None)
 `;
@@ -177,6 +182,28 @@ describe.skipIf(!python)("the guard in front of a stand-in ComfyUI (Python)", ()
     await c.start();
     expect(c.headers()[GUARD.key]).not.toBe(oldKey);
     expect((await raw(c.port!, "/system_stats", { Host: `127.0.0.1:${c.port}`, [GUARD.key]: oldKey })).status).toBe(403);
+  });
+
+  it("refuses the blocked routes (ComfyUI-InstantHMR's live capture) even with the key, in every spelling", async () => {
+    const comfyDir = tempDir("fuobe-guard-blocked-comfy-");
+    const workDir = tempDir("fuobe-guard-blocked-work-");
+    fs.writeFileSync(path.join(comfyDir, "main.py"), STAND_IN_MAIN);
+    const c = new OwnComfy({ comfyDir, workDir, python, modelDirs: [] });
+    started.push(c);
+    await c.start();
+    const port = c.port!;
+    const host = `127.0.0.1:${port}`;
+    const key = { [GUARD.key]: c.headers()[GUARD.key] };
+    for (const p of ["/instanthmr", "/instanthmr/ws", "/api/instanthmr/ws", "/api/instanthmr", "/InstantHMR/ws", "/API/InstantHMR/ws", "//instanthmr/ws", "/./instanthmr/ws", "/%69nstanthmr/ws", "/instanthmr/ws?x=1"]) {
+      expect((await raw(port, p, { Host: host, ...key })).status, p).toBe(403);
+    }
+    expect((await c.fetch(`${c.base}/instanthmr/ws`)).status).toBe(403);
+    expect(await wsOpens(`ws://${host}/instanthmr/ws`, key)).toBe(false);
+    expect(await wsOpens(`ws://${host}/api/instanthmr/ws`, key)).toBe(false);
+    // Only that route and what is under it: a route that merely starts with the same letters, and the rest, answer.
+    expect((await c.fetch(`${c.base}/instanthmr_other`)).status).toBe(200);
+    expect((await c.fetch(`${c.base}/system_stats`)).status).toBe(200);
+    expect(await wsOpens(`ws://${host}/ws`, key)).toBe(true);
   });
 });
 
