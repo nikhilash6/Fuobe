@@ -10,7 +10,7 @@
 //   and anything else as another program.
 //
 // Others = the GPU's total used memory, minus the worker's own ComfyUI, minus local ComfyUI work, minus the desktop's
-// usual share (measured at setup).
+// share (measured at setup, or what the desktop's processes hold now when that is more).
 //
 // One exception, for the owner's own jobs, which ask local ComfyUI work for no turn: local ComfyUI work that holds the
 // GPU's memory is asked whether it runs anything (its /queue, read only). When it runs nothing and has nothing queued,
@@ -169,7 +169,8 @@ export function unknownHolder(counters, listing, ownPid, minMb) {
  * `who` names the biggest other program (for the busy pause). `source`: "counters", "lock" (the counters failed, the
  * lock decided) or "total" (neither: everything that isn't the worker's own counts as another program, which fails
  * safe). `o`: { usedMb, apps (nvidia-smi's, for names), counters, listing, own: { pid, port, running, mb }, ports,
- * excludePorts, excludePids, baselineMb, lock (readLock's), lockOwners, gpu }.
+ * excludePorts, excludePids, baselineMb, liveDesktop (false: the setup measurement, which counts the desktop itself),
+ * lock (readLock's), lockOwners, gpu }.
  */
 export function splitMemory(o) {
   const base = Math.max(0, Number(o.baselineMb) || 0);
@@ -184,8 +185,12 @@ export function splitMemory(o) {
     // Its own ComfyUI before the counters list it: what torch says, as before.
     const ownMb = counted > 0 ? counted : fallbackMb;
     const workMb = sum(new Set(work.keys()));
-    const othersMb = Math.max(0, o.usedMb - ownMb - workMb - base);
     const nameOf = (pid) => o.listing.names?.[pid] ?? o.apps?.find((a) => a.pid === pid)?.name ?? null;
+    // The desktop as it is now (the compositor, browsers, editors, a remote-desktop session): what its processes hold,
+    // when that is more than the share measured at setup. A remote session can grow the compositor past 1 GB; that never
+    // makes the GPU busy for a job.
+    const desktopMb = mine.filter((c) => !own.has(c.pid) && !work.has(c.pid) && isDesktop(nameOf(c.pid))).reduce((n, c) => n + c.mb, 0);
+    const othersMb = Math.max(0, o.usedMb - ownMb - workMb - (o.liveDesktop === false ? base : Math.max(base, desktopMb)));
     const top = mine.filter((c) => !own.has(c.pid) && !work.has(c.pid) && c.mb > 0 && !isDesktop(nameOf(c.pid))).sort((a, b) => b.mb - a.mb)[0];
     const who = (top && nameOf(top.pid)) ?? "another program";
     const firstPort = [...work.values()][0] ?? null;
@@ -260,7 +265,7 @@ export async function measureBaseline(cfg, deps = {}) {
   const mine = cfg.workDir ? ownComfyOf(cfg.workDir) : null;
   const own = { pid: mine?.pid ?? null, port: mine?.port ?? null, running: false, mb: null };
   const o = { ports: cfg.localComfyPorts, excludePorts: cfg.localComfyExcludePorts, excludePids: cfg.localComfyExcludePids };
-  const split = splitMemory({ usedMb: reading.usedMb, apps: reading.apps, counters, listing, own, ...o, baselineMb: 0, gpu: cfg.gpuLuid });
+  const split = splitMemory({ usedMb: reading.usedMb, apps: reading.apps, counters, listing, own, ...o, baselineMb: 0, liveDesktop: false, gpu: cfg.gpuLuid });
   // The rest, by process, for the owner to see what was counted.
   const pids = workPids(listing, { ...o, ownPid: own.pid, ownPort: own.port });
   const gpu = pickGpu(counters, cfg.gpuLuid);

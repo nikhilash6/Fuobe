@@ -120,10 +120,22 @@ describe("the port table and the GPU counters", () => {
   it("never names a desktop process as the cause: the biggest other one, else another program", () => {
     const names = { ...LISTING, names: { ...LISTING.names, "77": "dwm", "78": "msedge", "5555": "game" } };
     const desktopOnly = splitMemory({ usedMb: 9000, counters: parseCounters(typeperf([[77, 1500], [78, 900]])), listing: names, own: { pid: null, port: null, running: false, mb: null }, ports: [8188, 8199], baselineMb: 600 });
-    expect(desktopOnly).toMatchObject({ othersMb: 8400, who: "another program" });
+    // what the desktop's processes hold now (2400 MB) counts as the desktop, not the 600 MB measured at setup
+    expect(desktopOnly).toMatchObject({ othersMb: 6600, who: "another program" });
     expect(splitMemory({ usedMb: 9000, counters: parseCounters(typeperf([[77, 3000], [5555, 2000]])), listing: names, own: { pid: null, port: null, running: false, mb: null }, ports: [8188, 8199], baselineMb: 600 }).who).toBe("game");
     const apps = [{ pid: 12092, name: "ShellHost.exe", usedMb: null }, { pid: 5, name: "blender.exe", usedMb: null }];
     expect(splitMemory({ usedMb: 9000, counters: null, listing: null, apps, own: { pid: null, port: null, running: false, mb: null }, baselineMb: 600, lock: null }).who).toBe("blender.exe");
+  });
+
+  it("a remote-desktop session grows the compositor past the busy line: the GPU isn't busy for that", () => {
+    const names = { ...LISTING, names: { ...LISTING.names, "77": "dwm", "78": "msedge", "79": "Code", "80": "Notepad" } };
+    const counters = parseCounters(typeperf([[77, 1563], [78, 281], [79, 252], [80, 40]]));
+    const s = splitMemory({ usedMb: 2250, counters, listing: names, own: { pid: null, port: null, running: false, mb: null }, ports: [8188, 8199], baselineMb: 700 });
+    expect(s.othersMb).toBeLessThan(1024);
+    // a real program next to it still counts
+    const game = splitMemory({ usedMb: 8250, counters: parseCounters(typeperf([[77, 1563], [5555, 6000]])), listing: { ...names, names: { ...names.names, "5555": "game" } }, own: { pid: null, port: null, running: false, mb: null }, ports: [8188, 8199], baselineMb: 700 });
+    expect(game.othersMb).toBeGreaterThan(5000);
+    expect(game.who).toBe("game");
   });
 
   it("its own ComfyUI's share is sure only when read per process (the counters), not from torch alone", () => {
