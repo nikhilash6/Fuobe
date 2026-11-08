@@ -1275,6 +1275,10 @@ function open(): Database.Database {
   db.exec(ACCOUNT_CANVAS_TABLES);
   // Fuobe Chat (src/server/chat/store.ts): not a numbered migration either.
   db.exec(CHAT_TABLES);
+  // When a chat was archived (it leaves the list, kept under Archived), for tables made before it.
+  if (!(db.prepare("PRAGMA table_info(account_chat_threads)").all() as { name: string }[]).some((c) => c.name === "archived_at")) {
+    addColumn(db, "ALTER TABLE account_chat_threads ADD COLUMN archived_at INTEGER");
+  }
   // A chat message's plan to make something (its runs and their inputs), for tables made before it.
   if (!(db.prepare("PRAGMA table_info(account_chat_messages)").all() as { name: string }[]).some((c) => c.name === "data_json")) {
     addColumn(db, "ALTER TABLE account_chat_messages ADD COLUMN data_json TEXT");

@@ -1,10 +1,11 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, MoreHorizontal, Pencil, RotateCcw, Share2, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Check, Copy, MoreHorizontal, Pencil, RotateCcw, Share2, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { RailButton } from "@/components/assist/shell";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import {
@@ -118,7 +119,7 @@ export function ThreadView({ id }: { id: string }) {
     <Frame>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-5">
         <RailButton />
-        <Button variant="ghost" size="icon" asChild aria-label="Chat home" className="xl:hidden">
+        <Button variant="ghost" size="icon" asChild aria-label="Chat home" className="lg:hidden">
           <Link href="/chat">
             <ArrowLeft />
           </Link>
@@ -168,6 +169,22 @@ export function ThreadView({ id }: { id: string }) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
                 <Pencil /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={async () => {
+                  try {
+                    await chatSend(`/api/chat/threads/${id}`, "PATCH", { archived: !t.archived });
+                    void qc.invalidateQueries({ queryKey: ["chat"] });
+                    if (!t.archived) {
+                      toast("Archived. Find it under Archived in the sidebar.", { duration: 2000 });
+                      router.push("/chat");
+                    }
+                  } catch (e) {
+                    toastError(e);
+                  }
+                }}
+              >
+                {t.archived ? <ArchiveRestore /> : <Archive />} {t.archived ? "Unarchive" : "Archive"}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setSettings(true)}>Chat settings</DropdownMenuItem>
               <DropdownMenuSeparator />

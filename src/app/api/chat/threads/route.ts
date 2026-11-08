@@ -10,8 +10,9 @@ export async function GET(request: Request) {
   await connection();
   const v = chatViewer(request);
   if (!v) return signUp();
-  const q = new URL(request.url).searchParams.get("q") ?? undefined;
-  return Response.json({ items: listThreads(v.who, { mature: getPrefs(v.who).mature, q }) });
+  const sp = new URL(request.url).searchParams;
+  const q = sp.get("q") ?? undefined;
+  return Response.json({ items: listThreads(v.who, { mature: getPrefs(v.who).mature, q, archived: sp.get("archived") === "1" }) });
 }
 
 const Post = z.object({

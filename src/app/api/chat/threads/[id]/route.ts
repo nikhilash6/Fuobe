@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { z } from "zod";
 import { body, chatViewer, gone, refused, signUp, tooOften } from "@/server/chat/http";
 import { cancelPending } from "@/server/chat/pending";
-import { deleteThread, getPrefs, getThread, renameThread } from "@/server/chat/store";
+import { deleteThread, getPrefs, getThread, renameThread, setArchived } from "@/server/chat/store";
 
 /** One of the person's chats with its messages (another's reads as gone). */
 export async function GET(request: Request, ctx: RouteContext<"/api/chat/threads/[id]">) {
@@ -16,8 +16,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/chat/threads
   return Response.json(t);
 }
 
-const Patch = z.object({ title: z.string().max(200) });
+const Patch = z.object({ title: z.string().max(200).optional(), archived: z.boolean().optional() });
 
+/** Rename a chat, or archive it (it leaves the list, kept under Archived) and bring it back. */
 export async function PATCH(request: Request, ctx: RouteContext<"/api/chat/threads/[id]">) {
   const v = chatViewer(request);
   if (!v) return signUp();
@@ -25,9 +26,11 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/chat/threa
   if (limited) return limited;
   const { id } = await ctx.params;
   const p = Patch.safeParse(await body(request));
-  if (!p.success) return Response.json({ error: "Give the chat a name." }, { status: 400 });
+  if (!p.success || (p.data.title === undefined && p.data.archived === undefined)) return Response.json({ error: "Give the chat a name." }, { status: 400 });
   try {
-    return Response.json(renameThread(v.who, id, p.data.title));
+    let t = p.data.title !== undefined ? renameThread(v.who, id, p.data.title) : null;
+    if (p.data.archived !== undefined) t = setArchived(v.who, id, p.data.archived);
+    return Response.json(t);
   } catch (e) {
     return refused(e);
   }

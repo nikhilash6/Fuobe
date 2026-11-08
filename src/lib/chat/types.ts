@@ -55,6 +55,8 @@ export interface ChatThreadSummary {
   tool: string | null;
   play: string | null;
   mature: boolean;
+  /** Archived: out of the list, kept under Archived. */
+  archived: boolean;
   /** The last message, cut short. */
   preview: string;
   updatedAt: number;

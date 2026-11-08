@@ -19,10 +19,14 @@ export function useChatMe(enabled = true) {
   return useQuery({ queryKey: ["chat", "me"], queryFn: async () => json<ChatMe>(await fetch("/api/chat/me")), staleTime: 15_000, enabled });
 }
 
-export function useChatThreads(enabled = true, q = "") {
+/** The person's chats (`archived`: the ones they archived instead). */
+export function useChatThreads(enabled = true, q = "", archived = false) {
+  const sp = new URLSearchParams();
+  if (q.trim()) sp.set("q", q.trim());
+  if (archived) sp.set("archived", "1");
   return useQuery({
-    queryKey: ["chat", "threads", q.trim()],
-    queryFn: async () => json<{ items: ChatThreadSummary[] }>(await fetch(`/api/chat/threads${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`)),
+    queryKey: ["chat", "threads", q.trim(), archived],
+    queryFn: async () => json<{ items: ChatThreadSummary[] }>(await fetch(`/api/chat/threads${sp.size ? `?${sp}` : ""}`)),
     staleTime: 5_000,
     enabled,
   });

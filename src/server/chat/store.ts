@@ -158,6 +158,7 @@ interface ThreadRow {
   summary: string | null;
   summary_upto: number;
   share_token: string | null;
+  archived_at?: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -211,6 +212,7 @@ function summaryOf(who: string, r: ThreadRow, last?: string): ChatThreadSummary 
     tool: r.tool,
     play: r.play,
     mature: !!r.mature,
+    archived: !!r.archived_at,
     // Plain words for the list line: no markdown marks, no "Prompt (image):" labels.
     preview: (last ?? "")
       .replace(/^\s*prompt\s*(\([a-z]+\))?\s*:/gim, "")
@@ -223,12 +225,12 @@ function summaryOf(who: string, r: ThreadRow, last?: string): ChatThreadSummary 
 }
 
 /** Their chats, newest first, with the last message of each. Mature chats only while Mango Chilli is on. */
-export function listThreads(who: string, o: { mature: boolean; q?: string; limit?: number } = { mature: false }): ChatThreadSummary[] {
+export function listThreads(who: string, o: { mature: boolean; q?: string; limit?: number; archived?: boolean } = { mature: false }): ChatThreadSummary[] {
   const q = o.q?.trim().toLowerCase();
   const rows = db()
     .prepare(
       `SELECT t.*, (SELECT content FROM account_chat_messages m WHERE m.thread_id = t.id ORDER BY seq DESC LIMIT 1) AS last
-       FROM account_chat_threads t WHERE t.account_id = ?${o.mature ? "" : " AND t.mature = 0"}${q ? " AND instr(lower(t.title), ?) > 0" : ""}
+       FROM account_chat_threads t WHERE t.account_id = ? AND t.archived_at IS ${o.archived ? "NOT NULL" : "NULL"}${o.mature ? "" : " AND t.mature = 0"}${q ? " AND instr(lower(t.title), ?) > 0" : ""}
        ORDER BY t.updated_at DESC LIMIT ?`,
     )
     .all(...[who, ...(q ? [q] : []), Math.min(o.limit ?? 200, CHAT_LIMITS.threads)]) as (ThreadRow & { last: string | null })[];
@@ -554,4 +556,11 @@ export function deleteAccountChat(who: string): void {
   d.transaction(() => {
     for (const t of ["account_chat_messages", "account_chat_threads", "account_chat_characters", "account_chat_prefs", "account_chat_shares"]) d.prepare(`DELETE FROM ${t} WHERE account_id = ?`).run(who);
   })();
+}
+
+/** Archive a chat (it leaves the list, kept under Archived) or bring it back. */
+export function setArchived(who: string, id: string, archived: boolean): ChatThreadSummary {
+  const r = db().prepare("UPDATE account_chat_threads SET archived_at = ? WHERE id = ? AND account_id = ?").run(archived ? Date.now() : null, id, who);
+  if (r.changes !== 1) throw new ChatError("That chat is gone.", 404);
+  return getThread(who, id)!;
 }

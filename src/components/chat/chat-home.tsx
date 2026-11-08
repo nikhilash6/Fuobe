@@ -322,9 +322,21 @@ function CharacterShelf({
       {shown
         ? shown.map((c) => (
             <div key={c.id} className={cn("group relative shrink-0 snap-start", row && "w-[42vw] max-w-[180px] sm:w-auto sm:max-w-none")}>
-              <button type="button" onClick={() => onPick(c)} className="block w-full text-left focus-visible:outline-none" aria-label={`Chat with ${c.name}`}>
-                <CharacterFace name={c.name} accent={c.accent} portrait={c.portrait} rounded="card" className="aspect-[3/4] w-full transition-transform duration-300 group-hover:scale-[1.015] group-focus-visible:ring-4 group-focus-visible:ring-brand-faint" />
-                <span className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-[18px] bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-10 text-white">
+              {/* The card keeps its rounded frame; only the picture inside it zooms on hover. */}
+              <button
+                type="button"
+                onClick={() => onPick(c)}
+                className="relative block w-full overflow-hidden rounded-[18px] text-left [transform:translateZ(0)] focus-visible:ring-4 focus-visible:ring-brand-faint focus-visible:outline-none"
+                aria-label={`Chat with ${c.name}`}
+              >
+                <CharacterFace
+                  name={c.name}
+                  accent={c.accent}
+                  portrait={c.portrait}
+                  rounded="card"
+                  className="aspect-[3/4] w-full rounded-none transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transition-none"
+                />
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-12 text-white">
                   <span className="flex items-center gap-1.5">
                     <span className="font-heading text-[20px] leading-tight">{c.name}</span>
                     {c.mature && <ChilliDot className="size-2" />}

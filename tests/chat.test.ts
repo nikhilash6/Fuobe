@@ -217,6 +217,21 @@ describe("an account's chats are its own", () => {
     expect((await page()).status).toBe(404);
   });
 
+  it("archives a chat out of the list and brings it back", async () => {
+    const t = store.createThread(a, { kind: "chat", title: "Archive me", mature: false });
+    const ids = async (archived: boolean) =>
+      ((await (await threadsRoute.GET(req(cookies.a, `/api/chat/threads${archived ? "?archived=1" : ""}`))).json()) as { items: { id: string; archived: boolean }[] }).items.map((x) => x.id);
+    expect(await ids(false)).toContain(t.id);
+    const r = await threadRoute.PATCH(req(cookies.a, `/api/chat/threads/${t.id}`, "PATCH", { archived: true }), ctx({ id: t.id }));
+    expect(((await r.json()) as { archived: boolean }).archived).toBe(true);
+    expect(await ids(false)).not.toContain(t.id);
+    expect(await ids(true)).toContain(t.id);
+    // Another account can't archive it.
+    expect((await threadRoute.PATCH(req(cookies.b, `/api/chat/threads/${t.id}`, "PATCH", { archived: false }), ctx({ id: t.id }))).status).toBe(404);
+    await threadRoute.PATCH(req(cookies.a, `/api/chat/threads/${t.id}`, "PATCH", { archived: false }), ctx({ id: t.id }));
+    expect(await ids(false)).toContain(t.id);
+  });
+
   it("a guest gets the sign-up answer from the routes too", async () => {
     const r = await threadsRoute.POST(new Request("http://localhost:3000/api/chat/threads", { method: "POST", headers: { host: "localhost:3000", "content-type": "application/json" }, body: "{}" }));
     expect(r.status).toBe(401);

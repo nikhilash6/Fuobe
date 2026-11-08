@@ -49,7 +49,7 @@ export function WorkshopGrid({ onPick }: { onPick: (p: PlayFormat) => void }) {
                 key={p.id}
                 type="button"
                 onClick={() => onPick(p)}
-                className="group relative block w-full overflow-hidden rounded-[18px] text-left focus-visible:ring-4 focus-visible:ring-brand-faint focus-visible:outline-none"
+                className="group relative block w-full overflow-hidden rounded-[18px] text-left [transform:translateZ(0)] focus-visible:ring-4 focus-visible:ring-brand-faint focus-visible:outline-none"
                 aria-label={`${p.name}: ${p.blurb}`}
               >
                 <WorkshopCover format={p} className="aspect-[4/5] w-full transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:transition-none" />
