@@ -1,0 +1,9 @@
+ComfyUI-InstantHMR (Fuobe's pinned form)
+
+Based on ComfyUI-InstantHMR by jtydhr88, https://github.com/jtydhr88/ComfyUI-InstantHMR,
+commit 36d85573438e5de5d2fe63ba2dbca927c6a16c9b, licensed under the Apache License 2.0 (see LICENSE).
+
+Changes from that commit:
+- __init__.py registers only the loader (InstantHMRLoader) and the predictor (InstantHMRPredict).
+- The live capture node, its HTTP routes and its web files (live.py, humanoid.py, web/, static/) are left out.
+- nodes.py and instanthmr_model.py are unchanged.
