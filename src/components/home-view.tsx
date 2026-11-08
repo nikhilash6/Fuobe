@@ -284,7 +284,8 @@ export function HomeView({
               ? "Frontier paid models through your own API keys."
               : "Frontier cloud models or fully open-source workflows — same studio, your choice."}
         </p>
-        <div className="relative mt-6 w-full max-w-[720px] rounded-[20px] border bg-background p-2.5 text-left shadow-soft transition focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer">
+        {/* id: where the first screen's "Start creating" leads (ScrollCue, home-islands.tsx: START_CREATING_ID). */}
+        <div id="start-creating" className="relative mt-6 w-full max-w-[720px] rounded-[20px] border bg-background p-2.5 text-left shadow-soft transition focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer">
           {flash > 0 && <span key={flash} aria-hidden className="pointer-events-none absolute -inset-px animate-ring-flash rounded-[inherit] ring-4 ring-primary/30 motion-reduce:hidden" />}
           <textarea
             value={prompt}

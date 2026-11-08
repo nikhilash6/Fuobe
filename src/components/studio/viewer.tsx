@@ -152,8 +152,12 @@ function LayerList({ g, index, all, onPick, onAll }: { g: Generation; index: num
 }
 
 /** The two-column action grid: a long label wraps to a second line, and the buttons of a row share its height. */
+/**
+ * Two columns of actions, each icon then its name from the left edge, so the icons line up down each column whether a
+ * name takes one line or (rarely, in a narrow panel) two. Move to Trash, across both columns, stays centred.
+ */
 const ACTION_GRID =
-  "@container/actions grid grid-cols-2 gap-2 [&>*]:h-auto [&>*]:min-h-7 [&>*]:py-1 [&>*]:whitespace-normal [&_[data-label]]:line-clamp-2 [&_[data-label]]:whitespace-normal [&_[data-label]]:text-center [&_[data-label]]:leading-tight";
+  "@container/actions grid grid-cols-2 gap-2 [&>*]:h-auto [&>*]:min-h-8 [&>*]:py-1 [&>*]:justify-start [&>*]:whitespace-normal [&>.col-span-2]:justify-center [&_[data-label]]:line-clamp-2 [&_[data-label]]:whitespace-normal [&_[data-label]]:text-left [&_[data-label]]:leading-tight";
 
 export function Viewer({
   generation: g,
@@ -438,7 +442,8 @@ export function Viewer({
           </div>
         </div>
 
-        <aside className="hidden w-80 shrink-0 flex-col border-l bg-card md:flex">
+        {/* Wider from xl, where the picture can spare it, so every action's name fits on one line. */}
+        <aside className="hidden w-80 shrink-0 flex-col border-l bg-card md:flex xl:w-[22rem]">
           <div className="flex items-center justify-between px-4 pt-3">
             <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
               <Info className="size-3.5" /> Details
@@ -447,7 +452,8 @@ export function Viewer({
               <X className="size-4" />
             </button>
           </div>
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
+          {/* The details keep at least a third of the panel; the actions under them scroll where a short screen can't show them all. */}
+          <div className="min-h-[33%] flex-1 space-y-4 overflow-y-auto px-4 pb-4">
             <Details g={g} index={index} />
             {/* Where this result can go next, with it attached (a layer is a part: it goes on from the Layers editor). */}
             {!layered && <NextSteps g={g} index={index} variant="list" max={5} onNavigate={onClose} />}
@@ -464,7 +470,7 @@ export function Viewer({
               />
             )}
           </div>
-          <div className={cn(ACTION_GRID, "border-t p-3")}>
+          <div className={cn(ACTION_GRID, "min-h-0 shrink overflow-y-auto overscroll-contain border-t p-3")}>
             {primary && actionButton(primary, { variant: "default" })}
             {bar.map((a) => actionButton(a))}
             {menu.filter((a) => !a.destructive && a.id !== "compare").map((a) => actionButton(a))}

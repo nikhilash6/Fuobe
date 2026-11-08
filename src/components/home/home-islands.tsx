@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CardPending, IntentLink } from "@/components/intent-link";
 import { useFadeEdges } from "@/components/use-fade-edges";
@@ -312,5 +312,79 @@ export function StartSteps() {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Where the cue leads: the composer under the first screen (home-view.tsx). */
+export const START_CREATING_ID = "start-creating";
+
+/**
+ * The first screen's way down to the composer. From md it is a button in the middle of the screen's foot row. While
+ * that row is under the fold (a phone, a short laptop screen) a copy of it floats over the bottom of the screen, above
+ * the phone's tabs, until the page is scrolled. A tap scrolls to the composer; with a mouse or trackpad the prompt box
+ * also takes the cursor (a phone keeps its keyboard closed).
+ */
+export function ScrollCue({ footId }: { footId: string }) {
+  const [float, setFloat] = useState(false);
+  useEffect(() => {
+    const foot = document.getElementById(footId);
+    if (!foot) return;
+    let below = false;
+    let scrolled = window.scrollY > 120;
+    let ready = false;
+    const update = () => setFloat(ready && below && !scrolled);
+    // Floats until the whole foot row is on the screen: a sliver of it at the bottom edge is easy to miss.
+    const io = new IntersectionObserver(
+      ([e]) => {
+        below = e.intersectionRatio < 0.98 && e.boundingClientRect.top > 0;
+        update();
+      },
+      { threshold: [0, 0.98] },
+    );
+    io.observe(foot);
+    const onScroll = () => {
+      if (window.scrollY <= 120) return;
+      scrolled = true;
+      update();
+      window.removeEventListener("scroll", onScroll);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    // After the headline has risen into place, so the two don't move at once.
+    const t = window.setTimeout(() => {
+      ready = true;
+      update();
+    }, 1200);
+    return () => {
+      io.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      window.clearTimeout(t);
+    };
+  }, [footId]);
+
+  const go = () => {
+    const box = document.getElementById(START_CREATING_ID);
+    if (!box) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" });
+    if (window.matchMedia("(pointer: fine)").matches) box.querySelector("textarea")?.focus({ preventScroll: true });
+    setFloat(false);
+  };
+
+  const label = (
+    <>
+      Start creating
+      <ArrowDown aria-hidden className="hb-cue-arrow size-3.5" />
+    </>
+  );
+  return (
+    <>
+      <button type="button" onClick={go} className="hb-cue max-md:hidden">
+        {label}
+      </button>
+      {/* The floating copy repeats the button above for pointers only: keyboards and screen readers reach that one. */}
+      <button type="button" onClick={go} aria-hidden tabIndex={-1} data-shown={float || undefined} className="hb-cue hb-cue-float">
+        {label}
+      </button>
+    </>
   );
 }

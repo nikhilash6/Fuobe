@@ -2,7 +2,7 @@ import { ArrowRight, ArrowUpRight, Play, Sparkles, Video } from "lucide-react";
 import { preload } from "react-dom";
 import { BentoClip, BentoMotion, BentoReel, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
 import { BentoVoice } from "@/components/home/bento-voice";
-import { PausePreviews } from "@/components/home/home-islands";
+import { PausePreviews, ScrollCue } from "@/components/home/home-islands";
 import { IntentLink } from "@/components/intent-link";
 import { CountUp } from "@/components/ui/count-up";
 import type { BentoPicture, BentoTile, HomeBento as Bento } from "@/lib/home-bento";
@@ -206,7 +206,9 @@ export function HomeBento({ bento }: { bento: Bento }) {
             <span aria-hidden className={s.end} />
           </span>
         </h1>
-        <p className={s.aside}>Film, live edits, swaps, stills, sound, 3D and whole pipelines. Each tile opens the studio that makes it.</p>
+        <p className={s.aside}>
+          <span className={s.asideWords}>Film, live edits, swaps, stills, sound, 3D and whole pipelines. Each tile opens the studio that makes it.</span>
+        </p>
       </div>
 
       <div className={s.grid}>
@@ -272,12 +274,13 @@ export function HomeBento({ bento }: { bento: Bento }) {
         </Tile>
       </div>
 
-      <div className={s.foot}>
+      <div id="home-bento-foot" className={s.foot}>
         <p className="min-w-0">
-          <span className="sm:hidden">Rendered locally on ComfyUI, on one RTX 5090.</span>
-          <span className="max-sm:hidden">Every preview on this page was rendered locally on ComfyUI, on one RTX 5090.</span>
+          <span className="lg:hidden">Rendered locally on ComfyUI, on one RTX 5090.</span>
+          <span className="max-lg:hidden">Every preview on this page was rendered locally on ComfyUI, on one RTX 5090.</span>
         </p>
-        <PausePreviews className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" />
+        <ScrollCue footId="home-bento-foot" />
+        <PausePreviews className="justify-self-end [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" />
       </div>
       <BentoMotion target="home-bento" />
     </section>

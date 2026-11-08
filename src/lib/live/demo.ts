@@ -40,6 +40,24 @@ export const MID_W = 768;
 export const SMALL_W = 512;
 
 /**
+ * The session's first picture (frame s0 of demo.json), always in the page under the player: the card shows it before
+ * the session file, the AVIF check and the observer have run, and keeps showing it where they never do (no script, a
+ * slow connection, a card scrolled past before it played). A test keeps it in step with demo.json.
+ */
+export const LIVE_DEMO_POSTER = {
+  avif: [
+    { src: "/previews/live-edit/512/step-00.avif?v=526c3183", w: SMALL_W },
+    { src: "/previews/live-edit/768/step-00.avif?v=df6f15aa", w: MID_W },
+    { src: "/previews/live-edit/1280/step-00.avif?v=c328e26e", w: 1280 },
+  ],
+  webp: [
+    { src: "/previews/live-edit/512/step-00.webp?v=1523fa79", w: SMALL_W },
+    { src: "/previews/live-edit/768/step-00.webp?v=60795779", w: MID_W },
+    { src: "/previews/live-edit/1280/step-00.webp?v=791c2996", w: 1280 },
+  ],
+} as const;
+
+/**
  * One picture of the session, in up to three sizes. Every file may end in ?v= and the first 8 hex digits of its
  * SHA-256, so a new file is never served from cache.
  */

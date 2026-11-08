@@ -370,8 +370,15 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
     );
   };
 
+  // A menu with fewer than six columns (Fuobe FX has five) shares the whole width among them, so no empty strip is
+  // left on the right under the full-width header row.
+  const spans = families ? 6 : model.columns.reduce((n, c) => n + (c.span ?? 1), 0);
+  const fewer = spans > 0 && spans < 6;
   return (
-    <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-x-3">
+    <div
+      className={cn("grid grid-cols-3 gap-x-4 gap-y-6 lg:gap-x-3", fewer ? "lg:grid-cols-(--mega-cols)" : "lg:grid-cols-6")}
+      style={fewer ? ({ "--mega-cols": `repeat(${spans}, minmax(0, 1fr))` } as React.CSSProperties) : undefined}
+    >
       {families
         ? model.families!.map((f) => (
             <Fragment key={f.id}>

@@ -20,6 +20,7 @@ import {
   frameOrder,
   framePath,
   LIVE_DEMO,
+  LIVE_DEMO_POSTER,
   LIVE_DEMO_V,
   LOOP_MAX_MS,
   loopMs,
@@ -96,6 +97,12 @@ describe("the shipped demo", () => {
     expect(shipped.script.at(-2)?.type).toBe("compare");
     expect(Object.keys(shipped.frames)[0]).toBe("s0");
     for (const id of Object.keys(shipped.frames)) expect(id).not.toMatch(/^\d+$/);
+  });
+
+  it("keeps its poster in step with the session's first picture", () => {
+    const f = shipped.frames[demoEnds(shipped).before];
+    expect(LIVE_DEMO_POSTER.avif.map((x) => x.src)).toEqual([f.small, f.mid, f.src]);
+    expect(LIVE_DEMO_POSTER.webp.map((x) => x.src)).toEqual([f.webp, f.webpMid, f.webpSrc]);
   });
 
   it("is fetched at its content version, and so is every frame", () => {

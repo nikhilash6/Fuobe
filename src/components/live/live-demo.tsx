@@ -12,6 +12,7 @@ import {
   frameFile,
   frameOrder,
   LIVE_DEMO,
+  LIVE_DEMO_POSTER,
   LIVE_DEMO_V,
   pillText,
   SETTLE_FADE_MS,
@@ -24,6 +25,11 @@ import {
   viewBefore,
 } from "@/lib/live/demo";
 import { cn } from "@/lib/utils";
+
+/** The poster's files as srcsets, and how wide it shows: a full card is up to 7 of 12 columns from lg; a compact one a tile. */
+const POSTER_AVIF = LIVE_DEMO_POSTER.avif.map((f) => `${f.src} ${f.w}w`).join(", ");
+const POSTER_WEBP = LIVE_DEMO_POSTER.webp.map((f) => `${f.src} ${f.w}w`).join(", ");
+const POSTER_SIZES = { full: "(min-width: 1024px) 680px, calc(100vw - 32px)", compact: "(min-width: 768px) 360px, calc(100vw - 32px)" };
 
 /**
  * A recorded live edit session, played back: one prompt that keeps growing. The words type themselves onto the end of
@@ -300,6 +306,20 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
 
   return (
     <div ref={box} className={cn("@container relative isolate overflow-hidden rounded-2xl bg-media text-white", className)} style={{ aspectRatio: compact ? ratio : undefined }} data-live-demo>
+      {/* The first picture, always there under the player: the card is never an empty box (LIVE_DEMO_POSTER). */}
+      <picture>
+        <source type="image/avif" srcSet={POSTER_AVIF} sizes={compact ? POSTER_SIZES.compact : POSTER_SIZES.full} />
+        <img
+          src={LIVE_DEMO_POSTER.webp[1].src}
+          srcSet={POSTER_WEBP}
+          sizes={compact ? POSTER_SIZES.compact : POSTER_SIZES.full}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="absolute inset-0 size-full object-cover"
+        />
+      </picture>
       {demo && ends && v && showImages && (reduced ? (
         <StillCompare before={src(ends.before)} after={src(ends.after)} changes={countChanges(demo)} />
       ) : (
