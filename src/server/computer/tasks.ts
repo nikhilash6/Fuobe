@@ -842,7 +842,9 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
     lease,
     ...(finish ? { finish } : ticket ? { ticket } : { graph: json(t.graph_json, {}) }),
     ...(t.slot === "cpu" && { slot: "cpu" as const }),
-    ...(t.pools && { class: (t.class === "paid" || t.class === "owner" ? t.class : t.class === "free" || t.account ? "free" : "owner") as "paid" | "free" | "owner", ...(t.workflow_id && { workflowId: t.workflow_id }) }),
+    // The worker reads "owner" as the owner's job, the only kind that comes as a graph: the owner's hands-on run (no
+    // account, in a person's class in the line) is "owner" to it too.
+    ...(t.pools && { class: (!t.account || t.class === "owner" ? "owner" : t.class === "paid" ? "paid" : "free") as "paid" | "free" | "owner", ...(t.workflow_id && { workflowId: t.workflow_id }) }),
     promptId: t.prompt_id,
     preview: !!t.preview,
     // A worker sends live previews only of a run that shows them: never of one whose results are checked first.

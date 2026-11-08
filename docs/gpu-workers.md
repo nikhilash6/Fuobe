@@ -394,7 +394,11 @@ default). It also keeps:
 - what it needs: the workflow, its files (folder, name, exact size, and SHA-256 where it is pinned), its node packs
   and its VRAM;
 - its class: `paid` or `free` for an account's run (the billing service says which; `free` without one), `owner` for
-  the owner's own jobs. People's runs always go first: the owner's jobs wait until no person's run waits that the
+  the owner's own jobs: the runs a script said it made (`source` on `POST /api/generations`: `batch`, `drill`,
+  `example` or `test`), and every other step of the same press of Run. The owner's hands-on run (no `source`) is
+  `free`, like a person's run: it waits in line with people's runs (a later step keeps its run's place), counts in the
+  beat's `claimableNow` (so local work makes room for it), is taken in People only, and never waits for a warm lane.
+  The worker still gets `class: "owner"` with it in its claim, since it comes as a graph. People's runs always go first: the owner's jobs wait until no person's run waits that the
   same worker could take. In the modes People first (the default) and People only, a worker that runs one of the
   owner's own jobs on its GPU makes room for a person: when a person's run waits that this worker can take, and no
   other worker that is free can take it, the beat answer lists the owner's job in `stops`. The worker takes its
@@ -934,8 +938,9 @@ its target), at most once an hour each.
     "waiting-for-yield", until }`, where `until` is the helper's estimate of the start time, or null. After 3 minutes
     with no answer, `why` is `"waiting-for-yield:no-answer"`. The worker may still take jobs, and its jobs keep their
     place.
-  - The answer also carries `claimableNow`, for studio jobs first: the number of people's jobs (never the owner's own)
-    that this worker may take now. `ownerWaitingNow` is the same count for the owner's own jobs: they ask for no turn,
+  - The answer also carries `claimableNow`, for studio jobs first: the number of people's jobs (the owner's hands-on
+    runs and any run the owner sent next too, never the owner's other own jobs) that this worker may take now. `ownerWaitingNow` is the same count for the
+    owner's own jobs: they ask for no turn,
     but idle local ComfyUI work is asked to free its memory for them. It counts the jobs in the worker's pool that it can run (its lanes, files and VRAM)
     and that end before its hours do. It is 0 while the worker is paused on the website, drains, is outside its hours
     or runs an older worker program. The worker's own pause on the PC does not change it. The answer has no wait time

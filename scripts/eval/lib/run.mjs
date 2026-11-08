@@ -561,7 +561,8 @@ async function runJob(client, job, ctx) {
       watched = routeResult(answer, job.submit.result);
       row.steps = (answer.items ?? []).map((g) => g.id);
     } else {
-      const request = { ...job.request, prompt: mention(job.request.prompt), inputs };
+      // An eval's run is a test run (an account's run drops it): on the install's workers it waits after people's runs.
+      const request = { ...job.request, prompt: mention(job.request.prompt), inputs, source: job.request.source ?? "test" };
       row.request = request;
       // The preview again with the real prompt: it names the route and the LoRAs it loads.
       const p = ctx.element ? await client.request("POST", "/api/generations", { json: request, query: { preview: 1 } }) : job.preview;

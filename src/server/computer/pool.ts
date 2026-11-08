@@ -87,6 +87,11 @@ const CLASS_RANK = "(CASE WHEN class = 'paid' THEN 0 WHEN class = 'owner' OR (cl
 const OWNER_CLASS = 2;
 export const classRank = (t: Pick<TaskRow, "class" | "account">): number => (t.class === "paid" ? 0 : t.class === "owner" || (!t.class && !t.account) ? 2 : 1);
 /**
+ * The owner's hands-on run (no account, in a person's class): a run the owner made by hand, which waits, runs and makes
+ * room on a worker's PC as a person's run does. The owner's scripts' runs (a batch, a drill…) stay the owner's class.
+ */
+export const ownerHandsOn = (t: Pick<TaskRow, "class" | "account">): boolean => !t.account && classRank(t) !== OWNER_CLASS;
+/**
  * The order workers serve waiting tasks in: by class, then by rank (a requeued task keeps its own, so it keeps its
  * place), then by when it was made. The claim and the place in line read the same order. With fair share on
  * (queue-settings.ts), each class goes round its accounts in turn (lineOrder).
@@ -506,7 +511,8 @@ function ownerJobsToPreempt(w: WorkerRow, held: Set<string>, now: number): TaskR
 }
 
 /**
- * People's tasks (an account's, never the owner's own) this worker may claim right now: in its pool, in a lane it is
+ * People's tasks (an account's, the owner's hands-on run: ownerHandsOn, and any run the owner sent next; never the
+ * owner's other own jobs) this worker may claim right now: in its pool, in a lane it is
  * allowed and able to run, with the files and VRAM they need, past their delays, and ending before its hours do. Its
  * own pause doesn't count here (its machine reads this to know whether a person's run waits for it); a pause on the
  * website, a drain, an older worker program or being outside its hours does.
@@ -516,7 +522,8 @@ export function claimableNow(w: WorkerRow, now = Date.now()): number {
 }
 
 /**
- * The owner's own tasks this worker may claim right now, by the same rules as claimableNow. They never ask local
+ * The owner's own jobs (a batch, a drill…; never a hands-on run, nor one sent next) this worker may claim right now, by the same rules as
+ * claimableNow. They never ask local
  * ComfyUI work to make room: its machine reads this only to let an idle local ComfyUI free the memory it keeps.
  */
 export function ownerWaitingNow(w: WorkerRow, now = Date.now()): number {
@@ -537,7 +544,14 @@ function gpuClaimableRows(w: WorkerRow, now: number, whose: "people" | "owner"):
   const c = controlsOf(w, now);
   // Only its GPU's: work its CPU slot takes never asks local ComfyUI work to make room (left out in the query, so a long
   // line of CPU work never hides the GPU's).
-  const rows = lineRows(LINE_COLS, `pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS ${whose === "people" ? "NOT NULL" : "NULL"} AND INSTR(',' || pools || ',', ?) > 0 ${slotWhere(w, "gpu")}`, [`,${w.pool},`], c, LOOK_AT);
+  // By class: people's runs and the owner's hands-on runs, or the owner's own jobs (a batch, a drill…). A run the owner
+  // sent next counts as a person's, whatever its class: local work on the PC makes room for it as for a person's run.
+  const sentNext = JSON.stringify(overrideTargets(c).generations);
+  const byClass =
+    whose === "people"
+      ? `(${CLASS_RANK} <> ${OWNER_CLASS} OR generation_id IN (SELECT value FROM json_each(?)))`
+      : `${CLASS_RANK} = ${OWNER_CLASS} AND generation_id NOT IN (SELECT value FROM json_each(?))`;
+  const rows = lineRows(LINE_COLS, `pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND ${byClass} AND INSTR(',' || pools || ',', ?) > 0 ${slotWhere(w, "gpu")}`, [sentNext, `,${w.pool},`], c, LOOK_AT);
   const fit = rows.filter((t) => fitsSlot(t, w, now, "gpu") && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
   if (plainLine(c)) return fit;
   // Held runs and people, runs pinned to another worker, and the owner's own jobs in People only don't count. In Our work
@@ -1548,6 +1562,30 @@ export function runPlaceOf(generationId: string): { class: "paid" | "free"; rank
 }
 
 /**
+ * The class of the owner's job on the workers. "owner" (after people's runs) for a run a script said it made
+ * (request.source: a batch, a drill, an example, a test), and for every other step of the same press of Run (its batch:
+ * a join or a first frame a chain adds carries no source of its own). Else "free": a hands-on run, which waits, runs and
+ * makes room on a worker's PC as a person's run does (ownerHandsOn).
+ */
+export function ownerRunClass(generationId: string): "free" | "owner" {
+  const d = db();
+  const g = d.prepare("SELECT batch_id, created_at, json_extract(request_json, '$.source') AS source FROM generations WHERE id = ?").get(generationId) as
+    | { batch_id: string | null; created_at: number; source: unknown }
+    | undefined;
+  if (!g) return "free";
+  if (typeof g.source === "string" && g.source !== "hands-on") return "owner";
+  if (!g.batch_id) return "free";
+  // A press makes its rows together: the batch's rows are read within two days of this one (by the created_at index).
+  const tagged = d
+    .prepare(
+      `SELECT 1 FROM generations WHERE created_at BETWEEN ? AND ? AND batch_id = ?
+         AND COALESCE(json_extract(request_json, '$.source'), 'hands-on') <> 'hands-on' LIMIT 1`,
+    )
+    .get(g.created_at - 2 * 24 * 60 * 60_000, g.created_at + 2 * 24 * 60 * 60_000, g.batch_id);
+  return tagged ? "owner" : "free";
+}
+
+/**
  * Is a workflow light CPU work: the requirements index marks it `cpu` (no model file, no graphics memory, no card its
  * nodes need: a join, a trim, adding sound, a Ken Burns move, a filter).
  */
@@ -1680,7 +1718,7 @@ export function updateOf(w: WorkerRow, now = Date.now()): WorkerUpdate {
   const state = !behind ? "current" : behindMs < BEHIND_NOTICE_MS ? "updating" : "behind";
   const key = refusalKey(w);
   const held = behind
-    ? (db().prepare("SELECT extra_json FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND account IS NOT NULL AND INSTR(extra_json, ?) > 0").all(key) as Pick<TaskRow, "extra_json">[]).filter((t) => refusedBy(t).includes(key)).length
+    ? (db().prepare(`SELECT extra_json FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND ${CLASS_RANK} <> ${OWNER_CLASS} AND INSTR(extra_json, ?) > 0`).all(key) as Pick<TaskRow, "extra_json">[]).filter((t) => refusedBy(t).includes(key)).length
     : 0;
   const waiting = live && w.kind === "pool" ? claimableNow(w, now) : 0;
   const words =

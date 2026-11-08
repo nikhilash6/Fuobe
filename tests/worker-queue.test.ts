@@ -276,7 +276,7 @@ describe("the beat", () => {
     accountTask();
     accountTask();
     const owner = accountTask();
-    db().prepare("UPDATE relay_tasks SET principal = 'owner', account = NULL WHERE id = ?").run(owner.id);
+    db().prepare("UPDATE relay_tasks SET principal = 'owner', account = NULL, class = 'owner' WHERE id = ?").run(owner.id);
     expect(beatAs(w).claimableNow).toBe(2);
     pool.patchWorker(w.id, { paused: true });
     expect(beatAs(w).claimableNow).toBe(0);
@@ -287,7 +287,7 @@ describe("the beat", () => {
     accountTask();
     const owner = accountTask();
     const other = accountTask();
-    db().prepare("UPDATE relay_tasks SET principal = 'owner', account = NULL WHERE id IN (?, ?)").run(owner.id, other.id);
+    db().prepare("UPDATE relay_tasks SET principal = 'owner', account = NULL, class = 'owner' WHERE id IN (?, ?)").run(owner.id, other.id);
     expect(beatAs(w)).toMatchObject({ claimableNow: 1, ownerWaitingNow: 2 });
     // One it can't run (another pool) doesn't count.
     db().prepare("UPDATE relay_tasks SET pools = 'elsewhere' WHERE id = ?").run(other.id);

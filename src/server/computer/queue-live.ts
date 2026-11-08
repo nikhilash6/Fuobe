@@ -6,7 +6,7 @@ import { laneLabel } from "@/lib/lanes";
 import { HOLDING_OTHER, HOLDING_WHY, SENT_STATES, type WorkerHolding } from "@/lib/relay";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { claimableNow, controlledLine, firstClaimableNow, localWorkOf, ownerWaitingNow, workerState } from "./pool";
+import { claimableNow, controlledLine, firstClaimableNow, localWorkOf, ownerHandsOn, ownerWaitingNow, workerState } from "./pool";
 import { controlWords, effectiveMode, liveOverrides, MODE_WORDS, overrideView, personKey, poolMode, poolModes, recentOverrides, sweepControls, workerModeOf, type EffectiveMode, type OverrideView, type QueueMode } from "./queue-controls";
 import type { LocalWork } from "@/lib/relay";
 import { json, taskCold, taskProgress, type TaskRow } from "./tasks";
@@ -41,6 +41,8 @@ export interface RunningJob {
   /** When its run was made (pressed). */
   createdAt: number | null;
   principal: PrincipalKind;
+  /** The owner's hands-on run (pool.ts ownerHandsOn): it waits and runs as a person's run does. */
+  handsOn?: true;
 }
 
 /** A job waiting in line for a worker, in the order the workers serve them (the ones no worker takes now last). */
@@ -66,6 +68,8 @@ export interface QueuedJob {
   /** The person whose run it is, as a key (never an account id; null: the owner's own), and whether a guest's. */
   person: string | null;
   guest: boolean;
+  /** The owner's hands-on run (pool.ts ownerHandsOn): it waits and runs as a person's run does. */
+  handsOn?: true;
 }
 
 /** A worker's mode and the local work on its PC, for the owner's Queue page. */
@@ -106,6 +110,8 @@ export interface HeldJob {
   /** When its run was made (a job it took). */
   createdAt?: number | null;
   waiting?: number;
+  /** The owner's hands-on run (pool.ts ownerHandsOn): it waits and runs as a person's run does. */
+  handsOn?: true;
 }
 
 /** A later step of a chain that waits for its earlier steps. */
@@ -177,7 +183,7 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
     else if (t.state === "sending") held = { why: "Sending its files to the worker", code: "sending", since: t.sending_since ?? t.claimed_at };
     else if (t.state === "queued") held = { why: p?.position ? `In its worker's ComfyUI queue (place ${p.position})` : "In its worker's ComfyUI queue", code: "queued", since: t.sent_at ?? t.claimed_at };
     if (held) {
-      holding.push({ worker: w?.name ?? "?", ...base, principal: who, ...held, createdAt: g?.created_at ?? null });
+      holding.push({ worker: w?.name ?? "?", ...base, principal: who, ...held, createdAt: g?.created_at ?? null, ...(ownerHandsOn(t) && { handsOn: true as const }) });
       continue;
     }
     const cold = taskCold(t);
@@ -195,6 +201,7 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
       claimedAt: t.claimed_at,
       createdAt: g?.created_at ?? null,
       principal: who,
+      ...(ownerHandsOn(t) && { handsOn: true as const }),
     });
   }
 
@@ -220,11 +227,12 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
       createdAt: g?.created_at ?? null,
       inLineAt: t.rank_at ?? t.created_at,
       rank,
-      why: controlWords(control, base, mode, nameOf),
+      why: controlWords(control, base, mode, nameOf, ownerHandsOn(t)),
       code: control.out ?? (control.tier === 0 ? "next" : control.tier === 1 ? "boost" : "class"),
       override: o ? { id: o.id, until: o.until, by: o.by, at: o.at, workerId: o.workerId } : null,
       person: t.account ? personKey(t.account) : null,
       guest: !!t.account?.startsWith("guest"),
+      ...(ownerHandsOn(t) && { handsOn: true as const }),
     };
   });
 
@@ -240,7 +248,7 @@ export function liveQueue(now = Date.now()): { running: RunningJob[]; holding: H
     // The job it would take first: whose run the worker holds back.
     const first = firstClaimableNow(w, now);
     const g = first ? genOf(first.generation_id) : undefined;
-    const next = first ? { generationId: first.generation_id, model: modelLabel(g?.model_id), op: g?.op ?? null, principal: principalKind(first) } : { generationId: null, model: null, op: null, principal: null };
+    const next = first ? { generationId: first.generation_id, model: modelLabel(g?.model_id), op: g?.op ?? null, principal: principalKind(first), ...(ownerHandsOn(first) && { handsOn: true as const }) } : { generationId: null, model: null, op: null, principal: null };
     if (h && now - w.seen_at <= HOLDING_FRESH_MS) holding.push({ worker: w.name, task: null, ...next, why: holdingWords(h.why), code: h.why, since: h.since, waiting });
     else if (!busy.has(w.id) && s.state !== "idle" && s.state !== "busy") holding.push({ worker: w.name, task: null, ...next, why: s.words, code: s.state, since: null, waiting });
   }

@@ -525,14 +525,19 @@ export function overrideTargets(c: LineControls): { generations: string[]; accou
   return { generations: [...new Set(gens)].slice(0, 500), accounts: [...new Set(accounts)].slice(0, 100) };
 }
 
-/** Why a task stands where it does, in the owner's words ("Run next", "Boosted"); the override's `until` says until when. */
-export function controlWords(tc: TaskControl, base: number, mode: QueueMode, workerName: (id: string) => string | null): string {
+/**
+ * Why a task stands where it does, in the owner's words ("Run next", "Boosted"); the override's `until` says until when.
+ * `own`: the owner's hands-on run (pool.ts ownerHandsOn), which stands with people's runs as "Your run".
+ */
+export function controlWords(tc: TaskControl, base: number, mode: QueueMode, workerName: (id: string) => string | null, own = false): string {
   const o = tc.by;
   if (tc.out === "held") return o?.kind === "person" ? "Held: this person's runs wait" : "Held by the owner";
   if (tc.out === "pinned") return `Pinned to ${workerName(o!.workerId!) ?? "another worker"}`;
   if (tc.out === "paused") return "Waits: People only";
-  if (tc.tier === 0) return o?.workerId ? `Run next on ${workerName(o.workerId) ?? "its worker"}` : "Run next";
+  // A run sent next asks local work on a worker's PC to make room, as a person's run does (pool.ts gpuClaimableRows).
+  if (tc.tier === 0) return `${o?.workerId ? `Run next on ${workerName(o.workerId) ?? "its worker"}` : "Run next"}: starts as soon as the GPU is free and local work makes room`;
   if (tc.tier === 1) return "Boosted: this person's runs first";
+  if (own && base !== 2) return mode === "ours-first" ? "Your run: after our work (Our work first)" : mode === "balanced" ? "Your run: by when it came (Balanced)" : "Your run";
   if (mode === "ours-first") return base === 2 ? "Our work first" : "After our work (Our work first)";
   if (mode === "balanced") return base === 0 ? "Paid run" : "Balanced: by when it came";
   return base === 0 ? "Paid run" : base === 1 ? "People first" : "Our work: after people's runs";

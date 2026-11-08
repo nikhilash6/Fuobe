@@ -195,12 +195,26 @@ describe("classes", () => {
     standInWorker();
     const route = { provider: "comfyui", endpoint: loadManifest().workflows[0].id, op: "t2i" } as never;
     const submit = (gid: string) => onComputer("owner", () => comfyProvider.submit({ route, input: { prompt: "a lighthouse" } as never, generationId: gid } as never));
+    // The owner's runs as stored: a script's (a source) and a hands-on one (none).
+    const made = (gid: string, request: Record<string, unknown>) =>
+      db()
+        .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'queued', ?, '[]', ?, ?)")
+        .run(gid, JSON.stringify(request), Date.now(), Date.now());
+    made("owner-gen-1", { source: "batch" });
+    made("owner-gen-2", { source: "test" });
+    made("owner-gen-hands", {});
     const first = rowOf(String(((await submit("owner-gen-1")).meta as { relay: string }).relay));
     expect(first.class).toBe("owner");
     expect(first.account).toBeNull();
     expect(first.not_after).toBeNull();
+    // A hands-on run waits as a person's free run does (still the owner's: no account), with the owner's wait limit.
+    const hands = rowOf(String(((await submit("owner-gen-hands")).meta as { relay: string }).relay));
+    expect(hands.class).toBe("free");
+    expect(hands.account).toBeNull();
+    expect(hands.not_after).toBeNull();
     qs.saveQueueSettings({ ...qs.queueSettings(), ownerWaitLimitS: 3600 });
     const second = rowOf(String(((await submit("owner-gen-2")).meta as { relay: string }).relay));
+    expect(second.class).toBe("owner");
     expect(second.not_after! - second.created_at).toBeGreaterThanOrEqual(3600_000 - 1000);
     expect(second.not_after! - second.created_at).toBeLessThanOrEqual(3600_000 + 1000);
   });
@@ -632,7 +646,9 @@ describe("the run ceiling", () => {
       await tick();
       await new Promise((res) => setTimeout(res, 20));
     }
-    expect(taskOf(ownerId)?.class).toBe("owner");
+    // Made in the browser, it is the owner's hands-on run: in line with people's runs.
+    expect(taskOf(ownerId)?.class).toBe("free");
+    expect(taskOf(ownerId)?.account).toBeNull();
     await tick();
     // By the runner's own count, both waited past every wait limit it knows (their tasks keep the real ones), and each
     // poll fails (the database is busy).

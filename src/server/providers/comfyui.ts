@@ -93,7 +93,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, runPlaceOf, workersCanRun, workersHold } from "../computer/pool";
+import { attemptDeadline, ownerRunClass, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, runPlaceOf, workersCanRun, workersHold } from "../computer/pool";
 import { notOnGpusText } from "../runs-here";
 import { catalogVersion } from "../computer/catalog-version";
 import { ticketProblem, type JobTicket } from "@/lib/job-ticket";
@@ -324,6 +324,17 @@ function accountPoolFields(workflowId: string, account: string, generationId: st
     graphSha: o.graphSha,
     runtime: o.runtime,
   });
+}
+
+/**
+ * Where the owner's job waits in line on the workers. A run a script said it made (a batch, a drill, an example, a
+ * test: pool.ts ownerRunClass) is the owner's class, after every person's run, in the order its jobs came. A hands-on
+ * run waits as a person's free run does: a later step of it keeps its run's place (runPlaceOf).
+ */
+function ownerPoolFields(workflowId: string, generationId: string | undefined, o: { size: NonNullable<Parameters<typeof poolFields>[1]>["size"]; runtime?: FileNeed[] }) {
+  const cls = generationId ? ownerRunClass(generationId) : "owner";
+  const run = cls === "free" && generationId ? runPlaceOf(generationId) : null;
+  return poolFields(workflowId, { class: cls, ...(run?.rankAt != null && { rankAt: run.rankAt }), waitMs: ownerWaitMs(), size: o.size, runtime: o.runtime });
 }
 
 /** Said to the owner when a job is larger than every worker's PC may ever run (its ceiling: `fuobe worker setup`). */
@@ -2063,9 +2074,10 @@ export const comfyProvider: ProviderAdapter = {
         ...(forPool && {
           pool:
             computer === "owner"
-              ? // The owner's jobs on the workers: the lane and files they need, after every person's run (the owner's
-                // class), with the owner's own wait limit (none unless the owner sets one: queue-settings.ts).
-                poolFields(manifest.id, { class: "owner", waitMs: ownerWaitMs(), size: prepared.size, runtime: runtime?.files })
+              ? // The owner's jobs on the workers: the lane and files they need, with the owner's own wait limit (none
+                // unless the owner sets one: queue-settings.ts). A script's run (a batch, a drill…) waits after every
+                // person's run (the owner's class); a hands-on run waits with people's runs, at its run's place.
+                ownerPoolFields(manifest.id, generationId, { size: prepared.size, runtime: runtime?.files })
               : // An account's: the lane and files they need, in its class (paid before free), in the order they came
                 // (with the billing service's head start inside the class), with the wait set for the run.
                 // A ticket's task goes only to a worker built for its catalog, and inside that PC's ceiling.
