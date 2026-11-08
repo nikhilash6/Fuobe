@@ -340,6 +340,130 @@ describe("a reply", () => {
     }
   });
 
+  it("keeps writing when the page reloads or closes: the page that opens joins the same reply, and only Stop ends it", async () => {
+    let on = true;
+    let jobs = 0;
+    const slot = (async () => {
+      while (on) {
+        beat();
+        const job = helper.claimHelperJob(workerRow(worker), {
+          model: "test",
+          device: "gpu",
+          chat: true,
+        });
+        if (!job) {
+          await new Promise((r) => setTimeout(r, 20));
+          continue;
+        }
+        jobs++;
+        const words = "One idea at a time, written slowly so a reload lands in the middle of it.".split(" ");
+        let gone = false;
+        for (let i = 1; i <= words.length && !gone; i++) {
+          gone =
+            "ok" !==
+            helper.partialHelperJob(workerRow(worker), job.id, {
+              lease: job.lease,
+              text: words.slice(0, i).join(" "),
+            });
+          await new Promise((r) => setTimeout(r, 120));
+        }
+        if (!gone)
+          helper.finishHelperJob(workerRow(worker), job.id, {
+            lease: job.lease,
+            text: words.join(" "),
+          });
+      }
+    })();
+    const post = (id: string, body: unknown, signal?: AbortSignal) =>
+      replyRoute.POST(
+        new Request(`http://localhost:3000/api/chat/threads/${id}/reply`, {
+          method: "POST",
+          headers: {
+            cookie: cookies.a,
+            host: "localhost:3000",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+        ctx({ id }),
+      );
+    /** Read events until `stop` says so; returns them (the stream stays open). */
+    const readUntil = async (res: Response, stop: (e: { type: string; [k: string]: unknown }) => boolean) => {
+      const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+      const got: { type: string; [k: string]: unknown }[] = [];
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return got;
+        buf += value;
+        const lines = buf.split("\n");
+        buf = lines.pop()!;
+        for (const l of lines.filter(Boolean)) {
+          got.push(JSON.parse(l));
+          if (stop(got.at(-1)!)) {
+            void reader.cancel().catch(() => {});
+            return got;
+          }
+        }
+      }
+    };
+    try {
+      const t = (await (
+        await threadsRoute.POST(
+          req(cookies.a, "/api/chat/threads", "POST", {
+            kind: "chat",
+            text: "Give me one idea",
+          }),
+        )
+      ).json()) as { id: string };
+      // The page reloads part way through the reply.
+      const first = new AbortController();
+      const before = await readUntil(await post(t.id, {}, first.signal), (e) => e.type === "text" && String(e.text).split(" ").length >= 3);
+      first.abort();
+      expect(before.at(-1)?.type).toBe("text");
+      // The reloaded page asks again: it joins the same reply, starting from the words so far, and no second one starts.
+      const after = await events(await post(t.id, {}));
+      expect(after[0].type).toBe("text");
+      expect(String(after[0].text).split(" ").length).toBeGreaterThanOrEqual(3);
+      expect(after.at(-1)).toMatchObject({
+        type: "done",
+        message: {
+          content: "One idea at a time, written slowly so a reload lands in the middle of it.",
+        },
+      });
+      expect(jobs).toBe(1);
+      expect(store.getThread(a, t.id)!.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+      // Asked again once it's saved: nothing to answer (the page shows the saved reply), still no second one.
+      const late = await post(t.id, {});
+      expect(late.status).toBe(409);
+      expect(((await late.json()) as { code: string }).code).toBe("nothing");
+      expect(jobs).toBe(1);
+
+      // A page closed part way: the reply is still written and saved.
+      const closed = new AbortController();
+      await readUntil(await post(t.id, { text: "Another?" }, closed.signal), (e) => e.type === "text");
+      closed.abort();
+      const end = Date.now() + 15_000;
+      while (store.getThread(a, t.id)!.messages.length < 4 && Date.now() < end) await new Promise((r) => setTimeout(r, 50));
+      expect(store.getThread(a, t.id)!.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
+
+      // Stop ends it: nothing of it is saved, the person's message stays.
+      const res = await post(t.id, { text: "And one more?" });
+      const seenText = readUntil(res, (e) => e.type === "error" || e.type === "done");
+      await new Promise((r) => setTimeout(r, 400));
+      const stopped = (await (await replyRoute.DELETE(req(cookies.a, `/api/chat/threads/${t.id}/reply`, "DELETE"), ctx({ id: t.id }))).json()) as {
+        stopped: boolean;
+      };
+      expect(stopped.stopped).toBe(true);
+      expect((await seenText).at(-1)?.type).toBe("error");
+      expect(store.getThread(a, t.id)!.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant", "user"]);
+    } finally {
+      on = false;
+      await slot;
+    }
+  });
+
   it("never shows an error while the free model starts up: the message waits and is answered when it's ready", async () => {
     db().prepare("DELETE FROM helper_slots").run();
     const t = (await (await threadsRoute.POST(req(cookies.a, "/api/chat/threads", "POST", { kind: "chat" }))).json()) as { id: string };

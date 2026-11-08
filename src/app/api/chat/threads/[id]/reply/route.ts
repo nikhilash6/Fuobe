@@ -7,6 +7,7 @@ import { ownPicture } from "@/server/chat/files";
 import { body, chatViewer, gone, refused, signUp } from "@/server/chat/http";
 import { wantsToMake } from "@/lib/chat/make-intent";
 import { planMake } from "@/server/chat/make";
+import { isLive, join, startLive, stopLive } from "@/server/chat/live";
 import { answerLater, cancelPending, isPending } from "@/server/chat/pending";
 import { addMessage, dropLastReply, getPrefs, getThread, rewindTo, threadTurns } from "@/server/chat/store";
 import { enter, hit } from "@/server/rate";
@@ -37,6 +38,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
   const prefs = getPrefs(v.who);
   if (thread.mature && !prefs.mature) return Response.json({ error: "This chat is in Mango Chilli mode. Turn it on to carry on.", code: "mature-off" }, { status: 403 });
 
+  // The page opened (or reloaded) while its reply is being written: it joins that reply, never starts a second one.
+  const plain = !p.data.text?.trim() && !p.data.image && !p.data.retry && !p.data.edit;
+  if (plain && isLive(v.who, id)) return watch(request, v.who, id, null);
+
   // Replies a minute per person, on any engine (the free helper counts its own use too).
   if (v.who !== "owner") {
     const r = hit(`chat-reply:${v.who}`, 20, 60_000);
@@ -45,6 +50,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
   // One reply at a time per person.
   const leave = v.who === "owner" ? () => {} : enter(`chat-replying:${v.who}`, 1);
   if (!leave) return Response.json({ error: "A reply is still being written. Wait for it, then send again.", code: "busy" }, { status: 409 });
+  // A reply for this chat is on its way (asked from another tab a moment ago): join it.
+  if (plain && isLive(v.who, id)) {
+    leave();
+    return watch(request, v.who, id, null);
+  }
 
   let userMessage: ChatMessage | null = null;
   try {
@@ -83,13 +93,97 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
   // Their own key answers now: it doesn't wait with the free model.
   if (prefs.engine === "key") cancelPending(v.who, id);
 
-  const enc = new TextEncoder();
-  const abort = new AbortController();
-  request.signal.addEventListener("abort", () => abort.abort(), { once: true });
+  // Already waiting for the free model: that answer comes here when it's ready (with this message too).
+  if (prefs.engine !== "key" && isPending(v.who, id)) {
+    leave();
+    const lines: ChatEvent[] = [...(userMessage ? [{ type: "user", message: userMessage } as const] : []), { type: "pending" }];
+    return new Response(lines.map((l) => JSON.stringify(l)).join("\n") + "\n", {
+      headers: NDJSON,
+    });
+  }
 
+  // The reply is written apart from this request: a reload or a closed tab doesn't stop it, and it is saved.
+  startLive(v.who, id, async (signal, emit) => {
+    // Text as it's written, at most every 60 ms (the last always goes).
+    let text: string | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      timer = null;
+      if (text !== null) emit({ type: "text", text });
+      text = null;
+    };
+    try {
+      const answer = await answerThread(v.who, id, {
+        from: request,
+        signal,
+        onText: (t) => {
+          text = t;
+          timer ??= setTimeout(flush, 60);
+        },
+        onQueue: (position) => emit({ type: "queue", position }),
+        onStatus: (status) => emit({ type: "status", status }),
+      });
+      if (timer) clearTimeout(timer);
+      flush();
+      if (signal.aborted) emit({ type: "error", code: "failed", message: "Stopped." });
+      else if ("pending" in answer) {
+        // Kept: answered as soon as the free model is up, even if the person has left.
+        answerLater(v.who, id);
+        emit({ type: "pending" });
+      } else if ("nothing" in answer) emit({ type: "pending" });
+      else if ("error" in answer)
+        emit({
+          type: "error",
+          code: answer.error,
+          message: answer.message,
+          ...(answer.retryAfterS && { retryAfterS: answer.retryAfterS }),
+        });
+      else emit({ type: "done", message: answer.message, title: answer.title });
+    } catch {
+      emit({ type: "error", code: "failed", message: CHAT_WORDS.failed });
+    } finally {
+      if (timer) clearTimeout(timer);
+      leave();
+    }
+  });
+  return watch(request, v.who, id, userMessage);
+}
+
+/** Stop: the reply being written ends now and isn't saved; the person's message stays. */
+export async function DELETE(request: Request, ctx: RouteContext<"/api/chat/threads/[id]/reply">) {
+  const v = chatViewer(request);
+  if (!v) return signUp();
+  const { id } = await ctx.params;
+  if (!getThread(v.who, id)) return gone();
+  return Response.json({ stopped: stopLive(v.who, id) });
+}
+
+const NDJSON = {
+  "Content-Type": "application/x-ndjson; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Accel-Buffering": "no",
+};
+
+/**
+ * This page's view of the chat's reply, one JSON object per line: the person's message as saved (when this request
+ * added one), what has happened so far, then each event until the reply ends. The page leaving stops only the view.
+ */
+function watch(request: Request, who: string, id: string, userMessage: ChatMessage | null): Response {
+  const enc = new TextEncoder();
+  let unwatch: (() => void) | null = null;
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start(controller) {
       let open = true;
+      const close = () => {
+        if (!open) return;
+        open = false;
+        unwatch?.();
+        try {
+          controller.close();
+        } catch {
+          // Already closed: the person left.
+        }
+      };
       const send = (e: ChatEvent) => {
         if (!open) return;
         try {
@@ -97,62 +191,21 @@ export async function POST(request: Request, ctx: RouteContext<"/api/chat/thread
         } catch {
           open = false;
         }
+        if (e.type === "done" || e.type === "pending" || e.type === "error") queueMicrotask(close);
       };
-      // Text as it's written, at most every 60 ms (the last always goes).
-      let text: string | null = null;
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      const flush = () => {
-        timer = null;
-        if (text !== null) send({ type: "text", text });
-        text = null;
-      };
-      try {
-        if (userMessage) send({ type: "user", message: userMessage });
-        // Already waiting for the free model: that answer comes here when it's ready (with this message too).
-        if (prefs.engine !== "key" && isPending(v.who, id)) {
-          send({ type: "pending" });
-          return;
-        }
-        const answer = await answerThread(v.who, id, {
-          from: request,
-          signal: abort.signal,
-          onText: (t) => {
-            text = t;
-            timer ??= setTimeout(flush, 60);
-          },
-          onQueue: (position) => send({ type: "queue", position }),
-          onStatus: (status) => send({ type: "status", status }),
-        });
-        if (timer) clearTimeout(timer);
-        flush();
-        if ("pending" in answer) {
-          // Kept: answered as soon as the free model is up, even if the person has left.
-          answerLater(v.who, id);
-          send({ type: "pending" });
-        } else if ("nothing" in answer) {
-          send({ type: "pending" });
-        } else if ("error" in answer) {
-          send({ type: "error", code: answer.error, message: answer.message, ...(answer.retryAfterS && { retryAfterS: answer.retryAfterS }) });
-        } else send({ type: "done", message: answer.message, title: answer.title });
-      } catch {
-        send({ type: "error", code: "failed", message: CHAT_WORDS.failed });
-      } finally {
-        leave();
-        open = false;
-        try {
-          controller.close();
-        } catch {
-          // Already closed: the person left.
-        }
+      if (userMessage) send({ type: "user", message: userMessage });
+      unwatch = join(who, id, send);
+      // Ended before this page joined: the saved reply, or (still waiting for the free model) the kept message.
+      if (!unwatch) {
+        const th = getThread(who, id);
+        const last = th?.messages.at(-1);
+        send(th && last?.role === "assistant" ? { type: "done", message: last, title: th.title } : { type: "pending" });
       }
+      request.signal.addEventListener("abort", close, { once: true });
     },
     cancel() {
-      // The person left: the reply stops; their message stays (and is answered when they come back).
-      abort.abort();
+      unwatch?.();
     },
   });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no" },
-  });
+  return new Response(stream, { headers: NDJSON });
 }

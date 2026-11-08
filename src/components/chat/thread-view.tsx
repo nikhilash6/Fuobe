@@ -1,10 +1,10 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, ArrowLeft, Check, Copy, MoreHorizontal, Pencil, RotateCcw, Share2, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, Check, Copy, MoreHorizontal, Pencil, RotateCcw, Share2, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { RailButton } from "@/components/assist/shell";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
@@ -38,7 +38,7 @@ import { Markdown, ReplyBody } from "./prose";
 export function ThreadView({ id }: { id: string }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { state, ask, stop, revealId: reveal } = useReply(id);
+  const { state, ask, stop, settle, streamedIds } = useReply(id);
   // A kept message: look for its reply until it's here.
   const view = useChatThread(id, true, state.phase === "pending");
   const me = useChatMe();
@@ -66,21 +66,45 @@ export function ThreadView({ id }: { id: string }) {
   // Messages that arrive while the page is open animate in; the ones it opened with don't.
   const [openedAt] = useState(() => Date.now());
 
-  // Follow the chat to its end, unless the person scrolled up to read: at once when it opens, smoothly after.
+  // The kept message got its reply (it arrived while the page waited): nothing is waiting any more.
+  const lastRole = t?.messages.at(-1)?.role;
+  useEffect(() => {
+    if (state.phase === "pending" && lastRole === "assistant") settle();
+  }, [state.phase, lastRole, settle]);
+
+  // Follow the chat to its end while the person is there. Scrolling up by hand lets go; scrolling back down (or the
+  // arrow) follows again. Anything that makes the chat taller (a reply being written, a picture loading) keeps the
+  // end in view, so a long reply never stops at the reply box.
   const scroller = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
-  const firstScroll = useRef(true);
+  const byHand = useRef(0);
+  const [away, setAway] = useState(false);
+  const toEnd = useCallback((smooth = false) => {
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" });
+  }, []);
   const streamed = state.phase === "writing" ? state.text.length : 0;
   useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el || !pinned.current || !t) return;
-    const instant = firstScroll.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    firstScroll.current = false;
-    el.scrollTo({ top: el.scrollHeight, behavior: instant ? "auto" : "smooth" });
-  }, [t, t?.messages.length, streamed, state.phase]);
+    if (pinned.current) toEnd();
+  }, [t, t?.messages.length, streamed, state.phase, toEnd]);
+  useEffect(() => {
+    const el = content.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (pinned.current) toEnd();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [toEnd]);
+  const hand = () => {
+    byHand.current = performance.now();
+  };
 
   const send = async (text: string, image: string | null) => {
     pinned.current = true;
+    setAway(false);
     // A light tap on phones that have it, as the message goes.
     navigator.vibrate?.(8);
     if (editing) {
@@ -200,12 +224,20 @@ export function ThreadView({ id }: { id: string }) {
       <div
         ref={scroller}
         className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6"
+        onWheel={hand}
+        onTouchMove={hand}
+        onPointerDown={hand}
+        onKeyDown={hand}
         onScroll={(e) => {
           const el = e.currentTarget;
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          // Only the person's own scrolling lets go of the end; the page's own scrolling never does.
+          if (atEnd) pinned.current = true;
+          else if (performance.now() - byHand.current < 500) pinned.current = false;
+          setAway(!pinned.current);
         }}
       >
-        <div className="mx-auto w-full max-w-[760px] py-6">
+        <div ref={content} className="mx-auto w-full max-w-[760px] py-6">
           {c && (
             <div className="mb-8 flex flex-col items-center text-center">
               <CharacterFace name={c.name} accent={c.accent} portrait={c.portrait} rounded="card" className="aspect-[3/4] w-32 shadow-strong sm:w-40" />
@@ -257,7 +289,7 @@ export function ThreadView({ id }: { id: string }) {
                         first={first}
                         tail={tail}
                         fresh={fresh}
-                        reveal={m.id === reveal}
+                        reveal={fresh && !streamedIds.has(m.id)}
                         last={m.id === lastAssistant?.id}
                         canRetry={canRetry}
                         onRetry={() => void ask({ retry: true })}
@@ -348,7 +380,23 @@ export function ThreadView({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+      <div className="relative shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+        {away && (
+          <button
+            type="button"
+            onClick={() => {
+              pinned.current = true;
+              setAway(false);
+              toEnd(true);
+            }}
+            className="absolute -top-12 left-1/2 z-10 grid size-9 -translate-x-1/2 animate-in place-items-center rounded-full border bg-background/90 text-foreground shadow-strong backdrop-blur duration-200 fade-in-0 zoom-in-95 hover:bg-accent"
+            aria-label="Go to the latest message"
+            title="Go to the latest message"
+          >
+            <ArrowDown className="size-4" />
+            {busy && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" aria-hidden />}
+          </button>
+        )}
         <div className="mx-auto w-full max-w-[760px]">
           {editing && (
             <div className="mb-1.5 flex items-center gap-2 px-2 text-[12.5px] text-muted-foreground">

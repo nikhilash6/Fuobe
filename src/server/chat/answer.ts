@@ -78,6 +78,8 @@ export async function answerThread(who: string, id: string, o: AnswerOptions = {
     },
     key,
   );
+  // Stopped: nothing of it is saved.
+  if (o.signal?.aborted) return { error: "failed", message: "Stopped." };
   if ("pending" in answer) return { pending: true };
   if ("error" in answer) return answer;
   // Answered meanwhile (a retry and the person's own visit): keep the first answer only.

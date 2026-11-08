@@ -94,8 +94,8 @@ export type ReplyState =
 export function useReply(threadId: string) {
   const qc = useQueryClient();
   const [state, setState] = useState<ReplyState>({ phase: "idle" });
-  /** The reply that arrived in one piece (no text on the way): the page shows it as if written. */
-  const [revealId, setRevealId] = useState<string | null>(null);
+  /** Replies this page watched being written: they show as they are. Any other reply that arrives while the page is open shows as if written. */
+  const [streamedIds, setStreamedIds] = useState<ReadonlySet<string>>(() => new Set());
   const ctl = useRef<AbortController | null>(null);
 
   const patch = useCallback(
@@ -133,6 +133,11 @@ export function useReply(threadId: string) {
       }
       if (!res.ok || !res.body) {
         const e = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        // Answered a moment ago (in another tab, or just before this page asked): the saved chat has the reply.
+        if (res.status === 409 && e.code === "nothing") {
+          await qc.invalidateQueries({ queryKey: ["chat", "thread", threadId] });
+          return setState({ phase: "idle" });
+        }
         // The guest card opens by itself (watchGuestRefusals); the message stays for Try again.
         responseError(res, new Error(e.error ?? ""));
         void qc.invalidateQueries({ queryKey: ["chat", "thread", threadId] });
@@ -166,6 +171,7 @@ export function useReply(threadId: string) {
             else if (e.type === "pending") {
               ended = true;
               setState({ phase: "pending" });
+              void qc.invalidateQueries({ queryKey: ["chat", "thread", threadId] });
             }
             else if (e.type === "text") {
               // Only a model that streams sends text on the way; a whole reply comes with done alone.
@@ -174,8 +180,8 @@ export function useReply(threadId: string) {
               setState({ phase: "writing", text: e.text });
             } else if (e.type === "done") {
               ended = true;
-              if (!streamed) setRevealId(e.message.id);
-              patch((t) => ({ ...t, title: e.title, messages: [...t.messages, e.message] }));
+              if (streamed) setStreamedIds((s) => new Set(s).add(e.message.id));
+              patch((t) => ({ ...t, title: e.title, messages: [...t.messages.filter((m) => m.id !== e.message.id), e.message] }));
               setState({ phase: "idle" });
               void qc.invalidateQueries({ queryKey: ["chat", "threads"] });
             } else if (e.type === "error") {
@@ -195,10 +201,15 @@ export function useReply(threadId: string) {
     [patch, qc, threadId],
   );
 
+  // Stop ends the reply on the server too (leaving the page doesn't: the reply carries on and is saved).
   const stop = useCallback(() => {
     ctl.current?.abort();
     setState({ phase: "idle" });
-  }, []);
+    void fetch(`/api/chat/threads/${threadId}/reply`, { method: "DELETE" }).catch(() => {});
+  }, [threadId]);
 
-  return { state, ask, stop, revealId };
+  /** The kept message has its reply now (the page saw it arrive): nothing is waiting any more. */
+  const settle = useCallback(() => setState((s) => (s.phase === "pending" ? { phase: "idle" } : s)), []);
+
+  return { state, ask, stop, settle, streamedIds };
 }

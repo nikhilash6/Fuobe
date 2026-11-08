@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { body, chatViewer, gone, refused, signUp, tooOften } from "@/server/chat/http";
+import { stopLive } from "@/server/chat/live";
 import { cancelPending } from "@/server/chat/pending";
 import { deleteThread, getPrefs, getThread, renameThread, setArchived } from "@/server/chat/store";
 
@@ -41,5 +42,6 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/chat/thre
   if (!v) return signUp();
   const { id } = await ctx.params;
   cancelPending(v.who, id);
+  stopLive(v.who, id);
   return deleteThread(v.who, id) ? Response.json({ ok: true }) : gone();
 }
