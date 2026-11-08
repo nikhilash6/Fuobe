@@ -36,7 +36,8 @@ describe("the open reference brief (reference-brief-gemma4)", () => {
     expect(at(workflow, manifest, "video")).toEqual(["up_ref.mp4"]);
     // frame_load_cap at 24 fps: 30 s → the 720-frame limit (TextGenerate keeps every 24th: 30 frames).
     expect(at(workflow, manifest, "frames")).toEqual([720]);
-    expect(at(workflow, manifest, "startFrame")).toEqual([0]);
+    // The start, in seconds (the ffmpeg loader takes a time).
+    expect((manifest.bindings.startFrame ?? []).map((t) => workflow[t.node].inputs.start_time)).toEqual([0]);
     expect(at(workflow, manifest, "frameWidth")).toEqual([384]);
     expect(at(workflow, manifest, "maxTokens")).toEqual([2048]);
     expect(at(workflow, manifest, "checkpoint")).toEqual(["gemma4_e4b_it_fp8_scaled.safetensors"]);
@@ -52,7 +53,7 @@ describe("the open reference brief (reference-brief-gemma4)", () => {
     const short = await prepare({ video: "up_ref.mp4", duration: 12.5 }, { "up_ref.mp4": clip(12.5) });
     expect(at(short.workflow, short.manifest, "frames")).toEqual([301]);
     const later = await prepare({ video: "up_ref.mp4", duration: 30, startTime: 10 }, { "up_ref.mp4": clip(90) });
-    expect(at(later.workflow, later.manifest, "startFrame")).toEqual([240]);
+    expect((later.manifest.bindings.startFrame ?? []).map((t) => later.workflow[t.node].inputs.start_time)).toEqual([10]);
     await expect(prepare({ video: "up_ref.mp4", startTime: 50 }, { "up_ref.mp4": clip(42) })).rejects.toThrow(/past the end of the clip/);
   });
 

@@ -173,7 +173,25 @@ export function applyBindings(
       node.inputs[t.input] = value;
     }
   }
+  startInSeconds(out);
   return { workflow: out, missing };
+}
+
+/**
+ * The ffmpeg video loader starts at a time, not a frame: a start frame bound into it (the specs' startFrame / windowStart
+ * bindings name skip_first_frames, as VHS_LoadVideo has it) becomes start_time = frames / its frame rate. Only a loader
+ * with a set rate takes one; at the clip's own rate (force_rate 0) the frame can't be placed, so it says so.
+ */
+function startInSeconds(wf: ComfyWorkflow): void {
+  for (const [id, n] of Object.entries(wf)) {
+    if (n.class_type !== "VHS_LoadVideoFFmpeg" || !("skip_first_frames" in n.inputs)) continue;
+    const frames = Number(n.inputs.skip_first_frames);
+    const fps = n.inputs.force_rate;
+    delete n.inputs.skip_first_frames;
+    if (!frames) continue;
+    if (typeof fps !== "number" || !(fps > 0)) throw new Error(`Video loader ${id}: a start frame needs a set frame rate`);
+    n.inputs.start_time = Math.round((frames / fps) * 10000) / 10000;
+  }
 }
 
 /**

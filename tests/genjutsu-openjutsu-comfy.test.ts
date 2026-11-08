@@ -53,7 +53,7 @@ describe("Genjutsu's Openjutsu graphs through the provider", () => {
 
   it("From picture: the first frame at the part's start, the clip's own person without a picture; the video from the approved frame", async () => {
     const f = (await prepare(W.prepare, { images: ["me.png"], startTime: 2, extra: { openjutsu: { light: "" } } }, "picture-frame")).workflow as Wf;
-    expect(f["1"].inputs).toMatchObject({ video: "part.mp4", skip_first_frames: 48 });
+    expect(f["1"].inputs).toMatchObject({ video: "part.mp4", start_time: 2 });
     expect(f["4"].inputs.image).toBe("me.png");
     const own = (await prepare(W.prepare, { startTime: 0, extra: { openjutsu: { light: "Light the new photo with a warm golden glow.", ownPerson: true } } }, "picture-frame")).workflow as Wf;
     expect(own["4"]).toBeUndefined();
@@ -62,7 +62,7 @@ describe("Genjutsu's Openjutsu graphs through the provider", () => {
     expect((v.workflow as Wf)["56"].inputs).toMatchObject({ length: 141 });
     expect((await prepare(W.solar, { images: ["frame.png"], extra: { openjutsu: { seconds: 6, renderer: "h3" } } }, "picture-video")).manifest.id).toBe(W.h3);
     const d = (await prepare(W.describe, { images: ["frame.png"], startTime: 1, extra: { openjutsu: { seconds: 6 } } }, "describe-video")).workflow as Wf;
-    expect(d["1"].inputs).toMatchObject({ skip_first_frames: 24, frame_load_cap: 141 });
+    expect(d["1"].inputs).toMatchObject({ start_time: 1, frame_load_cap: 141 });
   });
 
   it("Finish: faces with the photo, colours with its finish", async () => {

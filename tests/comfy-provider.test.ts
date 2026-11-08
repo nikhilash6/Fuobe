@@ -604,13 +604,13 @@ describe("round-3 workflow bindings", () => {
     const open = await prepare("video-trim", { endTime: undefined, startTime: 4 });
     expect(open.workflow["2"].inputs).toMatchObject({ start_time: 4, duration: 0 }); // to the end
     const seg = await prepare("video-segment-resample", { fps: 16 });
-    expect(seg.workflow["1"].inputs).toMatchObject({ force_rate: 16, skip_first_frames: 16, frame_load_cap: computeFrames(2, 16, 4, 241) });
+    expect(seg.workflow["1"].inputs).toMatchObject({ force_rate: 16, start_time: 1, frame_load_cap: computeFrames(2, 16, 4, 241) });
     expect(seg.workflow["3"].inputs.fps).toBe(16);
     const { width, height } = seg.workflow["2"].inputs as { width: number; height: number };
     expect(width % 16 + (height % 16)).toBe(0);
     expect(width / height).toBeCloseTo(16 / 9, 1);
     const mm = await prepare("mixed-media-zimage-frames", { extra: { fps: 12 } });
-    expect(mm.workflow["1"].inputs).toMatchObject({ force_rate: 12, skip_first_frames: 12, frame_load_cap: computeFrames(2, 12, 1, 240) });
+    expect(mm.workflow["1"].inputs).toMatchObject({ force_rate: 12, start_time: 1, frame_load_cap: computeFrames(2, 12, 1, 240) });
     expect(mm.workflow["22"].inputs.frame_rate).toBe(12);
     expect(mm.meta.metaBatch).toBe(true);
   });

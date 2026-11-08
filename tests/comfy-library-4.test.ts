@@ -457,7 +457,8 @@ describe("round-4 workflows through the provider", () => {
 
   it("fills the brief's frame window at its fixed 24 fps", async () => {
     const { workflow, manifest: m } = await prepare("reference-brief-gemma4");
-    expect(valuesAt(workflow, m, "startFrame")).toEqual([24]);
+    // 24 frames at 24 fps: the loader starts 1 s in.
+    expect((m.bindings.startFrame ?? []).map((t) => workflow[t.node].inputs.start_time)).toEqual([1]);
     expect(valuesAt(workflow, m, "frames")).toEqual([49]);
   });
 });

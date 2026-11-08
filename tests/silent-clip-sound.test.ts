@@ -158,3 +158,19 @@ describe("dropVhsAudio", () => {
     expect(dropVhsAudio(none)).toBe(none);
   });
 });
+
+describe("a start frame on the ffmpeg video loader", () => {
+  it("becomes start_time at the loader's frame rate, even when the rate is bound in the same call", async () => {
+    const { applyBindings } = await import("@/lib/comfy");
+    const wf: ComfyWorkflow = { "1": { class_type: "VHS_LoadVideoFFmpeg", inputs: { video: "a.mp4", force_rate: 24, start_time: 0 } } };
+    const b = { startFrame: [{ node: "1", input: "skip_first_frames" }], fps: [{ node: "1", input: "force_rate" }] } as never;
+    expect(applyBindings(wf, b, { startFrame: 48 } as never).workflow["1"].inputs).toEqual({ video: "a.mp4", force_rate: 24, start_time: 2 });
+    expect(applyBindings(wf, b, { startFrame: 20, fps: 8 } as never).workflow["1"].inputs).toEqual({ video: "a.mp4", force_rate: 8, start_time: 2.5 });
+    expect(applyBindings(wf, b, { startFrame: 0 } as never).workflow["1"].inputs).toEqual({ video: "a.mp4", force_rate: 24, start_time: 0 });
+    const native: ComfyWorkflow = { "1": { class_type: "VHS_LoadVideoFFmpeg", inputs: { video: "a.mp4", force_rate: 0 } } };
+    expect(() => applyBindings(native, b, { startFrame: 10 } as never)).toThrow(/set frame rate/);
+    // The OpenCV loader keeps its frame count.
+    const old: ComfyWorkflow = { "1": { class_type: "VHS_LoadVideo", inputs: { video: "a.mp4", force_rate: 24 } } };
+    expect(applyBindings(old, b, { startFrame: 48 } as never).workflow["1"].inputs.skip_first_frames).toBe(48);
+  });
+});
