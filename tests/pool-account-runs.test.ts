@@ -63,6 +63,8 @@ const { FILE_TROUBLE_WORDS, POOL_WORDS } = await import("@/lib/relay");
 const { ENGINE_WORDS, isEngineWords } = await import("@/lib/engine-error");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 const { catalogVersion } = await import("@/server/computer/catalog-version");
+const { refusalReason } = await import("@/lib/comfy-reason");
+const { runDetails } = await import("@/server/run-details");
 
 const HOST = "localhost:3000";
 const SITE_HEADERS = { host: HOST, "sec-fetch-site": "same-origin", origin: `http://${HOST}` };
@@ -741,6 +743,112 @@ describe("an account's run that a worker can't finish", () => {
     expect(owner?.detail).toBe(stored.detail);
     // Nothing of it in the run as the account reads it.
     expect(JSON.stringify(getGeneration(id))).not.toMatch(/VHS|fuobe-worker|ffmpeg/);
+  });
+
+  describe("ComfyUI's own reason, for the owner only", () => {
+    const visitorList = async () => {
+      const r = await generationsRoute.GET(request("/api/generations?limit=50"));
+      return JSON.stringify(await r.json());
+    };
+    const storedOf = (id: string) => db().prepare("SELECT error, detail FROM generations WHERE id = ?").get(id) as { error: string; detail: string | null };
+
+    it("a refusal: the worker's short reason is the owner's detail and \"Why it failed\"; the account reads the plain sentence", async () => {
+      const w = standInWorker();
+      beatAs(w);
+      const { id, taskId } = await accountRun();
+      const api = workerApi(w.token);
+      const t = (await api.claim())!;
+      const body = {
+        error: { type: "missing_node_type", message: "Node 'Predict' not found. The custom node may not be installed.", details: "Node ID '#12'", extra_info: { node_id: "12", class_type: "InstantHMRPredict", node_title: "Predict" } },
+        node_errors: {},
+      };
+      const why = refusalReason(body)!;
+      expect(why).toBe("ComfyUI refused the job: node InstantHMRPredict (id 12) isn't installed");
+      expect((await api.report(t, { event: "refused", status: 400, body, why })).status).toBe(200);
+      expect(rowOf(taskId).comfy_why).toBe(why);
+      const g = await ended(id);
+      expect(g.status).toBe("failed");
+      expect(isEngineWords(g.error), g.error ?? "").toBe(true);
+      expect(storedOf(id).detail).toBe(why);
+      const owner = listAccountRuns({ account: accountId }).items.find((x) => x.id === id);
+      expect(owner?.detail).toBe(why);
+      const details = runDetails(id)!;
+      expect(details.comfyReason).toBe(why);
+      expect(details.stored.detail).toBe(why);
+      expect(details.jobs.at(-1)?.comfyWhy).toBe(why);
+      // Never in what the account reads: its run, its list.
+      expect(JSON.stringify(getGeneration(id))).not.toMatch(/InstantHMR|isn't installed|comfyReason|comfyWhy/);
+      expect(await visitorList()).not.toMatch(/InstantHMR|isn't installed|comfyReason|comfyWhy|"detail"/);
+    });
+
+    it("an execution error: cleaned again on the server (the run's words, keys and folders out)", async () => {
+      const w = standInWorker();
+      beatAs(w);
+      const { id, taskId } = await accountRun();
+      const api = workerApi(w.token);
+      const t = (await api.claim())!;
+      await api.report(t, { event: "sent", promptId: t.promptId });
+      const entry = { prompt: [1, t.promptId], status: { status_str: "error", completed: false, messages: [["execution_error", { node_type: "KSampler", node_id: "3", exception_type: "RuntimeError", exception_message: "shapes" }]] }, outputs: {} };
+      // A worker that said too much: the server keeps none of it.
+      const why = "RuntimeError in KSampler (node 3): bad input a lighthouse at dusk with hf_abcdefghijklmnopqrstu from X:\\fuobe-worker\\ComfyUI\\nodes.py";
+      expect((await api.report(t, { event: "finished", entry, why })).status).toBe(200);
+      expect(rowOf(taskId).state).toBe("failed");
+      const g = await ended(id);
+      expect(isEngineWords(g.error), g.error ?? "").toBe(true);
+      const detail = storedOf(id).detail!;
+      expect(detail).toBe("RuntimeError in KSampler (node 3): bad input [text] with [key] from nodes.py");
+      expect(runDetails(id)!.comfyReason).toBe(detail);
+      expect(JSON.stringify(getGeneration(id))).not.toMatch(/RuntimeError|KSampler/);
+      expect(await visitorList()).not.toMatch(/RuntimeError|KSampler/);
+    });
+
+    it("a job the studio stopped keeps the reason its worker gave before", async () => {
+      const w = standInWorker();
+      beatAs(w);
+      const { id, taskId } = await accountRun();
+      const api = workerApi(w.token);
+      const t = (await api.claim())!;
+      tasks.setTask(taskId, { comfy_why: "CUDA out of memory in KSampler (node 7)" });
+      tasks.endTask(t.id, "canceled", { error: "Stopped" });
+      const g = await ended(id);
+      expect(g.error).not.toMatch(/CUDA|KSampler/);
+      expect(storedOf(id).detail).toBe("CUDA out of memory in KSampler (node 7)");
+      expect(listAccountRuns({ account: accountId }).items.find((x) => x.id === id)?.detail).toBe("CUDA out of memory in KSampler (node 7)");
+      expect(await visitorList()).not.toMatch(/CUDA|KSampler/);
+    });
+
+    it("the worker program reads ComfyUI's refusal itself, reports it, and says it when the job ends", async () => {
+      const w = standInWorker();
+      beatAs(w);
+      const { id, taskId } = await accountRun();
+      const said: { phase: string; why?: string }[] = [];
+      const api = apiAs(routes, null, { authorization: `Bearer ${w.token}` });
+      const worker = new ComputerRunner(
+        {
+          api,
+          local: (url, init) => realFetch(url, init),
+          socket: (url) => new WebSocket(url) as never,
+          sha256,
+          origin: "http://localhost:3000",
+          sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 50))),
+          compose: (t) => composeOnWorker(t),
+          ended: (_t, phase, why) => void said.push({ phase, why }),
+          beatExtra: () => ({ protocol: 3, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null, catalogVersion: catalogVersion() }),
+        },
+        { device: "worker", port: comfy.port, clientId: "worker-test" },
+      );
+      comfy.opts.failNext = "missing_model";
+      await worker.beat();
+      await worker.claimAndRun();
+      expect(rowOf(taskId).state).toBe("failed");
+      const why = rowOf(taskId).comfy_why ?? "";
+      expect(why).toMatch(/^ComfyUI refused the job: model file \S+\.\w+ not in the list \(/);
+      expect(said.at(-1)).toEqual({ phase: "failed", why });
+      const g = await ended(id);
+      expect(isEngineWords(g.error), g.error ?? "").toBe(true);
+      expect(storedOf(id).detail).toBe(why);
+      expect(await visitorList()).not.toMatch(/refused the job|not in the list/);
+    });
   });
 });
 

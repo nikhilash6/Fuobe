@@ -1106,6 +1106,8 @@ const RELAY_COLUMNS: [string, string, string][] = [
   // picture came (the picture is a file in the task's folder): kept in the database, so every app process sees them.
   ["relay_tasks", "progress_json", "TEXT"],
   ["relay_tasks", "preview_at", "INTEGER"],
+  // ComfyUI's own reason a job failed, in one short line (src/lib/comfy-reason.ts): the owner's only.
+  ["relay_tasks", "comfy_why", "TEXT"],
   // A pool worker's next token (workers.ts offerNextToken) and where its token was used from (hashed networks).
   ["relay_workers", "next_token_hash", "TEXT"],
   ["relay_workers", "next_expires_at", "INTEGER"],

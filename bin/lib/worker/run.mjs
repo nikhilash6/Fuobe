@@ -245,6 +245,11 @@ async function work(saved, deps, owner) {
   const site = cfg.site.replace(/\/+$/, "");
   const f = folders(cfg.workDir);
   fs.mkdirSync(cfg.workDir, { recursive: true });
+  /** A job's last line in the log: how it ended, and a failed one's reason in short (ComfyUI's own, when it said one). */
+  const endedLine = (what, t, phase, why) => {
+    const said = typeof why === "string" ? (redact ? redact(why) : why).replace(/\s+/g, " ").replace(/[\s.]+$/, "").slice(0, 600) : "";
+    return `${what} ${t.id} ${phase}${said ? `: ${said}` : ""}.`;
+  };
   emptyFolders(f);
   // Inputs kept by their SHA-256 while their job runs here (a job sent again reads nothing from the studio twice).
   const cacheDir = path.join(cfg.workDir, "cache");
@@ -674,8 +679,8 @@ async function work(saved, deps, owner) {
       now,
       sleep,
       vet: vetJob,
-      ended: async (t, phase) => {
-        log(`Job ${t.id} ${phase}.`);
+      ended: async (t, phase, why) => {
+        log(endedLine("Job", t, phase, why));
         // Done: the studio has every result. Otherwise its kept results wait for the next claim to say whose job it is,
         // after a while (so a studio that won't take them now doesn't keep its ComfyUI from starting).
         if (phase === "done") hold.drop(t.id);
@@ -820,8 +825,8 @@ async function work(saved, deps, owner) {
         sleep,
         vet: vetJob,
         finish: (t, inputs, o) => finish.finish(t, inputs, o),
-        ended: async (t, phase) => {
-          log(`CPU slot job ${t.id} ${phase}.`);
+        ended: async (t, phase, why) => {
+          log(endedLine("CPU slot job", t, phase, why));
           if (phase === "done") cpuHold.drop(t.id);
           delete crashes[t.id];
           saveCrashes();

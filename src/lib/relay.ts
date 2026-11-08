@@ -52,8 +52,11 @@ export type ReportEvent =
    * `kept`: a worker sends results it kept from an earlier try instead (nothing new runs, so it isn't another attempt).
    */
   | { event: "sent"; promptId: string; number?: number; kept?: boolean }
-  /** ComfyUI's /prompt refused it (its answer, as it was). */
-  | { event: "refused"; status: number; body: unknown }
+  /**
+   * ComfyUI's /prompt refused it (its answer, as it was). `why`, on this report and on "finished", "passes" and
+   * "failed": ComfyUI's reason in one short line (src/lib/comfy-reason.ts), for the owner only.
+   */
+  | { event: "refused"; status: number; body: unknown; why?: string }
   /** Waiting in ComfyUI's queue: how many prompts are before it. */
   | { event: "queued"; position: number }
   /**
@@ -66,12 +69,12 @@ export type ReportEvent =
    * executing the job (`execMs`: execution only, no waits, no uploads), its GPU's name (`device`), and `kept` when the
    * results are ones it kept from an earlier try (their time doesn't count toward the lane's times).
    */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string; kept?: boolean }
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string; kept?: boolean; why?: string }
   /**
    * A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. The
    * last one (not running) is the job's end: a worker adds `execMs`, `device` and `kept` as for "finished".
    */
-  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string; kept?: boolean }
+  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string; kept?: boolean; why?: string }
   /** A worker gives the task back to the line (it counts as an attempt). */
   | { event: "give-back"; why: GiveBackWhy }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
@@ -81,7 +84,7 @@ export type ReportEvent =
   /** A stop the server asked for is done. */
   | { event: "stopped" }
   /** The tab gave up for one of its own reasons. */
-  | { event: "failed"; reason: TabFailure; status?: number };
+  | { event: "failed"; reason: TabFailure; status?: number; why?: string };
 
 export type ReportEventName = ReportEvent["event"];
 

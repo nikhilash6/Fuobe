@@ -27,7 +27,7 @@ import { unruledPathInputs } from "./catalog-checks.mjs";
 import { allowedNodeList, filePins, inputRules, missingRules, readCatalog } from "./worker-catalog.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-export const SOURCES = ["computer-runner", "engine-error", "comfy-guard", "comfy-ws", "fetch-within", "local-comfy", "relay", "lanes", "worker-hours", "finish-ticket", "camera-path", "path-splat", "scene3d"];
+export const SOURCES = ["computer-runner", "engine-error", "comfy-reason", "comfy-guard", "comfy-ws", "fetch-within", "local-comfy", "relay", "lanes", "worker-hours", "finish-ticket", "camera-path", "path-splat", "scene3d"];
 
 /**
  * What the worker learns from the catalog: its node allowlist, its input rules and its file pins. Throws when an input

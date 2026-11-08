@@ -30,11 +30,13 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
   const kept = b.kept === true ? { kept: true } : {};
   // A worker's measured execution time and GPU name, with a finished job.
   const exec = { ...measured(b), ...kept };
+  // ComfyUI's reason a job failed, in one short line (the server cleans it again before it keeps it).
+  const why = typeof b.why === "string" && b.why.trim() ? { why: b.why.slice(0, 4_000) } : {};
   switch (e) {
     case "sent":
       return typeof b.promptId === "string" ? { event: e, promptId: b.promptId, number: num(b.number), ...kept } : null;
     case "refused":
-      return { event: e, status: num(b.status) ?? 400, body: b.body };
+      return { event: e, status: num(b.status) ?? 400, body: b.body, ...why };
     case "queued":
       return { event: e, position: num(b.position) ?? -1 };
     case "running": {
@@ -43,13 +45,13 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
       return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }), ...(preview && { preview }) };
     }
     case "finished":
-      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...exec } : null;
+      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...exec, ...why } : null;
     case "passes":
-      return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never, ...(b.running !== true && exec) } : null;
+      return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never, ...(b.running !== true && { ...exec, ...why }) } : null;
     case "give-back":
       return typeof b.why === "string" && (GIVE_BACK as readonly string[]).includes(b.why) ? { event: e, why: b.why as never } : null;
     case "failed":
-      return typeof b.reason === "string" && (TAB_FAILURES as readonly string[]).includes(b.reason) ? { event: e, reason: b.reason as never, status: num(b.status) } : null;
+      return typeof b.reason === "string" && (TAB_FAILURES as readonly string[]).includes(b.reason) ? { event: e, reason: b.reason as never, status: num(b.status), ...why } : null;
     case "comfy-down":
       return { event: e, ...(b.why === "setting" && { why: "setting" as const }) };
     default:

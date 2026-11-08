@@ -110,6 +110,8 @@ export interface RunDetails {
   /** What a failed run's GPU was missing, and what its GPU or key ran into (stored even where the account wasn't shown it). */
   fix: { code?: string; workflowId?: string; items?: { folder?: string; file?: string; class?: string; pack?: string }[] } | null;
   trouble: RunTrouble | null;
+  /** ComfyUI's own reason the run failed (its last job's that has one), in one short line: the owner's "Why it failed". */
+  comfyReason?: string;
   where: RunWhere;
   /** The model the account chose (Auto, or the one it named), beside the composer's default; `ranOn`: the model that made it, when another. */
   model: { id: string; name: string; state: "default" | "changed" | "unknown"; default?: string; defaultName?: string; ranOn?: { id: string; name: string } };
@@ -193,6 +195,8 @@ export interface RunJob {
   finishedAt?: number;
   error?: string;
   note?: string;
+  /** ComfyUI's own reason this job failed, in one short line, as its worker or tab reported it. */
+  comfyWhy?: string;
   /** Its computer's ComfyUI didn't answer, since when (and why, when it said). */
   down?: { at: number; why?: string };
 }
@@ -553,6 +557,7 @@ interface TaskFacts {
   down_at: number | null;
   down_why: string | null;
   progress_json: string | null;
+  comfy_why: string | null;
   created_at: number;
   claimed_at: number | null;
   sent_at: number | null;
@@ -582,7 +587,7 @@ const col = (have: Set<string>, name: string) => (have.has(name) ? name : `NULL 
 function jobsOf(id: string, url?: string): { jobs: RunJob[]; log: WorkerEvent[]; tasks: TaskFacts[] } {
   const have = columnsOf("relay_tasks");
   if (!have.size) return { jobs: [], log: [], tasks: [] };
-  const cols = ["slot", "lane", "class", "requeues", "tried_json", "est_ms", "progress_json"].map((c) => col(have, c)).join(", ");
+  const cols = ["slot", "lane", "class", "requeues", "tried_json", "est_ms", "progress_json", "comfy_why"].map((c) => col(have, c)).join(", ");
   const tasks = db()
     .prepare(
       `SELECT id, state, workflow_id, attempts, error, note, down_at, down_why, created_at, claimed_at, sent_at, started_at, finished_at, ${cols}
@@ -620,6 +625,7 @@ function jobsOf(id: string, url?: string): { jobs: RunJob[]; log: WorkerEvent[];
       ...(t.finished_at != null && { finishedAt: t.finished_at }),
       ...(t.error && { error: scrub(t.error) }),
       ...(t.note && { note: scrub(t.note) }),
+      ...(t.comfy_why && { comfyWhy: scrub(t.comfy_why) }),
       ...(t.down_at != null && { down: { at: t.down_at, ...(t.down_why && { why: t.down_why }) } }),
     };
   });
@@ -766,6 +772,8 @@ export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((g) => nearOf(g, req));
   const chain = chainOf(id, req);
+  // A run that ended without its result: ComfyUI's reason, from its last job that reported one.
+  const comfyReason = run.status === "failed" || run.status === "canceled" ? jobs.findLast((j) => j.comfyWhy)?.comfyWhy : undefined;
 
   return {
     run: {
@@ -780,6 +788,7 @@ export function runDetails(id: string, o: { emails?: boolean } = {}): RunDetails
     stored: { message: scrub(raw.message), error: scrub(raw.error), ...(raw.detail && { detail: scrub(raw.detail) ?? undefined }) },
     fix: Object.keys(fixRest).length ? (redactValue(fixRest, { url: gpu.url }) as RunDetails["fix"]) : null,
     trouble,
+    ...(comfyReason && { comfyReason }),
     where: whereOf(run, raw, gpu),
     model: modelChoice(run, chosen),
     preset: preset ? { id: preset.id, name: preset.name, type: preset.type } : run.presetId ? { id: run.presetId, name: run.presetName ?? run.presetId, type: "unknown" } : null,

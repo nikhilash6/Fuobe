@@ -25,6 +25,7 @@ import {
   type WantedFile,
   previewOf,
 } from "@/lib/relay";
+import { reasonText } from "@/lib/comfy-reason";
 import type { FinishTicket } from "@/lib/finish-ticket";
 import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
@@ -111,6 +112,11 @@ export interface TaskRow {
   result_json: string | null;
   error: string | null;
   refusal_json: string | null;
+  /**
+   * ComfyUI's own reason the job failed, in one short line, as the tab or worker reported it (src/lib/comfy-reason.ts,
+   * cleaned again here): for the owner only, never part of what the run's person reads.
+   */
+  comfy_why?: string | null;
   stop: number;
   attempts: number;
   down_at: number | null;
@@ -929,6 +935,15 @@ export function keptRefusal(body: unknown): { error?: Record<string, unknown>; n
   return JSON.stringify(kept).length <= RELAY_LIMITS.keptRefusalBytes ? kept : { ...(error && { error }), node_errors: {} };
 }
 
+/**
+ * ComfyUI's reason a job failed, as the tab or worker said it, fit to keep for the owner: the job's own words (its
+ * graph's or its ticket's texts) out, keys and paths out, at most REASON_MAX characters (src/lib/comfy-reason.ts).
+ */
+export function ownerReason(raw: string, t: Pick<TaskRow, "graph_json" | "ticket_json">): string {
+  const graph = json<unknown>(t.ticket_json ?? null, null) ?? json<unknown>(t.graph_json, null);
+  return reasonText(raw.slice(0, 8_000), { graph });
+}
+
 /** What the server does with a finished prompt: the files it wants, a meta-batch to follow, or a failure. */
 export type FinishedPlan = { wanted: WantedFile[]; outputs: unknown[]; budget: number } | { follow: string } | { error: string };
 
@@ -957,6 +972,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
     throw new RelayError(409, `That doesn't fit this run now (${t.state})`);
   }
   const seen = { device_seen_at: now, down_at: null, down_why: null };
+  const why = "why" in e && typeof e.why === "string" ? ownerReason(e.why, t) : "";
+  if (why) setTask(t.id, { comfy_why: why });
   switch (e.event) {
     case "sent": {
       const promptId = typeof e.promptId === "string" && UUID.test(e.promptId) ? e.promptId : typeof e.promptId === "string" && /^[\w-]{1,64}$/.test(e.promptId) ? e.promptId : null;

@@ -1899,9 +1899,11 @@ function poolKeeps(error: string): boolean {
  * stays as the owner's "Fix it".
  */
 export function poolFailure(res: Extract<PollResult, { state: "failed" }>): PollResult {
-  if (poolKeeps(res.error)) return { state: "failed", error: res.error, ...(res.fix && { fix: res.fix }), ...(res.lost && { lost: true as const }) };
+  // ComfyUI's own reason, when the worker reported one, is the owner's detail before the server's reading of it.
+  if (poolKeeps(res.error)) return { state: "failed", error: res.error, ...(res.detail && { detail: res.detail }), ...(res.fix && { fix: res.fix }), ...(res.lost && { lost: true as const }) };
   const plain = plainEngineFailure(res.error, res.fix?.code);
-  return { state: "failed", error: plain.words, ...(plain.detail && { detail: plain.detail }), ...(res.fix && { fix: res.fix }), ...(res.lost && { lost: true as const }) };
+  const detail = res.detail ?? plain.detail;
+  return { state: "failed", error: plain.words, ...(detail && { detail }), ...(res.fix && { fix: res.fix }), ...(res.lost && { lost: true as const }) };
 }
 
 /** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */
@@ -1959,10 +1961,11 @@ async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, u
       }
       return { state: "succeeded", outputs: await withLayerBoxes(outputs) };
     }
+    // ComfyUI's own reason (the owner's only: `detail`), when the tab or worker reported one.
     case "canceled":
-      return { state: "failed", error: t.error === "switched" ? RELAY_WORDS.switched : t.error === "disconnected" ? RELAY_WORDS.disconnected : RELAY_WORDS.stopped };
+      return { state: "failed", error: t.error === "switched" ? RELAY_WORDS.switched : t.error === "disconnected" ? RELAY_WORDS.disconnected : RELAY_WORDS.stopped, ...(t.comfy_why && { detail: t.comfy_why }) };
     default:
-      return { state: "failed", ...relayFailure(t, manifest) };
+      return { state: "failed", ...relayFailure(t, manifest), ...(t.comfy_why && { detail: t.comfy_why }) };
   }
 }
 

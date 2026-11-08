@@ -178,6 +178,11 @@ export function RunDetailsView() {
                 </Fact>
               )}
               {g.error && g.error !== d.stored.error && <Fact label="Error (as the account read it)">{g.error}</Fact>}
+              {d.comfyReason && d.comfyReason !== d.stored.detail && (
+                <Fact label="ComfyUI's reason">
+                  <span className="whitespace-pre-wrap">{d.comfyReason}</span>
+                </Fact>
+              )}
               {d.stored.detail && (
                 <Fact label="Technical detail">
                   <span className="whitespace-pre-wrap">{d.stored.detail}</span>
