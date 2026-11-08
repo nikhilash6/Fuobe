@@ -333,7 +333,7 @@ describe("studio jobs first", () => {
     const gpu = fakeGpu(p, { workMb: 9000 });
     let listOk = true;
     const readListeners = gpu.readListeners;
-    start(w, p, { ...gpu, readListeners: async () => (listOk ? readListeners() : null) });
+    start(w, p, { ...gpu, readListeners: (async () => (listOk ? readListeners() : null)) as unknown as typeof readListeners });
     await until(() => workerRow(w).local_why === "waiting-for-yield");
     listOk = false;
     for (let i = 0; i < 30; i++) {
