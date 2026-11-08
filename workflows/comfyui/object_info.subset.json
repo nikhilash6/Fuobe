@@ -11459,6 +11459,103 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "HyperFlowGGUFLoader": {
+    "input": {
+      "required": {
+        "unet_name": [
+          [
+            "minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+            "minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf"
+          ]
+        ]
+      },
+      "optional": {
+        "weights_in": [
+          [
+            "auto",
+            "ram",
+            "disk"
+          ],
+          {
+            "default": "auto",
+            "tooltip": "disk: weights that do not fit on the GPU stay in the memory-mapped file and stream from it, for machines with little RAM; ram: copy them into RAM; auto: disk with --fast-disk or a fast NVMe drive"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "unet_name"
+      ],
+      "optional": [
+        "weights_in"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "HyperFlowGGUFLoader",
+    "display_name": "HyperFlow GGUF Loader",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-HyperFlow-Flash",
+    "category": "HyperFlow",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "HyperFlowSigmas": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL"
+        ]
+      },
+      "optional": {
+        "steps": [
+          "INT",
+          {
+            "default": 6,
+            "min": 4,
+            "max": 8,
+            "step": 2
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model"
+      ],
+      "optional": [
+        "steps"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "SIGMAS"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "SIGMAS"
+    ],
+    "name": "HyperFlowSigmas",
+    "display_name": "HyperFlow Sigmas",
+    "description": "Step schedule of the checkpoint: 4 steps favour speed, 6 (default) balance speed and quality, 8 favour quality. Use it with SamplerCustom, euler, cfg 1.",
+    "python_module": "custom_nodes.ComfyUI-HyperFlow-Flash",
+    "category": "HyperFlow",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "INTConstant": {
     "input": {
       "required": {
@@ -29557,6 +29654,38 @@
     "output_node": false,
     "has_intermediate_output": false,
     "experimental": true,
+    "search_aliases": []
+  },
+  "UnetLoaderGGUF": {
+    "input": {
+      "required": {
+        "unet_name": [
+          []
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "unet_name"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "UnetLoaderGGUF",
+    "display_name": "Unet Loader (GGUF)",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-GGUF",
+    "category": "bootleg",
+    "output_node": false,
+    "has_intermediate_output": false,
     "search_aliases": []
   },
   "UnwrapMesh": {

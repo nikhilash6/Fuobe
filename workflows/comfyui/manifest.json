@@ -7332,6 +7332,378 @@
       "notes": "Text to video with sound on FastVideo's FastH3 Trim (FastVideo/FastVideo-FastH3-Trim-Comfy @ f66c13dc, 2026-10-06): 42 of H3's 50 blocks with a shared rank-16 timestep basis, 8-step DMD2 (checkpoint 300), experimental and below FastH3 V2 in quality. The FastH3 template's graph with unet = the Trim file: int8 ConvRot (18.92 GB, the default, any recent NVIDIA card), fp8 (19.68 GB, Ada and newer, for a PyTorch without CUDA 13) or NVFP4 (11.89 GB, Blackwell); MiniMaxH3SigmaShift 10 / 3, Comfy Kitchen attention, BlockSparseAttention vsa 10%, BasicScheduler simple 8 steps, res_multistep, CFG 1. vramGb 12 is the int8 / fp8 file partly offloaded; the 8 GB figure is FastVideo's test with the NVFP4 file and memory capped at 8 GB on an RTX 4090 (82 s for 5 s at 480p). FastVideo's timings (5 s with sound): RTX 5090 13.4 s at 480p, 35.4 s at 768p; RTX 4090 43.9 s / 132.8 s; none measured here. Text to video only: the Trim cards name eight-step text-to-video and no frame conditioning. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
     },
     {
+      "id": "minimax-h3-flash-t2v",
+      "title": "MiniMax H3 Text to Video + Audio (HyperFlow H3 Flash, 6 steps)",
+      "capability": "t2v",
+      "file": "minimax-h3-flash-t2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flash-t2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 6
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf",
+          "sizeGb": 14.93
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+          "sizeGb": 9.05,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-GGUF",
+          "repo": "https://github.com/city96/ComfyUI-GGUF/tree/6ea2651e7df66d7585f6ffee804b20e92fb38b8a"
+        },
+        {
+          "name": "ComfyUI-HyperFlow-Flash",
+          "repo": "https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash/tree/20a22ab2b075f3c948eb5dba62637ff89fc0f363"
+        }
+      ],
+      "vramGb": 16,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · HyperFlow H3 Flash (Video Rebirth): MiniMax H3 Community License · ComfyUI-HyperFlow-Flash nodes GPL-3.0 · ComfyUI-GGUF Apache-2.0",
+      "validated": true,
+      "notes": "Text to Video with sound on Video Rebirth's HyperFlow H3 Flash (VideoRebirthAI/hyperflow-h3-flash @ 9e9ed14b): H3 FL2VA pruned to 13.7B with low-rank factors and two-time (t, r) conditioning, sampled in 6 steps with no CFG. MiniMaxH3ImageToVideo with no frames, HyperFlowGGUFLoader (unet: Q8_0, 14.93 GB, or Q4_K_M, 9.05 GB; weights_in auto) -> HyperFlowSigmas 6 steps (its own schedule at video shift 12), KSamplerSelect euler, BasicGuider (CFG 1). ComfyUI-HyperFlow-Flash reads the GGUF through the dequantizing ops of ComfyUI-GGUF, so both packs are needed (runtimeNodes names the ComfyUI-GGUF loader so the GPU pre-flight asks for it). Measured on an RTX 5090 at 1280x960, 124 frames: about 7 min for the 6 steps with either file. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the HyperFlow GGUF, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).",
+      "runtimeNodes": [
+        "UnetLoaderGGUF"
+      ]
+    },
+    {
+      "id": "minimax-h3-flash-i2v",
+      "title": "MiniMax H3 Image to Video + Audio (HyperFlow H3 Flash, 6 steps)",
+      "capability": "i2v",
+      "file": "minimax-h3-flash-i2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flash-i2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "138",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 6
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf",
+          "sizeGb": 14.93
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+          "sizeGb": 9.05,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-GGUF",
+          "repo": "https://github.com/city96/ComfyUI-GGUF/tree/6ea2651e7df66d7585f6ffee804b20e92fb38b8a"
+        },
+        {
+          "name": "ComfyUI-HyperFlow-Flash",
+          "repo": "https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash/tree/20a22ab2b075f3c948eb5dba62637ff89fc0f363"
+        }
+      ],
+      "vramGb": 16,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · HyperFlow H3 Flash (Video Rebirth): MiniMax H3 Community License · ComfyUI-HyperFlow-Flash nodes GPL-3.0 · ComfyUI-GGUF Apache-2.0",
+      "validated": true,
+      "notes": "Image to Video with sound on Video Rebirth's HyperFlow H3 Flash (VideoRebirthAI/hyperflow-h3-flash @ 9e9ed14b): H3 FL2VA pruned to 13.7B with low-rank factors and two-time (t, r) conditioning, sampled in 6 steps with no CFG. MiniMaxH3ImageToVideo with first_frame, HyperFlowGGUFLoader (unet: Q8_0, 14.93 GB, or Q4_K_M, 9.05 GB; weights_in auto) -> HyperFlowSigmas 6 steps (its own schedule at video shift 12), KSamplerSelect euler, BasicGuider (CFG 1). ComfyUI-HyperFlow-Flash reads the GGUF through the dequantizing ops of ComfyUI-GGUF, so both packs are needed (runtimeNodes names the ComfyUI-GGUF loader so the GPU pre-flight asks for it). Measured on an RTX 5090 at 1280x960, 124 frames: about 7 min for the 6 steps with either file. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the HyperFlow GGUF, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).",
+      "runtimeNodes": [
+        "UnetLoaderGGUF"
+      ]
+    },
+    {
+      "id": "minimax-h3-flash-flf2v",
+      "title": "MiniMax H3 Start + End Frame to Video + Audio (HyperFlow H3 Flash, 6 steps)",
+      "capability": "flf2v",
+      "file": "minimax-h3-flash-flf2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flash-flf2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "138",
+            "input": "image"
+          }
+        ],
+        "endImage": [
+          {
+            "node": "140",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 6
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf",
+          "sizeGb": 14.93
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf",
+          "sizeGb": 9.05,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-GGUF",
+          "repo": "https://github.com/city96/ComfyUI-GGUF/tree/6ea2651e7df66d7585f6ffee804b20e92fb38b8a"
+        },
+        {
+          "name": "ComfyUI-HyperFlow-Flash",
+          "repo": "https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash/tree/20a22ab2b075f3c948eb5dba62637ff89fc0f363"
+        }
+      ],
+      "vramGb": 16,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · HyperFlow H3 Flash (Video Rebirth): MiniMax H3 Community License · ComfyUI-HyperFlow-Flash nodes GPL-3.0 · ComfyUI-GGUF Apache-2.0",
+      "validated": true,
+      "notes": "Start + End Frame to Video with sound on Video Rebirth's HyperFlow H3 Flash (VideoRebirthAI/hyperflow-h3-flash @ 9e9ed14b): H3 FL2VA pruned to 13.7B with low-rank factors and two-time (t, r) conditioning, sampled in 6 steps with no CFG. MiniMaxH3ImageToVideo with first_frame and last_frame, HyperFlowGGUFLoader (unet: Q8_0, 14.93 GB, or Q4_K_M, 9.05 GB; weights_in auto) -> HyperFlowSigmas 6 steps (its own schedule at video shift 12), KSamplerSelect euler, BasicGuider (CFG 1). ComfyUI-HyperFlow-Flash reads the GGUF through the dequantizing ops of ComfyUI-GGUF, so both packs are needed (runtimeNodes names the ComfyUI-GGUF loader so the GPU pre-flight asks for it). Measured on an RTX 5090 at 1280x960, 124 frames: about 7 min for the 6 steps with either file. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the HyperFlow GGUF, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).",
+      "runtimeNodes": [
+        "UnetLoaderGGUF"
+      ]
+    },
+    {
       "id": "infinitetalk-native",
       "title": "InfiniteTalk Lip-sync (native, single speaker, ~6 s)",
       "capability": "lipsync",

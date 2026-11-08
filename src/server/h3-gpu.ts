@@ -1,5 +1,5 @@
 import "server-only";
-import { deviceOf, H3_TIER_GRAPH, H3_TIER_MODEL, h3TierFor, H3_TIER_PARAM, TIER_BEST_NOTE, TIER_DECODER_NOTE, TIER_FLEX_REFUSAL, TIER_NOTES, tierChoice, tierGraphFor, tierOfGraph, SOL_VAE, type H3Tier, type H3TierChoice } from "@/lib/gpu/h3-tier";
+import { deviceOf, H3_TIER_GRAPH, H3_TIER_MODEL, h3TierFor, H3_TIER_PARAM, TIER_FLEX_REFUSAL, TIER_NOTES, tierChoice, tierExtraNotes, tierGraphFor, tierOfGraph, SOL_VAE, type H3Tier, type H3TierChoice } from "@/lib/gpu/h3-tier";
 import { getModel } from "@/lib/catalog";
 import { H3_FLEX_GRAPH } from "@/lib/comfy-variants";
 import { preflightOn } from "./gpu/index-file";
@@ -22,6 +22,7 @@ import { tenantAccount } from "./tenant";
  * - An orbit keeps the Orbit LoRA graph (full model only).
  * - Quality → Fast · Pika Flex keeps the full model too (Pika's adapters are made for it): with Auto the run stays Standard
  *   and the pre-flight judges the card; FastH3 V2 or Trim picked with it is refused in plain words, so neither choice is dropped.
+ *   Flash picked with it runs Flex on the full model (Flash is a look of its own, not a card size).
  */
 
 export interface H3GpuChoice {
@@ -84,9 +85,10 @@ export function h3Gpu(endpoint: string, extra: Record<string, unknown>, has: (id
   const model = H3_TIER_MODEL[choice.tier];
   if (!isOffered(model, "open")) {
     if (asked !== choice.tier) return { gpuTier: "standard" };
+    if (choice.tier === "flash" && tenantAccount()) throw new Error("Pick another GPU tier for this clip");
     throw new Error(tenantAccount() ? `Pick 32 GB or more for ${choice.label.replace(/ \(.*\)$/, "")}` : offReason(getModel(model)!));
   }
   // (Options → Decoder has become the file it loads by now: controlSets in src/lib/catalog/plan.ts.)
-  const notes = [TIER_NOTES[choice.tier], ...(extra.quality === "best" ? [TIER_BEST_NOTE] : []), ...(extra.vae === SOL_VAE ? [TIER_DECODER_NOTE] : [])];
+  const notes = [TIER_NOTES[choice.tier], ...tierExtraNotes(choice.tier, extra.quality === "best", extra.vae === SOL_VAE)];
   return { gpuTier: choice.tier, unet: choice.unet, note: notes.join(". ") };
 }

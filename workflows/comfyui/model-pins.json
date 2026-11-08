@@ -1488,5 +1488,15 @@
   "revision": "7c974aea58e062252a6cb5b6f9b7f639d545b729",
   "sizeBytes": 1994073596,
   "sha256": "ba8d4c34a81bc072b3f53db5241074d370b26e3b72ae793630be5344efd28934"
+ },
+ "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf": {
+  "revision": "9e9ed14b8be4b751d7517b8ca58dd199d509720c",
+  "sizeBytes": 14929689696,
+  "sha256": "9b7aebc17bd1be998bb82aa65409514c85e97e7b63559b75f206c44db17f7b2b"
+ },
+ "https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf": {
+  "revision": "9e9ed14b8be4b751d7517b8ca58dd199d509720c",
+  "sizeBytes": 9053456480,
+  "sha256": "ee251661dffdebfa4a8c2555d2967b642f0efe9f2e350830a6e5c691935e23c3"
  }
 }

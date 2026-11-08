@@ -73,6 +73,7 @@ const checked = (o: Parameters<typeof inventory>[0]) => writeSnapshot(INSTALL, i
 
 const FAST = ["minimax-h3-fast-t2v", "minimax-h3-fast-i2v", "minimax-h3-fast-flf2v"];
 const TRIM = "minimax-h3-trim-t2v";
+const FLASH = ["minimax-h3-flash-t2v", "minimax-h3-flash-i2v", "minimax-h3-flash-flf2v"];
 const SHARED = ["text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", "vae/minimax_h3_audio_vae_fp32.safetensors", "vae/minimax_h3_video_vae_int8_convrot.safetensors"];
 
 describe("the FastH3 graphs", () => {
@@ -354,7 +355,7 @@ describe("the pre-flight board", () => {
 
 describe("Models & licences", () => {
   it("lists each build with its licence and its own switch, never in a picker", () => {
-    for (const id of ["oss-minimax-h3-fast", "oss-minimax-h3-trim"]) {
+    for (const id of ["oss-minimax-h3-fast", "oss-minimax-h3-trim", "oss-minimax-h3-flash"]) {
       const m = getModel(id)!;
       expect(m.hidden, id).toBe(true);
       expect(m.engine, id).toBe("open");
@@ -362,7 +363,8 @@ describe("Models & licences", () => {
     }
     expect(getModel("oss-minimax-h3-trim")!.routes.map((r) => r.op)).toEqual(["t2v"]);
     expect(getModel("oss-minimax-h3-fast")!.routes.map((r) => r.op)).toEqual(["t2v", "i2v", "flf2v"]);
-    expect(T.H3_TIER_MODEL).toEqual({ fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim" });
+    expect(getModel("oss-minimax-h3-flash")!.routes.map((r) => r.endpoint)).toEqual(FLASH);
+    expect(T.H3_TIER_MODEL).toEqual({ fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim", flash: "oss-minimax-h3-flash" });
   });
 
   it("records Sol-H3-VAE's licence as unconfirmed on the full model's row", () => {
@@ -380,5 +382,66 @@ describe("Models & licences", () => {
     expect(T.H3_DECODER).toMatchObject({ param: "decoder", default: "standard", sets: { standard: {}, fast: { vae: T.SOL_VAE } } });
     expect(controls.find((c) => c.param === "gpuTier")?.default).toBeUndefined();
     for (const id of ["oss-minimax-h3-fast", "oss-minimax-h3-trim"]) expect(getModel(id)!.options.controls, id).toBeUndefined();
+  });
+});
+
+describe("H3 Flash (HyperFlow H3 Flash, Options → GPU tier → Flash)", () => {
+  it("runs Video Rebirth's GGUF through its loader and 6-step schedule, euler, CFG 1, on the FastH3 graphs' node ids", () => {
+    for (const id of FLASH) {
+      const g = graph(id);
+      expect(g["127"], id).toMatchObject({ class_type: "HyperFlowGGUFLoader", inputs: { unet_name: T.FLASH_FILES.q8_0.file, weights_in: "auto" } });
+      expect(g["124"], id).toMatchObject({ class_type: "HyperFlowSigmas", inputs: { steps: 6, model: ["127", 0] } });
+      expect(g["126"].inputs.model, id).toEqual(["127", 0]);
+      expect(g["135"].inputs.sampler_name, id).toBe("euler");
+      expect(g["128"].inputs.clip_name, id).toBe(T.H3_ENCODER);
+      // No sigma shift, attention patch or CFG guider: HyperFlow's schedule is its own.
+      const classes = Object.values(g).map((n) => n.class_type);
+      for (const c of ["MiniMaxH3SigmaShift", "ModelAttentionBackend", "BlockSparseAttention", "CFGGuider", "BasicScheduler"]) expect(classes, id).not.toContain(c);
+      expect(entry(id).bindings.unet, id).toEqual([{ node: "127", input: "unet_name" }]);
+      expect(entry(id).validated, id).toBe(true);
+      // Both packs: the loader's own and ComfyUI-GGUF, whose ops it loads the GGUF through.
+      expect(Object.keys(index.workflows[id].packs).sort(), id).toEqual(["ComfyUI-GGUF", "ComfyUI-HyperFlow-Flash"]);
+      expect(index.workflows[id].files, id).toEqual([`diffusion_models/${T.FLASH_FILES.q8_0.file}`, ...SHARED]);
+      expect(index.workflows[id].optional, id).toEqual([`diffusion_models/${T.FLASH_FILES.q4_k_m.file}`]);
+    }
+    expect(graph("minimax-h3-flash-i2v")["131"].inputs).toMatchObject({ first_frame: ["138", 0] });
+    expect(graph("minimax-h3-flash-flf2v")["131"].inputs).toMatchObject({ first_frame: ["138", 0], last_frame: ["140", 0] });
+    expect(graph("minimax-h3-flash-t2v")["131"].inputs.first_frame).toBeUndefined();
+    for (const f of Object.values(T.FLASH_FILES)) {
+      const file = index.files[`diffusion_models/${f.file}`];
+      expect(file.presence, f.file).toBe("loader");
+      expect(file.loaders, f.file).toEqual([["HyperFlowGGUFLoader", "unet_name"]]);
+      expect(Math.abs(file.sizeBytes! / 1e9 - f.gb), f.file).toBeLessThan(0.01);
+      expect(pins[file.pinnedUrl].sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it("runs its graph when picked, over Best; Fast · Pika Flex keeps Flex; Auto never picks it", () => {
+    expect(variant("minimax-h3-t2v", "t2v", { gpuTier: "flash" })).toBe("minimax-h3-flash-t2v");
+    expect(variant("minimax-h3-i2v", "i2v", { gpuTier: "flash", quality: "best" })).toBe("minimax-h3-flash-i2v");
+    expect(variant("minimax-h3-flf2v", "flf2v", { gpuTier: "flash" })).toBe("minimax-h3-flash-flf2v");
+    expect(variant("minimax-h3-t2v", "t2v", { gpuTier: "flash", quality: "flex" })).toBe("minimax-h3-flex-t2v");
+    try {
+      checked({ gb: 32, name: RTX4090 });
+      expect(h3Gpu("minimax-h3-t2v", { gpuTier: "flash" }, has, has)).toMatchObject({ gpuTier: "flash", unet: T.FLASH_FILES.q8_0.file, note: T.TIER_NOTES.flash });
+      expect(h3Gpu("minimax-h3-i2v", { gpuTier: "flash", quality: "best" }, has, has)?.note).toMatch(/H3 Flash runs its own 6-step schedule/);
+      checked({ gb: 16, name: RTX4070 });
+      expect(h3Gpu("minimax-h3-flf2v", { gpuTier: "flash" }, has, has)).toMatchObject({ gpuTier: "flash", unet: T.FLASH_FILES.q4_k_m.file });
+      // Flex picked with Flash: Flex on the full model, nothing refused.
+      expect(h3Gpu("minimax-h3-t2v", { gpuTier: "flash", quality: "flex" }, has, has)).toEqual({ gpuTier: "standard" });
+      // Auto on the same card picks FastH3 V2, never Flash.
+      expect(h3Gpu("minimax-h3-t2v", {}, has, has)).toMatchObject({ gpuTier: "fast" });
+      // A Flash graph run directly keeps Flash, with the card's file.
+      expect(h3Gpu("minimax-h3-flash-i2v", { unet: "something-else.gguf" }, has, has)).toMatchObject({ gpuTier: "flash", unet: T.FLASH_FILES.q4_k_m.file });
+    } finally {
+      dropSnapshots("install");
+    }
+  });
+
+  it("the pre-flight checks the file the run loads", () => {
+    const out = T.withTierFile(index, "minimax-h3-flash-i2v", T.FLASH_FILES.q4_k_m.file);
+    expect(out.workflows["minimax-h3-flash-i2v"].files).toEqual([`diffusion_models/${T.FLASH_FILES.q4_k_m.file}`, ...SHARED]);
+    expect(out.workflows["minimax-h3-flash-i2v"].optional).toEqual([]);
+    expect(T.withTierFile(index, "minimax-h3-flash-i2v", T.FLASH_FILES.q8_0.file)).toBe(index);
   });
 });

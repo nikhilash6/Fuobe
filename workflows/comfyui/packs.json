@@ -617,5 +617,23 @@
     "isolated": false,
     "subdir": "comfy-nodes/ComfyUI-BodyDouble",
     "folders": []
+  },
+  "ComfyUI-HyperFlow-Flash": {
+    "repo": "https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash",
+    "commit": "20a22ab2b075f3c948eb5dba62637ff89fc0f363",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-GGUF": {
+    "repo": "https://github.com/city96/ComfyUI-GGUF",
+    "commit": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
   }
 }

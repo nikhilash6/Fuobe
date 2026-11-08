@@ -70,6 +70,11 @@ declare -A NODES=(
   # which next to opencv-python can leave cv2 broken; core cv2 has every function it uses, and segment-anything is in the
   # union below. Its SAM ViT-B file goes in models/sams (the SAM ViT-B block near the end).
   [ComfyUI-Qwen-Watermark]="https://github.com/overflowofedge/ComfyUI-Qwen-Watermark eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
+  # HyperFlow H3 Flash (minimax-h3-flash-*, Options → GPU tier → Flash): Video Rebirth's GGUF loader and step schedule
+  # (GPL-3.0, v1.0.0), read at this commit (pure Python, no network, subprocess or downloads), and city96's ComfyUI-GGUF
+  # (Apache-2.0), whose dequantizing ops it loads the GGUF through. Their only dependency, gguf, is in the union below.
+  [ComfyUI-HyperFlow-Flash]="https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash 20a22ab2b075f3c948eb5dba62637ff89fc0f363"
+  [ComfyUI-GGUF]="https://github.com/city96/ComfyUI-GGUF 6ea2651e7df66d7585f6ffee804b20e92fb38b8a"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

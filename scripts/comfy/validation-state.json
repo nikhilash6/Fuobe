@@ -521,6 +521,24 @@
     "error": null,
     "at": "2026-11-05T00:31:32.631Z"
   },
+  "minimax-h3-flash-flf2v": {
+    "sha256": "bedc8d1f675523be63c8a0602499defb31559da81c4e0838f8a584bef90bc7ae",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-08T08:37:21.609Z"
+  },
+  "minimax-h3-flash-i2v": {
+    "sha256": "7c412d00c2a08c793efe2d65f6b21443ee13d9f87eb6c4530f67fe6e0fe25fde",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-08T08:37:18.930Z"
+  },
+  "minimax-h3-flash-t2v": {
+    "sha256": "a8c0331ec35ce3501885b26fbe89c9ab325fb9d5d01f142fe61a9f5e10608169",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-08T08:37:15.595Z"
+  },
   "minimax-h3-flex-flf2v": {
     "sha256": "a76ec6135a539210a9589118f1859746864ba13dded68f5f5fb1ab585a3995c3",
     "validated": true,

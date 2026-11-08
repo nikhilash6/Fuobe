@@ -35,6 +35,8 @@ export const LOADER_FOLDERS = {
   // Body Double: InstantHMR and the SAM 3D Body rig its skinned GLB is built on (models/detection).
   InstantHMRLoader: { model_file: 'detection' },
   SAM3DBody_Loader: { model_file: 'detection' },
+  // HyperFlow H3 Flash's GGUF loader (ComfyUI-HyperFlow-Flash): diffusion_models, like UNETLoader.
+  HyperFlowGGUFLoader: { unet_name: 'diffusion_models' },
   CheckpointLoaderSimple: { ckpt_name: 'checkpoints' },
   VAELoader: { vae_name: 'vae' },
   CLIPLoader: { clip_name: 'text_encoders' },

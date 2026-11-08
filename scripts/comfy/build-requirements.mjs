@@ -156,6 +156,21 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       }
     }
     const ext = path.extname(r.file).toLowerCase();
+    // An optional file no graph names (a GGUF the app binds in place of the default one): its loader is the bound input that holds
+    // a file of the same folder and extension, when the file can't be seen in a model list.
+    if (!loaders.size && !(PT_EXTENSIONS.includes(ext) && !UNLISTED_FOLDERS.has(r.folder))) {
+      for (const id of r.wfs) {
+        const wf = manifest.workflows.find((w) => w.id === id);
+        for (const targets of Object.values(wf?.bindings ?? {})) {
+          for (const { node, input } of targets) {
+            const n = graphs[id]?.[node];
+            const held = n?.inputs?.[input];
+            const same = typeof held === 'string' && path.extname(held).toLowerCase() === ext && wf.models.some((m) => m.file === held && m.folder === r.folder);
+            if (same && comboInput(subset[n.class_type], input)) loaders.set(`${n.class_type}\u0000${input}`, [n.class_type, input]);
+          }
+        }
+      }
+    }
     const presence = loaders.size ? 'loader' : PT_EXTENSIONS.includes(ext) && !UNLISTED_FOLDERS.has(r.folder) ? 'list' : 'unobservable';
     files[key] = {
       folder: r.folder,

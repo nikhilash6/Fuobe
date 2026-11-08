@@ -784,6 +784,24 @@ const open: ModelDef[] = [
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "768p" },
     hidden: true,
   }),
+  // MiniMax H3's GPU tier → Flash (any card, picked in Options → GPU tier): Video Rebirth's HyperFlow H3 Flash as GGUF. Listed for its
+  // licence, its switch in Models & licences and the pre-flight's readiness; never in a picker.
+  o({
+    id: "oss-minimax-h3-flash",
+    name: "MiniMax H3 · H3 Flash",
+    vendor: "Video Rebirth",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "MiniMax H3 in 6 steps with a natural, filmic look, from words, a start frame, or start and end frames; its 9 GB build fits 16 GB GPUs · MiniMax H3 Community License",
+    routes: [
+      comfy("t2v", "minimax-h3-flash-t2v", "H3 Flash, 6 steps"),
+      comfy("i2v", "minimax-h3-flash-i2v", "H3 Flash, 6 steps; the clip takes the start frame's shape"),
+      comfy("flf2v", "minimax-h3-flash-flf2v", "H3 Flash, 6 steps; the clip takes the start frame's shape"),
+    ],
+    options: { aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"], durations: [3, 5, 10, 15], resolutions: ["768p"], seed: true, endFrame: true, audio: "always", promptFormat: "minimax-h3" },
+    defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+    hidden: true,
+  }),
   o({
     id: "oss-wan22-5b",
     name: "Wan 2.2 5B",

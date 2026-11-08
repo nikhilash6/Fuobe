@@ -63,7 +63,7 @@ export function buildViews(inv: GpuInventory, idx: RequirementIndex, ctx: Readin
   if (summary.gpu) badges.gpu = shortGpu(summary.gpu);
   if (summary.vramGb) badges.vramGb = summary.vramGb;
   const h3 = chooseH3Tier(deviceOf(inv)).tier;
-  if (h3 !== "standard" && tierOpen(h3)) badges.h3Tier = h3;
+  if ((h3 === "fast" || h3 === "trim") && tierOpen(h3)) badges.h3Tier = h3;
   for (const tool of openModelTools()) {
     const b = badgeOf(readinessOf(tool, inv, idx, ctx));
     if (b) badges.models[tool.ref.slice("model:".length)] = b;

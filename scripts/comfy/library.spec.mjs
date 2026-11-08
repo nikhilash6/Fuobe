@@ -234,6 +234,10 @@ export const CUSTOM_NODE_REPOS = {
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
   'ComfyUI-InstantHMR': 'https://github.com/jtydhr88/ComfyUI-InstantHMR',
   'ComfyUI-BodyDouble': 'https://github.com/workingprototype/Fuobe/tree/26d386bdacb371d06aa2325ac1b90373a11ff6b7/comfy-nodes/ComfyUI-BodyDouble',
+  // HyperFlow H3 Flash (minimax-h3-flash-*): Video Rebirth's GGUF loader and step schedule (GPL-3.0, v1.0.0), which reads the
+  // GGUF through city96's ComfyUI-GGUF (Apache-2.0) and needs it installed beside it.
+  'ComfyUI-HyperFlow-Flash': 'https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash/tree/20a22ab2b075f3c948eb5dba62637ff89fc0f363',
+  'ComfyUI-GGUF': 'https://github.com/city96/ComfyUI-GGUF/tree/6ea2651e7df66d7585f6ffee804b20e92fb38b8a',
   // Hi3D 1.0 mesh refinement (hi3d-refine, docs/research/hi3d-refine.json): T8star's nodes (MIT code, vendored Hi3D code under
   // the Hi3D Open License 1.0), v0.5.1. Opt-in in install-comfyui.sh (HI3D=1): it needs an Ampere-or-newer NVIDIA GPU and
   // CUDA kernels (spconv, triton), so it is not on the validation server (mesh-refine-hi3d lists it with `packs`).
@@ -313,6 +317,8 @@ export const PACK_CLASSES = {
   'ComfyUI-InstantHMR': /^InstantHMR(Loader|Predict)$/,
   // Body Double's own pack (this repository at its pinned commit): the body fit and the look over the whole outline.
   'ComfyUI-BodyDouble': /^BodyDouble(Fit|Look)$/,
+  'ComfyUI-HyperFlow-Flash': /^HyperFlow(GGUFLoader|Sigmas)$/,
+  'ComfyUI-GGUF': /^(UnetLoaderGGUF|UnetLoaderGGUFAdvanced|CLIPLoaderGGUF|DualCLIPLoaderGGUF|TripleCLIPLoaderGGUF|QuadrupleCLIPLoaderGGUF)$/,
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
@@ -493,6 +499,10 @@ export const KNOWN_MODELS = {
   'fastvideo_fasth3_trim_8step_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_int8_convrot.safetensors' },
   'fastvideo_fasth3_trim_8step_fp8.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_fp8.safetensors' },
   'fastvideo_fasth3_trim_8step_nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_nvfp4.safetensors' },
+  // HyperFlow H3 Flash (Video Rebirth): a 14B distill of H3 FL2VA (pruned, low-rank, two-time conditioning; 4/6/8 steps, CFG 1)
+  // as GGUF, at the revision read on 2026-11-08. MiniMax H3 Community License (its card).
+  'minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf': { folder: 'diffusion_models', url: 'https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf' },
+  'minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf': { folder: 'diffusion_models', url: 'https://huggingface.co/VideoRebirthAI/hyperflow-h3-flash/resolve/9e9ed14b8be4b751d7517b8ca58dd199d509720c/fl2va_gguf/minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf' },
   // Fast decode: Sol-H3-VAE (Efficient-Large-Model, distilled from the H3 VAE decoder; weights under the MiniMax H3 licence per
   // its card, code Apache-2.0) as Comfy-Org repacked it for the core loader (ComfyUI #17411, master from 2026-10-28).
   'minimax_h3_sol_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors' },
@@ -722,6 +732,8 @@ const H3_LICENSE_SOL =
   'and weights under the MiniMax H3 Community License';
 // The FastH3 tiers: FastVideo's distills carry the MiniMax H3 Community License (their cards).
 const H3_LICENSE_FASTH3 = `${H3_LICENSE} · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License`;
+// HyperFlow H3 Flash (Video Rebirth): a derivative of MiniMax H3 under its Community License (its card); the nodes GPL-3.0.
+const H3_LICENSE_FLASH = `${H3_LICENSE} · HyperFlow H3 Flash (Video Rebirth): MiniMax H3 Community License · ComfyUI-HyperFlow-Flash nodes GPL-3.0 · ComfyUI-GGUF Apache-2.0`;
 const H3_NOTES_FASTH3_FILES =
   'Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded ' +
   'after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).';
@@ -2216,6 +2228,42 @@ export const SPEC = [
       'FastVideo\'s timings (5 s with sound): RTX 5090 13.4 s at 480p, 35.4 s at 768p; RTX 4090 43.9 s / 132.8 s; none measured here. Text to video only: the Trim ' +
       `cards name eight-step text-to-video and no frame conditioning. ${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FASTH3_FILES}`,
   },
+  // ---- HyperFlow H3 Flash (Options → GPU tier → Flash, any card): Video Rebirth's GGUF distill of H3 FL2VA through its own
+  // loader and step schedule, as its hyperflow_t2v / i2v / flf2v templates, on the FastH3 graphs' node ids. src/lib/gpu/h3-tier.ts
+  // binds `unet` to the card's file (Q8_0 on 32 GB or more, else Q4_K_M).
+  ...[
+    ['minimax-h3-flash-t2v', 't2v', 'Text to Video', false, false],
+    ['minimax-h3-flash-i2v', 'i2v', 'Image to Video', true, false],
+    ['minimax-h3-flash-flf2v', 'flf2v', 'Start + End Frame to Video', true, true],
+  ].map(([id, capability, what, first, last]) => ({
+    id,
+    title: `MiniMax H3 ${what} + Audio (HyperFlow H3 Flash, 6 steps)`,
+    capability,
+    handBuilt: `hand-built/${id}.json`,
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      ...(first && { image: [b('138', 'image')] }),
+      ...(last && { endImage: [b('140', 'image')] }),
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], unet: [b('127', 'unet_name')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 6 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 16,
+    optionalModels: ['minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf'],
+    runtimeNodes: ['UnetLoaderGGUF'],
+    license: H3_LICENSE_FLASH,
+    notes:
+      `${what} with sound on Video Rebirth's HyperFlow H3 Flash (VideoRebirthAI/hyperflow-h3-flash @ 9e9ed14b): H3 FL2VA pruned to 13.7B with low-rank ` +
+      'factors and two-time (t, r) conditioning, sampled in 6 steps with no CFG. MiniMaxH3ImageToVideo' + (first ? (last ? ' with first_frame and last_frame' : ' with first_frame') : ' with no frames') +
+      ', HyperFlowGGUFLoader (unet: Q8_0, 14.93 GB, or Q4_K_M, 9.05 GB; weights_in auto) -> HyperFlowSigmas 6 steps (its own schedule at video shift 12), ' +
+      'KSamplerSelect euler, BasicGuider (CFG 1). ComfyUI-HyperFlow-Flash reads the GGUF through the dequantizing ops of ComfyUI-GGUF, so both packs are needed ' +
+      '(runtimeNodes names the ComfyUI-GGUF loader so the GPU pre-flight asks for it). Measured on an RTX 5090 at 1280x960, 124 frames: about 7 min ' +
+      'for the 6 steps with either file. ' + (first ? H3_NOTES_FIRST_FRAME + ' ' : '') +
+      `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} Files: the HyperFlow GGUF, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).`,
+  })),
   {
     id: 'infinitetalk-native',
     title: 'InfiniteTalk Lip-sync (native, single speaker, ~6 s)',

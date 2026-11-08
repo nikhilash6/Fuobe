@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   FAST_FILES,
+  FLASH_FILES,
+  H3_GPU_TIER,
   TRIM_FILES,
   chooseH3Tier,
   cuda13,
@@ -163,5 +165,39 @@ describe("the graph each tier runs", () => {
     expect(h3TierNote({}, "i2v", "fast")).toMatch(/^On your GPU this runs as FastH3 V2/);
     expect(h3TierNote({}, "i2v", "trim")).toBeUndefined();
     expect(h3TierNote({ gpuTier: "standard" }, "t2v", "trim")).toBeUndefined();
+  });
+});
+
+describe("Options → GPU tier → Flash (HyperFlow H3 Flash)", () => {
+  const all = () => true;
+  it("loads Q8_0 on 32 GB or more and the 9 GB Q4_K_M below, or with no reading", () => {
+    expect(h3TierFor("flash", { vramGb: 32, name: RTX5090, type: "cuda" })).toMatchObject({ tier: "flash", weights: "q8_0", unet: FLASH_FILES.q8_0.file, offload: false, label: "H3 Flash (Q8_0)" });
+    expect(h3TierFor("flash", { vramGb: 24, name: RTX4090, type: "cuda" })).toMatchObject({ tier: "flash", weights: "q4_k_m", unet: FLASH_FILES.q4_k_m.file, offload: false });
+    expect(h3TierFor("flash", { vramGb: 16, name: RTX4070, type: "cuda" })).toMatchObject({ weights: "q4_k_m", offload: false });
+    expect(h3TierFor("flash", { vramGb: 8, name: RTX5060, type: "cuda" })).toMatchObject({ weights: "q4_k_m", offload: true });
+    expect(h3TierFor("flash", {})).toMatchObject({ tier: "flash", weights: "q4_k_m", offload: false });
+  });
+
+  it("is picked, never chosen by Auto", () => {
+    for (const vramGb of [8, 12, 16, 24, 31, 32, 48]) {
+      for (const name of [RTX5090, RTX4090, RTX3090]) expect(chooseH3Tier({ vramGb, name, type: "cuda", torch: CU130 }).tier).not.toBe("flash");
+    }
+  });
+
+  it("has text, start frame and start + end frames", () => {
+    expect(tierGraphFor("minimax-h3-t2v", "flash", all)).toBe("minimax-h3-flash-t2v");
+    expect(tierGraphFor("minimax-h3-i2v", "flash", all)).toBe("minimax-h3-flash-i2v");
+    expect(tierGraphFor("minimax-h3-flf2v", "flash", all)).toBe("minimax-h3-flash-flf2v");
+    expect(tierOfGraph("minimax-h3-flash-i2v")).toBe("flash");
+    expect(H3_GPU_TIER.values).toContain("flash");
+    expect(H3_GPU_TIER.ops?.flash).toEqual(["t2v", "i2v", "flf2v"]);
+  });
+
+  it("the composer's note describes Flash in its own words", () => {
+    expect(h3TierNote({ gpuTier: "flash" }, "i2v")).toMatch(/^H3 Flash: HyperFlow's 14B distill of MiniMax H3 in 6 steps/);
+    expect(h3TierNote({ gpuTier: "flash", quality: "best" }, "t2v")).toMatch(/H3 Flash runs its own 6-step schedule$/);
+    expect(h3TierNote({ gpuTier: "flash", decoder: "fast" }, "t2v")).toMatch(/H3 Flash decodes with the standard decoder$/);
+    // Fast · Pika Flex with Flash picked runs Flex: nothing is refused.
+    expect(h3TierNote({ gpuTier: "flash", quality: "flex" }, "t2v")).toBeUndefined();
   });
 });

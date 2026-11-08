@@ -685,6 +685,17 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Fuobe's own pack: lines each 3D body up with its person and draws the double over the whole outline from the picture's own geometry",
   }),
+  // HyperFlow H3 Flash (MiniMax H3's GPU tier → Flash): Video Rebirth's GGUF loader and step schedule, on city96's GGUF ops.
+  pack("ComfyUI-HyperFlow-Flash", "https://github.com/Video-Rebirth/ComfyUI-HyperFlow-Flash/tree/20a22ab2b075f3c948eb5dba62637ff89fc0f363", {
+    ...GPL,
+    note: "Video Rebirth's HyperFlow H3 Flash nodes (GGUF loader and step schedule); GPL-3.0 code. The HyperFlow H3 Flash weights are a MiniMax H3 derivative under the MiniMax H3 Community License",
+  }),
+  pack("ComfyUI-GGUF", "https://github.com/city96/ComfyUI-GGUF/tree/6ea2651e7df66d7585f6ffee804b20e92fb38b8a", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "city96's GGUF loaders and dequantizing ops; Apache-2.0 code",
+  }),
   // NVIDIA RTX Video (Quick · RTX, RTX Frame Generation, RTX Video HDR): an NVIDIA RTX card only; installed on RTX hosts.
   pack("ComfyUI_Nvidia_VFX_Nodes", "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40", {
     name: "Apache-2.0",

@@ -16,6 +16,9 @@ import type { FileKey, GpuInventory, RequirementIndex } from "./types";
  *   in quality, text to video only (FastVideo's cards name eight-step text-to-video and nothing else). NVFP4 (11.9 GB) on
  *   Blackwell, else int8 ConvRot (18.9 GB, the template's format) on a CUDA 13 PyTorch, fp8 (19.7 GB) on an older one
  *   (Comfy-Org: fp8 only where int8 ConvRot can't run). Both larger files are partly offloaded to system memory.
+ * - Flash (any card, picked in Options → GPU tier; Auto never picks it): Video Rebirth's HyperFlow H3 Flash, a 14B distill of H3
+ *   FL2VA sampled in 6 steps with no CFG, as GGUF through its own loader (ComfyUI-HyperFlow-Flash on ComfyUI-GGUF). Q8_0
+ *   (14.9 GB) on 32 GB or more, else Q4_K_M (9.1 GB). Text, start frame and start + end frames to video.
  * - Needs a bigger GPU: under 8 GB, under 12 GB without Blackwell, or a card older than Ada (RTX 30 and before) under
  *   32 GB, whose kernels FastVideo didn't test. Options → GPU tier can still pick a build on any card.
  *
@@ -27,10 +30,13 @@ import type { FileKey, GpuInventory, RequirementIndex } from "./types";
  * on an RTX 4090, 82 s on a 4090 capped at 8 GB with the NVFP4 Trim), never measured here.
  */
 
-export type H3Tier = "standard" | "fast" | "trim";
+export type H3Tier = "standard" | "fast" | "trim" | "flash";
+
+/** The builds Auto may pick on a smaller card (Flash is picked in Options → GPU tier only). */
+export type H3AutoTier = "fast" | "trim";
 
 /** The diffusion file's format a tier loads. */
-export type H3Weights = "int8" | "fp8" | "nvfp4";
+export type H3Weights = "int8" | "fp8" | "nvfp4" | "q8_0" | "q4_k_m";
 
 /** Graphics card generations, as the chooser tells them apart (compute capability in brackets). */
 export type GpuArch = "blackwell" | "hopper" | "ada" | "ampere" | "turing" | "older" | "other" | "unknown";
@@ -55,7 +61,7 @@ export interface H3TierChoice {
   unet?: string;
   /** Some of the model waits in system memory while it runs (the file is bigger than the card). */
   offload: boolean;
-  /** "FastH3 Trim (fp8)", "FastH3 V2 (int8)", "Standard". */
+  /** "FastH3 Trim (fp8)", "FastH3 V2 (int8)", "H3 Flash (Q8_0)", "Standard". */
   label: string;
   /** No build fits this card: the run goes to Standard, which the GPU pre-flight then says needs a bigger GPU. */
   tooSmall?: boolean;
@@ -64,7 +70,7 @@ export interface H3TierChoice {
 }
 
 /** The hidden models whose switch, licence and pre-flight row each smaller build has (src/lib/catalog/models.ts). */
-export const H3_TIER_MODEL: Record<Exclude<H3Tier, "standard">, string> = { fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim" };
+export const H3_TIER_MODEL: Record<Exclude<H3Tier, "standard">, string> = { fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim", flash: "oss-minimax-h3-flash" };
 
 /** Options → GPU tier's param (params.extra). Unset is Auto. */
 export const H3_TIER_PARAM = "gpuTier";
@@ -85,23 +91,32 @@ export const FAST_FILES: Record<"int8" | "nvfp4", { file: string; gb: number }> 
 };
 
 /** FastH3 Trim's files (FastVideo/FastVideo-FastH3-Trim-Comfy @ f66c13dc). */
-export const TRIM_FILES: Record<H3Weights, { file: string; gb: number }> = {
+export const TRIM_FILES: Record<"int8" | "fp8" | "nvfp4", { file: string; gb: number }> = {
   int8: { file: "fastvideo_fasth3_trim_8step_int8_convrot.safetensors", gb: 18.92 },
   fp8: { file: "fastvideo_fasth3_trim_8step_fp8.safetensors", gb: 19.68 },
   nvfp4: { file: "fastvideo_fasth3_trim_8step_nvfp4.safetensors", gb: 11.89 },
 };
+
+/** HyperFlow H3 Flash's files (VideoRebirthAI/hyperflow-h3-flash @ 9e9ed14b, fl2va_gguf). */
+export const FLASH_FILES: Record<"q8_0" | "q4_k_m", { file: string; gb: number }> = {
+  q8_0: { file: "minimax_h3_fl2va_hyperflow_flash_14b-Q8_0.gguf", gb: 14.93 },
+  q4_k_m: { file: "minimax_h3_fl2va_hyperflow_flash_14b-Q4_K_M.gguf", gb: 9.05 },
+};
+
+/** Flash loads Q8_0 from this much memory up, else Q4_K_M. */
+export const H3_FLASH_Q8_GB = 32;
 
 /** The text encoder every tier reads (the FastH3 templates' pairing). */
 export const H3_ENCODER = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
 
 /** The graphs each tier runs in place of a Standard graph. Trim has text to video only. */
 export const H3_TIER_GRAPH: Record<string, Partial<Record<Exclude<H3Tier, "standard">, string>>> = {
-  "minimax-h3-t2v": { fast: "minimax-h3-fast-t2v", trim: "minimax-h3-trim-t2v" },
-  "minimax-h3-i2v": { fast: "minimax-h3-fast-i2v" },
-  "minimax-h3-flf2v": { fast: "minimax-h3-fast-flf2v" },
+  "minimax-h3-t2v": { fast: "minimax-h3-fast-t2v", trim: "minimax-h3-trim-t2v", flash: "minimax-h3-flash-t2v" },
+  "minimax-h3-i2v": { fast: "minimax-h3-fast-i2v", flash: "minimax-h3-flash-i2v" },
+  "minimax-h3-flf2v": { fast: "minimax-h3-fast-flf2v", flash: "minimax-h3-flash-flf2v" },
 };
 
-/** Every FastH3 graph (the ones whose diffusion file follows the card: the `unet` binding). */
+/** Every FastH3 and Flash graph (the ones whose diffusion file follows the card: the `unet` binding). */
 export const H3_TIER_GRAPHS: ReadonlySet<string> = new Set(Object.values(H3_TIER_GRAPH).flatMap((t) => Object.values(t)));
 
 /** Which tier a FastH3 graph belongs to. */
@@ -143,11 +158,12 @@ export const cuda13 = (torch: string | undefined) => /\+cu1[3-9]\d/.test(torch ?
 // ---------------------------------------------------------------------------
 // The chooser
 
+const TIER_NAMES: Record<Exclude<H3Tier, "standard">, string> = { fast: "FastH3 V2", trim: "FastH3 Trim", flash: "H3 Flash" };
 const label = (tier: H3Tier, weights?: H3Weights) =>
-  tier === "standard" ? "Standard" : `${tier === "fast" ? "FastH3 V2" : "FastH3 Trim"} (${weights})`;
+  tier === "standard" ? "Standard" : `${TIER_NAMES[tier]} (${tier === "flash" ? weights?.toUpperCase() : weights})`;
 
 /** The file a tier loads on this card. Unknown cards take the templates' default format (int8 ConvRot). */
-export function tierWeights(tier: Exclude<H3Tier, "standard">, arch: GpuArch, torch?: string): H3Weights {
+export function tierWeights(tier: H3AutoTier, arch: GpuArch, torch?: string): H3Weights {
   if (arch === "blackwell") return "nvfp4";
   if (tier === "fast") return "int8";
   return adaOrNewer(arch) && torch && !cuda13(torch) ? "fp8" : "int8";
@@ -156,8 +172,14 @@ export function tierWeights(tier: Exclude<H3Tier, "standard">, arch: GpuArch, to
 /** A tier on this card: its file, and whether part of it waits in system memory. */
 export function tierChoice(tier: H3Tier, d: H3Device): H3TierChoice {
   if (tier === "standard") return { tier, offload: false, label: label(tier) };
+  if (tier === "flash") {
+    // Q8_0 on a 32 GB card, else (and with no reading) the 9 GB Q4_K_M.
+    const q: "q8_0" | "q4_k_m" = typeof d.vramGb === "number" && d.vramGb >= H3_FLASH_Q8_GB ? "q8_0" : "q4_k_m";
+    const f = FLASH_FILES[q];
+    return { tier, weights: q, unet: f.file, offload: typeof d.vramGb === "number" && f.gb > d.vramGb - 2, label: label(tier, q) };
+  }
   const weights = tierWeights(tier, gpuArch(d.name, d.type), d.torch);
-  const f = tier === "fast" ? FAST_FILES[weights as "int8" | "nvfp4"] : TRIM_FILES[weights];
+  const f = tier === "fast" ? FAST_FILES[weights as "int8" | "nvfp4"] : TRIM_FILES[weights as "int8" | "fp8" | "nvfp4"];
   // About 2 GB of a card goes to the picture being made: a file bigger than the rest is partly offloaded.
   const offload = typeof d.vramGb === "number" && f.gb > d.vramGb - 2;
   return { tier, weights, unet: f.file, offload, label: label(tier, weights) };
@@ -181,7 +203,7 @@ export function chooseH3Tier(d: H3Device): H3TierChoice {
 
 /** The tier a run takes: the one asked for in Options → GPU tier, else Auto's. */
 export function h3TierFor(asked: unknown, d: H3Device): H3TierChoice {
-  if (asked === "standard" || asked === "fast" || asked === "trim") return tierChoice(asked, d);
+  if (asked === "standard" || asked === "fast" || asked === "trim" || asked === "flash") return tierChoice(asked, d);
   return chooseH3Tier(d);
 }
 
@@ -196,7 +218,14 @@ export function tierGraphFor(endpoint: string, tier: H3Tier | undefined, has: (i
 export const TIER_NOTES: Record<Exclude<H3Tier, "standard">, string> = {
   fast: "FastH3 V2: an 8-step build of MiniMax H3 for 16-31 GB GPUs. A start frame is followed less closely than on the full model",
   trim: "FastH3 Trim: an experimental 8-step build for 8-15 GB GPUs, below FastH3 V2 in quality. Text to video only",
+  flash: "H3 Flash: HyperFlow's 14B distill of MiniMax H3 in 6 steps, with a natural, filmic look. Its 9 GB build fits 16 GB GPUs",
 };
+
+/** Flash picked with Sharper (Quality "best"): Flash keeps its own schedule. */
+export const FLASH_BEST_NOTE = "H3 Flash runs its own 6-step schedule";
+
+/** Flash picked with Fast decode: Flash decodes with the standard decoder. */
+export const FLASH_DECODER_NOTE = "H3 Flash decodes with the standard decoder";
 
 /** A smaller tier picked with Sharper (Quality "best"): Sharper needs the full model. */
 export const TIER_BEST_NOTE = "Sharper needs a 32 GB GPU: this run uses 8 steps";
@@ -211,13 +240,14 @@ export const TIER_FLEX_REFUSAL = "Fast · Pika Flex needs a 32 GB GPU. Pick 32 G
 export const H3_GPU_TIER: NonNullable<ModelOptions["controls"]>[number] = {
   param: H3_TIER_PARAM,
   label: "GPU tier",
-  values: ["standard", "fast", "trim"],
+  values: ["standard", "fast", "trim", "flash"],
   labels: {
     standard: "32 GB or more · full model",
     fast: "16 GB · FastH3 V2, 8 steps",
     trim: "8-12 GB · FastH3 Trim, experimental, text to video only",
+    flash: "Any GPU · H3 Flash, 6 steps, natural look",
   },
-  ops: { standard: ["t2v", "i2v", "flf2v"], fast: ["t2v", "i2v", "flf2v"], trim: ["t2v"] },
+  ops: { standard: ["t2v", "i2v", "flf2v"], fast: ["t2v", "i2v", "flf2v"], trim: ["t2v"], flash: ["t2v", "i2v", "flf2v"] },
 };
 
 /** Sol-H3-VAE as Comfy-Org repacked it (int8 ConvRot, 1.99 GB): the full graphs' optional decoder. */
@@ -249,7 +279,7 @@ export const H3_DECODER: NonNullable<ModelOptions["controls"]>[number] = {
 export const TIER_DECODER_NOTE = "Fast decode needs a 32 GB GPU: this run uses the standard decoder";
 
 /** What Auto runs on the card the GPU check read, as the composer says it (no file formats: visitors read it). */
-export const AUTO_TIER_NOTES: Record<Exclude<H3Tier, "standard">, string> = {
+export const AUTO_TIER_NOTES: Record<H3AutoTier, string> = {
   fast: "On your GPU this runs as FastH3 V2, an 8-step build for 16-31 GB cards. A start frame is followed less closely than on the full model",
   trim: "On your GPU this runs as FastH3 Trim, an experimental 8-step build for smaller cards: text to video only",
 };
@@ -258,7 +288,7 @@ export const AUTO_TIER_NOTES: Record<Exclude<H3Tier, "standard">, string> = {
  * The composer's note under MiniMax H3's options: what a smaller tier changes when one is picked for an operation that has it,
  * else (Auto) what the card the GPU check read runs (`auto`: BadgeMap.h3Tier).
  */
-export function h3TierNote(extra: Record<string, unknown> | undefined, op: string | undefined, auto?: "fast" | "trim"): string | undefined {
+export function h3TierNote(extra: Record<string, unknown> | undefined, op: string | undefined, auto?: H3AutoTier): string | undefined {
   const picked = extra?.[H3_TIER_PARAM];
   // Fast · Pika Flex runs on the full model: Auto keeps it there, and a smaller tier picked with it is refused.
   if (extra?.quality === "flex" && op && H3_GPU_TIER.ops?.fast?.includes(op)) {
@@ -268,8 +298,14 @@ export function h3TierNote(extra: Record<string, unknown> | undefined, op: strin
     return [AUTO_TIER_NOTES[auto], ...(extra?.quality === "best" ? [TIER_BEST_NOTE] : []), ...(extra?.decoder === "fast" ? [TIER_DECODER_NOTE] : [])].join(". ");
   }
   const tier = picked;
-  if ((tier !== "fast" && tier !== "trim") || !op || !H3_GPU_TIER.ops?.[tier]?.includes(op)) return undefined;
-  return [TIER_NOTES[tier], ...(extra?.quality === "best" ? [TIER_BEST_NOTE] : []), ...(extra?.decoder === "fast" ? [TIER_DECODER_NOTE] : [])].join(". ");
+  if ((tier !== "fast" && tier !== "trim" && tier !== "flash") || !op || !H3_GPU_TIER.ops?.[tier]?.includes(op)) return undefined;
+  return [TIER_NOTES[tier], ...tierExtraNotes(tier, extra?.quality === "best", extra?.decoder === "fast")].join(". ");
+}
+
+/** What Sharper and Fast decode become on a smaller or Flash build, as the run's notes say it. */
+export function tierExtraNotes(tier: Exclude<H3Tier, "standard">, best: boolean, fastDecode: boolean): string[] {
+  const flash = tier === "flash";
+  return [...(best ? [flash ? FLASH_BEST_NOTE : TIER_BEST_NOTE] : []), ...(fastDecode ? [flash ? FLASH_DECODER_NOTE : TIER_DECODER_NOTE] : [])];
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +325,7 @@ export function withTierFile(idx: RequirementIndex, graph: string, unet: string 
   const w = idx.workflows[graph];
   const key: FileKey = `diffusion_models/${unet}`;
   if (!w || !unet || !w.optional.includes(key) || w.files.includes(key)) return idx;
-  const files = [...w.files.filter((f) => !/^diffusion_models\/fastvideo_fasth3_/.test(f)), key].sort();
+  const files = [...w.files.filter((f) => !/^diffusion_models\/(fastvideo_fasth3_|minimax_h3_fl2va_hyperflow_flash_)/.test(f)), key].sort();
   return { ...idx, workflows: { ...idx.workflows, [graph]: { ...w, files, optional: w.optional.filter((f) => f !== key) } } };
 }
 
