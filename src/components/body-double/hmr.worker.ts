@@ -4,6 +4,7 @@
  * so the page keeps drawing the camera at its own frame rate. Nothing leaves the browser.
  */
 import { createHmr, type DrawBody, type Hmr, toDrawBody } from "@/lib/body-double/hmr";
+import { createOutlineFinder, type Outline, type OutlineFinder, outlineBox } from "@/lib/body-double/outline";
 
 export type LiveRequest =
   | { type: "start" }
@@ -13,13 +14,15 @@ export type LiveRequest =
 export type LiveReply =
   | { type: "progress"; share: number }
   | { type: "ready"; faces: Uint32Array; engine: Hmr["engine"] }
-  | { type: "body"; body: DrawBody; focal: number; width: number; height: number; at: number; ms: number }
+  | { type: "body"; body: DrawBody; outline: Outline | null; focal: number; width: number; height: number; at: number; ms: number }
   | { type: "skip"; at: number }
   | { type: "error"; message: string };
 
 const post = (r: LiveReply, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(r, transfer);
 
 let hmr: Hmr | null = null;
+/** The full outline (MediaPipe person segmenter); Live goes on with the body alone if it can't load. */
+let outlines: OutlineFinder | null = null;
 let starting: Promise<void> | null = null;
 
 self.onmessage = async (e: MessageEvent<LiveRequest>) => {
@@ -30,6 +33,10 @@ self.onmessage = async (e: MessageEvent<LiveRequest>) => {
         hmr = h;
         // A copy: the worker keeps its own faces for the normals.
         post({ type: "ready", faces: h.faces.slice(), engine: h.engine });
+        // The outline loads after the body (one GPU set-up at a time); frames until then carry no outline.
+        createOutlineFinder()
+          .then((o) => (outlines = o))
+          .catch(() => (outlines = null));
       })
       .catch((err: unknown) => {
         starting = null;
@@ -48,9 +55,18 @@ self.onmessage = async (e: MessageEvent<LiveRequest>) => {
   }
   const t0 = performance.now();
   try {
-    const res = await hmr.step(m.bitmap, m.width, m.height, m.at / 1000);
+    // The outline first: it covers clothes and hair, and its box is where the body model looks this frame.
+    let outline: Outline | null = null;
+    try {
+      outline = outlines ? await outlines.find(m.bitmap, m.width, m.height, m.at) : null;
+    } catch {
+      outline = null;
+    }
+    const res = await hmr.step(m.bitmap, m.width, m.height, m.at / 1000, outline && outlineBox(outline, m.width, m.height));
     const body = toDrawBody(res.verts, res.cam, hmr.faces);
-    post({ type: "body", body, focal: res.f, width: m.width, height: m.height, at: m.at, ms: performance.now() - t0 }, [body.positions.buffer, body.normals.buffer]);
+    const transfer: Transferable[] = [body.positions.buffer, body.normals.buffer];
+    if (outline) transfer.push(outline.data.buffer);
+    post({ type: "body", body, outline, focal: res.f, width: m.width, height: m.height, at: m.at, ms: performance.now() - t0 }, transfer);
   } catch (err) {
     post({ type: "error", message: err instanceof Error ? err.message : "Live stopped" });
   } finally {

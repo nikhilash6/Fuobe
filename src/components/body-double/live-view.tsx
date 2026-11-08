@@ -8,6 +8,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { type DrawBody, N_VERTS } from "@/lib/body-double/hmr";
+import type { Outline } from "@/lib/body-double/outline";
 import { BODY_DOUBLE_DEMOS } from "@/lib/catalog/body-double";
 import { usePlayInView } from "./use-play-in-view";
 import { cn } from "@/lib/utils";
@@ -64,12 +65,75 @@ function lookMaterial(look: LiveLook, envMap: THREE.Texture): THREE.Material {
   return new THREE.MeshPhysicalMaterial({ color: 0xf3f0ff, metalness: 1, roughness: 0.07, envMap, envMapIntensity: 1.35, clearcoat: 1, clearcoatRoughness: 0.04 });
 }
 
+const LOOK_INDEX: Record<LiveLook, number> = { chrome: 0, iris: 1, holo: 2, wire: 3 };
+
+/**
+ * The full outline as a full-screen layer under the 3D body: the person mask (clothes and hair included), softened into
+ * a height field whose slope gives a surface, lit in the same look as the body.
+ */
+function outlineMaterial() {
+  return new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    uniforms: { uMask: { value: null as THREE.Texture | null }, uTexel: { value: new THREE.Vector2(1 / 256, 1 / 192) }, uLook: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: `out vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: `
+      uniform sampler2D uMask; uniform vec2 uTexel; uniform int uLook; uniform float uTime; in vec2 vUv; out vec4 outColor;
+      float m(vec2 uv){ return texture(uMask, vec2(uv.x, 1.0 - uv.y)).r; }
+      // A rounded surface over the whole outline: the mask softened at three sizes by its mip levels (edge, limb, body),
+      // so the slope turns across each limb and the middle stays full.
+      float h(vec2 uv){
+        vec2 t = vec2(uv.x, 1.0 - uv.y);
+        return 0.3 * textureLod(uMask, t, 1.0).r + 0.35 * textureLod(uMask, t, 2.5).r + 0.35 * textureLod(uMask, t, 4.0).r;
+      }
+      void main(){
+        float a = smoothstep(0.35, 0.65, m(vUv));
+        if (a < 0.01) discard;
+        vec2 d = uTexel * 3.0;
+        float dx = h(vUv + vec2(d.x, 0.0)) - h(vUv - vec2(d.x, 0.0));
+        float dy = h(vUv + vec2(0.0, d.y)) - h(vUv - vec2(0.0, d.y));
+        vec3 n = normalize(vec3(-dx * 1.5, dy * 1.5, 0.5));
+        vec3 col;
+        if (uLook == 2) {
+          float fres = pow(1.0 - n.z, 1.5);
+          vec3 c = mix(vec3(.72,.55,1.), vec3(.35,.95,1.), .5 + .5*sin(vUv.y*6.0 + uTime*.8));
+          float scan = .75 + .25*sin(vUv.y*900.0 - uTime*6.0);
+          // Opaque, so nothing of the person shows through; brighter toward the outline.
+          col = c * (.42 + 1.2*fres) * scan;
+        } else if (uLook == 3) {
+          float g = max(step(0.93, fract(vUv.x*96.0)), step(0.93, fract(vUv.y*72.0)));
+          float edge = a - smoothstep(0.55, 0.8, m(vUv));
+          // A pale mannequin drawn with a grid: it covers the person, the lines show its shape.
+          col = mix(vec3(0.95,0.94,0.98), vec3(0.55,0.5,0.85), max(g * 0.8, edge));
+        } else {
+          vec3 r = vec3(n.x, n.y, n.z);
+          float sky = smoothstep(-0.6, 0.8, r.y);
+          vec3 base = mix(vec3(0.42,0.42,0.47), vec3(0.98,0.97,1.0), sky);
+          base += 0.55 * exp(-pow((r.y - 0.08) * 6.0, 2.0)) * vec3(0.9,0.9,1.0);
+          base *= 0.75 + 0.25 * smoothstep(-0.8, 0.8, r.x);
+          float fres = pow(1.0 - n.z, 2.0);
+          float spec = pow(max(dot(n, normalize(vec3(-0.45, 0.6, 0.7))), 0.0), 28.0);
+          col = base * (0.7 + 0.5 * fres) + spec * 0.85;
+          if (uLook == 1) {
+            vec3 rainbow = 0.5 + 0.5*cos(6.2832*(vec3(0.0,0.33,0.67) + dot(n.xy, vec2(0.8,0.5))*1.2 + 0.1));
+            col = mix(col, col*rainbow*1.35, 0.55);
+          }
+        }
+        outColor = vec4(col, a);
+      }`,
+  });
+}
+
 type Scenes = {
   /** The body whose normals the geometry holds. */
   shown?: unknown;
+  /** Whether the full outline shows under the body. */
+  outlineOn: boolean;
   geometry: THREE.BufferGeometry;
   positions: Float32Array;
-  overlay: { r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; mesh: THREE.Mesh; env: THREE.Texture };
+  overlay: { r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; mesh: THREE.Mesh; env: THREE.Texture; outline: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> };
   orbit: { r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; mesh: THREE.Mesh; env: THREE.Texture; body: THREE.Group; floor: THREE.Object3D[]; controls: OrbitControls };
   dispose(): void;
 };
@@ -93,7 +157,13 @@ function makeScenes(overlayCanvas: HTMLCanvasElement, orbitCanvas: HTMLCanvasEle
   const oCam = new THREE.PerspectiveCamera(50, 4 / 3, 0.05, 100);
   const oMesh = new THREE.Mesh(geometry, lookMaterial(look, oEnv));
   oMesh.visible = false;
+  oMesh.renderOrder = 1;
   oScene.add(oMesh);
+  const outline = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), outlineMaterial());
+  outline.frustumCulled = false;
+  outline.visible = false;
+  outline.renderOrder = 0;
+  oScene.add(outline);
   const key = new THREE.DirectionalLight(0xffffff, 1.6);
   key.position.set(-1, 2, 1);
   oScene.add(key);
@@ -122,14 +192,18 @@ function makeScenes(overlayCanvas: HTMLCanvasElement, orbitCanvas: HTMLCanvasEle
   rScene.add(key2);
 
   return {
+    outlineOn: true,
     geometry,
     positions,
-    overlay: { r: or, scene: oScene, cam: oCam, mesh: oMesh, env: oEnv },
+    overlay: { r: or, scene: oScene, cam: oCam, mesh: oMesh, env: oEnv, outline },
     orbit: { r: rr, scene: rScene, cam: rCam, mesh: rMesh, env: rEnv, body, floor: [disc, ring], controls },
     dispose() {
       controls.dispose();
       geometry.dispose();
       for (const m of [oMesh, rMesh]) (m.material as THREE.Material).dispose();
+      outline.geometry.dispose();
+      outline.material.uniforms.uMask.value?.dispose();
+      outline.material.dispose();
       oEnv.dispose();
       rEnv.dispose();
       or.dispose();
@@ -139,7 +213,7 @@ function makeScenes(overlayCanvas: HTMLCanvasElement, orbitCanvas: HTMLCanvasEle
 }
 
 /** One body from the worker, with the moment its camera frame was taken. */
-type Found = { body: DrawBody; focal: number; width: number; height: number; at: number };
+type Found = { body: DrawBody; outline: Outline | null; focal: number; width: number; height: number; at: number };
 
 /**
  * The newest body pushed forward to now along its own motion (from the body before it), so it stays on the person
@@ -147,8 +221,10 @@ type Found = { body: DrawBody; focal: number; width: number; height: number; at:
  */
 function drawBody(s: Scenes, last: Found, prev: Found | null, now: number) {
   const p = s.positions, a = last.body.positions;
+  // A small nudge only (at most 80 ms ahead), and none across a jump (a seek, a lost frame), so the body stays with
+  // its outline, which comes from the same frame.
   const step = prev ? last.at - prev.at : 0;
-  const k = prev && step > 0 ? 0.85 * Math.min(1.5, Math.max(0, (now - last.at) / step)) : 0;
+  const k = prev && step > 0 && step < 200 ? 0.7 * Math.min(1, Math.min(now - last.at, 80) / step) : 0;
   if (k > 0 && prev) {
     const b = prev.body.positions;
     for (let i = 0; i < p.length; i++) p[i] = a[i] + (a[i] - b[i]) * k;
@@ -161,7 +237,26 @@ function drawBody(s: Scenes, last: Found, prev: Found | null, now: number) {
     (n.array as Float32Array).set(last.body.normals);
     n.needsUpdate = true;
     s.geometry.computeBoundingSphere();
+    const o = last.outline, u = s.overlay.outline.material.uniforms;
+    if (o) {
+      const old = u.uMask.value as THREE.DataTexture | null;
+      if (old && old.image.width === o.width && old.image.height === o.height) {
+        (old.image.data as Uint8Array).set(o.data);
+        old.needsUpdate = true;
+      } else {
+        old?.dispose();
+        const t = new THREE.DataTexture(o.data, o.width, o.height, THREE.RedFormat, THREE.UnsignedByteType);
+        t.magFilter = THREE.LinearFilter;
+        t.minFilter = THREE.LinearMipmapLinearFilter;
+        t.generateMipmaps = true;
+        t.needsUpdate = true;
+        u.uMask.value = t;
+        u.uTexel.value.set(1 / o.width, 1 / o.height);
+      }
+    }
+    s.overlay.outline.visible = s.outlineOn && !!u.uMask.value;
   }
+  s.overlay.outline.material.uniforms.uTime.value = now / 1000;
   s.overlay.cam.fov = (2 * Math.atan(last.height / (2 * last.focal)) * 180) / Math.PI;
   s.overlay.cam.aspect = last.width / last.height;
   s.overlay.cam.updateProjectionMatrix();
@@ -205,6 +300,7 @@ export function LiveView() {
   const rec = useRef<{ recorder: MediaRecorder; canvas: HTMLCanvasElement; chunks: Blob[] } | null>(null);
   const [source, setSource] = useState<Source | null>(null);
   const [look, setLook] = useState<LiveLook>("chrome");
+  const [outlineOn, setOutlineOn] = useState(true);
   const [mirror, setMirror] = useState(true);
   const [status, setStatus] = useState<{ kind: "idle" | "loading" | "live" | "error"; text?: string; share?: number }>({ kind: "idle" });
   const [stats, setStats] = useState<{ fps: number; ms: number; engine: string } | null>(null);
@@ -250,7 +346,15 @@ export function LiveView() {
       (m.material as THREE.Material).dispose();
       m.material = lookMaterial(look, env);
     }
+    s.overlay.outline.material.uniforms.uLook.value = LOOK_INDEX[look];
   }, [look]);
+
+  useEffect(() => {
+    const s = scenes.current;
+    if (!s) return;
+    s.outlineOn = outlineOn;
+    s.overlay.outline.visible = outlineOn && !!s.overlay.outline.material.uniforms.uMask.value;
+  }, [outlineOn]);
 
   const size = useCallback((W: number, H: number) => {
     const s = scenes.current, stage = stageRef.current;
@@ -310,7 +414,7 @@ export function LiveView() {
         loopRef.current();
       } else if (m.type === "body") {
         r.prev = r.last;
-        r.last = { body: m.body, focal: m.focal, width: m.width, height: m.height, at: m.at };
+        r.last = { body: m.body, outline: m.outline, focal: m.focal, width: m.width, height: m.height, at: m.at };
         r.busy = false;
         r.fps.push(performance.now());
         while (r.fps.length > 30) r.fps.shift();
@@ -478,6 +582,9 @@ export function LiveView() {
               <Button variant={recording ? "destructive" : "outline"} size="sm" className="rounded-full" onClick={toggleRecord}>
                 {recording ? <Square className="size-3.5" /> : <Circle className="size-3.5" />} {recording ? "Stop and save" : "Record"}
               </Button>
+              <Button variant={outlineOn ? "secondary" : "outline"} size="sm" className="rounded-full" aria-pressed={outlineOn} onClick={() => setOutlineOn((o) => !o)}>
+                Full outline
+              </Button>
               <Button variant="outline" size="sm" className="rounded-full" onClick={() => worker.current?.postMessage({ type: "reset" } satisfies LiveRequest)}>
                 <RefreshCw className="size-3.5" /> Find me again
               </Button>
@@ -492,7 +599,7 @@ export function LiveView() {
               )}
             </div>
           )}
-          <p className="text-[12px] text-muted-foreground">One person at a time, best in full view. For everyone in a shot, or a file to animate with, use Photo or Clip.</p>
+          <p className="text-[12px] text-muted-foreground">One person at a time, best in full view. Full outline covers clothes and hair too. For everyone in a shot, or a file to animate with, use Photo or Clip.</p>
         </div>
       </div>
     </div>

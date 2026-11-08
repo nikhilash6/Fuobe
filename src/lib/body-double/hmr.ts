@@ -169,7 +169,13 @@ export function toDrawBody(verts: Float32Array, cam: Float32Array, faces: Uint32
   }
   return { positions, normals, centre: [sx / N_VERTS, sy / N_VERTS, sz / N_VERTS], floor: minY };
 }
-export type Hmr = { step(source: CanvasImageSource, W: number, H: number, t: number): Promise<HmrFrame>; resetTrack(): void; faces: Uint32Array; engine: "WebGPU" | "WebAssembly" };
+export type Hmr = {
+  /** One frame's body; `person` (a tight box x1, y1, x2, y2 in its pixels) replaces the box tracked from the last frame. */
+  step(source: CanvasImageSource, W: number, H: number, t: number, person?: number[] | null): Promise<HmrFrame>;
+  resetTrack(): void;
+  faces: Uint32Array;
+  engine: "WebGPU" | "WebAssembly";
+};
 
 export const hasWebGpu = () => typeof navigator !== "undefined" && "gpu" in navigator;
 
@@ -219,8 +225,9 @@ export async function createHmr(onProgress?: (share: number) => void): Promise<H
     smoothCam.reset();
   };
 
-  async function step(source: CanvasImageSource, W: number, H: number, t: number): Promise<HmrFrame> {
+  async function step(source: CanvasImageSource, W: number, H: number, t: number, person?: number[] | null): Promise<HmrFrame> {
     const f = 1.05 * Math.hypot(W, H);
+    if (person) box = person;
     if (!box) {
       const s = Math.min(W, H) / EXPAND;
       box = [W / 2 - s / 2, H / 2 - s / 2, W / 2 + s / 2, H / 2 + s / 2];
