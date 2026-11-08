@@ -410,7 +410,7 @@ export const PRESET_MINIS: Record<string, string> = {
   "motion-bullet-time": "1979e2af",
   "motion-car-chasing": "3607a885",
   "motion-car-grip": "cb51b783",
-  "motion-catwalk": "92cbdbef",
+  "motion-catwalk": "63830ebf",
   "motion-classic-static": "44d8e4ff",
   "motion-crane-down": "286205d3",
   "motion-crane-over-the-head": "48195d80",

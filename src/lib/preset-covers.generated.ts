@@ -414,7 +414,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "motion-bullet-time": ["a46e9809","47b0550c"],
   "motion-car-chasing": ["b65183fa","07d368e4"],
   "motion-car-grip": ["97305892","8b6ee6f5"],
-  "motion-catwalk": ["57f553e7","2b71fd01"],
+  "motion-catwalk": ["f357606b","75f24e9a"],
   "motion-classic-static": ["4ecfb2fe","395575ee"],
   "motion-crane-down": ["f338918c","970f8e6f"],
   "motion-crane-over-the-head": ["c0be0a10","4477dc8e"],

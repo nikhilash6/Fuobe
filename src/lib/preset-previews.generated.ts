@@ -3224,8 +3224,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-catwalk": {
-    "poster": "/previews/presets/motion-catwalk.jpg?v=57f553e7",
-    "video": "/previews/presets/motion-catwalk.mp4?v=2b71fd01",
+    "poster": "/previews/presets/motion-catwalk.jpg?v=f357606b",
+    "video": "/previews/presets/motion-catwalk.mp4?v=75f24e9a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",

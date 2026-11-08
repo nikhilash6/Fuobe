@@ -407,7 +407,7 @@ export const PRESET_HD: Record<string, { w: number[]; v: string; still?: number;
   "motion-buckle-up": { "w":[640,1024], "v":"694abe9f", "rest":"/examples/motion-buckle-up/1/out-peak.jpg" },
   "motion-car-chasing": { "w":[640,1024], "v":"4c70d5fa", "rest":"/examples/motion-car-chasing/1/out-peak.jpg" },
   "motion-car-grip": { "w":[640,1024], "v":"333102af", "rest":"/examples/motion-car-grip/1/out-peak.jpg" },
-  "motion-catwalk": { "w":[640,1024], "v":"cb5980c6", "rest":"/examples/motion-catwalk/1/out-peak.jpg" },
+  "motion-catwalk": { "w":[640,1024], "v":"e2e13a2c", "rest":"/examples/motion-catwalk/1/out-peak.jpg" },
   "motion-classic-static": { "w":[640,1024], "v":"cbe24ffd", "rest":"/examples/motion-classic-static/1/out-peak.jpg" },
   "motion-crane-down": { "w":[640,1024], "v":"1812c4a2", "rest":"/examples/motion-crane-down/1/out-peak.jpg" },
   "motion-crane-over-the-head": { "w":[640,1024], "v":"12b46e30", "rest":"/examples/motion-crane-over-the-head/1/out-peak.jpg" },
