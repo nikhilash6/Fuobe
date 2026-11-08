@@ -7,9 +7,10 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { createHmr, type Hmr, N_VERTS } from "@/lib/body-double/hmr";
+import { type DrawBody, N_VERTS } from "@/lib/body-double/hmr";
 import { BODY_DOUBLE_DEMOS } from "@/lib/catalog/body-double";
 import { cn } from "@/lib/utils";
+import type { LiveReply, LiveRequest } from "./hmr.worker";
 
 /** A clip anyone can try Live on before turning on their camera. */
 export const LIVE_SAMPLES = [
@@ -63,6 +64,8 @@ function lookMaterial(look: LiveLook, envMap: THREE.Texture): THREE.Material {
 }
 
 type Scenes = {
+  /** The body whose normals the geometry holds. */
+  shown?: unknown;
   geometry: THREE.BufferGeometry;
   positions: Float32Array;
   overlay: { r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; mesh: THREE.Mesh; env: THREE.Texture };
@@ -81,6 +84,7 @@ function makeScenes(overlayCanvas: HTMLCanvasElement, orbitCanvas: HTMLCanvasEle
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(N_VERTS * 3);
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(N_VERTS * 3), 3).setUsage(THREE.DynamicDrawUsage));
 
   const or = renderer(overlayCanvas);
   const oEnv = new THREE.PMREMGenerator(or).fromScene(new RoomEnvironment(), 0.04).texture;
@@ -133,36 +137,40 @@ function makeScenes(overlayCanvas: HTMLCanvasElement, orbitCanvas: HTMLCanvasEle
   };
 }
 
-/** The body into both views: over the picture through the camera's own lens, and centred on the disc. */
-function drawBody(s: Scenes, verts: Float32Array, cam: Float32Array, f: number, W: number, H: number, t: number) {
-  const p = s.positions;
-  let minY = Infinity, sx = 0, sy = 0, sz = 0;
-  // Camera frame (x right, y down, z forward) → three.js (y up, looking down −z).
-  for (let i = 0; i < N_VERTS; i++) {
-    const x = verts[3 * i] + cam[0], y = -(verts[3 * i + 1] + cam[1]), z = -(verts[3 * i + 2] + cam[2]);
-    p[3 * i] = x;
-    p[3 * i + 1] = y;
-    p[3 * i + 2] = z;
-    sx += x;
-    sy += y;
-    sz += z;
-    if (y < minY) minY = y;
-  }
+/** One body from the worker, with the moment its camera frame was taken. */
+type Found = { body: DrawBody; focal: number; width: number; height: number; at: number };
+
+/**
+ * The newest body pushed forward to now along its own motion (from the body before it), so it stays on the person
+ * while the camera plays at its own frame rate; at most a little past one model step, and damped.
+ */
+function drawBody(s: Scenes, last: Found, prev: Found | null, now: number) {
+  const p = s.positions, a = last.body.positions;
+  const step = prev ? last.at - prev.at : 0;
+  const k = prev && step > 0 ? 0.85 * Math.min(1.5, Math.max(0, (now - last.at) / step)) : 0;
+  if (k > 0 && prev) {
+    const b = prev.body.positions;
+    for (let i = 0; i < p.length; i++) p[i] = a[i] + (a[i] - b[i]) * k;
+  } else p.set(a);
   s.geometry.attributes.position.needsUpdate = true;
-  s.geometry.computeVertexNormals();
-  s.geometry.computeBoundingSphere();
-  s.overlay.cam.fov = (2 * Math.atan(H / (2 * f)) * 180) / Math.PI;
-  s.overlay.cam.aspect = W / H;
+  // Normals and bounds change only with a new body.
+  if (s.shown !== last) {
+    s.shown = last;
+    const n = s.geometry.attributes.normal as THREE.BufferAttribute;
+    (n.array as Float32Array).set(last.body.normals);
+    n.needsUpdate = true;
+    s.geometry.computeBoundingSphere();
+  }
+  s.overlay.cam.fov = (2 * Math.atan(last.height / (2 * last.focal)) * 180) / Math.PI;
+  s.overlay.cam.aspect = last.width / last.height;
   s.overlay.cam.updateProjectionMatrix();
   s.overlay.mesh.visible = true;
-  sx /= N_VERTS;
-  sy /= N_VERTS;
-  sz /= N_VERTS;
-  s.orbit.body.position.set(-sx, -sy, -sz);
-  for (const m of s.orbit.floor) m.position.y = minY - sy - 0.002;
+  const [cx, cy, cz] = last.body.centre;
+  s.orbit.body.position.set(-cx, -cy, -cz);
+  for (const m of s.orbit.floor) m.position.y = last.body.floor - cy - 0.002;
   for (const m of [s.overlay.mesh, s.orbit.mesh]) {
     const u = (m.material as THREE.ShaderMaterial).uniforms;
-    if (u?.uTime) u.uTime.value = t;
+    if (u?.uTime) u.uTime.value = now / 1000;
   }
   s.orbit.controls.update();
   s.overlay.r.render(s.overlay.scene, s.overlay.cam);
@@ -180,14 +188,12 @@ export function LiveView() {
   const stageRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
-  /** The frame each body was found in, shown under it so the two always match (the video plays on, out of sight). */
-  const frameRef = useRef<HTMLCanvasElement>(null);
-  const grab = useRef<HTMLCanvasElement | null>(null);
   const orbitRef = useRef<HTMLCanvasElement>(null);
   const scenes = useRef<Scenes | null>(null);
-  const hmr = useRef<Hmr | null>(null);
-  const run = useRef({ on: false, busy: false, lastTime: -1, fps: [] as number[] });
-  const tickRef = useRef<() => void>(() => {});
+  const worker = useRef<Worker | null>(null);
+  /** The loop: running, a frame with the worker, the last video time sent, the last two bodies, body times, engine. */
+  const run = useRef({ on: false, busy: false, lastTime: -1, last: null as Found | null, prev: null as Found | null, fps: [] as number[], engine: "" });
+  const loopRef = useRef<() => void>(() => {});
   const rec = useRef<{ recorder: MediaRecorder; canvas: HTMLCanvasElement; chunks: Blob[] } | null>(null);
   const [source, setSource] = useState<Source | null>(null);
   const [look, setLook] = useState<LiveLook>("chrome");
@@ -196,7 +202,7 @@ export function LiveView() {
   const [stats, setStats] = useState<{ fps: number; ms: number; engine: string } | null>(null);
   const [recording, setRecording] = useState(false);
 
-  // The scenes live as long as the view.
+  // The scenes live as long as the view; the turning view keeps turning between bodies.
   useEffect(() => {
     if (!overlayRef.current || !orbitRef.current) return;
     const s = makeScenes(overlayRef.current, orbitRef.current, "chrome");
@@ -204,7 +210,7 @@ export function LiveView() {
     const r = run.current;
     let frame = 0;
     const idle = () => {
-      if (!r.busy) {
+      if (!r.on) {
         s.orbit.controls.update();
         s.orbit.r.render(s.orbit.scene, s.orbit.cam);
       }
@@ -214,6 +220,8 @@ export function LiveView() {
     return () => {
       cancelAnimationFrame(frame);
       r.on = false;
+      worker.current?.terminate();
+      worker.current = null;
       s.dispose();
       scenes.current = null;
     };
@@ -247,66 +255,92 @@ export function LiveView() {
   }, [look]);
 
   const size = useCallback((W: number, H: number) => {
-    const s = scenes.current, stage = stageRef.current, orbit = orbitRef.current;
-    if (!s || !stage || !orbit) return;
+    const s = scenes.current, stage = stageRef.current;
+    if (!s || !stage) return;
     stage.style.aspectRatio = `${W} / ${H}`;
     const r = stage.getBoundingClientRect();
     s.overlay.r.setSize(r.width, r.height, false);
-    const o = orbit.getBoundingClientRect();
-    s.orbit.r.setSize(o.width, o.height, false);
-    s.orbit.cam.aspect = o.width / Math.max(1, o.height);
-    s.orbit.cam.updateProjectionMatrix();
   }, []);
 
-  const tick = useCallback(async () => {
-    const r = run.current, video = videoRef.current, engine = hmr.current;
-    if (!r.on || !video || !engine) return;
+  /**
+   * Every screen frame: hand the worker the newest camera frame when it is free, and draw the newest body pushed to now.
+   * The camera itself plays at its own rate underneath.
+   */
+  const loop = useCallback(() => {
+    const r = run.current, video = videoRef.current, w = worker.current;
+    if (!r.on || !video || !w) return;
     const W = video.videoWidth, H = video.videoHeight;
-    if (W && H && !r.busy && video.currentTime !== r.lastTime) {
-      r.lastTime = video.currentTime;
-      r.busy = true;
+    if (W && H) {
       const stage = stageRef.current;
       if (stage && stage.dataset.size !== `${W}x${H}`) {
         size(W, H);
         stage.dataset.size = `${W}x${H}`;
       }
-      const now = performance.now();
-      try {
-        // Freeze this frame, find its body, then show the frame and its body together.
-        const g = (grab.current ??= document.createElement("canvas"));
-        if (g.width !== W || g.height !== H) Object.assign(g, { width: W, height: H });
-        g.getContext("2d")?.drawImage(video, 0, 0, W, H);
-        const res = await engine.step(g, W, H, now / 1000);
-        const shown = frameRef.current;
-        if (shown) {
-          if (shown.width !== W || shown.height !== H) Object.assign(shown, { width: W, height: H });
-          shown.getContext("2d")?.drawImage(g, 0, 0);
-        }
-        if (scenes.current) drawBody(scenes.current, res.verts, res.cam, res.f, W, H, now / 1000);
-        if (rec.current) composite(rec.current.canvas, g, overlayRef.current, mirror && source?.kind === "camera");
-        r.fps.push(now);
+      if (!r.busy && video.currentTime !== r.lastTime) {
+        r.lastTime = video.currentTime;
+        r.busy = true;
+        const at = performance.now();
+        createImageBitmap(video)
+          .then((bitmap) => w.postMessage({ type: "frame", bitmap, width: W, height: H, at } satisfies LiveRequest, [bitmap]))
+          .catch(() => {
+            r.busy = false;
+          });
+      }
+      if (r.last && scenes.current) {
+        drawBody(scenes.current, r.last, r.prev, performance.now());
+        if (rec.current) composite(rec.current.canvas, video, overlayRef.current, mirror && source?.kind === "camera");
+      }
+    }
+    requestAnimationFrame(() => loopRef.current());
+  }, [size, mirror, source]);
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
+
+  /** The worker, made once: it loads the model, then answers each frame with its body. */
+  const getWorker = useCallback(() => {
+    if (worker.current) return worker.current;
+    const w = new Worker(new URL("./hmr.worker.ts", import.meta.url), { type: "module" });
+    w.onmessage = (e: MessageEvent<LiveReply>) => {
+      const m = e.data, r = run.current;
+      if (m.type === "progress") setStatus({ kind: "loading", share: m.share });
+      else if (m.type === "ready") {
+        scenes.current?.geometry.setIndex(new THREE.BufferAttribute(m.faces, 1));
+        r.engine = m.engine;
+        setStatus({ kind: "live" });
+        r.on = true;
+        loopRef.current();
+      } else if (m.type === "body") {
+        r.prev = r.last;
+        r.last = { body: m.body, focal: m.focal, width: m.width, height: m.height, at: m.at };
+        r.busy = false;
+        r.fps.push(performance.now());
         while (r.fps.length > 30) r.fps.shift();
         if (r.fps.length % 10 === 0) {
           const fps = r.fps.length > 1 ? (1000 * (r.fps.length - 1)) / (r.fps[r.fps.length - 1] - r.fps[0]) : 0;
-          setStats({ fps, ms: res.ms.prep + res.ms.network + res.ms.body, engine: engine.engine });
+          setStats({ fps, ms: m.ms, engine: r.engine });
         }
-      } catch (e) {
+      } else if (m.type === "skip") r.busy = false;
+      else if (m.type === "error") {
         r.on = false;
-        setStatus({ kind: "error", text: e instanceof Error ? e.message : "Live stopped" });
+        r.busy = false;
+        setStatus({ kind: "error", text: m.message });
       }
-      r.busy = false;
-    }
-    requestAnimationFrame(() => tickRef.current());
-  }, [size, mirror, source]);
-  useEffect(() => {
-    tickRef.current = () => void tick();
-  }, [tick]);
+    };
+    w.onerror = () => {
+      run.current.on = false;
+      setStatus({ kind: "error", text: "Live stopped" });
+    };
+    worker.current = w;
+    return w;
+  }, []);
 
   const start = useCallback(
     async (next: Source) => {
       const video = videoRef.current;
       if (!video) return;
-      run.current.on = false;
+      const r = run.current;
+      r.on = false;
       const old = video.srcObject as MediaStream | null;
       old?.getTracks().forEach((t) => t.stop());
       video.srcObject = null;
@@ -324,24 +358,19 @@ export function LiveView() {
         return;
       }
       setSource(next);
-      if (!hmr.current) {
+      Object.assign(r, { busy: false, lastTime: -1, last: null, prev: null });
+      const w = getWorker();
+      w.postMessage({ type: "reset" } satisfies LiveRequest);
+      if (r.engine) {
+        setStatus({ kind: "live" });
+        r.on = true;
+        loopRef.current();
+      } else {
         setStatus({ kind: "loading", share: 0 });
-        try {
-          const engine = await createHmr((share) => setStatus({ kind: "loading", share }));
-          scenes.current?.geometry.setIndex(new THREE.BufferAttribute(engine.faces, 1));
-          hmr.current = engine;
-        } catch (e) {
-          setStatus({ kind: "error", text: e instanceof Error ? e.message : "Live didn't start" });
-          return;
-        }
+        w.postMessage({ type: "start" } satisfies LiveRequest);
       }
-      hmr.current.resetTrack();
-      setStatus({ kind: "live" });
-      run.current.on = true;
-      run.current.lastTime = -1;
-      tickRef.current();
     },
-    [],
+    [getWorker],
   );
 
   // Stop the camera and the loop when the view goes.
@@ -385,8 +414,7 @@ export function LiveView() {
   return (
     <div className={cn("grid gap-3", live ? "lg:grid-cols-[minmax(0,1fr)_300px]" : "mx-auto w-full max-w-[860px]")}>
       <div ref={stageRef} className="relative overflow-hidden rounded-2xl bg-media" style={{ aspectRatio: "4 / 3" }}>
-        <video ref={videoRef} muted playsInline className="absolute inset-0 size-full object-contain opacity-0" aria-hidden />
-        <canvas ref={frameRef} className={cn("absolute inset-0 size-full object-contain", flipped && "-scale-x-100")} aria-label="Your camera" />
+        <video ref={videoRef} muted playsInline className={cn("absolute inset-0 size-full object-contain", flipped && "-scale-x-100")} />
         <canvas ref={overlayRef} className={cn("pointer-events-none absolute inset-0 size-full", flipped && "-scale-x-100")} aria-hidden />
         {!live && <video src={BODY_DOUBLE_DEMOS.live.video} poster={BODY_DOUBLE_DEMOS.live.poster} autoPlay muted loop playsInline aria-hidden className="absolute inset-0 size-full object-cover" />}
         {status.kind !== "live" && (
@@ -452,7 +480,7 @@ export function LiveView() {
               <Button variant={recording ? "destructive" : "outline"} size="sm" className="rounded-full" onClick={toggleRecord}>
                 {recording ? <Square className="size-3.5" /> : <Circle className="size-3.5" />} {recording ? "Stop and save" : "Record"}
               </Button>
-              <Button variant="outline" size="sm" className="rounded-full" onClick={() => hmr.current?.resetTrack()}>
+              <Button variant="outline" size="sm" className="rounded-full" onClick={() => worker.current?.postMessage({ type: "reset" } satisfies LiveRequest)}>
                 <RefreshCw className="size-3.5" /> Find me again
               </Button>
               {source?.kind === "camera" ? (

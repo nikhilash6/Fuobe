@@ -128,6 +128,47 @@ class OneEuro {
 }
 
 export type HmrFrame = { verts: Float32Array; cam: Float32Array; f: number; ms: { prep: number; network: number; body: number } };
+
+/** A body ready to draw: positions and normals in three.js space (y up, looking down −z), its centre and lowest point. */
+export type DrawBody = { positions: Float32Array; normals: Float32Array; centre: [number, number, number]; floor: number };
+
+/**
+ * The body in three.js space, with smooth vertex normals (area-weighted face normals summed at each vertex): the
+ * camera frame (x right, y down, z forward) flips y and z.
+ */
+export function toDrawBody(verts: Float32Array, cam: Float32Array, faces: Uint32Array): DrawBody {
+  const positions = new Float32Array(N_VERTS * 3);
+  let sx = 0, sy = 0, sz = 0, minY = Infinity;
+  for (let i = 0; i < N_VERTS; i++) {
+    const x = verts[3 * i] + cam[0], y = -(verts[3 * i + 1] + cam[1]), z = -(verts[3 * i + 2] + cam[2]);
+    positions[3 * i] = x;
+    positions[3 * i + 1] = y;
+    positions[3 * i + 2] = z;
+    sx += x;
+    sy += y;
+    sz += z;
+    if (y < minY) minY = y;
+  }
+  const normals = new Float32Array(N_VERTS * 3);
+  for (let f = 0; f < faces.length; f += 3) {
+    const a = 3 * faces[f], b = 3 * faces[f + 1], c = 3 * faces[f + 2];
+    const ux = positions[b] - positions[a], uy = positions[b + 1] - positions[a + 1], uz = positions[b + 2] - positions[a + 2];
+    const vx = positions[c] - positions[a], vy = positions[c + 1] - positions[a + 1], vz = positions[c + 2] - positions[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const k of [a, b, c]) {
+      normals[k] += nx;
+      normals[k + 1] += ny;
+      normals[k + 2] += nz;
+    }
+  }
+  for (let i = 0; i < normals.length; i += 3) {
+    const l = Math.hypot(normals[i], normals[i + 1], normals[i + 2]) || 1;
+    normals[i] /= l;
+    normals[i + 1] /= l;
+    normals[i + 2] /= l;
+  }
+  return { positions, normals, centre: [sx / N_VERTS, sy / N_VERTS, sz / N_VERTS], floor: minY };
+}
 export type Hmr = { step(source: CanvasImageSource, W: number, H: number, t: number): Promise<HmrFrame>; resetTrack(): void; faces: Uint32Array; engine: "WebGPU" | "WebAssembly" };
 
 export const hasWebGpu = () => typeof navigator !== "undefined" && "gpu" in navigator;
@@ -164,8 +205,8 @@ export async function createHmr(onProgress?: (share: number) => void): Promise<H
   }
   const faces = readFaces(bodyBytes);
 
-  const crop = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(SIZE, SIZE) : Object.assign(document.createElement("canvas"), { width: SIZE, height: SIZE });
-  const cctx = crop.getContext("2d", { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+  const crop = new OffscreenCanvas(SIZE, SIZE);
+  const cctx = crop.getContext("2d", { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D;
   const input = new Float32Array(3 * SIZE * SIZE);
   let box: number[] | null = null;
   // Light smoothing: enough to steady a still pose, quick enough to keep up with a dancer at 20 fps.
