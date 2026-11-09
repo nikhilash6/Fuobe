@@ -17,7 +17,7 @@ import { redactKey } from "./provider-keys";
 import { networkCode, recordRunEvent } from "./run-events";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
-import { poolClipLimitS, poolHasFiles, poolReady, poolTakes } from "./hosted";
+import { poolHasFiles, poolReady, poolTakes } from "./hosted";
 import { placeName } from "./place-name";
 import { helperKnown } from "./text-helper";
 import { poolOwnModels, poolOwnPresets, type PresetPress } from "./pool-own-setup";
@@ -370,11 +370,6 @@ export interface VisitorView {
    * own: its pickers leave those out instead of failing at Run. Absent: nothing is kept off, or it has a GPU of its own.
    */
   pool?: PoolRules;
-  /**
-   * The longest video clip a run on this install's GPUs makes, in seconds (queue-settings.ts longestClipS). Only with
-   * `hosted`, and only when the owner set one: the pickers start an untouched length within it there.
-   */
-  clipS?: number;
   /** The billing service's words for the account's balance (billing.ts): the top bar's chip and the account menu. */
   balance?: Balance;
   /** Extra links the billing service sends for the menu. */
@@ -484,8 +479,6 @@ export async function visitorStatus(account: Account | null) {
     // there first too, and the label says what runs on its own GPU instead.
     const rules = p?.hosted ? poolRulesOf(p, presetModels(), poolOwnModels(), poolOwnPresets(presetPresses(), poolTakes, poolHasFiles)) : undefined;
     if (rules) viewer.pool = rules;
-    const clipS = p?.hosted ? poolClipLimitS() : null;
-    if (clipS) viewer.clipS = clipS;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;
     // The service's display copy (wait and limit lines), for guests and accounts alike.

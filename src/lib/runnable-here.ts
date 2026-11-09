@@ -18,13 +18,11 @@ export interface Here {
   rules: PoolRules | undefined;
   /** The pool's owner: his runs go to the workers; what they lack now is a worker's files, never his own GPU or key. */
   owner: boolean;
-  /** The longest video clip a visitor's run here makes, in seconds (the owner's setting; absent: no limit). */
-  clipS?: number;
 }
 
 /** The parts of GET /api/status this reads. */
 export interface HereStatus {
-  viewer?: { hosted?: boolean; prefer?: "pool"; runOn?: string; gpu: { connected: boolean }; pool?: PoolRules; clipS?: number };
+  viewer?: { hosted?: boolean; prefer?: "pool"; runOn?: string; gpu: { connected: boolean }; pool?: PoolRules };
   /** The owner's view of the workers (sent only while his ComfyUI runs on them): the open models they can't run now. */
   pool?: PoolRules;
 }
@@ -37,20 +35,7 @@ export function hereOf(s: HereStatus | undefined, owner: boolean): Here | null {
   if (!s) return null;
   if (owner) return s.pool ? { rules: s.pool, owner: true } : null;
   const v = s.viewer;
-  return v && runsGoHere(v) ? { rules: v.pool, owner: false, ...(v.clipS ? { clipS: v.clipS } : {}) } : null;
-}
-
-/**
- * Where an untouched clip length starts for a run here (`current`: the length the run would make with nothing picked),
- * or undefined when it stays: within the longest clip here (Here.clipS), the longest of the picker's own lengths
- * (`lengths`, each one the model takes, so a model's own grid stays whole), else nothing (no length here fits: the
- * price check's label says how to run it). A length the person picks is never changed: it keeps its label instead.
- */
-export function hereClipStart(here: Here | null | undefined, lengths: readonly number[] | null | undefined, current: number | undefined): number | undefined {
-  const limit = here?.clipS;
-  if (!limit || !lengths?.length || current === undefined || current <= limit + 0.05) return undefined;
-  const fits = lengths.filter((l) => l <= limit + 0.05);
-  return fits.length ? Math.max(...fits) : undefined;
+  return v && runsGoHere(v) ? { rules: v.pool, owner: false } : null;
 }
 
 /**

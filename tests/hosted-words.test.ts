@@ -113,7 +113,7 @@ afterEach(() => notePlaceName(null));
 
 /** Every sentence a visitor reads from the server's word tables, for a place. */
 function serverWords(place: ReturnType<typeof placeOf>): string[] {
-  const reasons = ["notOffered", "rtxCard", "loras", "files", "inputs", "size", "length", "model3d"] as const;
+  const reasons = ["notOffered", "rtxCard", "loras", "files", "inputs", "size", "model3d"] as const;
   const setups = [needsGpu(), { need: "gpu" as const, vramGb: 48 }, { need: "gpu" as const, vramGb: 24, orKey: "fal" as const }, { need: "key" as const, provider: "fal" }];
   return [
     ...Object.values(hostedWords(place)),

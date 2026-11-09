@@ -731,14 +731,14 @@ describe("GET and PATCH /api/admin/queue/settings", () => {
     const res = await settingsRoute.GET(req({ cookie: ownerCookie() }));
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(await res.json()).toEqual({ settings: { runCeilingS: { default: 2700, lanes: {} }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0, pausedBudgetS: 7200, longestClipS: null } });
+    expect(await res.json()).toEqual({ settings: { runCeilingS: { default: 2700, lanes: {} }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0, pausedBudgetS: 7200 } });
   });
 
   it("the owner changes them; each change is logged with the values before and after", async () => {
     const lane = allLanes(loadIndex(), sha)[0].lane;
-    const res = await settingsRoute.PATCH(req({ method: "PATCH", cookie: ownerCookie(), body: { runCeilingS: { default: 3000, lanes: { [lane]: 3600 } }, ownerWaitLimitS: 86_400, fairShare: true, pausedBudgetS: 3600, longestClipS: 10 } }));
+    const res = await settingsRoute.PATCH(req({ method: "PATCH", cookie: ownerCookie(), body: { runCeilingS: { default: 3000, lanes: { [lane]: 3600 } }, ownerWaitLimitS: 86_400, fairShare: true, pausedBudgetS: 3600 } }));
     expect(res.status).toBe(200);
-    const want = { runCeilingS: { default: 3000, lanes: { [lane]: 3600 } }, ownerWaitLimitS: 86_400, fairShare: true, pickAllowanceMs: 0, pausedBudgetS: 3600, longestClipS: 10 };
+    const want = { runCeilingS: { default: 3000, lanes: { [lane]: 3600 } }, ownerWaitLimitS: 86_400, fairShare: true, pickAllowanceMs: 0, pausedBudgetS: 3600 };
     expect(await res.json()).toEqual({ settings: want });
     expect(qs.queueSettings()).toEqual(want);
     const row = audits().at(-1)!;
@@ -761,8 +761,6 @@ describe("GET and PATCH /api/admin/queue/settings", () => {
       { pickAllowanceMs: 1.5 },
       { pausedBudgetS: -1 },
       { pausedBudgetS: 8 * 24 * 3600 },
-      { longestClipS: 0 },
-      { longestClipS: 7200 },
       { somethingElse: 1 },
       [1, 2],
       null,

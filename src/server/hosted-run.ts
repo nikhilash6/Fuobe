@@ -44,7 +44,7 @@ import { loadIndex } from "./gpu/index-file";
 import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
 import { poolFinishes3d } from "./computer/finish";
 import { holdTiming } from "./queue-settings";
-import { clipPastLimit, hostedDetails, hostedGuestWords, hostedWords, isOutputsWords, outputsWords, poolAllows, poolAllowsRun, poolAway, poolFitsSize, poolHasFiles, poolMostWords, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesKind, poolTicketsReady, POOL_LANE, queueFacts, requestFileKinds, runFacts, runOnPool, workflowPicks, type JobSize } from "./hosted";
+import { hostedDetails, hostedGuestWords, hostedWords, isOutputsWords, outputsWords, poolAllows, poolAllowsRun, poolAway, poolFitsSize, poolHasFiles, poolMostWords, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesKind, poolTicketsReady, POOL_LANE, queueFacts, requestFileKinds, runFacts, runOnPool, workflowPicks, type JobSize } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -353,18 +353,16 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
  * LoRAs a look, a motion or a recipe adds at run time, src/lib/runtime-files.ts), a kind of file, more outputs at once
  * than a run there makes (`outputs`: a tool's run, which can't be cut down the way the studios' own runs are), one
  * that runs on the visitor's own setup only (`ownSetup`: a static item of own-setup.ts, or a workflow none of this
- * install's GPUs can run right now: none holds its files, serves its lane, or has the memory), a clip longer than the
- * longest the owner lets a run there make (`length`: queue-settings.ts longestClipS). Each is a label the visitor reads
- * before Run, with the setup that runs it. A run these GPUs take but can't start right now (every one that could is
- * away, or being updated) is no reason: it waits in line (runWaits).
+ * install's GPUs can run right now: none holds its files, serves its lane, or has the memory). Each is a label the
+ * visitor reads before Run, with the setup that runs it. A run these GPUs take but can't start right now (every one
+ * that could is away, or being updated) is no reason: it waits in line (runWaits).
  */
-export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "files" | "inputs" | "size" | "length" | "outputs" | "ownSetup";
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "files" | "inputs" | "size" | "outputs" | "ownSetup";
 
 /**
  * A gate's refusal: its reason, and the visitor's own setup that would run it (`setup`: always with "ownSetup" and
  * "model3d"; with the others, a GPU of its own, which runs what this install's GPUs don't take). `cap`: with "outputs",
- * the most a run there makes at once. `most`: with "size" and "length", the largest those GPUs make, in words
- * ("8 megapixels", "5 s clips").
+ * the most a run there makes at once. `most`: with "size", the largest those GPUs make, in words ("8 megapixels").
  */
 export type GateRefusal = { ok: false; reason: GateReason; setup?: OwnSetup; cap?: number; most?: string };
 
@@ -432,10 +430,6 @@ export function poolGate(
   // file it hasn't verified runs on the visitor's own GPU instead, said before Run (never dropped without a word).
   if (!poolHasFiles(planned.route.endpoint, runLoraFiles(planned, req.params?.extra))) return { ok: false, reason: "files", setup: gpu };
   if (!requestFileKinds(req).every((k) => poolTakesKind(k, p))) return { ok: false, reason: "inputs", setup: gpu };
-  // A clip longer than the longest the owner lets a run here make: a label before Run, and Run opens Connect your GPU.
-  // The length is never cut down without a word: the person picks a shorter one, or runs it on their own setup.
-  const clipLimit = clipPastLimit(req, planned.model.id, kind);
-  if (clipLimit !== null) return { ok: false, reason: "length", setup: gpu, most: `${clipLimit} s clips` };
   // A size bigger than every GPU here that runs it makes (their PCs' ceilings): said before Run as a label, never a run
   // that fails once pressed (the run's own check stays the last guard: comfyui.ts POOL_TOO_BIG).
   const size = sizeOf ? safeSize(sizeOf) : null;

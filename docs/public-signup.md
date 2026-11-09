@@ -877,13 +877,6 @@ With it on:
   - a size bigger than every GPU here makes (each worker's PC ceiling: megapixels, seconds, results at once), said
     before Run: "This size runs on your own GPU", tooltip "Up to 8 megapixels on our GPUs. Pick a smaller size, or
     run it on your own GPU." The run's own size check stays as the last guard;
-  - a video clip longer than the longest the owner lets a run here make (`longestClipS` in the queue's settings,
-    [gpu-workers.md](gpu-workers.md#the-queue); no limit unless set): "This length runs self-hosted", tooltip "Up to
-    5 s clips on our GPUs. Pick a shorter length, or run it on your own GPU." Every length stays in the pickers, and an
-    untouched length starts within the limit. The length a person or a script asks for is never cut down: the answer
-    is the same as for any other run these GPUs don't take (below). The length counted is the one asked for, else the
-    model's default; for shots made as separate clips and joined, the longest shot. A clip made from a clip (a swap, a
-    restyle, an upscale) has no length to pick and isn't counted;
   - a 3D model no worker finishes (Image to 3D, and Refine detail on its model run there only while a worker's CPU
     slot finishes them, and only when the policy allows 3D, `kinds.model3d`; Any Angle's 3D view runs there like a
     picture): "Runs on your own GPU · 24 GB".
