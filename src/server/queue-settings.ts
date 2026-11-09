@@ -15,6 +15,9 @@ import { db } from "./db";
  * - `pausedBudgetS`: how long, in all, a run that has started may spend back in line while its worker steps aside (another
  *   program on its GPU, a pause) and still be inside its hold's deadline. With the run ceiling, it sets the time a run
  *   asks its hold to stay open (holdTiming). A run past it still delivers its result.
+ * - `longestClipS`: the longest video clip a person's run on this install's GPUs may make, in seconds (null: no limit).
+ *   A longer length stays offered: it reads as a length that runs on the person's own GPU, and Run opens Connect your
+ *   GPU, as for any other run these GPUs don't take (hosted-run.ts poolGate). The owner's own runs have no such limit.
  *
  * Kept in the settings table under one key, as JSON. Nothing set: the defaults, which are today's fixed values.
  */
@@ -25,9 +28,10 @@ export interface QueueSettings {
   fairShare: boolean;
   pickAllowanceMs: number;
   pausedBudgetS: number;
+  longestClipS: number | null;
 }
 
-export const QUEUE_DEFAULTS: QueueSettings = { runCeilingS: { default: 2700, lanes: {} }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0, pausedBudgetS: 7200 };
+export const QUEUE_DEFAULTS: QueueSettings = { runCeilingS: { default: 2700, lanes: {} }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0, pausedBudgetS: 7200, longestClipS: null };
 
 /** The bounds each value may take. */
 export const QUEUE_BOUNDS = {
@@ -35,6 +39,7 @@ export const QUEUE_BOUNDS = {
   ownerWaitS: { min: 60, max: 7 * 24 * 3600 },
   pickAllowanceMs: { min: 0, max: 3_600_000 },
   pausedBudgetS: { min: 0, max: 7 * 24 * 3600 },
+  longestClipS: { min: 1, max: 3600 },
   lanes: 200,
 };
 
@@ -79,7 +84,7 @@ const inRange = (v: unknown, b: { min: number; max: number }): v is number => wh
 export function checkQueuePatch(body: unknown, base: QueueSettings = queueSettings()): { settings: QueueSettings } | { error: string } {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "Send the settings as an object" };
   const b = body as Record<string, unknown>;
-  const known = ["runCeilingS", "ownerWaitLimitS", "fairShare", "pickAllowanceMs", "pausedBudgetS"];
+  const known = ["runCeilingS", "ownerWaitLimitS", "fairShare", "pickAllowanceMs", "pausedBudgetS", "longestClipS"];
   const unknown = Object.keys(b).filter((k) => !known.includes(k));
   if (unknown.length) return { error: `Unknown setting: ${unknown[0]}` };
   const out = copy(base);
@@ -119,6 +124,11 @@ export function checkQueuePatch(body: unknown, base: QueueSettings = queueSettin
     const p = QUEUE_BOUNDS.pausedBudgetS;
     if (!inRange(b.pausedBudgetS, p)) return { error: `pausedBudgetS is ${p.min} to ${p.max} seconds` };
     out.pausedBudgetS = b.pausedBudgetS;
+  }
+  if (b.longestClipS !== undefined) {
+    const c = QUEUE_BOUNDS.longestClipS;
+    if (b.longestClipS !== null && !inRange(b.longestClipS, c)) return { error: `longestClipS is ${c.min} to ${c.max} seconds, or null for no limit` };
+    out.longestClipS = b.longestClipS as number | null;
   }
   return { settings: out };
 }

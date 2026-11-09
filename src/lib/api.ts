@@ -1060,6 +1060,8 @@ export interface StatusInfo {
     cardText?: string;
     /** What this studio's GPUs keep off, for a viewer with no GPU of its own: its pickers leave it out (src/lib/pool-rules.ts). */
     pool?: PoolRules;
+    /** The longest video clip a run on this studio's GPUs makes, in seconds (the owner's setting). Only with `hosted`. */
+    clipS?: number;
     /** The billing service's words for the account's balance (src/server/billing.ts). */
     balance?: HostedBalance;
     links?: BillingAction[];

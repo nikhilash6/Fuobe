@@ -1,5 +1,6 @@
 import "server-only";
 import { getModel } from "@/lib/catalog";
+import { lengthRange } from "@/lib/catalog/clip-lengths";
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
 import { imageSize } from "@/lib/image-size";
@@ -13,6 +14,7 @@ import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
 import { holdOf, NOT_HELD, type HoldReason } from "./pool-holds";
 import { poolRunCounts } from "./pool-limits";
+import { queueSettings } from "./queue-settings";
 import { getWorkflow, installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
 import { modelFormat, modelTaken } from "./model-input";
@@ -209,6 +211,7 @@ export function hostedWords(place: Place) {
     inputs: "This file runs self-hosted",
     rtxCard: "Self-hosted · RTX GPU",
     size: "This size runs self-hosted",
+    length: "This length runs self-hosted",
     notHosted: `Your account can't run on ${place.text} right now. Your own GPU or key still works.`,
   };
 }
@@ -225,13 +228,37 @@ export function hostedDetails(place: Place, most?: string | null) {
     inputs: "Connect your GPU to use it, or use a picture.",
     rtxCard: "This one needs an NVIDIA RTX card.",
     size: `${most ? `Up to ${most} on ${place.text}. ` : ""}Pick a smaller size, or run it on your own GPU.`,
+    length: `${most ? `Up to ${most} on ${place.text}. ` : ""}Pick a shorter length, or run it on your own GPU.`,
   };
 }
 
 /** The labels for a guest: the same as an account's (Run opens the sign-up for that label). */
 export function hostedGuestWords() {
-  const { notOffered, rtxCard, loras, files, inputs, size } = hostedWords({ label: "", text: "" });
-  return { notOffered, rtxCard, loras, files, inputs, size };
+  const { notOffered, rtxCard, loras, files, inputs, size, length } = hostedWords({ label: "", text: "" });
+  return { notOffered, rtxCard, loras, files, inputs, size, length };
+}
+
+/** The longest video clip a person's run on this install's GPUs may make, in seconds (queue-settings.ts; null: no limit). */
+export const poolClipLimitS = (): number | null => queueSettings().longestClipS;
+
+/**
+ * The seconds of the longest clip one job of a request makes, for the clip limit: a video model with a length to pick
+ * (its durations, or a range of whole seconds), the length asked for, else its default; shots rendered as clips of their
+ * own and joined, the longest shot. 0 for anything else (a clip made from a clip as long as its source, sound, pictures).
+ */
+export function requestClipSeconds(req: Pick<GenerationRequest, "params">, modelId: string, kind: string): number {
+  const model = getModel(modelId);
+  if (kind !== "video" || !model || !(model.options.durations?.length || lengthRange(model))) return 0;
+  const shots = (req.params?.shots ?? []).filter((s) => s.prompt?.trim());
+  if (shots.length && model.options.multiShot?.mode === "concat") return Math.max(...shots.map((s) => Number(s.duration) || 0));
+  const asked = Number(req.params?.duration ?? model.defaults?.duration ?? model.options.durations?.[0]);
+  return Number.isFinite(asked) && asked > 0 ? asked : 0;
+}
+
+/** The clip limit a request passes (poolClipLimitS), or null when it fits, or there is none. */
+export function clipPastLimit(req: Pick<GenerationRequest, "params">, modelId: string, kind: string, limit: number | null = poolClipLimitS()): number | null {
+  if (!limit) return null;
+  return requestClipSeconds(req, modelId, kind) > limit + 0.05 ? limit : null;
 }
 
 /**

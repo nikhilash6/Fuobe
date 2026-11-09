@@ -38,7 +38,7 @@ import { PlaceIntro } from "./place-intro";
 import { PoolNote } from "./pool-note";
 import { EndFrameNote } from "./end-frame-note";
 import { modelOwnSetup, pickerRules } from "@/lib/pool-rules";
-import { carryParams, closestHere, HERE_SET_UP, hereDefault, hereReason, hereRunLabel, hereSetup, runsHere } from "@/lib/runnable-here";
+import { carryParams, closestHere, HERE_SET_UP, hereClipStart, hereDefault, hereReason, hereRunLabel, hereSetup, runsHere } from "@/lib/runnable-here";
 import { useHere } from "@/hooks/use-pool-rules";
 import { controlSetup, keyOnlySetup } from "@/lib/own-setup-controls";
 import { ownSetupDetail, ownSetupLabel, ownSetupShort } from "@/lib/own-setup";
@@ -1287,6 +1287,12 @@ export function Composer({ docked }: { docked: boolean }) {
   // Enhance writes a scene; a tool's optional words (FLUX.3 Upscale's details) stay as typed.
   const baseShape = settingsShape(model, effectiveOp, config.kind, showPrompt && !config.hidePrompt, p, config.ops, studioFormats);
   const shape = framesCtx ? framesShape(baseShape, framesCtx.chained) : layoutOn ? layoutShape(baseShape) : baseShape;
+  // The longest clip this install's GPUs make (the owner's setting): an untouched length starts within it there. Longer
+  // lengths stay in the picker; picked, the price check says where they run and Run opens that setup.
+  const clipStart = model?.kind === "video" && model.engine === "open" && p.duration === undefined ? hereClipStart(here, shape.duration, model.defaults?.duration ?? shape.duration?.[0]) : undefined;
+  useEffect(() => {
+    if (clipStart !== undefined) setDraft((d) => (d.params.duration === undefined ? { params: { ...d.params, duration: clipStart } } : {}));
+  }, [clipStart, setDraft]);
   const outcome = config.clipFacts && draft.slots.video?.ref ? clipOutcome(effectiveOp, facts, p, model, today) : null;
   const video = draft.slots.video?.ref;
   const alternative = config.comfyOnly?.alternative;

@@ -6,7 +6,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * The line's settings (owner only, or an admin token with queue:read): the run ceiling (a default and per lane, in
- * seconds), the owner's wait limit, fair share, the pick allowance and the paused budget (src/server/queue-settings.ts).
+ * seconds), the owner's wait limit, fair share, the pick allowance, the paused budget and the longest clip a person's run
+ * may make there (src/server/queue-settings.ts).
  */
 export async function GET(request: Request) {
   await connection();
@@ -17,8 +18,8 @@ export async function GET(request: Request) {
 
 /**
  * Change them (owner only, or an admin token with queue:write): any of `{ runCeilingS: { default, lanes },
- * ownerWaitLimitS, fairShare, pickAllowanceMs, pausedBudgetS }`. A given runCeilingS replaces the default and every lane's value. Each
- * change is written to the admin log with the values before and after. It applies to new claims and clocks at once.
+ * ownerWaitLimitS, fairShare, pickAllowanceMs, pausedBudgetS, longestClipS }`. A given runCeilingS replaces the default and every lane's value. Each
+ * change is written to the admin log with the values before and after. It applies to new claims, clocks and runs at once.
  */
 export async function PATCH(request: Request) {
   const access = adminAccess(request, "queue:write", "Only the studio's owner changes the queue");

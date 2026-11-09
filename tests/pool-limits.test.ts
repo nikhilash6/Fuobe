@@ -1005,6 +1005,54 @@ describe("the price check before Run and the run itself", async () => {
     }
   });
 
+  it("a clip longer than the longest clip set for these GPUs is its label before Run, the press opens Connect your GPU, and nothing is cut down", async () => {
+    const qs = await import("@/server/queue-settings");
+    withBilling({ limits: NO_LIMITS });
+    const a = account();
+    const acct = auth.accountById(a.id)!;
+    const H3 = { feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "a dancer turns slowly in the light" };
+    const at = (duration: number) => ({ ...H3, params: { duration }, account: a.id }) as never;
+    // No limit set (the default): every length runs here as before.
+    expect(qs.queueSettings().longestClipS).toBeNull();
+    expect((await hostedRun.decidePlace(acct, at(15), undefined)).kind).toBe("pool");
+    expect((await hostedRun.poolQuote(acct, at(15), undefined))?.quote.allowed).toBe(true);
+    qs.saveQueueSettings({ ...qs.QUEUE_DEFAULTS, longestClipS: 5 });
+    try {
+      // Within it: taken.
+      expect((await hostedRun.decidePlace(acct, at(5), undefined)).kind).toBe("pool");
+      expect((await hostedRun.poolQuote(acct, at(5), undefined))?.quote.allowed).toBe(true);
+      // Past it: the price check says where it runs, in words, and Run opens Connect your GPU.
+      const check = await hostedRun.poolQuote(acct, at(15), undefined);
+      expect(check?.quote).toMatchObject({ allowed: false, code: "not-offered", text: "This length runs self-hosted", ownSetup: { need: "gpu" } });
+      expect((check?.quote as { sub?: string }).sub).toBe("Up to 5 s clips on our GPUs. Pick a shorter length, or run it on your own GPU.");
+      // A guest reads the same label (its Run opens the sign-up).
+      expect((await hostedRun.poolQuote(null, { ...H3, params: { duration: 10 } } as never, undefined))?.quote).toMatchObject({ allowed: false, text: "This length runs self-hosted" });
+      const run = await hostedRun.decidePlace(acct, at(10), undefined);
+      expect(run.kind).toBe("refuse");
+      if (run.kind === "refuse") {
+        expect(run.refusal.body).toMatchObject({ code: "connect-gpu", error: "This length runs self-hosted", ownSetup: { need: "gpu" } });
+        expect(run.refusal.headers[CONNECT_GPU_HEADER]).toBe("1");
+      }
+      // Asked for anyway (a script, an old link): the same answer; nothing is held, made, or made shorter.
+      const holds = fake.holds.size;
+      const r = await post({ ...H3, params: { duration: 15 }, place: "pool", ...SHOWN }, a.cookie);
+      expect(r.status, JSON.stringify(r.body)).toBe(403);
+      expect(r.body.code).toBe("connect-gpu");
+      expect(poolRuns(a.id)).toBe(0);
+      expect(fake.holds.size).toBe(holds);
+      // An account whose own GPU answers: the run goes there at its own length, no question.
+      const g = account({ gpu: "online" });
+      expect((await hostedRun.decidePlace(auth.accountById(g.id)!, { ...H3, params: { duration: 15 }, account: g.id } as never, undefined)).kind).toBe("own");
+      // Pictures have no length: untouched by it.
+      expect((await hostedRun.decidePlace(acct, { ...IMAGE, account: a.id } as never, undefined)).kind).toBe("pool");
+      // The visitor's status says the limit, so an untouched length starts within it.
+      expect((await visitorStatus(acct)).viewer.clipS).toBe(5);
+    } finally {
+      qs.saveQueueSettings(qs.QUEUE_DEFAULTS);
+    }
+    expect((await visitorStatus(acct)).viewer.clipS).toBeUndefined();
+  });
+
   it("a 3D model runs here only while a worker's CPU slot finishes it, and then as the policy's kinds say; a splat or a scene never does", async () => {
     const a = account();
     const acct = auth.accountById(a.id)!;
