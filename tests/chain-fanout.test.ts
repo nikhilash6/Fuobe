@@ -208,6 +208,23 @@ describe("fan-out and fan-in in createPipeline", () => {
     for (const w of waiting) expect(await settle(w.id, 20_000)).toMatchObject({ status: "failed", error: "An earlier step didn't finish" });
   });
 
+  it("a person's Stop on a run makes a step already failed by the stop before it stopped, not failed", async () => {
+    const hold = held();
+    const next = gens.createGenerations({ feature: "t", modelId: "nano-banana-2", op: "edit", prompt: "Ink" }, { dependsOn: hold.id })[0];
+    // The Stop reaches the first step; the sweep fails the waiting one before the Stop reaches it too.
+    db().prepare("UPDATE generations SET status = 'canceled', completed_at = ? WHERE id = ?").run(Date.now(), hold.id);
+    expect(await settle(next.id, 20_000)).toMatchObject({ status: "failed", error: "An earlier step didn't finish" });
+    await gens.cancelGeneration(next.id);
+    expect(row(next.id)).toMatchObject({ status: "canceled", error: null });
+    // A step that failed because its input failed stays failed.
+    const other = held();
+    const after = gens.createGenerations({ feature: "t", modelId: "nano-banana-2", op: "edit", prompt: "Ink" }, { dependsOn: other.id })[0];
+    other.fail();
+    expect(await settle(after.id, 20_000)).toMatchObject({ status: "failed" });
+    await gens.cancelGeneration(after.id);
+    expect(row(after.id)).toMatchObject({ status: "failed", error: "An earlier step didn't finish" });
+  });
+
   it("chains a pipeline's steps onto generations made before (a retry's kept steps)", () => {
     const hold = held();
     expect(() => createPipeline([{ key: "x", request: { feature: "t", modelId: "nano-banana-2", op: "edit", prompt: "Ink" }, after: "nope" }], { existing: { hold: hold.id } })).toThrow(/waits for “nope”, which isn't in the pipeline/);

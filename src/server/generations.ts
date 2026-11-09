@@ -5341,6 +5341,11 @@ async function persistOutput(o: RichOutput, generationId: string, pre?: { linked
 
 export async function cancelGeneration(id: string): Promise<void> {
   const r = db().prepare("SELECT * FROM generations WHERE id = ?").get(id) as Row | undefined;
+  if (r && stoppedJustAfterItsInput(r)) {
+    const now = Date.now();
+    db().prepare("UPDATE generations SET status = 'canceled', error = NULL, message = NULL, updated_at = ? WHERE id = ? AND status = 'failed' AND external_id IS NULL").run(now, id);
+    return;
+  }
   if (!r || (r.status !== "queued" && r.status !== "running")) return;
   // Its outputs are in and the 3D finish runs: the provider's job is over. Stop the finish before anything
   // awaits, so it can't mark the job done in between.
@@ -5375,6 +5380,19 @@ export async function cancelGeneration(id: string): Promise<void> {
   dropHold(id);
   // Steps waiting only to feed this one are dropped too (nothing was spent on them).
   dropUnused(depIds(r.depends_on));
+}
+
+/**
+ * A waiting step that was marked failed a moment ago only because the step it waited for was stopped: a person's Stop
+ * on a whole run reaches its steps one by one, and the sweep can fail the later step in between. Stopping it then makes
+ * it stopped, as the person asked, instead of failed. A step that ran, or failed on its own, stays as it is.
+ */
+function stoppedJustAfterItsInput(r: Row): boolean {
+  if (r.status !== "failed" || r.external_id || !r.depends_on || !WAITED_ON_FAILURE.has(r.error ?? "")) return false;
+  if (Date.now() - (r.completed_at ?? 0) > 10 * 60_000) return false;
+  const ids = depIds(r.depends_on);
+  const status = db().prepare("SELECT status FROM generations WHERE id = ?");
+  return ids.length > 0 && ids.every((d) => (status.get(d) as { status: string } | undefined)?.status === "canceled");
 }
 
 /**
