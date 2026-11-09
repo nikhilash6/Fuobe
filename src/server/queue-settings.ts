@@ -47,11 +47,19 @@ declare global {
 
 const copy = (s: QueueSettings): QueueSettings => ({ ...s, runCeilingS: { default: s.runCeilingS.default, lanes: { ...s.runCeilingS.lanes } } });
 
-/** A stored value read leniently: anything that isn't valid is the default (a bad row never stops a run). */
+/** The settings this version knows. */
+const QUEUE_KEYS = ["runCeilingS", "ownerWaitLimitS", "fairShare", "pickAllowanceMs", "pausedBudgetS"];
+
+/**
+ * A stored value read leniently: anything that isn't valid is the default (a bad row never stops a run). A setting
+ * this version doesn't know (one an earlier or later version stored) is left out, so the others still count.
+ */
 function fromStored(raw: string | null): QueueSettings {
   if (!raw) return copy(QUEUE_DEFAULTS);
   try {
-    const r = checkQueuePatch(JSON.parse(raw) as unknown, QUEUE_DEFAULTS);
+    const v = JSON.parse(raw) as unknown;
+    const known = v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([k]) => QUEUE_KEYS.includes(k))) : v;
+    const r = checkQueuePatch(known, QUEUE_DEFAULTS);
     return "error" in r ? copy(QUEUE_DEFAULTS) : r.settings;
   } catch {
     return copy(QUEUE_DEFAULTS);
@@ -79,8 +87,7 @@ const inRange = (v: unknown, b: { min: number; max: number }): v is number => wh
 export function checkQueuePatch(body: unknown, base: QueueSettings = queueSettings()): { settings: QueueSettings } | { error: string } {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "Send the settings as an object" };
   const b = body as Record<string, unknown>;
-  const known = ["runCeilingS", "ownerWaitLimitS", "fairShare", "pickAllowanceMs", "pausedBudgetS"];
-  const unknown = Object.keys(b).filter((k) => !known.includes(k));
+  const unknown = Object.keys(b).filter((k) => !QUEUE_KEYS.includes(k));
   if (unknown.length) return { error: `Unknown setting: ${unknown[0]}` };
   const out = copy(base);
   const { min, max } = QUEUE_BOUNDS.ceilingS;

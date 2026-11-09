@@ -779,6 +779,15 @@ describe("GET and PATCH /api/admin/queue/settings", () => {
     expect(qs.queueSettings()).toEqual(qs.QUEUE_DEFAULTS);
   });
 
+  it("a stored value with a setting this version doesn't know keeps the settings it knows", () => {
+    const stored = { runCeilingS: { default: 2700, lanes: { small: 7200 } }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0, pausedBudgetS: 3600, retiredSetting: 5 };
+    db().prepare("INSERT INTO settings (key, value) VALUES ('queue.settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(stored));
+    globalThis.__fuobeQueueSettings = undefined;
+    const known: Record<string, unknown> = { ...stored };
+    delete known.retiredSetting;
+    expect(qs.queueSettings()).toEqual(known);
+  });
+
   it("an admin token reads them with queue:read and changes them with queue:write", async () => {
     const make = (scopes: import("@/server/admin-tokens").Scope[]) => admin.createAdminToken({ name: `t-${Math.random()}`, scopes });
     const reader = make(["queue:read"]);
