@@ -451,7 +451,8 @@ describe("the line", () => {
       const g = getGeneration(id);
       return g?.status === "running" && (g.progress ?? 0) > 0 ? g : null;
     });
-    expect(working?.message).toBe(POOL_WORDS.working);
+    // Working, with the sampler's step.
+    expect(working?.message).toBe("Working · Step 3 of 4");
     // The worker pauses at once (its owner pressed the pause): the run goes back in line.
     pool.workerBeat(
       db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as never,

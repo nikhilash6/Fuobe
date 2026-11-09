@@ -11,7 +11,7 @@ process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
 const { setSetting } = await import("@/server/settings");
-const { comfyProvider, collectOutputs, getWorkflow, loadManifest, mediaInfoFor, prepareWorkflow, runProgress } = await import("@/server/providers/comfyui");
+const { comfyProvider, collectOutputs, getWorkflow, loadManifest, mediaInfoFor, prepareWorkflow } = await import("@/server/providers/comfyui");
 const { MODELS } = await import("@/lib/catalog");
 const { computeFrames } = await import("@/lib/comfy");
 
@@ -149,27 +149,17 @@ describe("ComfyUI websocket (S15)", () => {
 });
 
 describe("a running job's progress", () => {
-  it("step 3 of 8 in the sampler shows as 3/8, not 3/8 of one node's share", () => {
-    expect(runProgress({ nodesDone: 1, value: 3, max: 8 }, 10)).toBeCloseTo(0.375);
-    // Most nodes run already: the node share wins over the sampler's own steps.
-    expect(runProgress({ nodesDone: 9, value: 1, max: 8 }, 10)).toBeCloseTo((8 + 1 / 8) / 10);
-    // Nothing yet says how far it is.
-    expect(runProgress(undefined, 10)).toBeUndefined();
-    expect(runProgress({ nodesDone: 0 }, 10)).toBeUndefined();
-    // With no node count, the steps alone; never past 0.99.
-    expect(runProgress({ value: 4, max: 8 }, 0)).toBeCloseTo(0.5);
-    expect(runProgress({ nodesDone: 12, value: 8, max: 8 }, 10)).toBe(0.99);
-  });
-
-  it("a poll during sampling says step 3 of 8 as 0.375", async () => {
+  it("a poll during sampling follows the sampler's steps, not the share of nodes run", async () => {
+    const meta = { workflowId: "selftest-image", nodeCount: 10, plan: { nodes: 10, samplers: ["8"], after: 2 } };
     handler = (url) => (url.includes("/history/") ? json({}) : json({ queue_running: [[0, "p-steps"]], queue_pending: [] }));
-    await comfyProvider.poll(pollCtx("p-steps", { workflowId: "selftest-image", nodeCount: 10 }));
+    await comfyProvider.poll(pollCtx("p-steps", meta));
     const ws = FakeSocket.all.at(-1)!;
-    ws.emit({ type: "executing", data: { prompt_id: "p-steps", node: "3" } });
-    ws.emit({ type: "progress", data: { prompt_id: "p-steps", value: 3, max: 8, node: "3" } });
-    const running = await comfyProvider.poll(pollCtx("p-steps", { workflowId: "selftest-image", nodeCount: 10 }));
+    // Seven nodes (loaders, encoders) ran before the sampler: still only its steps say how far it is.
+    for (const node of ["1", "2", "3", "4", "5", "6", "7", "8"]) ws.emit({ type: "executing", data: { prompt_id: "p-steps", node } });
+    ws.emit({ type: "progress", data: { prompt_id: "p-steps", value: 3, max: 8, node: "8" } });
+    const running = await comfyProvider.poll(pollCtx("p-steps", meta));
     expect(running.state).toBe("running");
-    expect((running as { progress?: number }).progress).toBeCloseTo(0.375);
+    expect((running as { progress?: number }).progress).toBeCloseTo(0.1 + 0.8 * (3 / 8));
   });
 });
 

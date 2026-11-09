@@ -27,6 +27,7 @@ import {
 } from "@/lib/relay";
 import { reasonText } from "@/lib/comfy-reason";
 import { cleanNodeTimes } from "@/lib/node-times";
+import { trackReport, type LiveProgress } from "@/lib/run-progress";
 import type { FinishTicket } from "@/lib/finish-ticket";
 import type { JobTicket } from "@/lib/job-ticket";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
@@ -62,7 +63,7 @@ export const outputFile = (id: string, n: number) => path.join(taskDir(id), `out
 /** A task's latest preview picture (a worker's JPEG while the job renders), in the task's folder. */
 const previewFile = (id: string) => path.join(taskDir(id), "preview.jpg");
 
-export interface Progress {
+export interface Progress extends LiveProgress {
   value?: number;
   max?: number;
   node?: string;
@@ -649,7 +650,7 @@ export function showsPreview(t: Pick<TaskRow, "pools" | "preview" | "finish_json
  * another app process sent back in line, ended or gave to another worker meanwhile leaves nothing behind.
  */
 export function noteProgress(id: string, r: Record<string, unknown>, now: number, lease: string | null) {
-  const p: Progress = { at: now };
+  const p: Omit<Progress, "at"> = {};
   for (const k of ["value", "max", "nodesDone", "position"] as const) {
     const v = nonNeg(r[k]);
     if (v !== undefined) p[k] = Math.min(v, 1e6);
@@ -660,7 +661,8 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   const warmed = d.transaction((): boolean => {
     const cur = d.prepare(`SELECT progress_json, state FROM relay_tasks WHERE id = ? AND ${STILL_HELD}`).get(id, lease) as Pick<TaskRow, "progress_json" | "state"> | undefined;
     if (!cur) return false;
-    const next = { ...taskProgress(cur), ...p };
+    // Its steps as passes (src/lib/run-progress.ts): a node started since clears the step of the node before.
+    const next: Progress = { ...trackReport(taskProgress(cur), p, now), ...(p.position !== undefined && { position: p.position }), at: now };
     // Its first step reported: its model is loaded (noteCold), so it is no longer getting ready.
     const wasCold = next.cold === true;
     if (p.value !== undefined) delete next.cold;
@@ -679,8 +681,26 @@ export function noteCold(id: string, now: number): void {
   rdb().prepare("UPDATE relay_tasks SET progress_json = ? WHERE id = ? AND progress_json IS NULL").run(JSON.stringify({ cold: true, at: now } satisfies Progress), id);
 }
 
+/**
+ * Keep the highest share a task's run showed in this try (src/lib/run-progress.ts), so a later poll never shows less.
+ * Only over the try's own progress, and only higher.
+ */
+export function noteShown(id: string, share: number): void {
+  if (!Number.isFinite(share) || share <= 0) return;
+  const v = Math.round(share * 10_000) / 10_000;
+  rdb()
+    .prepare(
+      `UPDATE relay_tasks SET progress_json = json_set(progress_json, '$.shown', ?) WHERE id = ? AND state IN ('running','collecting')
+         AND progress_json IS NOT NULL AND json_valid(progress_json) AND COALESCE(json_extract(progress_json, '$.shown'), 0) < ?`,
+    )
+    .run(v, id, v);
+}
+
 /** Is a task still getting ready: taken cold (noteCold), with no step reported since? */
-export const taskCold = (t: Pick<TaskRow, "progress_json">): boolean => taskProgress(t)?.cold === true;
+export const taskCold = (t: Pick<TaskRow, "progress_json">): boolean => {
+  const p = taskProgress(t);
+  return p?.cold === true && p.value === undefined && !p.passes?.length;
+};
 
 /** A task still sent to the computer or worker that holds the lease given (the query's last parameter). */
 const STILL_HELD = `state IN (${SENT_STATES.map((x) => `'${x}'`).join(",")}) AND lease_hash IS ?`;

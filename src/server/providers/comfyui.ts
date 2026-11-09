@@ -57,7 +57,6 @@ import type { FileKey } from "@/lib/gpu/types";
 import { isEngineWords, plainEngineFailure } from "@/lib/engine-error";
 import {
   FILE_TROUBLE_WORDS,
-  makingWords,
   META_BATCH_HISTORY,
   POOL_WORDS,
   queueWords,
@@ -72,6 +71,7 @@ import {
   type WantedFile,
 } from "@/lib/relay";
 import type { GenerationFix } from "@/lib/catalog/types";
+import { collectingShare, floored, planOf, poolRunWords, progressPlan, progressView, runWords, trackReport, type LiveProgress, type ProgressPlan, type ProgressView } from "@/lib/run-progress";
 import {
   checkClocks,
   createTask,
@@ -88,6 +88,7 @@ import {
   runnerFacts,
   stageInput,
   stagedInput,
+  noteShown,
   taskProgress,
   type FinishedPlan,
   type Principal,
@@ -590,6 +591,8 @@ interface Progress {
   max: number;
   node?: string;
   nodesDone: number;
+  /** The same events as stages and passes (src/lib/run-progress.ts), with the highest share shown. */
+  live?: LiveProgress;
 }
 
 type ComfySocket = { url: string; ws: WebSocket; clientId: string; progress: Map<string, Progress> };
@@ -647,6 +650,7 @@ function ensureSocket(worker: ComfyWorker = "main"): { clientId: string; progres
             p.max = 0;
           }
         }
+        p.live = trackReport(p.live, { ...(p.max > 0 && { value: p.value, max: p.max }), node: p.node, nodesDone: p.nodesDone }, Date.now());
         progress.set(pid, p);
       } catch {}
     };
@@ -677,17 +681,33 @@ export function queuePlace(pending: unknown[][], promptId: string): number {
   return pending.filter((q) => typeof q[0] === "number" && q[0] < n).length;
 }
 
+/** Graph plans worked out from a task's own graph, for a run whose meta has none (one sent before plans were kept). */
+const graphPlans = new Map<string, ProgressPlan | null>();
+
+/** A run's progress plan: its meta's, else its task's graph's (null: neither says). */
+function runPlan(meta: Record<string, unknown>, t?: Pick<TaskRow, "id" | "graph_json">): ProgressPlan | null {
+  const kept = planOf(meta.plan);
+  if (kept || !t?.graph_json) return kept;
+  if (!graphPlans.has(t.id)) {
+    if (graphPlans.size >= 256) graphPlans.delete(graphPlans.keys().next().value!);
+    let plan: ProgressPlan | null = null;
+    try {
+      plan = progressPlan(JSON.parse(t.graph_json));
+    } catch {}
+    graphPlans.set(t.id, plan);
+  }
+  return graphPlans.get(t.id) ?? null;
+}
+
 /**
- * A running job's progress (0 to 0.99), or undefined when nothing says yet: the share of the graph's nodes run so far
- * (`nodesDone` of `total`, the running node counting as part done by its steps), and never less than the running
- * node's own steps (`value` of `max`). The sampler takes most of a job's time while it is one node of many, so step 3
- * of 8 shows as 3/8, not 3/8 of one node's share.
+ * A task's running job, by its stages (src/lib/run-progress.ts): its share, never below the highest it showed in this
+ * try. Not kept: the caller notes a higher share (noteShown).
  */
-export function runProgress(p: { nodesDone?: number; value?: number; max?: number } | undefined, total: number): number | undefined {
-  const stepFrac = p?.max ? Math.min(1, Math.max(0, (p.value ?? 0) / p.max)) : 0;
-  const nodeFrac = total > 0 ? (Math.max(1, p?.nodesDone ?? 1) - 1 + stepFrac) / total : 0;
-  const v = Math.min(0.99, Math.max(stepFrac, nodeFrac));
-  return v > 0 ? v : undefined;
+export function taskView(t: Pick<TaskRow, "id" | "graph_json" | "progress_json" | "started_at" | "claimed_at">, meta: Record<string, unknown>, now = Date.now()): ProgressView {
+  const p = taskProgress(t);
+  const since = p?.since ?? t.started_at ?? t.claimed_at ?? now;
+  const v = progressView({ ...p, since }, runPlan(meta, t), now);
+  return { ...v, share: floored(v.share, p?.shown) };
 }
 
 // ---------------------------------------------------------------------------
@@ -1875,7 +1895,10 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   const clocks = { ownClocks: true as const, ...(deadline && { deadline }) };
   // An account's run says only where it is: in line, or working on it (the owner's own runs keep the workers' words).
   if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ...clocks };
-  return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ...clocks } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ...clocks };
+  if (t.state === "waiting") return { state: "queued", message: POOL_WORDS.inLine, ...clocks };
+  // Working: its stage, with the sampler's step ("Working · Step 3 of 6"), as the server reads it.
+  const words = res.state !== "running" ? POOL_WORDS.working : t.state === "collecting" ? POOL_WORDS.finishing : t.state === "running" ? poolRunWords(taskView(t, meta)) : POOL_WORDS.working;
+  return { state: "running", progress: res.progress, message: words, ...clocks };
 }
 
 /**
@@ -1939,12 +1962,18 @@ async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, u
     case "queued":
       return { state: "queued", message: down ?? queueWords(p?.position), ...(sentAt && { sentAt }) };
     case "running": {
-      return { state: "running", progress: runProgress(p, Number(meta.nodeCount ?? 0)), message: down ?? makingWords(kind, p?.value, p?.max), ...(sentAt && { sentAt }) };
+      // Its stages: getting ready, the sampler's steps, then the nodes after it; never less than this try showed.
+      const view = taskView(t, meta);
+      noteShown(t.id, view.share);
+      return { state: "running", progress: view.share, message: down ?? runWords(kind, view), ...(sentAt && { sentAt }) };
     }
     case "collecting": {
       const got = receivedOf(t);
       const total = got.reduce((s, r) => s + r.total, 0);
-      return { state: "running", progress: 0.99, message: down ?? savingWords(total ? got.reduce((s, r) => s + r.bytes, 0) / total : undefined), ...(sentAt && { sentAt }) };
+      const received = total ? got.reduce((s, r) => s + r.bytes, 0) / total : undefined;
+      const share = floored(collectingShare(received), p?.shown);
+      noteShown(t.id, share);
+      return { state: "running", progress: share, message: down ?? savingWords(received), ...(sentAt && { sentAt }) };
     }
     case "done": {
       const types = new Map(receivedOf(t).map((r) => [r.n, r.contentType]));
@@ -2021,6 +2050,8 @@ export const comfyProvider: ProviderAdapter = {
     // MiniMax H3's 2K draft that kept its latent says where (the finish loads it only there: generations.ts latentHandOff).
     const latentAt = manifest.id === H3_LATENT_DRAFT_WORKFLOW ? comfyPlace() : null;
     if (latentAt) meta.latentAt = latentAt;
+    // Its stages for the progress bar: the nodes that sample, and how many come after them (src/lib/run-progress.ts).
+    meta.plan = progressPlan(wf);
     // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
     // here. A refusal comes back in its report, and the poll explains it as below.
     const computer = computerScope();
@@ -2222,9 +2253,13 @@ export const comfyProvider: ProviderAdapter = {
       const busy = queue.queue_running?.[0]?.[1];
       return { state: "queued", position: pendingIdx, ...(typeof busy === "string" && { busyWith: busy.slice(0, 64) }), message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
     }
+    // Its stages (src/lib/run-progress.ts), never less than it showed.
+    const view = progressView(p?.live, planOf(meta.plan), Date.now());
+    const share = floored(view.share, p?.live?.shown);
+    if (p?.live) p.live.shown = share;
     return {
       state: "running",
-      progress: runProgress(p, Number(meta.nodeCount ?? 0)),
+      progress: share,
       message: p?.max ? `Sampling ${p.value}/${p.max}` : worker === "isolated" ? "Running on the isolated ComfyUI worker" : "Running on ComfyUI",
     };
   },

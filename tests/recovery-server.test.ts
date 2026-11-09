@@ -1501,7 +1501,7 @@ describe("the run ceiling per lane", () => {
         // The worker sent it again: 4 minutes into this attempt (11 since the first began), it is still working.
         resent = true;
         await pass(4 * MIN, [d], watch);
-        expect(getGeneration(id)).toMatchObject({ status: "running", message: POOL_WORDS.working });
+        expect(getGeneration(id)).toMatchObject({ status: "running", message: expect.stringMatching(/^Working/) });
       }
     });
     await workAll(d);

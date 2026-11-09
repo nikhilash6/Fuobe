@@ -603,7 +603,7 @@ describe("the run ceiling", () => {
     expect(g.progress).toBeNull();
   });
 
-  it("a worker with another model loaded: Warming up · starting in a moment until the first step reports; with its model loaded, Working at once", async () => {
+  it("a worker with another model loaded: Loading the model until the first step reports; with its model loaded, Working at once", async () => {
     const w = standInWorker();
     const { id, t } = await accountRun("getting ready");
     const lane = rowOf(t.id).lane!;
@@ -615,10 +615,10 @@ describe("the run ceiling", () => {
     tasks.report(rowOf(t.id), { event: "sent", promptId: first.promptId }, () => ({ error: "unused" }));
     await tick();
     expect(getGeneration(id)).toMatchObject({ status: "running", message: POOL_WORDS.gettingReady, progress: null });
-    // Its first step: the model is loaded.
+    // Its first step: the model is loaded, and its words say the step.
     tasks.report(rowOf(t.id), { event: "running", value: 1, max: 4 }, () => ({ error: "unused" }));
     await tick();
-    expect(getGeneration(id)?.message).toBe(POOL_WORDS.working);
+    expect(getGeneration(id)?.message).toBe("Working · Step 1 of 4");
     // Given back, and taken by a worker that has its model loaded: Working, with no getting ready.
     tasks.report(rowOf(t.id), { event: "give-back", why: "stalled" }, () => ({ error: "unused" }));
     beatWarm(lane);
@@ -626,6 +626,55 @@ describe("the run ceiling", () => {
     tasks.report(rowOf(t.id), { event: "sent", promptId: first.promptId }, () => ({ error: "unused" }));
     await tick();
     expect(getGeneration(id)).toMatchObject({ status: "running", message: POOL_WORDS.working });
+  });
+
+  it("taken cold, its share follows the stages: loading, the sampler's steps, then the last few percent; never backwards, never 100% before done", async () => {
+    const w = standInWorker();
+    const { id, t } = await accountRun("its share follows the stages");
+    pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 3, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], catalogVersion: catalogVersion(), warmLane: "another-lane" }), Date.now());
+    const first = claimAs(w)!;
+    expect(first.id).toBe(t.id);
+    tasks.report(rowOf(t.id), { event: "sent", promptId: first.promptId }, () => ({ error: "unused" }));
+    // The run's plan: its graph's sampler, and the nodes after it.
+    const meta = JSON.parse((db().prepare("SELECT external_meta_json FROM generations WHERE id = ?").get(id) as { external_meta_json: string }).external_meta_json) as { plan: { nodes: number; samplers: string[]; after: number } };
+    expect(meta.plan.samplers.length).toBeGreaterThan(0);
+    const sampler = meta.plan.samplers[0];
+    const before = meta.plan.nodes - meta.plan.after;
+    const shares: number[] = [];
+    const look = async (r: Record<string, unknown>) => {
+      tasks.report(rowOf(t.id), { event: "running", ...r } as never, () => ({ error: "unused" }));
+      await tick();
+      const g = getGeneration(id)!;
+      expect(g.status).toBe("running");
+      shares.push(g.progress ?? 0);
+      return g;
+    };
+    // Its model loads while the nodes before the sampler start: a small share, under its words.
+    for (let n = 1; n < before; n++) {
+      const g = await look({ nodesDone: n, node: `load-${n}` });
+      expect(g.message).toBe(POOL_WORDS.gettingReady);
+      expect(g.progress ?? 0).toBeLessThanOrEqual(0.1);
+    }
+    // The sampler's steps: most of the bar, with the step in its words.
+    const at: number[] = [];
+    for (let v = 1; v <= 6; v++) {
+      const g = await look({ nodesDone: before, node: sampler, value: v, max: 6 });
+      expect(g.message).toBe(`Working · Step ${v} of 6`);
+      at.push(g.progress!);
+    }
+    expect(at[2]).toBeGreaterThan(0.45);
+    expect(at[2]).toBeLessThan(0.6);
+    // A late beat with the step before changes nothing.
+    await look({ nodesDone: before, value: 5, max: 6 });
+    // After the sampler: the decode and the file, the last few percent.
+    for (let k = 1; k <= meta.plan.after; k++) {
+      const g = await look({ nodesDone: before + k, node: `after-${k}` });
+      expect(g.message).toBe(POOL_WORDS.finishing);
+      expect(g.progress!).toBeGreaterThanOrEqual(0.9);
+      expect(g.progress!).toBeLessThanOrEqual(0.97);
+    }
+    for (let i = 1; i < shares.length; i++) expect(shares[i]).toBeGreaterThanOrEqual(shares[i - 1]);
+    expect(Math.max(...shares)).toBeLessThan(1);
   });
 
   it("a poll that fails never ends a run in line by the runner's own wait, an account's or the owner's", async () => {

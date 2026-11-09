@@ -62,10 +62,10 @@ describe("a run's tile on this studio's GPUs", () => {
     const html = render(createElement(PendingTile, { g: gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine, queue: { place: 3, etaSeconds: null, unknown: true } }), ratio: 1 }));
     expect(html).toContain("Warming up · starts automatically");
   });
-  it("working while its model loads: Warming up · starting in a moment, with no %", () => {
+  it("working while its model loads: Loading the model, with no % before its try reports one", () => {
     const html = render(createElement(PendingTile, { g: gen({ place: "pool", status: "running", message: POOL_WORDS.gettingReady, progress: null }), ratio: 1 }));
     expect(html).toContain('data-run-state="working"');
-    expect(html).toContain("Warming up · starting in a moment");
+    expect(html).toContain("Loading the model");
     expect(html).not.toContain("%");
   });
   it("in line with no place known yet: In line", () => {

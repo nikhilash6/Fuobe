@@ -7,6 +7,7 @@
  */
 import { isEngineWords } from "@/lib/engine-error";
 import { POOL_WORDS } from "@/lib/relay";
+import { isPoolRunWords } from "@/lib/run-progress";
 
 /** A run as the studio answers it (GET /api/generations/<id>, a list item, getGeneration). */
 export interface RunLike {
@@ -94,7 +95,7 @@ export class RunWatch {
       if (!["queued", "running", "succeeded"].includes(s.status)) out.push(`a state that isn't In line, Working or the result (${at})`);
       if (s.status === "queued" && s.message !== POOL_WORDS.inLine) out.push(`a waiting run that doesn't say In line (${at})`);
       if (s.status === "queued" && s.place === null) out.push(`a waiting run with no place in line (${at})`);
-      if (s.status === "running" && s.message !== POOL_WORDS.working && s.message !== POOL_WORDS.gettingReady) out.push(`a started run that doesn't say Working (${at})`);
+      if (s.status === "running" && !isPoolRunWords(s.message)) out.push(`a started run that doesn't say Working (${at})`);
       if (s.status === "succeeded" && s.outputs < 1) out.push(`a result with nothing in it (${at})`);
       if (s.error) out.push(`an error (${at})`);
       for (const w of [s.message, s.error]) if (w && MACHINE_WORDS.test(w)) out.push(`words about the machines (${at})`);
