@@ -334,7 +334,7 @@ const SUB_TOOLS: NavEntry[] = [
   { id: "ads-multiplier", href: "/ads/multiplier", label: "Ad Multiplier", what: "One ad in many versions", kind: "tool", goals: [], keywords: "variations versions sizes multiply ads studio", icon: "Target", parent: "marketing" },
   { id: "chat-skills", href: "/chat/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation assist", icon: "MessagesSquare", parent: "chat" },
   // An app with a page of its own that Create lists: a tool of Apps, so the bar marks Apps on its page.
-  { id: "body-double", href: "/apps/app-body-double", label: "Body Double", what: "A 3D body for every person", kind: "tool", goals: ["people", "film"], keywords: "body pose 3d mocap motion capture skeleton mesh webcam live camera dance", icon: "PersonStanding", parent: "apps" },
+  { id: "body-double", href: "/apps/app-body-double", label: "Body Double", what: "A 3D body for every person", kind: "tool", goals: ["people", "film"], keywords: "body pose 3d mocap motion capture skeleton mesh webcam live camera dance", cover: "app-body-double", icon: "PersonStanding", parent: "apps" },
   { id: "any-angle", href: "/apps/app-any-angle", label: "Any Angle", what: "See it from any angle", kind: "tool", goals: [], keywords: "angle rotate turn view camera viewpoint orbit 3d", cover: "app-any-angle", icon: "Rotate3d", parent: "apps" },
 ];
 

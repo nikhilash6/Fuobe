@@ -25,8 +25,8 @@ export const BODY_DOUBLE = {
 export const BODY_DOUBLE_SAMPLE_VERSIONS: Readonly<Record<string, string>> = {
   "photo-before.jpg": "56ca09c2",
   "photo-after.jpg": "294e3e56",
-  "clip-demo.mp4": "43a09a50",
-  "clip-demo.jpg": "7e65670a",
+  "clip-demo.mp4": "b31f9dbb",
+  "clip-demo.jpg": "ebb0e3da",
   "live-demo.mp4": "cf4d5064",
   "live-demo.jpg": "659e563b",
   "sample-dance.mp4": "227afd20",

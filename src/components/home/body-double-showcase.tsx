@@ -44,7 +44,7 @@ export function BodyDoubleShowcase({ className }: { className?: string }) {
             loop
             playsInline
             preload="none"
-            aria-label="A dance beside its Holo body double, with its 3D pose"
+            aria-label="A dance turning into its Holo body double, with its 3D pose"
             className="absolute inset-0 size-full object-cover"
           />
         )}
