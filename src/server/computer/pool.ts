@@ -18,7 +18,7 @@ import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteCold, notePr
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 import { modelLabel } from "./queue-live";
-import { addOverride, effectiveMode, runRows, workerModeOf, LOCAL_WORK, lineControls, liveOverrides, modeClass, modeClassSql, overrideTargets, plainLine, poolMode, sweepControls, taskControl, DEFAULT_MODE, type EffectiveMode, type LineControls, type QueueMode, type QueueOverride, type TaskControl } from "./queue-controls";
+import { effectiveMode, workerModeOf, LOCAL_WORK, lineControls, liveOverrides, modeClass, modeClassSql, overrideTargets, plainLine, poolMode, sweepControls, taskControl, DEFAULT_MODE, type EffectiveMode, type LineControls, type QueueMode, type TaskControl } from "./queue-controls";
 import type { LocalWork } from "@/lib/relay";
 import { cleanLogLines, lastEventOf, lastOfKind, logWorkerEvent, logWorkerEvents, setEventNames, type NewWorkerEvent, type WorkerEventKind } from "./worker-events";
 
@@ -406,8 +406,6 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       promptId: s.prompt_id,
       ...(s.prefix && { prefix: s.prefix }),
     }));
-    // Runs paused on the website (pauseRun) that this worker's GPU ran: their prompts come off its ComfyUI now, once.
-    stops.push(...takePausedOff(w.id));
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
     // Stop now (the website, or the worker paused itself with --now / a busy GPU): its jobs go back in line at no cost,
     // and the worker takes their prompts off its ComfyUI.
@@ -998,66 +996,6 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; whyKin
     dropProgress(t.id);
     return true;
   }).immediate();
-}
-
-/** The words a run paused on the website goes back in line with (the workers' log). */
-export const PAUSED_WORDS = "paused on the website";
-
-/**
- * Pause a run (POST /api/admin/queue/pause): it is held, as a run's Hold holds it, and each of its jobs a worker's GPU
- * runs now goes back in line as People first sends the owner's jobs back: no attempt counted, no blame, its place kept.
- * The worker takes the prompt off its ComfyUI at its next beat. When the hold ends, it runs again from the start. A job
- * saving its results, and light CPU work, go on: a run with only those going can't be paused now (409). A run that
- * waits in line is only held.
- */
-export function pauseRun(
-  generationId: string,
-  by: string,
-  now = Date.now(),
-): { override: QueueOverride; replaced: QueueOverride[]; sentBack: string[] } | { error: string; status: number } {
-  const d = db();
-  return d.transaction(() => {
-    const run = runRows(generationId);
-    if (!run) return { error: "No such run", status: 404 };
-    if (run.status !== "queued" && run.status !== "running") return { error: "That run has ended", status: 409 };
-    const live = d
-      .prepare(
-        `SELECT * FROM relay_tasks WHERE generation_id IN (${run.generations.map(() => "?").join(",")}) AND pools IS NOT NULL AND state IN ('waiting','sending','queued','running','collecting')`,
-      )
-      .all(...run.generations) as TaskRow[];
-    const onGpu = live.filter((t) => t.worker_id && t.state !== "waiting" && t.state !== "collecting" && t.slot !== "cpu" && !t.finish_json);
-    if (!onGpu.length && !live.some((t) => t.state === "waiting"))
-      return { error: live.length ? "This run is saving its results now, so it can't be paused" : "Only a run in this site's line can be paused", status: 409 };
-    const r = addOverride({ kind: "run", generationId, action: "hold", worker: null, until: null }, by, now);
-    if ("error" in r) return r;
-    const sentBack: string[] = [];
-    for (const t of onGpu) {
-      if (!backInLine(t, { blame: false, sentBack: PAUSED_WORDS })) continue;
-      sentBack.push(t.id);
-      const back = taskById(t.id);
-      if (back && t.prompt_id) {
-        const pausedOff = { worker: t.worker_id, promptId: t.prompt_id, ...(t.prefix && { prefix: t.prefix }), at: now };
-        setTask(t.id, { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(back.extra_json, {}), pausedOff }) });
-      }
-    }
-    return { ...r, sentBack };
-  }).immediate();
-}
-
-/** The prompts of paused runs (pauseRun) that worker `workerId` may still have on its ComfyUI: each handed out once. */
-function takePausedOff(workerId: string): BeatAnswer["stops"] {
-  const rows = db()
-    .prepare(`SELECT id, extra_json FROM relay_tasks WHERE pools IS NOT NULL AND state IN ('waiting','sending','queued','running','collecting') AND INSTR(extra_json, '"pausedOff"') > 0`)
-    .all() as Pick<TaskRow, "id" | "extra_json">[];
-  const stops: BeatAnswer["stops"] = [];
-  for (const t of rows) {
-    const { pausedOff, ...extra } = json<{ pausedOff?: { worker?: unknown; promptId?: unknown; prefix?: unknown } } & Record<string, unknown>>(t.extra_json, {});
-    if (pausedOff?.worker !== workerId) continue;
-    setTask(t.id, { extra_json: JSON.stringify(extra) });
-    if (typeof pausedOff.promptId === "string" && pausedOff.promptId)
-      stops.push({ task: t.id, promptId: pausedOff.promptId, ...(typeof pausedOff.prefix === "string" && pausedOff.prefix && { prefix: pausedOff.prefix }) });
-  }
-  return stops;
 }
 
 /**

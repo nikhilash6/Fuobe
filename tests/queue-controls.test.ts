@@ -380,62 +380,6 @@ describe("the admin routes", () => {
     expect((await post(cancelRoute, "/api/admin/queue/cancel", { generationId: a.gid }, controller)).status).toBe(409);
   });
 
-  it("pause: a running run goes back in line held, with no attempt counted and its place kept; the worker hears the stop once; ending the hold runs it again", async () => {
-    const pauseRoute = await import("@/app/api/admin/queue/pause/route");
-    const reader = admin.createAdminToken({ name: "reader3", scopes: ["queue:read"], expiresInDays: null }).token;
-    const controller = admin.createAdminToken({ name: "controller4", scopes: ["queue:control"], expiresInDays: null }).token;
-    const w = worker("w1");
-    const a = job({ account: alice, agoMs: 30 * MIN });
-    const b = job({ account: bob, agoMs: 1 * MIN });
-    beat(w);
-    expect(claim(w)?.id).toBe(a.id);
-    db().prepare("UPDATE relay_tasks SET state = 'running', started_at = ? WHERE id = ?").run(Date.now(), a.id);
-    const before = taskRow(a.id);
-    expect((await post(pauseRoute, "/api/admin/queue/pause", { generationId: a.gid }, reader)).status).toBe(403);
-    expect((await post(pauseRoute, "/api/admin/queue/pause", { generationId: "nope" }, controller)).status).toBe(404);
-    expect((await post(pauseRoute, "/api/admin/queue/pause", {}, controller)).status).toBe(400);
-    const r = await post(pauseRoute, "/api/admin/queue/pause", { generationId: a.gid }, controller);
-    expect(r.status).toBe(200);
-    const body = (await r.json()) as { generationId: string; sentBack: number; override: { id: string; action: string; generationId: string; by: string } };
-    expect(body).toMatchObject({ generationId: a.gid, sentBack: 1, override: { action: "hold", generationId: a.gid, by: "controller4" } });
-    const back = taskRow(a.id);
-    expect(back).toMatchObject({ state: "waiting", worker_id: null, lease_hash: null, requeues: 0, rank_at: before.rank_at, stop: 0 });
-    expect(liveQueue().queued.find((q) => q.task === a.id)).toMatchObject({ code: "held", override: { id: body.override.id } });
-    // The worker's next beat takes the prompt off its ComfyUI, once.
-    expect(beat(w).stops).toEqual([{ task: a.id, promptId: before.prompt_id }]);
-    expect(beat(w).stops).toEqual([]);
-    // Held: the next run goes first, and the paused one waits.
-    expect(served(w)).toEqual([b.id]);
-    const del = await overrideRoute.DELETE(
-      new NextRequest(`http://localhost:3000/api/admin/queue/overrides/${body.override.id}`, { method: "DELETE", headers: { authorization: `Bearer ${controller}` } }),
-      { params: Promise.resolve({ id: body.override.id }) } as never,
-    );
-    expect(del.status).toBe(200);
-    expect(served(w)).toEqual([a.id]);
-    expect(taskRow(a.id).requeues).toBe(0);
-    db().prepare("UPDATE generations SET status = 'succeeded' WHERE id = ?").run(a.gid);
-    expect((await post(pauseRoute, "/api/admin/queue/pause", { generationId: a.gid }, controller)).status).toBe(409);
-    expect(db().prepare("SELECT status FROM admin_audit WHERE action = 'queue.pause' ORDER BY id").all()).toEqual([{ status: 404 }, { status: 400 }, { status: 200 }, { status: 409 }]);
-  });
-
-  it("pause: a run waiting in line is only held; a run not in the line can't be paused", async () => {
-    const pauseRoute = await import("@/app/api/admin/queue/pause/route");
-    const controller = admin.createAdminToken({ name: "controller5", scopes: ["queue:control"], expiresInDays: null }).token;
-    const w = worker("w1");
-    const a = job({ account: alice });
-    const r = await post(pauseRoute, "/api/admin/queue/pause", { generationId: a.gid }, controller);
-    expect(r.status).toBe(200);
-    expect(await r.json()).toMatchObject({ sentBack: 0, override: { action: "hold" } });
-    expect(served(w)).toEqual([]);
-    const gid = "ctl-gen-own";
-    db()
-      .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'running', '{}', '[]', ?, ?)")
-      .run(gid, Date.now(), Date.now());
-    const none = await post(pauseRoute, "/api/admin/queue/pause", { generationId: gid }, controller);
-    expect(none.status).toBe(409);
-    expect(qc.liveOverrides().filter((o) => o.target === gid)).toEqual([]);
-  });
-
   it("GET /api/admin/queue shows the controls: each pool's mode, each worker's, the overrides, and why each run stands where it does", async () => {
     const w = worker("w1");
     job({ account: alice });
