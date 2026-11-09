@@ -440,6 +440,54 @@ describe("admin tokens: accounts and files", () => {
     expect((await routes.account.PATCH(req("/api/admin/accounts/nope", { token, method: "PATCH", body: { signOut: true } }), ctx({ id: "nope" }))).status).toBe(404);
   });
 
+  it("sets an account's password: the same rule and hash as sign-up, every sign-in ends, and the log holds no password", async () => {
+    const { token } = make(["accounts:write"]);
+    const a = auth.createAccount(`setpw-${++n}@example.com`, "long enough");
+    const s = auth.createSession(a.id).value;
+    const patch = (body: unknown, id = a.id, t = token) => routes.account.PATCH(req(`/api/admin/accounts/${id}`, { token: t, method: "PATCH", body }), ctx({ id }));
+    expect((await patch({ password: "short" })).status).toBe(400);
+    expect(auth.checkAccount(a.email, "long enough")?.id).toBe(a.id);
+    const res = await patch({ password: "a brand new one" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: a.id, email: a.email, disabled: false });
+    expect(auth.checkAccount(a.email, "long enough")).toBeNull();
+    expect(auth.checkAccount(a.email, "a brand new one")?.id).toBe(a.id);
+    expect(auth.accountById(a.id)!.hash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{64}$/);
+    expect(auth.accountById(a.id)!.passwordChangedAt).toBeGreaterThan(0);
+    expect(auth.sessionViewer(s)).toBeNull();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(auth.sessionViewer(auth.createSession(a.id).value)?.kind).toBe("account");
+    const row = auditRows().at(-1)!;
+    expect(row).toMatchObject({ action: "account.password", target: a.id, status: 200 });
+    expect(JSON.stringify(auditRows())).not.toContain("a brand new one");
+    expect((await patch({ password: "a brand new one" }, "nope")).status).toBe(404);
+    expect((await patch({ password: "a brand new one", signOut: true })).status).toBe(400);
+    // A token without accounts:write can't.
+    expect((await patch({ password: "another new one" }, a.id, make(["accounts:read"]).token)).status).toBe(403);
+    expect(auth.checkAccount(a.email, "a brand new one")?.id).toBe(a.id);
+  });
+
+  it("changes an account's sign-in email: normalised, never another account's, every sign-in ends", async () => {
+    const { token } = make(["accounts:write"]);
+    const a = auth.createAccount(`setmail-${++n}@example.com`, "long enough");
+    const other = auth.createAccount(`taken-${++n}@example.com`, "long enough");
+    const s = auth.createSession(a.id).value;
+    const patch = (body: unknown) => routes.account.PATCH(req(`/api/admin/accounts/${a.id}`, { token, method: "PATCH", body }), ctx({ id: a.id }));
+    expect((await patch({ email: "not an email" })).status).toBe(400);
+    expect((await patch({ email: other.email.toUpperCase() })).status).toBe(409);
+    expect(auth.sessionViewer(s)?.kind).toBe("account");
+    const res = await patch({ email: `  New-${n}@Example.COM ` });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: a.id, email: `new-${n}@example.com` });
+    expect(auth.checkAccount(`new-${n}@example.com`, "long enough")?.id).toBe(a.id);
+    expect(auth.checkAccount(a.email, "long enough")).toBeNull();
+    expect(auth.sessionViewer(s)).toBeNull();
+    // Its own email again is no conflict.
+    expect((await patch({ email: `new-${n}@example.com` })).status).toBe(200);
+    expect(auditRows().filter((r) => r.action === "account.email").map((r) => r.status)).toEqual([400, 409, 200, 200]);
+    expect(JSON.stringify(auditRows().filter((r) => r.action === "account.email"))).not.toContain("example.com");
+  });
+
   it("serves accounts', held and the owner's own files to outputs:view, and logs each view", async () => {
     const { token, info } = make(["outputs:view"]);
     const a = auth.createAccount(`files-${++n}@example.com`, "long enough");

@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { z } from "zod";
 import { accountsWithStats } from "@/server/account-admin";
 import { adminAccess, audit, auditRead, type Actor } from "@/server/admin-tokens";
-import { AccountError, accountInfo, setAccountDisabled, signOutAccount } from "@/server/auth";
+import { AccountError, accountInfo, setAccountDisabled, setAccountEmailAsOwner, setAccountPasswordAsOwner, signOutAccount } from "@/server/auth";
 import { removeAccount } from "@/server/account-sweep";
 import { revokeWorkersOf } from "@/server/computer/workers";
 
@@ -30,25 +30,36 @@ export async function GET(request: Request, ctx: RouteContext<"/api/admin/accoun
   return Response.json(accountsWithStats([account]).items[0], { headers: NO_STORE });
 }
 
-const Patch = z.union([z.object({ disabled: z.boolean() }).strict(), z.object({ signOut: z.literal(true) }).strict()]);
+const Patch = z.union([
+  z.object({ disabled: z.boolean() }).strict(),
+  z.object({ signOut: z.literal(true) }).strict(),
+  z.object({ password: z.string().max(500) }).strict(),
+  z.object({ email: z.string().max(254) }).strict(),
+]);
 
 /**
- * Switch an account off (`{ disabled: true }`: signed out, can't log in) or on again, or sign it out everywhere
- * (`{ signOut: true }`: every sign-in ends and its paired ComfyUIs stop, and it stays on).
+ * Switch an account off (`{ disabled: true }`: signed out, can't log in) or on again, sign it out everywhere
+ * (`{ signOut: true }`: every sign-in ends and its paired ComfyUIs stop, and it stays on), set a new password
+ * (`{ password }`: 8 characters or more) or a new sign-in email (`{ email }`: 409 when another account uses it). A new
+ * password or email ends every sign-in of the account. The log never holds a password or an email.
  */
 export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/accounts/[id]">) {
   const access = adminAccess(request, "accounts:write", DENIED);
   if (access instanceof Response) return access;
   const parsed = Patch.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Send { disabled: true }, { disabled: false } or { signOut: true }" }, { status: 400, headers: NO_STORE });
+  if (!parsed.success) return Response.json({ error: "Send { disabled: true }, { disabled: false }, { signOut: true }, { password } or { email }" }, { status: 400, headers: NO_STORE });
   const { id } = await ctx.params;
-  const action = "signOut" in parsed.data ? "account.signout" : parsed.data.disabled ? "account.disable" : "account.enable";
+  const body = parsed.data;
+  const action =
+    "signOut" in body ? "account.signout" : "password" in body ? "account.password" : "email" in body ? "account.email" : body.disabled ? "account.disable" : "account.enable";
   let computers = 0;
   try {
-    if ("signOut" in parsed.data) {
+    if ("signOut" in body) {
       signOutAccount(id);
       computers = revokeWorkersOf(`acct:${id}`);
-    } else setAccountDisabled(id, parsed.data.disabled);
+    } else if ("password" in body) await setAccountPasswordAsOwner(id, body.password);
+    else if ("email" in body) setAccountEmailAsOwner(id, body.email);
+    else setAccountDisabled(id, body.disabled);
   } catch (e) {
     return failed(e, access.actor, action, id);
   }

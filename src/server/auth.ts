@@ -404,6 +404,41 @@ export async function setAccountPassword(id: string, current: string, next: stri
   return { ...account, ...changed };
 }
 
+/**
+ * The owner sets an account's password (the admin API): the same 8-character rule and scrypt hash as sign-up. Every
+ * sign-in the account had ends (a new hash, and sessions_after), so it logs in again with the new password.
+ */
+export async function setAccountPasswordAsOwner(id: string, next: string): Promise<void> {
+  if (next.length < 8) throw new AccountError("Use at least 8 characters", 400);
+  if (!accountById(id)) throw new AccountError("No such account", 404);
+  const salt = crypto.randomBytes(16);
+  const hash = `${salt.toString("hex")}:${(await scrypt(next, salt)).toString("hex")}`;
+  const now = Date.now();
+  // The account may have gone while the password was hashed.
+  updateAccount(id, "password_hash = ?, password_changed_at = ?, sessions_after = ?", hash, now, now);
+}
+
+/**
+ * The owner changes an account's sign-in email (the admin API), normalised as sign-up does. Another account's email
+ * answers 409. Every sign-in the account had ends. Returns the email as stored.
+ */
+export function setAccountEmailAsOwner(id: string, email: string): string {
+  const e = normalizeEmail(email);
+  if (!e) throw new AccountError("Enter a valid email address", 400);
+  const taken = () => new AccountError("Another account already uses this email", 409);
+  try {
+    authWrite(() => {
+      const other = sql("SELECT id FROM auth_accounts WHERE email = ?").get(e) as { id: string } | undefined;
+      if (other && other.id !== id) throw taken();
+      if (!sql("UPDATE auth_accounts SET email = ?, sessions_after = ? WHERE id = ?").run(e, Date.now(), id).changes) throw new AccountError("No such account", 404);
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE" && /auth_accounts\.email/.test((err as Error).message)) throw taken();
+    throw err;
+  }
+  return e;
+}
+
 /** How often a log-in is written down. */
 const LOGIN_RECORD_MS = 60 * 60_000;
 

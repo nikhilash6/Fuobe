@@ -45,7 +45,7 @@ export type Scope = (typeof SCOPES)[number];
 /** What each scope lets a token do, in the words Settings shows. */
 export const SCOPE_LABELS: Record<Scope, string> = {
   "accounts:read": "See accounts",
-  "accounts:write": "Switch accounts off and on, sign them out",
+  "accounts:write": "Switch accounts off and on, sign them out, set their password or email",
   "accounts:delete": "Delete accounts",
   "runs:read": "See accounts' runs: when, which model and how they ended (their prompts and results need Open accounts' files; emails need See accounts)",
   "runs:delete": "Delete accounts' runs",

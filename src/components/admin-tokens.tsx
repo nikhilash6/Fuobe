@@ -64,6 +64,8 @@ const ACTION_WORDS: Record<string, string> = {
   "account.disable": "Switched an account off",
   "account.enable": "Switched an account on",
   "account.signout": "Signed an account out",
+  "account.password": "Set an account's password",
+  "account.email": "Changed an account's email",
   "account.delete": "Deleted an account",
   "run.delete": "Deleted a run",
   "outputs.hide": "Hid results",
