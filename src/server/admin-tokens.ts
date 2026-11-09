@@ -59,7 +59,7 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   "workers:tokens": "Add workers and give them new tokens (a worker runs accounts' queued jobs, with their files)",
   "queue:read": "See the queue and its settings",
   "queue:write": "Change the queue's settings: the run ceiling, the owner's wait limit, fair share, the pick allowance and the paused budget",
-  "queue:control": "Choose who the GPUs serve first: the mode (people first, people only, our work first, balanced), a run next, pinned or held, a person's runs first or held, cancel a waiting run, and run a person's run again for them",
+  "queue:control": "Choose who the GPUs serve first: the mode (people first, people only, our work first, balanced), a run next, pinned or held, a person's runs first or held, and cancel a waiting run",
   "site:read": "See the site's switches: the upload fitting steps",
   "site:write": "Switch the upload fitting steps off and on: convert, offer a part, offer a crop",
   "audit:read": "See the admin log",
