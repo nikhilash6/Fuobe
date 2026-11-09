@@ -81,6 +81,28 @@ Real covers from the galleries. Every clip and still below was rendered locally 
 <br>
 
 <p align="center">
+  <a href="https://fuobe.com/fx"><img src="docs/media/gifs/showcase-fx.gif" alt="Twelve Fuobe FX tools showing their results: Genjutsu, Character Swap, Genjutsu Object swap, Motion control, Video tools Green screen, Depth map, Video tools Remove object, Genjutsu Insert, Extend video, Upscale FPS Boost, Color grading and Inpaint" width="100%"></a>
+</p>
+
+<p align="center">
+  <b>62 tools in Fuobe FX.</b> For FX artists and teams: recast a plate, pull a matte, clean it, extend, retime, relight and grade, with the camera and the motion kept as shot.<br>
+  <a href="https://fuobe.com/fx"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-fx-on-dark.svg"><img src="docs/media/buttons/browse-fx.svg" alt="Browse all 62 FX tools" width="218"></picture></a>
+</p>
+
+<br>
+
+<p align="center">
+  <a href="https://fuobe.com/image-to-3d"><img src="docs/media/gifs/showcase-3d.gif" alt="Twelve Fuobe 3D results turning: Photo to 3D, Body Double, Image to 3D, 3D Figure, Splat, 3D Rotation, Motion capture, Image to 3D, Product 360, 3D Rotation, Body Double looks and Splat" width="100%"></a>
+</p>
+
+<p align="center">
+  <b>3D in five modes.</b> A model from one photo, several photos, a sentence or one object in a picture, or a soft splat; and Body Double, a 3D body for every person, with motion capture in six looks.<br>
+  <a href="https://fuobe.com/image-to-3d"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/try-image-to-3d-on-dark.svg"><img src="docs/media/buttons/try-image-to-3d.svg" alt="Try Image to 3D" width="173"></picture></a>
+</p>
+
+<br>
+
+<p align="center">
   <a href="https://fuobe.com/live-edit"><img src="docs/media/gifs/showcase-live-edit.gif" alt="Live edit: a portrait changes step by step as a prompt is typed, from evening makeup to a candlelit ballroom" width="80%"></a>
 </p>
 
@@ -97,6 +119,10 @@ Real covers from the galleries. Every clip and still below was rendered locally 
 - **Marketing templates.** Ten text templates drawn live in your brand, next to product shots, UGC, TikTok, ads and posters.
 - **New apps on your GPU:** Outfit Swap, Head Swap, Restore Photo, Steam It, Tap to Recolor, Photo to 3D and Any Angle, plus MiniMax H3 motion transfer.
 - **Body Double:** a 3D body for every person in a photo, motion capture from a clip as an animated, skinned GLB, and a live 3D mirror of your camera that runs in the browser with no GPU.
+- **Fuobe FX.** A new menu for FX artists and teams: 62 tools grouped by the stage of the shot, from recast and clean plates to retime, relight and 3D, with before and after cards.
+- **Fix faces:** sharper, truer faces in MiniMax H3 clips made from a start picture, with one opt-in switch, and a Fix Faces app for any video.
+- **3D previews.** Every 3D result plays as a turning model on Home, in the Library, in studio feeds and on Canvas, on a light or dark studio to match your theme.
+- **Film looks for MOSS-Image:** 30 film and camera looks, each with a thumbnail, in the Image studio and on Canvas.
 
 <br>
 
