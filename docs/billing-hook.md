@@ -322,6 +322,21 @@ run for free on one's own GPU.
 | `busy`, `paused` | 503 |
 | `blocked`, `not-offered`, `closed` | 403 |
 
+A reserve refusal may also say how the card looks. Every field is optional; an answer without them gets the card
+above, unchanged.
+
+| Field | What the card does |
+|---|---|
+| `title` | Its heading, in place of "This run didn't start" (one line, up to 80 characters). |
+| `tone: "info"` | A friendly look: an info icon in the brand colour, never a warning colour, and no other place offered (the way to one's own GPU is left out). |
+| `links` | Up to two more links, `[{ label, url }]` (labels up to 40 characters; `url` a same-site path or https), shown before `action`. |
+| `waitFor: { url, everyMs }` | A same-site path (an address on another site is left out) that the page asks with a GET, never cached, every `everyMs` (2 to 60 seconds; 4 by default) while the card is open, for 10 minutes at most. Once it answers `{ "ready": true }`, the card says "All set", sends the same run once more by itself as a new press (a fresh request id), and closes when it has started. While it waits, the card's links open in a new tab, so the card stays. |
+
+```json
+{ "ok": false, "code": "blocked", "text": "One more step and your run starts.", "title": "One quick step",
+  "tone": "info", "action": { "label": "Details", "url": "/your-page" }, "waitFor": { "url": "/your-page/ready", "everyMs": 4000 } }
+```
+
 ## Holds and the outbox
 
 Every row a run makes (its jobs, and every step its chains queue) carries the reserve's hold. The server stamps it; a

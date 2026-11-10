@@ -223,6 +223,46 @@ describe("the billing hook with a service", () => {
     }
   });
 
+  it("passes the service's card look through, checked: its title, tone, links and a same-site address to wait on", async () => {
+    resetRates();
+    fake.refuse = {
+      code: "blocked",
+      text: "One more step first.",
+      title: "One quick step",
+      tone: "info",
+      action: { label: "More", url: "/more" },
+      links: [{ label: "Open it", url: "https://example.com/inbox" }, { label: "Bad", url: "javascript:alert(1)" }, { label: "Third", url: "/x" }],
+      waitFor: { url: "/ready", everyMs: 10 },
+    };
+    const r = await post({ ...run(), shown: { amount: 7, priceVersion: "v7" } });
+    expect(r.status).toBe(403);
+    expect(r.headers.get("x-fuobe-billing")).toBe("blocked");
+    expect(await r.json()).toMatchObject({
+      error: "One more step first.",
+      code: "blocked",
+      title: "One quick step",
+      tone: "info",
+      action: { label: "More", url: "/more" },
+      links: [{ label: "Open it", url: "https://example.com/inbox" }],
+      waitFor: { url: "/ready", everyMs: 2000 },
+    });
+    // an answer without them: the card as before
+    resetRates();
+    fake.refuse = { code: "closed", text: "Closed." };
+    const plain = (await (await post({ ...run(), shown: { amount: 7, priceVersion: "v7" } })).json()) as Record<string, unknown>;
+    for (const k of ["title", "tone", "links", "waitFor"]) expect(plain).not.toHaveProperty(k);
+  });
+
+  it("checks a card look: only a same-site address to wait on, one-line words, https or same-site links, a sane pace", () => {
+    expect(billing.cardLook({ waitFor: { url: "https://evil.example/ready", everyMs: 4000 } })).toEqual({});
+    expect(billing.cardLook({ waitFor: { url: "//evil.example/ready" } })).toEqual({});
+    expect(billing.cardLook({ waitFor: { url: "/ready" } })).toEqual({ waitFor: { url: "/ready", everyMs: 4000 } });
+    expect(billing.cardLook({ waitFor: { url: "/ready", everyMs: 10 * 60_000 } })).toEqual({ waitFor: { url: "/ready", everyMs: 60_000 } });
+    expect(billing.cardLook({ title: "Two\nlines", tone: "loud" })).toEqual({});
+    expect(billing.cardLook({ title: "x".repeat(81) })).toEqual({});
+    expect(billing.cardLook(null)).toEqual({});
+  });
+
   it("service down: runs on this install's GPUs are refused in plain words with no word of a pause, and a run on the account's own GPU still goes", async () => {
     fake.down = "error";
     const r = await post({ ...run(), shown: { amount: 7, priceVersion: "v7" } });

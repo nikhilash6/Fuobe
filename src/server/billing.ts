@@ -73,6 +73,59 @@ export interface Action {
   url: string;
 }
 
+/**
+ * How the card for a refused run looks, when the service says (docs/billing-hook.md): its heading (`title`), a friendly
+ * look (`tone: "info"`), up to two more links (`links`), and a same-site address the page asks while the card is open
+ * (`waitFor`): once it answers `{ ready: true }`, the page sends the run once more by itself. Absent: the card as before.
+ */
+export interface CardLook {
+  title?: string;
+  tone?: "info";
+  links?: Action[];
+  waitFor?: { url: string; everyMs: number };
+}
+
+/** The most a card waits on `waitFor`, and how often it may ask. */
+export const CARD_WAIT = { mostMs: 10 * 60_000, everyMinMs: 2000, everyMaxMs: 60_000, everyMs: 4000 } as const;
+
+const oneLine = (v: unknown, max: number): string | undefined =>
+  typeof v === "string" && v.trim() && v.length <= max && !/[\u0000-\u001f\u007f]/.test(v) ? v.trim() : undefined;
+/** A link the page may open: a same-site path, or https. */
+const cardUrl = (v: unknown): string | undefined => {
+  const u = oneLine(v, 500);
+  if (!u) return undefined;
+  if (u.startsWith("/") && !u.startsWith("//") && !u.startsWith("/\\")) return u;
+  try {
+    return new URL(u).protocol === "https:" ? u : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** The card's look from a service's answer, checked: anything that isn't right is left out. */
+export function cardLook(a: unknown): CardLook {
+  const o = (a ?? {}) as Record<string, unknown>;
+  const title = oneLine(o.title, 80);
+  const links = Array.isArray(o.links)
+    ? o.links
+        .slice(0, 2)
+        .map((l) => ({ label: oneLine((l as Action | null)?.label, 40), url: cardUrl((l as Action | null)?.url) }))
+        .filter((l): l is Action => !!l.label && !!l.url)
+    : [];
+  const w = o.waitFor as { url?: unknown; everyMs?: unknown } | null | undefined;
+  const wUrl = cardUrl(w?.url);
+  const every = Number(w?.everyMs);
+  return {
+    ...(title && { title }),
+    ...(o.tone === "info" && { tone: "info" as const }),
+    ...(links.length && { links }),
+    // a same-site address only: the page asks it with the person's own cookie
+    ...(wUrl?.startsWith("/") && {
+      waitFor: { url: wUrl, everyMs: Number.isFinite(every) ? Math.min(CARD_WAIT.everyMaxMs, Math.max(CARD_WAIT.everyMinMs, Math.round(every))) : CARD_WAIT.everyMs },
+    }),
+  };
+}
+
 /** An offer the person can ask about; a click sends POST /v1/interest with its key. */
 export interface Offer {
   key: string;
@@ -176,7 +229,7 @@ export type ReserveAnswer =
       /** The hold is made, and the run waits until then (epoch ms) before it enters the line (absent: at once). */
       startAt?: number;
     }
-  | { ok: false; code: RefuseCode | "price-changed"; text: string; quote?: Quote; action?: Action; offer?: Offer };
+  | ({ ok: false; code: RefuseCode | "price-changed"; text: string; quote?: Quote; action?: Action; offer?: Offer } & CardLook);
 
 export interface Balance {
   amount: number;

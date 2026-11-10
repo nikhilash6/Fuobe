@@ -12,6 +12,7 @@ import {
   BILLING_HEADER,
   BILLING_WAIT,
   billingConfigured,
+  cardLook,
   cachedPolicy,
   forgetBalance,
   FREE_QUOTE,
@@ -758,7 +759,7 @@ export async function reservePool(
         if (!press || press.gaveUp()) queueRequestRelease(requestId);
       })();
     }
-    return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }) }) };
+    return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }), ...cardLook(a) }) };
   }
   forgetBalance(account.id);
   // A later start (the day's GPU time used up, an hourly limit): the hold is made, and the run waits until then.

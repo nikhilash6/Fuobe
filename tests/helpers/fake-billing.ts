@@ -44,7 +44,7 @@ export interface FakeBilling {
   /** Answer every call with HTTP 503 (the service "down"), or never answer. */
   down: false | "error" | "hang";
   /** Refuse reserves with this code (and words). */
-  refuse: null | { code: string; text: string };
+  refuse: null | ({ code: string; text: string } & Record<string, unknown>);
   /** The policy every account gets. */
   policy: Record<string, unknown>;
   /** The policy a guest gets (GET /v1/policy with no account); null: the same as an account. */
@@ -108,7 +108,7 @@ export async function startFakeBilling(): Promise<FakeBilling> {
       const requestId = String(b.requestId);
       const again = [...f.holds.entries()].find(([, h]) => h.requestId === requestId);
       if (again) return json(200, { ok: true, holdId: again[0], amount: again[1].amount, boostMs: 7000, maxWaitMs: 700_000, text: `${again[1].amount} units`, ...f.reserveExtra });
-      if (f.refuse) return json(200, { ok: false, code: f.refuse.code, text: f.refuse.text });
+      if (f.refuse) return json(200, { ok: false, ...f.refuse });
       const shown = b.shown as { amount: number; priceVersion: string };
       if (f.price.amount > shown.amount) return json(200, { ok: false, code: "price-changed", text: `The price is now ${f.price.amount} units.`, quote: quote() });
       const id = `h_${++holdN}`;

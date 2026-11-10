@@ -40,7 +40,7 @@ import type { AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
 import type { Diagnosis } from "./diagnose";
 import type { OwnSetup } from "./own-setup";
-import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
+import { BILLING_EVENT, BILLING_HEADER, freshBody, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 import { knownPlace, notePlaceName, placeOf, type Place } from "./place-name";
 import { noteServiceCopy, type ServiceCopy } from "./service-copy";
 import { ENGINE_KEY, ENGINE_SLOT_KEY, engineSlot, SHARED_SLOT, slotToCache, storedEngine, type EngineSlot, type SlotFacts } from "./engine-pref";
@@ -1845,7 +1845,14 @@ export function watchGuestRefusals(): void {
             billing === "price-changed" && method === "POST" && q && resendable(input, init) ? () => sendRunAgain(input, init, { [RUN_SHOWN_HEADER]: shownHeader(q) }) : undefined;
           // Hosted runs: the same run on the account's own GPU, for the card's "Run on your GPU".
           const own = method === "POST" && resendable(input, init) ? againAt(input, init, "own") : undefined;
-          window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing, ...(again && { runAgain: again }), ...(own && { runOwn: own }) } }));
+          // A run the service lets start once something clears (waitFor): the same run as a new press, sent by the card.
+          const fresh =
+            b.waitFor && method === "POST" && resendable(input, init)
+              ? () => sendRunAgain(input, { ...init, ...(typeof init?.body === "string" && { body: freshBody(init.body, newPressId) }) }, {})
+              : undefined;
+          window.dispatchEvent(
+            new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing, ...(again && { runAgain: again }), ...(own && { runOwn: own }), ...(fresh && { runFresh: fresh }) } }),
+          );
         })
         .catch(() => {});
     }

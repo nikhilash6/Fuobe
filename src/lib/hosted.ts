@@ -62,10 +62,61 @@ export interface BillingRefusalDetail {
   action?: BillingAction;
   offer?: BillingOffer;
   quote?: HostedQuote;
+  /** The card's heading, when the service gives one (else "This run didn't start"). */
+  title?: string;
+  /** "info": a friendly look (an info icon, no warning colour, no other place offered). */
+  tone?: "info";
+  /** Up to two more links the service sends. */
+  links?: BillingAction[];
+  /** A same-site address the card asks while open; once it answers { ready: true }, the run is sent again by itself. */
+  waitFor?: { url: string; everyMs: number };
+  /** The same run sent again as a new press (a fresh request id), for waitFor (true when it started). */
+  runFresh?: () => Promise<boolean>;
   /** A changed price: the same run sent again at the new price (true when it started). */
   runAgain?: () => Promise<boolean>;
   /** The same run sent again on the account's own GPU (true when it started). */
   runOwn?: () => Promise<boolean>;
+}
+
+/** The most a card waits on its waitFor address (src/server/billing.ts CARD_WAIT). */
+export const CARD_WAIT_MOST_MS = 10 * 60_000;
+
+/**
+ * Ask `url` (same site, GET, never cached) every `everyMs` until it answers `{ ready: true }`: true then; false once
+ * `mostMs` has passed or `signal` stops it. A failed or odd answer is asked again at the next turn.
+ */
+export async function waitUntilReady(
+  url: string,
+  everyMs: number,
+  o: { signal?: AbortSignal; mostMs?: number; fetcher?: typeof fetch; now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<boolean> {
+  if (!url.startsWith("/") || url.startsWith("//")) return false;
+  const now = o.now ?? Date.now;
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const fetcher = o.fetcher ?? fetch;
+  const end = now() + (o.mostMs ?? CARD_WAIT_MOST_MS);
+  while (!o.signal?.aborted && now() < end) {
+    await sleep(everyMs);
+    if (o.signal?.aborted) return false;
+    try {
+      const res = await fetcher(url, { cache: "no-store", credentials: "same-origin", ...(o.signal && { signal: o.signal }) });
+      if (res.ok && ((await res.json()) as { ready?: unknown })?.ready === true) return true;
+    } catch {
+      // asked again at the next turn
+    }
+  }
+  return false;
+}
+
+/** A run's body sent again as a new press: a fresh `requestId` when it has one (studio runs do), else the same body. */
+export function freshBody(body: string, id: () => string): string {
+  try {
+    const o = JSON.parse(body) as unknown;
+    if (o && typeof o === "object" && !Array.isArray(o) && typeof (o as { requestId?: unknown }).requestId === "string") return JSON.stringify({ ...o, requestId: id() });
+  } catch {
+    // not JSON: as it was
+  }
+  return body;
 }
 
 /** Fired for every refusal marked x-fuobe-billing (watchGuestRefusals): the billing card opens. */
