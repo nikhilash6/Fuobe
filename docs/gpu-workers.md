@@ -209,6 +209,12 @@ The worker always starts and stops its own ComfyUI process. It never uses a Comf
   to `false` on every VideoHelperSuite save node (`VHS_VideoCombine`) of each graph before its ComfyUI gets it (else
   the node writes the graph and the PC's local time into each clip), and it takes the `<metadata>` element out of each
   SVG result from ComfyUI's SVG save node before it keeps or sends the result;
+- starts with Comfy Kitchen attention (`--use-ck-attention`) when that ComfyUI has the flag. To start it with other
+  options, set `comfyOptions` in `worker.json` (for example `{ "comfyOptions": ["--use-sage-attention"] }`; `[]` for
+  none). The worker takes only an attention option, `--disable-dynamic-vram`, `--vram-headroom <GB>` and
+  `--fast [values]`, and leaves out anything else. If ComfyUI stops at its start because it can't load Kitchen
+  attention, the worker starts it again once without it, keeps it out until the worker restarts, and says so in its
+  log. The CPU slot's ComfyUI gets none of these options;
 - loads only the custom node packs that the worker found (`--disable-all-custom-nodes --whitelist-custom-nodes …`).
   The worker finds a pack whatever the case of its folder name, and gives ComfyUI the folder name as it is on disk;
 - gets only the environment variables that it needs: the system's own, `PATH`, the temp folder, the user folders

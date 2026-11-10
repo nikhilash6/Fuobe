@@ -129,10 +129,67 @@ export function partnerFlag(comfyDir) {
   }
 }
 
+/** The flags this ComfyUI's own argument list names (comfy/cli_args.py), or an empty set when it can't be read. */
+export function comfyFlags(comfyDir) {
+  try {
+    return new Set(fs.readFileSync(path.join(comfyDir ?? "", "comfy", "cli_args.py"), "utf8").match(/"--[a-z0-9-]+"/g)?.map((f) => f.slice(1, -1)) ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** The option that turns on Comfy Kitchen attention, which the GPU's ComfyUI gets by default. */
+export const KITCHEN = "--use-ck-attention";
+/** What ComfyUI says when it was asked for Comfy Kitchen attention that it can't load (it then exits). */
+export const KITCHEN_MISSING = "Comfy Kitchen attention is unavailable";
+/** The attention options: ComfyUI takes one at most. */
+const ATTENTION = new Set([KITCHEN, "--use-sage-attention", "--use-flash-attention", "--use-pytorch-cross-attention"]);
+/** Options with no value that worker.json's `comfyOptions` may give. */
+const PLAIN_OPTIONS = new Set([...ATTENTION, "--disable-dynamic-vram"]);
+/** The values `--fast` takes (none: all of them). */
+const FAST_VALUES = new Set(["fp16_accumulation", "fp8_matrix_mult", "cublas_ops", "autotune"]);
+
+/**
+ * The extra options of its ComfyUI: worker.json's `comfyOptions` when it gives a list (`[]`: none), else Comfy Kitchen
+ * attention where this ComfyUI has the flag. Only speed and memory options are taken: an attention option (one at
+ * most), `--disable-dynamic-vram`, `--vram-headroom <GB>` and `--fast [values]`, each only if this ComfyUI names it.
+ * Anything else (ports, folders, listening, custom nodes…) is left out, and said in `dropped`. The CPU slot's ComfyUI
+ * (`cfg.cpuOnly`) gets none. `o.flags`: comfyFlags of this ComfyUI; `o.noKitchen`: leave Kitchen attention out.
+ * @returns {{ options: string[]; dropped: string[] }}
+ */
+export function comfyOptions(cfg, o = {}) {
+  if (cfg.cpuOnly) return { options: [], dropped: [] };
+  const flags = o.flags ?? new Set();
+  const given = (Array.isArray(cfg.comfyOptions) ? cfg.comfyOptions.map(String) : flags.has(KITCHEN) ? [KITCHEN] : []).filter((a) => !(o.noKitchen && a === KITCHEN));
+  const options = [];
+  const dropped = [];
+  for (let i = 0; i < given.length; i++) {
+    const [name, inline] = given[i].startsWith("--") && given[i].includes("=") ? [given[i].slice(0, given[i].indexOf("=")), given[i].slice(given[i].indexOf("=") + 1)] : [given[i], null];
+    const known = flags.has(name) && !options.includes(name);
+    if (PLAIN_OPTIONS.has(name) && inline === null) {
+      if (known && !(ATTENTION.has(name) && options.some((x) => ATTENTION.has(x)))) options.push(name);
+      else dropped.push(name);
+    } else if (name === "--vram-headroom") {
+      const value = inline ?? (given[i + 1]?.startsWith("--") ? undefined : given[i + 1]);
+      if (inline === null && value !== undefined) i++;
+      const gb = Number(value);
+      if (known && value !== undefined && String(value).trim() !== "" && Number.isFinite(gb) && gb >= 0 && gb <= 1024) options.push(name, String(gb));
+      else dropped.push(`${name} ${value ?? ""}`.trim());
+    } else if (name === "--fast" && inline === null) {
+      const values = [];
+      while (i + 1 < given.length && !given[i + 1].startsWith("--")) values.push(given[++i]);
+      if (known && values.every((v) => FAST_VALUES.has(v))) options.push(name, ...new Set(values));
+      else dropped.push([name, ...values].join(" "));
+    } else dropped.push(given[i]);
+  }
+  return { options, dropped };
+}
+
 /**
  * ComfyUI's start arguments (3.3): localhost only, its own folders, no metadata, no browser, only the packs it needs,
  * and no partner nodes where this ComfyUI has the flag. `o.port`: this start's port (else worker.json's). The CPU slot's
- * ComfyUI (`cfg.cpuOnly`) runs on the CPU only, and never touches the GPU.
+ * ComfyUI (`cfg.cpuOnly`) runs on the CPU only, and never touches the GPU. `o.options`: the extra options (else
+ * comfyOptions with `o.flags` and `o.noKitchen`).
  */
 export function comfyArgs(cfg, packs = [], o = {}) {
   const f = folders(cfg.workDir);
@@ -150,6 +207,7 @@ export function comfyArgs(cfg, packs = [], o = {}) {
     "--disable-all-custom-nodes",
     ...(packs.length ? ["--whitelist-custom-nodes", ...packs] : []),
     ...(cfg.cpuOnly ? ["--cpu"] : []),
+    ...(o.options ?? comfyOptions(cfg, o).options),
   ];
 }
 
@@ -315,6 +373,12 @@ export class OwnComfy {
     /** When it last answered anything (a ComfyUI that stops answering is stuck). */
     this.answeredAt = 0;
     this.log = null;
+    /** Its ComfyUI couldn't load Comfy Kitchen attention: it starts without it for the rest of this run of the worker. */
+    this.noKitchen = false;
+    /** The options left out of worker.json's comfyOptions were said (once a run). */
+    this.droppedSaid = false;
+    /** The end of what its ComfyUI printed since this start. */
+    this.tail = "";
   }
 
   /** This start's address (port 0, which nothing answers, while no ComfyUI of its own is up). */
@@ -456,8 +520,14 @@ export class OwnComfy {
     this.key = crypto.randomBytes(32).toString("hex");
     let cmd;
     let marker;
+    const { options, dropped } = comfyOptions(this.cfg, { flags: comfyFlags(this.cfg.comfyDir), noKitchen: this.noKitchen });
+    if (dropped.length && !this.droppedSaid) {
+      this.droppedSaid = true;
+      this.o.log?.(`Left out of its ComfyUI's options (comfyOptions in worker.json takes only speed and memory options this ComfyUI knows): ${dropped.join(", ")}.`);
+    }
     if (this.cfg.comfyCommand) {
-      cmd = this.cfg.comfyCommand.map((a) => String(a).replaceAll("{port}", String(this.port)));
+      // A test's command: "{options}" stands for the extra options.
+      cmd = this.cfg.comfyCommand.flatMap((a) => (a === "{options}" ? options : [String(a).replaceAll("{port}", String(this.port))]));
       marker = cmd.slice(1).find((a) => /[\\/]/.test(a)) ?? cmd.join(" ");
     }
     this.crashes = this.crashes.filter((c) => (this.o.now ?? Date.now)() - c.at < 3_600_000);
@@ -472,7 +542,7 @@ export class OwnComfy {
       fs.rmSync(path.dirname(guard), { recursive: true, force: true });
       fs.mkdirSync(path.dirname(guard), { recursive: true });
       fs.copyFileSync(path.join(here, "comfy_guard.py"), guard);
-      cmd = [this.cfg.python || pythonFor(this.cfg.comfyDir), ...guardFlags(env), guard, path.join(this.cfg.comfyDir, "main.py"), ...comfyArgs(this.cfg, packs, { port: this.port, partnerFlag: partnerFlag(this.cfg.comfyDir) })];
+      cmd = [this.cfg.python || pythonFor(this.cfg.comfyDir), ...guardFlags(env), guard, path.join(this.cfg.comfyDir, "main.py"), ...comfyArgs(this.cfg, packs, { port: this.port, partnerFlag: partnerFlag(this.cfg.comfyDir), options })];
       marker = guard;
     }
     // Its working folder is the worker folder: a node that writes a relative path writes there, not into ComfyUI's.
@@ -482,8 +552,14 @@ export class OwnComfy {
     if (child.pid) fs.writeFileSync(this.pidFile, JSON.stringify({ pid: child.pid, port: this.port, marker, at: this.startedAt, worker: this.o.owner ?? null }), { mode: 0o600 });
     this.log?.close();
     const log = (this.log = new RotatingLog(path.join(this.cfg.workDir, "comfyui.log")));
-    child.stdout.on("data", (d) => log.write(d));
-    child.stderr.on("data", (d) => log.write(d));
+    this.tail = "";
+    const out = (d) => {
+      log.write(d);
+      this.tail = (this.tail + String(d)).slice(-16_384);
+    };
+    child.stdout.on("data", out);
+    child.stderr.on("data", out);
+    const closed = new Promise((r) => child.once("close", r));
     child.once("error", () => {});
     child.once("exit", (code) => {
       this.ready = false;
@@ -500,7 +576,22 @@ export class OwnComfy {
         await this.stop();
         throw ended();
       }
-      if (!this.alive()) throw new Error("ComfyUI stopped while starting (see comfyui.log in the worker folder)");
+      if (!this.alive()) {
+        // It stopped because Comfy Kitchen attention can't load there: once, it starts again without it, and keeps it
+        // out until the worker restarts. That stop counts as no crash.
+        if (options.includes(KITCHEN) && !this.noKitchen) {
+          await Promise.race([closed, new Promise((r) => setTimeout(r, 2_000))]);
+          if (this.tail.includes(KITCHEN_MISSING)) {
+            this.noKitchen = true;
+            this.crashes = this.crashes.filter((c) => c.at < this.startedAt);
+            this.inARow = Math.max(0, this.inARow - 1);
+            fs.rmSync(this.pidFile, { force: true });
+            this.o.log?.(`Its ComfyUI failed to start with Comfy Kitchen attention (${KITCHEN_MISSING} there, see comfyui.1.log): starting it again without it, until the worker restarts.`);
+            return this.start(packs, o);
+          }
+        }
+        throw new Error("ComfyUI stopped while starting (see comfyui.log in the worker folder)");
+      }
       try {
         if (!proof) proof = await this.proven(child.pid);
         if (proof) {
