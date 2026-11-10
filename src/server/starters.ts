@@ -88,18 +88,31 @@ function adoptSamples(s: Starter): string[] {
   });
 }
 
-/** Make the starter and say where it opens (and, for a project or an element, what it made, and `note`: what to do next). */
-export async function createFromStarter(id: string, engine: Engine): Promise<{ href: string; id?: string; note?: string }> {
+/**
+ * Make the starter and say where it opens (and, for a project or an element, what it made, and `note`: what to do next).
+ * `shot`: a ready film's page asked for one of its shots ("Make this shot"): the film opens with that shot in the prompt
+ * bar, in the film's look and shape. The film made before from this starter opens again while its shots are the
+ * starter's, so a film's shots made one by one land in one project.
+ */
+export async function createFromStarter(id: string, engine: Engine, shot?: number): Promise<{ href: string; id?: string; note?: string }> {
   const s = getStarter(id);
   if (!s) throw new StarterError("That starter doesn't exist", 404);
   const seed = s.seed;
   if (seed.kind === "fill" || seed.kind === "assist" || seed.kind === "storyboard" || seed.kind === "link") throw new StarterError("That starter opens in its studio: nothing to make here");
   if (seed.kind === "cinema") {
+    const n = shot && shot >= 1 && shot <= seed.shots.length ? Math.floor(shot) : 1;
+    const open = (projectId: string) => ({ href: `/cinema/${projectId}?shot=${n}`, id: projectId });
+    const ours = listProjects().filter((p) => p.name === seed.project.name && p.description === seed.project.description);
+    // One shot: the latest film from this starter whose AI Director still proposes the starter's shots.
+    const sameShots = (projectId: string) => {
+      const proposed = getChat(projectId).findLast((m) => m.role === "assistant" && m.shots?.length)?.shots ?? [];
+      return proposed.length === seed.shots.length && proposed.every((x, i) => x.prompt === seed.shots[i].prompt);
+    };
+    const film = shot ? ours.find((p) => sameShots(p.id)) : undefined;
+    if (film) return open(film.id);
     // The project made before from this starter opens again while nothing has been made or asked in it yet.
-    const untouched = listProjects().find(
-      (p) => p.name === seed.project.name && p.description === seed.project.description && !listItems(p.id).length && getChat(p.id).length <= 1,
-    );
-    if (untouched) return { href: `/cinema/${untouched.id}?shot=1`, id: untouched.id };
+    const untouched = ours.find((p) => !listItems(p.id).length && getChat(p.id).length <= 1);
+    if (untouched) return open(untouched.id);
     const p = createProject(seed.project);
     updateProject(p.id, { director: seed.director, brief: seed.brief });
     // The AI Director's proposal, as if it had just planned the film: each shot loads into the prompt bar from the chat.
@@ -110,7 +123,7 @@ export async function createFromStarter(id: string, engine: Engine): Promise<{ h
       shots: seed.shots,
       createdAt: Date.now(),
     });
-    return { href: `/cinema/${p.id}?shot=1`, id: p.id };
+    return open(p.id);
   }
   if (seed.kind === "element") {
     const references = adoptSamples(s);

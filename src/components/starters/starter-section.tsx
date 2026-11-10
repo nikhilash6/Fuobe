@@ -36,9 +36,13 @@ export function useStarters(surface: StarterSurface, starters: StarterCardData[]
   return { owner, starters: mine?.starters ?? starters, fills: mine ? { ...fills, ...mine.fills } : fills };
 }
 
+/** What is busy while one shot of a ready film is being opened ("Make this shot"), beside its starter's own id. */
+export const shotKey = (id: string, shot: number) => `${id}#shot-${shot}`;
+
 /**
  * The owner's "Use template": a starter made on the server (POST /api/starters/<id>) opens where it answers; one that
- * fills a composer fills it here (`onFill`, on its own studio's page) or opens its studio with `?starter=`.
+ * fills a composer fills it here (`onFill`, on its own studio's page) or opens its studio with `?starter=`. `shot`: one
+ * shot of a ready film, which opens in that film with the shot in its prompt bar (busy as `shotKey`).
  */
 export function useStarterUse(onFill?: (id: string) => void) {
   const router = useRouter();
@@ -48,15 +52,20 @@ export function useStarterUse(onFill?: (id: string) => void) {
   // The page it opens may be this one (Click to Ad, Marketing Studio): busy until that address has rendered.
   const [opening, setOpening] = useState<string | null>(null);
   const [navigating, startTransition] = useTransition();
-  const use = async (s: StarterCardData) => {
+  const use = async (s: StarterCardData, shot?: number) => {
     if (s.use.kind === "fill" || s.use.kind === "link") {
       if (onFill && s.use.kind === "fill") onFill(s.id);
       else router.push(s.use.href);
       return;
     }
-    setMaking(s.id);
+    const key = shot ? shotKey(s.id, shot) : s.id;
+    setMaking(key);
     try {
-      const res = await fetch(`/api/starters/${encodeURIComponent(s.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engine }) });
+      const res = await fetch(`/api/starters/${encodeURIComponent(s.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine, ...(shot && { shot }) }),
+      });
       const body = (await res.json().catch(() => ({}))) as { href?: string; note?: string; error?: string };
       if (!res.ok || !body.href) throw responseError(res, body.error ?? "That starter didn't come out right — try again, or pick another.");
       // What it made (a brand, a product, a channel, a film, an element) is in the lists the next page picks it from,
@@ -67,7 +76,7 @@ export function useStarterUse(onFill?: (id: string) => void) {
       const href = body.href;
       // What to do with it next (an element's @name), where it opens.
       if (body.note) toast.success(body.note);
-      setOpening(s.id);
+      setOpening(key);
       startTransition(() => router.push(href));
     } catch (e) {
       toastError(e);

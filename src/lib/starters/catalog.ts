@@ -32,7 +32,8 @@ import { EXPLAINER_STARTERS } from "./explainer";
 import { FACELESS_STARTERS } from "./faceless";
 import { LIBRARY_STARTERS } from "./library";
 import { STORYBOARD_STARTERS } from "./storyboard";
-import { STARTER_SURFACES, type StarterCardData, type StarterFill, type StarterInput, type StarterSurface } from "./types";
+import { cinemaLook, storyboardLook } from "./look";
+import { STARTER_SURFACES, type StarterCardData, type StarterFill, type StarterInput, type StarterLookItem, type StarterSurface } from "./types";
 
 /** A sample file a starter brings: a published example input (src/lib/examples/media.generated.ts). */
 export interface StarterSample {
@@ -248,18 +249,31 @@ export function starterCover(s: Pick<Starter, "id" | "coverFrom" | "coverOf">): 
 const AUDIO = /\.(m4a|mp3|wav|ogg|aac)$/i;
 
 function inputs(s: Starter): StarterInput[] {
-  const photo = s.seed.kind === "product" ? s.seed.kit.product.image : undefined;
+  const seed = s.seed;
+  const photo = seed.kind === "product" ? seed.kit.product.image : undefined;
   return [
     ...(photo ? [{ label: "Product photo", image: { thumb: EXAMPLE_MEDIA[photo.src]?.thumb ?? photo.src, name: photo.name } }] : []),
     ...(s.samples ?? []).map((f) =>
       AUDIO.test(f.src) ? { label: f.label, audio: { src: f.src, name: "A recording" } } : { label: f.label, image: { thumb: exampleFrame(f.src)?.thumb ?? f.src, name: "A photo" } },
     ),
-    ...s.words.map((w) => ({ label: w.label, text: w.text })),
+    ...s.words.map((w) => {
+      // A film's shot, by its words: its page makes that shot alone, in the film's look.
+      const shot = seed.kind === "cinema" ? seed.shots.findIndex((x) => x.prompt === w.text) + 1 : 0;
+      return { label: w.label, text: w.text, ...(shot > 0 && { shot }) };
+    }),
   ];
+}
+
+/** The look a starter is made in, as its studio names it: a film's Director settings, a story's look and shape. */
+function lookOf(s: Starter): StarterLookItem[] | undefined {
+  if (s.seed.kind === "cinema") return cinemaLook(s.seed.director);
+  if (s.seed.kind === "storyboard") return storyboardLook(s.seed);
+  return undefined;
 }
 
 export function starterCard(s: Starter): StarterCardData {
   const cover = starterCover(s);
+  const look = lookOf(s);
   return {
     id: s.id,
     surface: s.surface,
@@ -272,6 +286,7 @@ export function starterCard(s: Starter): StarterCardData {
     steps: s.steps,
     makes: s.makes,
     inputs: inputs(s),
+    ...(look && { look }),
     ...(cover && { cover }),
     coverKey: `starters/${s.id}`,
     ...(s.seed.kind === "element" && s.seed.element.kind === "character" && { coverTop: true }),

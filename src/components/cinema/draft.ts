@@ -1,4 +1,4 @@
-import { DURATION, type CinemaAction, type CinemaGenerateInput, type CinemaMode, type DirectorSettings, type GridSize, type GridType } from "@/lib/catalog/cinema";
+import { DEFAULT_ASPECT, DURATION, type CinemaAction, type CinemaGenerateInput, type CinemaMode, type DirectorSettings, type GridSize, type GridType } from "@/lib/catalog/cinema";
 import type { Engine, MediaKind } from "@/lib/catalog/types";
 import { takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 
@@ -66,7 +66,7 @@ export const initialDraft = (): CinemaDraft => ({
   models: {},
   duration: DURATION.default,
   resolution: { video: "720p", image: "1K" },
-  aspect: { video: "16:9", image: "16:9" },
+  aspect: { video: DEFAULT_ASPECT, image: DEFAULT_ASPECT },
   batch: 1,
   audio: true,
   multiShot: { mode: "off", shots: [] },

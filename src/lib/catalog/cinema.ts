@@ -643,6 +643,8 @@ export const MAX_LIGHTS = 2;
 // ---------------------------------------------------------------------------
 // Generation settings (cinemaStudio.videoModes, imageMode, references)
 
+/** The shape a new take starts at, a still or a clip: the prompt bar's first pick, and a ready film's look line. */
+export const DEFAULT_ASPECT = "16:9";
 export const VIDEO_ASPECTS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
 export const IMAGE_ASPECTS = ["16:9", "21:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"];
 export const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];

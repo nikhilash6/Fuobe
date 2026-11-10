@@ -159,6 +159,7 @@ import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/compo
 import { VOICE_FIRST_PARAM, voiceFirstDefault } from "@/lib/av/voice-first";
 import { FixFacesAfterSwitch } from "@/components/fix-faces/fix-faces-switch";
 import { FIX_FACES_AFTER_PARAM, fixFacesAfterOffered } from "@/lib/catalog/fix-faces";
+import { framingLabel, framingSuggestion } from "@/lib/framing-hint";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { FILM_LOOK_PARAM, takesFilmLooks } from "@/lib/film-looks";
@@ -359,6 +360,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const [voiceFirstAsked, setVoiceFirstAsked] = useState<boolean | null>(null);
   // "Fix faces" after an H3 video from a start picture: off until turned on.
   const [fixFacesAsked, setFixFacesAsked] = useState(false);
+  // The framing tip (a wide scene with a person, asked as a small square): "Keep 1:1" puts it away for this composer.
+  const [framingKept, setFramingKept] = useState(false);
   const voiceFirstKind: "audio" | "video" | null = !config.voiceFirst ? null : typed.slots.audio?.ref ? "audio" : typed.slots.video?.ref && config.ops.includes("transcribe") ? "video" : null;
   const draft = useMemo(
     () =>
@@ -1287,6 +1290,17 @@ export function Composer({ docked }: { docked: boolean }) {
   // Enhance writes a scene; a tool's optional words (FLUX.3 Upscale's details) stay as typed.
   const baseShape = settingsShape(model, effectiveOp, config.kind, showPrompt && !config.hidePrompt, p, config.ops, studioFormats);
   const shape = framesCtx ? framesShape(baseShape, framesCtx.chained) : layoutOn ? layoutShape(baseShape) : baseShape;
+  // An image of a wide scene with a person in it, asked as a small square: one tap makes it 16:9 at a larger size.
+  const framing =
+    config.kind === "image" && !framingKept && !layoutOn && !framesOn && model
+      ? framingSuggestion({
+          prompt: draft.prompt,
+          aspect: p.aspectRatio ?? model.defaults?.aspectRatio,
+          resolution: p.resolution ?? model.defaults?.resolution,
+          aspects: shape.aspect,
+          resolutions: shape.resolution,
+        })
+      : null;
   const outcome = config.clipFacts && draft.slots.video?.ref ? clipOutcome(effectiveOp, facts, p, model, today) : null;
   const video = draft.slots.video?.ref;
   const alternative = config.comfyOnly?.alternative;
@@ -2497,6 +2511,28 @@ export function Composer({ docked }: { docked: boolean }) {
       {sketched.note && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{sketched.note}</p>}
       {signed.notes.length > 0 && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{signed.notes.join(" · ")}</p>}
       {smallGpuNote && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{smallGpuNote}</p>}
+      {framing && (
+        <div role="note" className="mx-1 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border bg-brand-faint px-3 py-2 text-[12px] leading-snug">
+          <p className="min-w-0 flex-1 basis-56 text-muted-foreground">
+            <span className="font-medium text-foreground">A wide frame suits this scene.</span> {framing.aspectRatio}
+            {framing.resolution ? ` at ${framing.resolution}` : ""} gives the figure room and keeps faces crisp and detailed.
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 rounded-full px-3"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setP({ aspectRatio: framing.aspectRatio, ...(framing.resolution && { resolution: framing.resolution }) })}
+            >
+              {framingLabel(framing)}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 rounded-full px-2.5 text-muted-foreground" onMouseDown={(e) => e.preventDefault()} onClick={() => setFramingKept(true)}>
+              Keep 1:1
+            </Button>
+          </div>
+        </div>
+      )}
       {model && !framesOn && <EndFrameNote model={model} start={draft.slots.image} end={draft.slots.endImage} hasStartSlot={slots.some((s) => s.key === "image")} setSlot={setSlot} />}
       {model && op && model.options.endFrame === undefined && draft.slots.endImage?.ref && (
         <p className="px-2 pt-1 text-[12px] text-warning">{model.name} ignores the end frame — pick Kling 2.5, Veo 3.1, Seedance or Wan 2.2 to use it.</p>

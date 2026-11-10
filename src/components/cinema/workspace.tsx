@@ -40,6 +40,7 @@ import { SoulCastDialog, SoulLocationDialog } from "./soul-builders";
 import { BlockoutPanel, initialBlockout, withBuilt, type BlockoutDraft } from "./blockout-panel";
 import { WorldPanel } from "./world-panel";
 import type { BlockoutScene } from "@/lib/blockout";
+import { proposedShotLine } from "@/lib/starters/types";
 
 /** What a browser that can only write WebM is told: Seedance 2.5 takes MP4 or MOV reference clips. */
 const WEBM_BLOCKOUT = "This browser saved the blockout as WebM, which Seedance 2.5 doesn't take: render it in Chrome or Edge, upload an MP4 from your 3D app, or film it on your GPU.";
@@ -202,12 +203,6 @@ function LoadProposedShot({ projectId, n, onLoad }: { projectId: string; n: numb
   return null;
 }
 
-/** The empty project's line once a starter's shot 1 is in the prompt bar: where the other shots are. */
-function proposedLine(of: number) {
-  const rest = of === 2 ? "Shot 2 is" : of === 3 ? "Shots 2 and 3 are" : `Shots 2 to ${of} are`;
-  return `Shot 1 of ${of} is ready below. ${rest} in the AI Director.`;
-}
-
 function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaGeneration[]; loading: boolean }) {
   const { project, folders, spentUsd, context } = data;
   const id = project.id;
@@ -255,8 +250,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   // Blockout to film: the composer's panel (its draft kept while the project is open) and the builder.
   // /cinema/<id>?blockout=1 (a link to Blockout to film) opens it.
   const search = useSearchParams();
-  // A starter's film: how many shots the AI Director proposed, once shot 1 is in the prompt bar.
-  const [starterShots, setStarterShots] = useState(0);
+  // A starter's film: the shot in the prompt bar and how many the AI Director proposed.
+  const [starterShot, setStarterShot] = useState<{ n: number; of: number } | null>(null);
   const [blockoutOpen, setBlockoutOpen] = useState(() => search.get("blockout") === "1");
   // World mode: /cinema/<id>?world=1 (the GPU board's World mode row) opens it. Hidden when the engine mode is "Paid APIs
   // only": Hy-Nomas runs on your GPU alone.
@@ -443,8 +438,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
       <Empty icon={Library} title="No generations yet" text="Everything you make in Cinema Studio, in any project, shows up here." />
     ) : currentView.kind === "folder" ? (
       <Empty icon={FolderOpen} title="An empty scene" text="Describe a scene below and hit Generate — new takes land in this folder." />
-    ) : starterShots > 1 ? (
-      <Empty icon={Clapperboard} title="Your first shot" text={proposedLine(starterShots)} />
+    ) : starterShot && starterShot.of > 1 ? (
+      <Empty icon={Clapperboard} title="Your first shot" text={proposedShotLine(starterShot.n, starterShot.of)} />
     ) : (
       <Empty icon={Clapperboard} title="Your first shot" text="Start by describing a scene and pressing “Generate”. Set the genre, camera, palette and light in the Director's Panel." />
     );
@@ -478,7 +473,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
           n={proposedShot}
           onLoad={(s, of) => {
             onLoadShot(s);
-            setStarterShots(of);
+            setStarterShot({ n: proposedShot, of });
             // On a wide screen the AI Director shows the other shots beside the work.
             if (xl) setPanel("director");
           }}

@@ -98,6 +98,40 @@ describe("Cinema starters", () => {
     const c = (await (await make(id)).json()) as { id: string };
     expect(c.id).not.toBe(a.id);
   });
+
+  it("Make this shot: opens that shot in the film, in its look, and keeps a film's shots in one project", async () => {
+    const id = "cinema.noir-perfume";
+    const s = STARTERS.find((x) => x.id === id)!.seed;
+    if (s.kind !== "cinema") throw new Error(id);
+    const shot = async (n: number) => {
+      const res = await startersRoute.POST(post(`/api/starters/${id}`, { engine: "open", shot: n }), params({ id }));
+      expect(res.status, `shot ${n}`).toBe(201);
+      return (await res.json()) as { id: string; href: string };
+    };
+    const two = await shot(2);
+    expect(two.href).toBe(`/cinema/${two.id}?shot=2`);
+    const p = cinema.getProject(two.id)!;
+    expect(p.director).toMatchObject(s.director);
+    expect(cinema.getChat(p.id).findLast((m) => m.shots?.length)?.shots?.[1].prompt).toBe(s.shots[1].prompt);
+    // A take of shot 2 in it; shot 3 opens in the same film.
+    const r = await generateRoute.POST(
+      post("/x", { input: { engine: "cloud", mode: "video", action: "generate", prompt: s.shots[1].prompt, duration: 5, aspectRatio: "16:9", batch: 1, settings: p.director } }),
+      params({ id: p.id }),
+    );
+    expect(r.status).toBe(201);
+    const three = await shot(3);
+    expect(three).toEqual({ id: two.id, href: `/cinema/${two.id}?shot=3` });
+    // "Use template" still starts a fresh film once one has a take.
+    const fresh = (await (await make(id)).json()) as { id: string; href: string };
+    expect(fresh.id).not.toBe(two.id);
+    expect(fresh.href).toBe(`/cinema/${fresh.id}?shot=1`);
+    // A shot number the film doesn't have opens shot 1; one out of range is refused.
+    expect((await shot(1)).href).toMatch(/\?shot=1$/);
+    const bad = await startersRoute.POST(post(`/api/starters/${id}`, { engine: "open", shot: 0 }), params({ id }));
+    expect(bad.status).toBe(400);
+    const many = await startersRoute.POST(post(`/api/starters/${id}`, { engine: "open", shot: 9 }), params({ id }));
+    expect(((await many.json()) as { href: string }).href).toMatch(/\?shot=1$/);
+  });
 });
 
 describe("Element starters", () => {

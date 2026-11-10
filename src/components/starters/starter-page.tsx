@@ -1,18 +1,49 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { CoverArt, CoverImg, useCoverPlayback } from "@/components/template-cover";
 import { useIsOwner, useIsVisitor } from "@/lib/api";
-import { STARTER_SURFACES, VISITOR_MAKES, starterShown, type StarterCardData, type StarterInput } from "@/lib/starters/types";
+import { STARTER_SURFACES, VISITOR_MAKES, lookLine, starterShown, type StarterCardData, type StarterInput, type StarterLookItem } from "@/lib/starters/types";
 import { StarterIcon } from "./starter-icon";
-import { useStarterUse } from "./starter-section";
+import { shotKey, useStarterUse } from "./starter-section";
 import { StepsGlyph } from "./steps-glyph";
 
-function Input({ input }: { input: StarterInput }) {
+/**
+ * The look it is made in, in the studio's own words ("Epic · Anamorphic · Silhouette · Oil & Ochre · 16:9"): with the
+ * shots' words, the whole recipe.
+ */
+export function StarterLook({ look, className }: { look: StarterLookItem[]; className?: string }) {
+  return (
+    <div className={className}>
+      <p className="sr-only">Look: {lookLine(look)}</p>
+      <ul aria-hidden className="flex flex-wrap items-center gap-1.5">
+        <li className="mr-0.5 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">Look</li>
+        {look.map((i) => (
+          <li key={i.name} className="inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12.5px] font-medium text-secondary-foreground">
+            {i.swatch && (
+              <span className="flex -space-x-1">
+                {i.swatch.map((c, n) => (
+                  <span key={n} className="size-3 rounded-full ring-2 ring-secondary" style={{ background: c }} />
+                ))}
+              </span>
+            )}
+            {i.name}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * One thing that goes in. A ready film's shot offers "Make this shot": the film opens with that shot in its prompt bar,
+ * in the film's look and shape (`onMake`).
+ */
+function Input({ input, onMake, busy }: { input: StarterInput; onMake?: () => void; busy?: boolean }) {
   return (
     <li className="rounded-xl border bg-card p-3.5">
       <div className="flex items-start gap-3">
@@ -30,6 +61,11 @@ function Input({ input }: { input: StarterInput }) {
         <audio controls preload="none" src={input.audio.src} aria-label={input.audio.name} className="mt-2 h-9 w-full" />
       )}
       {input.text && <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-[13px] text-pretty whitespace-pre-line">{input.text}</p>}
+      {onMake && (
+        <Button variant="outline" size="sm" className="mt-2.5 rounded-full px-3" onClick={onMake} disabled={busy} aria-label={`Make ${input.label.toLowerCase()} in this look`}>
+          {busy ? <Loader2 className="animate-spin" /> : <Clapperboard />} Make this shot
+        </Button>
+      )}
     </li>
   );
 }
@@ -62,6 +98,10 @@ export function StarterPage({ s }: { s: StarterCardData }) {
   }
 
   const heading = "text-[13px] font-semibold tracking-wide text-muted-foreground uppercase";
+  // The owner, or a visitor where a ready one is theirs to make (a guest is asked to sign up first, then comes back here).
+  const makes = owner || VISITOR_MAKES.has(s.surface);
+  // A ready film: each shot can be made alone, in the film's look.
+  const shots = makes && s.use.kind === "create" && s.inputs.some((i) => i.shot);
   const cover = s.cover;
 
   return (
@@ -105,25 +145,27 @@ export function StarterPage({ s }: { s: StarterCardData }) {
             <h1 className="font-heading text-[30px] leading-tight text-balance">{s.name}</h1>
           </div>
           <p className="mt-2 text-[15px] text-pretty text-muted-foreground">{s.description}</p>
+          {s.look?.length ? <StarterLook look={s.look} className="mt-3" /> : null}
 
-          {owner || VISITOR_MAKES.has(s.surface) ? (
+          {makes ? (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {s.use.kind === "fill" ? (
-                <Button asChild className="rounded-full">
+                <Button asChild size="lg" className="rounded-full px-4">
                   <Link href={s.use.href}>
                     <Plus /> Use template
                   </Link>
                 </Button>
               ) : (
-                <Button className="rounded-full" onClick={() => void use(s)} disabled={busy === s.id}>
+                <Button size="lg" className="rounded-full px-4" onClick={() => void use(s)} disabled={busy === s.id}>
                   {busy === s.id ? <Loader2 className="animate-spin" /> : <Plus />} Use template
                 </Button>
               )}
+              {shots && <p className="basis-full text-[13px] text-muted-foreground">The whole film opens in {surface.name}: its look, its brief and every shot, ready to make.</p>}
             </div>
           ) : s.tryIn ? (
             // A guest or an account makes the same from the same photo in its app, the example loaded there.
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button asChild className="rounded-full">
+              <Button asChild size="lg" className="rounded-full px-4">
                 <Link href={s.tryIn.href}>
                   {s.tryIn.text ?? `Try it in ${s.tryIn.label}`} <ArrowRight />
                 </Link>
@@ -139,7 +181,7 @@ export function StarterPage({ s }: { s: StarterCardData }) {
             </h2>
             <ul className="mt-2 space-y-2">
               {s.inputs.map((i) => (
-                <Input key={i.label} input={i} />
+                <Input key={i.label} input={i} onMake={shots && i.shot ? () => void use(s, i.shot) : undefined} busy={!!i.shot && busy === shotKey(s.id, i.shot)} />
               ))}
             </ul>
           </section>

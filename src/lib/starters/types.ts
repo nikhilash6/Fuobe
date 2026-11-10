@@ -59,6 +59,15 @@ export interface StarterInput {
   image?: { thumb: string; name: string };
   /** A recording, played on its page. */
   audio?: { src: string; name: string };
+  /** A ready film's shot (1-based): its page offers to make that shot alone, in the film's look and shape. */
+  shot?: number;
+}
+
+/** One word of a starter's look: a genre, a lens, a light, a palette (with its colours) or a shape. */
+export interface StarterLookItem {
+  name: string;
+  /** A palette's colours, for its chip. */
+  swatch?: string[];
 }
 
 /**
@@ -88,6 +97,8 @@ export interface StarterCardData {
   /** What comes out, in plain words. */
   makes: string;
   inputs: StarterInput[];
+  /** The look it is made in, in the studio's own words: a film's genre, lens, light, palette and shape; a story's look and shape. */
+  look?: StarterLookItem[];
   /** Its real cover, when it has one: visitors only see starters that have it. */
   cover?: TemplateCover;
   /** The cover's key, for one-clip-at-a-time playback. */
@@ -136,3 +147,23 @@ export const starterShown = (s: Pick<StarterCardData, "cover">, visitor: boolean
  * a starter is saved to the owner's library, so only the owner makes it.
  */
 export const VISITOR_MAKES: ReadonlySet<StarterSurface> = new Set<StarterSurface>(["cinema", "faceless", "content-factory", "explainer"]);
+
+/** A starter's look in one line ("Epic · Anamorphic · Silhouette · Oil & Ochre · 16:9"), as a screen reader reads it. */
+export const lookLine = (items: StarterLookItem[]) => items.map((i) => i.name).join(" · ");
+
+/**
+ * A ready film's empty project, once shot `n` of `of` is in the prompt bar: where the other shots are ("Shot 2 of 3 is
+ * ready below. Shots 1 and 3 are in the AI Director.").
+ */
+export function proposedShotLine(n: number, of: number): string {
+  const others = Array.from({ length: of }, (_, i) => i + 1).filter((x) => x !== n);
+  const rest =
+    others.length === 1
+      ? `Shot ${others[0]} is`
+      : others.length === 2
+        ? `Shots ${others[0]} and ${others[1]} are`
+        : others.every((x, i) => i === 0 || x === others[i - 1] + 1)
+          ? `Shots ${others[0]} to ${others[others.length - 1]} are`
+          : `The other ${others.length} shots are`;
+  return `Shot ${n} of ${of} is ready below. ${rest} in the AI Director.`;
+}
